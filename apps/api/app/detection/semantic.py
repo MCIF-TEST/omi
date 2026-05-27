@@ -121,13 +121,9 @@ def _get_embeddings(texts: list[str]) -> np.ndarray | None:
     Returns an (n, d) float array or None on failure.
     """
     try:
-        from sentence_transformers import SentenceTransformer  # type: ignore
-
         model = _load_st_model()
         if model is not None:
             return np.asarray(model.encode(texts, show_progress_bar=False))
-    except ImportError:
-        pass
     except Exception:
         # If a transformer was installed but fails (e.g. no internet to fetch
         # weights), silently fall back. We never let the API hot path die on
