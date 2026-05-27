@@ -9,9 +9,16 @@ from app.narrative.embeddings import get_embedder
 from app.narrative.service import NarrativeService
 from app.schemas import (
     NarrativeActivityPoint,
+    NarrativeBurst,
     NarrativeDetail,
+    NarrativeGraph,
+    NarrativeGraphEdge,
+    NarrativeGraphNode,
+    NarrativeOriginWindow,
     NarrativeOut,
+    NarrativePropagationPoint,
     NarrativeSample,
+    NarrativeSignalBreakdown,
     NarrativesResponse,
     NarrativeTopAccount,
 )
@@ -25,22 +32,34 @@ router = APIRouter(prefix="/v1/narratives", tags=["narratives"])
 def list_narratives(
     window_days: int = Query(7, ge=1, le=90),
     limit: int = Query(20, ge=1, le=100),
+    min_risk_tier: str = Query(
+        "low",
+        pattern="^(low|moderate|high|extreme)$",
+        description=(
+            "Filter the list by minimum coordination risk band. "
+            "Pass 'moderate' to hide organic clusters."
+        ),
+    ),
     current: CurrentUser = Depends(require_user),
 ) -> NarrativesResponse:
-    """Trending narratives across the corpus, enriched with risk scores."""
+    """Trending narratives, ranked by coordination intelligence (not raw volume)."""
     embedder = get_embedder()
     embedder_name = type(embedder).__name__
 
     from app.core.cache import get_cache
     cache = get_cache()
-    cache_key = f"narratives.trending.w{window_days}.l{limit}"
+    cache_key = f"narratives.trending.w{window_days}.l{limit}.r{min_risk_tier}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
     with get_session() as session:
         service = NarrativeService(session, embedder=embedder)
-        trending = service.list_trending(window_days=window_days, limit=limit)
+        trending = service.list_trending(
+            window_days=window_days,
+            limit=limit,
+            min_risk_tier=min_risk_tier,
+        )
 
     result = NarrativesResponse(
         window_days=window_days,
@@ -59,6 +78,15 @@ def list_narratives(
                 inauthenticity_score=t.inauthenticity_score,
                 risk_label=t.risk_label,
                 platforms=t.platforms,
+                risk_tier=t.risk_tier,
+                coordination_score=t.coordination_score,
+                manipulation_probability=t.manipulation_probability,
+                synchronization_intensity=t.synchronization_intensity,
+                semantic_cohesion=t.semantic_cohesion,
+                cluster_confidence=t.cluster_confidence,
+                coordination_label=t.coordination_label,
+                qualifying_member_count=t.qualifying_member_count,
+                qualifying_author_count=t.qualifying_author_count,
             )
             for t in trending
         ],
@@ -72,7 +100,11 @@ def get_narrative(
     narrative_id: int,
     current: CurrentUser = Depends(require_user),
 ) -> NarrativeDetail:
-    """Full detail for one narrative cluster — accounts, samples, activity, AI analysis."""
+    """Full coordination drill-down for one narrative cluster.
+
+    Returns the multi-signal panel, propagation timeline, identified
+    bursts, origin lag, and a MODERATE-and-above subgraph.
+    """
     try:
         with get_session() as session:
             service = NarrativeService(session)
@@ -89,7 +121,6 @@ def get_narrative(
             detail=f"Narrative {narrative_id} not found.",
         )
 
-    # Generate LLM analysis
     from app.reasoning.commentary import synthesize_narrative_analysis
     sample_texts = [s.text for s in detail.samples[:6]]
     analysis_result = synthesize_narrative_analysis(
@@ -124,6 +155,9 @@ def get_narrative(
                 platform=a.platform,
                 comment_count=a.comment_count,
                 tier=a.tier,
+                display_tier=a.display_tier,
+                distinct_parents=a.distinct_parents,
+                influence_score=a.influence_score,
             )
             for a in detail.top_accounts
         ],
@@ -140,4 +174,36 @@ def get_narrative(
         ],
         ai_analysis=analysis_result.text,
         ai_provider=analysis_result.provider,
+        risk_tier=detail.risk_tier,
+        coordination_score=detail.coordination_score,
+        manipulation_probability=detail.manipulation_probability,
+        synchronization_intensity=detail.synchronization_intensity,
+        semantic_cohesion=detail.semantic_cohesion,
+        cluster_confidence=detail.cluster_confidence,
+        coordination_label=detail.coordination_label,
+        qualifying_member_count=detail.qualifying_member_count,
+        qualifying_author_count=detail.qualifying_author_count,
+        signal_breakdown=[NarrativeSignalBreakdown(**s) for s in detail.signal_breakdown],
+        propagation=[NarrativePropagationPoint(**p) for p in detail.propagation],
+        bursts=[NarrativeBurst(**b) for b in detail.bursts],
+        origin=NarrativeOriginWindow(**detail.origin) if detail.origin else None,
+        graph=NarrativeGraph(
+            nodes=[
+                NarrativeGraphNode(
+                    external_id=n.external_id,
+                    handle=n.handle,
+                    platform=n.platform,
+                    tier=n.tier,
+                    display_tier=n.display_tier,
+                    comment_count=n.comment_count,
+                    distinct_parents=n.distinct_parents,
+                    influence_score=n.influence_score,
+                )
+                for n in detail.graph.nodes
+            ],
+            edges=[
+                NarrativeGraphEdge(a=e.a, b=e.b, strength=e.strength, methods=e.methods)
+                for e in detail.graph.edges
+            ],
+        ),
     )

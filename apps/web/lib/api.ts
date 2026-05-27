@@ -103,6 +103,15 @@ export interface TrendInfo {
   summary: string;
 }
 
+export type RiskTier = 'low' | 'moderate' | 'high' | 'extreme';
+export type CoordinationLabel =
+  | 'organic'
+  | 'mixed'
+  | 'suspicious'
+  | 'coordinated'
+  | 'manipulation_network'
+  | 'unscored';
+
 export interface NarrativeOut {
   id: number;
   label: string;
@@ -114,8 +123,18 @@ export interface NarrativeOut {
   last_seen_at: string;
   sample_text: string;
   inauthenticity_score: number;
-  risk_label: string;   // "organic" | "mixed" | "suspicious" | "likely_coordinated" | "unknown"
+  risk_label: string;
   platforms: string[];
+  // Coordination intelligence panel
+  risk_tier: RiskTier;
+  coordination_score: number;
+  manipulation_probability: number;
+  synchronization_intensity: number;
+  semantic_cohesion: number;
+  cluster_confidence: number;
+  coordination_label: CoordinationLabel;
+  qualifying_member_count: number;
+  qualifying_author_count: number;
 }
 
 export interface NarrativeTopAccount {
@@ -125,6 +144,9 @@ export interface NarrativeTopAccount {
   platform: string;
   comment_count: number;
   tier: string | null;
+  display_tier: string | null;
+  distinct_parents: number;
+  influence_score: number;
 }
 
 export interface NarrativeSample {
@@ -134,6 +156,56 @@ export interface NarrativeSample {
   platform: string;
   parent_id: string | null;
   observed_at: string;
+}
+
+export interface NarrativeSignalBreakdown {
+  name: string;
+  value: number;
+  weight: number;
+}
+
+export interface NarrativePropagationPoint {
+  bucket_start: string;
+  count: number;
+  velocity: number;
+  suspicious_count: number;
+}
+
+export interface NarrativeBurst {
+  bucket_start: string;
+  velocity: number;
+  ratio: number;
+  severity: 'moderate' | 'high' | 'extreme';
+  suspicious_count: number;
+}
+
+export interface NarrativeOriginWindow {
+  first_seen: string;
+  suspicious_first_seen: string | null;
+  lag_hours: number | null;
+}
+
+export interface NarrativeGraphNode {
+  external_id: string;
+  handle: string;
+  platform: string;
+  tier: string | null;
+  display_tier: string | null;
+  comment_count: number;
+  distinct_parents: number;
+  influence_score: number;
+}
+
+export interface NarrativeGraphEdge {
+  a: string;
+  b: string;
+  strength: number;
+  methods: string[];
+}
+
+export interface NarrativeGraph {
+  nodes: NarrativeGraphNode[];
+  edges: NarrativeGraphEdge[];
 }
 
 export interface NarrativeDetail {
@@ -153,6 +225,21 @@ export interface NarrativeDetail {
   samples: NarrativeSample[];
   ai_analysis: string;
   ai_provider: string;
+  // Coordination intelligence panel
+  risk_tier: RiskTier;
+  coordination_score: number;
+  manipulation_probability: number;
+  synchronization_intensity: number;
+  semantic_cohesion: number;
+  cluster_confidence: number;
+  coordination_label: CoordinationLabel;
+  qualifying_member_count: number;
+  qualifying_author_count: number;
+  signal_breakdown: NarrativeSignalBreakdown[];
+  propagation: NarrativePropagationPoint[];
+  bursts: NarrativeBurst[];
+  origin: NarrativeOriginWindow | null;
+  graph: NarrativeGraph;
 }
 
 // ---------------------------------------------------------------------------

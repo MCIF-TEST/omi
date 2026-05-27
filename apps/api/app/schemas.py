@@ -577,10 +577,30 @@ class NarrativeOut(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     sample_text: str
-    # Risk enrichment — populated by the trending endpoint
+    # Legacy risk fields (kept for backwards compatibility with old clients).
     inauthenticity_score: float = 0.0   # fraction of scanned members flagged elevated/high
     risk_label: str = "unknown"          # organic | mixed | suspicious | likely_coordinated
     platforms: list[str] = Field(default_factory=list)
+
+    # ---- New coordination intelligence fields (Phase 9) -------------------
+    # User-facing risk band derived from the multi-signal coordination panel.
+    # Values: "low" | "moderate" | "high" | "extreme".
+    risk_tier: str = "low"
+    # Aggregate coordination likelihood in [0, 1].
+    coordination_score: float = 0.0
+    # Probability the cluster reflects artificial amplification.
+    manipulation_probability: float = 0.0
+    # Timing-focused score: bursts + entropy.
+    synchronization_intensity: float = 0.0
+    # Semantic tightness proxy.
+    semantic_cohesion: float = 0.0
+    # Number of independent signals firing at notable strength (0-8).
+    cluster_confidence: int = 0
+    # One-word verdict — see coordination.py for the mapping.
+    coordination_label: str = "unscored"   # organic | mixed | suspicious | coordinated | manipulation_network
+    # Counts restricted to MODERATE+ accounts (the "intelligence-grade" subset).
+    qualifying_member_count: int = 0
+    qualifying_author_count: int = 0
 
 
 class NarrativesResponse(BaseModel):
@@ -607,7 +627,12 @@ class NarrativeTopAccount(BaseModel):
     display_name: str | None = None
     platform: str
     comment_count: int
-    tier: str | None = None   # latest scan tier, None if never scanned
+    tier: str | None = None   # internal storage tier
+    display_tier: str | None = None   # public-facing risk band: low|moderate|high|extreme
+    # Number of distinct parents this account participated in (cross-spread).
+    distinct_parents: int = 0
+    # Composite per-account influence score within this cluster, in [0,1].
+    influence_score: float = 0.0
 
 
 class NarrativeSample(BaseModel):
@@ -617,6 +642,69 @@ class NarrativeSample(BaseModel):
     platform: str
     parent_id: str | None = None   # video/post ID
     observed_at: datetime
+
+
+class NarrativeSignalBreakdown(BaseModel):
+    """One row of the coordination signal breakdown."""
+
+    name: str
+    value: float = Field(ge=0.0, le=1.0)
+    weight: float = Field(ge=0.0, le=1.0)
+
+
+class NarrativePropagationPoint(BaseModel):
+    """One bucket of the propagation timeline (default 6-hour buckets)."""
+
+    bucket_start: datetime
+    count: int
+    velocity: float          # comments per hour
+    suspicious_count: int    # how many came from moderate+ accounts
+
+
+class NarrativeBurst(BaseModel):
+    """An identified amplification burst on the propagation timeline."""
+
+    bucket_start: datetime
+    velocity: float
+    ratio: float             # velocity / rolling-mean baseline
+    severity: str            # moderate | high | extreme
+    suspicious_count: int
+
+
+class NarrativeGraphNode(BaseModel):
+    """One node in the narrative coordination subgraph.
+
+    Only MODERATE+ accounts appear in this graph — the "MOST IMPORTANT RULE".
+    """
+
+    external_id: str
+    handle: str
+    platform: str
+    tier: str | None = None              # internal tier
+    display_tier: str | None = None      # public-facing risk band
+    comment_count: int = 0
+    distinct_parents: int = 0
+    influence_score: float = 0.0
+
+
+class NarrativeGraphEdge(BaseModel):
+    """One coordination edge between two MODERATE+ accounts in this cluster."""
+
+    a: str                 # external_id
+    b: str                 # external_id
+    strength: float = Field(ge=0.0, le=1.0)
+    methods: list[str] = Field(default_factory=list)
+
+
+class NarrativeGraph(BaseModel):
+    nodes: list[NarrativeGraphNode]
+    edges: list[NarrativeGraphEdge]
+
+
+class NarrativeOriginWindow(BaseModel):
+    first_seen: datetime
+    suspicious_first_seen: datetime | None = None
+    lag_hours: float | None = None       # gap between narrative emergence and suspicious amplification
 
 
 class NarrativeDetail(BaseModel):
@@ -634,10 +722,26 @@ class NarrativeDetail(BaseModel):
     platforms: list[str]
     platform_breakdown: dict[str, int]
     activity: list[NarrativeActivityPoint]   # daily buckets, last 30 days
-    top_accounts: list[NarrativeTopAccount]  # top 12 by comment count
+    top_accounts: list[NarrativeTopAccount]  # MODERATE+ accounts only — filtered per the rule
     samples: list[NarrativeSample]           # 15 most recent comments
     ai_analysis: str
     ai_provider: str
+
+    # ---- New coordination intelligence fields (Phase 9) -------------------
+    risk_tier: str = "low"                   # low | moderate | high | extreme
+    coordination_score: float = 0.0
+    manipulation_probability: float = 0.0
+    synchronization_intensity: float = 0.0
+    semantic_cohesion: float = 0.0
+    cluster_confidence: int = 0
+    coordination_label: str = "unscored"
+    qualifying_member_count: int = 0
+    qualifying_author_count: int = 0
+    signal_breakdown: list[NarrativeSignalBreakdown] = Field(default_factory=list)
+    propagation: list[NarrativePropagationPoint] = Field(default_factory=list)
+    bursts: list[NarrativeBurst] = Field(default_factory=list)
+    origin: NarrativeOriginWindow | None = None
+    graph: NarrativeGraph = Field(default_factory=lambda: NarrativeGraph(nodes=[], edges=[]))
 
 
 class AccountAnalysisResponse(BaseModel):
