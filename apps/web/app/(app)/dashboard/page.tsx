@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { Search, Activity, Database, Zap, ArrowRight } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { type EngineStatus, type InvestigationsListResponse } from '@/lib/api';
@@ -129,14 +128,26 @@ export default async function DashboardPage() {
         )}
       </Card>
 
-      {/* Coming-soon strip */}
-      <Card className="border-dashed">
-        <CardLabel>Capabilities — coming in later phases</CardLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-fg-dim">
-          <SoonItem n="03">Narrative intelligence — track talking points across accounts</SoonItem>
-          <SoonItem n="04">Graph view — coordination networks in Cytoscape</SoonItem>
-          <SoonItem n="06">Investigative report export (PDF, shareable links)</SoonItem>
-          <SoonItem n="08">Live monitoring — watchlists, anomaly alerts</SoonItem>
+      {/* Quick-links to key features */}
+      <Card>
+        <CardLabel className="mb-3">Explore capabilities</CardLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <Link href="/narratives" className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors">
+            <span className="font-mono text-2xs text-accent">NR</span>
+            <span className="text-fg-dim">Narrative intelligence — trending talking points</span>
+          </Link>
+          <Link href="/graph" className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors">
+            <span className="font-mono text-2xs text-accent">GR</span>
+            <span className="text-fg-dim">Graph view — coordination network explorer</span>
+          </Link>
+          <Link href="/investigations" className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors">
+            <span className="font-mono text-2xs text-accent">IV</span>
+            <span className="text-fg-dim">Investigations — full archive with share/export</span>
+          </Link>
+          <Link href="/monitoring" className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors">
+            <span className="font-mono text-2xs text-accent">MN</span>
+            <span className="text-fg-dim">Monitoring — watchlists and anomaly alerts</span>
+          </Link>
         </div>
       </Card>
     </div>
@@ -178,12 +189,3 @@ function Stat({ icon, label, value, sub, tone }: StatProps) {
   );
 }
 
-function SoonItem({ n, children }: { n: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-3 py-1">
-      <span className="font-mono text-2xs text-accent">{n}</span>
-      <span>{children}</span>
-      <Badge variant="warn" className="ml-auto">soon</Badge>
-    </div>
-  );
-}

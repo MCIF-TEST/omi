@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Search, Network, MessageSquareText,
-  Activity, FileText, Settings, type LucideIcon,
+  Activity, FileText, Settings, Folder, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -17,13 +17,13 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { href: '/investigate',   label: 'Investigate',   icon: Search },
-  { href: '/graph',         label: 'Graph',         icon: Network,         badge: 'new' },
-  { href: '/narratives',    label: 'Narratives',    icon: MessageSquareText, badge: 'new' },
-  { href: '/monitoring',    label: 'Monitoring',    icon: Activity,        badge: 'live' },
-  { href: '/reports',       label: 'Reports',       icon: FileText,        badge: 'soon', disabled: true },
-  { href: '/settings',      label: 'Settings',      icon: Settings },
+  { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard },
+  { href: '/investigate',     label: 'Investigate',   icon: Search },
+  { href: '/investigations',  label: 'Investigations', icon: Folder },
+  { href: '/graph',           label: 'Graph',         icon: Network },
+  { href: '/narratives',      label: 'Narratives',    icon: MessageSquareText },
+  { href: '/monitoring',      label: 'Monitoring',    icon: Activity },
+  { href: '/settings',        label: 'Settings',      icon: Settings },
 ];
 
 export function Sidebar() {
@@ -70,7 +70,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="px-6 py-4 border-t border-border-1 font-mono text-2xs tracking-wider text-fg-faint">
-        PHASE 1 · FOUNDATION
+        OMISPHERE · v1
       </div>
     </aside>
   );
