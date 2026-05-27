@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
 from app.core import background
@@ -134,18 +133,10 @@ def create_app() -> FastAPI:
     )
 
     # ---- Middleware stack (order matters; outermost first) ----
-    # 1. Trusted hosts in production (drop traffic to unexpected Hosts)
-    if settings.env == "production" and settings.public_base_url:
-        from urllib.parse import urlparse
-        host = urlparse(settings.public_base_url).hostname
-        if host:
-            # Allow the configured host, plus *.onrender.com for direct probes.
-            app.add_middleware(
-                TrustedHostMiddleware,
-                allowed_hosts=[host, "*.onrender.com"],
-            )
-
-    # 2. CORS — tight in prod, loose in dev
+    # 1. CORS — tight in prod, loose in dev
+    # (TrustedHostMiddleware removed: Render's edge handles host routing, and
+    # the internal proxy sets Host: omisphere-api:10000 which doesn't match
+    # *.onrender.com — causing 400 on every proxied request.)
     if settings.env == "production":
         origins = [settings.public_base_url] if settings.public_base_url else []
     else:
@@ -157,13 +148,13 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 3. Security headers
+    # 2. Security headers
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # 4. Compression — Cuts scan-response payloads by ~70%.
+    # 3. Compression — Cuts scan-response payloads by ~70%.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-    # 5. Per-request observability
+    # 4. Per-request observability
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestIdMiddleware)
 
