@@ -253,21 +253,24 @@ class NarrativeService:
         platform_breakdown: dict[str, int] = {p: int(c) for p, c in plat_rows}
         platforms = list(platform_breakdown.keys())
 
-        # Daily activity for last 30 days (SQLite strftime)
+        # Daily activity for last 30 days — func.date() works on both
+        # SQLite (returns 'YYYY-MM-DD' string) and PostgreSQL (returns date).
         cutoff_30 = datetime.now(timezone.utc) - timedelta(days=30)
+        day_expr = func.date(NarrativeMembership.observed_at)
         activity_rows = list(self.session.execute(
             select(
-                func.strftime("%Y-%m-%d", NarrativeMembership.observed_at).label("day"),
+                day_expr.label("day"),
                 func.count(NarrativeMembership.id).label("cnt"),
             )
             .where(
                 NarrativeMembership.narrative_id == narrative_id,
                 NarrativeMembership.observed_at >= cutoff_30,
             )
-            .group_by("day")
-            .order_by("day")
+            .group_by(day_expr)
+            .order_by(day_expr)
         ).all())
-        activity = [{"date": row[0], "count": int(row[1])} for row in activity_rows]
+        # str() normalises both 'YYYY-MM-DD' strings and datetime.date objects
+        activity = [{"date": str(row[0]), "count": int(row[1])} for row in activity_rows]
 
         # Top accounts by comment count (with handle from Account table if available)
         top_acct_rows = list(self.session.execute(
