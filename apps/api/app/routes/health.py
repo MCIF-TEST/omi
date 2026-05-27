@@ -85,6 +85,7 @@ def engine_status() -> EngineStatus:
             settings.stripe_secret_key and settings.stripe_price_id
         ),
         monthly_credit_grant=int(settings.monthly_credit_grant),
+        storage_ephemeral=settings.database_url.startswith("sqlite"),
     )
     cache.set("v1.status", result, ttl_seconds=5)
     return result
