@@ -21,11 +21,10 @@ import os
 import re
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
-from fastapi import Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.storage.db import get_session
