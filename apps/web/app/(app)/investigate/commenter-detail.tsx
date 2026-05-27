@@ -62,11 +62,11 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       )}
 
       {/* Reasons */}
-      {isFlagged && c.reasons.length > 0 && (
+      {isFlagged && (c.reasons ?? []).length > 0 && (
         <section>
           <Label icon={<TrendingUp size={11} />} text="Why this account was flagged" />
           <ul className="space-y-1.5">
-            {c.reasons.map((r, i) => (
+            {(c.reasons ?? []).map((r, i) => (
               <li key={i} className="text-sm text-fg leading-relaxed pl-3 border-l border-border-2">
                 {r}
               </li>
@@ -76,14 +76,14 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       )}
 
       {/* Activity sample */}
-      {isFlagged && c.recent_activity.length > 0 && (
+      {isFlagged && (c.recent_activity ?? []).length > 0 && (
         <section>
           <Label
             icon={<MessageSquareText size={11} />}
             text={`Activity — showing ${c.recent_activity.length} of ${c.activity_total}`}
           />
           <div className="space-y-2">
-            {c.recent_activity.map((a, i) => (
+            {(c.recent_activity ?? []).map((a, i) => (
               <div
                 key={i}
                 className="bg-bg border border-border-1 rounded-sm p-3"
@@ -109,11 +109,11 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       )}
 
       {/* Coordination evidence */}
-      {c.coordination_evidence.length > 0 && (
+      {(c.coordination_evidence ?? []).length > 0 && (
         <section>
           <Label icon={<AlertTriangle size={11} />} text="Coordination evidence" />
           <ul className="space-y-1.5">
-            {c.coordination_evidence.map((e, i) => (
+            {(c.coordination_evidence ?? []).map((e, i) => (
               <li key={i} className="text-sm text-fg-dim leading-relaxed pl-3 border-l border-tier-elevated/50">
                 {e}
               </li>
@@ -123,11 +123,11 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       )}
 
       {/* Weak signals */}
-      {c.weak_signals.length > 0 && (
+      {(c.weak_signals ?? []).length > 0 && (
         <section>
           <Label text="Data-quality caveats" />
           <ul className="space-y-1 text-xs text-fg-mute">
-            {c.weak_signals.map((w, i) => (
+            {(c.weak_signals ?? []).map((w, i) => (
               <li key={i}>· {w}</li>
             ))}
           </ul>

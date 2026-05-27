@@ -147,6 +147,7 @@ class CommenterScanResult(BaseModel):
     # bloating the response on the 80% of low-suspicion commenters).
     recent_activity: list[dict] = Field(default_factory=list)
     activity_total: int = 0
+    weak_signals: list[str] = Field(default_factory=list)
 
 
 class CoordinationClusterOut(BaseModel):
