@@ -1,14 +1,14 @@
 /** @type {import('next').NextConfig} */
 
 // Normalise OMI_API_ORIGIN — Render's `fromService.hostport` returns a bare
-// `host:port` with no scheme. Next.js rewrites require an absolute URL, so
-// prefix `https://` when missing. Local dev uses http://127.0.0.1:8000.
+// `host:port` with no scheme. Next.js rewrites require an absolute URL.
+// Render's internal service mesh is plain HTTP — never HTTPS — so bare
+// host:port values always get http://, not https://.
 function resolveApiOrigin() {
   const raw = process.env.OMI_API_ORIGIN || 'http://127.0.0.1:8000';
   if (/^https?:\/\//i.test(raw)) return raw.replace(/\/$/, '');
-  // Bare host or host:port — assume https in prod, http for localhost.
-  const isLocal = raw.startsWith('127.0.0.1') || raw.startsWith('localhost');
-  return `${isLocal ? 'http' : 'https'}://${raw}`.replace(/\/$/, '');
+  // Bare host or host:port (Render's fromService.hostport) — always HTTP.
+  return `http://${raw}`.replace(/\/$/, '');
 }
 
 const API_ORIGIN = resolveApiOrigin();

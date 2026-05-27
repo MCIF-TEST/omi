@@ -14,12 +14,11 @@ function required(name: string, value: string | undefined): string {
 }
 
 // Render's fromService.hostport returns a bare host:port with no scheme.
-// fetch() requires an absolute URL, so prefix https:// when it's missing.
+// Render's internal service mesh is plain HTTP — bare host:port always gets http://.
 function resolveApiOrigin(): string {
   const raw = process.env.OMI_API_ORIGIN ?? 'http://127.0.0.1:8000';
   if (/^https?:\/\//i.test(raw)) return raw.replace(/\/$/, '');
-  const isLocal = raw.startsWith('127.0.0.1') || raw.startsWith('localhost');
-  return `${isLocal ? 'http' : 'https'}://${raw}`.replace(/\/$/, '');
+  return `http://${raw}`.replace(/\/$/, '');
 }
 
 export const env = {
