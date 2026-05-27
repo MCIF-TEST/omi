@@ -340,6 +340,8 @@ def scan_youtube_video_full(
                 suspected_intent=r.scan_result.suspected_intent,
                 intent_label=r.scan_result.intent_label,
                 reasons=list(r.scan_result.reasons or []),
+                weak_signals=list(r.scan_result.weak_signals or []),
+                signals=list(r.scan_result.signals or []),
                 recent_activity=activity_samples,
                 activity_total=activity_total,
             ))
@@ -730,6 +732,8 @@ def scan_comprehensive_endpoint(
                 suspected_intent=r.scan_result.suspected_intent,
                 intent_label=r.scan_result.intent_label,
                 reasons=list(r.scan_result.reasons or []),
+                weak_signals=list(r.scan_result.weak_signals or []),
+                signals=list(r.scan_result.signals or []),
             ))
         tier_counts = Counter(c.tier.value for c in commenter_results)
         high_handles = sorted(

@@ -87,6 +87,9 @@ export interface HistoricalScan {
   confidence: number;
   tier: Tier;
   summary: string;
+  reasons: string[];
+  weak_signals: string[];
+  signals: SignalResult[];  // populated for latest scan only
 }
 
 export type TrendDirection = 'stable' | 'rising' | 'falling' | 'volatile' | 'insufficient';
@@ -150,6 +153,15 @@ export interface CommenterScanResult {
     like_count: number | null;
   }>;
   activity_total: number;
+  signals: SignalResult[];
+}
+
+export interface AccountAnalysisResponse {
+  platform: string;
+  external_id: string;
+  handle: string;
+  analysis: string;
+  provider: string;
 }
 
 export interface CrossLink {

@@ -118,3 +118,124 @@ def synthesize_commentary(
         user=user,
         max_tokens=settings.reasoning_max_tokens,
     )
+
+
+ACCOUNT_ANALYSIS_SYSTEM = """You are a digital forensics analyst writing a \
+concise behavioural profile of a single social-media account based on \
+probabilistic detection signals produced by OMISPHERE.
+
+Hard rules:
+1. Never claim certainty. Use "patterns suggest", "consistent with", \
+"appears to", "may indicate". Never "is a bot" or "is fake".
+2. Describe observed behavioural patterns, not the person behind the account.
+3. Reference specific signals and their contribution (e.g. "the temporal \
+detector found unusually low posting-interval variation").
+4. Structure: two to three short paragraphs. First: overall risk picture. \
+Second: most notable signals and what they mean. Third (if warranted): \
+caveats, data quality, or mitigating context.
+5. Total length 150–220 words. No headers, no bullet points.
+6. End with one sentence acknowledging probabilistic limits.
+
+You are NOT a chatbot. You produce analytic prose only."""
+
+
+def _build_account_digest(
+    *,
+    handle: str,
+    platform: str,
+    overall_probability: float,
+    tier: str,
+    confidence: float,
+    summary: str,
+    signals: list[dict],
+    trend_direction: str,
+    trend_summary: str,
+    scan_count: int,
+    reasons: list[str],
+    weak_signals: list[str],
+    max_chars: int,
+) -> str:
+    pct = int(round(overall_probability * 100))
+    conf_pct = int(round(confidence * 100))
+
+    lines = [
+        f"handle: {handle}",
+        f"platform: {platform}",
+        f"verdict_pct: {pct}",
+        f"tier: {tier}",
+        f"confidence_pct: {conf_pct}",
+        f"summary: {summary[:400]}",
+        f"trend: {trend_direction} — {trend_summary[:200]}",
+        f"total_scans: {scan_count}",
+    ]
+
+    if reasons:
+        lines.append("reasons: " + " | ".join(reasons[:4]))
+
+    # Per-detector breakdown
+    sig_lines = []
+    for s in signals:
+        name = s.get("name", "?")
+        prob = int(round((s.get("probability") or 0) * 100))
+        conf = int(round((s.get("confidence") or 0) * 100))
+        ev = (s.get("evidence") or [""])[0][:120] if s.get("evidence") else ""
+        sig_lines.append(f"  {name}: {prob}% prob, {conf}% conf — {ev}")
+    if sig_lines:
+        lines.append("detector_breakdown:\n" + "\n".join(sig_lines[:8]))
+
+    if weak_signals:
+        lines.append("data_quality_caveats: " + " | ".join(weak_signals[:3]))
+
+    return "\n".join(lines)[:max_chars]
+
+
+def synthesize_account_analysis(
+    *,
+    handle: str,
+    platform: str,
+    overall_probability: float,
+    tier: str,
+    confidence: float,
+    summary: str,
+    signals: list[dict],
+    trend_direction: str,
+    trend_summary: str,
+    scan_count: int,
+    reasons: list[str],
+    weak_signals: list[str],
+    settings: "Settings | None" = None,
+    provider: "LLMProvider | None" = None,
+) -> "ProviderResult":
+    """Generate a per-account behavioural analysis narrative."""
+    from app.core.config import get_settings as _get_settings
+    settings = settings or _get_settings()
+    provider = provider or get_provider(settings)
+
+    digest = _build_account_digest(
+        handle=handle,
+        platform=platform,
+        overall_probability=overall_probability,
+        tier=tier,
+        confidence=confidence,
+        summary=summary,
+        signals=signals,
+        trend_direction=trend_direction,
+        trend_summary=trend_summary,
+        scan_count=scan_count,
+        reasons=reasons,
+        weak_signals=weak_signals,
+        max_chars=settings.reasoning_max_input_chars,
+    )
+    user = (
+        "Write a 150–220 word behavioural profile for this account based on "
+        "OMISPHERE detection findings:\n\n"
+        f"{digest}\n\n"
+        "Structure: overall risk picture, then notable signals explained, "
+        "then caveats if needed. Probabilistic language throughout. "
+        "No headers or bullets."
+    )
+    return provider.synthesize(
+        system=ACCOUNT_ANALYSIS_SYSTEM,
+        user=user,
+        max_tokens=min(400, settings.reasoning_max_tokens + 80),
+    )

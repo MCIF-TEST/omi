@@ -148,6 +148,8 @@ class CommenterScanResult(BaseModel):
     recent_activity: list[dict] = Field(default_factory=list)
     activity_total: int = 0
     weak_signals: list[str] = Field(default_factory=list)
+    # Per-detector breakdown — populated when signals are available.
+    signals: list[SignalResult] = Field(default_factory=list)
 
 
 class CoordinationClusterOut(BaseModel):
@@ -357,13 +359,18 @@ class VideoScanSummary(BaseModel):
 
 
 class HistoricalScan(BaseModel):
-    """One past scan of an account, lightweight (no full signals payload)."""
+    """One past scan of an account."""
 
     scanned_at: datetime
     overall_probability: float = Field(ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0)
     tier: Tier
     summary: str
+    reasons: list[str] = Field(default_factory=list)
+    weak_signals: list[str] = Field(default_factory=list)
+    # Per-detector breakdown — only populated for the latest scan to keep
+    # the payload small for older history rows.
+    signals: list[SignalResult] = Field(default_factory=list)
 
 
 class TrendInfo(BaseModel):
@@ -578,6 +585,16 @@ class NarrativesResponse(BaseModel):
     window_days: int
     embedder: str
     narratives: list[NarrativeOut]
+
+
+class AccountAnalysisResponse(BaseModel):
+    """LLM (or template) behavioural analysis for a single account."""
+
+    platform: str
+    external_id: str
+    handle: str
+    analysis: str
+    provider: str   # "template" | "anthropic-claude-haiku-..."
 
 
 class AccountHistoryResponse(BaseModel):

@@ -2,12 +2,15 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Activity, Calendar,
+  Brain, BarChart2,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Sparkline } from '@/components/shared/sparkline';
-import { ApiError, type AccountHistoryResponse } from '@/lib/api';
+import { TierBadge } from '@/components/shared/tier-badge';
+import { ProbabilityBar } from '@/components/shared/probability-bar';
+import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type SignalResult } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { pct, timeAgo, tierBg } from '@/lib/format';
 
@@ -17,6 +20,17 @@ interface PageProps {
 }
 
 export const dynamic = 'force-dynamic';
+
+const SIGNAL_LABELS: Record<string, string> = {
+  temporal:    'Posting cadence',
+  semantic:    'Content repetition',
+  ai_writing:  'AI-writing patterns',
+  profile:     'Profile metadata',
+  voice:       'Personal voice',
+  engagement:  'Engagement farming',
+  memory:      'Fingerprint match',
+  coordination:'Coordination cluster',
+};
 
 export default async function AccountHistoryPage({ params, searchParams }: PageProps) {
   const platform = searchParams.platform || 'youtube';
@@ -32,12 +46,22 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
     throw e;
   }
 
-  const latest = history.scans[0]; // newest first
-  // Oldest → newest for the sparkline
+  // Fetch LLM analysis — gracefully skip if it fails
+  let analysis: AccountAnalysisResponse | null = null;
+  try {
+    analysis = await apiServer<AccountAnalysisResponse>(
+      `/v1/accounts/${platform}/${encodeURIComponent(external_id)}/analysis`,
+    );
+  } catch {
+    // Analysis is optional — continue without it
+  }
+
+  const latest = history.scans[0];
   const sparkPoints = [...history.scans].reverse().map((s) => s.overall_probability);
+  const latestSignals = (latest?.signals ?? []).filter((s) => s.confidence > 0);
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="space-y-6 max-w-5xl">
       <div>
         <Link
           href="/dashboard"
@@ -48,14 +72,64 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
           Account · {platform}
         </p>
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-baseline gap-3 flex-wrap">
           <h1 className="text-2xl font-semibold text-fg tracking-tight">{history.handle}</h1>
           {history.display_name && (
             <span className="text-fg-mute">· {history.display_name}</span>
           )}
+          {latest && <TierBadge tier={latest.tier} size="lg" />}
         </div>
         <p className="mt-1 font-mono text-xs text-fg-faint">{history.external_id}</p>
       </div>
+
+      {/* AI Behavioural Analysis */}
+      {analysis && (
+        <Card>
+          <div className="flex items-center gap-2 mb-3">
+            <Brain size={14} className="text-accent" />
+            <CardLabel className="m-0">AI behavioural analysis</CardLabel>
+            <span className="ml-auto font-mono text-2xs text-fg-faint tracking-wider">
+              {analysis.provider}
+            </span>
+          </div>
+          <p className="text-sm text-fg leading-relaxed">{analysis.analysis}</p>
+        </Card>
+      )}
+
+      {/* Latest snapshot + signal breakdown */}
+      {latest && (
+        <Card>
+          <CardLabel>Latest scan · {timeAgo(latest.scanned_at)}</CardLabel>
+          <div className="flex items-baseline justify-between gap-4 flex-wrap mb-3">
+            <span className="text-3xl font-bold tracking-tight mono text-fg">
+              {pct(latest.overall_probability)}
+            </span>
+            <span className={`px-2 py-0.5 rounded-sm border font-mono text-2xs uppercase tracking-wider ${tierBg(latest.tier)}`}>
+              {latest.tier} suspicion
+            </span>
+            <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
+              confidence {pct(latest.confidence)}
+            </span>
+          </div>
+          <ProbabilityBar value={latest.overall_probability} tier={latest.tier} showLabel={false} />
+          <p className="mt-3 text-sm text-fg-dim">{latest.summary}</p>
+
+          {/* Per-detector breakdown */}
+          {latestSignals.length > 0 && (
+            <div className="mt-5">
+              <div className="flex items-center gap-1.5 font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-3">
+                <BarChart2 size={11} />
+                Detector breakdown
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {latestSignals.map((s) => (
+                  <SignalCard key={s.name} signal={s} />
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Trend card + sparkline */}
       <Card>
@@ -100,25 +174,6 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </div>
       </Card>
 
-      {/* Latest snapshot */}
-      {latest && (
-        <Card>
-          <CardLabel>Latest scan · {timeAgo(latest.scanned_at)}</CardLabel>
-          <div className="flex items-baseline justify-between gap-4 flex-wrap mb-3">
-            <span className="text-3xl font-bold tracking-tight mono text-fg">
-              {pct(latest.overall_probability)}
-            </span>
-            <span className={`px-2 py-0.5 rounded-sm border font-mono text-2xs uppercase tracking-wider ${tierBg(latest.tier)}`}>
-              {latest.tier} suspicion
-            </span>
-            <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
-              confidence {pct(latest.confidence)}
-            </span>
-          </div>
-          <p className="text-sm text-fg-dim">{latest.summary}</p>
-        </Card>
-      )}
-
       {/* Scan history table */}
       <Card>
         <CardLabel>History · {history.scans.length} scan{history.scans.length === 1 ? '' : 's'}</CardLabel>
@@ -158,30 +213,22 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
       <Card>
         <CardLabel>Profile snapshot</CardLabel>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-          <Row label="Followers" value={history.follower_count ?? '—'} />
+          <Row label="Followers" value={history.follower_count?.toLocaleString() ?? '—'} />
           <Row
             label="Account created"
-            value={
-              history.account_created_at
-                ? new Date(history.account_created_at).toLocaleDateString()
-                : '—'
-            }
+            value={history.account_created_at
+              ? new Date(history.account_created_at).toLocaleDateString()
+              : '—'}
           />
           <Row
             label="First seen by OMISPHERE"
-            value={
-              history.first_seen_at
-                ? new Date(history.first_seen_at).toLocaleDateString()
-                : '—'
-            }
+            value={history.first_seen_at
+              ? new Date(history.first_seen_at).toLocaleDateString()
+              : '—'}
           />
           <Row
             label="Last scanned"
-            value={
-              history.last_scanned_at
-                ? timeAgo(history.last_scanned_at)
-                : '—'
-            }
+            value={history.last_scanned_at ? timeAgo(history.last_scanned_at) : '—'}
           />
           {history.bio && (
             <div className="sm:col-span-2">
@@ -203,12 +250,48 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
   );
 }
 
+function SignalCard({ signal }: { signal: SignalResult }) {
+  const prob = signal.probability ?? 0;
+  const conf = signal.confidence ?? 0;
+  const label = SIGNAL_LABELS[signal.name] ?? signal.name;
+  const topEvidence = signal.evidence?.[0];
+  const barColor =
+    prob >= 0.75 ? 'bg-tier-high' :
+    prob >= 0.5  ? 'bg-tier-elevated' :
+    prob >= 0.25 ? 'bg-tier-moderate' :
+    'bg-tier-low';
+  const textColor =
+    prob >= 0.75 ? 'text-tier-high' :
+    prob >= 0.5  ? 'text-tier-elevated' :
+    prob >= 0.25 ? 'text-tier-moderate' :
+    'text-tier-low';
+
+  return (
+    <div className="bg-bg border border-border-1 rounded-sm p-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">{label}</span>
+        <span className={`font-mono font-bold text-sm ${textColor}`}>
+          {Math.round(prob * 100)}%
+        </span>
+      </div>
+      <div className="h-1.5 w-full bg-border-1 rounded-full overflow-hidden mb-2">
+        <div
+          className={`h-full rounded-full ${barColor}`}
+          style={{ width: `${Math.round(prob * 100)}%`, opacity: Math.max(0.35, conf) }}
+        />
+      </div>
+      <div className="flex items-center justify-between text-2xs font-mono text-fg-faint">
+        <span className="truncate max-w-[180px]">{topEvidence ?? 'No evidence noted.'}</span>
+        <span className="shrink-0 ml-2">conf {Math.round(conf * 100)}%</span>
+      </div>
+    </div>
+  );
+}
+
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase mb-0.5">
-        {label}
-      </dt>
+      <dt className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase mb-0.5">{label}</dt>
       <dd className="text-fg">{value}</dd>
     </div>
   );
