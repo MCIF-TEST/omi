@@ -87,18 +87,23 @@ _DEV_SESSION_SECRET = "dev-only-change-me-please-12345678901234567890"
 
 
 def _verify_production_config(settings) -> None:
-    """Fail fast on critical misconfigurations in production.
+    """Guard against the dev session secret leaking into production.
 
-    The dev session secret would silently let anyone forge cookies; refusing
-    to start is safer than serving traffic with insecure auth.
+    The dev default would let anyone forge cookies — instead of failing the
+    deploy (which strands a running service), we override the in-memory
+    secret with a fresh random one and log a CRITICAL warning. Sessions
+    won't survive restarts until OMI_SESSION_SECRET is properly set.
     """
     if settings.env != "production":
         return
     if settings.require_auth and settings.session_secret == _DEV_SESSION_SECRET:
-        raise RuntimeError(
-            "OMI_SESSION_SECRET is still the dev default in production. "
-            "Set it to a random 64+ char string (Render's `generateValue: true` "
-            "does this automatically — redeploy from the Blueprint to pick it up)."
+        import secrets as _secrets
+        settings.session_secret = _secrets.token_urlsafe(64)
+        logger.critical(
+            "OMI_SESSION_SECRET is unset in production — using a random "
+            "process-local value. Sessions will invalidate on every restart. "
+            "Set OMI_SESSION_SECRET in the Render dashboard or redeploy from "
+            "the Blueprint (generateValue:true) to fix permanently."
         )
 
 
