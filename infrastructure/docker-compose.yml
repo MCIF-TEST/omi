@@ -1,0 +1,44 @@
+version: '3.9'
+
+# Local development stack. Brings up Postgres so OMISPHERE can develop
+# against the same DB engine used in production (Supabase Postgres).
+#
+# Usage:
+#   docker compose -f infrastructure/docker-compose.yml up -d
+#
+# Then run the API + web from your host:
+#   cd apps/api && uvicorn app.main:app --reload
+#   cd apps/web && npm run dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: omisphere-postgres
+    ports: ['5432:5432']
+    environment:
+      POSTGRES_DB: omi
+      POSTGRES_USER: omi
+      POSTGRES_PASSWORD: omi_dev_password
+    volumes:
+      - omisphere-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U omi']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Reserved for Phase 4 (Neo4j) + Phase 8 (Redis). Commented out so
+  # day-1 dev doesn't need to pull these images.
+  #
+  # neo4j:
+  #   image: neo4j:5-community
+  #   ports: ['7474:7474', '7687:7687']
+  #   environment:
+  #     NEO4J_AUTH: neo4j/omi_dev_password
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   ports: ['6379:6379']
+
+volumes:
+  omisphere-postgres-data:

@@ -1,0 +1,397 @@
+"""SQLAlchemy models for the self-improving fingerprint store.
+
+Schema choices:
+
+* ``Account`` is keyed on (platform, external_id) — the platform's stable
+  identifier (YouTube channel ID, X user ID). The visible handle is mutable
+  and is stored for display only.
+* ``Account.fingerprint_json`` holds the latest normalized fingerprint
+  vector for fast nearest-neighbor lookup; the full scan history lives in
+  ``Scan`` rows and is never garbage-collected (the value of the dataset
+  grows monotonically).
+* ``VideoScan`` records each ``/v1/scan/youtube/video`` invocation so a UI
+  can show "this video has been scanned N times before" without re-querying.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any
+
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+    __table_args__ = (UniqueConstraint("platform", "external_id", name="uq_account_platform_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    external_id: Mapped[str] = mapped_column(String(128), index=True)
+    handle: Mapped[str] = mapped_column(String(255))
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    follower_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    following_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    account_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Normalized fixed-width vector. Stored as JSON for portability; for
+    # large-scale deployments swap to pgvector / Qdrant.
+    fingerprint_json: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+
+    scans: Mapped[list["Scan"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="Scan.scanned_at.desc()",
+    )
+
+
+class Scan(Base):
+    __tablename__ = "scans"
+    # Composite for account_history (Phase 2): equality on account_id +
+    # ordering on scanned_at DESC.
+    __table_args__ = (
+        Index("ix_scan_account_time", "account_id", "scanned_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+    scanned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+
+    overall_probability: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    tier: Mapped[str] = mapped_column(String(16))
+    summary: Mapped[str] = mapped_column(Text)
+    signals_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+
+    account: Mapped[Account] = relationship(back_populates="scans")
+
+
+class VideoScan(Base):
+    """Aggregate record of a video-level scan."""
+
+    __tablename__ = "video_scans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    video_id: Mapped[str] = mapped_column(String(128), index=True)
+    scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    commenter_count: Mapped[int] = mapped_column(Integer, default=0)
+    fresh_count: Mapped[int] = mapped_column(Integer, default=0)
+    cached_count: Mapped[int] = mapped_column(Integer, default=0)
+    quota_used: Mapped[int] = mapped_column(Integer, default=0)
+
+    high_count: Mapped[int] = mapped_column(Integer, default=0)
+    elevated_count: Mapped[int] = mapped_column(Integer, default=0)
+    moderate_count: Mapped[int] = mapped_column(Integer, default=0)
+    low_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    coordination_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class CommenterEngagement(Base):
+    """Persistent edge: this commenter has been observed engaging with this
+    parent content (a video for YouTube, a thread for Reddit, etc.).
+
+    Source for the co-engagement / "fellow travelers" detector. We populate
+    one row per (account, parent_id) pair extracted from each commenter's
+    recent post history. The unique constraint keeps the index small as
+    operators re-scan the same accounts.
+    """
+
+    __tablename__ = "commenter_engagements"
+    __table_args__ = (
+        UniqueConstraint(
+            "platform", "account_external_id", "parent_id",
+            name="uq_engagement_account_parent",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    account_external_id: Mapped[str] = mapped_column(String(128), index=True)
+    parent_id: Mapped[str] = mapped_column(String(128), index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+# func is imported only to keep alembic-style auto-generated DDL stable; mark used.
+_ = func
+
+
+# ---------------------------------------------------------------------------
+# Multi-tenant tables: users + scan log + (future) billing.
+#
+# These are added in the public-launch update; existing single-user installs
+# can keep running without them touched (no FKs into existing tables yet).
+# ---------------------------------------------------------------------------
+
+
+class User(Base):
+    """A paying-or-trial user of the OMI service."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Credits remaining (refilled monthly when the subscription renews; also
+    # bumped by one-off purchases). Each comprehensive scan costs one credit.
+    credits_remaining: Mapped[int] = mapped_column(Integer, default=3)  # 3 free trial credits
+
+    # Stripe linkage
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    subscription_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    subscription_renews_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Soft role flag — set manually in the DB for now. Future: admin panel.
+    is_admin: Mapped[bool] = mapped_column(Integer, default=0)
+
+
+class ScanLog(Base):
+    """One row per scan a user initiates. Auditable history + analytics."""
+
+    __tablename__ = "scan_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+    platform: Mapped[str] = mapped_column(String(32))
+    scan_type: Mapped[str] = mapped_column(String(32))   # "comprehensive", "account", etc.
+    credits_cost: Mapped[int] = mapped_column(Integer, default=1)
+    target_input: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    success: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class BillingEvent(Base):
+    """Inbound Stripe webhook events. Stored idempotent by event id."""
+
+    __tablename__ = "billing_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stripe_event_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+# ---------------------------------------------------------------------------
+# Narrative intelligence (Phase 3) — cluster of similar comments across the
+# entire corpus. Centroid + member count + last-seen drives the trending
+# narratives feed.
+# ---------------------------------------------------------------------------
+
+
+class Narrative(Base):
+    """A semantic cluster of comments that share a topic / framing.
+
+    Centroid is the running-average embedding of all members; we update
+    it incrementally as new members are added.
+    """
+
+    __tablename__ = "narratives"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # An auto-generated representative excerpt — closest member to centroid
+    # when the narrative was last summarized.
+    label: Mapped[str] = mapped_column(String(280), default="")
+    centroid_json: Mapped[list[float]] = mapped_column(JSON)
+    dimensions: Mapped[int] = mapped_column(Integer, default=384)
+    member_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    # Number of distinct accounts contributing — high = wide spread.
+    distinct_authors: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+# ---------------------------------------------------------------------------
+# Graph + coordination intelligence (Phase 4) — persistent, cumulative
+# coordination edges across every scan. Symmetric (account_a < account_b
+# at write time so we never store both directions).
+# ---------------------------------------------------------------------------
+
+
+class CoordinationEdge(Base):
+    __tablename__ = "coordination_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "platform", "account_a", "account_b",
+            name="uq_coord_edge_pair",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    account_a: Mapped[str] = mapped_column(String(128), index=True)
+    account_b: Mapped[str] = mapped_column(String(128), index=True)
+    # Number of distinct per-scan clusters where this pair co-occurred.
+    observation_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Set of detector method names that have flagged this pair, JSON list.
+    methods_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Mean per-cluster score across all observations (running average).
+    mean_cluster_score: Mapped[float] = mapped_column(Float, default=0.0)
+    # Most recent video / parent_id the pair were observed under (for drill-down).
+    last_shared_parent: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    first_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+# ---------------------------------------------------------------------------
+# Investigations (Phase 5) — persistent record of a user's scan with stable
+# URL slug. Continuation batches append to the same investigation so the
+# user has one canonical record per piece of work.
+# ---------------------------------------------------------------------------
+
+
+class Investigation(Base):
+    __tablename__ = "investigations"
+    # Composite for /v1/investigations (dashboard list): equality on
+    # user_id + ordering by created_at DESC.
+    __table_args__ = (
+        Index("ix_inv_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # Short URL-safe id (e.g. ``inv_a1b2c3d4``) — stable across redeploys.
+    slug: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    # Auto-generated human label.
+    label: Mapped[str] = mapped_column(String(280))
+    # The raw input the user pasted.
+    input_url: Mapped[str] = mapped_column(String(500))
+    # Resolved primary target id (video id, channel id, etc.) — for joins.
+    target_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32))   # "video" | "channel" | "comprehensive"
+    overall_probability: Mapped[float] = mapped_column(Float, default=0.0)
+    overall_tier: Mapped[str] = mapped_column(String(16), default="low")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    quota_used: Mapped[int] = mapped_column(Integer, default=0)
+    batch_count: Mapped[int] = mapped_column(Integer, default=1)
+    # Full serialized ComprehensiveScanResult payload. We replace this on
+    # continuation batches with the merged result.
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Phase 6: public sharing — opt-in, revocable token.
+    share_token: Mapped[str | None] = mapped_column(String(48), nullable=True, unique=True, index=True)
+    is_public: Mapped[bool] = mapped_column(Integer, default=0)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Phase 7: cached analyst-style commentary. Populated on demand; survives
+    # across reloads so we don't re-spend tokens.
+    commentary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    commentary_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    commentary_tokens_used: Mapped[int] = mapped_column(Integer, default=0)
+    commentary_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Monitoring (Phase 8) — watchlists + alerts + anomaly feed.
+# ---------------------------------------------------------------------------
+
+
+class Watchlist(Base):
+    __tablename__ = "watchlists"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "kind", "target_id",
+            name="uq_watchlist_user_target",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32))   # "channel" | "narrative"
+    target_id: Mapped[str] = mapped_column(String(128), index=True)
+    label: Mapped[str] = mapped_column(String(280), default="")
+    # Tier threshold at which an alert fires — alerts only when current tier
+    # is at or above this rank. Stored as string for clarity.
+    alert_threshold_tier: Mapped[str] = mapped_column(String(16), default="moderate")
+    # Last observed tier / probability — used to detect changes.
+    last_seen_tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_seen_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_alert_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    __table_args__ = (
+        Index("ix_alert_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
+    watchlist_id: Mapped[int | None] = mapped_column(
+        ForeignKey("watchlists.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    # "tier_change" | "narrative_spike" | "high_tier_surge"
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    severity: Mapped[str] = mapped_column(String(16), default="info")
+    message: Mapped[str] = mapped_column(Text)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NarrativeMembership(Base):
+    """One comment that belongs to a narrative."""
+
+    __tablename__ = "narrative_memberships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    narrative_id: Mapped[int] = mapped_column(
+        ForeignKey("narratives.id", ondelete="CASCADE"), index=True
+    )
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    account_external_id: Mapped[str] = mapped_column(String(128), index=True)
+    parent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    comment_text: Mapped[str] = mapped_column(Text)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)

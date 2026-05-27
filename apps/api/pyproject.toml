@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omi-api"
+version = "0.1.0"
+description = "Omisphere detection API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "python-dateutil>=2.9",
+    "sqlalchemy>=2.0",
+    "bcrypt>=4.1",
+    "itsdangerous>=2.2",
+    "stripe>=10.0",
+    "networkx>=3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.5",
+]
+ml = [
+    # Heavyweight; only needed for the embedding-based semantic detector.
+    # Falls back gracefully to TF-IDF if not installed.
+    "sentence-transformers>=3.0",
+    "torch>=2.2",
+]
+youtube = [
+    "google-api-python-client>=2.130",
+]
+db = [
+    "asyncpg>=0.29",
+    "psycopg2-binary>=2.9",
+    "alembic>=1.13",
+    "redis>=5.0",
+    "neo4j>=5.20",
+]
+postgres = [
+    # Minimal Postgres driver for the public-launch deployment (Render etc.).
+    "psycopg2-binary>=2.9",
+]
+reasoning = [
+    # Phase 7 — optional LLM enhancement. Falls back to TemplateProvider
+    # when this isn't installed, so it's safe to leave out in dev.
+    "anthropic>=0.40",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
