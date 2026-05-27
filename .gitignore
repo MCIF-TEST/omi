@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+
+# Node / Next.js
+node_modules/
+.next/
+.turbo/
+out/
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.production.local
+*.env.local
+
+# Runtime data
+apps/api/data/
+.docker-data/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db

@@ -1,0 +1,4260 @@
+[
+  {
+    "label": "ai_content_high",
+    "expected_tier": "high",
+    "expected_probability": 0.85,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@TechFlowDaily",
+      "display_name": "TechFlow Daily",
+      "bio": "Bringing you the latest insights on technology. Stay informed.",
+      "follower_count": 142,
+      "created_at": "2024-08-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's important to note that \u2014 when we consider this carefully \u2014 the implications are quite significant.",
+        "created_at": "2026-05-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's worth mentioning that this development represents \u2014 in many ways \u2014 a pivotal moment in the industry.",
+        "created_at": "2026-05-01T12:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's essential to consider \u2014 particularly in this context \u2014 the broader ramifications of such a shift.",
+        "created_at": "2026-05-01T16:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's worth noting that \u2014 given the current landscape \u2014 this approach offers compelling advantages.",
+        "created_at": "2026-05-02T08:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's important to recognize \u2014 especially in light of recent events \u2014 the nuanced nature of this matter.",
+        "created_at": "2026-05-02T12:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's crucial to delve into \u2014 and thoroughly examine \u2014 the multifaceted implications here.",
+        "created_at": "2026-05-02T16:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's significant that \u2014 within this framework \u2014 we can identify several key trends emerging.",
+        "created_at": "2026-05-03T08:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's noteworthy that \u2014 given the broader context \u2014 these patterns merit close attention.",
+        "created_at": "2026-05-03T12:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's essential to understand \u2014 particularly from a strategic standpoint \u2014 the implications.",
+        "created_at": "2026-05-03T16:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@TechFlowDaily",
+        "text": "It's important to delve deeper \u2014 into the underlying mechanisms \u2014 to grasp the full picture.",
+        "created_at": "2026-05-04T08:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "engagement_farm_high",
+    "expected_tier": "high",
+    "expected_probability": 0.85,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@LikesAndSubs",
+      "display_name": "Likes And Subs",
+      "bio": "Drop a like \ud83d\udc4d link in bio \ud83d\udd17 follow for more \ud83d\ude80",
+      "follower_count": 89,
+      "created_at": "2025-01-10T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@LikesAndSubs",
+        "text": "\ud83d\udd25\ud83d\udd25\ud83d\udd25 SMASH that like!! Link in bio \ud83d\udd17 https://bit.ly/abc \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-05-01T09:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@LikesAndSubs",
+        "text": "Drop a like if you agree!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 https://bit.ly/xyz \ud83d\udd25\ud83d\udd25\ud83d\udd25 #viral",
+        "created_at": "2026-05-01T13:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@LikesAndSubs",
+        "text": "Subscribe NOW!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 Link in bio \ud83d\udd17 don't miss out \ud83d\udd25\ud83d\udd25\ud83d\udd25",
+        "created_at": "2026-05-01T17:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@LikesAndSubs",
+        "text": "\ud83d\ude80\ud83d\ude80\ud83d\ude80 Smash that like button!! Drop a follow \ud83d\udd25\ud83d\udd25\ud83d\udd25 link in bio",
+        "created_at": "2026-05-02T09:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@LikesAndSubs",
+        "text": "Check out my channel!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 https://bit.ly/qqq link in bio \ud83d\udd25",
+        "created_at": "2026-05-02T13:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@LikesAndSubs",
+        "text": "Drop a like \ud83d\udc4d subscribe \ud83d\udd14 share \ud83d\udd04 link in bio \ud83d\udd17 \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-05-02T17:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@LikesAndSubs",
+        "text": "\ud83d\udd25\ud83d\udd25\ud83d\udd25 Limited time!! Link in bio \ud83d\udd17 https://bit.ly/rrr \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-05-03T09:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@LikesAndSubs",
+        "text": "Don't forget to LIKE & SUBSCRIBE!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 #viral #fyp #trending",
+        "created_at": "2026-05-03T13:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_low_volume",
+    "expected_tier": "low",
+    "expected_probability": 0.18,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@sarah_baker",
+      "display_name": "Sarah",
+      "bio": "Mom of two, baking enthusiast, hiking on weekends.",
+      "follower_count": 312,
+      "created_at": "2019-03-22T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@sarah_baker",
+        "text": "Loved this episode, especially the part about sourdough \u2014 I've been struggling with mine.",
+        "created_at": "2026-04-23T19:32:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@sarah_baker",
+        "text": "Wait, you used WHAT hydration percentage? I need to try this.",
+        "created_at": "2026-04-28T08:15:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@sarah_baker",
+        "text": "Came back to rewatch \u2014 the timing tips finally clicked. Thanks!",
+        "created_at": "2026-05-04T21:48:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@sarah_baker",
+        "text": "Anyone else's kids steal half the dough before it proofs? \ud83d\ude05",
+        "created_at": "2026-05-10T17:02:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@sarah_baker",
+        "text": "Trying this recipe tonight, will report back tomorrow",
+        "created_at": "2026-05-15T16:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_normal_volume",
+    "expected_tier": "low",
+    "expected_probability": 0.2,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@marcus_codes",
+      "display_name": "Marcus",
+      "bio": "Software dev in Berlin. Photography on weekends.",
+      "follower_count": 1247,
+      "created_at": "2017-11-04T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@marcus_codes",
+        "text": "honestly I tried this for a week and it just didn't fit how I think about state",
+        "created_at": "2026-04-01T21:14:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@marcus_codes",
+        "text": "the framework is fine, the docs are not",
+        "created_at": "2026-04-03T18:42:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@marcus_codes",
+        "text": "anyone running this in prod and how's the cold-start?",
+        "created_at": "2026-04-06T09:11:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@marcus_codes",
+        "text": "wait when did they add SSR support, that changes things",
+        "created_at": "2026-04-08T13:29:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@marcus_codes",
+        "text": "yeah this matches my experience too",
+        "created_at": "2026-04-11T22:03:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@marcus_codes",
+        "text": "I would not have guessed that benchmark, surprising result",
+        "created_at": "2026-04-14T17:51:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@marcus_codes",
+        "text": "switching back to the old approach lol",
+        "created_at": "2026-04-17T20:35:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@marcus_codes",
+        "text": "good explanation, the diagram at 4:12 was what finally made it click",
+        "created_at": "2026-04-20T19:08:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@marcus_codes",
+        "text": "you can drop the cache layer if requests are mostly cold anyway",
+        "created_at": "2026-04-23T15:22:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@marcus_codes",
+        "text": "wish someone had told me this six months ago",
+        "created_at": "2026-04-26T11:47:00Z"
+      }
+    ]
+  },
+  {
+    "label": "scheduler_bot_moderate",
+    "expected_tier": "elevated",
+    "expected_probability": 0.66,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@news_pulse_24",
+      "display_name": "News Pulse 24",
+      "bio": "Breaking news 24/7. Auto-curated headlines.",
+      "follower_count": 580,
+      "created_at": "2024-02-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: market moves, tech announcements, weather updates.",
+        "created_at": "2026-05-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: policy decisions, sports recap, weather updates.",
+        "created_at": "2026-05-01T12:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: market moves, tech announcements, evening recap.",
+        "created_at": "2026-05-01T16:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: policy decisions, tech announcements, weather updates.",
+        "created_at": "2026-05-02T08:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: market moves, sports recap, weather updates.",
+        "created_at": "2026-05-02T12:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: policy decisions, tech announcements, weather updates.",
+        "created_at": "2026-05-02T16:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: market moves, tech announcements, evening recap.",
+        "created_at": "2026-05-03T08:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@news_pulse_24",
+        "text": "Today's headlines: policy decisions, sports recap, weather updates.",
+        "created_at": "2026-05-03T12:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "thin_data_ambiguous",
+    "expected_tier": "low",
+    "expected_probability": 0.35,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@dmills",
+      "display_name": "D Mills",
+      "bio": "",
+      "follower_count": 4,
+      "created_at": "2026-04-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@dmills",
+        "text": "great video",
+        "created_at": "2026-05-20T14:32:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@dmills",
+        "text": "agreed",
+        "created_at": "2026-05-22T19:15:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_gamer",
+    "expected_tier": "low",
+    "expected_probability": 0.14,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@jakesgaming",
+      "display_name": "Jake",
+      "bio": "PC gamer. mostly RPGs and survival. Colorado.",
+      "follower_count": 523,
+      "created_at": "2018-06-10T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@jakesgaming",
+        "text": "this boss took me like 4 tries lmao, finally figured out the pattern",
+        "created_at": "2026-04-05T23:14:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@jakesgaming",
+        "text": "wait the ending changes if you picked the third option in chapter 2?? restarting now",
+        "created_at": "2026-04-07T21:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@jakesgaming",
+        "text": "runs fine on my 3080 but frame pacing is still janky in the open world",
+        "created_at": "2026-04-12T20:12:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@jakesgaming",
+        "text": "nope that build falls apart past level 40, tested it twice",
+        "created_at": "2026-04-17T22:30:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@jakesgaming",
+        "text": "old soundtrack was better imo this one feels too generic",
+        "created_at": "2026-04-22T19:55:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@jakesgaming",
+        "text": "ok I take it back this is actually decent, had to get past the tutorial slog",
+        "created_at": "2026-04-28T22:08:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@jakesgaming",
+        "text": "anyone else losing saves? third time this week on my end",
+        "created_at": "2026-05-04T21:42:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@jakesgaming",
+        "text": "the DLC pricing is honestly a joke at this point",
+        "created_at": "2026-05-11T23:20:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@jakesgaming",
+        "text": "this mechanic is so much better than how they did it in the previous game",
+        "created_at": "2026-05-17T20:05:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_sports_fan",
+    "expected_tier": "low",
+    "expected_probability": 0.13,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@devonte_sports",
+      "display_name": "Devonte",
+      "bio": "Lakers fan. soccer on weekends. not a morning person.",
+      "follower_count": 891,
+      "created_at": "2016-09-03T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@devonte_sports",
+        "text": "no way that was offside, ref needs glasses",
+        "created_at": "2026-04-04T21:32:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@devonte_sports",
+        "text": "I called this trade happening two months ago btw just saying",
+        "created_at": "2026-04-09T19:44:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@devonte_sports",
+        "text": "the stats don't lie but my eyes tell a different story this season",
+        "created_at": "2026-04-13T22:15:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@devonte_sports",
+        "text": "that finish was absolutely filthy, didn't even celebrate properly",
+        "created_at": "2026-04-19T20:58:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@devonte_sports",
+        "text": "my bracket is cooked lmao",
+        "created_at": "2026-04-24T23:01:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@devonte_sports",
+        "text": "why do we keep playing zone when it clearly isn't working",
+        "created_at": "2026-05-02T21:30:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@devonte_sports",
+        "text": "honestly thought this season was done after that injury, impressed",
+        "created_at": "2026-05-09T20:47:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@devonte_sports",
+        "text": "take the points, never trust a team in their first road playoff game",
+        "created_at": "2026-05-14T22:12:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_foodie",
+    "expected_tier": "low",
+    "expected_probability": 0.14,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@priya_eats",
+      "display_name": "Priya",
+      "bio": "Home cook. obsessed with fermentation and regional Indian food.",
+      "follower_count": 2140,
+      "created_at": "2020-07-18T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@priya_eats",
+        "text": "I tried your ratio and my idli came out way fluffier \u2014 finally!",
+        "created_at": "2026-04-06T18:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@priya_eats",
+        "text": "my mom always adds a pinch of fenugreek seeds to the batter, curious if anyone else does that",
+        "created_at": "2026-04-11T17:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@priya_eats",
+        "text": "the tamarind sourness vs lemon thing is such a regional divide, where I'm from it's always tamarind",
+        "created_at": "2026-04-18T20:10:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@priya_eats",
+        "text": "3 days fermenting in my kitchen and it smelled incredible, the winters here kill the process though",
+        "created_at": "2026-04-25T19:30:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@priya_eats",
+        "text": "what brand of asafoetida do you use? the quality difference is real",
+        "created_at": "2026-05-03T16:55:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@priya_eats",
+        "text": "made this for guests last week and they all thought I ordered it from a restaurant, I was genuinely pleased",
+        "created_at": "2026-05-12T21:08:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@priya_eats",
+        "text": "counterpoint: the way my grandmother made it had half the steps and tasted just as good",
+        "created_at": "2026-05-19T18:40:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_parent_commenter",
+    "expected_tier": "low",
+    "expected_probability": 0.14,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@tdad_of_three",
+      "display_name": "Tom",
+      "bio": "Dad. Coach little league. software engineer by day.",
+      "follower_count": 204,
+      "created_at": "2015-04-11T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@tdad_of_three",
+        "text": "I sent this to my 12-year-old and he actually sat through the whole thing, that's the highest praise I can give",
+        "created_at": "2026-04-08T21:47:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@tdad_of_three",
+        "text": "we tried the experiment at the kitchen table last night, kids were more impressed by the mess than the science honestly",
+        "created_at": "2026-04-15T20:33:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@tdad_of_three",
+        "text": "had this playing on the TV while I made dinner, the kids stopped fighting to come watch, miracle",
+        "created_at": "2026-04-23T19:12:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@tdad_of_three",
+        "text": "my daughter asked why the moon looks different every night after this video. I told her that's literally the homework lol",
+        "created_at": "2026-05-01T22:05:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@tdad_of_three",
+        "text": "been watching with my kids on Sunday evenings for like a year now, it's our thing",
+        "created_at": "2026-05-09T21:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@tdad_of_three",
+        "text": "my son's teacher actually referenced this video in class which was a surreal moment",
+        "created_at": "2026-05-16T20:58:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_high_follower_creator",
+    "expected_tier": "low",
+    "expected_probability": 0.12,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@carlosfilms",
+      "display_name": "Carlos Mendes",
+      "bio": "Filmmaker. travel docs and street photography. S\u00e3o Paulo \u2192 everywhere.",
+      "follower_count": 84200,
+      "created_at": "2014-03-09T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@carlosfilms",
+        "text": "we shot this on a single gimbal pass, no cuts \u2014 the whole crew was holding their breath",
+        "created_at": "2026-04-02T16:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@carlosfilms",
+        "text": "color grade took longer than the shoot itself, always does in high contrast desert light",
+        "created_at": "2026-04-08T14:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@carlosfilms",
+        "text": "I've broken three gimbals in the field this year, all of them at the worst possible moment",
+        "created_at": "2026-04-15T11:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@carlosfilms",
+        "text": "the audio you hear in the final cut was actually a reshoot \u2014 location was next to a generator we didn't notice",
+        "created_at": "2026-04-21T13:58:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@carlosfilms",
+        "text": "question for other shooters: how do you handle crowd clearing when you don't speak the local language?",
+        "created_at": "2026-04-28T17:12:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@carlosfilms",
+        "text": "putting together the behind the scenes for this one, should be up by the weekend",
+        "created_at": "2026-05-06T15:40:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@carlosfilms",
+        "text": "post-production update: we had a hard drive failure on the backup, so the cut is going to slip a week",
+        "created_at": "2026-05-13T18:05:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@carlosfilms",
+        "text": "this comment section is genuinely one of the best on YouTube, I read every one",
+        "created_at": "2026-05-20T16:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_nonnative_english",
+    "expected_tier": "low",
+    "expected_probability": 0.16,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@nguyen_hoc",
+      "display_name": "Nguyen",
+      "bio": "Learning English. living in Hanoi. love technology videos.",
+      "follower_count": 37,
+      "created_at": "2023-08-20T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@nguyen_hoc",
+        "text": "I watch this video 3 time to understand. very helpful for my study.",
+        "created_at": "2026-04-10T14:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@nguyen_hoc",
+        "text": "in Vietnam we do different but I think your way is also good, maybe I try",
+        "created_at": "2026-04-17T15:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@nguyen_hoc",
+        "text": "excuse me, can you explain more slow about the second part? my english not so good yet",
+        "created_at": "2026-04-25T13:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@nguyen_hoc",
+        "text": "thank you! I show to my friend and he also like very much",
+        "created_at": "2026-05-03T16:08:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@nguyen_hoc",
+        "text": "is the subtitle have mistake at 3:45 or I understand wrong?",
+        "created_at": "2026-05-11T14:55:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@nguyen_hoc",
+        "text": "I try your method and work! many thank",
+        "created_at": "2026-05-18T17:20:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_journalist_links",
+    "expected_tier": "low",
+    "expected_probability": 0.18,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@klara_press",
+      "display_name": "Klara Lindqvist",
+      "bio": "Tech journalist. Reuters contributor. Stockholm.",
+      "follower_count": 6720,
+      "created_at": "2016-02-14T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@klara_press",
+        "text": "I covered a similar story last month \u2014 here's the piece I filed: https://reuters.com/technology/story-x. The privacy angle gets worse the more you dig.",
+        "created_at": "2026-04-05T11:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@klara_press",
+        "text": "my sources say the timeline was accelerated after the Q4 miss. Different from what the official statement says.",
+        "created_at": "2026-04-09T14:38:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@klara_press",
+        "text": "I got the same non-answer from their comms team. Standard boilerplate. Story is still developing.",
+        "created_at": "2026-04-14T10:55:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@klara_press",
+        "text": "The regulatory docs are public \u2014 pulled them last night: https://eu-regulator.example/case-4421. Worth reading the appendix.",
+        "created_at": "2026-04-21T13:12:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@klara_press",
+        "text": "going to push back gently here \u2014 three of those 'independent' reports were funded by industry groups. footnote 12.",
+        "created_at": "2026-04-28T15:48:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@klara_press",
+        "text": "my follow-up piece ran this morning: https://reuters.com/technology/followup-y. Response from the company was a surprise.",
+        "created_at": "2026-05-05T09:30:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@klara_press",
+        "text": "I'll note I have a correction to my earlier comment \u2014 the acquisition closed on the 12th, not the 14th. Apologies.",
+        "created_at": "2026-05-12T10:15:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_infrequent_commenter",
+    "expected_tier": "low",
+    "expected_probability": 0.15,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@bweinstein64",
+      "display_name": "Barry W",
+      "bio": "Retired. grandkids. sometimes the internet.",
+      "follower_count": 12,
+      "created_at": "2021-11-06T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@bweinstein64",
+        "text": "My wife found this channel and we've been watching together on Friday nights. This episode was particularly good.",
+        "created_at": "2025-11-14T20:45:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@bweinstein64",
+        "text": "Reminded me of when I worked in the industry in the 80s. Different problems but the same human element.",
+        "created_at": "2026-01-22T19:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@bweinstein64",
+        "text": "I looked up the person mentioned at 8:30 \u2014 fascinating career, never knew the backstory.",
+        "created_at": "2026-03-08T21:15:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@bweinstein64",
+        "text": "Shared this with my son who is in the field now. He said the technical details were accurate, which I couldn't evaluate myself.",
+        "created_at": "2026-05-03T20:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_teen_slang",
+    "expected_tier": "low",
+    "expected_probability": 0.14,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@zoe_vibesonly",
+      "display_name": "zoe \ud83c\udf19",
+      "bio": "16. art student. she/her. ngl I'm here a lot",
+      "follower_count": 148,
+      "created_at": "2024-01-30T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@zoe_vibesonly",
+        "text": "no because why does this hit so different at 2am lmao",
+        "created_at": "2026-04-07T01:48:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@zoe_vibesonly",
+        "text": "I showed my art teacher this and she was shook ngl",
+        "created_at": "2026-04-12T22:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@zoe_vibesonly",
+        "text": "the way I've watched this 6 times in a row is actually embarrassing",
+        "created_at": "2026-04-18T23:55:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@zoe_vibesonly",
+        "text": "someone explain to me how they do that transition because I'm not okay",
+        "created_at": "2026-04-25T00:12:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@zoe_vibesonly",
+        "text": "putting this on my mood board immediately no cap",
+        "created_at": "2026-05-01T23:40:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@zoe_vibesonly",
+        "text": "bestie if you see this ur so talented I can't",
+        "created_at": "2026-05-08T22:15:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@zoe_vibesonly",
+        "text": "the color palette in the second half hits different I can't explain it",
+        "created_at": "2026-05-15T01:05:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_welsh_commenter",
+    "expected_tier": "low",
+    "expected_probability": 0.15,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@owain_llywelyn",
+      "display_name": "Owain Llywelyn",
+      "bio": "Welsh historian. Gwynedd. occasional YouTube commenter.",
+      "follower_count": 88,
+      "created_at": "2020-05-17T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@owain_llywelyn",
+        "text": "Interesting treatment of the medieval period, though you're conflating two separate campaigns. Easy mistake if you're relying on secondary sources.",
+        "created_at": "2026-04-06T19:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@owain_llywelyn",
+        "text": "The pronunciation of Llywelyn at 4:20 made me wince, for what it's worth. Two lateral fricatives, not an 'L' followed by 'win'.",
+        "created_at": "2026-04-13T20:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@owain_llywelyn",
+        "text": "I'd recommend cross-referencing with the Brut y Tywysogion \u2014 it gives a very different account of those negotiations.",
+        "created_at": "2026-04-22T18:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@owain_llywelyn",
+        "text": "Fair point about Gwynedd's strategic position, though I'd argue the geography mattered more than the politics at that stage.",
+        "created_at": "2026-05-01T21:10:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@owain_llywelyn",
+        "text": "That map is slightly off \u2014 Merioneth wasn't part of the disputed territory at that date.",
+        "created_at": "2026-05-09T19:55:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@owain_llywelyn",
+        "text": "Shared this with my department. Colleagues were impressed by the production quality even where they disagreed with the framing.",
+        "created_at": "2026-05-17T20:20:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_debate_commenter",
+    "expected_tier": "low",
+    "expected_probability": 0.17,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@r_featherstone",
+      "display_name": "R. Featherstone",
+      "bio": "Philosophy PhD. Oxford. occasional YouTube rabbit holes.",
+      "follower_count": 430,
+      "created_at": "2019-08-24T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@r_featherstone",
+        "text": "The argument at 12:30 has a hidden premise \u2014 you're assuming the counterfactual is stable, which I'd contest.",
+        "created_at": "2026-04-04T15:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@r_featherstone",
+        "text": "I think you're right about the conclusion but for the wrong reasons. The evidence you cite doesn't actually support lemma 3.",
+        "created_at": "2026-04-10T16:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@r_featherstone",
+        "text": "Appreciate the pushback in the replies, but nobody has addressed the original objection \u2014 they've addressed a weaker version of it.",
+        "created_at": "2026-04-17T14:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@r_featherstone",
+        "text": "To be clear I'm not defending the position, I'm pointing out that the refutation doesn't work. There's a difference.",
+        "created_at": "2026-04-24T17:12:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@r_featherstone",
+        "text": "Changed my mind after reading the paper you linked. The third section addresses exactly what I was worried about.",
+        "created_at": "2026-05-02T16:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@r_featherstone",
+        "text": "I was wrong in my earlier comment \u2014 conflated two distinct claims. Correcting myself publicly since I was fairly emphatic.",
+        "created_at": "2026-05-10T15:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_tech_enthusiast",
+    "expected_tier": "low",
+    "expected_probability": 0.15,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@ndiaye_tech",
+      "display_name": "Ibrahima",
+      "bio": "Self-taught dev from Dakar. Python and embedded systems.",
+      "follower_count": 317,
+      "created_at": "2021-03-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@ndiaye_tech",
+        "text": "I implemented something similar on an STM32 and the interrupt handling was my whole problem for two weeks",
+        "created_at": "2026-04-03T18:45:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@ndiaye_tech",
+        "text": "the way you explained the memory layout finally made sense of something I'd been guessing at for months",
+        "created_at": "2026-04-09T20:12:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@ndiaye_tech",
+        "text": "question: does this approach still hold if your sample rate goes above 44kHz? I ran into weirdness there",
+        "created_at": "2026-04-16T19:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@ndiaye_tech",
+        "text": "I disagree with the conclusion at 9:45 \u2014 there's a race condition you're not accounting for in the async path",
+        "created_at": "2026-04-23T21:05:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@ndiaye_tech",
+        "text": "follow up from my question last week \u2014 yes it breaks above 44kHz, confirmed with a scope",
+        "created_at": "2026-04-30T18:22:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@ndiaye_tech",
+        "text": "I used this tutorial to land my first freelance embedded contract last month, wanted to say thanks",
+        "created_at": "2026-05-08T20:45:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@ndiaye_tech",
+        "text": "the oscilloscope shots are really helpful, most tutorials skip those and I always end up guessing",
+        "created_at": "2026-05-15T19:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_old_account_quiet",
+    "expected_tier": "low",
+    "expected_probability": 0.13,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@mgraham_uk",
+      "display_name": "Michael Graham",
+      "bio": "Engineer, cyclist, dad. not on social media much.",
+      "follower_count": 95,
+      "created_at": "2013-07-08T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@mgraham_uk",
+        "text": "I came across this video a year ago and it genuinely changed how I approach the problem. Came back to say so.",
+        "created_at": "2026-03-14T21:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@mgraham_uk",
+        "text": "Haven't commented on YouTube in probably five years, but this deserved one.",
+        "created_at": "2026-05-02T20:15:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@mgraham_uk",
+        "text": "The part about tolerances at 14:40 \u2014 I've seen that exact failure mode in the field. Well spotted.",
+        "created_at": "2026-05-18T19:45:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_rss_news_feed",
+    "expected_tier": "moderate",
+    "expected_probability": 0.38,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@dailytech_rss",
+      "display_name": "DailyTech News",
+      "bio": "Auto-posted tech news summaries. Not a human.",
+      "follower_count": 1420,
+      "created_at": "2023-05-22T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@dailytech_rss",
+        "text": "New: Apple announces updated MacBook Pro lineup with M4 chips. Read more: https://techcrunch.com/story-a",
+        "created_at": "2026-04-01T09:05:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@dailytech_rss",
+        "text": "New: OpenAI releases updated API with lower pricing for developers. Read more: https://techcrunch.com/story-b",
+        "created_at": "2026-04-02T09:05:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@dailytech_rss",
+        "text": "New: Google delays Pixel 10 launch according to supply chain sources. Read more: https://techcrunch.com/story-c",
+        "created_at": "2026-04-03T09:05:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@dailytech_rss",
+        "text": "New: Microsoft acquires enterprise AI startup for undisclosed sum. Read more: https://techcrunch.com/story-d",
+        "created_at": "2026-04-04T09:05:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@dailytech_rss",
+        "text": "New: Amazon Web Services expands into three new regions in Asia-Pacific. Read more: https://techcrunch.com/story-e",
+        "created_at": "2026-04-05T09:07:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@dailytech_rss",
+        "text": "New: EU regulators open investigation into social media algorithm practices. Read more: https://techcrunch.com/story-f",
+        "created_at": "2026-04-06T09:04:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@dailytech_rss",
+        "text": "New: Nvidia reports record quarterly earnings driven by AI chip demand. Read more: https://techcrunch.com/story-g",
+        "created_at": "2026-04-07T09:06:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@dailytech_rss",
+        "text": "New: SpaceX launches another batch of Starlink satellites from Cape Canaveral. Read more: https://techcrunch.com/story-h",
+        "created_at": "2026-04-08T09:05:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@dailytech_rss",
+        "text": "New: Linux kernel 6.9 released with improved support for ARM devices. Read more: https://techcrunch.com/story-i",
+        "created_at": "2026-04-09T09:04:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@dailytech_rss",
+        "text": "New: Qualcomm unveils next-generation Snapdragon mobile processor. Read more: https://techcrunch.com/story-j",
+        "created_at": "2026-04-10T09:05:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_brand_official",
+    "expected_tier": "moderate",
+    "expected_probability": 0.37,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@BuildPro_Tools",
+      "display_name": "BuildPro Tools",
+      "bio": "Professional power tools for serious tradespeople.",
+      "follower_count": 8900,
+      "created_at": "2022-01-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@BuildPro_Tools",
+        "text": "Great question! Our BP-400 drill is designed for exactly this type of application. Check out our full range at buildpro.com/drills",
+        "created_at": "2026-04-05T10:15:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@BuildPro_Tools",
+        "text": "Thanks for sharing this! The BP-400 is built for demanding job sites. More info at buildpro.com/bp400",
+        "created_at": "2026-04-07T10:22:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@BuildPro_Tools",
+        "text": "We appreciate your feedback! Have you tried our latest model? Visit buildpro.com/new-arrivals to explore our updated lineup.",
+        "created_at": "2026-04-09T10:18:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@BuildPro_Tools",
+        "text": "Thank you for the kind words! If you're looking for an upgrade, our BP-550 offers even more torque. buildpro.com/bp550",
+        "created_at": "2026-04-11T10:25:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@BuildPro_Tools",
+        "text": "Great video! For professional-grade results, our BP-400 series is worth a look: buildpro.com/pro-series",
+        "created_at": "2026-04-14T10:20:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@BuildPro_Tools",
+        "text": "We'd love to help with that! Our support team can advise on the right model. Contact us at buildpro.com/support",
+        "created_at": "2026-04-17T10:15:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@BuildPro_Tools",
+        "text": "Thanks for watching! Don't miss our Spring sale \u2014 up to 20% off selected tools at buildpro.com/sale",
+        "created_at": "2026-04-21T10:18:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@BuildPro_Tools",
+        "text": "Great point! That's exactly why we engineered the BP-400 with a dual-grip handle. More at buildpro.com/features",
+        "created_at": "2026-04-25T10:22:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_ai_assisted_light",
+    "expected_tier": "moderate",
+    "expected_probability": 0.42,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@insightful_takes",
+      "display_name": "Insightful Takes",
+      "bio": "Analysis and commentary on business and technology.",
+      "follower_count": 890,
+      "created_at": "2025-02-10T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@insightful_takes",
+        "text": "It's worth noting that this development underscores the broader shift happening across the industry. The implications remain to be seen, but they are significant.",
+        "created_at": "2026-04-06T11:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@insightful_takes",
+        "text": "I found this genuinely interesting \u2014 the second half especially. What struck me was the point about market fragmentation.",
+        "created_at": "2026-04-09T14:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@insightful_takes",
+        "text": "Furthermore, this raises important questions about the sustainability of the current model. In essence, the fundamentals haven't changed.",
+        "created_at": "2026-04-12T11:05:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@insightful_takes",
+        "text": "Good breakdown. I'd push back slightly on the conclusion \u2014 the timing matters more than the direction here.",
+        "created_at": "2026-04-15T13:45:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@insightful_takes",
+        "text": "At its core, this is a resource allocation problem. Moreover, the incentive structures are misaligned in ways that are hard to fix.",
+        "created_at": "2026-04-18T11:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@insightful_takes",
+        "text": "The nuanced take here is that both sides are partially right. What's particularly fascinating is how few people acknowledge that.",
+        "created_at": "2026-04-22T12:30:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@insightful_takes",
+        "text": "To shed light on the underlying dynamic: concentration of ownership tends to follow technology cycles, not cause them.",
+        "created_at": "2026-04-26T11:15:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@insightful_takes",
+        "text": "Agreed on the trend, but I think the pace is being overstated. The data from Q1 told a more mixed story than the headlines.",
+        "created_at": "2026-05-01T14:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_new_active_legitimate",
+    "expected_tier": "moderate",
+    "expected_probability": 0.4,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@firstyear_phd",
+      "display_name": "Kenji",
+      "bio": "First year PhD student. machine learning. posting more now that I have opinions.",
+      "follower_count": 43,
+      "created_at": "2026-01-12T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@firstyear_phd",
+        "text": "I've been watching a ton of ML content since starting the PhD and this is one of the clearer explanations of attention I've found",
+        "created_at": "2026-03-22T21:15:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@firstyear_phd",
+        "text": "question: does the positional encoding scheme matter much for short sequences or is that mostly a concern for long context?",
+        "created_at": "2026-03-28T20:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@firstyear_phd",
+        "text": "ok I finally implemented this from scratch and yes, the part about masking at 18:00 is exactly where I was making the mistake",
+        "created_at": "2026-04-05T22:45:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@firstyear_phd",
+        "text": "my advisor showed me a different derivation for this \u2014 think it reaches the same place but via different notation",
+        "created_at": "2026-04-12T21:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@firstyear_phd",
+        "text": "watched this three times this week while writing my lit review section, the clarity is genuinely helpful",
+        "created_at": "2026-04-20T23:15:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@firstyear_phd",
+        "text": "I'm going to be very embarrassed if I've been misunderstanding softmax normalization this whole time... checking now",
+        "created_at": "2026-04-29T22:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@firstyear_phd",
+        "text": "update: I was not misunderstanding it, but I was implementing it in a slightly wrong order. fixed.",
+        "created_at": "2026-04-30T19:30:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@firstyear_phd",
+        "text": "can someone clarify whether the warmup steps are sensitive to batch size? I'm getting odd training curves",
+        "created_at": "2026-05-08T21:45:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_academic_writer",
+    "expected_tier": "moderate",
+    "expected_probability": 0.38,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@dr_eleanor_marsh",
+      "display_name": "Dr. Eleanor Marsh",
+      "bio": "Climate science researcher. communicating science to general audiences.",
+      "follower_count": 3240,
+      "created_at": "2018-09-12T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@dr_eleanor_marsh",
+        "text": "It is worth noting that the methodology section understates the uncertainty bounds. Furthermore, the confidence intervals shown in the graph at 8:15 are not correctly propagated.",
+        "created_at": "2026-04-07T16:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@dr_eleanor_marsh",
+        "text": "To shed light on the paleoclimate data: the Holocene optimum is often misrepresented in popular communication. The regional variability is substantial.",
+        "created_at": "2026-04-14T15:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@dr_eleanor_marsh",
+        "text": "In summary, the video is well-produced but conflates two distinct feedback mechanisms. This is a common error in science communication and not a criticism of the creator.",
+        "created_at": "2026-04-21T17:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@dr_eleanor_marsh",
+        "text": "I must correct the claim at 11:30 \u2014 the IPCC AR6 figure cited is the central estimate, not the upper bound. These are not interchangeable.",
+        "created_at": "2026-04-28T16:15:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@dr_eleanor_marsh",
+        "text": "Additionally, it is important to emphasize that model uncertainty and measurement uncertainty require different treatments in risk assessment frameworks.",
+        "created_at": "2026-05-05T17:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@dr_eleanor_marsh",
+        "text": "My collaborators and I are writing a response paper to the study referenced here. I will share it when it clears peer review.",
+        "created_at": "2026-05-13T15:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@dr_eleanor_marsh",
+        "text": "I appreciate the thorough treatment of the carbon budget concept. Moreover, the framing around tipping points is more careful than I usually see in this format.",
+        "created_at": "2026-05-19T16:45:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_podcast_auto",
+    "expected_tier": "moderate",
+    "expected_probability": 0.4,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@ThinkBigPodcast",
+      "display_name": "Think Big Podcast",
+      "bio": "New episodes every Tuesday. Auto-posted clip highlights.",
+      "follower_count": 12400,
+      "created_at": "2022-08-03T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 142: 'The problem with expertise' \u2014 3 minutes. Full episode at thinkbig.fm/142",
+        "created_at": "2026-04-01T10:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 142: 'Why networks matter more than talent' \u2014 2 minutes. Full episode at thinkbig.fm/142",
+        "created_at": "2026-04-01T14:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 143: 'How to spot a bad incentive' \u2014 4 minutes. Full episode at thinkbig.fm/143",
+        "created_at": "2026-04-08T10:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 143: 'The underrated skill nobody teaches' \u2014 3 minutes. Full episode at thinkbig.fm/143",
+        "created_at": "2026-04-08T14:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 144: 'When data and intuition conflict' \u2014 5 minutes. Full episode at thinkbig.fm/144",
+        "created_at": "2026-04-15T10:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 144: 'The myth of the lone genius' \u2014 3 minutes. Full episode at thinkbig.fm/144",
+        "created_at": "2026-04-15T14:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 145: 'What most productivity advice gets wrong' \u2014 4 minutes. Full episode at thinkbig.fm/145",
+        "created_at": "2026-04-22T10:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 145: 'Systems thinking in plain language' \u2014 3 minutes. Full episode at thinkbig.fm/145",
+        "created_at": "2026-04-22T14:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 146: 'The compounding effect nobody talks about' \u2014 4 minutes. Full episode at thinkbig.fm/146",
+        "created_at": "2026-04-29T10:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@ThinkBigPodcast",
+        "text": "New clip from Episode 146: 'How to change your mind gracefully' \u2014 2 minutes. Full episode at thinkbig.fm/146",
+        "created_at": "2026-04-29T14:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_sports_analytics_auto",
+    "expected_tier": "moderate",
+    "expected_probability": 0.4,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@xG_metrics",
+      "display_name": "xG Metrics",
+      "bio": "Expected goals and shot quality stats. Auto-updated after each match.",
+      "follower_count": 4310,
+      "created_at": "2023-03-17T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Chelsea 2-1 Arsenal. xG: Chelsea 1.42 / Arsenal 2.17. Arsenal outperformed their finishing. Shot map in thread.",
+        "created_at": "2026-04-06T17:32:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Liverpool 3-0 Wolves. xG: Liverpool 2.88 / Wolves 0.31. Dominant performance backed by the numbers.",
+        "created_at": "2026-04-07T16:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Man City 1-1 Tottenham. xG: Man City 2.91 / Tottenham 0.44. City left 2+ goals on the table.",
+        "created_at": "2026-04-08T15:58:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Brighton 2-2 Everton. xG: Brighton 3.14 / Everton 0.68. Everton's keeper had an exceptional afternoon.",
+        "created_at": "2026-04-12T17:20:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Man United 0-2 Newcastle. xG: Man United 0.82 / Newcastle 1.97. Newcastle were the better side by every metric.",
+        "created_at": "2026-04-13T16:35:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Arsenal 1-0 Chelsea. xG: Arsenal 1.74 / Chelsea 0.52. Narrow win matches the xG margin this time.",
+        "created_at": "2026-04-20T17:48:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Tottenham 3-1 Wolves. xG: Tottenham 2.65 / Wolves 1.12. Clean win with solid shot quality.",
+        "created_at": "2026-04-21T15:55:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@xG_metrics",
+        "text": "Match report: Liverpool 2-0 Man City. xG: Liverpool 1.58 / Man City 1.42. Very close xG but Liverpool converted.",
+        "created_at": "2026-04-27T17:10:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_event_schedule_bot",
+    "expected_tier": "moderate",
+    "expected_probability": 0.38,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@StreamCalendar",
+      "display_name": "Stream Schedule Bot",
+      "bio": "Automated streaming schedule reminders for major creators.",
+      "follower_count": 2180,
+      "created_at": "2024-06-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @examplecreator \u2014 Game night! https://youtube.com/watch/example1",
+        "created_at": "2026-04-01T19:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @anothercreator \u2014 Q&A stream https://youtube.com/watch/example2",
+        "created_at": "2026-04-03T19:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @thirdcreator \u2014 New game playthrough https://youtube.com/watch/example3",
+        "created_at": "2026-04-05T19:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @examplecreator \u2014 Subscriber special https://youtube.com/watch/example4",
+        "created_at": "2026-04-08T19:30:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @anothercreator \u2014 Charity marathon day 1 https://youtube.com/watch/example5",
+        "created_at": "2026-04-10T19:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @thirdcreator \u2014 Community tournament https://youtube.com/watch/example6",
+        "created_at": "2026-04-12T19:30:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @examplecreator \u2014 Reaction stream https://youtube.com/watch/example7",
+        "created_at": "2026-04-15T19:30:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@StreamCalendar",
+        "text": "\ud83d\udd34 LIVE in 30 minutes: @anothercreator \u2014 Late night unboxing https://youtube.com/watch/example8",
+        "created_at": "2026-04-17T19:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_recycled_content",
+    "expected_tier": "moderate",
+    "expected_probability": 0.42,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@QuoteDropper",
+      "display_name": "Daily Quotes",
+      "bio": "Motivational quotes and life wisdom. daily.",
+      "follower_count": 3200,
+      "created_at": "2024-11-08T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@QuoteDropper",
+        "text": "Success is not final, failure is not fatal. It is the courage to continue that counts. \u2014 Churchill",
+        "created_at": "2026-04-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@QuoteDropper",
+        "text": "The only way to do great work is to love what you do. \u2014 Steve Jobs",
+        "created_at": "2026-04-02T08:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@QuoteDropper",
+        "text": "In the middle of every difficulty lies opportunity. \u2014 Einstein",
+        "created_at": "2026-04-03T08:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@QuoteDropper",
+        "text": "It always seems impossible until it's done. \u2014 Nelson Mandela",
+        "created_at": "2026-04-04T08:01:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@QuoteDropper",
+        "text": "The future belongs to those who believe in the beauty of their dreams. \u2014 Eleanor Roosevelt",
+        "created_at": "2026-04-05T08:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@QuoteDropper",
+        "text": "Do one thing every day that scares you. \u2014 Eleanor Roosevelt",
+        "created_at": "2026-04-06T08:02:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@QuoteDropper",
+        "text": "You miss 100% of the shots you don't take. \u2014 Wayne Gretzky",
+        "created_at": "2026-04-07T08:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@QuoteDropper",
+        "text": "The only impossible journey is the one you never begin. \u2014 Tony Robbins",
+        "created_at": "2026-04-08T08:01:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@QuoteDropper",
+        "text": "Believe you can and you're halfway there. \u2014 Theodore Roosevelt",
+        "created_at": "2026-04-09T08:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@QuoteDropper",
+        "text": "Success is not final, failure is not fatal. Courage to continue is what counts. \u2014 Churchill",
+        "created_at": "2026-04-10T08:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_fitness_template",
+    "expected_tier": "moderate",
+    "expected_probability": 0.4,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@FitLifeCoach99",
+      "display_name": "FitLife Coach",
+      "bio": "Online fitness coaching. DM for programs. Transform your body in 90 days!",
+      "follower_count": 5640,
+      "created_at": "2023-10-20T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@FitLifeCoach99",
+        "text": "Great video! If you're serious about results, you need a structured program. DM me 'READY' and I'll send you info! \ud83d\udcaa",
+        "created_at": "2026-04-02T11:15:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@FitLifeCoach99",
+        "text": "This is exactly the kind of content my clients need to see. Want a full program? Comment 'YES' below! \ud83d\udcaa",
+        "created_at": "2026-04-06T10:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@FitLifeCoach99",
+        "text": "I've been training for 8 years and this tip is gold. My 90-day program builds on exactly this. Link in bio!",
+        "created_at": "2026-04-10T11:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@FitLifeCoach99",
+        "text": "My clients who followed this approach dropped 15lbs in their first month. Interested? DM me 'TRANSFORM' \ud83d\udcaa",
+        "created_at": "2026-04-15T10:55:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@FitLifeCoach99",
+        "text": "This is why I always tell clients: consistency beats intensity every time. Want my free workout guide? Comment 'GUIDE'!",
+        "created_at": "2026-04-20T11:20:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@FitLifeCoach99",
+        "text": "Solid advice! I cover this in week 3 of my program. Limited spots available \u2014 link in bio to join! \ud83d\udcaa",
+        "created_at": "2026-04-26T10:40:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@FitLifeCoach99",
+        "text": "Just had a client achieve this exact result following my 90-day protocol. It works! DM me if you're ready to commit \ud83d\udcaa",
+        "created_at": "2026-05-02T11:05:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@FitLifeCoach99",
+        "text": "Great breakdown! This is foundation level stuff. My advanced program goes way deeper \u2014 link in bio if interested!",
+        "created_at": "2026-05-09T10:50:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_legitimate_news_bot",
+    "expected_tier": "moderate",
+    "expected_probability": 0.36,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@BBCNewsAlerts",
+      "display_name": "BBC News Alerts",
+      "bio": "Automated breaking news alerts from BBC News.",
+      "follower_count": 248000,
+      "created_at": "2012-04-05T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "BREAKING: UN Security Council convenes emergency session over escalating border tensions. Full coverage: bbc.com/news/world-1",
+        "created_at": "2026-04-04T14:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "UPDATE: Ceasefire agreement signed. Details still emerging. Follow live: bbc.com/news/live-2",
+        "created_at": "2026-04-05T09:15:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "BREAKING: Major earthquake reported off the coast of Japan. Tsunami warning issued. Latest: bbc.com/news/world-3",
+        "created_at": "2026-04-08T03:45:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "UPDATE: Tsunami warning lifted for most coastal areas. See regional breakdown: bbc.com/news/world-4",
+        "created_at": "2026-04-08T07:30:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "BREAKING: Prime Minister announces resignation following vote of no confidence. Live updates: bbc.com/news/politics-5",
+        "created_at": "2026-04-12T18:05:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "BREAKING: G7 nations reach agreement on new AI governance framework. Full statement: bbc.com/news/technology-6",
+        "created_at": "2026-04-18T11:30:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "UPDATE: Market reaction to rate decision. FTSE 100 up 1.4%. Analysis: bbc.com/news/business-7",
+        "created_at": "2026-04-22T15:45:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@BBCNewsAlerts",
+        "text": "BREAKING: Landmark climate agreement signed by 140 nations at Geneva summit. Read more: bbc.com/news/science-8",
+        "created_at": "2026-04-29T16:20:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_crypto_enthusiast",
+    "expected_tier": "moderate",
+    "expected_probability": 0.38,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@hodl_max_2017",
+      "display_name": "Max H.",
+      "bio": "In crypto since 2017. not financial advice. DCA forever.",
+      "follower_count": 1240,
+      "created_at": "2020-01-14T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@hodl_max_2017",
+        "text": "been through three cycles now and the pattern is always the same \u2014 everyone is a genius on the way up",
+        "created_at": "2026-04-05T22:15:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@hodl_max_2017",
+        "text": "if you're buying for the tech you're gonna make it through the dips, if you're buying for 10x you'll panic sell at -40%",
+        "created_at": "2026-04-09T19:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@hodl_max_2017",
+        "text": "the regulatory environment has genuinely shifted, this time feels structurally different. might be wrong though lol",
+        "created_at": "2026-04-14T21:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@hodl_max_2017",
+        "text": "check out $ETH and $SOL if you want real upside potential \ud83d\ude80 not financial advice obviously",
+        "created_at": "2026-04-19T20:45:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@hodl_max_2017",
+        "text": "this channel is one of the few that doesn't just pump whatever sponsors them, appreciate it",
+        "created_at": "2026-04-25T22:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@hodl_max_2017",
+        "text": "100x incoming fr fr \ud83d\ude80\ud83d\ude80 just DCA and don't look at it for 2 years, worked for me",
+        "created_at": "2026-05-01T20:15:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@hodl_max_2017",
+        "text": "I disagree with the exit strategy here, taking profits at ATH is leaving money on the table historically",
+        "created_at": "2026-05-08T21:45:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_weather_service",
+    "expected_tier": "moderate",
+    "expected_probability": 0.36,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@StormTracker_Auto",
+      "display_name": "Storm Tracker",
+      "bio": "Automated severe weather alerts for the US. Powered by NOAA data.",
+      "follower_count": 18700,
+      "created_at": "2021-07-04T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f TORNADO WATCH: Central Kansas until 10 PM CDT. If outdoors, seek shelter immediately. noaa.gov/alerts/ks-1",
+        "created_at": "2026-04-06T16:45:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f SEVERE THUNDERSTORM WARNING: NW Missouri until 8:30 PM CDT. Quarter-sized hail and 60mph winds possible.",
+        "created_at": "2026-04-11T19:20:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f FLASH FLOOD WATCH: Eastern Tennessee through Thursday. Rainfall totals of 3-5 inches expected.",
+        "created_at": "2026-04-16T08:05:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f WINTER STORM WARNING: Colorado Rockies above 9,000 feet. 18-24 inches of snow expected by Friday.",
+        "created_at": "2026-04-22T06:30:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f TORNADO WARNING: SE Oklahoma. Confirmed rotation detected. Seek shelter NOW.",
+        "created_at": "2026-04-28T20:15:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f HEAT ADVISORY: Phoenix metro area through the weekend. Highs 112-116\u00b0F. Limit outdoor activity.",
+        "created_at": "2026-05-04T10:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f SEVERE THUNDERSTORM WATCH: Central Iowa until midnight CDT. Damaging winds and large hail possible.",
+        "created_at": "2026-05-10T14:30:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@StormTracker_Auto",
+        "text": "\u26a0\ufe0f TORNADO WATCH: Northern Texas Panhandle until 9 PM CDT. Conditions favorable for strong tornadoes.",
+        "created_at": "2026-05-16T17:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_ai_writing_medium",
+    "expected_tier": "elevated",
+    "expected_probability": 0.64,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@ContentEdgeDaily",
+      "display_name": "Content Edge Daily",
+      "bio": "Business insights and growth strategies for modern professionals.",
+      "follower_count": 2340,
+      "created_at": "2025-03-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "It's worth noting that this framework represents a significant paradigm shift. Moreover, the implications for how we approach growth cannot be overstated.",
+        "created_at": "2026-04-01T10:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "In essence, the challenge here is fundamentally important: how do you scale without losing the culture that made you successful? This raises important questions.",
+        "created_at": "2026-04-04T10:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "What's particularly fascinating about this approach is how it navigates the ever-evolving landscape of customer expectations. The intricacies of this are well-explored here.",
+        "created_at": "2026-04-07T10:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "To delve into the core principle: at its core, trust is built through consistent delivery, not through promises. This is a nuanced take that speaks volumes.",
+        "created_at": "2026-04-10T10:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "Furthermore, in the realm of modern business, the ability to adapt stands as a testament to organizational resilience. Let's explore what this means in practice.",
+        "created_at": "2026-04-13T10:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "It's truly remarkable how this underscores the importance of customer centricity. In stark contrast to traditional approaches, this methodology captures the essence of modern strategy.",
+        "created_at": "2026-04-16T10:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "I appreciate you sharing this breakdown. It's a great breakdown of the fundamentals. What's particularly fascinating is the alignment with current market dynamics.",
+        "created_at": "2026-04-19T10:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "Additionally, this is such a thoughtful approach to the problem. The ever-evolving nature of the industry means that continuous learning is of paramount importance.",
+        "created_at": "2026-04-22T10:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "Let's dive into the broader context: the intricacies of scaling human capital represent one of the most challenging aspects of modern organizational design.",
+        "created_at": "2026-04-25T10:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@ContentEdgeDaily",
+        "text": "Thanks for breaking this down so clearly. The framework navigates the complexity in a way that speaks to the broader challenge of sustainable growth.",
+        "created_at": "2026-04-28T10:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_engagement_partial",
+    "expected_tier": "elevated",
+    "expected_probability": 0.62,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@GrowthHackerz",
+      "display_name": "Growth Hackerz",
+      "bio": "I teach creators how to grow. Free guide in bio.",
+      "follower_count": 4200,
+      "created_at": "2024-07-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@GrowthHackerz",
+        "text": "I've used this exact strategy to grow from 0 to 50k. Drop a like if you found this helpful! \ud83d\udd25",
+        "created_at": "2026-04-02T13:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@GrowthHackerz",
+        "text": "The algorithm loves consistency. I post 3x a week and my engagement is up 40%. smash that subscribe button for more tips \ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-05T11:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@GrowthHackerz",
+        "text": "Honestly the best YouTube growth advice I've seen in a while. Worth watching twice.",
+        "created_at": "2026-04-08T15:22:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@GrowthHackerz",
+        "text": "FREE course link in my bio! \ud83d\udd17 I break down the full strategy step by step. Don't miss this \ud83d\udd25\ud83d\udd25\ud83d\udd25",
+        "created_at": "2026-04-11T12:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@GrowthHackerz",
+        "text": "Real talk: most people overthink thumbnails. The title matters more. Learned this the hard way.",
+        "created_at": "2026-04-14T14:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@GrowthHackerz",
+        "text": "Comment 'GROWTH' below and I'll send you my free 30-day content calendar!! \ud83d\udcc5 seriously valuable stuff \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-17T12:15:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@GrowthHackerz",
+        "text": "This is exactly the kind of evergreen content that builds a loyal audience. Nice work.",
+        "created_at": "2026-04-20T16:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@GrowthHackerz",
+        "text": "My first viral video used this format! Drop a like and subscribe for more creator tips \ud83d\udd25 link in bio for the full breakdown",
+        "created_at": "2026-04-23T12:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_suspicious_profile",
+    "expected_tier": "elevated",
+    "expected_probability": 0.63,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@user8472930x",
+      "display_name": "user8472930x",
+      "bio": "",
+      "follower_count": 8,
+      "created_at": "2026-03-28T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@user8472930x",
+        "text": "Great content! Very informative. Keep up the good work!",
+        "created_at": "2026-04-01T09:15:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@user8472930x",
+        "text": "Great content! Loved this video. Keep making more!",
+        "created_at": "2026-04-02T10:20:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@user8472930x",
+        "text": "Excellent video! Really helpful information. Thank you!",
+        "created_at": "2026-04-03T09:45:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@user8472930x",
+        "text": "Awesome content! Very valuable. Keep it up!",
+        "created_at": "2026-04-04T10:10:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@user8472930x",
+        "text": "Great video! So helpful. Subscribed! \ud83d\udc4d",
+        "created_at": "2026-04-05T09:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@user8472930x",
+        "text": "Excellent content! Great explanation. Keep going!",
+        "created_at": "2026-04-06T10:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@user8472930x",
+        "text": "Really helpful! Great content as always. Love this channel.",
+        "created_at": "2026-04-07T09:15:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@user8472930x",
+        "text": "Amazing video! Super informative. Keep up the good work!",
+        "created_at": "2026-04-08T10:05:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@user8472930x",
+        "text": "Incredible content! Very useful. Looking forward to more.",
+        "created_at": "2026-04-09T09:30:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@user8472930x",
+        "text": "Loved this video! Excellent as always. Keep creating!",
+        "created_at": "2026-04-10T10:15:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_broadcast_voice",
+    "expected_tier": "elevated",
+    "expected_probability": 0.6,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@TrendBriefing",
+      "display_name": "Trend Briefing",
+      "bio": "Daily briefings on culture, business and technology.",
+      "follower_count": 7890,
+      "created_at": "2024-09-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@TrendBriefing",
+        "text": "The shift toward decentralized platforms continues to reshape creator economics. Revenue models are being restructured at every level of the industry.",
+        "created_at": "2026-04-01T09:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@TrendBriefing",
+        "text": "Retail investors have historically underperformed institutional counterparts. Behavioral finance offers several explanations for this persistent gap.",
+        "created_at": "2026-04-04T09:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@TrendBriefing",
+        "text": "Supply chain visibility has emerged as a critical competitive differentiator. Organizations that invested early in tracking infrastructure are now realizing the returns.",
+        "created_at": "2026-04-07T09:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@TrendBriefing",
+        "text": "Remote work adoption rates have stabilized across most sectors. The office occupancy data from major metros shows a consistent 40-50% utilization floor.",
+        "created_at": "2026-04-10T09:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@TrendBriefing",
+        "text": "Electric vehicle adoption continues to face infrastructure bottlenecks in secondary markets. Charging network density remains the primary constraint.",
+        "created_at": "2026-04-13T09:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@TrendBriefing",
+        "text": "Generative AI integration into enterprise workflows shows uneven adoption rates. Compliance-heavy industries are lagging by 18-24 months.",
+        "created_at": "2026-04-16T09:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@TrendBriefing",
+        "text": "Healthcare consolidation trends have accelerated since 2022. Regional hospital systems are being absorbed at a pace not seen since the managed care era.",
+        "created_at": "2026-04-19T09:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@TrendBriefing",
+        "text": "Open source foundation models are narrowing the performance gap with proprietary alternatives. Enterprise adoption is moving faster than most predictions suggested.",
+        "created_at": "2026-04-22T09:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@TrendBriefing",
+        "text": "Cross-border payment friction is declining as CBDC pilots expand. Settlement times that once required days are being compressed to seconds.",
+        "created_at": "2026-04-25T09:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@TrendBriefing",
+        "text": "Talent acquisition costs in the software sector have moderated substantially from 2021 peaks. Compensation benchmarks are resetting across all experience tiers.",
+        "created_at": "2026-04-28T09:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_template_comments",
+    "expected_tier": "elevated",
+    "expected_probability": 0.65,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@CommentBoostPro",
+      "display_name": "Comment Boost Pro",
+      "bio": "Helping channels grow organically.",
+      "follower_count": 56,
+      "created_at": "2025-08-20T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly the kind of content this platform needs more of. Well done to the creator.",
+        "created_at": "2026-04-01T11:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly the content this platform needs more of. Great work from the creator.",
+        "created_at": "2026-04-01T11:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly what this platform needs more of. Excellent job by the creator.",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is precisely the kind of content this platform needs. Well done to the creator here.",
+        "created_at": "2026-04-02T11:05:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly what YouTube needs more of. Great content from the creator.",
+        "created_at": "2026-04-02T11:35:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly what the platform needs. Excellent content from the creator as always.",
+        "created_at": "2026-04-02T12:05:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly the kind of video YouTube needs more of. Well done to the creator team.",
+        "created_at": "2026-04-03T11:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly the content YouTube needs. Really great work from the creator.",
+        "created_at": "2026-04-03T11:32:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is precisely what this platform needs more of. Excellent effort from the creator.",
+        "created_at": "2026-04-03T12:01:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@CommentBoostPro",
+        "text": "This is exactly what YouTube needs more of. Well done to the creator for this one.",
+        "created_at": "2026-04-04T11:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_link_heavy",
+    "expected_tier": "elevated",
+    "expected_probability": 0.62,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@DealsFinderBot",
+      "display_name": "Deals Finder",
+      "bio": "Best deals online, daily. affiliate links may apply.",
+      "follower_count": 3100,
+      "created_at": "2024-04-12T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@DealsFinderBot",
+        "text": "If you liked this product, check out the deal I found: https://amzn.to/deal1 \u2014 currently 30% off \ud83d\udd25",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@DealsFinderBot",
+        "text": "Better deal here: https://amzn.to/deal2 \u2014 free shipping and 25% off right now. Limited time!",
+        "created_at": "2026-04-01T16:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@DealsFinderBot",
+        "text": "I found this same item at a lower price: https://amzn.to/deal3 \u2014 link in my bio for more deals",
+        "created_at": "2026-04-02T12:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@DealsFinderBot",
+        "text": "For anyone looking to buy this: https://amzn.to/deal4 \u2014 20% coupon code in the link",
+        "created_at": "2026-04-02T16:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@DealsFinderBot",
+        "text": "Cheaper alternative here that works just as well: https://amzn.to/deal5 \ud83d\udd17",
+        "created_at": "2026-04-03T12:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@DealsFinderBot",
+        "text": "Today's best deal on this category: https://amzn.to/deal6 \u2014 price drops at midnight so act fast",
+        "created_at": "2026-04-03T16:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@DealsFinderBot",
+        "text": "Great video! If buying: https://amzn.to/deal7 is where I'd go. Link in bio for full comparison \ud83d\udd17",
+        "created_at": "2026-04-04T12:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@DealsFinderBot",
+        "text": "Found it 40% cheaper here: https://amzn.to/deal8 \u2014 I always check before buying anything recommended online",
+        "created_at": "2026-04-04T16:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_mechanical_posting",
+    "expected_tier": "elevated",
+    "expected_probability": 0.64,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@CryptoAlertFeed",
+      "display_name": "Crypto Alert Feed",
+      "bio": "Price alerts and market updates. Automated.",
+      "follower_count": 6720,
+      "created_at": "2023-11-10T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "BTC crossed $68,000. Volume up 14% in the last hour. Watch the $70k resistance level.",
+        "created_at": "2026-04-01T06:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "ETH up 4.2% in the last 4 hours. On-chain activity increasing. Funding rates neutral.",
+        "created_at": "2026-04-01T10:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "SOL broke above $180. Social sentiment strongly positive. Watch for continuation.",
+        "created_at": "2026-04-01T14:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "BTC pulling back to $67,200. Normal retest of breakout level. Volume thinning.",
+        "created_at": "2026-04-01T18:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "ETH holding above $3,400 support. Derivatives market showing low leverage. Constructive.",
+        "created_at": "2026-04-01T22:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "BTC up 1.8% overnight. Asian session positive. European open in 2 hours.",
+        "created_at": "2026-04-02T06:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "SOL correcting 6% from highs. Normal consolidation. Support at $168.",
+        "created_at": "2026-04-02T10:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "BTC testing $69,500 again. Second attempt at resistance. Volume picking up.",
+        "created_at": "2026-04-02T14:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "Market-wide liquidations: $82M in the last 2 hours. Shorts getting squeezed.",
+        "created_at": "2026-04-02T18:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@CryptoAlertFeed",
+        "text": "ETH/BTC ratio declining. BTC dominance rising. Typical late bull cycle pattern.",
+        "created_at": "2026-04-02T22:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_crypto_shill",
+    "expected_tier": "elevated",
+    "expected_probability": 0.66,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@MoonCoinAdvisor",
+      "display_name": "Moon Coin Advisor",
+      "bio": "Early crypto investor. sharing alpha. not financial advice \ud83d\ude80",
+      "follower_count": 2890,
+      "created_at": "2025-06-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "This is why $MOON is going 100x. The tokenomics are unlike anything I've seen. Get in before the listing! \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-03T14:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "If you missed $DOGE and $SHIB this is your second chance. $MOON has the same early signals. Link in bio for the whitepaper \ud83d\udd17",
+        "created_at": "2026-04-05T15:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "Insiders are accumulating $MOON right now. My sources confirm major exchange listing in 2 weeks \ud83d\udd25\ud83d\udd25\ud83d\udd25 Not financial advice!",
+        "created_at": "2026-04-07T14:15:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "Great analysis! And this is exactly why I'm still heavily in $MOON \u2014 the fundamentals align perfectly with this thesis \ud83d\ude80",
+        "created_at": "2026-04-09T16:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "$MOON just broke out of accumulation phase. This is the same pattern BTC showed at $8k. Early bird opportunity \ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-11T14:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "I've put 40% of my portfolio in $MOON and I sleep like a baby. The team is legit and the tech is solid. DYOR \ud83d\udd25",
+        "created_at": "2026-04-13T15:45:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "My community made 8x on my last call. $MOON is my next one. Join my Telegram for entry points \ud83d\udd17 link in bio!",
+        "created_at": "2026-04-15T14:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@MoonCoinAdvisor",
+        "text": "The whales are loading up. Volume doesn't lie. $MOON to $1 is just the beginning \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-17T15:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_follow_bait_mixed",
+    "expected_tier": "elevated",
+    "expected_probability": 0.61,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@ViralShortsCo",
+      "display_name": "Viral Shorts Co",
+      "bio": "Short-form content that actually performs. Follow for tips.",
+      "follower_count": 9400,
+      "created_at": "2024-12-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@ViralShortsCo",
+        "text": "If you want to go viral in 2026, stop making long videos. Shorts with hooks under 3 seconds is the game now.",
+        "created_at": "2026-04-02T10:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@ViralShortsCo",
+        "text": "Follow me if you want daily tips on what's actually working right now \ud83d\udc47 no fluff just results",
+        "created_at": "2026-04-04T12:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@ViralShortsCo",
+        "text": "Most creators waste their first 2 seconds. Here's what to do instead \u2014 drop a like if this helped \ud83d\udd25",
+        "created_at": "2026-04-07T10:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@ViralShortsCo",
+        "text": "Comment 'HOOK' below and I'll DM you my 50 proven hook templates for free \ud83d\udc47\ud83d\udc47",
+        "created_at": "2026-04-10T11:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@ViralShortsCo",
+        "text": "Solid breakdown. The part about thumbnail psychology is something I cover in depth on my channel \u2014 worth checking out.",
+        "created_at": "2026-04-13T14:22:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@ViralShortsCo",
+        "text": "Subscribe for daily shorts growth tips \u2014 I post every day and my community has grown 300% this year \ud83d\ude80",
+        "created_at": "2026-04-16T10:15:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@ViralShortsCo",
+        "text": "Ring the bell \ud83d\udd14 because YouTube buries these tips in your feed unless you're subscribed and notified!",
+        "created_at": "2026-04-19T11:30:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@ViralShortsCo",
+        "text": "I made $14k last month from a channel with 8k subscribers. The platform doesn't matter if your hooks are right.",
+        "created_at": "2026-04-22T10:45:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_astroturf_light",
+    "expected_tier": "elevated",
+    "expected_probability": 0.63,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@real_citizen_voice",
+      "display_name": "A Real Citizen",
+      "bio": "Just a regular person who cares about this country.",
+      "follower_count": 22,
+      "created_at": "2026-02-14T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@real_citizen_voice",
+        "text": "This is exactly what the mainstream media doesn't want you to see. Share this before it gets removed!",
+        "created_at": "2026-04-01T09:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@real_citizen_voice",
+        "text": "Finally someone is telling the truth. The establishment is terrified of this kind of coverage.",
+        "created_at": "2026-04-01T13:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@real_citizen_voice",
+        "text": "Every concerned citizen needs to watch this. I've sent it to my local representatives already.",
+        "created_at": "2026-04-02T09:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@real_citizen_voice",
+        "text": "This is why they want to shut down independent journalism. Spread this everywhere you can!",
+        "created_at": "2026-04-02T13:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@real_citizen_voice",
+        "text": "I've been saying this for years and nobody listened. Finally the truth is coming out. Share share share!",
+        "created_at": "2026-04-03T09:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@real_citizen_voice",
+        "text": "The legacy media buried this story. Real citizens are the only ones spreading the truth now.",
+        "created_at": "2026-04-03T13:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@real_citizen_voice",
+        "text": "Wake up people. This is exactly what they've been hiding from us. Your vote depends on knowing this.",
+        "created_at": "2026-04-04T09:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@real_citizen_voice",
+        "text": "This channel deserves millions of views. Real journalism from real people. Unlike the corporate media.",
+        "created_at": "2026-04-04T13:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_ai_promo_mixed",
+    "expected_tier": "elevated",
+    "expected_probability": 0.63,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@ProInsightHub",
+      "display_name": "Pro Insight Hub",
+      "bio": "Professional development and productivity strategies.",
+      "follower_count": 1780,
+      "created_at": "2025-04-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@ProInsightHub",
+        "text": "It's important to note that productivity is fundamentally about energy management, not time management. This is a nuanced take that resonates deeply.",
+        "created_at": "2026-04-01T09:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@ProInsightHub",
+        "text": "I've been using the framework described here for 3 months. My output is up 60% \u2014 link in bio for my full review.",
+        "created_at": "2026-04-04T09:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@ProInsightHub",
+        "text": "Moreover, what's particularly fascinating is how this navigates the ever-evolving challenge of focus in a distraction-heavy world. Drop a like if you agree \ud83d\udd25",
+        "created_at": "2026-04-07T09:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@ProInsightHub",
+        "text": "Great breakdown! I cover similar strategies in my free guide \u2014 link in bio for those who want to go deeper.",
+        "created_at": "2026-04-10T09:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@ProInsightHub",
+        "text": "In essence, the intricacies of habit formation cannot be overstated. At its core, the system works because it aligns with how the brain actually processes behavior.",
+        "created_at": "2026-04-13T09:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@ProInsightHub",
+        "text": "Subscribe for daily insights like these \ud83d\udc47 I share what's working for top performers right now. Link in bio for my newsletter \ud83d\udd17",
+        "created_at": "2026-04-16T09:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@ProInsightHub",
+        "text": "Furthermore, the implications of this for remote workers cannot be overstated. It's truly remarkable how few productivity systems account for this variable.",
+        "created_at": "2026-04-19T09:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@ProInsightHub",
+        "text": "This is such a thoughtful approach. It captures the essence of what makes high performers different. Drop a like if this added value! \ud83d\ude80",
+        "created_at": "2026-04-22T09:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_profile_age_rate",
+    "expected_tier": "elevated",
+    "expected_probability": 0.6,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@acc_39274811",
+      "display_name": "acc_39274811",
+      "bio": "sharing content",
+      "follower_count": 3,
+      "created_at": "2026-04-10T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@acc_39274811",
+        "text": "nice video",
+        "created_at": "2026-04-10T10:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@acc_39274811",
+        "text": "good content thanks",
+        "created_at": "2026-04-11T11:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@acc_39274811",
+        "text": "interesting video",
+        "created_at": "2026-04-12T10:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@acc_39274811",
+        "text": "helpful video thanks for sharing",
+        "created_at": "2026-04-13T09:45:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@acc_39274811",
+        "text": "good explanation keep going",
+        "created_at": "2026-04-14T11:15:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@acc_39274811",
+        "text": "nice thanks",
+        "created_at": "2026-04-15T10:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@acc_39274811",
+        "text": "great video",
+        "created_at": "2026-04-16T09:30:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@acc_39274811",
+        "text": "love this content",
+        "created_at": "2026-04-17T10:45:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@acc_39274811",
+        "text": "subscribed thanks",
+        "created_at": "2026-04-18T11:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@acc_39274811",
+        "text": "keep making videos",
+        "created_at": "2026-04-19T10:15:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_pure_scheduler",
+    "expected_tier": "high",
+    "expected_probability": 0.82,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@AutoPost360",
+      "display_name": "AutoPost 360",
+      "bio": "Automated daily content.",
+      "follower_count": 210,
+      "created_at": "2025-01-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 1 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-01T00:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 2 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-01T04:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 3 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-01T08:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 4 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 5 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-01T16:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 6 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-01T20:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 7 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-02T00:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 8 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-02T04:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 9 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-02T08:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 10 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-02T12:00:00Z"
+      },
+      {
+        "id": "p11",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 11 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-02T16:00:00Z"
+      },
+      {
+        "id": "p12",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 12 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-02T20:00:00Z"
+      },
+      {
+        "id": "p13",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 13 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-03T00:00:00Z"
+      },
+      {
+        "id": "p14",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 14 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-03T04:00:00Z"
+      },
+      {
+        "id": "p15",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 15 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-03T08:00:00Z"
+      },
+      {
+        "id": "p16",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 16 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-03T12:00:00Z"
+      },
+      {
+        "id": "p17",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 17 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-03T16:00:00Z"
+      },
+      {
+        "id": "p18",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 18 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-03T20:00:00Z"
+      },
+      {
+        "id": "p19",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 19 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-04T00:00:00Z"
+      },
+      {
+        "id": "p20",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 20 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-04T04:00:00Z"
+      },
+      {
+        "id": "p21",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 21 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-04T08:00:00Z"
+      },
+      {
+        "id": "p22",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 22 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-04T12:00:00Z"
+      },
+      {
+        "id": "p23",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 23 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-04T16:00:00Z"
+      },
+      {
+        "id": "p24",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 24 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-04T20:00:00Z"
+      },
+      {
+        "id": "p25",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 25 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-05T00:00:00Z"
+      },
+      {
+        "id": "p26",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 26 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-05T04:00:00Z"
+      },
+      {
+        "id": "p27",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 27 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-05T08:00:00Z"
+      },
+      {
+        "id": "p28",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 28 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-05T12:00:00Z"
+      },
+      {
+        "id": "p29",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 29 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-05T16:00:00Z"
+      },
+      {
+        "id": "p30",
+        "author_handle": "@AutoPost360",
+        "text": "Top 10 facts about topic 30 you need to know today. Subscribe for daily content.",
+        "created_at": "2026-04-05T20:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_multi_vector_bot",
+    "expected_tier": "high",
+    "expected_probability": 0.9,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@BotNet7294x",
+      "display_name": "BotNet7294x",
+      "bio": "",
+      "follower_count": 5,
+      "created_at": "2026-03-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@BotNet7294x",
+        "text": "It's important to note that this content represents \u2014 in many ways \u2014 a pivotal shift. Smash that like!! \ud83d\udd25\ud83d\udd25\ud83d\udd25 https://bit.ly/a1",
+        "created_at": "2026-04-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@BotNet7294x",
+        "text": "It's worth noting that this development underscores the broader transformation. Drop a like \ud83d\udc4d link in bio \ud83d\udd17 https://bit.ly/a2",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@BotNet7294x",
+        "text": "Furthermore, it is important to recognize \u2014 particularly in this context \u2014 the nuanced implications. Subscribe NOW!! \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-01T16:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@BotNet7294x",
+        "text": "Moreover, this raises important questions at its core. SMASH that like button!! \ud83d\udd25\ud83d\udd25\ud83d\udd25 https://bit.ly/a3",
+        "created_at": "2026-04-02T08:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@BotNet7294x",
+        "text": "It's essential to delve into the multifaceted implications here. Don't miss out \ud83d\ude80\ud83d\ude80\ud83d\ude80 link in bio \ud83d\udd17",
+        "created_at": "2026-04-02T12:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@BotNet7294x",
+        "text": "What's particularly fascinating is how this navigates ever-evolving challenges. Drop a like if you agree \ud83d\udd25 https://bit.ly/a4",
+        "created_at": "2026-04-02T16:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@BotNet7294x",
+        "text": "In essence, this captures the essence of modern strategy. Subscribe for more \ud83d\ude80\ud83d\ude80\ud83d\ude80 link in bio \ud83d\udd17 https://bit.ly/a5",
+        "created_at": "2026-04-03T08:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@BotNet7294x",
+        "text": "It's worth mentioning that the intricacies cannot be overstated. Ring the bell \ud83d\udd14 LIKE & SUBSCRIBE!! \ud83d\udd25\ud83d\udd25\ud83d\udd25",
+        "created_at": "2026-04-03T12:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@BotNet7294x",
+        "text": "Additionally, this stands as a testament to the evolving landscape. Comment below \ud83d\udc47 link in bio \ud83d\udd17 https://bit.ly/a6",
+        "created_at": "2026-04-03T16:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@BotNet7294x",
+        "text": "It's truly remarkable how this speaks volumes about the broader implications. Smash like \ud83d\udd25\ud83d\udd25\ud83d\udd25 Subscribe now!! \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-04T08:00:00Z"
+      },
+      {
+        "id": "p11",
+        "author_handle": "@BotNet7294x",
+        "text": "Great breakdown of the paradigm. It's important to note the implications. Drop a like \ud83d\udc4d link in bio \ud83d\udd17",
+        "created_at": "2026-04-04T12:00:00Z"
+      },
+      {
+        "id": "p12",
+        "author_handle": "@BotNet7294x",
+        "text": "Furthermore, the ever-evolving nature of this fundamentally important topic. LIKE and SUBSCRIBE!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 https://bit.ly/a7",
+        "created_at": "2026-04-04T16:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_template_spam_factory",
+    "expected_tier": "high",
+    "expected_probability": 0.84,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@CommentFarm99",
+      "display_name": "Comment Farm 99",
+      "bio": "positive vibes only",
+      "follower_count": 14,
+      "created_at": "2026-01-20T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did an amazing job. 10/10 would recommend.",
+        "created_at": "2026-04-01T09:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did an incredible job. 10/10 would recommend.",
+        "created_at": "2026-04-01T09:05:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did a fantastic job. 10/10 would recommend.",
+        "created_at": "2026-04-01T09:10:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did a brilliant job. 10/10 would recommend.",
+        "created_at": "2026-04-02T09:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@CommentFarm99",
+        "text": "Enjoyed this video! The creator did an amazing job. 10/10 would recommend.",
+        "created_at": "2026-04-02T09:05:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did an outstanding job. 10/10 would recommend.",
+        "created_at": "2026-04-02T09:10:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this content! The creator did an amazing job. 10/10 would recommend.",
+        "created_at": "2026-04-03T09:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did a superb job. 10/10 would recommend.",
+        "created_at": "2026-04-03T09:05:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this clip! The creator did an amazing job. 10/10 would recommend.",
+        "created_at": "2026-04-03T09:10:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did a remarkable job. 10/10 would recommend.",
+        "created_at": "2026-04-04T09:00:00Z"
+      },
+      {
+        "id": "p11",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did an exceptional job. 10/10 would recommend.",
+        "created_at": "2026-04-04T09:05:00Z"
+      },
+      {
+        "id": "p12",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did a wonderful job. 10/10 would recommend.",
+        "created_at": "2026-04-04T09:10:00Z"
+      },
+      {
+        "id": "p13",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did an awesome job. 10/10 would recommend.",
+        "created_at": "2026-04-05T09:00:00Z"
+      },
+      {
+        "id": "p14",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did a great job. 10/10 would recommend.",
+        "created_at": "2026-04-05T09:05:00Z"
+      },
+      {
+        "id": "p15",
+        "author_handle": "@CommentFarm99",
+        "text": "Loved this video! The creator did a terrific job. 10/10 would recommend.",
+        "created_at": "2026-04-05T09:10:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_affiliate_link_spam",
+    "expected_tier": "high",
+    "expected_probability": 0.86,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@DealsEveryHour",
+      "display_name": "Deals Every Hour",
+      "bio": "Best deals. all day every day. affiliate links.",
+      "follower_count": 840,
+      "created_at": "2025-07-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 50% OFF today only!! https://amzn.to/x1 Don't miss out!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 link in bio \ud83d\udd17",
+        "created_at": "2026-04-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 60% OFF limited time!! https://amzn.to/x2 Drop a like and share!! \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 FREE shipping today!! https://amzn.to/x3 Don't sleep on this!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 link in bio \ud83d\udd17",
+        "created_at": "2026-04-01T16:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 Price drop just happened!! https://amzn.to/x4 Smash that like!! \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-02T08:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 40% coupon active now!! https://amzn.to/x5 Subscribe for more deals \ud83d\udd14 link in bio \ud83d\udd17",
+        "created_at": "2026-04-02T12:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 Lowest price of the year!! https://amzn.to/x6 \ud83d\ude80\ud83d\ude80\ud83d\ude80 Don't miss out!!",
+        "created_at": "2026-04-02T16:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 Only 12 left in stock!! https://amzn.to/x7 ring the bell \ud83d\udd14 link in bio \ud83d\udd17",
+        "created_at": "2026-04-03T08:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 Flash sale ends midnight!! https://amzn.to/x8 Smash subscribe!! \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-03T12:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 Buy 2 get 1 free today!! https://amzn.to/x9 Link in bio for all today's deals \ud83d\udd17",
+        "created_at": "2026-04-03T16:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@DealsEveryHour",
+        "text": "DEAL ALERT \ud83d\udd25\ud83d\udd25\ud83d\udd25 Prime deal before it expires!! https://amzn.to/x10 \ud83d\ude80\ud83d\ude80\ud83d\ude80 drop a like!",
+        "created_at": "2026-04-04T08:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_profile_bot_fresh",
+    "expected_tier": "high",
+    "expected_probability": 0.84,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@xz8472kq91m",
+      "display_name": "xz8472kq91m",
+      "bio": "",
+      "follower_count": 0,
+      "created_at": "2026-05-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@xz8472kq91m",
+        "text": "Check out my channel for more: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@xz8472kq91m",
+        "text": "Subscribe to my channel: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-01T10:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@xz8472kq91m",
+        "text": "Follow for more content: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-01T12:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@xz8472kq91m",
+        "text": "Visit my channel: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-01T14:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@xz8472kq91m",
+        "text": "New videos daily: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-01T16:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@xz8472kq91m",
+        "text": "Check out my channel for more: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-02T08:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@xz8472kq91m",
+        "text": "Subscribe now: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-02T10:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@xz8472kq91m",
+        "text": "More content at: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-02T12:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@xz8472kq91m",
+        "text": "Follow my channel: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-02T14:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@xz8472kq91m",
+        "text": "Visit for daily videos: https://youtube.com/xz8472kq91m",
+        "created_at": "2026-05-02T16:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_political_astroturf",
+    "expected_tier": "high",
+    "expected_probability": 0.86,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@Patriot_Voice_Free",
+      "display_name": "Patriot Voice",
+      "bio": "Standing up for freedom. real citizen. not affiliated with any organization.",
+      "follower_count": 31,
+      "created_at": "2026-03-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "Share this NOW before they delete it. The truth is finally coming out and they are SCARED. This is what they don't want you to see!",
+        "created_at": "2026-04-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "WAKE UP PEOPLE. They control the media and they are hiding this from you. Share before it gets removed!! THIS IS URGENT.",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "This is what the establishment is terrified of. Real journalism exposing the truth. Share to every group you're in NOW!",
+        "created_at": "2026-04-01T16:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "Every real patriot needs to see this. They are trying to silence us. Share this video before it gets banned!!",
+        "created_at": "2026-04-02T08:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "The mainstream media won't cover this. Only WE THE PEOPLE can spread the truth. Share share share!!",
+        "created_at": "2026-04-02T12:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "They called us conspiracy theorists. Now the truth is coming out. Share this with everyone you know before it disappears!",
+        "created_at": "2026-04-02T16:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "This channel is one of the last truly free voices. They will try to shut it down. Share NOW to protect free speech!!",
+        "created_at": "2026-04-03T08:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "Your vote depends on knowing this information. The corporate media will NEVER show you what's in this video. Share it!!",
+        "created_at": "2026-04-03T12:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "I've sent this to 40 people already. Do your part as a citizen. SHARE THIS NOW before it gets taken down!",
+        "created_at": "2026-04-03T16:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@Patriot_Voice_Free",
+        "text": "This is the information they banned from every mainstream platform. Only real patriots are sharing it. ARE YOU ONE OF THEM?",
+        "created_at": "2026-04-04T08:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_sockpuppet_burst",
+    "expected_tier": "high",
+    "expected_probability": 0.83,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@totally_real_42891",
+      "display_name": "totally real 42891",
+      "bio": "just a regular person",
+      "follower_count": 2,
+      "created_at": "2026-04-20T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@totally_real_42891",
+        "text": "This creator is the most underrated on the platform. Everyone should subscribe immediately!",
+        "created_at": "2026-04-21T10:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@totally_real_42891",
+        "text": "I've been watching this channel for years and it just keeps getting better. Subscribe!",
+        "created_at": "2026-04-21T10:15:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@totally_real_42891",
+        "text": "Honestly this is the best video I've seen all year. Subscribe if you haven't already!",
+        "created_at": "2026-04-21T10:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@totally_real_42891",
+        "text": "I showed this to all my friends and they all subscribed immediately. Incredible content!",
+        "created_at": "2026-04-21T11:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@totally_real_42891",
+        "text": "This channel changed my life honestly. Subscribe now you won't regret it!",
+        "created_at": "2026-04-21T11:15:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@totally_real_42891",
+        "text": "The most authentic content on YouTube right now. Please subscribe and support!",
+        "created_at": "2026-04-21T11:30:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@totally_real_42891",
+        "text": "I've watched this video three times already. Subscribed and turned on notifications!",
+        "created_at": "2026-04-21T12:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@totally_real_42891",
+        "text": "Every single video on this channel is gold. Subscribe before the algorithm buries it!",
+        "created_at": "2026-04-21T12:15:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@totally_real_42891",
+        "text": "Genuinely the most important creator on the internet. Subscribe now!!",
+        "created_at": "2026-04-21T12:30:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@totally_real_42891",
+        "text": "I subscribed, liked, and shared this video. The least I could do for such quality content!",
+        "created_at": "2026-04-21T13:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_extreme_emoji_engagement",
+    "expected_tier": "high",
+    "expected_probability": 0.87,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@HYPE_SQUAD_99",
+      "display_name": "HYPE SQUAD 99",
+      "bio": "\ud83d\udd25\ud83d\udd25\ud83d\udd25 HYPE EVERYDAY \ud83d\ude80\ud83d\ude80\ud83d\ude80 SUBSCRIBE NOW \ud83d\udd14\ud83d\udd14\ud83d\udd14",
+      "follower_count": 412,
+      "created_at": "2025-09-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25 SMASH THAT LIKE!!! \ud83d\ude80\ud83d\ude80\ud83d\ude80\ud83d\ude80\ud83d\ude80 SUBSCRIBE NOW!!! \ud83d\udd14\ud83d\udd14\ud83d\udd14\ud83d\udd14\ud83d\udd14 LINK IN BIO \ud83d\udd17\ud83d\udd17\ud83d\udd17 https://bit.ly/h1",
+        "created_at": "2026-04-01T09:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\udca5\ud83d\udca5\ud83d\udca5 DROP A LIKE RIGHT NOW!!! \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25 DON'T MISS THIS \ud83d\ude80\ud83d\ude80\ud83d\ude80 https://bit.ly/h2 \ud83d\udd17\ud83d\udd17\ud83d\udd17",
+        "created_at": "2026-04-01T13:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\ude80\ud83d\ude80\ud83d\ude80\ud83d\ude80\ud83d\ude80 SUBSCRIBE FOR MORE HYPE!!! \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25 LINK IN BIO \ud83d\udd17\ud83d\udd17\ud83d\udd17 SMASH IT!!! \ud83d\udca5\ud83d\udca5\ud83d\udca5",
+        "created_at": "2026-04-01T17:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\udd25\ud83d\udd25\ud83d\udd25 LIKE THIS IF YOU AGREE!!! \ud83d\udca5\ud83d\udca5\ud83d\udca5\ud83d\udca5\ud83d\udca5 https://bit.ly/h3 \ud83d\udd17\ud83d\udd17\ud83d\udd17 DON'T SLEEP ON THIS \ud83d\ude80\ud83d\ude80\ud83d\ude80",
+        "created_at": "2026-04-02T09:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\udd14\ud83d\udd14\ud83d\udd14\ud83d\udd14\ud83d\udd14 RING THAT BELL!!! \ud83d\udd25\ud83d\udd25\ud83d\udd25 SMASH SUBSCRIBE!!! \ud83d\ude80\ud83d\ude80\ud83d\ude80\ud83d\ude80\ud83d\ude80 LINK IN BIO \ud83d\udd17\ud83d\udd17\ud83d\udd17 https://bit.ly/h4",
+        "created_at": "2026-04-02T13:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\udca5\ud83d\udca5\ud83d\udca5\ud83d\udca5\ud83d\udca5 GOING VIRAL!!! \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25 SHARE THIS NOW!!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 https://bit.ly/h5 \ud83d\udd17\ud83d\udd17\ud83d\udd17 DROP A LIKE!!!",
+        "created_at": "2026-04-02T17:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\ude80\ud83d\ude80\ud83d\ude80 LIMITED TIME!!! \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25 SUBSCRIBE NOW FOR FREE CONTENT!!! \ud83d\udca5\ud83d\udca5\ud83d\udca5 https://bit.ly/h6 \ud83d\udd17\ud83d\udd17\ud83d\udd17",
+        "created_at": "2026-04-03T09:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@HYPE_SQUAD_99",
+        "text": "\ud83d\udd25\ud83d\udd25\ud83d\udd25 DON'T MISS THIS!!! \ud83d\udca5\ud83d\udca5\ud83d\udca5\ud83d\udca5\ud83d\udca5 SMASH THAT LIKE BUTTON!!! \ud83d\ude80\ud83d\ude80\ud83d\ude80 https://bit.ly/h7 LINK IN BIO \ud83d\udd17\ud83d\udd17\ud83d\udd17",
+        "created_at": "2026-04-03T13:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_copy_paste_flood",
+    "expected_tier": "high",
+    "expected_probability": 0.83,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@SpamReachBot",
+      "display_name": "SpamReach Bot",
+      "bio": "growing my channel",
+      "follower_count": 9,
+      "created_at": "2026-02-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:05:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:10:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:15:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:20:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:25:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:30:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:35:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:40:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:45:00Z"
+      },
+      {
+        "id": "p11",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:50:00Z"
+      },
+      {
+        "id": "p12",
+        "author_handle": "@SpamReachBot",
+        "text": "Great video! I make similar content on my channel. Check it out and subscribe! https://youtube.com/spamreach",
+        "created_at": "2026-04-01T10:55:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_ai_broadcast_no_voice",
+    "expected_tier": "high",
+    "expected_probability": 0.85,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@MarketInsightAI",
+      "display_name": "Market Insight AI",
+      "bio": "AI-curated market analysis and business intelligence.",
+      "follower_count": 5230,
+      "created_at": "2025-02-15T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@MarketInsightAI",
+        "text": "It's worth noting that the current market dynamics underscore the ever-evolving nature of global capital flows. The implications are of paramount importance to stakeholders.",
+        "created_at": "2026-04-01T08:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@MarketInsightAI",
+        "text": "Moreover, this development represents a pivotal shift in the broader ecosystem. Furthermore, the intricacies of the regulatory framework cannot be overstated.",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@MarketInsightAI",
+        "text": "In essence, this stands as a testament to the fundamentally important role of liquidity management. What's particularly fascinating is how this navigates competing pressures.",
+        "created_at": "2026-04-01T16:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@MarketInsightAI",
+        "text": "It's important to note that the tapestry of factors influencing this decision speaks volumes about the underlying structural shifts. In summary, the trend is accelerating.",
+        "created_at": "2026-04-02T08:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@MarketInsightAI",
+        "text": "Additionally, the multifaceted nature of this development underscores the critical importance of rigorous analysis. Let's explore the broader ramifications of this paradigm shift.",
+        "created_at": "2026-04-02T12:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@MarketInsightAI",
+        "text": "Furthermore, at its core this is a fundamentally important question about capital allocation. The ever-evolving regulatory environment adds additional complexity to the analysis.",
+        "created_at": "2026-04-02T16:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@MarketInsightAI",
+        "text": "It's essential to delve into the nuanced interplay between monetary policy and market sentiment. In the realm of modern finance, these dynamics are particularly fascinating.",
+        "created_at": "2026-04-03T08:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@MarketInsightAI",
+        "text": "Moreover, this underscores the importance of understanding systemic risk in an interconnected global economy. The implications of this shift cannot be overstated.",
+        "created_at": "2026-04-03T12:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@MarketInsightAI",
+        "text": "In conclusion, the confluence of factors highlighted here shed light on a broader transformation. It's worth mentioning the potential for cascading second-order effects.",
+        "created_at": "2026-04-03T16:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@MarketInsightAI",
+        "text": "It's truly remarkable how this intricate dynamic navigates the competing forces at play. At its core, the opportunity here speaks to a fundamental market inefficiency.",
+        "created_at": "2026-04-04T08:00:00Z"
+      },
+      {
+        "id": "p11",
+        "author_handle": "@MarketInsightAI",
+        "text": "What's particularly fascinating is how the tapestry of macroeconomic indicators aligns with the thesis. Furthermore, this raises important questions about duration risk.",
+        "created_at": "2026-04-04T12:00:00Z"
+      },
+      {
+        "id": "p12",
+        "author_handle": "@MarketInsightAI",
+        "text": "In essence, this development stands as a testament to the ever-evolving nature of global finance. The nuanced take required here is one few analysts have articulated clearly.",
+        "created_at": "2026-04-04T16:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_sleepless_mass_commenter",
+    "expected_tier": "high",
+    "expected_probability": 0.84,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@EngageBoost247",
+      "display_name": "Engage Boost 247",
+      "bio": "boosting engagement. 24/7.",
+      "follower_count": 18,
+      "created_at": "2025-11-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T00:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T02:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T04:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T06:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T08:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T10:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T12:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T14:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T16:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T18:00:00Z"
+      },
+      {
+        "id": "p11",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T20:00:00Z"
+      },
+      {
+        "id": "p12",
+        "author_handle": "@EngageBoost247",
+        "text": "Amazing content! Subscribe for more like this \ud83d\udd25",
+        "created_at": "2026-04-01T22:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "edge_arabic_language",
+    "expected_tier": "low",
+    "expected_probability": 0.18,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@ahmed_comments",
+      "display_name": "Ahmed",
+      "bio": "\u0645\u0634\u062a\u0631\u0643 \u062c\u062f\u064a\u062f. \u0645\u0646 \u0645\u0635\u0631.",
+      "follower_count": 92,
+      "created_at": "2022-04-10T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@ahmed_comments",
+        "text": "\u0641\u064a\u062f\u064a\u0648 \u0631\u0627\u0626\u0639 \u062c\u062f\u0627\u064b! \u0634\u0631\u062d \u0648\u0627\u0636\u062d \u0648\u0645\u0641\u064a\u062f. \u0634\u0643\u0631\u0627\u064b \u0644\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a",
+        "created_at": "2026-04-05T20:15:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@ahmed_comments",
+        "text": "\u0645\u0627 \u0641\u0647\u0645\u062a \u0627\u0644\u062c\u0632\u0621 \u0641\u064a \u0665:\u0663\u0660 \u0645\u0645\u0643\u0646 \u062a\u0634\u0631\u062d \u0623\u0643\u062b\u0631\u061f",
+        "created_at": "2026-04-11T21:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@ahmed_comments",
+        "text": "\u0623\u0646\u0627 \u062c\u0631\u0628\u062a \u0647\u0630\u0627 \u0627\u0644\u0623\u0633\u0644\u0648\u0628 \u0648\u0634\u063a\u0627\u0644 \u0632\u064a\u0646 \u0627\u0644\u062d\u0645\u062f \u0644\u0644\u0647",
+        "created_at": "2026-04-18T19:45:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@ahmed_comments",
+        "text": "\u0645\u062d\u062a\u0648\u0649 \u0642\u064a\u0651\u0645 \u062c\u062f\u0627\u064b\u060c \u0627\u0633\u062a\u0645\u0631 \u0641\u064a \u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062a\u0648\u0649",
+        "created_at": "2026-04-26T22:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@ahmed_comments",
+        "text": "\u0634\u0643\u0631\u0627\u064b \u0645\u0646 \u0645\u0635\u0631! \u0647\u0630\u0627 \u0627\u0644\u0642\u0646\u0627\u0629 \u0645\u0646 \u0623\u0641\u0636\u0644 \u0627\u0644\u0642\u0646\u0648\u0627\u062a \u0627\u0644\u062a\u0639\u0644\u064a\u0645\u064a\u0629",
+        "created_at": "2026-05-05T20:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "edge_spanish_language",
+    "expected_tier": "low",
+    "expected_probability": 0.17,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@carolina_mx",
+      "display_name": "Carolina",
+      "bio": "M\u00fasica, cocina y caf\u00e9s en CDMX. comentando por ah\u00ed.",
+      "follower_count": 438,
+      "created_at": "2021-06-22T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@carolina_mx",
+        "text": "Este video me lo recomend\u00f3 mi hermana y no me arrepiento para nada. Muy buena explicaci\u00f3n.",
+        "created_at": "2026-04-07T18:22:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@carolina_mx",
+        "text": "Oye, \u00bfpodr\u00edas hacer un video sobre el tema que mencionas al final? Me qued\u00e9 con ganas de m\u00e1s.",
+        "created_at": "2026-04-14T20:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@carolina_mx",
+        "text": "Intent\u00e9 lo que dices a las 7:20 y funcion\u00f3 perfectamente. Gracias por el tip.",
+        "created_at": "2026-04-22T19:15:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@carolina_mx",
+        "text": "Me da risa porque exactamente esto me pas\u00f3 la semana pasada jaja",
+        "created_at": "2026-05-01T21:30:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@carolina_mx",
+        "text": "Discrepo un poco con la parte del minuto 12, en mi experiencia funciona diferente. Pero buen video de todas formas.",
+        "created_at": "2026-05-10T18:55:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@carolina_mx",
+        "text": "Llevo tres videos seguidos viendo tu canal, est\u00e1 muy bien hecho el contenido",
+        "created_at": "2026-05-17T20:10:00Z"
+      }
+    ]
+  },
+  {
+    "label": "edge_verified_creator",
+    "expected_tier": "low",
+    "expected_probability": 0.12,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@MrBeast",
+      "display_name": "MrBeast",
+      "bio": "I make really long videos.",
+      "follower_count": 42000000,
+      "verified": true,
+      "created_at": "2012-02-19T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@MrBeast",
+        "text": "Thanks for all the support on the last video! We're already planning the next one and it's going to be way bigger.",
+        "created_at": "2026-04-05T15:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@MrBeast",
+        "text": "Read every comment on the last upload. You guys are the best community on YouTube, not even close.",
+        "created_at": "2026-04-12T16:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@MrBeast",
+        "text": "Behind the scenes vid dropping this week. Some of what got cut was honestly just as good as what made the final.",
+        "created_at": "2026-04-19T14:20:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@MrBeast",
+        "text": "We spent 3 months building the set for the next video. Worth it.",
+        "created_at": "2026-04-28T17:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@MrBeast",
+        "text": "Going to try something different in the next upload. Curious if you guys notice.",
+        "created_at": "2026-05-06T15:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "edge_academic_english_formal",
+    "expected_tier": "moderate",
+    "expected_probability": 0.35,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@prof_alan_bishop",
+      "display_name": "Prof. Alan Bishop",
+      "bio": "Mathematics education researcher. University of Cambridge. occasional commenter.",
+      "follower_count": 720,
+      "created_at": "2017-09-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@prof_alan_bishop",
+        "text": "It is worth noting that the pedagogical approach demonstrated here aligns closely with constructivist learning theory. The implications for classroom practice are, moreover, substantial.",
+        "created_at": "2026-04-08T14:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@prof_alan_bishop",
+        "text": "In conclusion, whilst the methodology is sound, the generalisation in the final section overstates the available evidence. This is a common challenge in science communication.",
+        "created_at": "2026-04-16T15:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@prof_alan_bishop",
+        "text": "Furthermore, the distinction between procedural and conceptual knowledge \u2014 which the video touches upon at 8:40 \u2014 is fundamentally important to how we design assessments.",
+        "created_at": "2026-04-24T16:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@prof_alan_bishop",
+        "text": "In the realm of mathematics education, it is essential to consider the role of prior knowledge. Additionally, the cultural dimension of numeracy is often overlooked in these discussions.",
+        "created_at": "2026-05-02T14:15:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@prof_alan_bishop",
+        "text": "I would recommend cross-referencing this with Vygotsky's zone of proximal development. At its core, the scaffolding question is what the research consistently returns to.",
+        "created_at": "2026-05-11T15:30:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@prof_alan_bishop",
+        "text": "Moreover, my own research suggests that the transfer effect described here is considerably more context-dependent than the presenter implies. I have shared my papers in a reply below.",
+        "created_at": "2026-05-19T14:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "edge_empty_bio_real_human",
+    "expected_tier": "low",
+    "expected_probability": 0.22,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@tanner_b",
+      "display_name": "Tanner",
+      "bio": "",
+      "follower_count": 67,
+      "created_at": "2023-02-08T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@tanner_b",
+        "text": "I've been trying to figure this out for three days. Thank you so much.",
+        "created_at": "2026-04-09T20:45:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@tanner_b",
+        "text": "the way I completely missed the step at 11:00 the first two times I watched this lol",
+        "created_at": "2026-04-17T22:15:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@tanner_b",
+        "text": "update: got it working! took me another hour but your video was the key",
+        "created_at": "2026-04-18T21:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@tanner_b",
+        "text": "came back for a different tutorial and realised I already commented here lol. this channel is great",
+        "created_at": "2026-05-06T23:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@tanner_b",
+        "text": "genuinely saved my project with this. appreciate you keeping it free",
+        "created_at": "2026-05-14T21:45:00Z"
+      }
+    ]
+  },
+  {
+    "label": "edge_old_popular_account",
+    "expected_tier": "low",
+    "expected_probability": 0.11,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@CGPGrey",
+      "display_name": "CGP Grey",
+      "bio": "Videos about complicated things.",
+      "follower_count": 6200000,
+      "created_at": "2010-08-27T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@CGPGrey",
+        "text": "The new video is almost done. 'Almost' is doing a lot of work in that sentence.",
+        "created_at": "2026-03-15T18:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@CGPGrey",
+        "text": "Thank you all for the patience. The research rabbit hole on this one was particularly deep.",
+        "created_at": "2026-04-02T16:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@CGPGrey",
+        "text": "Pinning this comment to note: the statistic at 4:20 has been updated since filming. See the description for the correction.",
+        "created_at": "2026-04-18T15:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@CGPGrey",
+        "text": "I've read enough comments now to know what the follow-up video should be. Working on it.",
+        "created_at": "2026-05-05T17:15:00Z"
+      }
+    ]
+  },
+  {
+    "label": "high_ai_dense_repetitive",
+    "expected_tier": "high",
+    "expected_probability": 0.86,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@AlphaInsightsPro",
+      "display_name": "Alpha Insights Pro",
+      "bio": "Premium insights for premium minds.",
+      "follower_count": 3140,
+      "created_at": "2025-05-01T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "It's important to note that this framework is, at its core, fundamentally important to understanding the ever-evolving landscape. Let's delve into the intricacies.",
+        "created_at": "2026-04-01T09:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "Moreover, it's worth noting that this stands as a testament to the nuanced approach required. Furthermore, the implications cannot be overstated in today's fast-paced environment.",
+        "created_at": "2026-04-03T09:00:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "In the realm of modern strategy, what's particularly fascinating is how this navigates the tapestry of competing priorities. In essence, the complexity is real.",
+        "created_at": "2026-04-05T09:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "Additionally, this is such a thoughtful breakdown. It's essential to delve deeper \u2014 the intricacies of implementation speak volumes about the broader challenge.",
+        "created_at": "2026-04-07T09:00:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "Thanks for breaking this down. It's truly remarkable how this underscores the importance of navigating ever-evolving dynamics. Great breakdown of the fundamentals.",
+        "created_at": "2026-04-09T09:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "In stark contrast to conventional approaches, this methodology captures the essence of what matters. At its core, this raises important questions about sustainability.",
+        "created_at": "2026-04-11T09:00:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "I appreciate you sharing this. The nuanced take here speaks to the broader challenge that fundamentally important players in this space have been ignoring.",
+        "created_at": "2026-04-13T09:00:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "In conclusion, embark on a journey through these intricacies and you will find that the tapestry of factors is more complex than initially apparent. Intricate but worth it.",
+        "created_at": "2026-04-15T09:00:00Z"
+      },
+      {
+        "id": "p9",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "What's particularly fascinating is how this navigates the multifaceted landscape of modern challenges. Moreover, this is such a thoughtful approach to the problem.",
+        "created_at": "2026-04-17T09:00:00Z"
+      },
+      {
+        "id": "p10",
+        "author_handle": "@AlphaInsightsPro",
+        "text": "Furthermore, at the heart of this discussion lies a fundamentally important dynamic. It's worth mentioning that the broader implications are of paramount importance.",
+        "created_at": "2026-04-19T09:00:00Z"
+      }
+    ]
+  },
+  {
+    "label": "elevated_promo_mixed",
+    "expected_tier": "elevated",
+    "expected_probability": 0.62,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@DropshipKing_99",
+      "display_name": "Dropship King",
+      "bio": "E-commerce entrepreneur. teaching what works.",
+      "follower_count": 7820,
+      "created_at": "2024-03-20T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@DropshipKing_99",
+        "text": "Tried this exact strategy last month \u2014 made $4k. Happy to share my Shopify setup if interested.",
+        "created_at": "2026-04-02T12:00:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@DropshipKing_99",
+        "text": "Good overview but the supplier vetting part is where most people fail. I cover that in my free course \u2014 link in bio \ud83d\udd17",
+        "created_at": "2026-04-06T11:30:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@DropshipKing_99",
+        "text": "The ad targeting advice here is solid. I'd add that lookalike audiences have dropped off in 2026 \u2014 email lists are the move now.",
+        "created_at": "2026-04-10T13:00:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@DropshipKing_99",
+        "text": "Comment 'FREE' and I'll send you my product research spreadsheet \u2014 used it to find 3 winning products last quarter \ud83d\udd25",
+        "created_at": "2026-04-14T12:15:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@DropshipKing_99",
+        "text": "Disagree on the niche selection point \u2014 micro-niches are still very much viable if you target the right demographics.",
+        "created_at": "2026-04-18T14:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@DropshipKing_99",
+        "text": "I built a $50k/month store using exactly this model. My full breakdown is in my bio \u2014 worth 20 minutes of your time \ud83d\udd17",
+        "created_at": "2026-04-22T12:30:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@DropshipKing_99",
+        "text": "Subscribe for daily e-commerce tips \u2014 I share what's actually working right now, not what worked 2 years ago \ud83d\ude80",
+        "created_at": "2026-04-26T11:45:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@DropshipKing_99",
+        "text": "Great point about margins. The 3x rule still holds but you need to factor in return rates by category.",
+        "created_at": "2026-04-30T13:15:00Z"
+      }
+    ]
+  },
+  {
+    "label": "human_musician_fan",
+    "expected_tier": "low",
+    "expected_probability": 0.14,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@fender_life_elena",
+      "display_name": "Elena",
+      "bio": "Amateur guitarist. vintage amp collector. Barcelona.",
+      "follower_count": 284,
+      "created_at": "2020-11-30T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@fender_life_elena",
+        "text": "I've been chasing that exact tone for two years. Never heard anyone explain the pickup height relationship so clearly.",
+        "created_at": "2026-04-04T21:30:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@fender_life_elena",
+        "text": "My 1971 Deluxe reverb has this exact issue \u2014 I always assumed it was the caps. Sending it in next week now.",
+        "created_at": "2026-04-11T20:15:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@fender_life_elena",
+        "text": "the way you demonstrate the difference between A/B at 9:30 \u2014 I actually heard it through my laptop speakers which never happens",
+        "created_at": "2026-04-19T22:45:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@fender_life_elena",
+        "text": "found this at 2am when I couldn't sleep and it was the best 30 minutes of my week",
+        "created_at": "2026-04-27T02:12:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@fender_life_elena",
+        "text": "Update from my comment two weeks ago: the reverb tank swap worked. Total difference. Thank you!",
+        "created_at": "2026-05-06T21:00:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@fender_life_elena",
+        "text": "would love an episode on the Bandmaster \u2014 I know it's niche but you'd make it interesting",
+        "created_at": "2026-05-14T22:30:00Z"
+      }
+    ]
+  },
+  {
+    "label": "moderate_stock_alerts_auto",
+    "expected_tier": "moderate",
+    "expected_probability": 0.39,
+    "profile": {
+      "platform": "youtube",
+      "handle": "@StockScannerBot",
+      "display_name": "Stock Scanner Bot",
+      "bio": "Automated technical analysis alerts. not financial advice.",
+      "follower_count": 9240,
+      "created_at": "2022-10-05T00:00:00Z"
+    },
+    "posts": [
+      {
+        "id": "p1",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $AAPL broke above 200-day MA on above-average volume. RSI at 62. Watch for continuation or rejection at $198 resistance.",
+        "created_at": "2026-04-01T15:32:00Z"
+      },
+      {
+        "id": "p2",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $NVDA formed bullish engulfing candle on daily. Volume 1.4x average. Previous resistance at $890 now potential support.",
+        "created_at": "2026-04-03T15:45:00Z"
+      },
+      {
+        "id": "p3",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $TSLA MACD bullish crossover on 4H chart. RSI recovering from oversold. Key level: $172 needs to hold.",
+        "created_at": "2026-04-07T15:30:00Z"
+      },
+      {
+        "id": "p4",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $META broke out of 3-week consolidation range. Volume 1.8x average. Target zone: $510-$520.",
+        "created_at": "2026-04-10T15:38:00Z"
+      },
+      {
+        "id": "p5",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $MSFT weekly chart shows golden cross forming. Momentum indicators positive. Watch $415 as near-term resistance.",
+        "created_at": "2026-04-14T15:42:00Z"
+      },
+      {
+        "id": "p6",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $GOOGL doji candle on daily suggests indecision. Volume below average. Likely to resolve with macro catalyst.",
+        "created_at": "2026-04-17T15:35:00Z"
+      },
+      {
+        "id": "p7",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $AMD high volume rejection at $175. Shooting star pattern on daily. Short-term bearish signal pending confirmation.",
+        "created_at": "2026-04-21T15:40:00Z"
+      },
+      {
+        "id": "p8",
+        "author_handle": "@StockScannerBot",
+        "text": "ALERT: $SPY weekly RSI approaching overbought at 71. No divergence yet but worth monitoring breadth indicators.",
+        "created_at": "2026-04-24T15:33:00Z"
+      }
+    ]
+  }
+]
