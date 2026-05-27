@@ -83,8 +83,28 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+_DEV_SESSION_SECRET = "dev-only-change-me-please-12345678901234567890"
+
+
+def _verify_production_config(settings) -> None:
+    """Fail fast on critical misconfigurations in production.
+
+    The dev session secret would silently let anyone forge cookies; refusing
+    to start is safer than serving traffic with insecure auth.
+    """
+    if settings.env != "production":
+        return
+    if settings.require_auth and settings.session_secret == _DEV_SESSION_SECRET:
+        raise RuntimeError(
+            "OMI_SESSION_SECRET is still the dev default in production. "
+            "Set it to a random 64+ char string (Render's `generateValue: true` "
+            "does this automatically — redeploy from the Blueprint to pick it up)."
+        )
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
+    _verify_production_config(settings)
 
     app = FastAPI(
         title="OMISPHERE API",
