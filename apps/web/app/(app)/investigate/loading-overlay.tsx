@@ -80,8 +80,8 @@ export function LoadingOverlay({ active }: { active: boolean }) {
         })}
       </div>
       <p className="mt-4 text-2xs text-fg-mute font-mono leading-relaxed">
-        First-time scans take 10–30 seconds depending on commenter count and
-        YouTube API latency. Cached commenters return instantly on re-scan.
+        Scans take 15–45 seconds depending on batch size and YouTube API
+        latency. Cached commenters return instantly on re-scan.
       </p>
     </div>
   );

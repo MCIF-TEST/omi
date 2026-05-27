@@ -537,7 +537,7 @@ def scan_link(
         video_url_or_id=classification.get("video_id"),
         account_url_or_handle=classification.get("account_input"),
         comments_text=None,
-        max_commenters=int(payload.get("max_commenters", 150)),
+        max_commenters=int(payload.get("max_commenters", 25)),
         force_refresh=bool(payload.get("force_refresh", False)),
         start_page_token=payload.get("start_page_token") or None,
     )

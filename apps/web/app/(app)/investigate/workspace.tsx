@@ -23,7 +23,7 @@ interface State {
 
 export function Workspace({ initialUrl }: { initialUrl: string }) {
   const router = useRouter();
-  const [batchSize, setBatchSize] = useState(150);
+  const [batchSize, setBatchSize] = useState(25);
   const [scanUrl, setScanUrl] = useState(initialUrl);
   const [state, setState] = useState<State>({
     data: null, selectedId: null, pending: false, error: null, loadingMore: false,
