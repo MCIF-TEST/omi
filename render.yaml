@@ -97,7 +97,7 @@ services:
 
 databases:
   - name: omisphere-postgres
-    plan: starter
+    plan: free
     region: oregon
     databaseName: omi
     user: omi
