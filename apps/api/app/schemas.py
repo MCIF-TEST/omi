@@ -577,6 +577,10 @@ class NarrativeOut(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     sample_text: str
+    # Risk enrichment — populated by the trending endpoint
+    inauthenticity_score: float = 0.0   # fraction of scanned members flagged elevated/high
+    risk_label: str = "unknown"          # organic | mixed | suspicious | likely_coordinated
+    platforms: list[str] = Field(default_factory=list)
 
 
 class NarrativesResponse(BaseModel):
@@ -585,6 +589,55 @@ class NarrativesResponse(BaseModel):
     window_days: int
     embedder: str
     narratives: list[NarrativeOut]
+
+
+# ---------------------------------------------------------------------------
+# Narrative detail (drill-down page)
+# ---------------------------------------------------------------------------
+
+
+class NarrativeActivityPoint(BaseModel):
+    date: str   # "2024-01-15"
+    count: int
+
+
+class NarrativeTopAccount(BaseModel):
+    external_id: str
+    handle: str
+    display_name: str | None = None
+    platform: str
+    comment_count: int
+    tier: str | None = None   # latest scan tier, None if never scanned
+
+
+class NarrativeSample(BaseModel):
+    text: str
+    account_external_id: str
+    handle: str | None = None
+    platform: str
+    parent_id: str | None = None   # video/post ID
+    observed_at: datetime
+
+
+class NarrativeDetail(BaseModel):
+    """Full drill-down for a single narrative cluster."""
+
+    id: int
+    label: str
+    member_count: int
+    distinct_authors: int
+    spread_ratio: float
+    first_seen_at: datetime
+    last_seen_at: datetime
+    inauthenticity_score: float
+    risk_label: str
+    platforms: list[str]
+    platform_breakdown: dict[str, int]
+    activity: list[NarrativeActivityPoint]   # daily buckets, last 30 days
+    top_accounts: list[NarrativeTopAccount]  # top 12 by comment count
+    samples: list[NarrativeSample]           # 15 most recent comments
+    ai_analysis: str
+    ai_provider: str
 
 
 class AccountAnalysisResponse(BaseModel):

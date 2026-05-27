@@ -239,3 +239,72 @@ def synthesize_account_analysis(
         user=user,
         max_tokens=min(400, settings.reasoning_max_tokens + 80),
     )
+
+
+# ---------------------------------------------------------------------------
+# Narrative cluster analysis
+# ---------------------------------------------------------------------------
+
+NARRATIVE_ANALYSIS_SYSTEM = """You are a disinformation and narrative intelligence \
+analyst. You analyse clusters of semantically similar social-media comments \
+detected by OMISPHERE and write a concise, evidence-grounded assessment.
+
+Rules:
+1. Describe what topic/framing this comment cluster represents — what claim, \
+talking point, or narrative is being spread.
+2. Assess whether the spread pattern looks organic (genuine public interest) \
+or coordinated/inauthentic (amplified by bots or inauthentic accounts).
+3. Reference specific statistics (member count, spread ratio, inauthentic %).
+4. Use probabilistic language: "appears to", "patterns suggest", "consistent \
+with". Never state facts you cannot verify.
+5. Length: 100–160 words. One or two paragraphs. No bullets or headers.
+6. End with one sentence on the probabilistic limits of this analysis.
+
+You produce analytic prose only."""
+
+
+def synthesize_narrative_analysis(
+    *,
+    label: str,
+    member_count: int,
+    distinct_authors: int,
+    spread_ratio: float,
+    inauthenticity_score: float,
+    risk_label: str,
+    platforms: list[str],
+    sample_texts: list[str],
+    settings: "Settings | None" = None,
+    provider: "LLMProvider | None" = None,
+) -> "ProviderResult":
+    """Generate an analyst assessment of what a narrative cluster represents."""
+    from app.core.config import get_settings as _get_settings
+    settings = settings or _get_settings()
+    provider = provider or get_provider(settings)
+
+    spread_pct = int(round(spread_ratio * 100))
+    inauth_pct = int(round(inauthenticity_score * 100))
+    samples_block = "\n".join(f'  - "{t[:200]}"' for t in sample_texts[:6] if t.strip())
+
+    digest = (
+        f"cluster_topic: {label[:300]}\n"
+        f"total_members: {member_count}\n"
+        f"distinct_authors: {distinct_authors}\n"
+        f"spread_ratio: {spread_pct}%\n"
+        f"inauthentic_authors_pct: {inauth_pct}%\n"
+        f"risk_label: {risk_label}\n"
+        f"platforms: {', '.join(platforms) or 'unknown'}\n"
+        f"sample_comments:\n{samples_block}"
+    )
+
+    user = (
+        "Write a 100–160 word narrative intelligence assessment for this comment cluster:\n\n"
+        f"{digest}\n\n"
+        "Cover: what is being said (the actual narrative/claim), whether the spread "
+        "looks organic or coordinated, and what the inauthentic author percentage implies. "
+        "Probabilistic language throughout. No headers."
+    )
+    return provider.synthesize(
+        system=NARRATIVE_ANALYSIS_SYSTEM,
+        user=user,
+        max_tokens=min(350, settings.reasoning_max_tokens + 30),
+    )

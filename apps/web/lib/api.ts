@@ -113,6 +113,46 @@ export interface NarrativeOut {
   first_seen_at: string;
   last_seen_at: string;
   sample_text: string;
+  inauthenticity_score: number;
+  risk_label: string;   // "organic" | "mixed" | "suspicious" | "likely_coordinated" | "unknown"
+  platforms: string[];
+}
+
+export interface NarrativeTopAccount {
+  external_id: string;
+  handle: string;
+  display_name: string | null;
+  platform: string;
+  comment_count: number;
+  tier: string | null;
+}
+
+export interface NarrativeSample {
+  text: string;
+  account_external_id: string;
+  handle: string | null;
+  platform: string;
+  parent_id: string | null;
+  observed_at: string;
+}
+
+export interface NarrativeDetail {
+  id: number;
+  label: string;
+  member_count: number;
+  distinct_authors: number;
+  spread_ratio: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  inauthenticity_score: number;
+  risk_label: string;
+  platforms: string[];
+  platform_breakdown: Record<string, number>;
+  activity: Array<{ date: string; count: number }>;
+  top_accounts: NarrativeTopAccount[];
+  samples: NarrativeSample[];
+  ai_analysis: string;
+  ai_provider: string;
 }
 
 // ---------------------------------------------------------------------------

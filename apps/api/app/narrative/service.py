@@ -14,12 +14,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.narrative.clustering import best_match
 from app.narrative.embeddings import Embedder, get_embedder
-from app.storage.models import Narrative, NarrativeMembership
+from app.storage.models import Account, Narrative, NarrativeMembership, Scan
 
 
 @dataclass
@@ -38,9 +38,16 @@ class TrendingNarrative:
     distinct_authors: int
     first_seen_at: datetime
     last_seen_at: datetime
-    recent_members: int     # members in the trailing window
-    spread_ratio: float     # distinct_authors / member_count
+    recent_members: int
+    spread_ratio: float
     sample_text: str
+    inauthenticity_score: float = 0.0
+    risk_label: str = "unknown"
+    platforms: list = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.platforms is None:
+            self.platforms = []
 
 
 class NarrativeService:
@@ -186,9 +193,30 @@ class NarrativeService:
             select(Narrative).where(Narrative.id.in_(narrative_ids))
         ).scalars())
 
+        # Platform breakdown per narrative (one query for all)
+        plat_rows = list(self.session.execute(
+            select(
+                NarrativeMembership.narrative_id,
+                NarrativeMembership.platform,
+                func.count(NarrativeMembership.id),
+            )
+            .where(NarrativeMembership.narrative_id.in_(narrative_ids))
+            .group_by(NarrativeMembership.narrative_id, NarrativeMembership.platform)
+        ).all())
+        platforms_by_id: dict[int, list[str]] = {}
+        for nid, plat, _ in plat_rows:
+            platforms_by_id.setdefault(nid, [])
+            if plat not in platforms_by_id[nid]:
+                platforms_by_id[nid].append(plat)
+
+        # Inauthenticity score per narrative — fraction of *scanned* distinct
+        # authors whose latest scan is elevated or high.
+        inauth_by_id = _batch_inauthenticity(self.session, narrative_ids)
+
         results: list[TrendingNarrative] = []
         for n in narrative_rows:
             spread = (n.distinct_authors / n.member_count) if n.member_count else 0.0
+            inauth = inauth_by_id.get(n.id, 0.0)
             results.append(TrendingNarrative(
                 id=n.id,
                 label=n.label or "(unnamed)",
@@ -199,11 +227,175 @@ class NarrativeService:
                 recent_members=recent_by_id.get(n.id, 0),
                 spread_ratio=spread,
                 sample_text=n.label or "",
+                inauthenticity_score=inauth,
+                risk_label=_risk_label(inauth, spread),
+                platforms=platforms_by_id.get(n.id, []),
             ))
 
         # Final ranking: recent_members × (0.5 + spread). Mixes volume + spread.
         results.sort(key=lambda t: t.recent_members * (0.5 + t.spread_ratio), reverse=True)
         return results[:limit]
+
+    # ---- Detail ---------------------------------------------------------
+
+    def get_detail(self, narrative_id: int) -> "NarrativeDetailData | None":
+        """Full drill-down for one narrative cluster."""
+        narrative = self.session.get(Narrative, narrative_id)
+        if narrative is None:
+            return None
+
+        # Platform breakdown
+        plat_rows = list(self.session.execute(
+            select(NarrativeMembership.platform, func.count(NarrativeMembership.id))
+            .where(NarrativeMembership.narrative_id == narrative_id)
+            .group_by(NarrativeMembership.platform)
+        ).all())
+        platform_breakdown: dict[str, int] = {p: int(c) for p, c in plat_rows}
+        platforms = list(platform_breakdown.keys())
+
+        # Daily activity for last 30 days (SQLite strftime)
+        cutoff_30 = datetime.now(timezone.utc) - timedelta(days=30)
+        activity_rows = list(self.session.execute(
+            select(
+                func.strftime("%Y-%m-%d", NarrativeMembership.observed_at).label("day"),
+                func.count(NarrativeMembership.id).label("cnt"),
+            )
+            .where(
+                NarrativeMembership.narrative_id == narrative_id,
+                NarrativeMembership.observed_at >= cutoff_30,
+            )
+            .group_by("day")
+            .order_by("day")
+        ).all())
+        activity = [{"date": row[0], "count": int(row[1])} for row in activity_rows]
+
+        # Top accounts by comment count (with handle from Account table if available)
+        top_acct_rows = list(self.session.execute(
+            select(
+                NarrativeMembership.account_external_id,
+                NarrativeMembership.platform,
+                func.count(NarrativeMembership.id).label("cnt"),
+            )
+            .where(NarrativeMembership.narrative_id == narrative_id)
+            .group_by(NarrativeMembership.account_external_id, NarrativeMembership.platform)
+            .order_by(desc("cnt"))
+            .limit(12)
+        ).all())
+
+        top_accounts: list[NarrativeTopAccountData] = []
+        for ext_id, plat, cnt in top_acct_rows:
+            acc = self.session.execute(
+                select(Account).where(Account.external_id == ext_id)
+            ).scalar_one_or_none()
+            tier: str | None = None
+            if acc is not None:
+                latest_scan = self.session.execute(
+                    select(Scan)
+                    .where(Scan.account_id == acc.id)
+                    .order_by(Scan.scanned_at.desc())
+                    .limit(1)
+                ).scalar_one_or_none()
+                if latest_scan:
+                    tier = latest_scan.tier
+            top_accounts.append(NarrativeTopAccountData(
+                external_id=ext_id,
+                handle=acc.handle if acc else ext_id,
+                display_name=acc.display_name if acc else None,
+                platform=plat,
+                comment_count=int(cnt),
+                tier=tier,
+            ))
+
+        # Sample comments (15 most recent, de-duped by text)
+        sample_rows = list(self.session.execute(
+            select(NarrativeMembership)
+            .where(NarrativeMembership.narrative_id == narrative_id)
+            .order_by(NarrativeMembership.observed_at.desc())
+            .limit(40)
+        ).scalars())
+        seen_texts: set[str] = set()
+        samples: list[NarrativeSampleData] = []
+        for row in sample_rows:
+            text_key = row.comment_text[:80].lower().strip()
+            if text_key in seen_texts:
+                continue
+            seen_texts.add(text_key)
+            acc = self.session.execute(
+                select(Account).where(Account.external_id == row.account_external_id)
+            ).scalar_one_or_none()
+            samples.append(NarrativeSampleData(
+                text=row.comment_text,
+                account_external_id=row.account_external_id,
+                handle=acc.handle if acc else None,
+                platform=row.platform,
+                parent_id=row.parent_id,
+                observed_at=_to_utc(row.observed_at),
+            ))
+            if len(samples) >= 15:
+                break
+
+        spread = (narrative.distinct_authors / narrative.member_count) if narrative.member_count else 0.0
+        inauth = _batch_inauthenticity(self.session, [narrative_id]).get(narrative_id, 0.0)
+
+        return NarrativeDetailData(
+            id=narrative.id,
+            label=narrative.label or "(unnamed)",
+            member_count=narrative.member_count,
+            distinct_authors=narrative.distinct_authors,
+            spread_ratio=spread,
+            first_seen_at=_to_utc(narrative.first_seen_at),
+            last_seen_at=_to_utc(narrative.last_seen_at),
+            inauthenticity_score=inauth,
+            risk_label=_risk_label(inauth, spread),
+            platforms=platforms,
+            platform_breakdown=platform_breakdown,
+            activity=activity,
+            top_accounts=top_accounts,
+            samples=samples,
+        )
+
+
+@dataclass
+class NarrativeTopAccountData:
+    external_id: str
+    handle: str
+    display_name: str | None
+    platform: str
+    comment_count: int
+    tier: str | None
+
+
+@dataclass
+class NarrativeSampleData:
+    text: str
+    account_external_id: str
+    handle: str | None
+    platform: str
+    parent_id: str | None
+    observed_at: datetime
+
+
+@dataclass
+class NarrativeDetailData:
+    id: int
+    label: str
+    member_count: int
+    distinct_authors: int
+    spread_ratio: float
+    first_seen_at: datetime
+    last_seen_at: datetime
+    inauthenticity_score: float
+    risk_label: str
+    platforms: list[str]
+    platform_breakdown: dict[str, int]
+    activity: list[dict]
+    top_accounts: list[NarrativeTopAccountData]
+    samples: list[NarrativeSampleData]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _clip_label(text: str, max_len: int = 200) -> str:
@@ -217,3 +409,73 @@ def _to_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _risk_label(inauthenticity_score: float, spread_ratio: float) -> str:
+    """Map numeric inauthentic fraction → plain-language risk label."""
+    if inauthenticity_score >= 0.60:
+        return "likely_coordinated"
+    if inauthenticity_score >= 0.35:
+        return "suspicious"
+    if inauthenticity_score >= 0.15 or spread_ratio < 0.10:
+        return "mixed"
+    return "organic"
+
+
+def _batch_inauthenticity(session: Session, narrative_ids: list[int]) -> dict[int, float]:
+    """Compute inauthenticity score for a batch of narratives in two queries.
+
+    Returns a dict mapping narrative_id → fraction of scanned distinct
+    authors whose latest scan tier is elevated or high.
+    """
+    if not narrative_ids:
+        return {}
+
+    # Step 1: Get all (narrative_id, account_external_id) distinct pairs
+    pairs = list(session.execute(
+        select(
+            NarrativeMembership.narrative_id,
+            NarrativeMembership.account_external_id,
+        )
+        .where(NarrativeMembership.narrative_id.in_(narrative_ids))
+        .distinct()
+    ).all())
+
+    if not pairs:
+        return {}
+
+    all_ext_ids = list({p[1] for p in pairs})
+
+    # Step 2: Get latest scan tier per account (correlated subquery approach)
+    tier_rows = list(session.execute(
+        select(Account.external_id, Scan.tier)
+        .join(Scan, Scan.account_id == Account.id)
+        .where(Account.external_id.in_(all_ext_ids))
+    ).all())
+
+    # Keep only the "worst" (highest-risk) tier per account since multiple
+    # scans may exist. worst = most informative for inauthentic scoring.
+    _tier_rank = {"low": 0, "moderate": 1, "elevated": 2, "high": 3}
+    worst_tier: dict[str, str] = {}
+    for ext_id, tier in tier_rows:
+        current = worst_tier.get(ext_id)
+        if current is None or _tier_rank.get(tier, 0) > _tier_rank.get(current, 0):
+            worst_tier[ext_id] = tier
+
+    # Step 3: Aggregate per narrative
+    from collections import defaultdict
+    scanned: dict[int, list[str]] = defaultdict(list)
+    for nid, ext_id in pairs:
+        if ext_id in worst_tier:
+            scanned[nid].append(worst_tier[ext_id])
+
+    result: dict[int, float] = {}
+    for nid in narrative_ids:
+        tiers = scanned.get(nid, [])
+        if not tiers:
+            result[nid] = 0.0
+            continue
+        flagged = sum(1 for t in tiers if t in ("elevated", "high"))
+        result[nid] = flagged / len(tiers)
+
+    return result

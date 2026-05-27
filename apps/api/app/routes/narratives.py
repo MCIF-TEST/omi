@@ -1,4 +1,4 @@
-"""Narrative observatory endpoints — Phase 3."""
+"""Narrative observatory endpoints."""
 
 from __future__ import annotations
 
@@ -7,7 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.auth import CurrentUser, require_user
 from app.narrative.embeddings import get_embedder
 from app.narrative.service import NarrativeService
-from app.schemas import NarrativeOut, NarrativesResponse
+from app.schemas import (
+    NarrativeActivityPoint,
+    NarrativeDetail,
+    NarrativeOut,
+    NarrativeSample,
+    NarrativesResponse,
+    NarrativeTopAccount,
+)
 from app.storage.db import get_session
 
 
@@ -20,15 +27,7 @@ def list_narratives(
     limit: int = Query(20, ge=1, le=100),
     current: CurrentUser = Depends(require_user),
 ) -> NarrativesResponse:
-    """Trending narratives across the corpus.
-
-    A narrative is a cluster of semantically similar comments (across all
-    accounts, all videos, all platforms). Trending = high membership in
-    the trailing window, weighted by spread (distinct authors).
-    """
-    if window_days < 1:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="window_days must be >= 1")
+    """Trending narratives across the corpus, enriched with risk scores."""
     embedder = get_embedder()
     embedder_name = type(embedder).__name__
 
@@ -57,9 +56,82 @@ def list_narratives(
                 first_seen_at=t.first_seen_at,
                 last_seen_at=t.last_seen_at,
                 sample_text=t.sample_text,
+                inauthenticity_score=t.inauthenticity_score,
+                risk_label=t.risk_label,
+                platforms=t.platforms,
             )
             for t in trending
         ],
     )
     cache.set(cache_key, result, ttl_seconds=60)
     return result
+
+
+@router.get("/{narrative_id}", response_model=NarrativeDetail)
+def get_narrative(
+    narrative_id: int,
+    current: CurrentUser = Depends(require_user),
+) -> NarrativeDetail:
+    """Full detail for one narrative cluster — accounts, samples, activity, AI analysis."""
+    with get_session() as session:
+        service = NarrativeService(session)
+        detail = service.get_detail(narrative_id)
+
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Narrative {narrative_id} not found.",
+        )
+
+    # Generate LLM analysis
+    from app.reasoning.commentary import synthesize_narrative_analysis
+    sample_texts = [s.text for s in detail.samples[:6]]
+    analysis_result = synthesize_narrative_analysis(
+        label=detail.label,
+        member_count=detail.member_count,
+        distinct_authors=detail.distinct_authors,
+        spread_ratio=detail.spread_ratio,
+        inauthenticity_score=detail.inauthenticity_score,
+        risk_label=detail.risk_label,
+        platforms=detail.platforms,
+        sample_texts=sample_texts,
+    )
+
+    return NarrativeDetail(
+        id=detail.id,
+        label=detail.label,
+        member_count=detail.member_count,
+        distinct_authors=detail.distinct_authors,
+        spread_ratio=detail.spread_ratio,
+        first_seen_at=detail.first_seen_at,
+        last_seen_at=detail.last_seen_at,
+        inauthenticity_score=detail.inauthenticity_score,
+        risk_label=detail.risk_label,
+        platforms=detail.platforms,
+        platform_breakdown=detail.platform_breakdown,
+        activity=[NarrativeActivityPoint(**a) for a in detail.activity],
+        top_accounts=[
+            NarrativeTopAccount(
+                external_id=a.external_id,
+                handle=a.handle,
+                display_name=a.display_name,
+                platform=a.platform,
+                comment_count=a.comment_count,
+                tier=a.tier,
+            )
+            for a in detail.top_accounts
+        ],
+        samples=[
+            NarrativeSample(
+                text=s.text,
+                account_external_id=s.account_external_id,
+                handle=s.handle,
+                platform=s.platform,
+                parent_id=s.parent_id,
+                observed_at=s.observed_at,
+            )
+            for s in detail.samples
+        ],
+        ai_analysis=analysis_result.text,
+        ai_provider=analysis_result.provider,
+    )
