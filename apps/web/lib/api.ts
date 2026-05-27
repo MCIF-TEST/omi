@@ -78,6 +78,7 @@ export interface EngineStatus {
   auth_required: boolean;
   billing_configured: boolean;
   monthly_credit_grant: number;
+  storage_ephemeral: boolean;
 }
 
 export interface HistoricalScan {
