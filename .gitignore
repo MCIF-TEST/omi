@@ -33,3 +33,4 @@ apps/api/data/
 
 # OS
 Thumbs.db
+apps/web/tsconfig.tsbuildinfo

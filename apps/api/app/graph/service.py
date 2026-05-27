@@ -8,15 +8,14 @@ the Account table for handle / tier in the visualization).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.graph.algorithms import (
-    CommunitySummary, Subgraph, build_subgraph, detect_communities, edge_strength,
+    Subgraph, build_subgraph, detect_communities, edge_strength,
 )
-from app.graph.store import EdgeRecord, GraphStore
+from app.graph.store import GraphStore
 from app.storage.models import Account
 
 

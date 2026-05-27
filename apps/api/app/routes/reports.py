@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 from pydantic import BaseModel
 
 from app.core.auth import CurrentUser, require_user
-from app.reports.templates import Template, build_report_view, render_markdown
+from app.reports.templates import build_report_view, render_markdown
 from app.storage.db import get_session
 from app.storage.repository import AccountRepository
 from app.storage.models import Investigation

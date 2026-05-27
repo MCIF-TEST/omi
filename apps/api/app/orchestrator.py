@@ -14,7 +14,7 @@ invariant that detectors are pure and independently testable.
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -561,7 +561,7 @@ def scan_comprehensive(
     )
 
     settings = get_settings()
-    repo = AccountRepository(session)
+    AccountRepository(session)
     stats = FetchStats()
     inputs_provided: list[str] = []
 

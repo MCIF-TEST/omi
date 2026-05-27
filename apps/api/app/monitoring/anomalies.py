@@ -171,7 +171,6 @@ def alert_already_open(
     session: Session, kind: str, payload_key: str, payload_value, *, within_minutes: int = 60,
 ) -> bool:
     """Has an alert of this kind for this entity fired in the last N minutes?"""
-    from sqlalchemy import cast, String as _String
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=within_minutes)
     rows = session.execute(
         select(Alert).where(

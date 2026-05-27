@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 
 from app.core.auth import (
     CurrentUser,
-    SESSION_COOKIE_NAME,
     clear_session,
     get_optional_user,
     hash_password,

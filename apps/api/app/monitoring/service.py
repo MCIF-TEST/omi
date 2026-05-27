@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -184,7 +183,7 @@ class MonitoringService:
         alerts = 0
         for w in rows:
             prev_tier = w.last_seen_tier
-            prev_rank = _TIER_RANK.get(prev_tier or "low", 0)
+            _TIER_RANK.get(prev_tier or "low", 0)
             threshold_rank = _TIER_RANK.get(w.alert_threshold_tier, 2)
             # Fire if tier changed AND current is at-or-above threshold
             if prev_tier != current_tier and cur_rank >= threshold_rank:

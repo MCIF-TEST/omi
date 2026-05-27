@@ -168,7 +168,7 @@ def detect_communities(
     for node, cid in membership.items():
         by_id.setdefault(cid, []).append(node)
 
-    edge_lookup: dict[tuple[str, str], EdgeRecord] = {
+    {
         tuple(sorted([e.account_a, e.account_b])): e for e in edges  # type: ignore
     }
 

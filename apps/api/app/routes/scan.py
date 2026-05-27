@@ -28,7 +28,6 @@ from app.integrations.youtube import (
     parse_video_id,
     resolve_channel_id,
 )
-from app.memory.fingerprint import extract_fingerprint
 from app.orchestrator import (
     scan_account_with_memory,
     scan_comprehensive,
@@ -520,8 +519,8 @@ def scan_link(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"Unrecognized link. Paste a YouTube video or channel URL. "
-                f"(More platforms coming as Omi grows.)"
+                "Unrecognized link. Paste a YouTube video or channel URL. "
+                "(More platforms coming as Omi grows.)"
             ),
         )
 

@@ -17,7 +17,6 @@ We score the *distance* from the typical human band, not the raw rate.
 
 from __future__ import annotations
 
-import math
 import re
 
 from app.schemas import Post, SignalResult
