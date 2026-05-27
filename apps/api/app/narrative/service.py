@@ -79,6 +79,12 @@ class NarrativeService:
         assigned = 0
         now = datetime.now(timezone.utc)
 
+        # Track (narrative_id, account_external_id) pairs seen so far in
+        # this batch so we can update distinct_authors without a mid-loop
+        # SELECT (which would trigger autoflush and risk StaleDataError on
+        # SQLite StaticPool when the session has unflushed dirty objects).
+        batch_author_pairs: set[tuple[int, str]] = set()
+
         for item, vec in zip(items, vecs):
             decision = best_match(vec, candidates, match_threshold=self.match_threshold)
             if decision.narrative_id is None:
@@ -103,6 +109,7 @@ class NarrativeService:
                     observed_at=now,
                 )
                 self.session.add(membership)
+                batch_author_pairs.add((narrative.id, item.account_external_id))
                 candidates.append((narrative.id, decision.new_centroid, 1))
                 assigned += 1
             else:
@@ -113,15 +120,20 @@ class NarrativeService:
                 narrative.centroid_json = decision.new_centroid
                 narrative.member_count += 1
                 narrative.last_seen_at = now
-                # Distinct-authors counter: only bump on a new author
-                existing_author = self.session.execute(
-                    select(func.count(NarrativeMembership.id)).where(
-                        NarrativeMembership.narrative_id == narrative.id,
-                        NarrativeMembership.account_external_id == item.account_external_id,
-                    )
-                ).scalar_one()
-                if existing_author == 0:
-                    narrative.distinct_authors += 1
+                # Distinct-authors: bump if this account hasn't contributed
+                # to this narrative yet (check batch first to avoid a
+                # SELECT that triggers autoflush on dirty objects).
+                pair = (narrative.id, item.account_external_id)
+                if pair not in batch_author_pairs:
+                    existing_author = self.session.execute(
+                        select(func.count(NarrativeMembership.id)).where(
+                            NarrativeMembership.narrative_id == narrative.id,
+                            NarrativeMembership.account_external_id == item.account_external_id,
+                        )
+                    ).scalar_one()
+                    if existing_author == 0:
+                        narrative.distinct_authors += 1
+                batch_author_pairs.add(pair)
                 membership = NarrativeMembership(
                     narrative_id=narrative.id,
                     platform=item.platform,
