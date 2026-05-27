@@ -303,8 +303,72 @@ def synthesize_narrative_analysis(
         "looks organic or coordinated, and what the inauthentic author percentage implies. "
         "Probabilistic language throughout. No headers."
     )
+
+    # When running without an LLM key the generic TemplateProvider parses
+    # investigation-style keys and produces garbled prose for narrative data.
+    # Fall back to a purpose-built template instead.
+    from app.reasoning.providers import TemplateProvider
+    if isinstance(provider, TemplateProvider):
+        return ProviderResult(
+            text=_narrative_template(
+                label=label,
+                member_count=member_count,
+                distinct_authors=distinct_authors,
+                spread_pct=spread_pct,
+                inauth_pct=inauth_pct,
+                risk_label=risk_label,
+                platforms=platforms,
+            ),
+            provider="template",
+            tokens_used=0,
+        )
+
     return provider.synthesize(
         system=NARRATIVE_ANALYSIS_SYSTEM,
         user=user,
         max_tokens=min(350, settings.reasoning_max_tokens + 30),
+    )
+
+
+def _narrative_template(
+    *,
+    label: str,
+    member_count: int,
+    distinct_authors: int,
+    spread_pct: int,
+    inauth_pct: int,
+    risk_label: str,
+    platforms: list[str],
+) -> str:
+    platform_str = ", ".join(platforms) if platforms else "an unspecified platform"
+    risk_phrases = {
+        "likely_coordinated": (
+            f"the inauthenticity signal is very high ({inauth_pct}% of scanned authors "
+            f"show elevated or high suspicion), consistent with coordinated amplification"
+        ),
+        "suspicious": (
+            f"a notable share of authors ({inauth_pct}%) score elevated or higher on "
+            f"inauthenticity detectors, suggesting possible amplification by inauthentic accounts"
+        ),
+        "mixed": (
+            f"the cluster shows mixed signals — {inauth_pct}% of scanned authors appear "
+            f"inauthentic, indicating a blend of organic and coordinated engagement"
+        ),
+        "organic": (
+            f"the inauthenticity signal is low ({inauth_pct}%), and the spread pattern "
+            f"appears consistent with genuine public interest"
+        ),
+    }
+    risk_phrase = risk_phrases.get(
+        risk_label,
+        f"{inauth_pct}% of scanned authors show elevated suspicion",
+    )
+    return (
+        f"This cluster groups {member_count:,} comments from {distinct_authors:,} distinct "
+        f"authors on {platform_str}, all sharing the topic or framing: \"{label[:180]}\". "
+        f"The spread ratio of {spread_pct}% indicates how broadly the narrative reaches "
+        f"across independent videos or content sources — a higher value suggests the narrative "
+        f"is not confined to a single context. In terms of authenticity, {risk_phrase}. "
+        f"As with all OMISPHERE findings, these assessments are probabilistic; "
+        f"individual accounts within the cluster may score differently."
     )

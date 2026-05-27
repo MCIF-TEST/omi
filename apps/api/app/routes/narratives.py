@@ -73,9 +73,15 @@ def get_narrative(
     current: CurrentUser = Depends(require_user),
 ) -> NarrativeDetail:
     """Full detail for one narrative cluster — accounts, samples, activity, AI analysis."""
-    with get_session() as session:
-        service = NarrativeService(session)
-        detail = service.get_detail(narrative_id)
+    try:
+        with get_session() as session:
+            service = NarrativeService(session)
+            detail = service.get_detail(narrative_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load narrative: {exc}",
+        ) from exc
 
     if detail is None:
         raise HTTPException(

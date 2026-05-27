@@ -285,7 +285,10 @@ class NarrativeService:
         top_accounts: list[NarrativeTopAccountData] = []
         for ext_id, plat, cnt in top_acct_rows:
             acc = self.session.execute(
-                select(Account).where(Account.external_id == ext_id)
+                select(Account).where(
+                    Account.external_id == ext_id,
+                    Account.platform == plat,
+                )
             ).scalar_one_or_none()
             tier: str | None = None
             if acc is not None:
@@ -321,7 +324,10 @@ class NarrativeService:
                 continue
             seen_texts.add(text_key)
             acc = self.session.execute(
-                select(Account).where(Account.external_id == row.account_external_id)
+                select(Account).where(
+                    Account.external_id == row.account_external_id,
+                    Account.platform == row.platform,
+                )
             ).scalar_one_or_none()
             samples.append(NarrativeSampleData(
                 text=row.comment_text,
