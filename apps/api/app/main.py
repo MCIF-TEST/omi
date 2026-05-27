@@ -105,6 +105,16 @@ def _verify_production_config(settings) -> None:
             "Set OMI_SESSION_SECRET in the Render dashboard or redeploy from "
             "the Blueprint (generateValue:true) to fix permanently."
         )
+    # SQLite on Render's ephemeral disk = every redeploy wipes user accounts
+    # and saved investigations. Loud warning so this doesn't bite silently.
+    if settings.database_url.startswith("sqlite"):
+        logger.critical(
+            "OMI_DATABASE_URL is unset — falling back to SQLite. On Render "
+            "the filesystem is ephemeral, so every redeploy WIPES all user "
+            "accounts and saved investigations. Provision Postgres "
+            "(omisphere-postgres in render.yaml) and set OMI_DATABASE_URL "
+            "to the connection string before going live."
+        )
 
 
 def create_app() -> FastAPI:
