@@ -13,6 +13,17 @@ from app.storage.models import Account, CommenterEngagement, Scan, VideoScan
 router = APIRouter(tags=["health"])
 
 
+@router.get("/")
+def root() -> dict[str, str]:
+    """Root landing — explains this is the API and points at the docs."""
+    return {
+        "service": "OMISPHERE API",
+        "version": __version__,
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 @router.get("/health")
 def health() -> dict[str, str]:
     """Liveness probe. Also touches the DB so platform health checks
