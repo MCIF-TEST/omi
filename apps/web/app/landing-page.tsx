@@ -35,14 +35,15 @@ export function LandingPage() {
       <section className="px-6 pt-16 pb-12 max-w-5xl mx-auto w-full">
         <div className="space-y-6 text-center mb-12">
           <p className="font-mono text-2xs tracking-[0.18em] text-accent uppercase">
-            Probabilistic authenticity intelligence
+            YouTube authenticity intelligence · beta
           </p>
           <h1 className="text-4xl md:text-5xl font-semibold text-fg tracking-tight leading-tight max-w-3xl mx-auto">
             See who's <span className="text-accent">really</span> behind the comments.
           </h1>
           <p className="text-base md:text-lg text-fg-dim max-w-2xl mx-auto leading-relaxed">
-            OMISPHERE scores every commenter on a YouTube video, identifies coordinated networks,
-            and surfaces narrative manipulation. Eight independent signals, one verdict.
+            Paste a YouTube video or channel URL. OMISPHERE scores every commenter on
+            eight independent signals, surfaces coordinated networks, and tracks
+            narrative campaigns across every scan. Probabilistic — never a verdict.
           </p>
         </div>
 
@@ -71,23 +72,39 @@ export function LandingPage() {
         <ValueCard
           icon={<ShieldAlert size={18} />}
           title="Per-commenter detection"
-          body="Every account gets scored on bot patterns, AI-generated text, account age, posting cadence, and behavioral fingerprints. Probabilistic — never definitive."
+          body="Each commenter scored on temporal cadence, semantic repetition, AI-writing tells, profile metadata, personal-voice rate, engagement farming, fingerprint memory, and coordination. Probabilistic, with explicit evidence."
         />
         <ValueCard
           icon={<Network size={18} />}
           title="Coordination clusters"
-          body="Five detectors find groups acting together: temporal-semantic bursts, fingerprint families, age cohorts, style matches, co-engagement networks."
+          body="Three cross-account detectors find groups acting together: temporal-semantic bursts (copy-paste within seconds), age cohorts (accounts created in the same week), and co-engagement (the same people on the same videos)."
         />
         <ValueCard
           icon={<Activity size={18} />}
           title="Narrative tracking"
-          body="Semantic clusters across all scans. See which talking points are organic and which are being amplified by suspicious accounts."
+          body="Semantic clusters across all your scans. See which talking points are organic and which are being amplified by suspicious accounts — across every video you've ever scanned."
         />
         <ValueCard
           icon={<Database size={18} />}
           title="Self-improving database"
-          body="Every scan adds to a shared intelligence base. Future scans benefit from accounts you've already analyzed — fingerprints, coordination history, the works."
+          body="Every scan adds a behavioural fingerprint and persists coordination edges. Future scans pull priors from the growing set, so the engine sharpens the more you use it."
         />
+      </section>
+
+      {/* Honest scope block */}
+      <section className="px-6 pb-4 max-w-3xl mx-auto w-full">
+        <div className="bg-bg-elev/40 border border-border-1 rounded-md p-5 text-sm text-fg-dim leading-relaxed">
+          <p className="font-mono text-2xs tracking-wider uppercase text-fg-mute mb-2">
+            Scope, plainly
+          </p>
+          <p>
+            Today OMISPHERE scans <span className="text-fg">YouTube</span> only —
+            videos and channels. The detection engine is platform-agnostic;
+            ingestion for X / Twitter, Reddit, and TikTok is on the roadmap and
+            depends on those APIs being financially reasonable. We&apos;d rather ship
+            one platform with depth than four platforms with stubs.
+          </p>
+        </div>
       </section>
 
       {/* CTA */}

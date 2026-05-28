@@ -9,8 +9,11 @@ from app.content.service import ContentIntelligenceService
 from app.core.auth import CurrentUser, require_user
 from app.core.config import Settings, get_settings
 from app.schemas import (
+    AuthorCommentRow,
+    AuthorCommentsResponse,
     AuthorContentRow,
     AuthorPresenceResponse,
+    BatchDiffResponse,
     CommentBatchOut,
     ContentCommentsResponse,
     ContentCommentOut,
@@ -200,6 +203,46 @@ def rescan_content_entity(
     return scan_youtube_video_full(req, settings=settings, current=current)
 
 
+@router.get("/{platform}/{content_id}/diff", response_model=BatchDiffResponse)
+def diff_content_batches(
+    platform: str,
+    content_id: str,
+    from_batch_id: int | None = Query(None, alias="from"),
+    to_batch_id: int | None = Query(None, alias="to"),
+    _: CurrentUser = Depends(require_user),
+) -> BatchDiffResponse:
+    """Compare two batches of the same content. With no params, diffs the
+    newest batch against the one before — "what changed since last scan."
+    """
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        entity = svc.get_entity_by_platform_id(platform, content_id)
+        if entity is None:
+            raise HTTPException(status_code=404, detail="Content entity not found.")
+        result = svc.diff_batches(
+            entity.id,
+            from_batch_id=from_batch_id,
+            to_batch_id=to_batch_id,
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Need at least two batches to compute a diff. Re-scan this content to create a second batch.",
+            )
+
+    return BatchDiffResponse(
+        from_batch=_batch_to_out(result["from_batch"]),
+        to_batch=_batch_to_out(result["to_batch"]),
+        coordination_score_delta=result["coordination_score_delta"],
+        risk_tier_changed=result["risk_tier_changed"],
+        tier_distribution_delta=result["tier_distribution_delta"],
+        new_comment_count=result["new_comment_count"],
+        new_author_count=result["new_author_count"],
+        new_authors=result["new_authors"],
+        sample_new_comments=[_comment_to_out(c) for c in result["sample_new_comments"]],
+    )
+
+
 @router.get("/authors/{platform}/{author_external_id}", response_model=AuthorPresenceResponse)
 def get_author_presence(
     platform: str,
@@ -240,6 +283,43 @@ def get_author_presence(
         last_seen=data["last_seen"],
         entities=entities,
     )
+
+
+@router.get("/authors/{platform}/{author_external_id}/comments", response_model=AuthorCommentsResponse)
+def get_author_comments(
+    platform: str,
+    author_external_id: str,
+    limit: int = Query(200, ge=1, le=1000),
+    _: CurrentUser = Depends(require_user),
+) -> AuthorCommentsResponse:
+    """Every comment we've recorded from one author on a platform, paired
+    with the content entity it was posted on. Newest-first."""
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        total, rows = svc.get_author_comments(platform, author_external_id, limit=limit)
+
+        if total == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No tracked comments by {author_external_id} on {platform}.",
+            )
+
+        # Most recently observed handle wins
+        handle = next((c.author_handle for c, _e in rows if c.author_handle), None)
+
+        return AuthorCommentsResponse(
+            platform=platform,
+            author_external_id=author_external_id,
+            author_handle=handle,
+            total=total,
+            comments=[
+                AuthorCommentRow(
+                    comment=_comment_to_out(c),
+                    entity=_entity_to_summary(e),
+                )
+                for c, e in rows
+            ],
+        )
 
 
 @router.get("/{platform}/{content_id}/comments", response_model=ContentCommentsResponse)

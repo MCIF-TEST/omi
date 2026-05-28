@@ -27,7 +27,8 @@ from app.core.middleware import (
 from app.monitoring import lifespan_monitoring
 from app.routes import (
     accounts, analyze, auth, billing, content, graph, health, investigations,
-    metrics, monitoring, narratives, reasoning, reports, scan, watchlists,
+    labels, metrics, monitoring, narratives, reasoning, reports, scan,
+    watchlists,
 )
 from app.storage.db import init_db
 
@@ -39,6 +40,9 @@ logger = logging.getLogger("omi")
 async def lifespan(app: FastAPI):
     _configure_logging()
     init_db()
+    from app.content.seed import seed_example_content
+    seed_example_content()
+    _log_optional_feature_state()
     async with lifespan_monitoring(app):
         try:
             yield
@@ -46,6 +50,23 @@ async def lifespan(app: FastAPI):
             # Drain in-flight background tasks before shutdown so a deploy
             # doesn't lose narrative ingestion / fan-out work.
             background.shutdown()
+
+
+def _log_optional_feature_state() -> None:
+    """Loudly announce which optional features (LLM, SMTP, billing) are wired.
+
+    Saves operators from having to guess why an alert never arrived: if
+    SMTP isn't configured, the boot log says so explicitly. Same for the
+    other gracefully-degrading features.
+    """
+    s = get_settings()
+    parts: list[str] = []
+    parts.append(f"YouTube ingestion: {'on' if s.youtube_api_key else 'OFF — no scans will work'}")
+    parts.append(f"Anthropic LLM: {'on' if s.anthropic_api_key else 'off (using template fallback)'}")
+    parts.append(f"SMTP email alerts: {'on (' + s.smtp_host + ')' if s.smtp_host else 'off — webhook delivery still works'}")
+    parts.append(f"Stripe billing: {'on' if s.stripe_secret_key and s.stripe_price_id else 'off (free tier only)'}")
+    parts.append(f"Background monitoring: {'on' if s.enable_monitoring else 'off'}")
+    logger.info("Optional features: %s", " | ".join(parts))
 
 
 def _configure_logging() -> None:
@@ -83,47 +104,115 @@ class _JsonFormatter(logging.Formatter):
 
 
 _DEV_SESSION_SECRET = "dev-only-change-me-please-12345678901234567890"
+_MIN_SESSION_SECRET_LENGTH = 32
 
 
-def _verify_production_config(settings) -> None:
-    """Guard against the dev session secret leaking into production.
+class ProductionConfigError(RuntimeError):
+    """Raised at boot when production environment is misconfigured.
 
-    The dev default would let anyone forge cookies — instead of failing the
-    deploy (which strands a running service), we override the in-memory
-    secret with a fresh random one and log a CRITICAL warning. Sessions
-    won't survive restarts until OMI_SESSION_SECRET is properly set.
+    Hard-failing the deploy is the only honest signal: an API service that
+    starts but can't perform its primary function (scan / store / sign cookies)
+    silently strands users behind a green health check.
+    """
+
+
+def _validate_production_config(settings) -> None:
+    """Refuse to start a production deploy that would lose data or strand users.
+
+    Every check here represents a class of failure we've actually paid for:
+
+    * SQLite on Render's ephemeral disk wipes ALL user accounts and saved
+      investigations on every redeploy.
+    * A missing YouTube key turns every scan into a silent 503 — the service
+      is up but the product doesn't work.
+    * The dev session secret is published in this file; leaving it in prod
+      means anyone can forge admin cookies.
+    * A short or default secret is functionally equivalent to no secret.
+
+    Set ``OMI_ALLOW_DEGRADED_PRODUCTION=true`` to downgrade these to logged
+    warnings — only intended for break-glass debugging.
     """
     if settings.env != "production":
         return
-    if settings.require_auth and settings.session_secret == _DEV_SESSION_SECRET:
-        import secrets as _secrets
-        settings.session_secret = _secrets.token_urlsafe(64)
-        logger.critical(
-            "OMI_SESSION_SECRET is unset in production — using a random "
-            "process-local value. Sessions will invalidate on every restart. "
-            "Set OMI_SESSION_SECRET in the Render dashboard or redeploy from "
-            "the Blueprint (generateValue:true) to fix permanently."
-        )
-    # SQLite on Render's ephemeral disk = every redeploy wipes user accounts
-    # and saved investigations. Loud warning so this doesn't bite silently.
+
+    import os
+    allow_degraded = os.environ.get("OMI_ALLOW_DEGRADED_PRODUCTION", "").lower() in (
+        "1", "true", "yes",
+    )
+    problems: list[str] = []
+
+    # --- 1. Persistent storage ----------------------------------------------
     if settings.database_url.startswith("sqlite"):
-        logger.critical(
-            "OMI_DATABASE_URL is unset — falling back to SQLite. On Render "
-            "the filesystem is ephemeral, so every redeploy WIPES all user "
-            "accounts and saved investigations. Provision Postgres "
-            "(omisphere-postgres in render.yaml) and set OMI_DATABASE_URL "
-            "to the connection string before going live."
+        problems.append(
+            "OMI_DATABASE_URL is unset or points at SQLite. On Render the "
+            "container filesystem is ephemeral — every redeploy will WIPE all "
+            "user accounts, credits, subscriptions, and saved investigations. "
+            "Provision the Postgres service from render.yaml and set "
+            "OMI_DATABASE_URL to its internal connection string."
         )
+
+    # --- 2. Session integrity -----------------------------------------------
+    if settings.require_auth:
+        if settings.session_secret == _DEV_SESSION_SECRET:
+            problems.append(
+                "OMI_SESSION_SECRET is the dev default. That secret is "
+                "checked into the repo — anyone could forge a session cookie "
+                "for any user, including admins. Set OMI_SESSION_SECRET to a "
+                "random 64+ char string (Render's Blueprint generates this "
+                "automatically when generateValue:true)."
+            )
+        elif len(settings.session_secret) < _MIN_SESSION_SECRET_LENGTH:
+            problems.append(
+                f"OMI_SESSION_SECRET is only {len(settings.session_secret)} "
+                f"characters long. Use at least {_MIN_SESSION_SECRET_LENGTH} "
+                "(a Python `secrets.token_urlsafe(64)` is the safe default)."
+            )
+
+    # --- 3. YouTube ingestion (the product's primary function) --------------
+    yt_key = (settings.youtube_api_key or "").strip()
+    if not yt_key:
+        problems.append(
+            "OMI_YOUTUBE_API_KEY is unset. Every scan endpoint will return "
+            "503; the product is non-functional without this key. Create a "
+            "YouTube Data API v3 key at console.cloud.google.com and set it "
+            "as a Render environment variable."
+        )
+
+    if not problems:
+        return
+
+    # Format a tidy error block so the deploy logs make the problem obvious.
+    banner = "=" * 72
+    body = "\n\n".join(f"  · {p}" for p in problems)
+    block = (
+        f"\n{banner}\n"
+        f"OMISPHERE refused to start: production configuration is incomplete.\n"
+        f"{banner}\n\n"
+        f"{body}\n\n"
+        f"If you absolutely must boot in a degraded state (e.g. recovery), "
+        f"set OMI_ALLOW_DEGRADED_PRODUCTION=true and restart. This is unsafe.\n"
+        f"{banner}"
+    )
+
+    if allow_degraded:
+        logger.critical("Production config check OVERRIDDEN by OMI_ALLOW_DEGRADED_PRODUCTION.%s", block)
+        return
+
+    logger.critical("%s", block)
+    raise ProductionConfigError(
+        f"Production configuration incomplete ({len(problems)} issue"
+        f"{'s' if len(problems) != 1 else ''}). See logs for the full list."
+    )
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    _verify_production_config(settings)
+    _validate_production_config(settings)
 
     app = FastAPI(
         title="OMISPHERE API",
         description=(
-            "Probabilistic social authenticity intelligence. "
+            "YouTube comment-section authenticity intelligence. "
             "Powered by the omi detection engine."
         ),
         version=__version__,
@@ -172,6 +261,7 @@ def create_app() -> FastAPI:
     app.include_router(reports.public_router)
     app.include_router(monitoring.router)
     app.include_router(watchlists.router)
+    app.include_router(labels.router)
     app.include_router(metrics.router)
     app.include_router(auth.router)
     app.include_router(billing.router)

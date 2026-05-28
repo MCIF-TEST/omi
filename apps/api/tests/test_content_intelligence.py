@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from app.content.service import ContentIntelligenceService
@@ -358,6 +359,66 @@ def test_get_author_presence_aggregates_across_entities():
             assert row["comment_count"] == 2
 
 
+def test_get_author_comments_returns_every_comment_with_entity():
+    """get_author_comments returns the raw comments (not aggregated) with the
+    content entity attached. Used by the account page to show real comments."""
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        for cid in ["v1", "v2"]:
+            e = svc.get_or_create_entity(platform="youtube", content_id=cid, title=f"Video {cid}")
+            svc.record_batch(
+                entity=e, user_id=1,
+                comments=[
+                    _comment(f"{cid}_a1", "alice", f"alice first on {cid}", offset_min=0),
+                    _comment(f"{cid}_a2", "alice", f"alice second on {cid}", offset_min=10),
+                    _comment(f"{cid}_b1", "bob", f"bob on {cid}", offset_min=20),
+                ],
+                handle_map={"alice": "Alice"},
+            )
+        s.commit()
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        total, rows = svc.get_author_comments("youtube", "alice", limit=100)
+        assert total == 4  # 2 per video × 2 videos
+        assert len(rows) == 4
+        # Newest first
+        observed = [c.observed_at for c, _e in rows]
+        assert observed == sorted(observed, reverse=True)
+        # Every row carries its entity
+        for c, e in rows:
+            assert c.author_external_id == "alice"
+            assert e.platform == "youtube"
+            assert e.content_id in ("v1", "v2")
+
+
+def test_get_author_comments_respects_limit():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1", title="V1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[_comment(f"c{i}", "alice", f"msg {i}", offset_min=i) for i in range(20)],
+            handle_map={"alice": "Alice"},
+        )
+        s.commit()
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        total, rows = svc.get_author_comments("youtube", "alice", limit=5)
+        # Total is unfiltered; rows respects the limit
+        assert total == 20
+        assert len(rows) == 5
+
+
+def test_get_author_comments_returns_empty_when_no_matches():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        total, rows = svc.get_author_comments("youtube", "ghost", limit=10)
+        assert total == 0
+        assert rows == []
+
+
 def test_get_author_presence_empty_returns_zero_counts():
     with get_session() as s:
         svc = ContentIntelligenceService(s)
@@ -366,6 +427,84 @@ def test_get_author_presence_empty_returns_zero_counts():
         assert data["content_count"] == 0
         assert data["entities"] == []
         assert data["first_seen"] is None
+
+
+def test_diff_batches_no_diff_when_only_one_batch():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[_comment("c1", "a")],
+            handle_map={},
+            coordination_score=0.1, risk_tier="low",
+            tier_distribution={"low": 1},
+        )
+        s.commit()
+        assert svc.diff_batches(e.id) is None
+
+
+def test_diff_batches_compares_newest_two_by_default():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[_comment("c1", "alice"), _comment("c2", "bob")],
+            handle_map={},
+            coordination_score=0.1, risk_tier="low",
+            tier_distribution={"low": 2},
+        )
+        s.commit()
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_entity_by_platform_id("youtube", "v1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[
+                _comment("c1", "alice"),    # dup
+                _comment("c2", "bob"),      # dup
+                _comment("c3", "charlie"),  # NEW comment + NEW author
+                _comment("c4", "alice"),    # NEW comment, EXISTING author
+            ],
+            handle_map={},
+            coordination_score=0.45, risk_tier="elevated",
+            tier_distribution={"low": 2, "moderate": 1, "elevated": 1},
+        )
+        s.commit()
+        eid = e.id
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        d = svc.diff_batches(eid)
+        assert d is not None
+        assert d["coordination_score_delta"] == pytest.approx(0.35, abs=1e-6)
+        assert d["risk_tier_changed"] is True
+        assert d["new_comment_count"] == 2     # c3 + c4
+        assert d["new_author_count"] == 1      # only charlie
+        assert "charlie" in d["new_authors"]
+        # Tier distribution went up in elevated, low stayed
+        td = d["tier_distribution_delta"]
+        assert td.get("elevated", 0) == 1
+        assert td.get("moderate", 0) == 1
+        assert td.get("low", 0) == 0
+
+
+def test_diff_batches_explicit_from_and_to_ids():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1")
+        b1 = svc.record_batch(entity=e, user_id=1, comments=[_comment("c1", "a")], handle_map={})
+        b2 = svc.record_batch(entity=e, user_id=1, comments=[_comment("c2", "b")], handle_map={})
+        b3 = svc.record_batch(entity=e, user_id=1, comments=[_comment("c3", "c")], handle_map={})
+        s.commit()
+        eid = e.id
+        # Diff b1→b3 (skip b2): should still find the diff
+        d = svc.diff_batches(eid, from_batch_id=b1.id, to_batch_id=b3.id)
+        assert d is not None
+        assert d["from_batch"].id == b1.id
+        assert d["to_batch"].id == b3.id
 
 
 def test_get_author_presence_isolates_by_platform():

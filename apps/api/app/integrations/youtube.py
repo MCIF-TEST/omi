@@ -29,6 +29,12 @@ from typing import Any, Iterable, Protocol
 
 from dateutil import parser as date_parser
 
+from app.integrations.youtube_errors import (
+    YouTubeAccessError,
+    YouTubeClientError,
+    YouTubeNotFoundError,
+    translate_http_error,
+)
 from app.schemas import Post, Profile
 
 
@@ -152,7 +158,13 @@ def resolve_channel_id(
                 .list(part="id", forHandle=value, maxResults=1)
                 .execute()
             )
-        except Exception:
+        except Exception as e:
+            cls_path = f"{type(e).__module__}.{type(e).__name__}"
+            if cls_path.startswith("googleapiclient.errors.") or hasattr(e, "resp"):
+                typed = translate_http_error(e)
+                if isinstance(typed, YouTubeNotFoundError):
+                    return None
+                raise typed from e
             return None
         stats.quota_used += 1
         items = response.get("items", [])
@@ -164,7 +176,13 @@ def resolve_channel_id(
                 .list(part="id", forUsername=value, maxResults=1)
                 .execute()
             )
-        except Exception:
+        except Exception as e:
+            cls_path = f"{type(e).__module__}.{type(e).__name__}"
+            if cls_path.startswith("googleapiclient.errors.") or hasattr(e, "resp"):
+                typed = translate_http_error(e)
+                if isinstance(typed, YouTubeNotFoundError):
+                    return None
+                raise typed from e
             return None
         stats.quota_used += 1
         items = response.get("items", [])
@@ -233,7 +251,13 @@ def fetch_video_commenters(
         if next_token:
             params["pageToken"] = next_token
 
-        response = client.commentThreads().list(**params).execute()
+        try:
+            response = client.commentThreads().list(**params).execute()
+        except Exception as e:
+            cls_path = f"{type(e).__module__}.{type(e).__name__}"
+            if cls_path.startswith("googleapiclient.errors.") or hasattr(e, "resp"):
+                raise translate_http_error(e) from e
+            raise
         stats.quota_used += 1
 
         for item in response.get("items", []):
@@ -265,11 +289,17 @@ def fetch_channel_profile(
 ) -> Profile | None:
     """Look up the channel's metadata and normalize to a ``Profile``."""
     stats = stats or FetchStats()
-    response = (
-        client.channels()
-        .list(part="snippet,statistics", id=channel_id, maxResults=1)
-        .execute()
-    )
+    try:
+        response = (
+            client.channels()
+            .list(part="snippet,statistics", id=channel_id, maxResults=1)
+            .execute()
+        )
+    except Exception as e:
+        cls_path = f"{type(e).__module__}.{type(e).__name__}"
+        if cls_path.startswith("googleapiclient.errors.") or hasattr(e, "resp"):
+            raise translate_http_error(e) from e
+        raise
     stats.quota_used += 1
     items = response.get("items", [])
     if not items:
@@ -313,8 +343,19 @@ def fetch_channel_recent_comments(
 
         try:
             response = client.commentThreads().list(**params).execute()
-        except Exception:
-            # Some channels have comments disabled or restricted; treat as no history.
+        except Exception as e:
+            cls_path = f"{type(e).__module__}.{type(e).__name__}"
+            if cls_path.startswith("googleapiclient.errors.") or hasattr(e, "resp"):
+                typed = translate_http_error(e)
+                # "Comments disabled / private channel" is the historical
+                # reason this except existed — treat it as "no history" and
+                # move on. Quota / auth errors must propagate.
+                if isinstance(typed, (YouTubeAccessError, YouTubeNotFoundError)):
+                    break
+                raise typed from e
+            # Non-HTTP errors (transient network etc.) — fall back to old
+            # "no history" behaviour so a one-off blip doesn't fail the
+            # whole scan.
             break
         stats.quota_used += 1
 
@@ -407,7 +448,13 @@ def fetch_video_full(
         }
         if next_token:
             params["pageToken"] = next_token
-        response = client.commentThreads().list(**params).execute()
+        try:
+            response = client.commentThreads().list(**params).execute()
+        except Exception as e:
+            cls_path = f"{type(e).__module__}.{type(e).__name__}"
+            if cls_path.startswith("googleapiclient.errors.") or hasattr(e, "resp"):
+                raise translate_http_error(e) from e
+            raise
         stats.quota_used += 1
 
         for item in response.get("items", []):

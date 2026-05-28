@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     scan_max_history_per_commenter: int = 50
     # If we've scanned an account within this many days, reuse the cached score.
     scan_cache_ttl_days: int = 7
+    # YouTube Data API v3 daily quota cap. Defaults to the free-tier limit;
+    # set higher if you've requested a quota increase from Google. Used for
+    # the health-pill warning level and the /v1/status quota_used_today number.
+    youtube_daily_quota: int = 10000
 
     # Memory / fingerprint nearest-neighbor settings.
     memory_k: int = 5

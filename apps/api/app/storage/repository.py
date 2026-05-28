@@ -132,6 +132,12 @@ class AccountRepository:
         scans = list(self.session.execute(stmt).scalars())
         return account, scans
 
+    def count_scans(self, account_id: int) -> int:
+        """Total number of persisted scans for an account (no limit)."""
+        from sqlalchemy import func
+        stmt = select(func.count(Scan.id)).where(Scan.account_id == account_id)
+        return self.session.execute(stmt).scalar_one() or 0
+
     # ---- Cache check ----
 
     def cached_scan_within(

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
-from app.core.auth import CurrentUser, consume_credits, require_user
+from app.core.auth import CurrentUser, consume_credits, refund_credits, require_user
 from app.core.config import Settings, get_settings
 from app.integrations import youtube as yt
 from app.integrations.youtube import (
@@ -30,6 +30,13 @@ from app.integrations.youtube import (
     fetch_video_metadata,
     parse_video_id,
     resolve_channel_id,
+)
+from app.integrations.youtube_errors import (
+    YouTubeAccessError,
+    YouTubeAuthError,
+    YouTubeClientError,
+    YouTubeNotFoundError,
+    YouTubeQuotaExceededError,
 )
 from app.orchestrator import (
     scan_account_with_memory,
@@ -55,6 +62,119 @@ from app.storage.repository import AccountRepository
 
 
 router = APIRouter(prefix="/v1/scan", tags=["scan"])
+
+
+def _handle_youtube_error(
+    e: YouTubeClientError,
+    *,
+    user_id: int,
+    credits_to_refund: int,
+    target_input: str,
+) -> "HTTPException":
+    """Translate a typed YouTube error into an HTTPException, refunding the
+    user's credit unless the failure was their fault (private content etc.).
+
+    The audit log is updated by ``refund_credits`` so the analytics view
+    can distinguish a real charge from a refunded one.
+    """
+    import logging
+    log = logging.getLogger("omi.scan.youtube")
+
+    if isinstance(e, YouTubeQuotaExceededError):
+        refund_credits(user_id, credits_to_refund, reason="yt_quota")
+        log.warning("YouTube quota exhausted: %s", e.admin_detail)
+        # Pacific midnight reset; tell client to back off for a bit.
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.user_message,
+            headers={"Retry-After": "3600"},
+        )
+    if isinstance(e, YouTubeAuthError):
+        refund_credits(user_id, credits_to_refund, reason="yt_auth")
+        log.error("YouTube auth/config error: %s", e.admin_detail)
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.user_message,
+        )
+    if isinstance(e, YouTubeNotFoundError):
+        refund_credits(user_id, credits_to_refund, reason="yt_404")
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.user_message,
+        )
+    if isinstance(e, YouTubeAccessError):
+        # The lookup ran (we used quota). The user's URL was syntactically
+        # fine, but YouTube refused to return data — private channel,
+        # comments disabled, geo-block. Do not refund: the work happened.
+        log.info("YouTube access denied for %s: %s", target_input[:80], e.admin_detail)
+        # Suspension auto-labelling: YouTube's own moderation action is
+        # high-quality ground truth. If this channel exists in our DB,
+        # tag it 'suspended' so calibration can use it.
+        if e.is_suspension:
+            try:
+                _autolabel_suspension(target_input)
+            except Exception:
+                log.exception("auto-label on suspension failed")
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.user_message,
+        )
+    # Generic YouTubeClientError — assume transient.
+    refund_credits(user_id, credits_to_refund, reason="yt_other")
+    log.exception("Unexpected YouTube error: %s", e.admin_detail)
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=e.user_message,
+    )
+
+
+def _autolabel_suspension(target_input: str) -> None:
+    """When YouTube tells us a channel is suspended/closed, record that as
+    a high-confidence ground-truth label on the local Account row (if any).
+
+    Idempotent: existing suspension labels are touched rather than
+    duplicated. Uses user_id=None because YouTube is the labeler, not a
+    person — the source field carries that provenance.
+    """
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from app.storage.db import get_session
+    from app.storage.models import Account, AccountLabel
+
+    # Pull the bare channel ID out of whatever the user pasted.
+    channel_id = yt.parse_channel_input(target_input)[1] if target_input else None
+    if not channel_id or not channel_id.startswith("UC"):
+        return
+
+    with get_session() as session:
+        account = session.execute(
+            select(Account).where(
+                Account.platform == "youtube",
+                Account.external_id == channel_id,
+            )
+        ).scalar_one_or_none()
+        if account is None:
+            return  # never seen this channel; nothing to label
+
+        existing = session.execute(
+            select(AccountLabel).where(
+                AccountLabel.account_id == account.id,
+                AccountLabel.source == "youtube_suspension",
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.created_at = datetime.now(timezone.utc)
+            return
+
+        session.add(AccountLabel(
+            account_id=account.id,
+            user_id=None,
+            label="suspended",
+            expected_tier="high",
+            confidence="high",
+            source="youtube_suspension",
+            rationale="Auto-recorded: YouTube returned channelSuspended/channelClosed on rescan.",
+        ))
 
 
 def _activity_payload(posts: list, tier: Tier) -> tuple[list[dict], int]:
@@ -131,9 +251,15 @@ def scan_youtube_video(
 
     max_commenters = req.max_commenters or settings.scan_max_commenters
     stats = FetchStats()
-    commenters = fetch_video_commenters(
-        client, video_id, max_commenters=max_commenters, stats=stats
-    )
+    try:
+        commenters = fetch_video_commenters(
+            client, video_id, max_commenters=max_commenters, stats=stats
+        )
+    except YouTubeClientError as e:
+        raise _handle_youtube_error(
+            e, user_id=current.id, credits_to_refund=1,
+            target_input=req.video_url_or_id,
+        )
 
     results: list[CommenterScanResult] = []
     fresh = 0
@@ -222,6 +348,11 @@ def scan_youtube_video(
                         activity_total=activity_total,
                     )
                 )
+            except YouTubeClientError:
+                # Quota / auth errors are not per-commenter problems —
+                # they affect the whole batch. Bail out and refund so
+                # the rest of the commenters don't all log as failed.
+                raise
             except Exception as e:  # noqa: BLE001 — quarantine per-commenter failures
                 results.append(
                     CommenterScanResult(
@@ -249,6 +380,8 @@ def scan_youtube_video(
                 tier_counts=dict(tier_counts),
             )
 
+    # If the loop raised a typed YouTube error mid-flight, catch + refund
+    # at the route boundary so partial progress doesn't strand the user.
     high_handles = sorted(
         (r.handle for r in results if r.tier in (Tier.HIGH, Tier.ELEVATED)),
     )
@@ -295,34 +428,42 @@ def scan_youtube_video_full(
 
     max_commenters = req.max_commenters or settings.scan_max_commenters
     stats = FetchStats()
-    commenters_meta, all_comments, next_page_token = fetch_video_full(
-        client, video_id,
-        max_commenters=max_commenters,
-        max_comments=max_commenters * 3,
-        stats=stats,
-        start_page_token=req.start_page_token,
-    )
+    try:
+        commenters_meta, all_comments, next_page_token = fetch_video_full(
+            client, video_id,
+            max_commenters=max_commenters,
+            max_comments=max_commenters * 3,
+            stats=stats,
+            start_page_token=req.start_page_token,
+        )
 
-    def _profile(channel_id):
-        return fetch_channel_profile(client, channel_id, stats=stats)
+        def _profile(channel_id):
+            return fetch_channel_profile(client, channel_id, stats=stats)
 
-    def _history(channel_id, max_comments):
-        return fetch_channel_recent_comments(
-            client, channel_id, max_comments=max_comments, stats=stats
+        def _history(channel_id, max_comments):
+            return fetch_channel_recent_comments(
+                client, channel_id, max_comments=max_comments, stats=stats
+            )
+
+        with get_session() as session:
+            full = scan_video_full(
+                session,
+                platform="youtube",
+                video_id=video_id,
+                commenters_meta=commenters_meta,
+                all_comments_under_video=all_comments,
+                fetch_profile=_profile,
+                fetch_history=_history,
+                stats=stats,
+                force_refresh=req.force_refresh,
+            )
+    except YouTubeClientError as e:
+        raise _handle_youtube_error(
+            e, user_id=current.id, credits_to_refund=1,
+            target_input=req.video_url_or_id,
         )
 
     with get_session() as session:
-        full = scan_video_full(
-            session,
-            platform="youtube",
-            video_id=video_id,
-            commenters_meta=commenters_meta,
-            all_comments_under_video=all_comments,
-            fetch_profile=_profile,
-            fetch_history=_history,
-            stats=stats,
-            force_refresh=req.force_refresh,
-        )
 
         commenter_results: list[CommenterScanResult] = []
         for r in full.commenter_records:
@@ -459,23 +600,33 @@ def scan_youtube_account(
     client = factory()
     stats = FetchStats()
 
-    channel_id = resolve_channel_id(client, account_input, stats=stats)
-    if not channel_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Could not resolve a YouTube channel from '{account_input}'.",
+    try:
+        channel_id = resolve_channel_id(client, account_input, stats=stats)
+        if not channel_id:
+            # Refund and 404 — user input couldn't be matched to a channel,
+            # but the lookup itself ran cleanly (no quota burned).
+            refund_credits(current.id, 1, reason="yt_unresolved")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Could not resolve a YouTube channel from '{account_input}'.",
+            )
+        profile = fetch_channel_profile(client, channel_id, stats=stats)
+        if profile is None:
+            refund_credits(current.id, 1, reason="yt_no_profile")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="YouTube returned no profile for the resolved channel.",
+            )
+        history = fetch_channel_recent_comments(
+            client, channel_id,
+            max_comments=settings.scan_max_history_per_commenter,
+            stats=stats,
         )
-    profile = fetch_channel_profile(client, channel_id, stats=stats)
-    if profile is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="YouTube returned no profile for the resolved channel.",
+    except YouTubeClientError as e:
+        raise _handle_youtube_error(
+            e, user_id=current.id, credits_to_refund=1,
+            target_input=account_input,
         )
-    history = fetch_channel_recent_comments(
-        client, channel_id,
-        max_comments=settings.scan_max_history_per_commenter,
-        stats=stats,
-    )
 
     with get_session() as session:
         orch = scan_account_with_memory(
@@ -808,17 +959,27 @@ def scan_comprehensive_endpoint(
         factory = _client_factory_override or (lambda: _resolve_client(settings))
         client = factory()
 
-    with get_session() as session:
-        out = scan_comprehensive(
-            session,
-            account_url_or_handle=req.account_url_or_handle,
-            video_url_or_id=req.video_url_or_id,
-            comments_text=req.comments_text,
-            max_commenters=req.max_commenters,
-            force_refresh=req.force_refresh,
-            client=client,
-            youtube=yt,
-            start_page_token=req.start_page_token,
+    try:
+        with get_session() as session:
+            out = scan_comprehensive(
+                session,
+                account_url_or_handle=req.account_url_or_handle,
+                video_url_or_id=req.video_url_or_id,
+                comments_text=req.comments_text,
+                max_commenters=req.max_commenters,
+                force_refresh=req.force_refresh,
+                client=client,
+                youtube=yt,
+                start_page_token=req.start_page_token,
+            )
+    except YouTubeClientError as e:
+        # If this was a continuation (we only charged on the first call),
+        # there's nothing to refund; the helper handles credits_to_refund=0.
+        raise _handle_youtube_error(
+            e,
+            user_id=current.id,
+            credits_to_refund=1 if _charge_credit else 0,
+            target_input=(req.video_url_or_id or req.account_url_or_handle or ""),
         )
 
     # Convert to the response schemas

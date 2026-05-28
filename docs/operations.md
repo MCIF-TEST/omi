@@ -207,3 +207,157 @@ Watch `/v1/metrics` `cost.youtube_quota_lifetime` and
 | Stripe webhooks failing | dashboard.stripe.com → Webhooks → recent deliveries; check signature mismatch |
 | Auth not persisting | `OMI_SESSION_SECRET` changed? cookies invalid after rotation. Force-redeploy reverts |
 | Monitoring loop silent | `OMI_ENABLE_MONITORING=true`? logs for `monitoring loop started` line |
+
+---
+
+## Email alert delivery (SMTP)
+
+Watchlist alerts can be delivered via email, webhook, or both. Webhooks
+work without any config; email requires SMTP credentials set on the API
+service.
+
+### Configuring SMTP
+
+Any standard SMTP provider works. Set these env vars on the API service
+(via Render dashboard or `apps/api/.env` for local):
+
+```
+OMI_SMTP_HOST=smtp.resend.com
+OMI_SMTP_PORT=587
+OMI_SMTP_USER=resend
+OMI_SMTP_PASSWORD=re_xxxxx          # the API key from your provider
+OMI_SMTP_FROM=alerts@yourdomain.com
+OMI_SMTP_USE_TLS=true               # STARTTLS on 587; some providers prefer port 465
+```
+
+Recommended providers (any will work — same SMTP creds shape):
+
+| Provider | Host | Port | Notes |
+|---|---|---|---|
+| Resend | `smtp.resend.com` | 587 | Cheapest. Use `resend` as the user; password is the API key. |
+| AWS SES | `email-smtp.<region>.amazonaws.com` | 587 | Generate SMTP creds in SES console; default region is us-east-1. |
+| Postmark | `smtp.postmarkapp.com` | 587 | Server token as both user and password. |
+
+### Verifying delivery
+
+After setting the env vars and redeploying, sign in as an admin and call:
+
+```bash
+curl -X POST https://api.yourdomain.com/v1/monitoring/test-alert \
+     -b "omi_session=<your-cookie>"
+```
+
+The response reports the delivery status of every channel the admin has
+enabled in settings:
+
+```json
+{
+  "user_email": "you@example.com",
+  "email": {
+    "requested": true,
+    "delivered": true,
+    "error": null,
+    "smtp_host": "smtp.resend.com"
+  },
+  "webhook": { "requested": false },
+  "smtp_configured": true
+}
+```
+
+If `delivered: false`, the `error` field carries the specific reason
+(`smtp_not_configured`, `SMTPAuthenticationError: ...`, etc.). Common
+failures:
+
+- `smtp_not_configured` — `OMI_SMTP_HOST` is empty. Re-check env vars and
+  redeploy.
+- `SMTPAuthenticationError` — wrong user or password. Resend uses the
+  literal user `resend`; SES requires SES-generated creds, not your
+  AWS access key.
+- `gaierror` — DNS / hostname wrong. Typo in `OMI_SMTP_HOST`.
+
+### Boot-time confirmation
+
+On every startup the API logs an `Optional features:` line that
+includes the live SMTP state:
+
+```
+Optional features: YouTube ingestion: on | Anthropic LLM: off |
+  SMTP email alerts: on (smtp.resend.com) |
+  Stripe billing: on | Background monitoring: on
+```
+
+If you expect SMTP to be on but the log says `off — webhook delivery
+still works`, the env var didn't reach the API service. Re-check the
+Render dashboard.
+
+---
+
+## Schema migrations (Alembic, advisory)
+
+For Phase 1 deploys the boot flow uses ``Base.metadata.create_all`` plus
+an ad-hoc ``_INCREMENTAL_COLUMNS`` hook in ``app/storage/db.py``. That's
+fine for the additive changes we've made so far but it doesn't handle
+column type changes, drops, renames, or foreign-key changes safely.
+
+Alembic is wired up under ``apps/api/alembic/`` for operators who want
+proper migrations. Today it's advisory — the boot flow still calls
+``create_all`` for backward compatibility — but new schema work should
+land as an Alembic migration alongside the model change so the history
+is real, not implicit.
+
+### Adopting Alembic on an existing deploy
+
+A one-time step to tell Alembic the existing schema is at the latest
+revision (so it doesn't try to recreate every table):
+
+```bash
+cd apps/api
+OMI_DATABASE_URL="<the prod URL>" alembic stamp head
+```
+
+After that, every future deploy can apply pending migrations with:
+
+```bash
+OMI_DATABASE_URL="<the prod URL>" alembic upgrade head
+```
+
+We don't run this automatically in the Render boot flow yet — wire it
+into the build / pre-deploy step when you're ready.
+
+### Authoring a new migration
+
+When you change a model in ``app/storage/models.py``:
+
+```bash
+cd apps/api
+OMI_DATABASE_URL="sqlite:///./data/scratch.db" \
+  alembic revision --autogenerate -m "describe the change"
+```
+
+Review the generated file under ``alembic/versions/`` — autogenerate is
+not infallible (it can miss enum changes, index renames, type widenings).
+Trim or extend manually, then commit. Run ``alembic upgrade head`` to
+apply locally and confirm it works.
+
+### Inspection
+
+```bash
+# Where is this DB currently at?
+alembic current
+
+# What revisions exist?
+alembic history --verbose
+
+# What would the next upgrade do, as SQL, without running it?
+alembic upgrade head --sql
+```
+
+### When the create_all hook and Alembic disagree
+
+The migrations under ``alembic/versions/`` are written to be idempotent
+on tables that ``create_all`` may already have built. Specifically: every
+``op.create_table`` is guarded by a presence check (see
+``0002_account_labels.py``). This means new deploys can use either
+mechanism without conflicts. Once an operation arrives that can't be
+expressed safely both ways (e.g. dropping a column), we'll flip the
+boot flow to ``alembic upgrade head`` and retire ``_INCREMENTAL_COLUMNS``.

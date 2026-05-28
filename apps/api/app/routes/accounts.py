@@ -51,13 +51,13 @@ def _signals_from_json(signals_json: list[dict] | None) -> list[SignalResult]:
 def account_history(
     platform: str,
     external_id: str,
-    limit: int = 50,
+    limit: int = 500,
     current: CurrentUser = Depends(require_user),
 ) -> AccountHistoryResponse:
-    if limit < 1 or limit > 200:
+    if limit < 1 or limit > 1000:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="limit must be between 1 and 200",
+            detail="limit must be between 1 and 1000",
         )
 
     with get_session() as session:
@@ -68,6 +68,7 @@ def account_history(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No scans on file for {platform}:{external_id}.",
             )
+        total_scans = repo.count_scans(account.id)
 
         scans_oldest_first = list(reversed(scans))
         points = [
@@ -79,15 +80,9 @@ def account_history(
 
         historical: list[HistoricalScan] = []
         for i, s in enumerate(scans):  # newest first
-            # Include full signal breakdown only for the latest scan
-            signals = _signals_from_json(s.signals_json) if i == 0 else []
-            # Extract reasons/weak_signals stored in the signals payload
-            reasons: list[str] = []
-            weak: list[str] = []
-            if s.signals_json:
-                for sig in s.signals_json:
-                    for ev in (sig.get("evidence") or []):
-                        pass  # evidence is per-signal; reasons are on scan row
+            # Include full signal breakdown for every historical scan so the
+            # UI can expand any row to see what fired (not just the latest).
+            signals = _signals_from_json(s.signals_json)
             historical.append(HistoricalScan(
                 scanned_at=_ensure_utc(s.scanned_at),
                 overall_probability=s.overall_probability,
@@ -108,6 +103,7 @@ def account_history(
             first_seen_at=_ensure_utc(account.first_seen_at),
             last_scanned_at=_ensure_utc(account.last_scanned_at),
             scans=historical,
+            total_scans=total_scans,
             trend=TrendInfo(
                 direction=trend.direction,
                 slope=trend.slope,

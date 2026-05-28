@@ -171,30 +171,36 @@ export default async function ContentPage({
 
       {entities.length === 0 ? (
         <Card>
-          <CardLabel>{query ? 'No matches' : 'No content entities found'}</CardLabel>
+          <CardLabel>{query ? 'No matches' : 'Empty database'}</CardLabel>
           <CardTitle>
-            {query ? `Nothing matched "${query}"` : 'The intelligence database is empty'}
+            {query ? `Nothing matched "${query}"` : 'No content has been scanned yet'}
           </CardTitle>
-          <p className="text-sm text-fg-dim max-w-lg">
-            {query ? (
-              <>
-                Try a broader query, or{' '}
-                <Link href="/content" className="text-accent hover:underline">
-                  clear the search
-                </Link>
-                .
-              </>
-            ) : (
-              <>
-                Scan a YouTube video or other content using the{' '}
-                <Link href="/investigate" className="text-accent hover:underline">
-                  Investigate
-                </Link>{' '}
-                page. Each scan adds that content to this universal database, and future scans of
-                the same content will layer in new batches.
-              </>
-            )}
-          </p>
+          {query ? (
+            <p className="text-sm text-fg-dim max-w-lg">
+              Try a broader query, or{' '}
+              <Link href="/content" className="text-accent hover:underline">
+                clear the search
+              </Link>
+              .
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-fg-dim max-w-xl mb-4">
+                This database starts empty by design — we don&apos;t pre-load demo accounts that
+                would muddle real findings. Run your first scan to populate it.
+              </p>
+              <Link
+                href="/investigate"
+                className="inline-flex items-center gap-1.5 bg-accent hover:bg-accent-2 text-bg-deep font-medium px-3 py-2 rounded-sm font-mono text-2xs uppercase tracking-wider transition-colors"
+              >
+                <SearchIcon size={12} /> Start your first scan
+              </Link>
+              <p className="mt-4 text-xs text-fg-mute font-mono">
+                Each scan adds the content here; rescanning later layers in fresh batches so you
+                can see how coordination evolves over time.
+              </p>
+            </>
+          )}
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

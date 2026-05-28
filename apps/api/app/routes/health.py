@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import func, select
 
 from fastapi import APIRouter
@@ -70,6 +72,14 @@ def engine_status() -> EngineStatus:
         last_scan = session.execute(
             select(func.max(Scan.scanned_at))
         ).scalar_one()
+        # Sum YouTube quota burned in the last 24h. VideoScan.quota_used
+        # captures every commentThreads / channels call.
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        quota_today = session.execute(
+            select(func.coalesce(func.sum(VideoScan.quota_used), 0)).where(
+                VideoScan.scanned_at >= cutoff
+            )
+        ).scalar_one()
     result = EngineStatus(
         version=__version__,
         env=settings.env,
@@ -86,6 +96,8 @@ def engine_status() -> EngineStatus:
         ),
         monthly_credit_grant=int(settings.monthly_credit_grant),
         storage_ephemeral=settings.database_url.startswith("sqlite"),
+        youtube_quota_used_today=int(quota_today or 0),
+        youtube_quota_daily_limit=int(settings.youtube_daily_quota),
     )
     cache.set("v1.status", result, ttl_seconds=5)
     return result

@@ -342,6 +342,11 @@ class EngineStatus(BaseModel):
     # True when the DB lives on an ephemeral disk (SQLite). UI shows a banner
     # so operators know data won't survive a redeploy.
     storage_ephemeral: bool = False
+    # YouTube Data API v3 daily quota burn. Counted from VideoScan rows
+    # scanned in the last 24 hours. The default daily limit on the free
+    # YouTube tier is 10000 units; override via OMI_YOUTUBE_DAILY_QUOTA.
+    youtube_quota_used_today: int = 0
+    youtube_quota_daily_limit: int = 10000
 
 
 class VideoScanSummary(BaseModel):
@@ -824,6 +829,25 @@ class ContentCommentsResponse(BaseModel):
     comments: list[ContentCommentOut]
 
 
+class BatchDiffResponse(BaseModel):
+    """Comparison between two batches of the same content entity.
+
+    Surfaces what changed since the previous scan — coordination drift,
+    new authors, sample comments — so an analyst running a re-scan sees
+    "what's new" in one glance instead of having to scroll the whole
+    batch history.
+    """
+    from_batch: CommentBatchOut
+    to_batch: CommentBatchOut
+    coordination_score_delta: float
+    risk_tier_changed: bool
+    tier_distribution_delta: dict[str, int]
+    new_comment_count: int
+    new_author_count: int
+    new_authors: list[str]
+    sample_new_comments: list[ContentCommentOut]
+
+
 class AuthorContentRow(BaseModel):
     entity: ContentEntitySummary
     comment_count: int
@@ -841,6 +865,23 @@ class AuthorPresenceResponse(BaseModel):
     first_seen: datetime | None = None
     last_seen: datetime | None = None
     entities: list[AuthorContentRow]
+
+
+class AuthorCommentRow(BaseModel):
+    """One comment by an author, with the content entity it was posted on."""
+
+    comment: ContentCommentOut
+    entity: ContentEntitySummary
+
+
+class AuthorCommentsResponse(BaseModel):
+    """Every comment we've seen one author make on a platform."""
+
+    platform: str
+    author_external_id: str
+    author_handle: str | None = None
+    total: int
+    comments: list[AuthorCommentRow]
 
 
 class AccountAnalysisResponse(BaseModel):
@@ -870,4 +911,75 @@ class AccountHistoryResponse(BaseModel):
     first_seen_at: datetime | None = None
     last_scanned_at: datetime | None = None
     scans: list[HistoricalScan]
+    total_scans: int = 0  # total persisted scans (may exceed len(scans) if page-limited)
     trend: TrendInfo
+
+
+# ---------------------------------------------------------------------------
+# Phase 12 — Ground-truth labels
+# ---------------------------------------------------------------------------
+
+
+LABEL_KINDS = (
+    "bot", "human", "unclear", "commercial_spam", "political_coord",
+    "engagement_farm", "ai_content", "suspended",
+)
+LABEL_SOURCES = ("manual", "youtube_suspension", "imported_dataset")
+LABEL_CONFIDENCES = ("high", "medium")
+
+
+class AccountLabelOut(BaseModel):
+    id: int
+    account_id: int
+    user_id: int | None
+    user_email: str | None = None
+    platform: str
+    external_id: str
+    handle: str | None = None
+    label: str
+    expected_tier: str
+    confidence: str
+    source: str
+    rationale: str | None = None
+    created_at: datetime
+
+
+class AccountLabelCreate(BaseModel):
+    """Create a label by referring to an account that's already been scanned.
+
+    Provide the account either by its DB ID (preferred when coming from the
+    UI which already has it) or by (platform, external_id) for scripts.
+    """
+
+    account_id: int | None = None
+    platform: str | None = None
+    external_id: str | None = None
+    label: str
+    expected_tier: str
+    confidence: str = "medium"
+    rationale: str | None = None
+
+
+class AccountLabelsListResponse(BaseModel):
+    total: int
+    labels: list[AccountLabelOut]
+    by_label: dict[str, int]
+    by_source: dict[str, int]
+
+
+class CalibrationFixtureCase(BaseModel):
+    """Shaped like the synthetic calibration JSON so scripts/calibrate.py
+    can swap data sources without further code changes."""
+
+    label: str
+    expected_tier: str
+    expected_probability: float | None = None
+    profile: dict
+    posts: list[dict]
+
+
+class CalibrationFixtureResponse(BaseModel):
+    n_cases: int
+    by_label: dict[str, int]
+    by_source: dict[str, int]
+    cases: list[CalibrationFixtureCase]

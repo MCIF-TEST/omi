@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { Target, ArrowRight } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -59,6 +61,27 @@ export default async function SettingsPage() {
       </Card>
 
       <NotificationsBlock />
+
+      {user.is_admin && (
+        <Card>
+          <CardLabel>Admin</CardLabel>
+          <Link
+            href="/settings/calibration"
+            className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Target size={16} className="text-accent" />
+              <div>
+                <div className="text-fg font-medium">Calibration</div>
+                <div className="text-xs text-fg-dim mt-0.5">
+                  Live engine accuracy against your labeled corpus.
+                </div>
+              </div>
+            </div>
+            <ArrowRight size={14} className="text-fg-mute" />
+          </Link>
+        </Card>
+      )}
 
       <Card>
         <CardLabel>Danger zone</CardLabel>

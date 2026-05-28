@@ -79,6 +79,8 @@ export interface EngineStatus {
   billing_configured: boolean;
   monthly_credit_grant: number;
   storage_ephemeral: boolean;
+  youtube_quota_used_today: number;
+  youtube_quota_daily_limit: number;
 }
 
 export interface HistoricalScan {
@@ -89,7 +91,7 @@ export interface HistoricalScan {
   summary: string;
   reasons: string[];
   weak_signals: string[];
-  signals: SignalResult[];  // populated for latest scan only
+  signals: SignalResult[];  // populated for every scan in the history
 }
 
 export type TrendDirection = 'stable' | 'rising' | 'falling' | 'volatile' | 'insufficient';
@@ -596,6 +598,7 @@ export interface AccountHistoryResponse {
   first_seen_at: string | null;
   last_scanned_at: string | null;
   scans: HistoricalScan[];
+  total_scans: number;
   trend: TrendInfo;
 }
 
@@ -680,6 +683,31 @@ export interface NotificationPrefs {
   email: string;
 }
 
+export interface AuthorCommentRow {
+  comment: ContentCommentOut;
+  entity: ContentEntitySummary;
+}
+
+export interface AuthorCommentsResponse {
+  platform: string;
+  author_external_id: string;
+  author_handle: string | null;
+  total: number;
+  comments: AuthorCommentRow[];
+}
+
+export interface BatchDiffResponse {
+  from_batch: CommentBatchOut;
+  to_batch: CommentBatchOut;
+  coordination_score_delta: number;
+  risk_tier_changed: boolean;
+  tier_distribution_delta: Record<string, number>;
+  new_comment_count: number;
+  new_author_count: number;
+  new_authors: string[];
+  sample_new_comments: ContentCommentOut[];
+}
+
 export interface AuthorPresenceResponse {
   platform: string;
   author_external_id: string;
@@ -689,4 +717,59 @@ export interface AuthorPresenceResponse {
   first_seen: string | null;
   last_seen: string | null;
   entities: AuthorContentRow[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 12 — Ground-truth labels
+// ---------------------------------------------------------------------------
+
+export const LABEL_KINDS = [
+  'bot',
+  'human',
+  'unclear',
+  'commercial_spam',
+  'political_coord',
+  'engagement_farm',
+  'ai_content',
+  'suspended',
+] as const;
+export type LabelKind = typeof LABEL_KINDS[number];
+
+export const LABEL_CONFIDENCES = ['high', 'medium'] as const;
+export type LabelConfidence = typeof LABEL_CONFIDENCES[number];
+
+export const LABEL_TIERS = ['low', 'moderate', 'elevated', 'high'] as const;
+
+export interface AccountLabel {
+  id: number;
+  account_id: number;
+  user_id: number | null;
+  user_email: string | null;
+  platform: string;
+  external_id: string;
+  handle: string | null;
+  label: LabelKind;
+  expected_tier: 'low' | 'moderate' | 'elevated' | 'high';
+  confidence: LabelConfidence;
+  source: 'manual' | 'youtube_suspension' | 'imported_dataset';
+  rationale: string | null;
+  created_at: string;
+}
+
+export interface AccountLabelsResponse {
+  total: number;
+  labels: AccountLabel[];
+  by_label: Record<string, number>;
+  by_source: Record<string, number>;
+}
+
+export interface CalibrationEvaluation {
+  n_cases: number;
+  tier_accuracy?: number;
+  brier_score?: number;
+  macro_f1?: number;
+  per_tier?: Record<string, { precision: number; recall: number; f1: number; support: number }>;
+  per_label_accuracy?: Record<string, number>;
+  per_source_accuracy?: Record<string, number>;
+  message?: string;
 }

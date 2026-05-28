@@ -281,6 +281,95 @@ class ContentIntelligenceService:
             ).scalars().all()
         )
 
+    def diff_batches(
+        self, entity_id: int, *, from_batch_id: int | None = None, to_batch_id: int | None = None,
+    ) -> dict[str, Any] | None:
+        """Compare two batches of the same content entity. By default compares
+        the newest batch against the one before it ("what changed since
+        last scan").
+
+        Returns None when there aren't enough batches to compare.
+        """
+        batches = self.get_batches(entity_id, limit=2 if (from_batch_id is None and to_batch_id is None) else 100)
+        if from_batch_id is None and to_batch_id is None:
+            if len(batches) < 2:
+                return None
+            to_batch = batches[0]   # newest
+            from_batch = batches[1] # second-newest
+        else:
+            by_id = {b.id: b for b in batches}
+            to_batch = by_id.get(to_batch_id) if to_batch_id else batches[0]
+            from_batch = by_id.get(from_batch_id) if from_batch_id else None
+            if to_batch is None or from_batch is None:
+                # Pull explicit rows that weren't in the limit-2 default
+                to_batch = to_batch or self._s.get(CommentBatch, to_batch_id)
+                from_batch = from_batch or self._s.get(CommentBatch, from_batch_id)
+                if to_batch is None or from_batch is None:
+                    return None
+        if to_batch.id == from_batch.id:
+            return None
+
+        # Tier distribution delta
+        from_td = from_batch.tier_distribution or {}
+        to_td = to_batch.tier_distribution or {}
+        all_tiers = set(from_td) | set(to_td)
+        tier_delta = {t: (to_td.get(t, 0) - from_td.get(t, 0)) for t in all_tiers}
+
+        # New comments are anything where first_batch_id matches to_batch.id
+        # AND its observed_at is after from_batch.fetched_at (so reanalysis
+        # against the same content with new comments shows up correctly).
+        new_comments_rows = list(
+            self._s.execute(
+                select(ContentComment)
+                .where(
+                    ContentComment.content_entity_id == entity_id,
+                    ContentComment.first_batch_id == to_batch.id,
+                )
+                .order_by(ContentComment.observed_at.desc())
+                .limit(20)
+            ).scalars().all()
+        )
+
+        new_comment_count = self._s.execute(
+            select(func.count(ContentComment.id)).where(
+                ContentComment.content_entity_id == entity_id,
+                ContentComment.first_batch_id == to_batch.id,
+            )
+        ).scalar_one() or 0
+
+        # New authors = distinct authors among new-comment rows that don't
+        # appear in any earlier batch's comments.
+        from sqlalchemy import distinct as _distinct
+        new_authors_subq = (
+            select(_distinct(ContentComment.author_external_id))
+            .where(
+                ContentComment.content_entity_id == entity_id,
+                ContentComment.first_batch_id == to_batch.id,
+            )
+        )
+        candidate_authors = list(self._s.execute(new_authors_subq).scalars().all())
+
+        prior_authors = set(self._s.execute(
+            select(_distinct(ContentComment.author_external_id))
+            .where(
+                ContentComment.content_entity_id == entity_id,
+                ContentComment.first_batch_id != to_batch.id,
+            )
+        ).scalars().all())
+        new_author_set = [a for a in candidate_authors if a not in prior_authors]
+
+        return {
+            "from_batch": from_batch,
+            "to_batch": to_batch,
+            "coordination_score_delta": (to_batch.coordination_score or 0) - (from_batch.coordination_score or 0),
+            "risk_tier_changed": (from_batch.risk_tier or "low") != (to_batch.risk_tier or "low"),
+            "tier_distribution_delta": tier_delta,
+            "new_comment_count": new_comment_count,
+            "new_author_count": len(new_author_set),
+            "new_authors": new_author_set[:30],
+            "sample_new_comments": new_comments_rows,
+        }
+
     def get_author_presence(
         self, platform: str, author_external_id: str, *, limit: int = 50,
     ) -> dict[str, Any]:
@@ -360,6 +449,45 @@ class ContentIntelligenceService:
             "last_seen": last_seen,
             "entities": entity_rows,
         }
+
+    def get_author_comments(
+        self,
+        platform: str,
+        author_external_id: str,
+        *,
+        limit: int = 200,
+    ) -> tuple[int, list[tuple[ContentComment, ContentEntity]]]:
+        """All comments by one author across every content entity on a platform.
+
+        Returns ``(total_count, rows)`` where ``rows`` is newest-first and each
+        row is ``(ContentComment, ContentEntity)`` so the UI can show the
+        comment alongside what it was posted on. The count reflects the
+        unfiltered total even if ``limit`` truncates the page.
+        """
+        base = (
+            select(ContentComment, ContentEntity)
+            .join(ContentEntity, ContentComment.content_entity_id == ContentEntity.id)
+            .where(
+                ContentEntity.platform == platform,
+                ContentComment.author_external_id == author_external_id,
+            )
+        )
+        count_q = (
+            select(func.count())
+            .select_from(ContentComment)
+            .join(ContentEntity, ContentComment.content_entity_id == ContentEntity.id)
+            .where(
+                ContentEntity.platform == platform,
+                ContentComment.author_external_id == author_external_id,
+            )
+        )
+        total = self._s.execute(count_q).scalar_one() or 0
+        rows = list(
+            self._s.execute(
+                base.order_by(ContentComment.observed_at.desc()).limit(limit)
+            ).all()
+        )
+        return total, [(c, e) for c, e in rows]
 
     def get_comments(
         self,

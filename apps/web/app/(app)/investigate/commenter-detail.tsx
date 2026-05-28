@@ -160,7 +160,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
         </p>
       )}
 
-      {/* Full history CTA */}
+      {/* Account profile link */}
       <div className="pt-1 border-t border-border-1">
         <Link
           href={`/accounts/${encodeURIComponent(c.external_id)}?platform=${c.platform || 'youtube'}`}
@@ -168,10 +168,10 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
         >
           <div>
             <p className="font-mono text-2xs tracking-wider uppercase text-accent mb-0.5">
-              Full account history
+              View account profile
             </p>
             <p className="text-xs text-fg-dim">
-              AI behavioural analysis · scan history · trend curve
+              AI behavioural analysis · signal breakdown · scan history
             </p>
           </div>
           <ArrowRight size={14} className="text-fg-mute shrink-0" />
