@@ -19,12 +19,19 @@ services:
   # ---------------------------------------------------------------
   # API — FastAPI
   # ---------------------------------------------------------------
+  # autoDeploy watches the working branch (claude/ecstatic-babbage-wu1f4)
+  # instead of `main` so every commit pushed during a Claude session goes
+  # live in ~3 minutes without a merge step. The fail-fast production
+  # config validation in app/main.py refuses to boot a broken deploy, and
+  # Render's health check rolls back to the previous version automatically
+  # if the new container never goes green. To swap back to PR-gated
+  # deploys, set this branch field to `main` and reopen merges.
   - type: web
     name: omisphere-api
     runtime: python
     region: oregon
     plan: starter
-    branch: main
+    branch: claude/ecstatic-babbage-wu1f4
     rootDir: apps/api
     buildCommand: pip install -e .[youtube,postgres]
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -99,7 +106,7 @@ services:
     runtime: node
     region: oregon
     plan: starter
-    branch: main
+    branch: claude/ecstatic-babbage-wu1f4
     rootDir: apps/web
     buildCommand: npm install && npm run build
     startCommand: npm run start
