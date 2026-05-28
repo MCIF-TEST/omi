@@ -39,6 +39,8 @@ logger = logging.getLogger("omi")
 async def lifespan(app: FastAPI):
     _configure_logging()
     init_db()
+    from app.content.seed import seed_example_content
+    seed_example_content()
     async with lifespan_monitoring(app):
         try:
             yield

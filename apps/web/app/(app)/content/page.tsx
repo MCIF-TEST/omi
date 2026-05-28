@@ -152,6 +152,21 @@ export default async function ContentPage({
         </p>
       )}
 
+      {/* Example data notice — shown when all entities are system-seeded (contributor_count === 0) */}
+      {entities.length > 0 && entities.every((e) => e.contributor_count === 0) && !query && (
+        <div className="flex items-start gap-3 rounded-md border border-accent/20 bg-accent/5 px-4 py-3">
+          <span className="font-mono text-2xs text-accent uppercase tracking-wider pt-0.5 shrink-0">
+            Example data
+          </span>
+          <p className="text-sm text-fg-dim">
+            These are pre-loaded example scans so you can explore the interface right away.
+            Run your own scan from the{' '}
+            <Link href="/investigate" className="text-accent hover:underline">Investigate</Link>
+            {' '}page to add real content.
+          </p>
+        </div>
+      )}
+
       {/* Stats row */}
       {entities.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
