@@ -568,3 +568,66 @@ class ContentComment(Base):
     observed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, index=True,
     )
+
+
+# ============================================================================
+# Phase 12 — Ground-truth labeling for calibration
+# ============================================================================
+
+class AccountLabel(Base):
+    """Operator-supplied ground-truth judgment on an account's true nature.
+
+    Drives the calibration harness's --from-db mode: instead of running the
+    engine against a synthetic JSON fixture, we run it against accounts the
+    operators have labeled and compare the predicted tier against the labeled
+    expectation. This is how the system improves over time on real data
+    instead of a stale benchmark.
+
+    One row per (account, user) so two reviewers can independently label the
+    same account — disagreement is itself a signal the case is genuinely
+    ambiguous.
+
+    Provenance is tracked so we can weight 'manual' labels differently from
+    'youtube_suspension' labels (the latter come straight from YouTube's own
+    moderation actions and are higher-confidence ground truth).
+    """
+
+    __tablename__ = "account_labels"
+    __table_args__ = (
+        UniqueConstraint("account_id", "user_id", name="uq_account_label_per_user"),
+        Index("ix_account_label_source", "source", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+    # Nullable because youtube_suspension labels aren't owned by any user.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    # Categorical verdict: what the labeler thinks this account *is*.
+    # 'bot' | 'human' | 'unclear' | 'commercial_spam' | 'political_coord'
+    # | 'engagement_farm' | 'ai_content' | 'suspended'
+    label: Mapped[str] = mapped_column(String(32), index=True)
+
+    # The tier the labeler thinks the OMI engine *should* return for this
+    # account. Used by the calibration harness as the ground-truth target.
+    expected_tier: Mapped[str] = mapped_column(String(16))
+
+    # 'high' | 'medium' — how confident the labeler is in this judgment.
+    # Low-confidence labels are still kept (they're useful for spotting
+    # genuinely ambiguous cases) but the harness can filter on this.
+    confidence: Mapped[str] = mapped_column(String(8), default="medium")
+
+    # 'manual' | 'youtube_suspension' | 'imported_dataset'
+    source: Mapped[str] = mapped_column(String(32), default="manual")
+
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True,
+    )
+
+    account: Mapped["Account"] = relationship()
+

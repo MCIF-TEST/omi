@@ -15,6 +15,7 @@ import { pct, timeAgo, tierBg } from '@/lib/format';
 import { HistoryRow } from './history-row';
 import { AccountActivityPanel } from './activity-panel';
 import { AccountActionsClient } from './account-actions-wrapper';
+import { LabelWidget } from './label-widget';
 
 interface PageProps {
   params: { external_id: string };
@@ -141,6 +142,9 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           )}
         </Card>
       )}
+
+      {/* Admin-only ground-truth label widget. Renders null for non-admins. */}
+      <LabelWidget platform={platform} externalId={history.external_id} />
 
       {/* Trend card + sparkline */}
       <Card>

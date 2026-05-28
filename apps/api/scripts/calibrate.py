@@ -82,6 +82,71 @@ def _expected_prob(case: dict[str, Any]) -> float:
     return _TIER_MIDPOINT[tier]
 
 
+def _load_cases_from_db(min_confidence: str) -> list[dict[str, Any]]:
+    """Hydrate a calibration fixture from labelled accounts in the DB.
+
+    Strategy: for each labelled account we have a persisted Scan row from
+    a previous /v1/scan/* call. The Scan row carries the resulting tier
+    + probability — i.e. what the engine *did* return for this account.
+    We use that as the prediction and the AccountLabel.expected_tier as
+    the target.
+
+    Note: we don't re-run the detectors. The point of --from-db is to
+    measure how the engine *was* calibrated at the time of each scan, not
+    to re-evaluate every account. Detector-by-detector influence stats are
+    therefore empty in this mode.
+    """
+    from sqlalchemy import select
+    from app.storage.db import get_session
+    from app.storage.models import Account, AccountLabel, Scan
+
+    out: list[dict[str, Any]] = []
+    filt = []
+    if min_confidence == "high":
+        filt.append(AccountLabel.confidence == "high")
+
+    with get_session() as session:
+        rows = session.execute(
+            select(AccountLabel, Account).join(
+                Account, AccountLabel.account_id == Account.id
+            ).where(*filt)
+        ).all()
+        for label_row, account in rows:
+            scan = session.execute(
+                select(Scan).where(Scan.account_id == account.id)
+                .order_by(Scan.scanned_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if scan is None:
+                continue
+            # We hand back a case shape that includes a `_db_prediction`
+            # block so main() can short-circuit the detector pipeline and
+            # use the stored result directly.
+            out.append({
+                "label": f"{label_row.label}/{label_row.source}",
+                "expected_tier": label_row.expected_tier,
+                "expected_probability": None,
+                "profile": {
+                    "platform": account.platform,
+                    "handle": account.handle,
+                    "display_name": account.display_name,
+                    "bio": account.bio,
+                    "follower_count": account.follower_count,
+                    "following_count": account.following_count,
+                    "created_at": account.account_created_at.isoformat()
+                    if account.account_created_at else None,
+                },
+                "posts": [],
+                "_db_prediction": {
+                    "tier": scan.tier,
+                    "probability": scan.overall_probability,
+                    "confidence": scan.confidence,
+                    "signals": scan.signals_json or [],
+                },
+            })
+    return out
+
+
 def _per_tier_metrics(
     expected: list[str], predicted: list[str]
 ) -> dict[str, dict[str, float]]:
@@ -129,12 +194,38 @@ def main() -> int:
             "calibration regressions when detector weights change."
         ),
     )
+    ap.add_argument(
+        "--from-db",
+        action="store_true",
+        help=(
+            "Load cases from the local AccountLabel table instead of the JSON "
+            "fixture. Uses the production DB (OMI_DATABASE_URL); evaluates "
+            "labelled accounts against their most recent persisted Scan row "
+            "so no extra YouTube quota is consumed."
+        ),
+    )
+    ap.add_argument(
+        "--min-confidence",
+        choices=("high", "medium"),
+        default="medium",
+        help="With --from-db, restrict to labels of at least this confidence.",
+    )
     args = ap.parse_args()
 
-    cases = _load_fixture(args.fixture)
-    if not cases:
-        print("No cases in fixture.", file=sys.stderr)
-        return 1
+    if args.from_db:
+        cases = _load_cases_from_db(args.min_confidence)
+        if not cases:
+            print(
+                "No labeled accounts with a persisted Scan row found. "
+                "Label a few from the dashboard and re-run.",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        cases = _load_fixture(args.fixture)
+        if not cases:
+            print("No cases in fixture.", file=sys.stderr)
+            return 1
 
     results: list[dict[str, Any]] = []
     signal_contributions: dict[str, list[float]] = defaultdict(list)
@@ -143,30 +234,52 @@ def main() -> int:
     tier_confusion: dict[tuple[str, str], int] = Counter()
 
     for case in cases:
-        profile = _parse_profile(case["profile"])
-        posts = [_parse_post(p) for p in case.get("posts", [])]
-        scan = analyze_account(profile, posts)
-
         expected_p = _expected_prob(case)
         expected_tier = case.get("expected_tier", "low")
-        err = (scan.overall_probability - expected_p) ** 2
-        brier_terms.append(err)
-        if scan.tier.value == expected_tier:
-            tier_correct += 1
-        tier_confusion[(expected_tier, scan.tier.value)] += 1
 
-        for s in scan.signals:
-            signal_contributions[s.name].append(abs(s.probability - 0.5) * s.confidence)
+        # --- DB-backed cases: use the persisted scan result directly ---
+        db_pred = case.get("_db_prediction")
+        if db_pred:
+            predicted_tier = db_pred["tier"]
+            predicted_p = db_pred["probability"]
+            predicted_conf = db_pred["confidence"]
+            stored_signals = db_pred.get("signals") or []
+            for s in stored_signals:
+                if not isinstance(s, dict):
+                    continue
+                signal_contributions[s.get("name", "?")].append(
+                    abs((s.get("probability", 0.5)) - 0.5) * (s.get("confidence", 0.0))
+                )
+            weak = []
+        else:
+            # --- Fixture cases: re-run the detector pipeline ---
+            profile = _parse_profile(case["profile"])
+            posts = [_parse_post(p) for p in case.get("posts", [])]
+            scan_res = analyze_account(profile, posts)
+            predicted_tier = scan_res.tier.value
+            predicted_p = scan_res.overall_probability
+            predicted_conf = scan_res.confidence
+            for s in scan_res.signals:
+                signal_contributions[s.name].append(
+                    abs(s.probability - 0.5) * s.confidence
+                )
+            weak = list(scan_res.weak_signals or [])
+
+        err = (predicted_p - expected_p) ** 2
+        brier_terms.append(err)
+        if predicted_tier == expected_tier:
+            tier_correct += 1
+        tier_confusion[(expected_tier, predicted_tier)] += 1
 
         results.append({
             "label": case.get("label", "?"),
             "expected_tier": expected_tier,
             "expected_p": round(expected_p, 3),
-            "predicted_tier": scan.tier.value,
-            "predicted_p": round(scan.overall_probability, 3),
-            "confidence": round(scan.confidence, 3),
-            "abs_error": round(abs(scan.overall_probability - expected_p), 3),
-            "weak_signals": list(scan.weak_signals or []),
+            "predicted_tier": predicted_tier,
+            "predicted_p": round(predicted_p, 3),
+            "confidence": round(predicted_conf, 3),
+            "abs_error": round(abs(predicted_p - expected_p), 3),
+            "weak_signals": weak,
         })
 
     n = len(results)

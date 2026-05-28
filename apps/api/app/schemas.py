@@ -913,3 +913,73 @@ class AccountHistoryResponse(BaseModel):
     scans: list[HistoricalScan]
     total_scans: int = 0  # total persisted scans (may exceed len(scans) if page-limited)
     trend: TrendInfo
+
+
+# ---------------------------------------------------------------------------
+# Phase 12 — Ground-truth labels
+# ---------------------------------------------------------------------------
+
+
+LABEL_KINDS = (
+    "bot", "human", "unclear", "commercial_spam", "political_coord",
+    "engagement_farm", "ai_content", "suspended",
+)
+LABEL_SOURCES = ("manual", "youtube_suspension", "imported_dataset")
+LABEL_CONFIDENCES = ("high", "medium")
+
+
+class AccountLabelOut(BaseModel):
+    id: int
+    account_id: int
+    user_id: int | None
+    user_email: str | None = None
+    platform: str
+    external_id: str
+    handle: str | None = None
+    label: str
+    expected_tier: str
+    confidence: str
+    source: str
+    rationale: str | None = None
+    created_at: datetime
+
+
+class AccountLabelCreate(BaseModel):
+    """Create a label by referring to an account that's already been scanned.
+
+    Provide the account either by its DB ID (preferred when coming from the
+    UI which already has it) or by (platform, external_id) for scripts.
+    """
+
+    account_id: int | None = None
+    platform: str | None = None
+    external_id: str | None = None
+    label: str
+    expected_tier: str
+    confidence: str = "medium"
+    rationale: str | None = None
+
+
+class AccountLabelsListResponse(BaseModel):
+    total: int
+    labels: list[AccountLabelOut]
+    by_label: dict[str, int]
+    by_source: dict[str, int]
+
+
+class CalibrationFixtureCase(BaseModel):
+    """Shaped like the synthetic calibration JSON so scripts/calibrate.py
+    can swap data sources without further code changes."""
+
+    label: str
+    expected_tier: str
+    expected_probability: float | None = None
+    profile: dict
+    posts: list[dict]
+
+
+class CalibrationFixtureResponse(BaseModel):
+    n_cases: int
+    by_label: dict[str, int]
+    by_source: dict[str, int]
+    cases: list[CalibrationFixtureCase]

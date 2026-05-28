@@ -59,8 +59,19 @@ class YouTubeAuthError(YouTubeClientError):
 
 class YouTubeAccessError(YouTubeClientError):
     """The target exists but isn't readable: comments disabled, private
-    channel, geo-blocked, age-restricted, etc. Distinguish from NotFound
-    so the user gets accurate copy."""
+    channel, geo-blocked, age-restricted, suspended, etc. Distinguish from
+    NotFound so the user gets accurate copy.
+
+    ``is_suspension`` is True when the cause is a YouTube moderation action
+    (channelSuspended / channelClosed). That's a strong ground-truth signal:
+    YouTube itself decided the account violated policy. The label
+    auto-generator uses it to seed ``source=youtube_suspension`` rows.
+    """
+
+    def __init__(self, user_message: str, *, admin_detail: str | None = None,
+                 is_suspension: bool = False) -> None:
+        super().__init__(user_message, admin_detail=admin_detail)
+        self.is_suspension = is_suspension
 
 
 class YouTubeNotFoundError(YouTubeClientError):
@@ -152,8 +163,16 @@ def translate_http_error(err: Any) -> YouTubeClientError:
             admin_detail=admin_detail,
         )
 
-    # --- Access (private, disabled, blocked) --------------------------------
+    # --- Access (private, disabled, blocked, SUSPENDED) ---------------------
     if reason in _ACCESS_REASONS or status_code == 403:
+        is_suspension = reason in {"channelSuspended", "channelClosed"}
+        if is_suspension:
+            return YouTubeAccessError(
+                "YouTube has suspended or closed this channel. The account "
+                "is no longer reachable.",
+                admin_detail=admin_detail,
+                is_suspension=True,
+            )
         return YouTubeAccessError(
             "YouTube refused to return data for that target. It may be "
             "private, have comments disabled, or be geo-restricted.",

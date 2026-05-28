@@ -718,3 +718,58 @@ export interface AuthorPresenceResponse {
   last_seen: string | null;
   entities: AuthorContentRow[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 12 — Ground-truth labels
+// ---------------------------------------------------------------------------
+
+export const LABEL_KINDS = [
+  'bot',
+  'human',
+  'unclear',
+  'commercial_spam',
+  'political_coord',
+  'engagement_farm',
+  'ai_content',
+  'suspended',
+] as const;
+export type LabelKind = typeof LABEL_KINDS[number];
+
+export const LABEL_CONFIDENCES = ['high', 'medium'] as const;
+export type LabelConfidence = typeof LABEL_CONFIDENCES[number];
+
+export const LABEL_TIERS = ['low', 'moderate', 'elevated', 'high'] as const;
+
+export interface AccountLabel {
+  id: number;
+  account_id: number;
+  user_id: number | null;
+  user_email: string | null;
+  platform: string;
+  external_id: string;
+  handle: string | null;
+  label: LabelKind;
+  expected_tier: 'low' | 'moderate' | 'elevated' | 'high';
+  confidence: LabelConfidence;
+  source: 'manual' | 'youtube_suspension' | 'imported_dataset';
+  rationale: string | null;
+  created_at: string;
+}
+
+export interface AccountLabelsResponse {
+  total: number;
+  labels: AccountLabel[];
+  by_label: Record<string, number>;
+  by_source: Record<string, number>;
+}
+
+export interface CalibrationEvaluation {
+  n_cases: number;
+  tier_accuracy?: number;
+  brier_score?: number;
+  macro_f1?: number;
+  per_tier?: Record<string, { precision: number; recall: number; f1: number; support: number }>;
+  per_label_accuracy?: Record<string, number>;
+  per_source_accuracy?: Record<string, number>;
+  message?: string;
+}

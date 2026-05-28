@@ -107,6 +107,14 @@ def _handle_youtube_error(
         # fine, but YouTube refused to return data — private channel,
         # comments disabled, geo-block. Do not refund: the work happened.
         log.info("YouTube access denied for %s: %s", target_input[:80], e.admin_detail)
+        # Suspension auto-labelling: YouTube's own moderation action is
+        # high-quality ground truth. If this channel exists in our DB,
+        # tag it 'suspended' so calibration can use it.
+        if e.is_suspension:
+            try:
+                _autolabel_suspension(target_input)
+            except Exception:
+                log.exception("auto-label on suspension failed")
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=e.user_message,
@@ -118,6 +126,55 @@ def _handle_youtube_error(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=e.user_message,
     )
+
+
+def _autolabel_suspension(target_input: str) -> None:
+    """When YouTube tells us a channel is suspended/closed, record that as
+    a high-confidence ground-truth label on the local Account row (if any).
+
+    Idempotent: existing suspension labels are touched rather than
+    duplicated. Uses user_id=None because YouTube is the labeler, not a
+    person — the source field carries that provenance.
+    """
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from app.storage.db import get_session
+    from app.storage.models import Account, AccountLabel
+
+    # Pull the bare channel ID out of whatever the user pasted.
+    channel_id = yt.parse_channel_input(target_input)[1] if target_input else None
+    if not channel_id or not channel_id.startswith("UC"):
+        return
+
+    with get_session() as session:
+        account = session.execute(
+            select(Account).where(
+                Account.platform == "youtube",
+                Account.external_id == channel_id,
+            )
+        ).scalar_one_or_none()
+        if account is None:
+            return  # never seen this channel; nothing to label
+
+        existing = session.execute(
+            select(AccountLabel).where(
+                AccountLabel.account_id == account.id,
+                AccountLabel.source == "youtube_suspension",
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.created_at = datetime.now(timezone.utc)
+            return
+
+        session.add(AccountLabel(
+            account_id=account.id,
+            user_id=None,
+            label="suspended",
+            expected_tier="high",
+            confidence="high",
+            source="youtube_suspension",
+            rationale="Auto-recorded: YouTube returned channelSuspended/channelClosed on rescan.",
+        ))
 
 
 def _activity_payload(posts: list, tier: Tier) -> tuple[list[dict], int]:
