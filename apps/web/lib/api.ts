@@ -89,7 +89,7 @@ export interface HistoricalScan {
   summary: string;
   reasons: string[];
   weak_signals: string[];
-  signals: SignalResult[];  // populated for latest scan only
+  signals: SignalResult[];  // populated for every scan in the history
 }
 
 export type TrendDirection = 'stable' | 'rising' | 'falling' | 'volatile' | 'insufficient';

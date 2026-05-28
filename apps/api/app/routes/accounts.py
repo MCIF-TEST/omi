@@ -79,15 +79,9 @@ def account_history(
 
         historical: list[HistoricalScan] = []
         for i, s in enumerate(scans):  # newest first
-            # Include full signal breakdown only for the latest scan
-            signals = _signals_from_json(s.signals_json) if i == 0 else []
-            # Extract reasons/weak_signals stored in the signals payload
-            reasons: list[str] = []
-            weak: list[str] = []
-            if s.signals_json:
-                for sig in s.signals_json:
-                    for ev in (sig.get("evidence") or []):
-                        pass  # evidence is per-signal; reasons are on scan row
+            # Include full signal breakdown for every historical scan so the
+            # UI can expand any row to see what fired (not just the latest).
+            signals = _signals_from_json(s.signals_json)
             historical.append(HistoricalScan(
                 scanned_at=_ensure_utc(s.scanned_at),
                 overall_probability=s.overall_probability,
