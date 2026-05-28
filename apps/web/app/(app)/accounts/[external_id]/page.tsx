@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Activity, Calendar,
   Brain, BarChart2,
-} from 'lucide-react';
+} from 'lucide-react'; // Activity used in TrendIcon
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkline } from '@/components/shared/sparkline';
@@ -81,11 +81,15 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           )}
           {latest && <TierBadge tier={latest.tier} size="lg" />}
         </div>
-        <div className="mt-1 flex items-center justify-between gap-3 flex-wrap">
-          <p className="font-mono text-xs text-fg-faint">{history.external_id}</p>
-          <RescanAccountButton externalId={history.external_id} platform={platform} />
-        </div>
+        <p className="mt-1 font-mono text-xs text-fg-faint">{history.external_id}</p>
       </div>
+
+      {/* Rescan banner — full-width, hard to miss */}
+      <RescanAccountButton
+        externalId={history.external_id}
+        platform={platform}
+        handle={history.handle}
+      />
 
       {/* AI Behavioural Analysis */}
       {analysis && (
@@ -248,15 +252,6 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </dl>
       </Card>
 
-      <div className="flex gap-3">
-        <RescanAccountButton externalId={history.external_id} platform={platform} label="Re-scan this account" />
-        <Link
-          href="/investigate"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 font-mono text-xs tracking-wider uppercase text-fg-mute hover:text-fg border border-border-2 rounded-sm transition-colors"
-        >
-          <Activity size={12} /> Investigate a different account
-        </Link>
-      </div>
     </div>
   );
 }
