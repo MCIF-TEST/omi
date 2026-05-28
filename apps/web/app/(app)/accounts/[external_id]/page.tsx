@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Activity, Calendar,
   Brain, BarChart2,
-} from 'lucide-react'; // Activity used in TrendIcon
+} from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkline } from '@/components/shared/sparkline';
@@ -12,9 +12,9 @@ import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type SignalResult } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { pct, timeAgo, tierBg } from '@/lib/format';
-import { RescanAccountButton } from './rescan-account-button';
 import { HistoryRow } from './history-row';
 import { AccountActivityPanel } from './activity-panel';
+import { AccountActionsClient } from './account-actions-wrapper';
 
 interface PageProps {
   params: { external_id: string };
@@ -48,22 +48,32 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
     throw e;
   }
 
-  // Fetch LLM analysis — gracefully skip if it fails
   let analysis: AccountAnalysisResponse | null = null;
   try {
     analysis = await apiServer<AccountAnalysisResponse>(
       `/v1/accounts/${platform}/${encodeURIComponent(external_id)}/analysis`,
     );
   } catch {
-    // Analysis is optional — continue without it
+    /* analysis is optional */
   }
 
   const latest = history.scans[0];
   const sparkPoints = [...history.scans].reverse().map((s) => s.overall_probability);
   const latestSignals = (latest?.signals ?? []).filter((s) => s.confidence > 0);
 
+  // Pre-build CSV body once, server-side, so the export button is instant
+  const csvRows = buildCsv(history);
+
   return (
     <div className="space-y-6 max-w-5xl">
+      {/* Sticky action bar — rescan / watch / export — ALWAYS visible */}
+      <AccountActionsClient
+        externalId={history.external_id}
+        platform={platform}
+        handle={history.handle}
+        csvText={csvRows}
+      />
+
       <div>
         <Link
           href="/dashboard"
@@ -83,13 +93,6 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </div>
         <p className="mt-1 font-mono text-xs text-fg-faint">{history.external_id}</p>
       </div>
-
-      {/* Rescan banner — full-width, hard to miss */}
-      <RescanAccountButton
-        externalId={history.external_id}
-        platform={platform}
-        handle={history.handle}
-      />
 
       {/* AI Behavioural Analysis */}
       {analysis && (
@@ -123,7 +126,6 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           <ProbabilityBar value={latest.overall_probability} tier={latest.tier} showLabel={false} />
           <p className="mt-3 text-sm text-fg-dim">{latest.summary}</p>
 
-          {/* Per-detector breakdown */}
           {latestSignals.length > 0 && (
             <div className="mt-5">
               <div className="flex items-center gap-1.5 font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-3">
@@ -183,14 +185,14 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </div>
       </Card>
 
-      {/* Account activity — every comment we've ingested from this channel */}
+      {/* Account activity — heatmap + searchable comment feed */}
       <AccountActivityPanel platform={platform} externalId={history.external_id} />
 
       {/* Scan history table — every row expands to show that scan's signals */}
       <Card>
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <CardLabel className="m-0">
-            Full history · {(history.total_scans || history.scans.length).toLocaleString()} scan
+            Full scan history · {(history.total_scans || history.scans.length).toLocaleString()} scan
             {(history.total_scans || history.scans.length) === 1 ? '' : 's'}
             {history.total_scans > history.scans.length && (
               <span className="ml-2 font-mono text-2xs text-fg-mute normal-case tracking-normal">
@@ -251,9 +253,24 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           )}
         </dl>
       </Card>
-
     </div>
   );
+}
+
+function buildCsv(h: AccountHistoryResponse): string {
+  const header = ['scanned_at', 'tier', 'probability', 'confidence', 'summary'];
+  const lines = [header.join(',')];
+  for (const s of h.scans) {
+    const summary = (s.summary || '').replace(/"/g, '""').replace(/\r?\n/g, ' ');
+    lines.push([
+      s.scanned_at,
+      s.tier,
+      s.overall_probability.toFixed(4),
+      s.confidence.toFixed(4),
+      `"${summary}"`,
+    ].join(','));
+  }
+  return lines.join('\n');
 }
 
 function SignalCard({ signal }: { signal: SignalResult }) {

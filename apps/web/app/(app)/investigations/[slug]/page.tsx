@@ -1,14 +1,14 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { ApiError, type InvestigationDetailResponse } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { Card, CardLabel } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { SavedInvestigationViewer } from './viewer';
 import { ShareBlock } from './share-block';
 import { CommentaryBlock } from './commentary-block';
+import { RescanInvestigationButton } from './rescan-investigation-button';
 import { env } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
@@ -49,11 +49,7 @@ export default async function InvestigationPage({ params }: { params: { slug: st
         </div>
         <div className="flex items-center gap-3">
           <TierBadge tier={inv.overall_tier} size="lg" />
-          <Link href={`/investigate?url=${encodeURIComponent(inv.input_url)}`}>
-            <Button variant="secondary">
-              <ExternalLink size={14} /> Re-scan
-            </Button>
-          </Link>
+          <RescanInvestigationButton inputUrl={inv.input_url} />
         </div>
       </header>
 
