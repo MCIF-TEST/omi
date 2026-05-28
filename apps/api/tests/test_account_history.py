@@ -90,7 +90,7 @@ def test_history_respects_limit_query():
         assert r.status_code == 200
         assert len(r.json()["scans"]) == 2
 
-        r = tc.get(f"/v1/accounts/youtube/{eid}/history?limit=999")
+        r = tc.get(f"/v1/accounts/youtube/{eid}/history?limit=9999")
         assert r.status_code == 400
 
 

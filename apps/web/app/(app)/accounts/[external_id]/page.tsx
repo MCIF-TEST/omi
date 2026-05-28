@@ -40,7 +40,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
   let history: AccountHistoryResponse;
   try {
     history = await apiServer<AccountHistoryResponse>(
-      `/v1/accounts/${platform}/${encodeURIComponent(external_id)}/history`,
+      `/v1/accounts/${platform}/${encodeURIComponent(external_id)}/history?limit=1000`,
     );
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
@@ -182,7 +182,13 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
       <Card>
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <CardLabel className="m-0">
-            History · {history.scans.length} scan{history.scans.length === 1 ? '' : 's'}
+            Full history · {(history.total_scans || history.scans.length).toLocaleString()} scan
+            {(history.total_scans || history.scans.length) === 1 ? '' : 's'}
+            {history.total_scans > history.scans.length && (
+              <span className="ml-2 font-mono text-2xs text-fg-mute normal-case tracking-normal">
+                (showing newest {history.scans.length.toLocaleString()})
+              </span>
+            )}
           </CardLabel>
           <span className="font-mono text-2xs text-fg-mute tracking-wider uppercase">
             Click a row to expand

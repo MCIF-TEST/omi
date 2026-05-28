@@ -596,6 +596,7 @@ export interface AccountHistoryResponse {
   first_seen_at: string | null;
   last_scanned_at: string | null;
   scans: HistoricalScan[];
+  total_scans: number;
   trend: TrendInfo;
 }
 

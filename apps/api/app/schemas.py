@@ -889,4 +889,5 @@ class AccountHistoryResponse(BaseModel):
     first_seen_at: datetime | None = None
     last_scanned_at: datetime | None = None
     scans: list[HistoricalScan]
+    total_scans: int = 0  # total persisted scans (may exceed len(scans) if page-limited)
     trend: TrendInfo
