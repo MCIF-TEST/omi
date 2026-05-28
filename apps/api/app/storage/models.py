@@ -187,6 +187,23 @@ class User(Base):
     notify_alerts_webhook: Mapped[int] = mapped_column(Integer, default=0)
     webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Anti-abuse: hash of the IP this user signed up from. Used by signup to
+    # detect duplicate-IP signups (multiple "free trial" accounts from one
+    # household). Raw IP never stored.
+    signup_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+    # Referral system. Every user gets a short URL-safe code at signup. When
+    # a friend signs up with this code, the referrer gets +3 credits at
+    # signup and +5 more when the referred user starts a subscription.
+    referral_code: Mapped[str | None] = mapped_column(String(16), nullable=True, unique=True, index=True)
+    referred_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    referral_credits_earned: Mapped[int] = mapped_column(Integer, default=0)
+    # Idempotency guard: ensures the subscription-conversion bonus is paid
+    # only once even if Stripe sends the subscription.created event twice.
+    referral_subscription_bonus_paid: Mapped[int] = mapped_column(Integer, default=0)
+
 
 class ScanLog(Base):
     """One row per scan a user initiates. Auditable history + analytics."""
@@ -349,6 +366,10 @@ class Investigation(Base):
     commentary_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     commentary_tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     commentary_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Analyst verdict — set by the user to mark the investigation concluded.
+    verdict: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    concluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -630,4 +651,39 @@ class AccountLabel(Base):
     )
 
     account: Mapped["Account"] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# Bulk scan jobs — queue of URLs submitted for background processing.
+# ---------------------------------------------------------------------------
+
+
+class ScanJob(Base):
+    """A user-submitted batch of URLs to scan sequentially in the background."""
+
+    __tablename__ = "scan_jobs"
+    __table_args__ = (
+        Index("ix_scanjob_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Stable public identifier exposed in the API (avoids leaking DB row IDs).
+    job_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # JSON list of URLs submitted by the user.
+    urls_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # JSON list of BulkScanJobResult dicts, one per URL (appended as items complete).
+    results_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    credits_estimate: Mapped[int] = mapped_column(Integer, default=0)
+    credits_used: Mapped[int] = mapped_column(Integer, default=0)
+    max_commenters: Mapped[int] = mapped_column(Integer, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

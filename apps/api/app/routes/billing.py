@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from app.core.auth import CurrentUser, require_user
 from app.core.config import Settings, get_settings
+from app.core.referrals import grant_subscription_bonus_if_due
 from app.storage.db import get_session
 from app.storage.models import BillingEvent, User
 
@@ -203,6 +204,12 @@ def _handle_subscription_update(obj: dict, settings: Settings) -> None:
         if sub_status == "active" and user.credits_remaining < settings.monthly_credit_grant:
             user.credits_remaining = settings.monthly_credit_grant
 
+        # Referral conversion bonus: if this user was referred and they just
+        # became a paying subscriber, award their referrer +5 credits. The
+        # helper is idempotent so Stripe webhook redeliveries are safe.
+        if sub_status in ("active", "trialing"):
+            grant_subscription_bonus_if_due(session, user)
+
 
 def _handle_subscription_deleted(obj: dict) -> None:
     cust = obj.get("customer")
@@ -234,3 +241,7 @@ def _handle_invoice_paid(obj: dict, settings: Settings) -> None:
         )
         if user.subscription_status not in ("active", "trialing"):
             user.subscription_status = "active"
+        # First successful invoice is also the "they paid" moment for the
+        # referral bonus, in case subscription.created arrives out of order.
+        if billing_reason == "subscription_create":
+            grant_subscription_bonus_if_due(session, user)

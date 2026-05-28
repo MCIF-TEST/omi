@@ -1,17 +1,37 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { apiClient, ApiError } from '@/lib/api';
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [showReferralInput, setShowReferralInput] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  // Pre-fill referral code from a ?ref= query param so shared links work
+  // without the user typing anything. Persist across navigations too.
+  useEffect(() => {
+    const fromUrl = searchParams.get('ref');
+    if (fromUrl) {
+      setReferralCode(fromUrl.trim());
+      setShowReferralInput(true);
+      return;
+    }
+    const fromStorage = sessionStorage.getItem('omi_ref');
+    if (fromStorage) {
+      setReferralCode(fromStorage);
+      setShowReferralInput(true);
+    }
+  }, [searchParams]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -24,8 +44,13 @@ export function SignupForm() {
     try {
       await apiClient('/v1/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          referral_code: referralCode.trim() || undefined,
+        }),
       });
+      sessionStorage.removeItem('omi_ref');
       router.refresh();
       router.push('/dashboard');
     } catch (e) {
@@ -61,6 +86,35 @@ export function SignupForm() {
           onChange={(e) => setPassword(e.target.value)}
         />
       </div>
+
+      {showReferralInput ? (
+        <div>
+          <Label htmlFor="referral">
+            <span className="inline-flex items-center gap-1.5">
+              <Gift size={11} className="text-accent" />
+              Referral code
+            </span>
+          </Label>
+          <Input
+            id="referral"
+            type="text"
+            autoComplete="off"
+            maxLength={16}
+            placeholder="Optional — get your friend an extra credit"
+            value={referralCode}
+            onChange={(e) => setReferralCode(e.target.value)}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowReferralInput(true)}
+          className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase text-fg-mute hover:text-accent transition-colors"
+        >
+          <Gift size={11} /> Have a referral code?
+        </button>
+      )}
+
       {error && (
         <p className="text-xs text-danger bg-danger/10 border border-danger/40 rounded-sm px-3 py-2 font-mono">
           {error}

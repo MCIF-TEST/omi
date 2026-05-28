@@ -10,13 +10,15 @@ from __future__ import annotations
 
 from datetime import timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.auth import CurrentUser, require_user
 from app.detection.trend import analyze_trend
 from app.schemas import (
     AccountAnalysisResponse,
     AccountHistoryResponse,
+    AccountSearchResponse,
+    AccountSearchResult,
     HistoricalScan,
     SignalResult,
     Tier,
@@ -27,6 +29,37 @@ from app.storage.repository import AccountRepository
 
 
 router = APIRouter(prefix="/v1/accounts", tags=["accounts"])
+
+
+@router.get("/search", response_model=AccountSearchResponse)
+def search_accounts(
+    q: str = Query(min_length=2, max_length=100, description="Handle, display name, or channel ID prefix."),
+    platform: str = Query(default="youtube"),
+    limit: int = Query(default=20, ge=1, le=50),
+    current: CurrentUser = Depends(require_user),
+) -> AccountSearchResponse:
+    """Cross-scan account search. Searches every account in the intelligence
+    database by handle, display name, or external ID. No credit cost — reads
+    only data you've already contributed to the shared fingerprint store."""
+    with get_session() as session:
+        repo = AccountRepository(session)
+        accounts = repo.search_accounts(q, platform=platform, limit=limit)
+
+    results = [
+        AccountSearchResult(
+            external_id=a.external_id,
+            platform=a.platform,
+            handle=a.handle,
+            display_name=a.display_name,
+            tier=Tier(a.last_tier) if a.last_tier else None,
+            overall_probability=a.last_score,
+            last_scanned_at=_ensure_utc(a.last_scanned_at),
+            first_seen_at=_ensure_utc(a.first_seen_at),
+            follower_count=a.follower_count,
+        )
+        for a in accounts
+    ]
+    return AccountSearchResponse(query=q, platform=platform, results=results)
 
 
 def _ensure_utc(dt):

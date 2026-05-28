@@ -63,6 +63,8 @@ export interface User {
   subscription_status: string | null;
   subscription_renews_at: string | null;
   is_admin: boolean;
+  referral_code: string | null;
+  referral_credits_earned: number;
 }
 
 export interface EngineStatus {
@@ -382,6 +384,23 @@ export interface ComprehensiveScanResult {
 // Saved investigations
 // ---------------------------------------------------------------------------
 
+export type InvestigationVerdict =
+  | 'pending'
+  | 'confirmed_bot_ring'
+  | 'likely_inauthentic'
+  | 'mixed'
+  | 'likely_authentic'
+  | 'inconclusive';
+
+export const VERDICT_LABELS: Record<InvestigationVerdict, string> = {
+  pending: 'Pending',
+  confirmed_bot_ring: 'Confirmed bot ring',
+  likely_inauthentic: 'Likely inauthentic',
+  mixed: 'Mixed',
+  likely_authentic: 'Likely authentic',
+  inconclusive: 'Inconclusive',
+};
+
 export interface InvestigationSummary {
   slug: string;
   label: string;
@@ -395,6 +414,7 @@ export interface InvestigationSummary {
   created_at: string;
   updated_at: string;
   target_id: string | null;
+  verdict: InvestigationVerdict | null;
 }
 
 export interface InvestigationsListResponse {
@@ -420,6 +440,9 @@ export interface InvestigationDetailResponse {
   commentary_text: string | null;
   commentary_provider: string | null;
   commentary_generated_at: string | null;
+  verdict: InvestigationVerdict | null;
+  concluded_at: string | null;
+  notes: string | null;
 }
 
 export interface CommentaryResponse {
@@ -772,4 +795,147 @@ export interface CalibrationEvaluation {
   per_label_accuracy?: Record<string, number>;
   per_source_accuracy?: Record<string, number>;
   message?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Cross-scan account search  (/v1/accounts/search)
+// ---------------------------------------------------------------------------
+
+export interface AccountSearchResult {
+  external_id: string;
+  platform: string;
+  handle: string;
+  display_name: string | null;
+  tier: Tier | null;
+  overall_probability: number | null;
+  last_scanned_at: string | null;
+  first_seen_at: string | null;
+  follower_count: number | null;
+}
+
+export interface AccountSearchResponse {
+  query: string;
+  platform: string;
+  results: AccountSearchResult[];
+}
+
+// ---------------------------------------------------------------------------
+// Activity log  (/v1/activity)
+// ---------------------------------------------------------------------------
+
+export interface ActivityEntry {
+  id: number;
+  created_at: string;
+  platform: string;
+  scan_type: string;
+  credits_cost: number;
+  target_input: string | null;
+  success: boolean;
+  refunded: boolean;
+}
+
+export interface ActivityLogResponse {
+  entries: ActivityEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+  credits_spent_total: number;
+  credits_refunded_total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk scan queue  (/v1/scan/bulk)
+// ---------------------------------------------------------------------------
+
+export interface BulkScanJobResult {
+  url: string;
+  status: 'pending' | 'running' | 'ok' | 'failed';
+  slug: string | null;
+  tier: Tier | null;
+  probability: number | null;
+  error: string | null;
+}
+
+export interface BulkScanJobSummary {
+  job_id: string;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  total: number;
+  completed: number;
+  failed_count: number;
+  credits_estimate: number;
+  credits_used: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface BulkScanJobResponse {
+  job: BulkScanJobSummary;
+  results: BulkScanJobResult[];
+}
+
+export interface BulkScanJobsListResponse {
+  jobs: BulkScanJobSummary[];
+}
+
+// ---------------------------------------------------------------------------
+// Channel-level deep intelligence  (/v1/channels/{platform}/{id}/intelligence)
+// ---------------------------------------------------------------------------
+
+export interface ChannelVideoSummary {
+  content_id: string;
+  title: string | null;
+  canonical_url: string | null;
+  thumbnail_url: string | null;
+  total_batches: number;
+  total_comments_collected: number;
+  total_distinct_authors: number;
+  latest_coordination_score: number;
+  latest_risk_tier: string;
+  latest_tier_distribution: Record<string, number>;
+  first_scanned_at: string;
+  last_scanned_at: string;
+}
+
+export interface ChannelRiskPoint {
+  content_id: string;
+  date: string;
+  coordination_score: number;
+  risk_tier: string;
+  comment_count: number;
+}
+
+export interface ChannelTopCommenter {
+  external_id: string;
+  platform: string;
+  handle: string;
+  video_count: number;
+  tier: string | null;
+  overall_probability: number | null;
+}
+
+export interface ChannelAudienceComposition {
+  high: number;
+  elevated: number;
+  moderate: number;
+  low: number;
+  total_commenters: number;
+}
+
+export interface ChannelIntelligenceResponse {
+  platform: string;
+  external_id: string;
+  handle: string;
+  display_name: string | null;
+  bio: string | null;
+  follower_count: number | null;
+  first_seen_at: string | null;
+  last_scanned_at: string | null;
+  video_count: number;
+  videos: ChannelVideoSummary[];
+  audience_composition: ChannelAudienceComposition;
+  risk_trend: ChannelRiskPoint[];
+  top_commenters: ChannelTopCommenter[];
+  avg_comments_per_video: number;
+  returning_commenter_ratio: number;
 }

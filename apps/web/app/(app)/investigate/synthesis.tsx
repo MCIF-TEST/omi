@@ -1,7 +1,11 @@
-import { Activity, Search, Zap, Network as NetworkIcon } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { Activity, Search, Zap, Network as NetworkIcon, ChevronDown, ChevronRight, Users, AlertTriangle } from 'lucide-react';
+import Link from 'next/link';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
-import { type ComprehensiveScanResult } from '@/lib/api';
+import { type ComprehensiveScanResult, type CoordinationCluster } from '@/lib/api';
 
 export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
   const prob = data.overall_probability;
@@ -83,6 +87,11 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
         </div>
       )}
 
+      {/* Coordination rings — the differentiator view */}
+      {v && v.clusters.length > 0 && (
+        <RingsPanel clusters={v.clusters} commenters={v.commenters ?? []} />
+      )}
+
       {/* Focus account spotlight */}
       {data.focus_account && (
         <section>
@@ -128,6 +137,174 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
     </article>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Coordination rings panel
+// ---------------------------------------------------------------------------
+
+const METHOD_LABELS: Record<string, string> = {
+  temporal_semantic: 'Timing + semantic',
+  co_engagement: 'Co-engagement',
+  style_match: 'Writing style match',
+  fingerprint_cluster: 'Fingerprint cluster',
+  cohort: 'Cohort clustering',
+};
+
+interface RingsPanelProps {
+  clusters: CoordinationCluster[];
+  commenters: any[];
+}
+
+function RingsPanel({ clusters, commenters }: RingsPanelProps) {
+  // Index commenter handles by external_id for fast lookup
+  const handleMap = new Map<string, { handle: string; tier: string }>();
+  for (const c of commenters) {
+    handleMap.set(c.external_id, { handle: c.handle, tier: c.tier });
+  }
+
+  // Sort by score descending
+  const sorted = [...clusters].sort((a, b) => b.score - a.score);
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <NetworkIcon size={12} className="text-accent" />
+        <span className="font-mono text-2xs tracking-[0.18em] text-accent uppercase">
+          Coordination rings · {clusters.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {sorted.map((cluster, i) => (
+          <RingCard
+            key={i}
+            index={i + 1}
+            cluster={cluster}
+            handleMap={handleMap}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RingCard({
+  index,
+  cluster,
+  handleMap,
+}: {
+  index: number;
+  cluster: CoordinationCluster;
+  handleMap: Map<string, { handle: string; tier: string }>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const score = cluster.score;
+  const isHighRisk = score >= 0.7;
+  const isMedium = score >= 0.4;
+
+  const headerColor = isHighRisk
+    ? 'border-danger/40 bg-danger/5'
+    : isMedium
+      ? 'border-tier-elevated/40 bg-tier-elevated/5'
+      : 'border-border-2 bg-bg-elev-2/30';
+
+  const scoreColor = isHighRisk
+    ? 'text-danger'
+    : isMedium
+      ? 'text-tier-elevated'
+      : 'text-fg-dim';
+
+  return (
+    <div className={`border rounded-sm overflow-hidden ${headerColor}`}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="font-mono text-2xs text-fg-mute shrink-0">R{index}</span>
+          <span className="font-mono text-2xs tracking-wider uppercase text-fg-dim shrink-0">
+            {METHOD_LABELS[cluster.method] ?? cluster.method}
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-fg-dim font-mono shrink-0">
+            <Users size={10} />
+            {cluster.members.length} accounts
+          </span>
+          {isHighRisk && (
+            <span className="flex items-center gap-1 text-danger font-mono text-2xs">
+              <AlertTriangle size={10} /> High risk
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className={`font-bold font-mono text-base ${scoreColor}`}>
+            {Math.round(score * 100)}%
+          </span>
+          {expanded ? <ChevronDown size={13} className="text-fg-mute" /> : <ChevronRight size={13} className="text-fg-mute" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border-1/50">
+          {/* Evidence */}
+          {cluster.evidence.length > 0 && (
+            <div className="pt-3">
+              <div className="font-mono text-2xs tracking-wider uppercase text-fg-mute mb-1.5">Evidence</div>
+              <ul className="space-y-1">
+                {cluster.evidence.map((e, i) => (
+                  <li key={i} className="text-xs text-fg-dim pl-3 border-l border-border-2 leading-relaxed">
+                    {e}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Member accounts */}
+          <div>
+            <div className="font-mono text-2xs tracking-wider uppercase text-fg-mute mb-2">
+              Accounts in ring ({cluster.members.length})
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {cluster.members.map((id) => {
+                const info = handleMap.get(id);
+                const handle = info?.handle ?? id;
+                const tier = info?.tier ?? 'low';
+                return (
+                  <Link
+                    key={id}
+                    href={`/accounts/${encodeURIComponent(id)}?platform=youtube`}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-sm border border-border-2 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors"
+                  >
+                    <TierBadge tier={tier as any} size="sm" />
+                    <span className="font-mono text-2xs text-fg">{handle}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Metadata scores */}
+          {Object.keys(cluster.metadata).length > 0 && (
+            <div>
+              <div className="font-mono text-2xs tracking-wider uppercase text-fg-mute mb-1.5">Signal scores</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {Object.entries(cluster.metadata).map(([k, v]) => (
+                  <div key={k} className="flex justify-between text-xs font-mono">
+                    <span className="text-fg-mute capitalize">{k.replace(/_/g, ' ')}</span>
+                    <span className="text-fg-dim">{(v * 100).toFixed(0)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helper components
+// ---------------------------------------------------------------------------
 
 function Stat({ icon, label, value, sub }: {
   icon: React.ReactNode; label: string; value: number | string; sub: string;

@@ -17,6 +17,12 @@ from app.core.auth import (
     verify_password,
 )
 from app.core.config import Settings, get_settings
+from app.core.ip import client_ip, hash_ip
+from app.core.referrals import (
+    generate_unique_code,
+    grant_signup_bonus,
+    resolve_referrer,
+)
 from app.storage.db import get_session
 from app.storage.models import User
 
@@ -24,17 +30,13 @@ from app.storage.models import User
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
-def _client_ip(request: Request) -> str:
-    """Best-effort client IP. Honors X-Forwarded-For from the platform proxy."""
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return (request.client.host if request.client else "unknown") or "unknown"
-
-
 class SignupRequest(BaseModel):
     email: str = Field(min_length=4, max_length=255)
     password: str = Field(min_length=8, max_length=200)
+    # Optional referral code captured from the ?ref= query param on /signup.
+    # Invalid codes are silently ignored (we don't want to block real signups
+    # over a typo'd link).
+    referral_code: str | None = Field(default=None, max_length=16)
 
 
 class LoginRequest(BaseModel):
@@ -49,13 +51,15 @@ class UserOut(BaseModel):
     subscription_status: str | None
     subscription_renews_at: datetime | None
     is_admin: bool
+    referral_code: str | None = None
+    referral_credits_earned: int = 0
 
 
 @router.post("/signup", response_model=UserOut)
 def signup(req: SignupRequest, request: Request, response: Response, settings: Settings = Depends(get_settings)) -> UserOut:
     # Rate-limit account creation per IP (5/hour) to slow farming.
     from app.core.rate_limit import SIGNUP_LIMITER
-    ip = _client_ip(request)
+    ip = client_ip(request)
     if not SIGNUP_LIMITER.hit(ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -66,6 +70,8 @@ def signup(req: SignupRequest, request: Request, response: Response, settings: S
         raise HTTPException(status_code=400, detail="Please use a valid email address.")
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    ip_hash = hash_ip(ip)
 
     with get_session() as session:
         existing = session.query(User).filter(User.email == email).first()
@@ -80,15 +86,50 @@ def signup(req: SignupRequest, request: Request, response: Response, settings: S
             if e.strip()
         }
         is_super_admin = email in admin_emails
+
+        # ---- Free-credit fraud check ----
+        # If another account already exists from this IP and received the
+        # free trial credits, suppress this signup's free credits. Real
+        # signups still work; this just denies the trial-stacking trick.
+        # Super admins are exempt — they're seeded by env config, not abuse.
+        ip_already_credited = False
+        if not is_super_admin and settings.free_trial_credits > 0:
+            ip_already_credited = (
+                session.query(User.id)
+                .filter(User.signup_ip_hash == ip_hash)
+                .first()
+                is not None
+            )
+
+        if is_super_admin:
+            initial_credits = 999999
+        elif ip_already_credited:
+            initial_credits = 0
+        else:
+            initial_credits = settings.free_trial_credits
+
+        # ---- Resolve the referrer (optional) ----
+        referrer = resolve_referrer(session, req.referral_code)
+
         user = User(
             email=email,
             password_hash=hash_password(req.password),
-            credits_remaining=999999 if is_super_admin else settings.free_trial_credits,
+            credits_remaining=initial_credits,
             last_login_at=datetime.now(timezone.utc),
             is_admin=1 if is_super_admin else 0,
+            signup_ip_hash=ip_hash,
+            referral_code=generate_unique_code(session),
+            referred_by_user_id=referrer.id if referrer else None,
         )
         session.add(user)
         session.flush()  # populate user.id
+
+        # Grant the referrer's +3 signup bonus only when the referee is a
+        # "real" signup. Same-IP suppressed signups don't qualify, which
+        # closes the self-referral-on-same-IP scam vector.
+        if referrer is not None and not ip_already_credited:
+            grant_signup_bonus(session, referrer)
+
         issue_session(response, user, settings)
         return UserOut(
             id=user.id,
@@ -97,6 +138,8 @@ def signup(req: SignupRequest, request: Request, response: Response, settings: S
             subscription_status=user.subscription_status,
             subscription_renews_at=user.subscription_renews_at,
             is_admin=bool(user.is_admin),
+            referral_code=user.referral_code,
+            referral_credits_earned=user.referral_credits_earned,
         )
 
 
@@ -104,7 +147,7 @@ def signup(req: SignupRequest, request: Request, response: Response, settings: S
 def login(req: LoginRequest, request: Request, response: Response, settings: Settings = Depends(get_settings)) -> UserOut:
     # Rate-limit login per IP (10/min) to slow brute-force.
     from app.core.rate_limit import LOGIN_LIMITER
-    ip = _client_ip(request)
+    ip = client_ip(request)
     if not LOGIN_LIMITER.hit(ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -127,6 +170,8 @@ def login(req: LoginRequest, request: Request, response: Response, settings: Set
             subscription_status=user.subscription_status,
             subscription_renews_at=user.subscription_renews_at,
             is_admin=bool(user.is_admin),
+            referral_code=user.referral_code,
+            referral_credits_earned=user.referral_credits_earned,
         )
 
 
@@ -155,6 +200,8 @@ def me(
         subscription_status=current.subscription_status,
         subscription_renews_at=current.subscription_renews_at,
         is_admin=current.is_admin,
+        referral_code=current.referral_code,
+        referral_credits_earned=current.referral_credits_earned,
     )
 
 

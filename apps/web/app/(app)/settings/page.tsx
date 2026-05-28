@@ -1,11 +1,12 @@
 import Link from 'next/link';
-import { Target, ArrowRight } from 'lucide-react';
+import { Target, ArrowRight, Clock } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth';
 import { ManageSubscriptionButton } from './manage-subscription-button';
 import { NotificationsBlock } from './notifications-block';
+import { ReferralBlock } from './referral-block';
 
 export const metadata = { title: 'Settings — OMISPHERE' };
 
@@ -60,7 +61,31 @@ export default async function SettingsPage() {
         <ManageSubscriptionButton active={user.subscription_status === 'active'} />
       </Card>
 
+      <ReferralBlock
+        referralCode={user.referral_code}
+        creditsEarned={user.referral_credits_earned}
+      />
+
       <NotificationsBlock />
+
+      <Card>
+        <CardLabel>History</CardLabel>
+        <Link
+          href="/settings/activity"
+          className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Clock size={16} className="text-fg-dim" />
+            <div>
+              <div className="text-fg font-medium">Activity log</div>
+              <div className="text-xs text-fg-dim mt-0.5">
+                Every scan you've run · credit usage · refunds
+              </div>
+            </div>
+          </div>
+          <ArrowRight size={14} className="text-fg-mute" />
+        </Link>
+      </Card>
 
       {user.is_admin && (
         <Card>
