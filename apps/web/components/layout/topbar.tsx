@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { apiClient, type AlertsResponse, type User } from '@/lib/api';
 import { usePolling } from '@/lib/use-polling';
+import { ServiceHealthPill } from './service-health';
 
 interface TopbarProps {
   user: User;
@@ -16,6 +17,7 @@ interface TopbarProps {
     fingerprints_stored: number;
     total_scans: number;
     youtube_configured: boolean;
+    storage_ephemeral?: boolean;
   };
 }
 
@@ -45,26 +47,24 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
       <div className="flex items-center gap-6">
         <Logo />
         <div className="hidden lg:flex items-center gap-3 font-mono text-2xs text-fg-mute tracking-wider uppercase">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-ok animate-pulse-dot" />
-            Engine Online
-          </span>
           {engineStatus && (
             <>
-              <span>·</span>
               <span>FP <span className="text-fg">{engineStatus.fingerprints_stored}</span></span>
               <span>·</span>
               <span>Scans <span className="text-fg">{engineStatus.total_scans}</span></span>
-              <span>·</span>
-              <span className={engineStatus.youtube_configured ? 'text-ok' : 'text-danger'}>
-                YT {engineStatus.youtube_configured ? 'ON' : 'OFF'}
-              </span>
             </>
           )}
         </div>
       </div>
 
       <div className="flex items-center gap-3">
+        {engineStatus && (
+          <ServiceHealthPill
+            youtubeConfigured={engineStatus.youtube_configured}
+            storageEphemeral={Boolean(engineStatus.storage_ephemeral)}
+            isAdmin={user.is_admin}
+          />
+        )}
         <button
           onClick={() => {
             // Dispatch a synthetic Cmd+K so the global listener opens the palette.

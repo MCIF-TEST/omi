@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
+import { ServiceDegradedBanner } from './service-health';
 import { type User, type EngineStatus } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 
@@ -20,18 +21,23 @@ export async function AppShell({ user, children }: AppShellProps) {
   return (
     <div className="min-h-screen flex flex-col bg-bg-deep">
       <Topbar user={user} engineStatus={engineStatus} />
+      {/* User-visible banner — everyone sees it, no env-var jargon. */}
+      {engineStatus && (
+        <ServiceDegradedBanner youtubeConfigured={engineStatus.youtube_configured} />
+      )}
+      {/* Admin diagnostics — env-var names, action items. */}
       {engineStatus?.storage_ephemeral && user.is_admin && (
         <div className="bg-danger/15 border-b border-danger/40 px-6 py-2 text-xs font-mono text-danger">
-          ⚠ Database is ephemeral (SQLite). Every redeploy will wipe all user
+          ⚠ Admin: database is ephemeral (SQLite). Every redeploy wipes all user
           accounts and saved investigations — provision Postgres and set{' '}
           <code className="bg-bg/40 px-1 rounded-sm">OMI_DATABASE_URL</code> before going live.
         </div>
       )}
       {engineStatus && !engineStatus.youtube_configured && user.is_admin && (
         <div className="bg-warn/15 border-b border-warn/40 px-6 py-2 text-xs font-mono text-warn">
-          ⚠ YouTube API key not configured. Scans will fail until{' '}
+          ⚠ Admin: YouTube API key not configured. Set{' '}
           <code className="bg-bg/40 px-1 rounded-sm">OMI_YOUTUBE_API_KEY</code>
-          {' '}is set in the API environment.
+          {' '}in the API service env to restore scanning.
         </div>
       )}
       <div className="flex-1 flex">
