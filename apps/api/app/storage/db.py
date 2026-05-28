@@ -95,6 +95,14 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("alerts", "delivered_at", "TIMESTAMP WITH TIME ZONE"),
     ("alerts", "delivery_status", "VARCHAR(32)"),
     ("alerts", "delivery_error", "VARCHAR(500)"),
+    # Referral system + signup-IP fraud prevention
+    ("users", "signup_ip_hash", "VARCHAR(64)"),
+    ("users", "referral_code", "VARCHAR(16)"),
+    ("users", "referred_by_user_id", "INTEGER"),
+    ("users", "referral_credits_earned", "INTEGER DEFAULT 0"),
+    ("users", "referral_subscription_bonus_paid", "INTEGER DEFAULT 0"),
+    # Phase C — reply-pod count on content entities
+    ("content_entities", "latest_reply_pod_count", "INTEGER DEFAULT 0"),
 ]
 
 

@@ -780,6 +780,7 @@ class ContentEntitySummary(BaseModel):
     latest_coordination_score: float
     latest_risk_tier: str
     latest_tier_distribution: dict[str, int] = Field(default_factory=dict)
+    reply_pod_count: int = 0
     first_scanned_at: datetime
     last_scanned_at: datetime
 

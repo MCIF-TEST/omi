@@ -646,6 +646,7 @@ export interface ContentEntitySummary {
   latest_coordination_score: number;
   latest_risk_tier: string;
   latest_tier_distribution: Record<string, number>;
+  reply_pod_count: number;
   first_scanned_at: string;
   last_scanned_at: string;
 }

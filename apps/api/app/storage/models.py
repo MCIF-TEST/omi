@@ -498,6 +498,7 @@ class ContentEntity(Base):
     latest_coordination_score: Mapped[float] = mapped_column(Float, default=0.0)
     latest_risk_tier: Mapped[str] = mapped_column(String(16), default="low")
     latest_tier_distribution: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    latest_reply_pod_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Timestamps
     first_scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

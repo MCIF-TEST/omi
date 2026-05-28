@@ -51,6 +51,7 @@ def _entity_to_summary(e) -> ContentEntitySummary:
         latest_coordination_score=e.latest_coordination_score or 0.0,
         latest_risk_tier=e.latest_risk_tier or "low",
         latest_tier_distribution=e.latest_tier_distribution or {},
+        reply_pod_count=e.latest_reply_pod_count or 0,
         first_scanned_at=e.first_scanned_at,
         last_scanned_at=e.last_scanned_at,
     )
