@@ -239,6 +239,51 @@ def consume_credits(
         return u.credits_remaining
 
 
+def refund_credits(
+    user_id: int,
+    credits: int,
+    *,
+    reason: str,
+    settings: Settings | None = None,
+) -> int:
+    """Atomically re-credit a user after a scan failed for a reason that
+    isn't their fault (YouTube quota, gateway timeout, internal 5xx).
+
+    Marks the most recent matching ScanLog row as failed so the audit
+    trail reflects the refund. Returns the user's new balance.
+
+    No-op when require_auth is disabled, when the user is an admin (they
+    were never charged), or when ``credits`` is 0.
+    """
+    settings = settings or get_settings()
+    if not settings.require_auth or credits <= 0:
+        return 999999
+
+    from app.storage.models import ScanLog
+
+    with get_session() as session:
+        u = session.get(User, user_id)
+        if u is None:
+            return 0
+        if u.is_admin:
+            return u.credits_remaining
+        u.credits_remaining += credits
+        # Flip the most recent successful ScanLog row to failed so the
+        # audit history matches the refund. Best-effort; if there is no
+        # matching row (clock skew, manual DB edit, etc.) the refund still
+        # goes through.
+        recent = (
+            session.query(ScanLog)
+            .filter(ScanLog.user_id == u.id, ScanLog.success == 1)
+            .order_by(ScanLog.id.desc())
+            .first()
+        )
+        if recent is not None and recent.credits_cost == credits:
+            recent.success = 0
+            recent.target_input = (recent.target_input or "")[:480] + f" [REFUND:{reason[:20]}]"
+        return u.credits_remaining
+
+
 def generate_secret() -> str:
     """For the deploy guide — print a fresh session_secret."""
     return secrets.token_urlsafe(64)

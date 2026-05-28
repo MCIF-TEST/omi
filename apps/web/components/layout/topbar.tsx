@@ -18,6 +18,8 @@ interface TopbarProps {
     total_scans: number;
     youtube_configured: boolean;
     storage_ephemeral?: boolean;
+    youtube_quota_used_today?: number;
+    youtube_quota_daily_limit?: number;
   };
 }
 
@@ -63,6 +65,8 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
             youtubeConfigured={engineStatus.youtube_configured}
             storageEphemeral={Boolean(engineStatus.storage_ephemeral)}
             isAdmin={user.is_admin}
+            quotaUsedToday={engineStatus.youtube_quota_used_today}
+            quotaDailyLimit={engineStatus.youtube_quota_daily_limit}
           />
         )}
         <button

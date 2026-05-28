@@ -8,6 +8,8 @@ interface Props {
   youtubeConfigured: boolean;
   storageEphemeral: boolean;
   isAdmin: boolean;
+  quotaUsedToday?: number;
+  quotaDailyLimit?: number;
 }
 
 /**
@@ -18,7 +20,13 @@ interface Props {
  * with the human-readable status — admins get diagnostic detail, regular
  * users get a friendly "scanning is temporarily unavailable" message.
  */
-export function ServiceHealthPill({ youtubeConfigured, storageEphemeral, isAdmin }: Props) {
+export function ServiceHealthPill({
+  youtubeConfigured,
+  storageEphemeral,
+  isAdmin,
+  quotaUsedToday,
+  quotaDailyLimit,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   const issues: { severity: 'high' | 'medium'; user: string; admin: string }[] = [];
@@ -38,6 +46,24 @@ export function ServiceHealthPill({ youtubeConfigured, storageEphemeral, isAdmin
       admin:
         'Database is SQLite on ephemeral disk. Provision Postgres and set OMI_DATABASE_URL before launch — every redeploy wipes user data.',
     });
+  }
+  // YouTube quota pressure — only meaningful if YouTube is configured.
+  // ≥80% used in last 24h is a yellow warning; ≥95% is a red warning.
+  if (youtubeConfigured && quotaUsedToday !== undefined && quotaDailyLimit && quotaDailyLimit > 0) {
+    const pct = quotaUsedToday / quotaDailyLimit;
+    if (pct >= 0.95) {
+      issues.push({
+        severity: 'high',
+        user: 'Daily scan capacity is nearly exhausted. New scans may be delayed until tomorrow.',
+        admin: `YouTube quota at ${Math.round(pct * 100)}% (${quotaUsedToday.toLocaleString()} of ${quotaDailyLimit.toLocaleString()} units used in last 24h). Resets at midnight Pacific.`,
+      });
+    } else if (pct >= 0.8) {
+      issues.push({
+        severity: 'medium',
+        user: 'Scan capacity is running low for the day. Scans should still work but may be slower.',
+        admin: `YouTube quota at ${Math.round(pct * 100)}% (${quotaUsedToday.toLocaleString()} of ${quotaDailyLimit.toLocaleString()} units used in last 24h).`,
+      });
+    }
   }
 
   const highest = issues.length === 0
@@ -95,11 +121,31 @@ export function ServiceHealthPill({ youtubeConfigured, storageEphemeral, isAdmin
             </div>
 
             {issues.length === 0 ? (
-              <div className="flex items-start gap-2">
-                <CheckCircle2 size={13} className="text-tier-low shrink-0 mt-0.5" />
-                <p className="text-xs text-fg-dim leading-relaxed">
-                  All systems operational. Scanning, storage, and detection are healthy.
-                </p>
+              <div>
+                <div className="flex items-start gap-2 mb-3">
+                  <CheckCircle2 size={13} className="text-tier-low shrink-0 mt-0.5" />
+                  <p className="text-xs text-fg-dim leading-relaxed">
+                    All systems operational. Scanning, storage, and detection are healthy.
+                  </p>
+                </div>
+                {isAdmin && quotaDailyLimit && quotaDailyLimit > 0 && quotaUsedToday !== undefined && (
+                  <div className="pt-2 border-t border-border-1">
+                    <div className="flex items-center justify-between font-mono text-2xs text-fg-mute uppercase tracking-wider mb-1">
+                      <span>YT quota · last 24h</span>
+                      <span className="text-fg">
+                        {quotaUsedToday.toLocaleString()} / {quotaDailyLimit.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-border-1 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-accent rounded-full"
+                        style={{
+                          width: `${Math.min(100, (quotaUsedToday / quotaDailyLimit) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <ul className="space-y-3">

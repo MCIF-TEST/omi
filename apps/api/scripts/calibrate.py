@@ -82,11 +82,53 @@ def _expected_prob(case: dict[str, Any]) -> float:
     return _TIER_MIDPOINT[tier]
 
 
+def _per_tier_metrics(
+    expected: list[str], predicted: list[str]
+) -> dict[str, dict[str, float]]:
+    """Per-tier precision / recall / F1, classic micro-style.
+
+    We treat each tier as a separate one-vs-rest classification. This lets
+    us see, for example, "the engine is fine at flagging HIGH but tends to
+    miss MODERATE" — a fact the global Brier score hides.
+    """
+    tiers = ("low", "moderate", "elevated", "high")
+    out: dict[str, dict[str, float]] = {}
+    for t in tiers:
+        tp = sum(1 for e, p in zip(expected, predicted) if e == t and p == t)
+        fp = sum(1 for e, p in zip(expected, predicted) if e != t and p == t)
+        fn = sum(1 for e, p in zip(expected, predicted) if e == t and p != t)
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) else 0.0
+        )
+        support = sum(1 for e in expected if e == t)
+        out[t] = {
+            "precision": round(precision, 3),
+            "recall": round(recall, 3),
+            "f1": round(f1, 3),
+            "support": support,
+        }
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Calibrate the omi detection engine.")
     default_fixture = Path(__file__).parent / "fixtures" / "calibration.json"
     ap.add_argument("--fixture", type=Path, default=default_fixture)
     ap.add_argument("--json", action="store_true", help="Emit machine-readable JSON only.")
+    ap.add_argument(
+        "--check",
+        metavar="BASELINE.json",
+        type=Path,
+        help=(
+            "Compare this run against a previously-saved baseline (also in "
+            "--json format). Exits non-zero if Brier worsens by >0.01 or "
+            "tier accuracy drops by >0.02 — wire this into CI to catch "
+            "calibration regressions when detector weights change."
+        ),
+    )
     args = ap.parse_args()
 
     cases = _load_fixture(args.fixture)
@@ -149,15 +191,57 @@ def main() -> int:
         elif lvl > 2.0 * avg:
             suggestions.append(f"{name}: very high influence ({lvl:.3f}) — check for overfit or label leakage.")
 
+    expected_tiers = [r["expected_tier"] for r in results]
+    predicted_tiers = [r["predicted_tier"] for r in results]
+    per_tier = _per_tier_metrics(expected_tiers, predicted_tiers)
+    macro_f1 = (
+        sum(m["f1"] for m in per_tier.values()) / len(per_tier)
+        if per_tier else 0.0
+    )
+
     report = {
         "n_cases": n,
         "brier_score": round(brier, 4),
         "tier_accuracy": round(accuracy, 3),
+        "macro_f1": round(macro_f1, 3),
+        "per_tier": per_tier,
         "per_detector_influence": detector_influence,
         "tier_confusion": {f"{e}→{p}": c for (e, p), c in sorted(tier_confusion.items())},
         "weight_suggestions": suggestions,
         "per_case": results,
     }
+
+    # Regression check against a saved baseline — for CI integration.
+    if args.check:
+        try:
+            baseline = json.loads(args.check.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"Failed to read baseline {args.check}: {e}", file=sys.stderr)
+            return 2
+        regressions: list[str] = []
+        if report["brier_score"] > baseline.get("brier_score", 1.0) + 0.01:
+            regressions.append(
+                f"Brier worsened: {baseline['brier_score']:.4f} → {report['brier_score']:.4f}"
+            )
+        if report["tier_accuracy"] < baseline.get("tier_accuracy", 0.0) - 0.02:
+            regressions.append(
+                f"Tier accuracy dropped: {baseline['tier_accuracy']:.3f} → {report['tier_accuracy']:.3f}"
+            )
+        if report["macro_f1"] < baseline.get("macro_f1", 0.0) - 0.02:
+            regressions.append(
+                f"Macro-F1 dropped: {baseline['macro_f1']:.3f} → {report['macro_f1']:.3f}"
+            )
+        if regressions:
+            print("CALIBRATION REGRESSION DETECTED:", file=sys.stderr)
+            for r in regressions:
+                print(f"  · {r}", file=sys.stderr)
+            return 1
+        print(
+            f"OK · brier {report['brier_score']:.4f} "
+            f"acc {report['tier_accuracy']:.1%} "
+            f"macro-F1 {report['macro_f1']:.3f}",
+            file=sys.stderr,
+        )
 
     if args.json:
         print(json.dumps(report, indent=2))
@@ -170,6 +254,19 @@ def main() -> int:
     print()
     print(f"  Brier score:       {brier:.4f}   (lower is better; 0 = perfect)")
     print(f"  Tier accuracy:     {accuracy:.1%}   ({tier_correct}/{n})")
+    print(f"  Macro-F1:          {macro_f1:.3f}   (average F1 across 4 tiers)")
+    print()
+    print("  Per-tier precision / recall / F1:")
+    for tier_name in ("low", "moderate", "elevated", "high"):
+        m = per_tier[tier_name]
+        if m["support"] == 0:
+            print(f"    {tier_name:<10}  (no cases)")
+            continue
+        print(
+            f"    {tier_name:<10}  P={m['precision']:.2f}  "
+            f"R={m['recall']:.2f}  F1={m['f1']:.2f}  "
+            f"(n={m['support']})"
+        )
     print()
     print("  Per-detector influence (avg |p-0.5| × confidence):")
     for name, lvl in sorted(detector_influence.items(), key=lambda kv: -kv[1]):

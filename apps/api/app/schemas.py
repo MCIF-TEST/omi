@@ -342,6 +342,11 @@ class EngineStatus(BaseModel):
     # True when the DB lives on an ephemeral disk (SQLite). UI shows a banner
     # so operators know data won't survive a redeploy.
     storage_ephemeral: bool = False
+    # YouTube Data API v3 daily quota burn. Counted from VideoScan rows
+    # scanned in the last 24 hours. The default daily limit on the free
+    # YouTube tier is 10000 units; override via OMI_YOUTUBE_DAILY_QUOTA.
+    youtube_quota_used_today: int = 0
+    youtube_quota_daily_limit: int = 10000
 
 
 class VideoScanSummary(BaseModel):

@@ -79,6 +79,8 @@ export interface EngineStatus {
   billing_configured: boolean;
   monthly_credit_grant: number;
   storage_ephemeral: boolean;
+  youtube_quota_used_today: number;
+  youtube_quota_daily_limit: number;
 }
 
 export interface HistoricalScan {
