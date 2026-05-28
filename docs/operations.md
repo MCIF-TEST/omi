@@ -207,3 +207,85 @@ Watch `/v1/metrics` `cost.youtube_quota_lifetime` and
 | Stripe webhooks failing | dashboard.stripe.com → Webhooks → recent deliveries; check signature mismatch |
 | Auth not persisting | `OMI_SESSION_SECRET` changed? cookies invalid after rotation. Force-redeploy reverts |
 | Monitoring loop silent | `OMI_ENABLE_MONITORING=true`? logs for `monitoring loop started` line |
+
+---
+
+## Email alert delivery (SMTP)
+
+Watchlist alerts can be delivered via email, webhook, or both. Webhooks
+work without any config; email requires SMTP credentials set on the API
+service.
+
+### Configuring SMTP
+
+Any standard SMTP provider works. Set these env vars on the API service
+(via Render dashboard or `apps/api/.env` for local):
+
+```
+OMI_SMTP_HOST=smtp.resend.com
+OMI_SMTP_PORT=587
+OMI_SMTP_USER=resend
+OMI_SMTP_PASSWORD=re_xxxxx          # the API key from your provider
+OMI_SMTP_FROM=alerts@yourdomain.com
+OMI_SMTP_USE_TLS=true               # STARTTLS on 587; some providers prefer port 465
+```
+
+Recommended providers (any will work — same SMTP creds shape):
+
+| Provider | Host | Port | Notes |
+|---|---|---|---|
+| Resend | `smtp.resend.com` | 587 | Cheapest. Use `resend` as the user; password is the API key. |
+| AWS SES | `email-smtp.<region>.amazonaws.com` | 587 | Generate SMTP creds in SES console; default region is us-east-1. |
+| Postmark | `smtp.postmarkapp.com` | 587 | Server token as both user and password. |
+
+### Verifying delivery
+
+After setting the env vars and redeploying, sign in as an admin and call:
+
+```bash
+curl -X POST https://api.yourdomain.com/v1/monitoring/test-alert \
+     -b "omi_session=<your-cookie>"
+```
+
+The response reports the delivery status of every channel the admin has
+enabled in settings:
+
+```json
+{
+  "user_email": "you@example.com",
+  "email": {
+    "requested": true,
+    "delivered": true,
+    "error": null,
+    "smtp_host": "smtp.resend.com"
+  },
+  "webhook": { "requested": false },
+  "smtp_configured": true
+}
+```
+
+If `delivered: false`, the `error` field carries the specific reason
+(`smtp_not_configured`, `SMTPAuthenticationError: ...`, etc.). Common
+failures:
+
+- `smtp_not_configured` — `OMI_SMTP_HOST` is empty. Re-check env vars and
+  redeploy.
+- `SMTPAuthenticationError` — wrong user or password. Resend uses the
+  literal user `resend`; SES requires SES-generated creds, not your
+  AWS access key.
+- `gaierror` — DNS / hostname wrong. Typo in `OMI_SMTP_HOST`.
+
+### Boot-time confirmation
+
+On every startup the API logs an `Optional features:` line that
+includes the live SMTP state:
+
+```
+Optional features: YouTube ingestion: on | Anthropic LLM: off |
+  SMTP email alerts: on (smtp.resend.com) |
+  Stripe billing: on | Background monitoring: on
+```
+
+If you expect SMTP to be on but the log says `off — webhook delivery
+still works`, the env var didn't reach the API service. Re-check the
+Render dashboard.

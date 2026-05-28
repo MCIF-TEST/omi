@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     init_db()
     from app.content.seed import seed_example_content
     seed_example_content()
+    _log_optional_feature_state()
     async with lifespan_monitoring(app):
         try:
             yield
@@ -49,6 +50,23 @@ async def lifespan(app: FastAPI):
             # Drain in-flight background tasks before shutdown so a deploy
             # doesn't lose narrative ingestion / fan-out work.
             background.shutdown()
+
+
+def _log_optional_feature_state() -> None:
+    """Loudly announce which optional features (LLM, SMTP, billing) are wired.
+
+    Saves operators from having to guess why an alert never arrived: if
+    SMTP isn't configured, the boot log says so explicitly. Same for the
+    other gracefully-degrading features.
+    """
+    s = get_settings()
+    parts: list[str] = []
+    parts.append(f"YouTube ingestion: {'on' if s.youtube_api_key else 'OFF — no scans will work'}")
+    parts.append(f"Anthropic LLM: {'on' if s.anthropic_api_key else 'off (using template fallback)'}")
+    parts.append(f"SMTP email alerts: {'on (' + s.smtp_host + ')' if s.smtp_host else 'off — webhook delivery still works'}")
+    parts.append(f"Stripe billing: {'on' if s.stripe_secret_key and s.stripe_price_id else 'off (free tier only)'}")
+    parts.append(f"Background monitoring: {'on' if s.enable_monitoring else 'off'}")
+    logger.info("Optional features: %s", " | ".join(parts))
 
 
 def _configure_logging() -> None:
