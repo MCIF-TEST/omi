@@ -201,6 +201,26 @@ class ScanLog(Base):
     success: Mapped[int] = mapped_column(Integer, default=1)
 
 
+class DemoScanLog(Base):
+    """One row per anonymous demo scan. Used to enforce IP-based rate limits
+    so the free demo can't be abused. IPs are hashed (never stored raw) so
+    this is GDPR-friendly even though it gates abuse-control."""
+
+    __tablename__ = "demo_scan_logs"
+    __table_args__ = (
+        Index("ix_demo_ip_created", "ip_hash", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ip_hash: Mapped[str] = mapped_column(String(64), index=True)
+    video_id: Mapped[str] = mapped_column(String(64))
+    user_agent_snippet: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True,
+    )
+    success: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class BillingEvent(Base):
     """Inbound Stripe webhook events. Stored idempotent by event id."""
 

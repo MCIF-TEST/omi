@@ -10,8 +10,10 @@ intelligence base that future scans benefit from.
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 
 from app.core.auth import CurrentUser, consume_credits, require_user
 from app.core.config import Settings, get_settings
@@ -515,6 +517,113 @@ def classify_link_endpoint(url: str = "") -> dict:
     """Live URL classification for the UI: tells the operator what OMI will
     do with a pasted URL before they commit to scanning. No quota cost."""
     return classify_url(url)
+
+
+def _hash_ip(ip: str | None) -> str:
+    """Hash an IP for the demo log so we don't store raw addresses."""
+    import hashlib
+    h = hashlib.sha256()
+    h.update((ip or "unknown").encode("utf-8"))
+    h.update(b"omi-demo-salt-v1")
+    return h.hexdigest()
+
+
+def _client_ip(request) -> str | None:
+    """Extract the originating client IP. Trusts X-Forwarded-For when present
+    (Render terminates TLS in front of the app)."""
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+@router.post("/demo", response_model=ComprehensiveScanResult)
+def scan_demo(
+    payload: dict,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> ComprehensiveScanResult:
+    """Anonymous demo scan — no auth required, no credits charged.
+
+    Rate-limited to one scan per IP per 24h to keep YouTube quota under
+    control. Capped at 10 commenters so the result lands in 5-10 seconds
+    and the visitor sees real coordination output without any signup
+    friction. After this they need an account to scan again, save the
+    result, or unlock the rest of the platform.
+    """
+    from datetime import timedelta
+    from app.storage.models import DemoScanLog
+
+    url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
+    if not url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url is required.")
+
+    classification = classify_url(url)
+    if classification["kind"] != "video":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Demo scans only support YouTube video URLs right now. Paste a watch?v= or youtu.be link.",
+        )
+
+    ip = _client_ip(request)
+    ip_hash = _hash_ip(ip)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    # Rate limit: 1 successful demo per IP per 24h
+    with get_session() as session:
+        existing = session.execute(
+            select(DemoScanLog).where(
+                DemoScanLog.ip_hash == ip_hash,
+                DemoScanLog.created_at >= cutoff,
+                DemoScanLog.success == 1,
+            ).limit(1)
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    "You've used your free demo for today. "
+                    "Sign up to run more scans, save results, and unlock the full platform."
+                ),
+            )
+
+    # Synthetic anonymous user just for the request — id=0 skips credit logic + persistence.
+    from app.core.auth import CurrentUser
+    anon = CurrentUser(
+        id=0, email="demo@omi.local",
+        credits_remaining=999, subscription_status="demo",
+        subscription_renews_at=None, is_admin=False,
+    )
+
+    # Run the comprehensive scan with a smaller batch — demo only.
+    creq = ComprehensiveScanRequest(
+        video_url_or_id=classification.get("video_id"),
+        account_url_or_handle=None,
+        comments_text=None,
+        max_commenters=10,
+        force_refresh=False,
+        start_page_token=None,
+    )
+
+    success_flag = 1
+    try:
+        result = scan_comprehensive_endpoint(creq, settings, current=anon, _charge_credit=False)
+    except HTTPException:
+        success_flag = 0
+        raise
+    finally:
+        # Log the attempt either way so a failed demo doesn't grant an extra free one,
+        # but only successful scans count toward the rate limit (success=1 above).
+        with get_session() as session:
+            session.add(DemoScanLog(
+                ip_hash=ip_hash,
+                video_id=classification.get("video_id") or url[:60],
+                user_agent_snippet=(request.headers.get("user-agent") or "")[:200],
+                success=success_flag,
+            ))
+            session.commit()
+
+    return result
 
 
 @router.post("/link", response_model=ComprehensiveScanResult)
