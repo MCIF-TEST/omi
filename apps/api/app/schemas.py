@@ -201,6 +201,10 @@ class FullVideoScanRequest(BaseModel):
     # External ID (e.g. YouTube channel ID) of a commenter to spotlight in
     # the response.
     focus_account_external_id: str | None = None
+    # Continuation cursor — resume YouTube commentThreads pagination from a
+    # prior batch so an incremental "+ New Batch" scan reads ONLY new
+    # comments instead of re-fetching the ones already in the database.
+    start_page_token: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -782,6 +786,7 @@ class CommentBatchOut(BaseModel):
     risk_tier: str
     tier_distribution: dict[str, int] = Field(default_factory=dict)
     summary: str | None = None
+    has_more: bool = False    # true iff the platform left a continuation cursor
 
 
 class ContentCommentOut(BaseModel):
@@ -801,6 +806,11 @@ class ContentEntityDetail(BaseModel):
     batches: list[CommentBatchOut]
     recent_comments: list[ContentCommentOut]
     total_comments: int
+    # True iff the platform's pagination cursor for this entity is still live
+    # — meaning a "+ New batch" scan would resume from where the last one
+    # stopped (cheap, fast, only ingests new comments) rather than restart
+    # from page 1 (slow, mostly dedupes).
+    has_continuation: bool = False
 
 
 class ContentEntityListResponse(BaseModel):

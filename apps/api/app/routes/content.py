@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.content.service import ContentIntelligenceService
 from app.core.auth import CurrentUser, require_user
+from app.core.config import Settings, get_settings
 from app.schemas import (
     CommentBatchOut,
     ContentCommentsResponse,
@@ -13,6 +14,8 @@ from app.schemas import (
     ContentEntityDetail,
     ContentEntityListResponse,
     ContentEntitySummary,
+    FullVideoScanRequest,
+    FullVideoScanResult,
 )
 from app.storage.db import get_session
 
@@ -55,6 +58,7 @@ def _batch_to_out(b) -> CommentBatchOut:
         risk_tier=b.risk_tier or "low",
         tier_distribution=b.tier_distribution or {},
         summary=b.summary,
+        has_more=bool(b.next_page_token),
     )
 
 
@@ -117,6 +121,7 @@ def get_content_entity(
             )
         batches = svc.get_batches(entity.id, limit=50)
         total_comments, recent = svc.get_comments(entity.id, limit=20)
+        has_continuation = svc.latest_next_page_token(entity.id) is not None
         summary = _entity_to_summary(entity)
 
     return ContentEntityDetail(
@@ -124,6 +129,7 @@ def get_content_entity(
         batches=[_batch_to_out(b) for b in batches],
         recent_comments=[_comment_to_out(c) for c in recent],
         total_comments=total_comments,
+        has_continuation=has_continuation,
     )
 
 
@@ -142,6 +148,48 @@ def get_content_batches(
             raise HTTPException(status_code=404, detail="Content entity not found.")
         batches = svc.get_batches(entity.id, limit=limit)
     return [_batch_to_out(b) for b in batches]
+
+
+@router.post("/{platform}/{content_id}/rescan", response_model=FullVideoScanResult)
+def rescan_content_entity(
+    platform: str,
+    content_id: str,
+    settings: Settings = Depends(get_settings),
+    current: CurrentUser = Depends(require_user),
+) -> FullVideoScanResult:
+    """Run an incremental scan against this content, resuming pagination
+    from the latest server-tracked cursor when possible.
+
+    Falls back to a fresh page-1 scan if the platform's cursor has expired
+    or this is the first scan of the content. Charges 1 credit just like a
+    direct scan call.
+    """
+    if platform != "youtube":
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"Continuation scans are not yet implemented for platform '{platform}'.",
+        )
+
+    # Lookup token before invoking the scan so we can short-circuit gracefully.
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        entity = svc.get_entity_by_platform_id(platform, content_id)
+        if entity is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No content entity for {platform}/{content_id}. Run a scan first.",
+            )
+        token = svc.latest_next_page_token(entity.id)
+        video_url = entity.canonical_url or content_id
+
+    # Import the scan handler lazily to avoid circular imports at module load.
+    from app.routes.scan import scan_youtube_video_full
+    req = FullVideoScanRequest(
+        video_url_or_id=video_url,
+        force_refresh=False,
+        start_page_token=token,
+    )
+    return scan_youtube_video_full(req, settings=settings, current=current)
 
 
 @router.get("/{platform}/{content_id}/comments", response_model=ContentCommentsResponse)

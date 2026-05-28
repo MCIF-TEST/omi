@@ -293,11 +293,12 @@ def scan_youtube_video_full(
 
     max_commenters = req.max_commenters or settings.scan_max_commenters
     stats = FetchStats()
-    commenters_meta, all_comments, _next_token = fetch_video_full(
+    commenters_meta, all_comments, next_page_token = fetch_video_full(
         client, video_id,
         max_commenters=max_commenters,
         max_comments=max_commenters * 3,
         stats=stats,
+        start_page_token=req.start_page_token,
     )
 
     def _profile(channel_id):
@@ -381,6 +382,7 @@ def scan_youtube_video_full(
             current.id,
             client,
             stats,
+            next_page_token,
         )
 
         focus = None
@@ -426,6 +428,7 @@ def scan_youtube_video_full(
             ],
             focus_account=focus,
             summary=summary,
+            next_page_token=next_page_token,
         )
 
 
@@ -834,8 +837,15 @@ def _record_content_intelligence_async(
     user_id: int,
     client,
     stats,
+    next_page_token: str | None = None,
 ) -> None:
-    """Background worker — records a CommentBatch and upserts content intelligence."""
+    """Background worker — records a CommentBatch and upserts content intelligence.
+
+    All failures are logged (not silently swallowed) so production scans
+    keep a paper trail even when the optional intelligence write fails.
+    """
+    import logging
+    log = logging.getLogger("omi.content")
     try:
         from app.content.service import ContentIntelligenceService
         from app.storage.db import get_session as _gs
@@ -849,8 +859,8 @@ def _record_content_intelligence_async(
         if platform == "youtube":
             try:
                 meta = fetch_video_metadata(client, content_id, stats=stats) or {}
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                log.warning("video metadata fetch failed for %s/%s: %s", platform, content_id, e)
 
         with _gs() as session:
             svc = ContentIntelligenceService(session)
@@ -872,10 +882,17 @@ def _record_content_intelligence_async(
                 coordination_score=coordination_score,
                 risk_tier=risk_tier,
                 tier_distribution=tier_counts,
+                next_page_token=next_page_token,
             )
             session.commit()
-    except Exception:  # noqa: BLE001 — must not surface to caller
-        pass
+            log.info(
+                "recorded batch for %s/%s: %d comments, %d new, next_token=%s",
+                platform, content_id, len(comments),
+                getattr(svc, "_last_new_count", 0),
+                "yes" if next_page_token else "no",
+            )
+    except Exception as e:  # noqa: BLE001 — must not surface to caller
+        log.exception("content intelligence recording failed for %s/%s: %s", platform, content_id, e)
 
 
 def _video_summary_text(

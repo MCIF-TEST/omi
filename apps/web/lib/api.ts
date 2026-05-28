@@ -636,6 +636,7 @@ export interface CommentBatchOut {
   risk_tier: string;
   tier_distribution: Record<string, number>;
   summary: string | null;
+  has_more: boolean;
 }
 
 export interface ContentCommentOut {
@@ -655,6 +656,7 @@ export interface ContentEntityDetail {
   batches: CommentBatchOut[];
   recent_comments: ContentCommentOut[];
   total_comments: number;
+  has_continuation: boolean;
 }
 
 export interface ContentEntityListResponse {

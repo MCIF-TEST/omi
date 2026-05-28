@@ -11,7 +11,9 @@ import os
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import Engine, create_engine
+import logging
+
+from sqlalchemy import Engine, create_engine, inspect
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -21,6 +23,7 @@ from app.storage.models import Base
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
+_logger = logging.getLogger("omi.storage")
 
 
 def _build_engine(url: str) -> Engine:
@@ -42,14 +45,36 @@ def _build_engine(url: str) -> Engine:
 
 
 def init_db(url: str | None = None) -> Engine:
-    """Initialize the global engine + session factory. Idempotent."""
+    """Initialize the global engine + session factory. Idempotent.
+
+    Uses ``Base.metadata.create_all`` which creates missing tables but never
+    alters existing ones. Safe to call on every startup. Logs which tables
+    were just created so production deploys can verify Phase 10 (and future)
+    schema additions actually landed.
+    """
     global _engine, _SessionLocal
     if _engine is not None and url is None:
         return _engine
     target = url or get_settings().database_url
     _engine = _build_engine(target)
     _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
+
+    # Capture pre-existing tables so we can log what gets newly created.
+    try:
+        before = set(inspect(_engine).get_table_names())
+    except Exception:
+        before = set()
+
     Base.metadata.create_all(_engine)
+
+    try:
+        after = set(inspect(_engine).get_table_names())
+        new_tables = sorted(after - before)
+        if new_tables:
+            _logger.info("Created %d new tables: %s", len(new_tables), ", ".join(new_tables))
+    except Exception:
+        pass
+
     return _engine
 
 

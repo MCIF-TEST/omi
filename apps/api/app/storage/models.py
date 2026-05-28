@@ -489,6 +489,10 @@ class CommentBatch(Base):
     tier_distribution: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     # Optional per-batch payload — short summary or note from the orchestrator.
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Platform pagination cursor — pass to the next scan of this content to
+    # resume fetching new comments instead of re-reading the same ones.
+    # ``None`` means we've exhausted the thread.
+    next_page_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class ContentComment(Base):

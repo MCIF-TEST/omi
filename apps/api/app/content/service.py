@@ -85,6 +85,7 @@ class ContentIntelligenceService:
         coordination_score: float = 0.0,
         risk_tier: str = "low",
         tier_distribution: dict[str, int] | None = None,
+        next_page_token: str | None = None,
     ) -> CommentBatch:
         tier_distribution = tier_distribution or {}
 
@@ -105,6 +106,7 @@ class ContentIntelligenceService:
             coordination_score=coordination_score,
             risk_tier=risk_tier,
             tier_distribution=tier_distribution,
+            next_page_token=next_page_token,
         )
         self._s.add(batch)
         self._s.flush()  # materialise batch.id before comment inserts
@@ -167,6 +169,7 @@ class ContentIntelligenceService:
         batch.duplicates = dup_count
         batch.distinct_authors = len(batch_authors)
         batch.new_authors = len(new_author_set)
+        self._last_new_count = new_count   # for callers that want to log it
 
         # Recompute entity cumulative counters.
         entity.total_batches = (entity.total_batches or 0) + 1
@@ -232,6 +235,20 @@ class ContentIntelligenceService:
                 ContentEntity.platform == platform,
                 ContentEntity.content_id == content_id,
             )
+        ).scalar_one_or_none()
+
+    def latest_next_page_token(self, entity_id: int) -> str | None:
+        """Return the most recent non-null continuation cursor for resuming
+        ingestion, or None if no batch left a cursor (exhausted or first scan).
+        """
+        return self._s.execute(
+            select(CommentBatch.next_page_token)
+            .where(
+                CommentBatch.content_entity_id == entity_id,
+                CommentBatch.next_page_token.is_not(None),
+            )
+            .order_by(CommentBatch.fetched_at.desc())
+            .limit(1)
         ).scalar_one_or_none()
 
     def get_batches(

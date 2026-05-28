@@ -22,6 +22,7 @@ import {
 } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
+import { RescanButton } from './rescan-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +69,7 @@ export default async function ContentEntityPage({
     );
   }
 
-  const { entity: e, batches, recent_comments, total_comments } = data;
+  const { entity: e, batches, recent_comments, total_comments, has_continuation } = data;
   const risk = riskConfig(e.latest_risk_tier);
   const coord_pct = Math.round(e.latest_coordination_score * 100);
 
@@ -209,16 +210,15 @@ export default async function ContentEntityPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Batch history */}
         <div className="lg:col-span-1 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase pt-1.5">
               Batch history
             </p>
-            <Link
-              href={`/investigate?video=${e.canonical_url || e.content_id}`}
-              className="font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
-            >
-              + New batch
-            </Link>
+            <RescanButton
+              platform={e.platform}
+              contentId={e.content_id}
+              hasContinuation={has_continuation}
+            />
           </div>
           {batches.length === 0 ? (
             <p className="text-sm text-fg-dim">No batches yet.</p>
