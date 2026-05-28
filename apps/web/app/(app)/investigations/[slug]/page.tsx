@@ -1,13 +1,14 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { ApiError, type InvestigationDetailResponse } from '@/lib/api';
+import { ApiError, type InvestigationDetailResponse, VERDICT_LABELS } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { SavedInvestigationViewer } from './viewer';
 import { ShareBlock } from './share-block';
 import { CommentaryBlock } from './commentary-block';
+import { VerdictWidget } from './verdict-widget';
 import { env } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,11 @@ export default async function InvestigationPage({ params }: { params: { slug: st
           <p className="mt-1 font-mono text-xs text-fg-faint break-all">{inv.input_url}</p>
         </div>
         <div className="flex items-center gap-3">
+          {inv.verdict && inv.verdict !== 'pending' && (
+            <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-2 px-2 py-1 rounded-sm">
+              {VERDICT_LABELS[inv.verdict]}
+            </span>
+          )}
           <TierBadge tier={inv.overall_tier} size="lg" />
         </div>
       </header>
@@ -60,6 +66,19 @@ export default async function InvestigationPage({ params }: { params: { slug: st
           <Row label="YT quota"    value={`${inv.quota_used} units`} />
           <Row label="Created"     value={new Date(inv.created_at).toLocaleString()} />
         </dl>
+      </Card>
+
+      {/* Analyst verdict + notes */}
+      <Card>
+        <CardLabel>Analyst verdict</CardLabel>
+        <p className="text-xs text-fg-mute mb-4">
+          Mark this investigation once you've reached a conclusion. Visible only to you.
+        </p>
+        <VerdictWidget
+          slug={inv.slug}
+          initialVerdict={inv.verdict}
+          initialNotes={inv.notes}
+        />
       </Card>
 
       <CommentaryBlock

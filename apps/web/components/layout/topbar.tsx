@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, LogOut, Zap } from 'lucide-react';
+import { Bell, LogOut, Search, Zap } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -69,17 +69,14 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
             quotaDailyLimit={engineStatus.youtube_quota_daily_limit}
           />
         )}
-        <button
-          onClick={() => {
-            // Dispatch a synthetic Cmd+K so the global listener opens the palette.
-            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
-          }}
+        <Link
+          href="/search"
           className="hidden md:inline-flex items-center gap-2 px-2.5 h-7 border border-border-2 rounded-sm font-mono text-2xs tracking-wider uppercase text-fg-mute hover:text-fg-dim hover:border-border-hot transition-colors"
-          aria-label="Open command palette"
+          aria-label="Search accounts"
         >
           <span>Search</span>
-          <kbd className="text-accent">⌘K</kbd>
-        </button>
+          <Search size={11} className="text-fg-mute" />
+        </Link>
         <Link
           href="/monitoring"
           className="relative inline-flex items-center justify-center w-8 h-8 rounded-sm border border-border-2 hover:border-border-hot text-fg-dim hover:text-fg transition-colors"

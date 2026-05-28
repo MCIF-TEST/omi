@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import { Search, Activity, Database, Zap, ArrowRight } from 'lucide-react';
+import { Search, Activity, Database, Zap, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
-import { type EngineStatus, type InvestigationsListResponse } from '@/lib/api';
+import { type EngineStatus, type InvestigationsListResponse, VERDICT_LABELS } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { getCurrentUser } from '@/lib/auth';
 import { timeAgo } from '@/lib/format';
@@ -105,9 +105,15 @@ export default async function DashboardPage() {
                   className="flex items-center justify-between gap-4 py-3 px-2 hover:bg-bg-elev-2/50 transition-colors rounded-sm"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3 mb-1">
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
                       <span className="font-medium text-fg truncate">{inv.label}</span>
                       <TierBadge tier={inv.overall_tier} size="sm" />
+                      {inv.verdict && inv.verdict !== 'pending' && (
+                        <span className="inline-flex items-center gap-1 font-mono text-2xs text-fg-mute uppercase tracking-wider">
+                          <CheckCircle2 size={10} />
+                          {VERDICT_LABELS[inv.verdict]}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-fg-dim truncate">{inv.summary}</p>
                     <div className="mt-1 flex items-center gap-3 font-mono text-2xs text-fg-mute uppercase tracking-wider">
@@ -132,6 +138,14 @@ export default async function DashboardPage() {
       <Card>
         <CardLabel className="mb-3">Explore capabilities</CardLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <Link href="/search" className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors">
+            <span className="font-mono text-2xs text-accent">SR</span>
+            <span className="text-fg-dim">Account search — find any scanned account instantly</span>
+          </Link>
+          <Link href="/bulk" className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors">
+            <span className="font-mono text-2xs text-accent">BK</span>
+            <span className="text-fg-dim">Bulk scan — queue up to 20 URLs at once</span>
+          </Link>
           <Link href="/narratives" className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors">
             <span className="font-mono text-2xs text-accent">NR</span>
             <span className="text-fg-dim">Narrative intelligence — trending talking points</span>

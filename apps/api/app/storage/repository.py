@@ -11,12 +11,12 @@ from typing import Any
 
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.schemas import Profile, ScanResult
-from app.storage.models import Account, CommenterEngagement, Scan, VideoScan
+from app.storage.models import Account, CommenterEngagement, Scan, ScanLog, VideoScan
 
 
 class AccountRepository:
@@ -134,9 +134,69 @@ class AccountRepository:
 
     def count_scans(self, account_id: int) -> int:
         """Total number of persisted scans for an account (no limit)."""
-        from sqlalchemy import func
         stmt = select(func.count(Scan.id)).where(Scan.account_id == account_id)
         return self.session.execute(stmt).scalar_one() or 0
+
+    # ---- Cross-scan account search ----
+
+    def search_accounts(
+        self, q: str, *, platform: str = "youtube", limit: int = 20
+    ) -> list[Account]:
+        """Case-insensitive substring search across handle, display_name, and
+        external_id prefix. Results are sorted by most-recently-scanned first
+        so the most relevant entries appear at the top of the list."""
+        stmt = (
+            select(Account)
+            .where(
+                Account.platform == platform,
+                or_(
+                    Account.handle.ilike(f"%{q}%"),
+                    Account.display_name.ilike(f"%{q}%"),
+                    Account.external_id.ilike(f"{q}%"),
+                ),
+            )
+            .order_by(Account.last_scanned_at.desc().nullslast())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars())
+
+    # ---- Activity log ----
+
+    def list_activity(
+        self, user_id: int, *, limit: int = 50, offset: int = 0
+    ) -> tuple[list[ScanLog], int]:
+        """Return paginated ScanLog rows for a user, newest first."""
+        count_stmt = select(func.count(ScanLog.id)).where(ScanLog.user_id == user_id)
+        total = self.session.execute(count_stmt).scalar_one() or 0
+        stmt = (
+            select(ScanLog)
+            .where(ScanLog.user_id == user_id)
+            .order_by(ScanLog.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        rows = list(self.session.execute(stmt).scalars())
+        return rows, total
+
+    def activity_credit_totals(self, user_id: int) -> tuple[int, int]:
+        """Return (total_credits_spent, total_credits_refunded) for a user.
+
+        Refunded rows are identified by success==0 with a tag starting with
+        'REFUND:'. Credits_cost on those rows was the original charge, so we
+        sum them separately to show how much was given back.
+        """
+        spent_stmt = (
+            select(func.coalesce(func.sum(ScanLog.credits_cost), 0))
+            .where(ScanLog.user_id == user_id, ScanLog.success == 1)
+        )
+        # ScanLog doesn't have a 'tag' column yet — refunds flip success to 0.
+        refunded_stmt = (
+            select(func.coalesce(func.sum(ScanLog.credits_cost), 0))
+            .where(ScanLog.user_id == user_id, ScanLog.success == 0)
+        )
+        spent = self.session.execute(spent_stmt).scalar_one() or 0
+        refunded = self.session.execute(refunded_stmt).scalar_one() or 0
+        return int(spent), int(refunded)
 
     # ---- Cache check ----
 

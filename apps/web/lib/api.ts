@@ -382,6 +382,23 @@ export interface ComprehensiveScanResult {
 // Saved investigations
 // ---------------------------------------------------------------------------
 
+export type InvestigationVerdict =
+  | 'pending'
+  | 'confirmed_bot_ring'
+  | 'likely_inauthentic'
+  | 'mixed'
+  | 'likely_authentic'
+  | 'inconclusive';
+
+export const VERDICT_LABELS: Record<InvestigationVerdict, string> = {
+  pending: 'Pending',
+  confirmed_bot_ring: 'Confirmed bot ring',
+  likely_inauthentic: 'Likely inauthentic',
+  mixed: 'Mixed',
+  likely_authentic: 'Likely authentic',
+  inconclusive: 'Inconclusive',
+};
+
 export interface InvestigationSummary {
   slug: string;
   label: string;
@@ -395,6 +412,7 @@ export interface InvestigationSummary {
   created_at: string;
   updated_at: string;
   target_id: string | null;
+  verdict: InvestigationVerdict | null;
 }
 
 export interface InvestigationsListResponse {
@@ -420,6 +438,9 @@ export interface InvestigationDetailResponse {
   commentary_text: string | null;
   commentary_provider: string | null;
   commentary_generated_at: string | null;
+  verdict: InvestigationVerdict | null;
+  concluded_at: string | null;
+  notes: string | null;
 }
 
 export interface CommentaryResponse {
@@ -772,4 +793,85 @@ export interface CalibrationEvaluation {
   per_label_accuracy?: Record<string, number>;
   per_source_accuracy?: Record<string, number>;
   message?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Cross-scan account search  (/v1/accounts/search)
+// ---------------------------------------------------------------------------
+
+export interface AccountSearchResult {
+  external_id: string;
+  platform: string;
+  handle: string;
+  display_name: string | null;
+  tier: Tier | null;
+  overall_probability: number | null;
+  last_scanned_at: string | null;
+  first_seen_at: string | null;
+  follower_count: number | null;
+}
+
+export interface AccountSearchResponse {
+  query: string;
+  platform: string;
+  results: AccountSearchResult[];
+}
+
+// ---------------------------------------------------------------------------
+// Activity log  (/v1/activity)
+// ---------------------------------------------------------------------------
+
+export interface ActivityEntry {
+  id: number;
+  created_at: string;
+  platform: string;
+  scan_type: string;
+  credits_cost: number;
+  target_input: string | null;
+  success: boolean;
+  refunded: boolean;
+}
+
+export interface ActivityLogResponse {
+  entries: ActivityEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+  credits_spent_total: number;
+  credits_refunded_total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk scan queue  (/v1/scan/bulk)
+// ---------------------------------------------------------------------------
+
+export interface BulkScanJobResult {
+  url: string;
+  status: 'pending' | 'running' | 'ok' | 'failed';
+  slug: string | null;
+  tier: Tier | null;
+  probability: number | null;
+  error: string | null;
+}
+
+export interface BulkScanJobSummary {
+  job_id: string;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  total: number;
+  completed: number;
+  failed_count: number;
+  credits_estimate: number;
+  credits_used: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface BulkScanJobResponse {
+  job: BulkScanJobSummary;
+  results: BulkScanJobResult[];
+}
+
+export interface BulkScanJobsListResponse {
+  jobs: BulkScanJobSummary[];
 }

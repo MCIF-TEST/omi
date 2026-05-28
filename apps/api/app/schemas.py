@@ -463,6 +463,7 @@ class InvestigationSummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     target_id: str | None = None
+    verdict: str | None = None
 
 
 class InvestigationsListResponse(BaseModel):
@@ -491,6 +492,10 @@ class InvestigationDetailResponse(BaseModel):
     commentary_text: str | None = None
     commentary_provider: str | None = None
     commentary_generated_at: datetime | None = None
+    # Analyst verdict + notes
+    verdict: str | None = None
+    concluded_at: datetime | None = None
+    notes: str | None = None
 
 
 class CommentaryResponse(BaseModel):
@@ -983,3 +988,120 @@ class CalibrationFixtureResponse(BaseModel):
     by_label: dict[str, int]
     by_source: dict[str, int]
     cases: list[CalibrationFixtureCase]
+
+
+# ---------------------------------------------------------------------------
+# Feature: Cross-scan account search  (/v1/accounts/search)
+# ---------------------------------------------------------------------------
+
+
+class AccountSearchResult(BaseModel):
+    external_id: str
+    platform: str
+    handle: str
+    display_name: str | None = None
+    tier: Tier | None = None
+    overall_probability: float | None = None
+    last_scanned_at: datetime | None = None
+    first_seen_at: datetime | None = None
+    follower_count: int | None = None
+
+
+class AccountSearchResponse(BaseModel):
+    query: str
+    platform: str
+    results: list[AccountSearchResult]
+
+
+# ---------------------------------------------------------------------------
+# Feature: Activity log  (/v1/activity)
+# ---------------------------------------------------------------------------
+
+
+class ActivityEntry(BaseModel):
+    id: int
+    created_at: datetime
+    platform: str
+    scan_type: str
+    credits_cost: int
+    target_input: str | None = None
+    success: bool
+    refunded: bool = False
+
+
+class ActivityLogResponse(BaseModel):
+    entries: list[ActivityEntry]
+    total: int
+    limit: int
+    offset: int
+    credits_spent_total: int
+    credits_refunded_total: int
+
+
+# ---------------------------------------------------------------------------
+# Feature: Investigation verdict  (/v1/investigations/{slug} PATCH)
+# ---------------------------------------------------------------------------
+
+INVESTIGATION_VERDICTS = (
+    "pending",
+    "confirmed_bot_ring",
+    "likely_inauthentic",
+    "mixed",
+    "likely_authentic",
+    "inconclusive",
+)
+
+VERDICT_LABELS: dict[str, str] = {
+    "pending": "Pending",
+    "confirmed_bot_ring": "Confirmed bot ring",
+    "likely_inauthentic": "Likely inauthentic",
+    "mixed": "Mixed",
+    "likely_authentic": "Likely authentic",
+    "inconclusive": "Inconclusive",
+}
+
+
+class VerdictUpdate(BaseModel):
+    verdict: str | None = None
+    notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Feature: Bulk scan queue  (/v1/scan/bulk)
+# ---------------------------------------------------------------------------
+
+
+class BulkScanRequest(BaseModel):
+    urls: list[str] = Field(min_length=1, max_length=20, description="Up to 20 video or channel URLs.")
+    max_commenters: int = Field(default=100, ge=5, le=300)
+
+
+class BulkScanJobResult(BaseModel):
+    url: str
+    status: str  # "pending" | "running" | "ok" | "failed"
+    slug: str | None = None
+    tier: str | None = None
+    probability: float | None = None
+    error: str | None = None
+
+
+class BulkScanJobSummary(BaseModel):
+    job_id: str
+    status: str  # "queued" | "running" | "done" | "failed"
+    total: int
+    completed: int
+    failed_count: int
+    credits_estimate: int
+    credits_used: int
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class BulkScanJobResponse(BaseModel):
+    job: BulkScanJobSummary
+    results: list[BulkScanJobResult]
+
+
+class BulkScanJobsListResponse(BaseModel):
+    jobs: list[BulkScanJobSummary]

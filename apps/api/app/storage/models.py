@@ -349,6 +349,10 @@ class Investigation(Base):
     commentary_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     commentary_tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     commentary_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Analyst verdict — set by the user to mark the investigation concluded.
+    verdict: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    concluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -630,4 +634,39 @@ class AccountLabel(Base):
     )
 
     account: Mapped["Account"] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# Bulk scan jobs — queue of URLs submitted for background processing.
+# ---------------------------------------------------------------------------
+
+
+class ScanJob(Base):
+    """A user-submitted batch of URLs to scan sequentially in the background."""
+
+    __tablename__ = "scan_jobs"
+    __table_args__ = (
+        Index("ix_scanjob_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Stable public identifier exposed in the API (avoids leaking DB row IDs).
+    job_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # JSON list of URLs submitted by the user.
+    urls_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # JSON list of BulkScanJobResult dicts, one per URL (appended as items complete).
+    results_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    credits_estimate: Mapped[int] = mapped_column(Integer, default=0)
+    credits_used: Mapped[int] = mapped_column(Integer, default=0)
+    max_commenters: Mapped[int] = mapped_column(Integer, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
