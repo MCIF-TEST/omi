@@ -24,6 +24,7 @@ import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
 import { RescanButton } from './rescan-button';
 import { DiffPanel } from './diff-panel';
+import { ReplyTreePanel } from './reply-tree-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -223,6 +224,9 @@ export default async function ContentEntityPage({
 
       {/* What changed since last scan */}
       <DiffPanel platform={e.platform} contentId={e.content_id} totalBatches={e.total_batches} />
+
+      {/* Phase C — Reply tree + engagement pods */}
+      <ReplyTreePanel platform={e.platform} contentId={e.content_id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Batch history */}

@@ -139,6 +139,10 @@ class ContentIntelligenceService:
             author = (c.get("author_external_id") or "").strip()
             text = (c.get("text") or "").strip()
             created_at: datetime | None = c.get("created_at")
+            parent_id_raw = c.get("parent_comment_id")
+            parent_comment_id = (parent_id_raw or "").strip() or None if parent_id_raw is not None else None
+            like_count = c.get("like_count")
+            reply_count = c.get("reply_count")
 
             if not ext_id or not text:
                 continue
@@ -156,9 +160,12 @@ class ContentIntelligenceService:
                 content_entity_id=entity.id,
                 first_batch_id=batch.id,
                 external_comment_id=ext_id,
+                parent_comment_id=parent_comment_id,
                 author_external_id=author,
                 author_handle=handle_map.get(author),
                 text=text,
+                like_count=like_count if isinstance(like_count, int) else None,
+                reply_count=reply_count if isinstance(reply_count, int) else None,
                 observed_at=created_at or datetime.now(tz=timezone.utc),
             ))
             existing_ids.add(ext_id)

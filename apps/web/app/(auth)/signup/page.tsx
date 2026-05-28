@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { SignupForm } from './signup-form';
@@ -29,7 +30,9 @@ export default function SignupPage() {
         </p>
       </div>
 
-      <SignupForm />
+      <Suspense fallback={<div className="h-48 animate-pulse bg-bg-elev rounded-sm" />}>
+        <SignupForm />
+      </Suspense>
 
       <p className="mt-4 text-xs text-fg-mute leading-relaxed">
         By signing up you agree to OMISPHERE's{' '}

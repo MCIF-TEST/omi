@@ -1152,6 +1152,60 @@ class ChannelAudienceComposition(BaseModel):
     total_commenters: int
 
 
+# ---------------------------------------------------------------------------
+# Phase C: Reply tree + engagement pods  (/v1/content/{platform}/{id}/reply-tree)
+# ---------------------------------------------------------------------------
+
+
+class ReplyTreeNode(BaseModel):
+    comment_id: str
+    parent_comment_id: str | None = None
+    author_external_id: str
+    author_handle: str | None = None
+    author_tier: str | None = None
+    text: str
+    like_count: int | None = None
+    reply_count: int | None = None
+    posted_at: datetime
+    # Direct replies (one level deep). YouTube exposes replies as a flat
+    # list under each top-level comment, so the tree is effectively 2-tier.
+    replies: list["ReplyTreeNode"] = Field(default_factory=list)
+    # Reply-pod id this node belongs to, if the pod detector flagged it.
+    # Frontend uses this to colour-code the tree.
+    pod_id: int | None = None
+
+
+class ReplyTreeResponse(BaseModel):
+    platform: str
+    content_id: str
+    total_comments: int
+    top_level_count: int
+    reply_count: int
+    roots: list[ReplyTreeNode]
+
+
+class ReplyPodMember(BaseModel):
+    external_id: str
+    handle: str | None = None
+    tier: str | None = None
+    overall_probability: float | None = None
+
+
+class ReplyPodOut(BaseModel):
+    pod_id: int
+    score: float
+    members: list[ReplyPodMember]
+    evidence: list[str]
+    interaction_count: int
+
+
+class ReplyPodsResponse(BaseModel):
+    platform: str
+    content_id: str
+    pod_count: int
+    pods: list[ReplyPodOut]
+
+
 class ChannelIntelligenceResponse(BaseModel):
     platform: str
     external_id: str

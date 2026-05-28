@@ -922,6 +922,55 @@ export interface ChannelAudienceComposition {
   total_commenters: number;
 }
 
+// ---------------------------------------------------------------------------
+// Phase C — Reply tree + engagement pods
+// ---------------------------------------------------------------------------
+
+export interface ReplyTreeNode {
+  comment_id: string;
+  parent_comment_id: string | null;
+  author_external_id: string;
+  author_handle: string | null;
+  author_tier: string | null;
+  text: string;
+  like_count: number | null;
+  reply_count: number | null;
+  posted_at: string;
+  replies: ReplyTreeNode[];
+  pod_id: number | null;
+}
+
+export interface ReplyTreeResponse {
+  platform: string;
+  content_id: string;
+  total_comments: number;
+  top_level_count: number;
+  reply_count: number;
+  roots: ReplyTreeNode[];
+}
+
+export interface ReplyPodMember {
+  external_id: string;
+  handle: string | null;
+  tier: string | null;
+  overall_probability: number | null;
+}
+
+export interface ReplyPodOut {
+  pod_id: number;
+  score: number;
+  members: ReplyPodMember[];
+  evidence: string[];
+  interaction_count: number;
+}
+
+export interface ReplyPodsResponse {
+  platform: string;
+  content_id: string;
+  pod_count: number;
+  pods: ReplyPodOut[];
+}
+
 export interface ChannelIntelligenceResponse {
   platform: string;
   external_id: string;

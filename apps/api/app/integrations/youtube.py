@@ -458,19 +458,23 @@ def fetch_video_full(
         stats.quota_used += 1
 
         for item in response.get("items", []):
-            snippet = item.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
+            top = item.get("snippet", {}).get("topLevelComment", {})
+            snippet = top.get("snippet", {})
             channel_id = snippet.get("authorChannelId", {}).get("value")
             if not channel_id:
                 continue
             ts = _iso_or_none(snippet.get("publishedAt"))
             if ts is None:
                 continue
+            top_id = top.get("id") or f"yt:{len(all_items)}"
             all_items.append({
-                "comment_id": item.get("snippet", {}).get("topLevelComment", {}).get("id")
-                              or f"yt:{len(all_items)}",
+                "comment_id": top_id,
+                "parent_comment_id": None,
                 "author_external_id": channel_id,
                 "text": snippet.get("textDisplay", "") or "",
                 "created_at": ts,
+                "like_count": snippet.get("likeCount"),
+                "reply_count": snippet.get("replyCount"),
             })
             if channel_id not in seen and len(seen) < max_commenters:
                 seen[channel_id] = {
@@ -481,6 +485,39 @@ def fetch_video_full(
                 }
             if len(all_items) >= max_comments:
                 break
+
+            # Replies are bundled inline on the commentThread when
+            # totalReplyCount > 0 (up to ~5 per thread). YouTube returns
+            # newest-first; we keep them in arrival order. Beyond ~5
+            # replies the full set would need /comments.list with the
+            # thread's parent ID, which is a separate quota cost — skipped
+            # for now since 5 is enough to detect reply pods.
+            for reply in item.get("snippet", {}).get("replies", {}).get("comments", []):
+                rsnip = reply.get("snippet", {})
+                r_chan = rsnip.get("authorChannelId", {}).get("value")
+                if not r_chan:
+                    continue
+                r_ts = _iso_or_none(rsnip.get("publishedAt"))
+                if r_ts is None:
+                    continue
+                all_items.append({
+                    "comment_id": reply.get("id") or f"yt:r:{len(all_items)}",
+                    "parent_comment_id": rsnip.get("parentId") or top_id,
+                    "author_external_id": r_chan,
+                    "text": rsnip.get("textDisplay", "") or "",
+                    "created_at": r_ts,
+                    "like_count": rsnip.get("likeCount"),
+                    "reply_count": None,  # replies don't have nested replies on YT
+                })
+                if r_chan not in seen and len(seen) < max_commenters:
+                    seen[r_chan] = {
+                        "channel_id": r_chan,
+                        "handle": rsnip.get("authorDisplayName") or r_chan,
+                        "avatar_url": rsnip.get("authorProfileImageUrl"),
+                        "sample_text": rsnip.get("textDisplay", ""),
+                    }
+                if len(all_items) >= max_comments:
+                    break
 
         next_token = response.get("nextPageToken")
         if not next_token:
