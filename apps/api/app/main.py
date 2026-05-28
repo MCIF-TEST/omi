@@ -193,7 +193,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="OMISPHERE API",
         description=(
-            "Probabilistic social authenticity intelligence. "
+            "YouTube comment-section authenticity intelligence. "
             "Powered by the omi detection engine."
         ),
         version=__version__,

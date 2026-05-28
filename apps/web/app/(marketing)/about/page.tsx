@@ -6,12 +6,15 @@ export default function AboutPage() {
       <header>
         <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">About</p>
         <h1 className="text-3xl font-semibold text-fg tracking-tight">
-          The trust layer for public social media
+          A trust layer for YouTube comment sections
         </h1>
         <p className="mt-3 text-fg-dim leading-relaxed">
-          OMISPHERE is a probabilistic social authenticity intelligence platform. It
-          detects bot accounts, AI-generated engagement, coordinated influence campaigns,
-          engagement farms, and synthetic virality — across public social media.
+          OMISPHERE is a probabilistic intelligence platform for YouTube comments. It
+          detects bot accounts, AI-generated engagement, coordinated influence
+          campaigns, engagement farms, and synthetic virality — using eight
+          independent detectors and a self-improving fingerprint database. The
+          detection engine is platform-agnostic by design; today the only
+          ingestion adapter shipped is YouTube. Other platforms are on the roadmap.
         </p>
       </header>
 
@@ -39,6 +42,16 @@ export default function AboutPage() {
           no LLM calls in the per-scan path — pure Python heuristics, embeddings, and
           graph algorithms. LLMs are reserved for optional report generation, never the
           core scoring.
+        </p>
+      </Section>
+
+      <Section title="Scope, plainly">
+        <p>
+          Today OMISPHERE scans <span className="text-fg">YouTube</span> only — videos
+          and channels. Every &ldquo;scan&rdquo; covers a video&apos;s comment thread or a
+          single channel&apos;s recent activity, and consumes one credit. X / Twitter
+          ingestion is the next platform on the roadmap; pricing for X scans will
+          reflect that platform&apos;s higher API cost when it ships.
         </p>
       </Section>
 
