@@ -2,14 +2,14 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Activity, Calendar,
-  Brain, BarChart2,
+  Brain, BarChart2, Video, ArrowRight,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkline } from '@/components/shared/sparkline';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
-import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type SignalResult } from '@/lib/api';
+import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type ChannelIntelligenceResponse, type SignalResult } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { pct, timeAgo, tierBg } from '@/lib/format';
 import { HistoryRow } from './history-row';
@@ -58,6 +58,19 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
     /* analysis is optional */
   }
 
+  // If this account is the author of any scanned content, expose a link to
+  // the channel-level intelligence view. Cheap probe — endpoint 404s when
+  // there's no data, in which case we hide the link.
+  let channel: ChannelIntelligenceResponse | null = null;
+  try {
+    channel = await apiServer<ChannelIntelligenceResponse>(
+      `/v1/channels/${platform}/${encodeURIComponent(external_id)}/intelligence`,
+    );
+    if (channel.video_count === 0) channel = null;
+  } catch {
+    channel = null;
+  }
+
   const latest = history.scans[0];
   const sparkPoints = [...history.scans].reverse().map((s) => s.overall_probability);
   const latestSignals = (latest?.signals ?? []).filter((s) => s.confidence > 0);
@@ -94,6 +107,31 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </div>
         <p className="mt-1 font-mono text-xs text-fg-faint">{history.external_id}</p>
       </div>
+
+      {/* Channel-level intelligence link — only shown when this account owns content */}
+      {channel && (
+        <Link
+          href={`/channels/${platform}/${encodeURIComponent(history.external_id)}`}
+          className="block group"
+        >
+          <div className="flex items-center gap-4 p-4 rounded-md border border-accent/30 bg-accent/5 hover:border-accent hover:bg-accent/10 transition-colors">
+            <div className="shrink-0 w-10 h-10 rounded-sm border border-accent/40 bg-bg flex items-center justify-center text-accent">
+              <Video size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-0.5">
+                Channel intelligence available
+              </p>
+              <p className="text-sm text-fg">
+                {channel.video_count} video{channel.video_count === 1 ? '' : 's'} scanned ·{' '}
+                {channel.audience_composition.total_commenters.toLocaleString()} audience interactions ·{' '}
+                {Math.round(channel.returning_commenter_ratio * 100)}% returning commenters
+              </p>
+            </div>
+            <ArrowRight size={16} className="text-accent shrink-0 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+      )}
 
       {/* AI Behavioural Analysis */}
       {analysis && (

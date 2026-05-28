@@ -101,11 +101,13 @@ def channel_intelligence(
                     comment_count=batch.comments_fetched,
                 ))
 
-        # Top repeat commenters: accounts appearing across the most videos
+        # Top repeat commenters: accounts appearing across the most videos.
+        # Also compute the returning-commenter ratio in the same pass.
         content_ids = [v.content_id for v in videos]
         top_commenters: list[ChannelTopCommenter] = []
+        returning_ratio = 0.0
         if content_ids:
-            top_q = (
+            counts_q = (
                 select(
                     CommenterEngagement.account_external_id,
                     func.count(CommenterEngagement.parent_id.distinct()).label("video_count"),
@@ -116,9 +118,13 @@ def channel_intelligence(
                 )
                 .group_by(CommenterEngagement.account_external_id)
                 .order_by(func.count(CommenterEngagement.parent_id.distinct()).desc())
-                .limit(20)
             )
-            for commenter_ext_id, vid_count in session.execute(top_q).all():
+            rows = session.execute(counts_q).all()
+            total_distinct = len(rows)
+            returning_count = sum(1 for _, c in rows if c >= 2)
+            returning_ratio = (returning_count / total_distinct) if total_distinct else 0.0
+
+            for commenter_ext_id, vid_count in rows[:20]:
                 acct = repo.get(platform, commenter_ext_id)
                 top_commenters.append(ChannelTopCommenter(
                     external_id=commenter_ext_id,
@@ -140,11 +146,19 @@ def channel_intelligence(
                 total_distinct_authors=v.total_distinct_authors,
                 latest_coordination_score=v.latest_coordination_score,
                 latest_risk_tier=v.latest_risk_tier,
+                latest_tier_distribution={
+                    k: int(v_) for k, v_ in (v.latest_tier_distribution or {}).items()
+                },
                 first_scanned_at=_utc(v.first_scanned_at),
                 last_scanned_at=_utc(v.last_scanned_at),
             )
             for v in videos
         ]
+
+        avg_comments_per_video = (
+            sum(v.total_comments_collected for v in videos) / len(videos)
+            if videos else 0.0
+        )
 
         return ChannelIntelligenceResponse(
             platform=platform,
@@ -166,4 +180,6 @@ def channel_intelligence(
             ),
             risk_trend=risk_trend,
             top_commenters=top_commenters,
+            avg_comments_per_video=avg_comments_per_video,
+            returning_commenter_ratio=returning_ratio,
         )

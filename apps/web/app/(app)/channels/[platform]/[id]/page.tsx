@@ -7,10 +7,13 @@ import {
   Users,
   TrendingUp,
   ExternalLink,
+  Activity,
+  Repeat,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
-import { ApiError, type ChannelIntelligenceResponse } from '@/lib/api';
+import { Sparkline } from '@/components/shared/sparkline';
+import { ApiError, type ChannelIntelligenceResponse, type Tier } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
 
@@ -113,7 +116,7 @@ export default async function ChannelIntelligencePage({
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-border-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-5 pt-5 border-t border-border-1">
           <Stat label="Videos scanned" value={data.video_count} icon={<Video size={11} />} />
           <Stat
             label="Total commenters"
@@ -124,6 +127,24 @@ export default async function ChannelIntelligencePage({
             label="Avg coordination"
             value={avgCoord !== null ? `${Math.round(avgCoord * 100)}%` : '—'}
             icon={<TrendingUp size={11} />}
+          />
+          <Stat
+            label="Avg comments/video"
+            value={
+              data.avg_comments_per_video > 0
+                ? Math.round(data.avg_comments_per_video).toLocaleString()
+                : '—'
+            }
+            icon={<Activity size={11} />}
+          />
+          <Stat
+            label="Returning ratio"
+            value={
+              data.returning_commenter_ratio > 0
+                ? `${Math.round(data.returning_commenter_ratio * 100)}%`
+                : '—'
+            }
+            icon={<Repeat size={11} />}
           />
           <Stat
             label="Last scanned"
@@ -210,9 +231,26 @@ export default async function ChannelIntelligencePage({
       {/* Risk trend table */}
       {data.risk_trend.length > 0 && (
         <Card>
-          <CardLabel className="mb-4">
-            Scan history · {data.risk_trend.length} batch{data.risk_trend.length !== 1 ? 'es' : ''}
-          </CardLabel>
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+            <CardLabel className="m-0">
+              Scan history · {data.risk_trend.length} batch{data.risk_trend.length !== 1 ? 'es' : ''}
+            </CardLabel>
+            {data.risk_trend.length >= 2 && (
+              <div className="w-full sm:w-[260px]">
+                <Sparkline
+                  points={data.risk_trend.map((p) => p.coordination_score)}
+                  tier={
+                    (data.risk_trend[data.risk_trend.length - 1].risk_tier as Tier) ?? 'low'
+                  }
+                  height={48}
+                />
+                <div className="flex justify-between mt-1 font-mono text-2xs text-fg-mute">
+                  <span>oldest</span>
+                  <span>latest</span>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="overflow-x-auto -mx-2">
             <table className="w-full text-sm">
               <thead>
@@ -316,6 +354,7 @@ export default async function ChannelIntelligencePage({
                         </>
                       )}
                     </div>
+                    <TierDistributionBar dist={v.latest_tier_distribution} />
                   </div>
                   <div className="text-right shrink-0">
                     <div className={`font-mono text-sm font-semibold tabular-nums ${rc.cls}`}>
@@ -331,6 +370,45 @@ export default async function ChannelIntelligencePage({
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function TierDistributionBar({ dist }: { dist: Record<string, number> }) {
+  const total =
+    (dist.high ?? 0) + (dist.elevated ?? 0) + (dist.moderate ?? 0) + (dist.low ?? 0);
+  if (total === 0) return null;
+  const seg = (count: number) => (count / total) * 100;
+  return (
+    <div className="mt-1.5 flex h-1 w-full max-w-[280px] rounded-full overflow-hidden bg-border-1">
+      {dist.high > 0 && (
+        <span
+          className="h-full bg-tier-high"
+          style={{ width: `${seg(dist.high)}%` }}
+          title={`High: ${dist.high}`}
+        />
+      )}
+      {dist.elevated > 0 && (
+        <span
+          className="h-full bg-tier-elevated"
+          style={{ width: `${seg(dist.elevated)}%` }}
+          title={`Elevated: ${dist.elevated}`}
+        />
+      )}
+      {dist.moderate > 0 && (
+        <span
+          className="h-full bg-tier-moderate"
+          style={{ width: `${seg(dist.moderate)}%` }}
+          title={`Moderate: ${dist.moderate}`}
+        />
+      )}
+      {dist.low > 0 && (
+        <span
+          className="h-full bg-tier-low"
+          style={{ width: `${seg(dist.low)}%` }}
+          title={`Low: ${dist.low}`}
+        />
+      )}
     </div>
   );
 }

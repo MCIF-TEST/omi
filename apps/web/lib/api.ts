@@ -890,6 +890,7 @@ export interface ChannelVideoSummary {
   total_distinct_authors: number;
   latest_coordination_score: number;
   latest_risk_tier: string;
+  latest_tier_distribution: Record<string, number>;
   first_scanned_at: string;
   last_scanned_at: string;
 }
@@ -933,4 +934,6 @@ export interface ChannelIntelligenceResponse {
   audience_composition: ChannelAudienceComposition;
   risk_trend: ChannelRiskPoint[];
   top_commenters: ChannelTopCommenter[];
+  avg_comments_per_video: number;
+  returning_commenter_ratio: number;
 }

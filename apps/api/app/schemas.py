@@ -1122,6 +1122,7 @@ class ChannelVideoSummary(BaseModel):
     total_distinct_authors: int
     latest_coordination_score: float
     latest_risk_tier: str
+    latest_tier_distribution: dict[str, int] = Field(default_factory=dict)
     first_scanned_at: datetime
     last_scanned_at: datetime
 
@@ -1165,3 +1166,11 @@ class ChannelIntelligenceResponse(BaseModel):
     audience_composition: ChannelAudienceComposition
     risk_trend: list[ChannelRiskPoint]
     top_commenters: list[ChannelTopCommenter]
+    # Aggregate engagement velocity: average comments per scanned video.
+    # Computed across all videos in the result set.
+    avg_comments_per_video: float = 0.0
+    # Returning users: distinct commenters appearing on 2+ videos / total
+    # distinct commenters across all videos. High values mean a tight,
+    # loyal audience; very high values (with low video count) can hint at
+    # synthetic engagement.
+    returning_commenter_ratio: float = 0.0
