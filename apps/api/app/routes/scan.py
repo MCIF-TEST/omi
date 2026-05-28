@@ -563,61 +563,48 @@ def scan_link(
         force_refresh=bool(payload.get("force_refresh", False)),
         start_page_token=payload.get("start_page_token") or None,
     )
+
+    import logging
+    import time as _time
+    log = logging.getLogger("omi.scan")
+    t_scan = _time.time()
     result = scan_comprehensive_endpoint(creq, settings, current=current, _charge_credit=False)
+    log.info(
+        "comprehensive scan finished in %.1fs (commenters=%s, tier=%s)",
+        _time.time() - t_scan,
+        (result.video.commenter_count if result.video else 0),
+        result.overall_tier.value if hasattr(result.overall_tier, "value") else result.overall_tier,
+    )
 
     # ---- Phase 5: persist as a saved investigation ----
-    # First scan creates the row; continuation batches (with start_page_token
-    # or investigation_slug) append to the same row so the user has one
-    # canonical record per piece of work.
+    # Pre-generate the slug so we can stamp it on the response WITHOUT waiting
+    # for the database write. Persistence is offloaded to a background worker
+    # — if the DB is slow or the 200KB+ payload serialization stalls, the
+    # user still gets their scan result immediately. The slug is reserved
+    # client-side; on first follow-up scan the bg worker has long since
+    # committed the row.
     if current.id != 0:  # skip in local mode
-        try:
-            import secrets
-            from app.storage.repository import AccountRepository
-            existing_slug = payload.get("investigation_slug")
-            label = _investigation_label(classification, url)
-            target_id = (
-                classification.get("video_id")
-                or classification.get("account_input")
-            )
-            with get_session() as session:
-                repo = AccountRepository(session)
-                inv = None
-                if existing_slug:
-                    inv = repo.get_investigation(slug=existing_slug, user_id=current.id)
-                if inv is None:
-                    slug = "inv_" + secrets.token_hex(4)
-                    inv = repo.create_investigation(
-                        user_id=current.id, slug=slug, label=label,
-                        input_url=url, target_id=target_id,
-                        kind=classification.get("kind", "comprehensive"),
-                        overall_probability=result.overall_probability,
-                        overall_tier=result.overall_tier.value,
-                        summary=result.summary,
-                        quota_used=result.quota_used,
-                        payload_json=_serialize_result(result),
-                    )
-                    # Stamp the slug onto the response so the UI can store it
-                    result_dict = result.model_dump()
-                    result_dict["investigation_slug"] = inv.slug
-                    # Pydantic v2 trick: rebuild with the new field
-                    from app.schemas import ComprehensiveScanResult as CSR
-                    return CSR.model_validate({**result_dict})
-                else:
-                    merged_payload = _merge_payloads(inv.payload_json or {}, _serialize_result(result))
-                    repo.update_investigation_payload(
-                        inv,
-                        payload_json=merged_payload,
-                        quota_used_delta=result.quota_used,
-                        overall_probability=result.overall_probability,
-                        overall_tier=result.overall_tier.value,
-                        summary=result.summary,
-                    )
-                    result_dict = result.model_dump()
-                    result_dict["investigation_slug"] = inv.slug
-                    from app.schemas import ComprehensiveScanResult as CSR
-                    return CSR.model_validate({**result_dict})
-        except Exception:  # noqa: BLE001 — investigation save mustn't break a paid scan
-            pass
+        import secrets
+        existing_slug = payload.get("investigation_slug")
+        slug = existing_slug or ("inv_" + secrets.token_hex(4))
+
+        result_dict = result.model_dump()
+        result_dict["investigation_slug"] = slug
+        from app.schemas import ComprehensiveScanResult as CSR
+        stamped = CSR.model_validate({**result_dict})
+
+        # Offload persistence to the background pool.
+        from app.core import background as _bg
+        _bg.submit(
+            _persist_investigation_async,
+            slug=slug,
+            existing=bool(existing_slug),
+            user_id=current.id,
+            classification=classification,
+            url=url,
+            result=result,
+        )
+        return stamped
 
     return result
 
@@ -824,6 +811,61 @@ def _full_summary_text(
         "All estimates are probabilistic, not definitive judgements.",
     ]
     return " ".join(parts)
+
+
+def _persist_investigation_async(
+    *,
+    slug: str,
+    existing: bool,
+    user_id: int,
+    classification: dict,
+    url: str,
+    result,
+) -> None:
+    """Background worker — saves an investigation row WITHOUT blocking the
+    request response. Heavy operations (model_dump on a 200KB+ payload,
+    JSON DB write) happen here instead of on the request thread, so the
+    user always sees their scan finish promptly even when the DB is slow.
+    """
+    import logging
+    import time as _time
+    log = logging.getLogger("omi.scan")
+    try:
+        from app.storage.repository import AccountRepository
+        label = _investigation_label(classification, url)
+        target_id = (
+            classification.get("video_id")
+            or classification.get("account_input")
+        )
+        t0 = _time.time()
+        with get_session() as session:
+            repo = AccountRepository(session)
+            inv = repo.get_investigation(slug=slug, user_id=user_id) if existing else None
+            if inv is None:
+                repo.create_investigation(
+                    user_id=user_id, slug=slug, label=label,
+                    input_url=url, target_id=target_id,
+                    kind=classification.get("kind", "comprehensive"),
+                    overall_probability=result.overall_probability,
+                    overall_tier=result.overall_tier.value,
+                    summary=result.summary,
+                    quota_used=result.quota_used,
+                    payload_json=_serialize_result(result),
+                )
+            else:
+                merged_payload = _merge_payloads(inv.payload_json or {}, _serialize_result(result))
+                repo.update_investigation_payload(
+                    inv,
+                    payload_json=merged_payload,
+                    quota_used_delta=result.quota_used,
+                    overall_probability=result.overall_probability,
+                    overall_tier=result.overall_tier.value,
+                    summary=result.summary,
+                )
+            session.commit()
+        log.info("investigation %s persisted in %.1fs", slug, _time.time() - t0)
+    except Exception as e:  # noqa: BLE001
+        log.exception("investigation %s persistence failed: %s", slug, e)
 
 
 def _record_content_intelligence_async(

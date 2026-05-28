@@ -26,8 +26,11 @@ def _get() -> ThreadPoolExecutor:
     if _executor is None:
         with _lock:
             if _executor is None:
+                # Each scan can submit up to 3 background tasks (narrative
+                # ingestion, content intelligence, investigation persistence).
+                # Sized to absorb a few concurrent scans without queue buildup.
                 _executor = ThreadPoolExecutor(
-                    max_workers=2, thread_name_prefix="omi-bg",
+                    max_workers=6, thread_name_prefix="omi-bg",
                 )
     return _executor
 
