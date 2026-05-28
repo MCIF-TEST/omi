@@ -48,6 +48,11 @@ db = [
 postgres = [
     # Minimal Postgres driver for the public-launch deployment (Render etc.).
     "psycopg2-binary>=2.9",
+    # Schema migrations. The boot flow still uses create_all + the
+    # _INCREMENTAL_COLUMNS hook (advisory policy), so this is here so the
+    # `alembic` CLI is available for ops work without pulling the heavy
+    # `db` extra (neo4j, redis, asyncpg).
+    "alembic>=1.13",
 ]
 reasoning = [
     # Phase 7 — optional LLM enhancement. Falls back to TemplateProvider
