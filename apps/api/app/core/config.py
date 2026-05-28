@@ -110,6 +110,19 @@ class Settings(BaseSettings):
     high_tier_surge_min: int = 3
     high_tier_surge_baseline_ratio: float = 2.0
 
+    # -----------------------------------------------------------------------
+    # Alert delivery (Phase 11). Configure SMTP credentials to enable email
+    # notifications; leave smtp_host empty to disable email entirely. Webhook
+    # delivery has no global config — it's per-user via User.webhook_url.
+    # -----------------------------------------------------------------------
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str = "alerts@omisphere.ai"
+    smtp_use_tls: bool = True
+    alert_webhook_timeout_seconds: float = 10.0
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

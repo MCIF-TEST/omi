@@ -673,6 +673,13 @@ export interface AuthorContentRow {
   sample_text: string;
 }
 
+export interface NotificationPrefs {
+  email_enabled: boolean;
+  webhook_enabled: boolean;
+  webhook_url: string | null;
+  email: string;
+}
+
 export interface AuthorPresenceResponse {
   platform: string;
   author_external_id: string;

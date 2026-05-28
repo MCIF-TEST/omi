@@ -181,6 +181,12 @@ class User(Base):
     # Soft role flag — set manually in the DB for now. Future: admin panel.
     is_admin: Mapped[bool] = mapped_column(Integer, default=0)
 
+    # Notification preferences. Default ON for email (uses User.email),
+    # OFF for webhook (must be explicitly configured).
+    notify_alerts_email: Mapped[int] = mapped_column(Integer, default=1)
+    notify_alerts_webhook: Mapped[int] = mapped_column(Integer, default=0)
+    webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
 
 class ScanLog(Base):
     """One row per scan a user initiates. Auditable history + analytics."""
@@ -399,6 +405,11 @@ class Alert(Base):
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Delivery tracking — when the alert was sent to email/webhook channels
+    # and any error encountered. NULL delivered_at = not yet delivered.
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivery_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    delivery_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class NarrativeMembership(Base):

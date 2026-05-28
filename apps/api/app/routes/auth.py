@@ -156,3 +156,73 @@ def me(
         subscription_renews_at=current.subscription_renews_at,
         is_admin=current.is_admin,
     )
+
+
+class NotificationPrefs(BaseModel):
+    email_enabled: bool
+    webhook_enabled: bool
+    webhook_url: str | None = None
+    email: str
+
+
+class NotificationPrefsIn(BaseModel):
+    email_enabled: bool | None = None
+    webhook_enabled: bool | None = None
+    webhook_url: str | None = None
+
+
+@router.get("/notifications", response_model=NotificationPrefs)
+def get_notification_prefs(
+    current: CurrentUser | None = Depends(get_optional_user),
+) -> NotificationPrefs:
+    if current is None or current.id == 0:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Log in to manage notifications.")
+    with get_session() as session:
+        u = session.get(User, current.id)
+        if u is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        return NotificationPrefs(
+            email_enabled=bool(u.notify_alerts_email),
+            webhook_enabled=bool(u.notify_alerts_webhook),
+            webhook_url=u.webhook_url,
+            email=u.email,
+        )
+
+
+@router.put("/notifications", response_model=NotificationPrefs)
+def update_notification_prefs(
+    payload: NotificationPrefsIn,
+    current: CurrentUser | None = Depends(get_optional_user),
+) -> NotificationPrefs:
+    if current is None or current.id == 0:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Log in to manage notifications.")
+    with get_session() as session:
+        u = session.get(User, current.id)
+        if u is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+        if payload.email_enabled is not None:
+            u.notify_alerts_email = 1 if payload.email_enabled else 0
+        if payload.webhook_enabled is not None:
+            u.notify_alerts_webhook = 1 if payload.webhook_enabled else 0
+        if payload.webhook_url is not None:
+            url = payload.webhook_url.strip()
+            if url and not (url.startswith("http://") or url.startswith("https://")):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="webhook_url must start with http:// or https://",
+                )
+            if url and len(url) > 500:
+                raise HTTPException(status_code=400, detail="webhook_url too long (max 500 chars).")
+            u.webhook_url = url or None
+            # If they set a webhook URL but didn't explicitly disable webhooks, enable them.
+            if url and payload.webhook_enabled is None:
+                u.notify_alerts_webhook = 1
+
+        session.commit()
+        return NotificationPrefs(
+            email_enabled=bool(u.notify_alerts_email),
+            webhook_enabled=bool(u.notify_alerts_webhook),
+            webhook_url=u.webhook_url,
+            email=u.email,
+        )

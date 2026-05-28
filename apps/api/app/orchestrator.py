@@ -129,6 +129,10 @@ def scan_account_with_memory(
             current_probability=final.overall_probability,
             platform=platform,
         )
+        # Phase 11: dispatch any pending alerts to email/webhook.
+        # Fire-and-forget; the worker waits a beat so the outer txn commits.
+        from app.core import background as _bg
+        _bg.submit(_deliver_pending_after_commit)
     except Exception:  # noqa: BLE001
         pass
 
@@ -473,6 +477,19 @@ def _ingest_narratives_async(items) -> None:
     from app.storage.db import get_session as _gs
     with _gs() as session:
         NarrativeService(session).ingest_batch(items)
+
+
+def _deliver_pending_after_commit() -> None:
+    """Background worker — small delay so the outer scan's transaction has
+    committed, then deliver any pending watchlist alerts. Safe to call
+    repeatedly; deliver_pending_alerts() is idempotent."""
+    import time
+    try:
+        time.sleep(0.5)
+        from app.notifications.delivery import deliver_pending_alerts
+        deliver_pending_alerts()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _empty_scan(handle: str) -> ScanResult:
