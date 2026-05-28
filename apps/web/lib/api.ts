@@ -664,3 +664,22 @@ export interface ContentEntityListResponse {
   platform: string | null;
   entities: ContentEntitySummary[];
 }
+
+export interface AuthorContentRow {
+  entity: ContentEntitySummary;
+  comment_count: number;
+  first_comment: string;
+  last_comment: string;
+  sample_text: string;
+}
+
+export interface AuthorPresenceResponse {
+  platform: string;
+  author_external_id: string;
+  author_handle: string | null;
+  total_comments: number;
+  content_count: number;
+  first_seen: string | null;
+  last_seen: string | null;
+  entities: AuthorContentRow[];
+}

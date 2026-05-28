@@ -9,6 +9,7 @@ import {
   Users,
   Layers,
   MessageCircle,
+  Search as SearchIcon,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { type ContentEntityListResponse, type ContentEntitySummary } from '@/lib/api';
@@ -43,17 +44,19 @@ const RISK_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: s
 export default async function ContentPage({
   searchParams,
 }: {
-  searchParams: { platform?: string; min?: string };
+  searchParams: { platform?: string; min?: string; q?: string };
 }) {
   const platform = searchParams.platform || '';
   const min_risk_tier = (['low', 'moderate', 'high', 'extreme'].includes(searchParams.min || '')
     ? searchParams.min
     : 'low') as string;
+  const query = (searchParams.q || '').trim();
 
   let data: ContentEntityListResponse;
   try {
     const params = new URLSearchParams({ min_risk_tier, limit: '40' });
     if (platform) params.set('platform', platform);
+    if (query) params.set('q', query);
     data = await apiServer<ContentEntityListResponse>(`/v1/content?${params}`);
   } catch {
     data = { total: 0, platform: null, entities: [] };
@@ -78,6 +81,34 @@ export default async function ContentPage({
         </div>
       </header>
 
+      {/* Search */}
+      <form action="/content" method="GET" className="flex items-center gap-2">
+        {platform && <input type="hidden" name="platform" value={platform} />}
+        <input type="hidden" name="min" value={min_risk_tier} />
+        <div className="relative flex-1 max-w-md">
+          <SearchIcon
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none"
+          />
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Search titles, IDs, channels…"
+            className="w-full pl-9 pr-3 py-2 bg-bg-elev border border-border-1 rounded-sm text-sm text-fg placeholder:text-fg-mute focus:outline-none focus:border-accent transition-colors"
+            autoComplete="off"
+          />
+        </div>
+        {query && (
+          <Link
+            href={`/content?platform=${platform}&min=${min_risk_tier}`}
+            className="font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-sm border border-border-2 text-fg-dim hover:text-fg hover:border-border-hot transition-colors"
+          >
+            Clear
+          </Link>
+        )}
+      </form>
+
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
         <div className="flex items-center gap-2 flex-wrap">
@@ -85,7 +116,7 @@ export default async function ContentPage({
           {PLATFORM_FILTERS.map((f) => (
             <Link
               key={f.value}
-              href={`/content?platform=${f.value}&min=${min_risk_tier}`}
+              href={buildHref({ platform: f.value, min: min_risk_tier, q: query })}
               className={`font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-sm border transition-colors ${
                 f.value === platform
                   ? 'border-accent bg-accent/10 text-accent'
@@ -101,7 +132,7 @@ export default async function ContentPage({
           {RISK_FILTERS.map((f) => (
             <Link
               key={f.value}
-              href={`/content?platform=${platform}&min=${f.value}`}
+              href={buildHref({ platform, min: f.value, q: query })}
               className={`font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-sm border transition-colors ${
                 f.value === min_risk_tier
                   ? 'border-accent bg-accent/10 text-accent'
@@ -113,6 +144,13 @@ export default async function ContentPage({
           ))}
         </div>
       </div>
+
+      {query && (
+        <p className="font-mono text-2xs text-fg-mute">
+          Searching for <span className="text-accent">&ldquo;{query}&rdquo;</span> ·{' '}
+          {data.total} result{data.total !== 1 ? 's' : ''}
+        </p>
+      )}
 
       {/* Stats row */}
       {entities.length > 0 && (
@@ -133,15 +171,29 @@ export default async function ContentPage({
 
       {entities.length === 0 ? (
         <Card>
-          <CardLabel>No content entities found</CardLabel>
-          <CardTitle>The intelligence database is empty</CardTitle>
+          <CardLabel>{query ? 'No matches' : 'No content entities found'}</CardLabel>
+          <CardTitle>
+            {query ? `Nothing matched "${query}"` : 'The intelligence database is empty'}
+          </CardTitle>
           <p className="text-sm text-fg-dim max-w-lg">
-            Scan a YouTube video or other content using the{' '}
-            <Link href="/investigate" className="text-accent hover:underline">
-              Investigate
-            </Link>{' '}
-            page. Each scan adds that content to this universal database, and future scans of
-            the same content will layer in new batches.
+            {query ? (
+              <>
+                Try a broader query, or{' '}
+                <Link href="/content" className="text-accent hover:underline">
+                  clear the search
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                Scan a YouTube video or other content using the{' '}
+                <Link href="/investigate" className="text-accent hover:underline">
+                  Investigate
+                </Link>{' '}
+                page. Each scan adds that content to this universal database, and future scans of
+                the same content will layer in new batches.
+              </>
+            )}
           </p>
         </Card>
       ) : (
@@ -153,6 +205,15 @@ export default async function ContentPage({
       )}
     </div>
   );
+}
+
+function buildHref({ platform, min, q }: { platform: string; min: string; q: string }) {
+  const params = new URLSearchParams();
+  if (platform) params.set('platform', platform);
+  if (min) params.set('min', min);
+  if (q) params.set('q', q);
+  const qs = params.toString();
+  return qs ? `/content?${qs}` : '/content';
 }
 
 function ContentEntityCard({ entity: e }: { entity: ContentEntitySummary }) {

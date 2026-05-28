@@ -207,6 +207,9 @@ export default async function ContentEntityPage({
         </div>
       )}
 
+      {/* Longitudinal evolution chart — only meaningful with 2+ batches */}
+      {batches.length >= 2 && <EvolutionChart batches={batches} />}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Batch history */}
         <div className="lg:col-span-1 space-y-3">
@@ -242,7 +245,7 @@ export default async function ContentEntityPage({
           ) : (
             <div className="space-y-2">
               {recent_comments.map((c) => (
-                <CommentRow key={c.id} comment={c} />
+                <CommentRow key={c.id} comment={c} platform={e.platform} />
               ))}
             </div>
           )}
@@ -250,6 +253,184 @@ export default async function ContentEntityPage({
       </div>
     </div>
   );
+}
+
+function EvolutionChart({ batches }: { batches: CommentBatchOut[] }) {
+  // Batches come newest-first; reverse for chronological left-to-right plot.
+  const ordered = [...batches].reverse();
+  const W = 800;
+  const H = 180;
+  const PADDING = { top: 16, right: 16, bottom: 28, left: 36 };
+  const innerW = W - PADDING.left - PADDING.right;
+  const innerH = H - PADDING.top - PADDING.bottom;
+
+  const xs = ordered.map((_, i) =>
+    ordered.length === 1
+      ? PADDING.left + innerW / 2
+      : PADDING.left + (i * innerW) / (ordered.length - 1),
+  );
+
+  const scoreY = (s: number) => PADDING.top + innerH * (1 - Math.max(0, Math.min(1, s)));
+  const maxNew = Math.max(1, ...ordered.map((b) => b.new_comments));
+  const barW = Math.max(2, Math.min(20, innerW / ordered.length / 2));
+
+  // Tier→stroke color for the score line segment
+  const tierStroke: Record<string, string> = {
+    high: '#ef4444',
+    extreme: '#ef4444',
+    elevated: '#f97316',
+    moderate: '#eab308',
+    low: '#22c55e',
+  };
+
+  // Drift = latest − first (in percentage points)
+  const first = ordered[0].coordination_score;
+  const last = ordered[ordered.length - 1].coordination_score;
+  const driftPct = Math.round((last - first) * 100);
+  const driftLabel =
+    driftPct > 0 ? `+${driftPct}pp` : driftPct < 0 ? `${driftPct}pp` : '±0pp';
+  const driftCls =
+    driftPct > 5
+      ? 'text-tier-elevated'
+      : driftPct < -5
+      ? 'text-tier-low'
+      : 'text-fg-dim';
+
+  const lineD = xs
+    .map((x, i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${scoreY(ordered[i].coordination_score).toFixed(1)}`)
+    .join(' ');
+
+  return (
+    <div className="bg-bg-elev border border-border-1 rounded-md p-4">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
+          Coordination evolution
+          <span className="ml-2 text-fg-faint normal-case tracking-normal">
+            ({ordered.length} batches)
+          </span>
+        </p>
+        <div className="flex items-center gap-3 font-mono text-2xs">
+          <span className="text-fg-mute uppercase tracking-wider">Drift</span>
+          <span className={`tabular-nums font-medium ${driftCls}`}>{driftLabel}</span>
+        </div>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-auto"
+        preserveAspectRatio="none"
+      >
+        {/* Grid lines at 25/50/75% */}
+        {[0.25, 0.5, 0.75].map((g) => (
+          <line
+            key={g}
+            x1={PADDING.left}
+            x2={W - PADDING.right}
+            y1={scoreY(g)}
+            y2={scoreY(g)}
+            stroke="currentColor"
+            strokeOpacity={0.08}
+            strokeDasharray="2,4"
+          />
+        ))}
+        {/* Y axis labels */}
+        {[0, 0.5, 1].map((g) => (
+          <text
+            key={g}
+            x={PADDING.left - 6}
+            y={scoreY(g) + 3}
+            textAnchor="end"
+            className="fill-current"
+            fontSize="9"
+            opacity={0.4}
+            fontFamily="ui-monospace, monospace"
+          >
+            {Math.round(g * 100)}%
+          </text>
+        ))}
+
+        {/* New-comments bars (background) */}
+        {ordered.map((b, i) => {
+          const h = innerH * (b.new_comments / maxNew) * 0.5; // bars fill bottom 50%
+          return (
+            <rect
+              key={`bar-${b.id}`}
+              x={xs[i] - barW / 2}
+              y={H - PADDING.bottom - h}
+              width={barW}
+              height={h}
+              fill="currentColor"
+              opacity={0.12}
+              rx={1}
+            />
+          );
+        })}
+
+        {/* Score line */}
+        <path
+          d={lineD}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          opacity={0.6}
+        />
+
+        {/* Per-batch points colored by risk tier */}
+        {ordered.map((b, i) => (
+          <g key={`pt-${b.id}`}>
+            <circle
+              cx={xs[i]}
+              cy={scoreY(b.coordination_score)}
+              r={4}
+              fill={tierStroke[b.risk_tier] || '#9ca3af'}
+              stroke="rgb(var(--bg-elev))"
+              strokeWidth={1.5}
+            >
+              <title>
+                {new Date(b.fetched_at).toLocaleString()}
+                {'\n'}
+                Coordination: {Math.round(b.coordination_score * 100)}% ({b.risk_tier})
+                {'\n'}
+                New: {b.new_comments} · Dupes: {b.duplicates} · Authors: {b.distinct_authors}
+              </title>
+            </circle>
+          </g>
+        ))}
+
+        {/* X-axis time labels (first / middle / last) */}
+        {[0, Math.floor(ordered.length / 2), ordered.length - 1]
+          .filter((v, idx, arr) => arr.indexOf(v) === idx)
+          .map((i) => (
+            <text
+              key={`xl-${i}`}
+              x={xs[i]}
+              y={H - PADDING.bottom + 14}
+              textAnchor="middle"
+              className="fill-current"
+              fontSize="9"
+              opacity={0.4}
+              fontFamily="ui-monospace, monospace"
+            >
+              {shortDate(ordered[i].fetched_at)}
+            </text>
+          ))}
+      </svg>
+
+      <div className="flex items-center gap-4 mt-2 flex-wrap font-mono text-2xs text-fg-mute">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-0.5 bg-fg-dim" /> Coordination score
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 bg-fg/20 rounded-sm" /> New comments per batch
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function BigStat({
@@ -324,13 +505,22 @@ function BatchRow({ batch: b, isLatest }: { batch: CommentBatchOut; isLatest: bo
   );
 }
 
-function CommentRow({ comment: c }: { comment: ContentCommentOut }) {
+function CommentRow({
+  comment: c,
+  platform,
+}: {
+  comment: ContentCommentOut;
+  platform: string;
+}) {
   return (
     <div className="bg-bg-elev border border-border-1 rounded-md p-3">
       <div className="flex items-center justify-between mb-1">
-        <span className="font-mono text-2xs text-fg-dim">
+        <Link
+          href={`/content/authors/${platform}/${encodeURIComponent(c.author_external_id)}`}
+          className="font-mono text-2xs text-fg-dim hover:text-accent transition-colors"
+        >
           {c.author_handle ? `@${c.author_handle}` : c.author_external_id}
-        </span>
+        </Link>
         <span className="font-mono text-2xs text-fg-mute">{timeAgo(c.observed_at)}</span>
       </div>
       <p className="text-sm text-fg leading-relaxed line-clamp-3">{c.text}</p>

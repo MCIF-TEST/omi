@@ -200,10 +200,18 @@ class ContentIntelligenceService:
         *,
         platform: str | None = None,
         min_risk_tier: str = "low",
+        search: str | None = None,
         limit: int = 40,
         offset: int = 0,
     ) -> tuple[int, list[ContentEntity]]:
-        """Return (total_count, page) of ContentEntity rows."""
+        """Return (total_count, page) of ContentEntity rows.
+
+        Search matches case-insensitive substrings against title, content_id,
+        and author_handle simultaneously. Empty / whitespace-only ``search``
+        is ignored.
+        """
+        from sqlalchemy import or_
+
         tier_order = {"low": 0, "moderate": 1, "elevated": 2, "high": 3}
         min_ord = tier_order.get(min_risk_tier, 0)
 
@@ -216,6 +224,16 @@ class ContentIntelligenceService:
             allowed = [t for t, o in tier_order.items() if o >= min_ord]
             q = q.where(ContentEntity.latest_risk_tier.in_(allowed))
             cq = cq.where(ContentEntity.latest_risk_tier.in_(allowed))
+
+        if search and search.strip():
+            needle = f"%{search.strip().lower()}%"
+            pred = or_(
+                func.lower(ContentEntity.title).like(needle),
+                func.lower(ContentEntity.content_id).like(needle),
+                func.lower(ContentEntity.author_handle).like(needle),
+            )
+            q = q.where(pred)
+            cq = cq.where(pred)
 
         total = self._s.execute(cq).scalar_one() or 0
         rows = list(
@@ -262,6 +280,86 @@ class ContentIntelligenceService:
                 .limit(limit)
             ).scalars().all()
         )
+
+    def get_author_presence(
+        self, platform: str, author_external_id: str, *, limit: int = 50,
+    ) -> dict[str, Any]:
+        """Cross-content footprint for one author.
+
+        Returns a dict with:
+          - ``author_handle``: most recently observed handle (may be None)
+          - ``total_comments``: total comments by this author across ALL content
+          - ``content_count``: number of distinct content entities they've commented on
+          - ``first_seen``: timestamp of earliest comment
+          - ``last_seen``: timestamp of most recent comment
+          - ``entities``: list of dicts with ContentEntity + per-entity comment_count
+
+        Comments are joined to ContentEntity to filter by platform — this is
+        important because the same external_id could in theory exist on
+        multiple platforms.
+        """
+        # All comments by this author across all content (limited to platform)
+        comments = list(
+            self._s.execute(
+                select(ContentComment, ContentEntity)
+                .join(ContentEntity, ContentComment.content_entity_id == ContentEntity.id)
+                .where(
+                    ContentEntity.platform == platform,
+                    ContentComment.author_external_id == author_external_id,
+                )
+                .order_by(ContentComment.observed_at.desc())
+            ).all()
+        )
+
+        if not comments:
+            return {
+                "author_handle": None,
+                "total_comments": 0,
+                "content_count": 0,
+                "first_seen": None,
+                "last_seen": None,
+                "entities": [],
+            }
+
+        # Group by content entity
+        by_entity: dict[int, dict[str, Any]] = {}
+        for c, ent in comments:
+            row = by_entity.setdefault(ent.id, {
+                "entity": ent,
+                "comment_count": 0,
+                "first_comment": c.observed_at,
+                "last_comment": c.observed_at,
+                "sample_text": c.text,
+            })
+            row["comment_count"] += 1
+            if c.observed_at < row["first_comment"]:
+                row["first_comment"] = c.observed_at
+            if c.observed_at > row["last_comment"]:
+                row["last_comment"] = c.observed_at
+
+        # Most recent handle observation
+        latest_handle = next(
+            (c.author_handle for c, _ in comments if c.author_handle), None
+        )
+
+        first_seen = min(c.observed_at for c, _ in comments)
+        last_seen = max(c.observed_at for c, _ in comments)
+
+        # Sort entities by recency of latest comment, cap to limit
+        entity_rows = sorted(
+            by_entity.values(),
+            key=lambda r: r["last_comment"],
+            reverse=True,
+        )[:limit]
+
+        return {
+            "author_handle": latest_handle,
+            "total_comments": len(comments),
+            "content_count": len(by_entity),
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "entities": entity_rows,
+        }
 
     def get_comments(
         self,

@@ -824,6 +824,25 @@ class ContentCommentsResponse(BaseModel):
     comments: list[ContentCommentOut]
 
 
+class AuthorContentRow(BaseModel):
+    entity: ContentEntitySummary
+    comment_count: int
+    first_comment: datetime
+    last_comment: datetime
+    sample_text: str
+
+
+class AuthorPresenceResponse(BaseModel):
+    platform: str
+    author_external_id: str
+    author_handle: str | None = None
+    total_comments: int
+    content_count: int
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+    entities: list[AuthorContentRow]
+
+
 class AccountAnalysisResponse(BaseModel):
     """LLM (or template) behavioural analysis for a single account."""
 

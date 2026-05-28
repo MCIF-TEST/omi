@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.content.platforms import display_name as platform_display_name, supports_rescan
 from app.content.service import ContentIntelligenceService
 from app.core.auth import CurrentUser, require_user
 from app.core.config import Settings, get_settings
 from app.schemas import (
+    AuthorContentRow,
+    AuthorPresenceResponse,
     CommentBatchOut,
     ContentCommentsResponse,
     ContentCommentOut,
@@ -80,6 +83,7 @@ def _comment_to_out(c) -> ContentCommentOut:
 def list_content_entities(
     platform: str | None = Query(None),
     min_risk_tier: str = Query("low", pattern="^(low|moderate|high|extreme)$"),
+    q: str | None = Query(None, max_length=200, description="Substring search on title / content_id / author_handle"),
     limit: int = Query(40, ge=1, le=100),
     offset: int = Query(0, ge=0),
     _: CurrentUser = Depends(require_user),
@@ -94,6 +98,7 @@ def list_content_entities(
         total, entities = svc.list_entities(
             platform=platform,
             min_risk_tier=internal_tier,
+            search=q,
             limit=limit,
             offset=offset,
         )
@@ -164,10 +169,13 @@ def rescan_content_entity(
     or this is the first scan of the content. Charges 1 credit just like a
     direct scan call.
     """
-    if platform != "youtube":
+    if not supports_rescan(platform):
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=f"Continuation scans are not yet implemented for platform '{platform}'.",
+            detail=(
+                f"Rescans for {platform_display_name(platform)} aren't wired up yet — "
+                "scan via the Investigate page to ingest this content."
+            ),
         )
 
     # Lookup token before invoking the scan so we can short-circuit gracefully.
@@ -190,6 +198,48 @@ def rescan_content_entity(
         start_page_token=token,
     )
     return scan_youtube_video_full(req, settings=settings, current=current)
+
+
+@router.get("/authors/{platform}/{author_external_id}", response_model=AuthorPresenceResponse)
+def get_author_presence(
+    platform: str,
+    author_external_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    _: CurrentUser = Depends(require_user),
+) -> AuthorPresenceResponse:
+    """Cross-content footprint for one author — every piece of content
+    OMISPHERE has seen them comment on, ranked by recency."""
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        data = svc.get_author_presence(platform, author_external_id, limit=limit)
+
+        if data["total_comments"] == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No tracked comments by {author_external_id} on {platform}.",
+            )
+
+        entities = [
+            AuthorContentRow(
+                entity=_entity_to_summary(row["entity"]),
+                comment_count=row["comment_count"],
+                first_comment=row["first_comment"],
+                last_comment=row["last_comment"],
+                sample_text=row["sample_text"],
+            )
+            for row in data["entities"]
+        ]
+
+    return AuthorPresenceResponse(
+        platform=platform,
+        author_external_id=author_external_id,
+        author_handle=data["author_handle"],
+        total_comments=data["total_comments"],
+        content_count=data["content_count"],
+        first_seen=data["first_seen"],
+        last_seen=data["last_seen"],
+        entities=entities,
+    )
 
 
 @router.get("/{platform}/{content_id}/comments", response_model=ContentCommentsResponse)
