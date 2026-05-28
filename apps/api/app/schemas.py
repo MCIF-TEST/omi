@@ -824,6 +824,25 @@ class ContentCommentsResponse(BaseModel):
     comments: list[ContentCommentOut]
 
 
+class BatchDiffResponse(BaseModel):
+    """Comparison between two batches of the same content entity.
+
+    Surfaces what changed since the previous scan — coordination drift,
+    new authors, sample comments — so an analyst running a re-scan sees
+    "what's new" in one glance instead of having to scroll the whole
+    batch history.
+    """
+    from_batch: CommentBatchOut
+    to_batch: CommentBatchOut
+    coordination_score_delta: float
+    risk_tier_changed: bool
+    tier_distribution_delta: dict[str, int]
+    new_comment_count: int
+    new_author_count: int
+    new_authors: list[str]
+    sample_new_comments: list[ContentCommentOut]
+
+
 class AuthorContentRow(BaseModel):
     entity: ContentEntitySummary
     comment_count: int

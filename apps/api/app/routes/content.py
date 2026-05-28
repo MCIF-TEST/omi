@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.schemas import (
     AuthorContentRow,
     AuthorPresenceResponse,
+    BatchDiffResponse,
     CommentBatchOut,
     ContentCommentsResponse,
     ContentCommentOut,
@@ -198,6 +199,46 @@ def rescan_content_entity(
         start_page_token=token,
     )
     return scan_youtube_video_full(req, settings=settings, current=current)
+
+
+@router.get("/{platform}/{content_id}/diff", response_model=BatchDiffResponse)
+def diff_content_batches(
+    platform: str,
+    content_id: str,
+    from_batch_id: int | None = Query(None, alias="from"),
+    to_batch_id: int | None = Query(None, alias="to"),
+    _: CurrentUser = Depends(require_user),
+) -> BatchDiffResponse:
+    """Compare two batches of the same content. With no params, diffs the
+    newest batch against the one before — "what changed since last scan."
+    """
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        entity = svc.get_entity_by_platform_id(platform, content_id)
+        if entity is None:
+            raise HTTPException(status_code=404, detail="Content entity not found.")
+        result = svc.diff_batches(
+            entity.id,
+            from_batch_id=from_batch_id,
+            to_batch_id=to_batch_id,
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Need at least two batches to compute a diff. Re-scan this content to create a second batch.",
+            )
+
+    return BatchDiffResponse(
+        from_batch=_batch_to_out(result["from_batch"]),
+        to_batch=_batch_to_out(result["to_batch"]),
+        coordination_score_delta=result["coordination_score_delta"],
+        risk_tier_changed=result["risk_tier_changed"],
+        tier_distribution_delta=result["tier_distribution_delta"],
+        new_comment_count=result["new_comment_count"],
+        new_author_count=result["new_author_count"],
+        new_authors=result["new_authors"],
+        sample_new_comments=[_comment_to_out(c) for c in result["sample_new_comments"]],
+    )
 
 
 @router.get("/authors/{platform}/{author_external_id}", response_model=AuthorPresenceResponse)

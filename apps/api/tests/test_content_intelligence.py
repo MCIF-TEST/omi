@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from app.content.service import ContentIntelligenceService
@@ -366,6 +367,84 @@ def test_get_author_presence_empty_returns_zero_counts():
         assert data["content_count"] == 0
         assert data["entities"] == []
         assert data["first_seen"] is None
+
+
+def test_diff_batches_no_diff_when_only_one_batch():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[_comment("c1", "a")],
+            handle_map={},
+            coordination_score=0.1, risk_tier="low",
+            tier_distribution={"low": 1},
+        )
+        s.commit()
+        assert svc.diff_batches(e.id) is None
+
+
+def test_diff_batches_compares_newest_two_by_default():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[_comment("c1", "alice"), _comment("c2", "bob")],
+            handle_map={},
+            coordination_score=0.1, risk_tier="low",
+            tier_distribution={"low": 2},
+        )
+        s.commit()
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_entity_by_platform_id("youtube", "v1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[
+                _comment("c1", "alice"),    # dup
+                _comment("c2", "bob"),      # dup
+                _comment("c3", "charlie"),  # NEW comment + NEW author
+                _comment("c4", "alice"),    # NEW comment, EXISTING author
+            ],
+            handle_map={},
+            coordination_score=0.45, risk_tier="elevated",
+            tier_distribution={"low": 2, "moderate": 1, "elevated": 1},
+        )
+        s.commit()
+        eid = e.id
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        d = svc.diff_batches(eid)
+        assert d is not None
+        assert d["coordination_score_delta"] == pytest.approx(0.35, abs=1e-6)
+        assert d["risk_tier_changed"] is True
+        assert d["new_comment_count"] == 2     # c3 + c4
+        assert d["new_author_count"] == 1      # only charlie
+        assert "charlie" in d["new_authors"]
+        # Tier distribution went up in elevated, low stayed
+        td = d["tier_distribution_delta"]
+        assert td.get("elevated", 0) == 1
+        assert td.get("moderate", 0) == 1
+        assert td.get("low", 0) == 0
+
+
+def test_diff_batches_explicit_from_and_to_ids():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1")
+        b1 = svc.record_batch(entity=e, user_id=1, comments=[_comment("c1", "a")], handle_map={})
+        b2 = svc.record_batch(entity=e, user_id=1, comments=[_comment("c2", "b")], handle_map={})
+        b3 = svc.record_batch(entity=e, user_id=1, comments=[_comment("c3", "c")], handle_map={})
+        s.commit()
+        eid = e.id
+        # Diff b1→b3 (skip b2): should still find the diff
+        d = svc.diff_batches(eid, from_batch_id=b1.id, to_batch_id=b3.id)
+        assert d is not None
+        assert d["from_batch"].id == b1.id
+        assert d["to_batch"].id == b3.id
 
 
 def test_get_author_presence_isolates_by_platform():

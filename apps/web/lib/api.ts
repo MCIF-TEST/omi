@@ -680,6 +680,18 @@ export interface NotificationPrefs {
   email: string;
 }
 
+export interface BatchDiffResponse {
+  from_batch: CommentBatchOut;
+  to_batch: CommentBatchOut;
+  coordination_score_delta: number;
+  risk_tier_changed: boolean;
+  tier_distribution_delta: Record<string, number>;
+  new_comment_count: number;
+  new_author_count: number;
+  new_authors: string[];
+  sample_new_comments: ContentCommentOut[];
+}
+
 export interface AuthorPresenceResponse {
   platform: string;
   author_external_id: string;

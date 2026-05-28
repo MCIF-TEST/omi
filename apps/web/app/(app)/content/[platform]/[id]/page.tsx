@@ -23,6 +23,7 @@ import {
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
 import { RescanButton } from './rescan-button';
+import { DiffPanel } from './diff-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -209,6 +210,9 @@ export default async function ContentEntityPage({
 
       {/* Longitudinal evolution chart — only meaningful with 2+ batches */}
       {batches.length >= 2 && <EvolutionChart batches={batches} />}
+
+      {/* What changed since last scan */}
+      <DiffPanel platform={e.platform} contentId={e.content_id} totalBatches={e.total_batches} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Batch history */}
