@@ -85,42 +85,110 @@ class _JsonFormatter(logging.Formatter):
 
 
 _DEV_SESSION_SECRET = "dev-only-change-me-please-12345678901234567890"
+_MIN_SESSION_SECRET_LENGTH = 32
 
 
-def _verify_production_config(settings) -> None:
-    """Guard against the dev session secret leaking into production.
+class ProductionConfigError(RuntimeError):
+    """Raised at boot when production environment is misconfigured.
 
-    The dev default would let anyone forge cookies — instead of failing the
-    deploy (which strands a running service), we override the in-memory
-    secret with a fresh random one and log a CRITICAL warning. Sessions
-    won't survive restarts until OMI_SESSION_SECRET is properly set.
+    Hard-failing the deploy is the only honest signal: an API service that
+    starts but can't perform its primary function (scan / store / sign cookies)
+    silently strands users behind a green health check.
+    """
+
+
+def _validate_production_config(settings) -> None:
+    """Refuse to start a production deploy that would lose data or strand users.
+
+    Every check here represents a class of failure we've actually paid for:
+
+    * SQLite on Render's ephemeral disk wipes ALL user accounts and saved
+      investigations on every redeploy.
+    * A missing YouTube key turns every scan into a silent 503 — the service
+      is up but the product doesn't work.
+    * The dev session secret is published in this file; leaving it in prod
+      means anyone can forge admin cookies.
+    * A short or default secret is functionally equivalent to no secret.
+
+    Set ``OMI_ALLOW_DEGRADED_PRODUCTION=true`` to downgrade these to logged
+    warnings — only intended for break-glass debugging.
     """
     if settings.env != "production":
         return
-    if settings.require_auth and settings.session_secret == _DEV_SESSION_SECRET:
-        import secrets as _secrets
-        settings.session_secret = _secrets.token_urlsafe(64)
-        logger.critical(
-            "OMI_SESSION_SECRET is unset in production — using a random "
-            "process-local value. Sessions will invalidate on every restart. "
-            "Set OMI_SESSION_SECRET in the Render dashboard or redeploy from "
-            "the Blueprint (generateValue:true) to fix permanently."
-        )
-    # SQLite on Render's ephemeral disk = every redeploy wipes user accounts
-    # and saved investigations. Loud warning so this doesn't bite silently.
+
+    import os
+    allow_degraded = os.environ.get("OMI_ALLOW_DEGRADED_PRODUCTION", "").lower() in (
+        "1", "true", "yes",
+    )
+    problems: list[str] = []
+
+    # --- 1. Persistent storage ----------------------------------------------
     if settings.database_url.startswith("sqlite"):
-        logger.critical(
-            "OMI_DATABASE_URL is unset — falling back to SQLite. On Render "
-            "the filesystem is ephemeral, so every redeploy WIPES all user "
-            "accounts and saved investigations. Provision Postgres "
-            "(omisphere-postgres in render.yaml) and set OMI_DATABASE_URL "
-            "to the connection string before going live."
+        problems.append(
+            "OMI_DATABASE_URL is unset or points at SQLite. On Render the "
+            "container filesystem is ephemeral — every redeploy will WIPE all "
+            "user accounts, credits, subscriptions, and saved investigations. "
+            "Provision the Postgres service from render.yaml and set "
+            "OMI_DATABASE_URL to its internal connection string."
         )
+
+    # --- 2. Session integrity -----------------------------------------------
+    if settings.require_auth:
+        if settings.session_secret == _DEV_SESSION_SECRET:
+            problems.append(
+                "OMI_SESSION_SECRET is the dev default. That secret is "
+                "checked into the repo — anyone could forge a session cookie "
+                "for any user, including admins. Set OMI_SESSION_SECRET to a "
+                "random 64+ char string (Render's Blueprint generates this "
+                "automatically when generateValue:true)."
+            )
+        elif len(settings.session_secret) < _MIN_SESSION_SECRET_LENGTH:
+            problems.append(
+                f"OMI_SESSION_SECRET is only {len(settings.session_secret)} "
+                f"characters long. Use at least {_MIN_SESSION_SECRET_LENGTH} "
+                "(a Python `secrets.token_urlsafe(64)` is the safe default)."
+            )
+
+    # --- 3. YouTube ingestion (the product's primary function) --------------
+    yt_key = (settings.youtube_api_key or "").strip()
+    if not yt_key:
+        problems.append(
+            "OMI_YOUTUBE_API_KEY is unset. Every scan endpoint will return "
+            "503; the product is non-functional without this key. Create a "
+            "YouTube Data API v3 key at console.cloud.google.com and set it "
+            "as a Render environment variable."
+        )
+
+    if not problems:
+        return
+
+    # Format a tidy error block so the deploy logs make the problem obvious.
+    banner = "=" * 72
+    body = "\n\n".join(f"  · {p}" for p in problems)
+    block = (
+        f"\n{banner}\n"
+        f"OMISPHERE refused to start: production configuration is incomplete.\n"
+        f"{banner}\n\n"
+        f"{body}\n\n"
+        f"If you absolutely must boot in a degraded state (e.g. recovery), "
+        f"set OMI_ALLOW_DEGRADED_PRODUCTION=true and restart. This is unsafe.\n"
+        f"{banner}"
+    )
+
+    if allow_degraded:
+        logger.critical("Production config check OVERRIDDEN by OMI_ALLOW_DEGRADED_PRODUCTION.%s", block)
+        return
+
+    logger.critical("%s", block)
+    raise ProductionConfigError(
+        f"Production configuration incomplete ({len(problems)} issue"
+        f"{'s' if len(problems) != 1 else ''}). See logs for the full list."
+    )
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    _verify_production_config(settings)
+    _validate_production_config(settings)
 
     app = FastAPI(
         title="OMISPHERE API",
