@@ -289,3 +289,75 @@ Optional features: YouTube ingestion: on | Anthropic LLM: off |
 If you expect SMTP to be on but the log says `off — webhook delivery
 still works`, the env var didn't reach the API service. Re-check the
 Render dashboard.
+
+---
+
+## Schema migrations (Alembic, advisory)
+
+For Phase 1 deploys the boot flow uses ``Base.metadata.create_all`` plus
+an ad-hoc ``_INCREMENTAL_COLUMNS`` hook in ``app/storage/db.py``. That's
+fine for the additive changes we've made so far but it doesn't handle
+column type changes, drops, renames, or foreign-key changes safely.
+
+Alembic is wired up under ``apps/api/alembic/`` for operators who want
+proper migrations. Today it's advisory — the boot flow still calls
+``create_all`` for backward compatibility — but new schema work should
+land as an Alembic migration alongside the model change so the history
+is real, not implicit.
+
+### Adopting Alembic on an existing deploy
+
+A one-time step to tell Alembic the existing schema is at the latest
+revision (so it doesn't try to recreate every table):
+
+```bash
+cd apps/api
+OMI_DATABASE_URL="<the prod URL>" alembic stamp head
+```
+
+After that, every future deploy can apply pending migrations with:
+
+```bash
+OMI_DATABASE_URL="<the prod URL>" alembic upgrade head
+```
+
+We don't run this automatically in the Render boot flow yet — wire it
+into the build / pre-deploy step when you're ready.
+
+### Authoring a new migration
+
+When you change a model in ``app/storage/models.py``:
+
+```bash
+cd apps/api
+OMI_DATABASE_URL="sqlite:///./data/scratch.db" \
+  alembic revision --autogenerate -m "describe the change"
+```
+
+Review the generated file under ``alembic/versions/`` — autogenerate is
+not infallible (it can miss enum changes, index renames, type widenings).
+Trim or extend manually, then commit. Run ``alembic upgrade head`` to
+apply locally and confirm it works.
+
+### Inspection
+
+```bash
+# Where is this DB currently at?
+alembic current
+
+# What revisions exist?
+alembic history --verbose
+
+# What would the next upgrade do, as SQL, without running it?
+alembic upgrade head --sql
+```
+
+### When the create_all hook and Alembic disagree
+
+The migrations under ``alembic/versions/`` are written to be idempotent
+on tables that ``create_all`` may already have built. Specifically: every
+``op.create_table`` is guarded by a presence check (see
+``0002_account_labels.py``). This means new deploys can use either
+mechanism without conflicts. Once an operation arrives that can't be
+expressed safely both ways (e.g. dropping a column), we'll flip the
+boot flow to ``alembic upgrade head`` and retire ``_INCREMENTAL_COLUMNS``.
