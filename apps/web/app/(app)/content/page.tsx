@@ -20,10 +20,8 @@ export const metadata = { title: 'Content database — OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 const PLATFORM_FILTERS = [
-  { value: '', label: 'All platforms' },
+  { value: '', label: 'All' },
   { value: 'youtube', label: 'YouTube' },
-  { value: 'x', label: 'X / Twitter' },
-  { value: 'reddit', label: 'Reddit' },
 ] as const;
 
 const RISK_FILTERS = [
@@ -72,11 +70,11 @@ export default async function ContentPage({
             Content intelligence
           </p>
           <h1 className="text-2xl font-semibold text-fg tracking-tight">
-            Universal content database
+            YouTube content database
           </h1>
           <p className="mt-1 text-sm text-fg-dim max-w-2xl">
-            Every scanned video, post, or thread persists here. Multiple users scanning the same
-            content merge into a single intelligence record — the more scans, the smarter it gets.
+            Every scanned video persists here. Multiple users scanning the same content merge into
+            a single intelligence record — the more scans, the smarter the engine gets.
           </p>
         </div>
       </header>
@@ -253,8 +251,14 @@ function ContentEntityCard({ entity: e }: { entity: ContentEntitySummary }) {
             <p className="text-sm text-fg font-medium leading-tight line-clamp-1">
               {e.title || e.content_id}
             </p>
-            {e.author_handle && (
-              <p className="text-2xs text-fg-mute mt-0.5">@{e.author_handle}</p>
+            {e.author_handle && e.author_external_id && (
+              <Link
+                href={`/channels/${e.platform}/${encodeURIComponent(e.author_external_id)}`}
+                onClick={(ev) => ev.stopPropagation()}
+                className="text-2xs text-fg-mute hover:text-accent transition-colors mt-0.5 inline-block"
+              >
+                @{e.author_handle}
+              </Link>
             )}
           </div>
           <span className="font-mono text-2xs text-fg-mute shrink-0">{timeAgo(e.last_scanned_at)}</span>

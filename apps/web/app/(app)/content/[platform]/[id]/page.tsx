@@ -120,7 +120,17 @@ export default async function ContentEntityPage({
             {e.title || e.content_id}
           </h1>
           {e.author_handle && (
-            <p className="text-sm text-fg-dim mt-0.5">@{e.author_handle}</p>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-sm text-fg-dim">@{e.author_handle}</span>
+              {e.author_external_id && (
+                <Link
+                  href={`/channels/${e.platform}/${encodeURIComponent(e.author_external_id)}`}
+                  className="font-mono text-2xs tracking-wider uppercase text-accent hover:underline"
+                >
+                  Channel intelligence →
+                </Link>
+              )}
+            </div>
           )}
           <div className="flex items-center gap-4 mt-2 flex-wrap">
             {e.canonical_url && (

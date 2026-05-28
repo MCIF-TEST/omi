@@ -875,3 +875,62 @@ export interface BulkScanJobResponse {
 export interface BulkScanJobsListResponse {
   jobs: BulkScanJobSummary[];
 }
+
+// ---------------------------------------------------------------------------
+// Channel-level deep intelligence  (/v1/channels/{platform}/{id}/intelligence)
+// ---------------------------------------------------------------------------
+
+export interface ChannelVideoSummary {
+  content_id: string;
+  title: string | null;
+  canonical_url: string | null;
+  thumbnail_url: string | null;
+  total_batches: number;
+  total_comments_collected: number;
+  total_distinct_authors: number;
+  latest_coordination_score: number;
+  latest_risk_tier: string;
+  first_scanned_at: string;
+  last_scanned_at: string;
+}
+
+export interface ChannelRiskPoint {
+  content_id: string;
+  date: string;
+  coordination_score: number;
+  risk_tier: string;
+  comment_count: number;
+}
+
+export interface ChannelTopCommenter {
+  external_id: string;
+  platform: string;
+  handle: string;
+  video_count: number;
+  tier: string | null;
+  overall_probability: number | null;
+}
+
+export interface ChannelAudienceComposition {
+  high: number;
+  elevated: number;
+  moderate: number;
+  low: number;
+  total_commenters: number;
+}
+
+export interface ChannelIntelligenceResponse {
+  platform: string;
+  external_id: string;
+  handle: string;
+  display_name: string | null;
+  bio: string | null;
+  follower_count: number | null;
+  first_seen_at: string | null;
+  last_scanned_at: string | null;
+  video_count: number;
+  videos: ChannelVideoSummary[];
+  audience_composition: ChannelAudienceComposition;
+  risk_trend: ChannelRiskPoint[];
+  top_commenters: ChannelTopCommenter[];
+}

@@ -1105,3 +1105,63 @@ class BulkScanJobResponse(BaseModel):
 
 class BulkScanJobsListResponse(BaseModel):
     jobs: list[BulkScanJobSummary]
+
+
+# ---------------------------------------------------------------------------
+# Phase B: Channel-level deep intelligence  (/v1/channels/{platform}/{id}/intelligence)
+# ---------------------------------------------------------------------------
+
+
+class ChannelVideoSummary(BaseModel):
+    content_id: str
+    title: str | None = None
+    canonical_url: str | None = None
+    thumbnail_url: str | None = None
+    total_batches: int
+    total_comments_collected: int
+    total_distinct_authors: int
+    latest_coordination_score: float
+    latest_risk_tier: str
+    first_scanned_at: datetime
+    last_scanned_at: datetime
+
+
+class ChannelRiskPoint(BaseModel):
+    content_id: str
+    date: datetime
+    coordination_score: float
+    risk_tier: str
+    comment_count: int
+
+
+class ChannelTopCommenter(BaseModel):
+    external_id: str
+    platform: str
+    handle: str
+    video_count: int
+    tier: str | None = None
+    overall_probability: float | None = None
+
+
+class ChannelAudienceComposition(BaseModel):
+    high: int
+    elevated: int
+    moderate: int
+    low: int
+    total_commenters: int
+
+
+class ChannelIntelligenceResponse(BaseModel):
+    platform: str
+    external_id: str
+    handle: str
+    display_name: str | None = None
+    bio: str | None = None
+    follower_count: int | None = None
+    first_seen_at: datetime | None = None
+    last_scanned_at: datetime | None = None
+    video_count: int
+    videos: list[ChannelVideoSummary]
+    audience_composition: ChannelAudienceComposition
+    risk_trend: list[ChannelRiskPoint]
+    top_commenters: list[ChannelTopCommenter]
