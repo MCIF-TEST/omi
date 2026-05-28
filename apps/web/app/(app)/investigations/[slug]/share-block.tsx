@@ -76,7 +76,9 @@ export function ShareBlock({ slug, initialToken, publicBaseUrl }: Props) {
         <>
           <CardTitle>Shareable</CardTitle>
           <p className="text-sm text-fg-dim mb-4">
-            Anyone with this link can view the report. Revoking instantly disables it.
+            Anyone with this link can view the report — verdict, evidence, methodology.
+            Recipients can save a PDF or download Markdown/JSON for their own files.
+            Revoking instantly disables the link.
           </p>
           <div className="flex items-center gap-2 mb-4">
             <input

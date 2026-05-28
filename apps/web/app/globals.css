@@ -73,3 +73,106 @@
 @layer components {
   .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
 }
+
+/* ---------------------------------------------------------------------------
+   Public report — print / PDF styling.
+   Targets the /r/[token] page (.report-page) so when an analyst hits
+   "Save as PDF" in their browser, the output is high-contrast, paginated
+   correctly, and looks like a professional intelligence brief — not a
+   screenshot of a dark UI.
+--------------------------------------------------------------------------- */
+
+@media print {
+  @page {
+    size: Letter;
+    margin: 0.6in 0.7in 0.7in 0.7in;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #111111 !important;
+    font-size: 10pt;
+    line-height: 1.45;
+  }
+
+  .report-page,
+  .report-page .bg-bg-elev,
+  .report-page .bg-bg,
+  .report-page .bg-bg-deep {
+    background: #ffffff !important;
+  }
+
+  .report-page,
+  .report-page .text-fg,
+  .report-page .text-fg-dim {
+    color: #111111 !important;
+  }
+  .report-page .text-fg-mute,
+  .report-page .text-fg-faint,
+  .report-page .report-muted {
+    color: #555555 !important;
+  }
+  .report-page .text-accent,
+  .report-page .report-accent {
+    color: #075985 !important;
+  }
+  .report-page .text-tier-elevated { color: #b8530c !important; }
+  .report-page .text-tier-high     { color: #a4161a !important; }
+  .report-page .text-tier-moderate { color: #92660a !important; }
+  .report-page .text-tier-low      { color: #166534 !important; }
+
+  .report-page .border,
+  .report-page [class*="border-"] {
+    border-color: #d4d4d4 !important;
+  }
+
+  .report-card {
+    background: #ffffff !important;
+    border: 1px solid #d4d4d4 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .no-print { display: none !important; }
+
+  .report-page section { page-break-inside: avoid; }
+  .report-page h1, .report-page h2, .report-page h3 { page-break-after: avoid; }
+
+  .report-page a[href]:not([href^="#"])::after {
+    content: " (" attr(href) ")";
+    font-family: ui-monospace, monospace;
+    font-size: 8pt;
+    color: #555555;
+  }
+
+  .report-page [class*="sticky"] { position: static !important; }
+
+  .report-page table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .report-page th, .report-page td {
+    border: 1px solid #e5e5e5 !important;
+    padding: 6pt 8pt !important;
+  }
+  .report-page thead {
+    display: table-header-group;
+    background: #f5f5f5 !important;
+  }
+
+  .report-tier-pill {
+    border: 1px solid currentColor;
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+  }
+
+  /* Force print to honour background colors on tier bars */
+  .report-page .bg-tier-low,
+  .report-page .bg-tier-moderate,
+  .report-page .bg-tier-elevated,
+  .report-page .bg-tier-high,
+  .report-page .bg-accent {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
