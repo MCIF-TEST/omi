@@ -22,6 +22,11 @@ from app.schemas import (
     ContentEntitySummary,
     FullVideoScanRequest,
     FullVideoScanResult,
+    ReplyPodMember,
+    ReplyPodOut,
+    ReplyPodsResponse,
+    ReplyTreeNode,
+    ReplyTreeResponse,
 )
 from app.storage.db import get_session
 
@@ -344,3 +349,187 @@ def get_content_comments(
         total=total,
         comments=[_comment_to_out(c) for c in comments],
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase C — Reply tree + engagement pods
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{platform}/{content_id}/reply-tree", response_model=ReplyTreeResponse)
+def get_reply_tree(
+    platform: str,
+    content_id: str,
+    _: CurrentUser = Depends(require_user),
+) -> ReplyTreeResponse:
+    """Return the threaded comment structure for a single video.
+
+    Returns top-level comments as roots, with their replies nested. Reply-pod
+    membership is annotated inline so the UI can colour-code threads
+    without making a second request.
+    """
+    from sqlalchemy import select
+    from app.storage.models import Account, ContentComment
+    from app.detection.coordination.reply_pods import ReplyEvent, detect_reply_pods
+
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        entity = svc.get_entity_by_platform_id(platform, content_id)
+        if entity is None:
+            raise HTTPException(status_code=404, detail="Content entity not found.")
+
+        rows = list(session.execute(
+            select(ContentComment)
+            .where(ContentComment.content_entity_id == entity.id)
+            .order_by(ContentComment.observed_at.asc())
+        ).scalars().all())
+
+        # Run reply-pod detection so we can annotate nodes with pod_id.
+        events = [
+            ReplyEvent(
+                comment_id=r.external_comment_id,
+                parent_comment_id=r.parent_comment_id,
+                author_external_id=r.author_external_id,
+                posted_at=r.observed_at,
+            )
+            for r in rows
+            if r.author_external_id
+        ]
+        pods = detect_reply_pods(events)
+        author_to_pod: dict[str, int] = {}
+        for idx, pod in enumerate(pods):
+            for member in pod.members:
+                author_to_pod[member] = idx
+
+        # Resolve author tiers in one query.
+        author_ids = {r.author_external_id for r in rows if r.author_external_id}
+        tiers: dict[str, str | None] = {}
+        if author_ids:
+            for acct in session.execute(
+                select(Account).where(
+                    Account.platform == platform,
+                    Account.external_id.in_(author_ids),
+                )
+            ).scalars().all():
+                tiers[acct.external_id] = acct.last_tier
+
+        # Build tree: any comment with parent_comment_id present in our rows
+        # becomes a child of that node; orphan replies fall back to root level.
+        nodes_by_id: dict[str, ReplyTreeNode] = {}
+        for r in rows:
+            nodes_by_id[r.external_comment_id] = ReplyTreeNode(
+                comment_id=r.external_comment_id,
+                parent_comment_id=r.parent_comment_id,
+                author_external_id=r.author_external_id,
+                author_handle=r.author_handle,
+                author_tier=tiers.get(r.author_external_id),
+                text=r.text,
+                like_count=r.like_count,
+                reply_count=r.reply_count,
+                posted_at=r.observed_at,
+                pod_id=author_to_pod.get(r.author_external_id),
+            )
+
+        roots: list[ReplyTreeNode] = []
+        reply_count = 0
+        for r in rows:
+            node = nodes_by_id[r.external_comment_id]
+            if r.parent_comment_id and r.parent_comment_id in nodes_by_id:
+                nodes_by_id[r.parent_comment_id].replies.append(node)
+                reply_count += 1
+            else:
+                roots.append(node)
+
+        return ReplyTreeResponse(
+            platform=platform,
+            content_id=content_id,
+            total_comments=len(rows),
+            top_level_count=len(roots),
+            reply_count=reply_count,
+            roots=roots,
+        )
+
+
+@router.get("/{platform}/{content_id}/reply-pods", response_model=ReplyPodsResponse)
+def get_reply_pods(
+    platform: str,
+    content_id: str,
+    _: CurrentUser = Depends(require_user),
+) -> ReplyPodsResponse:
+    """Detect engagement pods inside a video's reply structure.
+
+    Pods are clusters of accounts that reply to each other or co-reply to
+    the same parent comment in tight windows. Each pod returns a score,
+    evidence, and per-member risk tier from the persistent account store.
+    """
+    from sqlalchemy import select
+    from app.storage.models import Account, ContentComment
+    from app.detection.coordination.reply_pods import ReplyEvent, detect_reply_pods
+
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        entity = svc.get_entity_by_platform_id(platform, content_id)
+        if entity is None:
+            raise HTTPException(status_code=404, detail="Content entity not found.")
+
+        rows = list(session.execute(
+            select(ContentComment.external_comment_id,
+                   ContentComment.parent_comment_id,
+                   ContentComment.author_external_id,
+                   ContentComment.author_handle,
+                   ContentComment.observed_at)
+            .where(ContentComment.content_entity_id == entity.id)
+        ).all())
+
+        events = [
+            ReplyEvent(
+                comment_id=ext_id,
+                parent_comment_id=parent_id,
+                author_external_id=author,
+                posted_at=ts,
+            )
+            for (ext_id, parent_id, author, _handle, ts) in rows
+            if author
+        ]
+        handle_map = {author: handle for (_eid, _pid, author, handle, _ts) in rows if author}
+
+        pods = detect_reply_pods(events)
+
+        # Look up author tier + probability for every pod member.
+        all_members = {m for p in pods for m in p.members}
+        accounts: dict[str, Account] = {}
+        if all_members:
+            for acct in session.execute(
+                select(Account).where(
+                    Account.platform == platform,
+                    Account.external_id.in_(all_members),
+                )
+            ).scalars().all():
+                accounts[acct.external_id] = acct
+
+        pods_out: list[ReplyPodOut] = []
+        for idx, pod in enumerate(pods):
+            interaction_count = sum(pod.pair_counts.values())
+            members_out = []
+            for m in pod.members:
+                acct = accounts.get(m)
+                members_out.append(ReplyPodMember(
+                    external_id=m,
+                    handle=acct.handle if acct else handle_map.get(m),
+                    tier=acct.last_tier if acct else None,
+                    overall_probability=acct.last_score if acct else None,
+                ))
+            pods_out.append(ReplyPodOut(
+                pod_id=idx,
+                score=pod.score,
+                members=members_out,
+                evidence=pod.evidence,
+                interaction_count=interaction_count,
+            ))
+
+        return ReplyPodsResponse(
+            platform=platform,
+            content_id=content_id,
+            pod_count=len(pods_out),
+            pods=pods_out,
+        )
