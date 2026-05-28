@@ -9,6 +9,8 @@ from app.content.service import ContentIntelligenceService
 from app.core.auth import CurrentUser, require_user
 from app.core.config import Settings, get_settings
 from app.schemas import (
+    AuthorCommentRow,
+    AuthorCommentsResponse,
     AuthorContentRow,
     AuthorPresenceResponse,
     BatchDiffResponse,
@@ -281,6 +283,43 @@ def get_author_presence(
         last_seen=data["last_seen"],
         entities=entities,
     )
+
+
+@router.get("/authors/{platform}/{author_external_id}/comments", response_model=AuthorCommentsResponse)
+def get_author_comments(
+    platform: str,
+    author_external_id: str,
+    limit: int = Query(200, ge=1, le=1000),
+    _: CurrentUser = Depends(require_user),
+) -> AuthorCommentsResponse:
+    """Every comment we've recorded from one author on a platform, paired
+    with the content entity it was posted on. Newest-first."""
+    with get_session() as session:
+        svc = ContentIntelligenceService(session)
+        total, rows = svc.get_author_comments(platform, author_external_id, limit=limit)
+
+        if total == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No tracked comments by {author_external_id} on {platform}.",
+            )
+
+        # Most recently observed handle wins
+        handle = next((c.author_handle for c, _e in rows if c.author_handle), None)
+
+        return AuthorCommentsResponse(
+            platform=platform,
+            author_external_id=author_external_id,
+            author_handle=handle,
+            total=total,
+            comments=[
+                AuthorCommentRow(
+                    comment=_comment_to_out(c),
+                    entity=_entity_to_summary(e),
+                )
+                for c, e in rows
+            ],
+        )
 
 
 @router.get("/{platform}/{content_id}/comments", response_model=ContentCommentsResponse)

@@ -862,6 +862,23 @@ class AuthorPresenceResponse(BaseModel):
     entities: list[AuthorContentRow]
 
 
+class AuthorCommentRow(BaseModel):
+    """One comment by an author, with the content entity it was posted on."""
+
+    comment: ContentCommentOut
+    entity: ContentEntitySummary
+
+
+class AuthorCommentsResponse(BaseModel):
+    """Every comment we've seen one author make on a platform."""
+
+    platform: str
+    author_external_id: str
+    author_handle: str | None = None
+    total: int
+    comments: list[AuthorCommentRow]
+
+
 class AccountAnalysisResponse(BaseModel):
     """LLM (or template) behavioural analysis for a single account."""
 

@@ -359,6 +359,66 @@ def test_get_author_presence_aggregates_across_entities():
             assert row["comment_count"] == 2
 
 
+def test_get_author_comments_returns_every_comment_with_entity():
+    """get_author_comments returns the raw comments (not aggregated) with the
+    content entity attached. Used by the account page to show real comments."""
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        for cid in ["v1", "v2"]:
+            e = svc.get_or_create_entity(platform="youtube", content_id=cid, title=f"Video {cid}")
+            svc.record_batch(
+                entity=e, user_id=1,
+                comments=[
+                    _comment(f"{cid}_a1", "alice", f"alice first on {cid}", offset_min=0),
+                    _comment(f"{cid}_a2", "alice", f"alice second on {cid}", offset_min=10),
+                    _comment(f"{cid}_b1", "bob", f"bob on {cid}", offset_min=20),
+                ],
+                handle_map={"alice": "Alice"},
+            )
+        s.commit()
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        total, rows = svc.get_author_comments("youtube", "alice", limit=100)
+        assert total == 4  # 2 per video × 2 videos
+        assert len(rows) == 4
+        # Newest first
+        observed = [c.observed_at for c, _e in rows]
+        assert observed == sorted(observed, reverse=True)
+        # Every row carries its entity
+        for c, e in rows:
+            assert c.author_external_id == "alice"
+            assert e.platform == "youtube"
+            assert e.content_id in ("v1", "v2")
+
+
+def test_get_author_comments_respects_limit():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        e = svc.get_or_create_entity(platform="youtube", content_id="v1", title="V1")
+        svc.record_batch(
+            entity=e, user_id=1,
+            comments=[_comment(f"c{i}", "alice", f"msg {i}", offset_min=i) for i in range(20)],
+            handle_map={"alice": "Alice"},
+        )
+        s.commit()
+
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        total, rows = svc.get_author_comments("youtube", "alice", limit=5)
+        # Total is unfiltered; rows respects the limit
+        assert total == 20
+        assert len(rows) == 5
+
+
+def test_get_author_comments_returns_empty_when_no_matches():
+    with get_session() as s:
+        svc = ContentIntelligenceService(s)
+        total, rows = svc.get_author_comments("youtube", "ghost", limit=10)
+        assert total == 0
+        assert rows == []
+
+
 def test_get_author_presence_empty_returns_zero_counts():
     with get_session() as s:
         svc = ContentIntelligenceService(s)

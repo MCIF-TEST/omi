@@ -14,6 +14,7 @@ import { apiServer } from '@/lib/api-server';
 import { pct, timeAgo, tierBg } from '@/lib/format';
 import { RescanAccountButton } from './rescan-account-button';
 import { HistoryRow } from './history-row';
+import { AccountActivityPanel } from './activity-panel';
 
 interface PageProps {
   params: { external_id: string };
@@ -177,6 +178,9 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           </div>
         </div>
       </Card>
+
+      {/* Account activity — every comment we've ingested from this channel */}
+      <AccountActivityPanel platform={platform} externalId={history.external_id} />
 
       {/* Scan history table — every row expands to show that scan's signals */}
       <Card>

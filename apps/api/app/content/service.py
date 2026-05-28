@@ -450,6 +450,45 @@ class ContentIntelligenceService:
             "entities": entity_rows,
         }
 
+    def get_author_comments(
+        self,
+        platform: str,
+        author_external_id: str,
+        *,
+        limit: int = 200,
+    ) -> tuple[int, list[tuple[ContentComment, ContentEntity]]]:
+        """All comments by one author across every content entity on a platform.
+
+        Returns ``(total_count, rows)`` where ``rows`` is newest-first and each
+        row is ``(ContentComment, ContentEntity)`` so the UI can show the
+        comment alongside what it was posted on. The count reflects the
+        unfiltered total even if ``limit`` truncates the page.
+        """
+        base = (
+            select(ContentComment, ContentEntity)
+            .join(ContentEntity, ContentComment.content_entity_id == ContentEntity.id)
+            .where(
+                ContentEntity.platform == platform,
+                ContentComment.author_external_id == author_external_id,
+            )
+        )
+        count_q = (
+            select(func.count())
+            .select_from(ContentComment)
+            .join(ContentEntity, ContentComment.content_entity_id == ContentEntity.id)
+            .where(
+                ContentEntity.platform == platform,
+                ContentComment.author_external_id == author_external_id,
+            )
+        )
+        total = self._s.execute(count_q).scalar_one() or 0
+        rows = list(
+            self._s.execute(
+                base.order_by(ContentComment.observed_at.desc()).limit(limit)
+            ).all()
+        )
+        return total, [(c, e) for c, e in rows]
+
     def get_comments(
         self,
         entity_id: int,

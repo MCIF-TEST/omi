@@ -681,6 +681,19 @@ export interface NotificationPrefs {
   email: string;
 }
 
+export interface AuthorCommentRow {
+  comment: ContentCommentOut;
+  entity: ContentEntitySummary;
+}
+
+export interface AuthorCommentsResponse {
+  platform: string;
+  author_external_id: string;
+  author_handle: string | null;
+  total: number;
+  comments: AuthorCommentRow[];
+}
+
 export interface BatchDiffResponse {
   from_batch: CommentBatchOut;
   to_batch: CommentBatchOut;
