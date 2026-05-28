@@ -7,8 +7,8 @@ import {
   Users,
   ChevronDown,
   ChevronRight,
-  ShieldAlert,
   Network,
+  Filter,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
@@ -103,7 +103,7 @@ export function ReplyTreePanel({ platform, contentId }: ReplyTreePanelProps) {
   return (
     <div className="space-y-5">
       <PodsSummary pods={pods?.pods ?? []} platform={platform} />
-      <ReplyTreeBlock tree={tree} />
+      <ReplyTreeBlock tree={tree} pods={pods?.pods ?? []} />
     </div>
   );
 }
@@ -126,17 +126,24 @@ function PodsSummary({ pods, platform }: { pods: ReplyPodOut[]; platform: string
     );
   }
 
+  const totalMembers = new Set(pods.flatMap((p) => p.members.map((m) => m.external_id))).size;
+  const totalInteractions = pods.reduce((s, p) => s + p.interaction_count, 0);
+
   return (
     <Card>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+      <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
         <CardLabel className="m-0">
           <Network size={11} className="inline -mt-0.5 mr-1" />
           Reply pods · {pods.length}
         </CardLabel>
-        <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-          coordinated reply clusters
-        </span>
+        <div className="flex items-center gap-3 font-mono text-2xs text-fg-mute">
+          <span><Users size={9} className="inline -mt-0.5 mr-0.5" />{totalMembers} accounts</span>
+          <span className="tracking-wider uppercase">{totalInteractions} interactions</span>
+        </div>
       </div>
+      <p className="text-xs text-fg-mute mb-3">
+        Clusters of accounts that systematically reply to each other or co-reply within tight time windows.
+      </p>
       <div className="space-y-3">
         {pods.map((pod) => (
           <PodCard key={pod.pod_id} pod={pod} platform={platform} />
@@ -202,16 +209,36 @@ function PodCard({ pod, platform }: { pod: ReplyPodOut; platform: string }) {
   );
 }
 
-function ReplyTreeBlock({ tree }: { tree: ReplyTreeResponse }) {
+function ReplyTreeBlock({ tree, pods }: { tree: ReplyTreeResponse; pods: ReplyPodOut[] }) {
+  const [podFilterOn, setPodFilterOn] = useState(false);
+
+  // Build set of root comment IDs that contain at least one pod member.
+  const podRootIds = useMemo(() => {
+    if (!pods.length) return new Set<string>();
+    const podAuthorIds = new Set(pods.flatMap((p) => p.members.map((m) => m.external_id)));
+    return new Set(
+      tree.roots
+        .filter((r) =>
+          podAuthorIds.has(r.author_external_id) ||
+          r.replies.some((reply) => podAuthorIds.has(reply.author_external_id))
+        )
+        .map((r) => r.comment_id)
+    );
+  }, [tree.roots, pods]);
+
   // Sort roots: pods first (by pod_id ascending), then by reply count desc
   const sortedRoots = useMemo(() => {
     return [...tree.roots].sort((a, b) => {
-      const aHasPod = a.replies.some((r) => r.pod_id !== null) ? 0 : 1;
-      const bHasPod = b.replies.some((r) => r.pod_id !== null) ? 0 : 1;
+      const aHasPod = a.replies.some((r) => r.pod_id !== null) || a.pod_id !== null ? 0 : 1;
+      const bHasPod = b.replies.some((r) => r.pod_id !== null) || b.pod_id !== null ? 0 : 1;
       if (aHasPod !== bHasPod) return aHasPod - bHasPod;
       return (b.replies.length || 0) - (a.replies.length || 0);
     });
   }, [tree.roots]);
+
+  const displayRoots = podFilterOn
+    ? sortedRoots.filter((r) => podRootIds.has(r.comment_id))
+    : sortedRoots;
 
   return (
     <Card>
@@ -220,16 +247,37 @@ function ReplyTreeBlock({ tree }: { tree: ReplyTreeResponse }) {
           <MessageSquare size={11} className="inline -mt-0.5 mr-1" />
           Reply tree · {tree.total_comments} comments
         </CardLabel>
-        <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-          {tree.top_level_count} threads · {tree.reply_count} replies
-        </span>
+        <div className="flex items-center gap-3">
+          {pods.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPodFilterOn((v) => !v)}
+              className={`inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-2 py-1 rounded-sm border transition-colors ${
+                podFilterOn
+                  ? 'border-accent text-accent bg-accent/10'
+                  : 'border-border-1 text-fg-mute hover:border-border-hot hover:text-fg'
+              }`}
+            >
+              <Filter size={9} />
+              Pod threads only
+            </button>
+          )}
+          <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
+            {tree.top_level_count} threads · {tree.reply_count} replies
+          </span>
+        </div>
       </div>
+      {podFilterOn && displayRoots.length === 0 && (
+        <p className="text-sm text-fg-mute font-mono mb-3">
+          No threads with pod activity found.
+        </p>
+      )}
       <ul className="space-y-1">
-        {sortedRoots.slice(0, 30).map((root) => (
+        {displayRoots.slice(0, 30).map((root) => (
           <CommentNode key={root.comment_id} node={root} depth={0} />
         ))}
       </ul>
-      {sortedRoots.length > 30 && (
+      {!podFilterOn && sortedRoots.length > 30 && (
         <p className="mt-3 font-mono text-2xs text-fg-mute">
           Showing top 30 of {sortedRoots.length} threads.
         </p>

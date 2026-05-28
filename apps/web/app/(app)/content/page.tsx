@@ -9,6 +9,7 @@ import {
   Users,
   Layers,
   MessageCircle,
+  Network,
   Search as SearchIcon,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
@@ -247,6 +248,12 @@ function ContentEntityCard({ entity: e }: { entity: ContentEntitySummary }) {
                 {risk.icon}
                 {risk.label}
               </span>
+              {e.reply_pod_count > 0 && (
+                <span className="inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-sm border border-accent/40 text-accent bg-accent/5">
+                  <Network size={9} />
+                  {e.reply_pod_count} pod{e.reply_pod_count !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
             <p className="text-sm text-fg font-medium leading-tight line-clamp-1">
               {e.title || e.content_id}

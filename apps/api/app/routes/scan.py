@@ -528,6 +528,44 @@ def scan_youtube_video_full(
             next_page_token,
         )
 
+        # Phase C: run reply-pod detection on the live comment list and surface
+        # pods as additional coordination clusters in the response.
+        from app.detection.coordination.reply_pods import (
+            ReplyEvent as _ReplyEvent,
+            detect_reply_pods as _detect_reply_pods,
+        )
+        _pod_events = [
+            _ReplyEvent(
+                comment_id=c["comment_id"],
+                parent_comment_id=c.get("parent_comment_id"),
+                author_external_id=c["author_external_id"],
+                posted_at=c["created_at"],
+            )
+            for c in all_comments
+            if c.get("comment_id") and c.get("author_external_id") and c.get("created_at")
+        ]
+        _raw_pods = _detect_reply_pods(_pod_events) if _pod_events else []
+        pod_clusters = [
+            CoordinationClusterOut(
+                method="reply_pod",
+                members=pod.members,
+                score=pod.score,
+                evidence=pod.evidence,
+                metadata={"interaction_count": float(sum(pod.pair_counts.values()))},
+            )
+            for pod in _raw_pods
+        ]
+        all_clusters = [
+            CoordinationClusterOut(
+                method=cl.method,
+                members=cl.members,
+                score=cl.score,
+                evidence=cl.evidence,
+                metadata=cl.metadata,
+            )
+            for cl in full.coordination_clusters
+        ] + pod_clusters
+
         focus = None
         if req.focus_account_external_id:
             focus = next(
@@ -543,7 +581,7 @@ def scan_youtube_video_full(
             coord_score=full.coordination_score,
             cached=full.cached_count,
             fresh=full.fresh_count,
-            n_clusters=len(full.coordination_clusters),
+            n_clusters=len(all_clusters),
             thread_prob=full.thread_scan.overall_probability,
         )
 
@@ -559,16 +597,7 @@ def scan_youtube_video_full(
             thread_scan=full.thread_scan,
             coordination_score=full.coordination_score,
             coordination_tier=full.coordination_tier,
-            clusters=[
-                CoordinationClusterOut(
-                    method=cl.method,
-                    members=cl.members,
-                    score=cl.score,
-                    evidence=cl.evidence,
-                    metadata=cl.metadata,
-                )
-                for cl in full.coordination_clusters
-            ],
+            clusters=all_clusters,
             focus_account=focus,
             summary=summary,
             next_page_token=next_page_token,
@@ -1138,6 +1167,81 @@ def _persist_investigation_async(
         log.exception("investigation %s persistence failed: %s", slug, e)
 
 
+def _persist_reply_pods(session, entity, platform: str, content_id: str, log) -> None:
+    """Run reply-pod detection on all stored comments for an entity and persist
+    high-confidence pod pairs as CoordinationEdge rows.
+
+    Updates ``entity.latest_reply_pod_count`` so the list page can show a
+    badge without re-running the detector per request.
+    """
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from app.storage.models import ContentComment, CoordinationEdge
+    from app.detection.coordination.reply_pods import ReplyEvent, detect_reply_pods
+
+    rows = list(session.execute(
+        select(
+            ContentComment.external_comment_id,
+            ContentComment.parent_comment_id,
+            ContentComment.author_external_id,
+            ContentComment.observed_at,
+        ).where(ContentComment.content_entity_id == entity.id)
+    ).all())
+
+    events = [
+        ReplyEvent(
+            comment_id=ext_id,
+            parent_comment_id=parent_id,
+            author_external_id=author,
+            posted_at=ts,
+        )
+        for (ext_id, parent_id, author, ts) in rows
+        if author
+    ]
+    pods = detect_reply_pods(events)
+    entity.latest_reply_pod_count = len(pods)
+
+    now = datetime.now(timezone.utc)
+    for pod in pods:
+        if pod.score < 0.50:
+            continue
+        members = sorted(pod.members)
+        for i, acct_a in enumerate(members):
+            for acct_b in members[i + 1:]:
+                try:
+                    existing = session.execute(
+                        select(CoordinationEdge).where(
+                            CoordinationEdge.platform == platform,
+                            CoordinationEdge.account_a == acct_a,
+                            CoordinationEdge.account_b == acct_b,
+                        )
+                    ).scalar_one_or_none()
+                    if existing is not None:
+                        n = existing.observation_count or 1
+                        existing.observation_count = n + 1
+                        existing.mean_cluster_score = (
+                            existing.mean_cluster_score * n + pod.score
+                        ) / (n + 1)
+                        if "reply_pod" not in (existing.methods_json or []):
+                            existing.methods_json = list(existing.methods_json or []) + ["reply_pod"]
+                        existing.last_shared_parent = content_id
+                        existing.last_observed_at = now
+                    else:
+                        session.add(CoordinationEdge(
+                            platform=platform,
+                            account_a=acct_a,
+                            account_b=acct_b,
+                            observation_count=1,
+                            methods_json=["reply_pod"],
+                            mean_cluster_score=pod.score,
+                            last_shared_parent=content_id,
+                            first_observed_at=now,
+                            last_observed_at=now,
+                        ))
+                except Exception as edge_err:  # noqa: BLE001
+                    log.warning("failed to upsert CoordinationEdge %s↔%s: %s", acct_a, acct_b, edge_err)
+
+
 def _record_content_intelligence_async(
     platform: str,
     content_id: str,
@@ -1196,6 +1300,11 @@ def _record_content_intelligence_async(
                 tier_distribution=tier_counts,
                 next_page_token=next_page_token,
             )
+
+            # Phase C — run reply-pod detection on stored comments and persist
+            # coordination edges so pods appear in the cross-video graph view.
+            _persist_reply_pods(session, entity, platform, content_id, log)
+
             session.commit()
             log.info(
                 "recorded batch for %s/%s: %d comments, %d new, next_token=%s",
