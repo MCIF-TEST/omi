@@ -8,7 +8,6 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { SavedInvestigationViewer } from './viewer';
 import { ShareBlock } from './share-block';
 import { CommentaryBlock } from './commentary-block';
-import { RescanInvestigationButton } from './rescan-investigation-button';
 import { env } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +48,6 @@ export default async function InvestigationPage({ params }: { params: { slug: st
         </div>
         <div className="flex items-center gap-3">
           <TierBadge tier={inv.overall_tier} size="lg" />
-          <RescanInvestigationButton inputUrl={inv.input_url} />
         </div>
       </header>
 
