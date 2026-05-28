@@ -395,3 +395,141 @@ class NarrativeMembership(Base):
     parent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     comment_text: Mapped[str] = mapped_column(Text)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 — Universal content intelligence database.
+#
+# Every analysed video / post / thread becomes a persistent ContentEntity.
+# Each scan adds a CommentBatch under that entity, and individual comments
+# are deduplicated into ContentComment rows. Intelligence (coordination
+# scores, tier distribution, narrative drift) is recomputed across all
+# accumulated batches — the more the platform is used, the smarter it gets.
+# ---------------------------------------------------------------------------
+
+
+class ContentEntity(Base):
+    """Master intelligence record for one piece of content.
+
+    Keyed on ``(platform, content_id)`` — the platform-native identifier
+    (YouTube video ID, X status ID, Reddit submission ID, etc.). Shared
+    across all users: anyone scanning the same content contributes to the
+    same record.
+    """
+
+    __tablename__ = "content_entities"
+    __table_args__ = (
+        UniqueConstraint("platform", "content_id", name="uq_content_platform_id"),
+        Index("ix_content_last_scan", "platform", "last_scanned_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    content_id: Mapped[str] = mapped_column(String(128), index=True)
+    kind: Mapped[str] = mapped_column(String(32), default="video")    # video | post | thread
+
+    # Display metadata — populated opportunistically from scan responses.
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    author_external_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    author_handle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    canonical_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Cumulative counters — updated each time a new batch is recorded.
+    total_batches: Mapped[int] = mapped_column(Integer, default=0)
+    total_comments_collected: Mapped[int] = mapped_column(Integer, default=0)
+    total_distinct_authors: Mapped[int] = mapped_column(Integer, default=0)
+    # Number of distinct users (User.id) who have contributed batches.
+    contributor_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Latest aggregate intelligence (denormalized for fast list rendering).
+    latest_coordination_score: Mapped[float] = mapped_column(Float, default=0.0)
+    latest_risk_tier: Mapped[str] = mapped_column(String(16), default="low")
+    latest_tier_distribution: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    # Timestamps
+    first_scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class CommentBatch(Base):
+    """One ingestion event for a ContentEntity.
+
+    Each scan a user performs against the same content produces a new
+    batch. Batches are immutable — they record the snapshot at scan time.
+    """
+
+    __tablename__ = "comment_batches"
+    __table_args__ = (
+        Index("ix_batch_content_time", "content_entity_id", "fetched_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    content_entity_id: Mapped[int] = mapped_column(
+        ForeignKey("content_entities.id", ondelete="CASCADE"), index=True
+    )
+    # The user who triggered this batch (NULL = system / unauthenticated).
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True,
+    )
+
+    # Raw counts — what the platform returned for this batch.
+    comments_fetched: Mapped[int] = mapped_column(Integer, default=0)
+    new_comments: Mapped[int] = mapped_column(Integer, default=0)        # deduplicated against existing batches
+    duplicates: Mapped[int] = mapped_column(Integer, default=0)
+    distinct_authors: Mapped[int] = mapped_column(Integer, default=0)
+    new_authors: Mapped[int] = mapped_column(Integer, default=0)         # authors first seen in this batch
+
+    # Aggregate intelligence at the time of this batch.
+    coordination_score: Mapped[float] = mapped_column(Float, default=0.0)
+    risk_tier: Mapped[str] = mapped_column(String(16), default="low")
+    tier_distribution: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Optional per-batch payload — short summary or note from the orchestrator.
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ContentComment(Base):
+    """One comment under a ContentEntity, deduplicated across batches.
+
+    Comments are keyed on ``(content_entity_id, external_comment_id)`` so
+    that re-scanning the same content never inserts the same comment twice.
+    ``first_batch_id`` records which batch first observed this comment, so
+    longitudinal analysis can ask "which batch did this user first appear in".
+    """
+
+    __tablename__ = "content_comments"
+    __table_args__ = (
+        UniqueConstraint(
+            "content_entity_id", "external_comment_id",
+            name="uq_content_comment_id",
+        ),
+        Index(
+            "ix_comment_content_observed",
+            "content_entity_id", "observed_at",
+        ),
+        Index(
+            "ix_comment_content_author",
+            "content_entity_id", "author_external_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    content_entity_id: Mapped[int] = mapped_column(
+        ForeignKey("content_entities.id", ondelete="CASCADE"), index=True
+    )
+    first_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("comment_batches.id", ondelete="CASCADE"), index=True
+    )
+    external_comment_id: Mapped[str] = mapped_column(String(128), index=True)
+    parent_comment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    author_external_id: Mapped[str] = mapped_column(String(128), index=True)
+    author_handle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    text: Mapped[str] = mapped_column(Text)
+    like_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reply_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True,
+    )

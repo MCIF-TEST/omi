@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Search, Network, MessageSquareText,
-  Activity, FileText, Settings, Folder, type LucideIcon,
+  Activity, FileText, Settings, Folder, Database, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -22,6 +22,7 @@ const NAV: NavItem[] = [
   { href: '/investigations',  label: 'Investigations', icon: Folder },
   { href: '/graph',           label: 'Graph',         icon: Network },
   { href: '/narratives',      label: 'Narratives',    icon: MessageSquareText },
+  { href: '/content',         label: 'Content DB',    icon: Database },
   { href: '/monitoring',      label: 'Monitoring',    icon: Activity },
   { href: '/settings',        label: 'Settings',      icon: Settings },
 ];

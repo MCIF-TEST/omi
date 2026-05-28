@@ -25,6 +25,7 @@ from app.integrations.youtube import (
     fetch_channel_recent_comments,
     fetch_video_commenters,
     fetch_video_full,
+    fetch_video_metadata,
     parse_video_id,
     resolve_channel_id,
 )
@@ -365,6 +366,22 @@ def scan_youtube_video_full(
                 tier_counts=dict(tier_counts),
                 coordination_score=full.coordination_score,
             )
+
+        # Phase 10 — persist content intelligence (fire-and-forget background).
+        from app.core import background as _bg
+        _bg.submit(
+            _record_content_intelligence_async,
+            "youtube",
+            video_id,
+            all_comments,
+            {r.external_id: r.handle for r in full.commenter_records},
+            dict(tier_counts),
+            full.coordination_score,
+            full.coordination_tier.value,
+            current.id,
+            client,
+            stats,
+        )
 
         focus = None
         if req.focus_account_external_id:
@@ -804,6 +821,61 @@ def _full_summary_text(
         "All estimates are probabilistic, not definitive judgements.",
     ]
     return " ".join(parts)
+
+
+def _record_content_intelligence_async(
+    platform: str,
+    content_id: str,
+    comments: list,
+    handle_map: dict,
+    tier_counts: dict,
+    coordination_score: float,
+    coordination_tier_value: str,
+    user_id: int,
+    client,
+    stats,
+) -> None:
+    """Background worker — records a CommentBatch and upserts content intelligence."""
+    try:
+        from app.content.service import ContentIntelligenceService
+        from app.storage.db import get_session as _gs
+
+        # Map coordination tier value to internal tier storage name.
+        tier_map = {"low": "low", "moderate": "moderate", "elevated": "elevated", "high": "high"}
+        risk_tier = tier_map.get(coordination_tier_value, "low")
+
+        # Fetch video metadata opportunistically; don't fail if unavailable.
+        meta: dict = {}
+        if platform == "youtube":
+            try:
+                meta = fetch_video_metadata(client, content_id, stats=stats) or {}
+            except Exception:
+                pass
+
+        with _gs() as session:
+            svc = ContentIntelligenceService(session)
+            entity = svc.get_or_create_entity(
+                platform=platform,
+                content_id=content_id,
+                kind="video",
+                title=meta.get("title"),
+                author_external_id=meta.get("author_external_id"),
+                author_handle=meta.get("author_handle"),
+                canonical_url=meta.get("canonical_url"),
+                thumbnail_url=meta.get("thumbnail_url"),
+            )
+            svc.record_batch(
+                entity=entity,
+                user_id=user_id,
+                comments=comments,
+                handle_map=handle_map,
+                coordination_score=coordination_score,
+                risk_tier=risk_tier,
+                tier_distribution=tier_counts,
+            )
+            session.commit()
+    except Exception:  # noqa: BLE001 — must not surface to caller
+        pass
 
 
 def _video_summary_text(

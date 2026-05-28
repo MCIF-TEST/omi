@@ -598,3 +598,67 @@ export interface AccountHistoryResponse {
   scans: HistoricalScan[];
   trend: TrendInfo;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 10 — Content Intelligence types
+// ---------------------------------------------------------------------------
+
+export interface ContentEntitySummary {
+  id: number;
+  platform: string;
+  content_id: string;
+  kind: string;
+  title: string | null;
+  author_external_id: string | null;
+  author_handle: string | null;
+  canonical_url: string | null;
+  thumbnail_url: string | null;
+  total_batches: number;
+  total_comments_collected: number;
+  total_distinct_authors: number;
+  contributor_count: number;
+  latest_coordination_score: number;
+  latest_risk_tier: string;
+  latest_tier_distribution: Record<string, number>;
+  first_scanned_at: string;
+  last_scanned_at: string;
+}
+
+export interface CommentBatchOut {
+  id: number;
+  fetched_at: string;
+  comments_fetched: number;
+  new_comments: number;
+  duplicates: number;
+  distinct_authors: number;
+  new_authors: number;
+  coordination_score: number;
+  risk_tier: string;
+  tier_distribution: Record<string, number>;
+  summary: string | null;
+}
+
+export interface ContentCommentOut {
+  id: number;
+  external_comment_id: string;
+  author_external_id: string;
+  author_handle: string | null;
+  text: string;
+  like_count: number | null;
+  reply_count: number | null;
+  observed_at: string;
+  first_batch_id: number;
+}
+
+export interface ContentEntityDetail {
+  entity: ContentEntitySummary;
+  batches: CommentBatchOut[];
+  recent_comments: ContentCommentOut[];
+  total_comments: number;
+}
+
+export interface ContentEntityListResponse {
+  total: number;
+  platform: string | null;
+  entities: ContentEntitySummary[];
+}

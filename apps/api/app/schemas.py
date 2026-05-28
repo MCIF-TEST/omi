@@ -744,6 +744,76 @@ class NarrativeDetail(BaseModel):
     graph: NarrativeGraph = Field(default_factory=lambda: NarrativeGraph(nodes=[], edges=[]))
 
 
+# ---------------------------------------------------------------------------
+# Phase 10 — Content intelligence schemas
+# ---------------------------------------------------------------------------
+
+
+class ContentEntitySummary(BaseModel):
+    id: int
+    platform: str
+    content_id: str
+    kind: str
+    title: str | None = None
+    author_external_id: str | None = None
+    author_handle: str | None = None
+    canonical_url: str | None = None
+    thumbnail_url: str | None = None
+    total_batches: int
+    total_comments_collected: int
+    total_distinct_authors: int
+    contributor_count: int
+    latest_coordination_score: float
+    latest_risk_tier: str
+    latest_tier_distribution: dict[str, int] = Field(default_factory=dict)
+    first_scanned_at: datetime
+    last_scanned_at: datetime
+
+
+class CommentBatchOut(BaseModel):
+    id: int
+    fetched_at: datetime
+    comments_fetched: int
+    new_comments: int
+    duplicates: int
+    distinct_authors: int
+    new_authors: int
+    coordination_score: float
+    risk_tier: str
+    tier_distribution: dict[str, int] = Field(default_factory=dict)
+    summary: str | None = None
+
+
+class ContentCommentOut(BaseModel):
+    id: int
+    external_comment_id: str
+    author_external_id: str
+    author_handle: str | None = None
+    text: str
+    like_count: int | None = None
+    reply_count: int | None = None
+    observed_at: datetime
+    first_batch_id: int
+
+
+class ContentEntityDetail(BaseModel):
+    entity: ContentEntitySummary
+    batches: list[CommentBatchOut]
+    recent_comments: list[ContentCommentOut]
+    total_comments: int
+
+
+class ContentEntityListResponse(BaseModel):
+    total: int
+    platform: str | None = None
+    entities: list[ContentEntitySummary]
+
+
+class ContentCommentsResponse(BaseModel):
+    total: int
+    comments: list[ContentCommentOut]
+
+
 class AccountAnalysisResponse(BaseModel):
     """LLM (or template) behavioural analysis for a single account."""
 

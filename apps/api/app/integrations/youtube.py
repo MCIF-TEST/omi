@@ -442,6 +442,46 @@ def fetch_video_full(
     return list(seen.values()), all_items, next_token
 
 
+def fetch_video_metadata(
+    client: YouTubeClient,
+    video_id: str,
+    stats: FetchStats | None = None,
+) -> dict | None:
+    """Fetch title, author, and thumbnail for a single video.
+
+    Returns a dict with keys: title, author_external_id, author_handle,
+    thumbnail_url, canonical_url — or None if the video is not found.
+    Costs 1 quota unit.
+    """
+    stats = stats or FetchStats()
+    try:
+        response = (
+            client.videos()
+            .list(part="snippet", id=video_id, maxResults=1)
+            .execute()
+        )
+        stats.quota_used += 1
+    except Exception:
+        return None
+
+    items = response.get("items", [])
+    if not items:
+        return None
+
+    snippet = items[0].get("snippet", {})
+    thumbs = snippet.get("thumbnails") or {}
+    thumb_url = (
+        (thumbs.get("medium") or thumbs.get("default") or {}).get("url")
+    )
+    return {
+        "title": snippet.get("title"),
+        "author_external_id": snippet.get("channelId"),
+        "author_handle": snippet.get("channelTitle"),
+        "thumbnail_url": thumb_url,
+        "canonical_url": f"https://www.youtube.com/watch?v={video_id}",
+    }
+
+
 # A "real" client is heavy; expose a Protocol checker for the route handler.
 __all__ = [
     "YouTubeClient",
@@ -453,6 +493,7 @@ __all__ = [
     "build_default_client",
     "fetch_video_commenters",
     "fetch_video_full",
+    "fetch_video_metadata",
     "fetch_channel_profile",
     "fetch_channel_recent_comments",
 ]
