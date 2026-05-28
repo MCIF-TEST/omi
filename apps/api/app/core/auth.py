@@ -121,6 +121,8 @@ class CurrentUser:
     subscription_status: str | None
     subscription_renews_at: datetime | None
     is_admin: bool
+    referral_code: str | None = None
+    referral_credits_earned: int = 0
 
     @classmethod
     def from_row(cls, u: User) -> "CurrentUser":
@@ -131,6 +133,8 @@ class CurrentUser:
             subscription_status=u.subscription_status,
             subscription_renews_at=u.subscription_renews_at,
             is_admin=bool(u.is_admin),
+            referral_code=u.referral_code,
+            referral_credits_earned=u.referral_credits_earned or 0,
         )
 
 

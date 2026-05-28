@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Search, Activity, Database, Zap, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Search, Activity, Database, Zap, ArrowRight, CheckCircle2, Gift } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
@@ -164,6 +164,34 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </Card>
+
+      {/* Referral nudge */}
+      {user?.referral_code && (
+        <Link
+          href="/settings"
+          className="block group"
+        >
+          <div className="flex items-center gap-4 p-4 rounded-md border border-accent/30 bg-accent/5 hover:border-accent hover:bg-accent/10 transition-colors">
+            <div className="shrink-0 w-10 h-10 rounded-sm border border-accent/40 bg-bg flex items-center justify-center text-accent">
+              <Gift size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-0.5">
+                Earn credits
+              </p>
+              <p className="text-sm text-fg">
+                Invite a friend → +3 credits when they sign up, +5 more when they subscribe.
+                {user.referral_credits_earned > 0 && (
+                  <span className="font-medium ml-1">
+                    You&apos;ve earned {user.referral_credits_earned} so far.
+                  </span>
+                )}
+              </p>
+            </div>
+            <ArrowRight size={16} className="text-accent shrink-0 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+      )}
 
       {/* Platform roadmap */}
       <Card>

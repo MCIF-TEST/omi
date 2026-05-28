@@ -187,6 +187,23 @@ class User(Base):
     notify_alerts_webhook: Mapped[int] = mapped_column(Integer, default=0)
     webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Anti-abuse: hash of the IP this user signed up from. Used by signup to
+    # detect duplicate-IP signups (multiple "free trial" accounts from one
+    # household). Raw IP never stored.
+    signup_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+    # Referral system. Every user gets a short URL-safe code at signup. When
+    # a friend signs up with this code, the referrer gets +3 credits at
+    # signup and +5 more when the referred user starts a subscription.
+    referral_code: Mapped[str | None] = mapped_column(String(16), nullable=True, unique=True, index=True)
+    referred_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    referral_credits_earned: Mapped[int] = mapped_column(Integer, default=0)
+    # Idempotency guard: ensures the subscription-conversion bonus is paid
+    # only once even if Stripe sends the subscription.created event twice.
+    referral_subscription_bonus_paid: Mapped[int] = mapped_column(Integer, default=0)
+
 
 class ScanLog(Base):
     """One row per scan a user initiates. Auditable history + analytics."""

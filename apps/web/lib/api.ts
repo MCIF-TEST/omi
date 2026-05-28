@@ -63,6 +63,8 @@ export interface User {
   subscription_status: string | null;
   subscription_renews_at: string | null;
   is_admin: boolean;
+  referral_code: string | null;
+  referral_credits_earned: number;
 }
 
 export interface EngineStatus {

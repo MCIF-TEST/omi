@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth';
 import { ManageSubscriptionButton } from './manage-subscription-button';
 import { NotificationsBlock } from './notifications-block';
+import { ReferralBlock } from './referral-block';
 
 export const metadata = { title: 'Settings — OMISPHERE' };
 
@@ -59,6 +60,11 @@ export default async function SettingsPage() {
         </p>
         <ManageSubscriptionButton active={user.subscription_status === 'active'} />
       </Card>
+
+      <ReferralBlock
+        referralCode={user.referral_code}
+        creditsEarned={user.referral_credits_earned}
+      />
 
       <NotificationsBlock />
 
