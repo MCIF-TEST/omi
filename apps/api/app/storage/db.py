@@ -62,7 +62,8 @@ def init_db(url: str | None = None) -> Engine:
     # Capture pre-existing tables so we can log what gets newly created.
     try:
         before = set(inspect(_engine).get_table_names())
-    except Exception:
+    except Exception as e:
+        _logger.warning("could not enumerate existing tables: %s", e)
         before = set()
 
     Base.metadata.create_all(_engine)
@@ -72,8 +73,8 @@ def init_db(url: str | None = None) -> Engine:
         new_tables = sorted(after - before)
         if new_tables:
             _logger.info("Created %d new tables: %s", len(new_tables), ", ".join(new_tables))
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.warning("could not verify table creation: %s", e)
 
     return _engine
 
