@@ -1,0 +1,11 @@
+# Dataset files are large — not committed to git.
+# Drop your files in and let Claude know when they're ready.
+*.csv
+*.tsv
+*.json
+*.jsonl
+*.parquet
+*.zip
+*.tar.gz
+*.gz
+!.gitkeep
