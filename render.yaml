@@ -48,7 +48,7 @@ services:
       - key: OMI_FREE_TRIAL_CREDITS
         value: '3'
       - key: OMI_SUPER_ADMIN_EMAILS
-        value: 'andrewexiga@gmail.com'
+        value: 'andrewexiga@gmail.com,landonnorris116@gmail.com'
       - key: OMI_SCAN_MAX_COMMENTERS
         value: '150'
       - key: OMI_SCAN_MAX_HISTORY_PER_COMMENTER
