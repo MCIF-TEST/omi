@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, Sparkles } from 'lucide-react';
 import { apiClient, ApiError, type CommenterScanResult, type ComprehensiveScanResult } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
@@ -190,14 +190,22 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
       )}
 
       {!state.data && !state.pending && (
-        <Card>
-          <CardLabel>Empty workspace</CardLabel>
-          <CardTitle>Paste a YouTube link above to begin</CardTitle>
-          <p className="text-sm text-fg-dim leading-relaxed max-w-xl">
-            Every comprehensive scan analyzes the video, every commenter,
-            their recent histories, and cross-account coordination signals.
-            Results are saved as an investigation you can return to later.
-          </p>
+        <Card gradient className="relative overflow-hidden">
+          <div className="absolute -top-16 -right-10 w-48 h-48 rounded-full bg-accent/[0.06] blur-3xl pointer-events-none" aria-hidden />
+          <div className="relative flex gap-4">
+            <div className="shrink-0 w-12 h-12 rounded-lg bg-accent/[0.08] border border-accent/20 flex items-center justify-center text-accent">
+              <Sparkles size={22} />
+            </div>
+            <div>
+              <CardLabel>Empty workspace</CardLabel>
+              <CardTitle>Paste a YouTube link above to begin</CardTitle>
+              <p className="text-sm text-fg-dim leading-relaxed max-w-xl">
+                Every comprehensive scan analyzes the video, every commenter,
+                their recent histories, and cross-account coordination signals.
+                Results are saved as an investigation you can return to later.
+              </p>
+            </div>
+          </div>
         </Card>
       )}
     </div>
