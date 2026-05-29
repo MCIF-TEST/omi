@@ -18,7 +18,8 @@ export class ApiError extends Error {
  *  re-uses it; not intended as a public API. */
 export async function _parse<T>(res: Response): Promise<T> {
   const text = await res.text();
-  const body = text ? _safeJson(text) : undefined;
+  const parsed = text ? _tryJson(text) : { ok: true as const, value: undefined };
+  const body = parsed.ok ? parsed.value : text;
   if (!res.ok) {
     const detail =
       (body && typeof body === 'object' && 'detail' in body && typeof (body as any).detail === 'string')
@@ -26,11 +27,26 @@ export async function _parse<T>(res: Response): Promise<T> {
         : res.statusText;
     throw new ApiError(res.status, detail, body);
   }
+  // A 2xx response whose body arrived but doesn't parse as JSON means the
+  // response was truncated or replaced by a gateway/proxy error page — common
+  // when a long scan exceeds an upstream timeout and the connection is cut
+  // after the status line. Silently returning the raw string here used to
+  // leave callers with `data` set to an unrenderable string, so the UI showed
+  // nothing at all. Surface it as an error instead.
+  if (text && !parsed.ok) {
+    throw new ApiError(
+      res.status,
+      'The server returned an incomplete response. The request may have ' +
+        'timed out — try again, and reduce the batch size if it persists.',
+      body,
+    );
+  }
   return body as T;
 }
 
-function _safeJson(s: string): unknown {
-  try { return JSON.parse(s); } catch { return s; }
+type JsonParse = { ok: true; value: unknown } | { ok: false };
+function _tryJson(s: string): JsonParse {
+  try { return { ok: true, value: JSON.parse(s) }; } catch { return { ok: false }; }
 }
 
 /** Browser-side fetch. Uses /api/* rewrite for same-origin cookies. */

@@ -877,10 +877,13 @@ def scan_link(
         existing_slug = payload.get("investigation_slug")
         slug = existing_slug or ("inv_" + secrets.token_hex(4))
 
-        result_dict = result.model_dump()
-        result_dict["investigation_slug"] = slug
-        from app.schemas import ComprehensiveScanResult as CSR
-        stamped = CSR.model_validate({**result_dict})
+        # Stamp the slug directly on the existing model. The previous
+        # implementation round-tripped the whole 200-300KB result through
+        # model_dump() + model_validate() just to add one string field — two
+        # full traversals of a large object on the request thread, for every
+        # authenticated scan. Pydantic v2 allows plain attribute assignment,
+        # so set it in place and skip the round-trip entirely.
+        result.investigation_slug = slug
 
         # Offload persistence to the background pool.
         from app.core import background as _bg
@@ -893,7 +896,7 @@ def scan_link(
             url=url,
             result=result,
         )
-        return stamped
+        return result
 
     return result
 
