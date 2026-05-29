@@ -41,17 +41,30 @@ except ImportError:  # pragma: no cover - declared as a dep
     bcrypt = None  # type: ignore
 
 
+# bcrypt only considers the first 72 bytes of a password, and bcrypt>=4
+# *raises* on anything longer instead of silently truncating. SignupRequest
+# allows passwords up to 200 chars, so without this a long passphrase would
+# 500 the signup endpoint. Truncate to 72 bytes in BOTH hash and verify so
+# the behavior is consistent (a long password set at signup still logs in)
+# and backward-compatible (passwords <= 72 bytes are untouched).
+_BCRYPT_MAX_BYTES = 72
+
+
+def _bcrypt_bytes(plain: str) -> bytes:
+    return (plain or "").encode("utf-8")[:_BCRYPT_MAX_BYTES]
+
+
 def hash_password(plain: str) -> str:
     if bcrypt is None:
         raise RuntimeError("bcrypt is not installed; run pip install -e .[auth]")
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode()
+    return bcrypt.hashpw(_bcrypt_bytes(plain), bcrypt.gensalt(rounds=12)).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     if bcrypt is None:
         return False
     try:
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+        return bcrypt.checkpw(_bcrypt_bytes(plain), hashed.encode("utf-8"))
     except (ValueError, TypeError):
         return False
 

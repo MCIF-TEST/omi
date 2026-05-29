@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
 from app.core.auth import (
     CurrentUser,
@@ -122,7 +123,17 @@ def signup(req: SignupRequest, request: Request, response: Response, settings: S
             referred_by_user_id=referrer.id if referrer else None,
         )
         session.add(user)
-        session.flush()  # populate user.id
+        try:
+            session.flush()  # populate user.id; surfaces unique violations
+        except IntegrityError:
+            # Two signups for the same email raced past the existence check
+            # above (or some other unique constraint tripped). Roll the failed
+            # INSERT back and return the same clean 409 the check would have.
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with that email already exists. Try logging in.",
+            )
 
         # Grant the referrer's +3 signup bonus only when the referee is a
         # "real" signup. Same-IP suppressed signups don't qualify, which
