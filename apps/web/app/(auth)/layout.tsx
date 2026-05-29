@@ -3,7 +3,7 @@ import { Logo } from '@/components/shared/logo';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col bg-bg-deep">
+    <div className="min-h-screen flex flex-col bg-bg-deep grain">
       {/* Aurora */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
         <div className="absolute top-[-10%] left-[30%] w-[600px] h-[500px] rounded-full bg-accent/[0.055] blur-[130px]" />

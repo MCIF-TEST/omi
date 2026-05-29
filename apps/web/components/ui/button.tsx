@@ -11,13 +11,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    'bg-accent text-bg-deep hover:bg-accent-2 border border-accent disabled:opacity-50 disabled:cursor-not-allowed',
+    'bg-accent text-bg-deep hover:bg-accent-2 border border-accent btn-glow disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:before:hidden',
   secondary:
-    'bg-bg-elev text-fg hover:bg-bg-elev-2 border border-border-2 disabled:opacity-50 disabled:cursor-not-allowed',
+    'bg-bg-elev text-fg hover:bg-bg-elev-2 border border-border-2 hover:border-border-hot disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150',
   ghost:
-    'bg-transparent text-fg-dim hover:text-fg hover:bg-bg-elev border border-transparent disabled:opacity-50',
+    'bg-transparent text-fg-dim hover:text-fg hover:bg-bg-elev border border-transparent disabled:opacity-50 transition-colors duration-150',
   danger:
-    'bg-tier-high/10 text-tier-high hover:bg-tier-high/20 border border-tier-high/40',
+    'bg-tier-high/10 text-tier-high hover:bg-tier-high/20 border border-tier-high/40 transition-colors duration-150',
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -31,7 +31,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-sm font-medium uppercase transition-colors duration-150',
+        'inline-flex items-center justify-center gap-2 rounded-sm font-medium uppercase',
         variantClasses[variant],
         sizeClasses[size],
         className,
