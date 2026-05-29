@@ -11,11 +11,15 @@ import {
   GitBranch,
 } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
+import { Reveal } from '@/components/shared/reveal';
+import { AnimatedNumber } from '@/components/shared/animated-number';
+import { ScrollProgress } from '@/components/shared/scroll-progress';
 import { DemoScanForm } from './demo-scan-form';
 
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-bg-deep flex flex-col relative overflow-hidden grain">
+      <ScrollProgress />
 
       {/* Aurora blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
@@ -101,71 +105,47 @@ export function LandingPage() {
       <section className="relative z-10 px-6 pb-6 max-w-5xl mx-auto w-full">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { value: '8',   label: 'Detection signals',  sub: 'per commenter' },
-            { value: '3',   label: 'Coord. detectors',   sub: 'cross-account' },
-            { value: '0',   label: 'LLMs in core path',  sub: 'pure heuristics' },
-            { value: '∞',   label: 'Self-improving DB',  sub: 'every scan trains it' },
-          ].map(({ value, label, sub }) => (
-            <div
-              key={label}
-              className="p-4 rounded-lg border border-border-1 bg-bg-elev/50 text-center hover:border-border-hot transition-colors"
-            >
-              <div className="text-3xl font-semibold mono text-accent mb-0.5">{value}</div>
-              <div className="font-mono text-2xs text-fg uppercase tracking-wider">{label}</div>
-              <div className="font-mono text-2xs text-fg-faint mt-0.5">{sub}</div>
-            </div>
+            { num: 8,    suffix: '',  label: 'Detection signals',  sub: 'per commenter' },
+            { num: 3,    suffix: '',  label: 'Coord. detectors',   sub: 'cross-account' },
+            { num: 0,    suffix: '',  label: 'LLMs in core path',  sub: 'pure heuristics' },
+            { num: null, suffix: '∞', label: 'Self-improving DB',  sub: 'every scan trains it' },
+          ].map(({ num, suffix, label, sub }, i) => (
+            <Reveal key={label} delay={i * 70} from="up">
+              <div className="group p-4 rounded-lg border border-border-1 bg-bg-elev/50 text-center card-interactive spotlight">
+                <div className="text-3xl font-semibold mono text-accent mb-0.5">
+                  {num !== null ? <AnimatedNumber value={num} format={false} onView /> : suffix}
+                </div>
+                <div className="font-mono text-2xs text-fg uppercase tracking-wider">{label}</div>
+                <div className="font-mono text-2xs text-fg-faint mt-0.5">{sub}</div>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Features ────────────────────────────────────────────── */}
       <section className="relative z-10 px-6 py-16 max-w-5xl mx-auto w-full">
-        <div className="text-center mb-12">
+        <Reveal className="text-center mb-12">
           <p className="font-mono text-2xs tracking-[0.2em] text-accent uppercase mb-3">
             Capabilities
           </p>
           <h2 className="text-2xl md:text-3xl font-semibold text-fg tracking-tight">
             Intelligence across every dimension
           </h2>
-        </div>
+        </Reveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger">
-          <FeatureCard
-            icon={<ShieldAlert size={20} />}
-            title="Per-commenter detection"
-            body="Each commenter scored on temporal cadence, semantic repetition, AI-writing tells, profile metadata, personal-voice rate, engagement farming, fingerprint memory, and coordination. Probabilistic with explicit evidence."
-          />
-          <FeatureCard
-            icon={<Network size={20} />}
-            title="Coordination clusters"
-            body="Three cross-account detectors find groups acting together: temporal-semantic bursts (copy-paste within seconds), age cohorts (accounts created in the same week), and co-engagement (the same people on the same videos)."
-          />
-          <FeatureCard
-            icon={<Activity size={20} />}
-            title="Narrative tracking"
-            body="Semantic clusters across all your scans. See which talking points are organic and which are being amplified by suspicious accounts — across every video you've ever scanned."
-          />
-          <FeatureCard
-            icon={<Database size={20} />}
-            title="Self-improving database"
-            body="Every scan adds a behavioural fingerprint and persists coordination edges. Future scans pull priors from the growing set, so the engine sharpens the more you use it."
-          />
-          <FeatureCard
-            icon={<Cpu size={20} />}
-            title="Pure-signal engine"
-            body="No LLMs in the core detection path — pure Python heuristics, embeddings, and graph algorithms. Fast, deterministic, and fully auditable. LLMs are reserved for optional report generation only."
-          />
-          <FeatureCard
-            icon={<Eye size={20} />}
-            title="Full evidence chain"
-            body="Every score shows its work. Click any flag to see the raw signals that triggered it — timestamps, text matches, account metadata. No black boxes. Probabilistic reasoning, fully transparent."
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={(i % 2) * 80} from="up">
+              <FeatureCard icon={f.icon} title={f.title} body={f.body} />
+            </Reveal>
+          ))}
         </div>
       </section>
 
       {/* ── Scope block ─────────────────────────────────────────── */}
       <section className="relative z-10 px-6 pb-8 max-w-4xl mx-auto w-full">
-        <div className="rounded-lg border border-border-1 bg-bg-elev/40 p-6 flex gap-4">
+        <Reveal className="rounded-lg border border-border-1 bg-bg-elev/40 p-6 flex gap-4">
           <GitBranch size={16} className="text-fg-mute shrink-0 mt-0.5" />
           <div>
             <p className="font-mono text-2xs tracking-wider uppercase text-fg-mute mb-2">
@@ -177,34 +157,36 @@ export function LandingPage() {
               is on the roadmap. We&apos;d rather ship one platform with depth than four with stubs.
             </p>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ── CTA ─────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 py-20 max-w-3xl mx-auto w-full text-center space-y-6">
-        <h2 className="text-3xl md:text-4xl font-semibold text-fg tracking-tight leading-tight">
-          Ready to see what&apos;s{' '}
-          <span className="text-gradient">real?</span>
-        </h2>
-        <p className="text-lg text-fg-dim max-w-xl mx-auto">
-          $9.99/month · 20 scans · 3 free on signup. Cancel anytime.
-          Built for journalists, researchers, and platform integrity teams.
-        </p>
-        <div className="flex items-center justify-center gap-4 pt-2 flex-wrap">
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-8 py-3 rounded-sm hover:bg-accent-2 transition-all btn-glow"
-          >
-            Start free trial
-            <ArrowRight size={16} />
-          </Link>
-          <Link
-            href="/pricing"
-            className="font-mono text-2xs tracking-wider uppercase text-fg-dim hover:text-fg transition-colors px-4 py-3"
-          >
-            See full pricing →
-          </Link>
-        </div>
+      <section className="relative z-10 px-6 py-20 max-w-3xl mx-auto w-full text-center">
+        <Reveal from="scale" className="space-y-6">
+          <h2 className="text-3xl md:text-4xl font-semibold text-fg tracking-tight leading-tight">
+            Ready to see what&apos;s{' '}
+            <span className="text-brand">real?</span>
+          </h2>
+          <p className="text-lg text-fg-dim max-w-xl mx-auto">
+            $9.99/month · 20 scans · 3 free on signup. Cancel anytime.
+            Built for journalists, researchers, and platform integrity teams.
+          </p>
+          <div className="flex items-center justify-center gap-4 pt-2 flex-wrap">
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-8 py-3 rounded-sm hover:bg-accent-2 transition-all btn-glow"
+            >
+              Start free trial
+              <ArrowRight size={16} />
+            </Link>
+            <Link
+              href="/pricing"
+              className="font-mono text-2xs tracking-wider uppercase text-fg-dim hover:text-fg transition-colors px-4 py-3"
+            >
+              See full pricing →
+            </Link>
+          </div>
+        </Reveal>
       </section>
 
       {/* ── Footer ──────────────────────────────────────────────── */}
@@ -225,6 +207,39 @@ export function LandingPage() {
     </div>
   );
 }
+
+const FEATURES = [
+  {
+    icon: <ShieldAlert size={20} />,
+    title: 'Per-commenter detection',
+    body: 'Each commenter scored on temporal cadence, semantic repetition, AI-writing tells, profile metadata, personal-voice rate, engagement farming, fingerprint memory, and coordination. Probabilistic with explicit evidence.',
+  },
+  {
+    icon: <Network size={20} />,
+    title: 'Coordination clusters',
+    body: 'Three cross-account detectors find groups acting together: temporal-semantic bursts (copy-paste within seconds), age cohorts (accounts created in the same week), and co-engagement (the same people on the same videos).',
+  },
+  {
+    icon: <Activity size={20} />,
+    title: 'Narrative tracking',
+    body: "Semantic clusters across all your scans. See which talking points are organic and which are being amplified by suspicious accounts — across every video you've ever scanned.",
+  },
+  {
+    icon: <Database size={20} />,
+    title: 'Self-improving database',
+    body: 'Every scan adds a behavioural fingerprint and persists coordination edges. Future scans pull priors from the growing set, so the engine sharpens the more you use it.',
+  },
+  {
+    icon: <Cpu size={20} />,
+    title: 'Pure-signal engine',
+    body: 'No LLMs in the core detection path — pure Python heuristics, embeddings, and graph algorithms. Fast, deterministic, and fully auditable. LLMs are reserved for optional report generation only.',
+  },
+  {
+    icon: <Eye size={20} />,
+    title: 'Full evidence chain',
+    body: 'Every score shows its work. Click any flag to see the raw signals that triggered it — timestamps, text matches, account metadata. No black boxes. Probabilistic reasoning, fully transparent.',
+  },
+];
 
 function FeatureCard({
   icon,

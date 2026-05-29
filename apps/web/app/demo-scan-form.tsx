@@ -15,6 +15,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { apiClient, ApiError, type ComprehensiveScanResult } from '@/lib/api';
+import { ScoreRing } from '@/components/shared/score-ring';
 
 const EXAMPLES = [
   'https://www.youtube.com/watch?v=jNQXAC9IVRw',
@@ -172,17 +173,22 @@ function DemoResult({
 
   return (
     <div className="space-y-5 animate-fade-up">
-      <div className="flex items-center gap-2 mb-3">
-        <span
-          className={`inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2 py-1 rounded-sm border ${cls}`}
-        >
-          {icon}
-          {tier} risk
-        </span>
-        <span className="font-mono text-2xs text-fg-mute">Scan complete</span>
+      {/* Hero reveal — score ring + verdict */}
+      <div className="flex items-center gap-5 flex-wrap">
+        <ScoreRing value={video?.coordination_score || 0} tier={tier} size={104} />
+        <div className="flex-1 min-w-[200px] space-y-2">
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2 py-1 rounded-sm border ${cls}`}
+            >
+              {icon}
+              {tier} risk
+            </span>
+            <span className="font-mono text-2xs text-fg-mute">Scan complete</span>
+          </div>
+          <p className="text-sm text-fg leading-relaxed">{result.summary}</p>
+        </div>
       </div>
-
-      <p className="text-sm text-fg leading-relaxed">{result.summary}</p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Commenters" value={video?.commenter_count || 0} icon={<Users size={11} />} />

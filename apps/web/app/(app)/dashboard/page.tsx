@@ -11,6 +11,7 @@ import { apiServer } from '@/lib/api-server';
 import { getCurrentUser } from '@/lib/auth';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { AnimatedNumber } from '@/components/shared/animated-number';
 
 export const metadata = { title: 'Dashboard — OMISPHERE' };
 
@@ -57,19 +58,19 @@ export default async function DashboardPage() {
         <StatCard
           icon={<Database size={14} />}
           label="Fingerprints"
-          value={(status?.fingerprints_stored ?? 0).toLocaleString()}
+          value={status?.fingerprints_stored ?? 0}
           sub="stored across all scans"
         />
         <StatCard
           icon={<Activity size={14} />}
           label="Total scans"
-          value={(status?.total_scans ?? 0).toLocaleString()}
+          value={status?.total_scans ?? 0}
           sub="self-improving database"
         />
         <StatCard
           icon={<Search size={14} />}
           label="Coord. edges"
-          value={(status?.total_engagement_edges ?? 0).toLocaleString()}
+          value={status?.total_engagement_edges ?? 0}
           sub="commenter ↔ video links"
         />
       </div>
@@ -231,7 +232,7 @@ function StatCard({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: number | string;
+  value: number;
   sub: string;
   tone?: 'accent' | 'danger';
 }) {
@@ -251,7 +252,7 @@ function StatCard({
         </span>
       </div>
       <div className={`font-mono text-2xl font-semibold tabular-nums mb-1 ${tone === 'danger' ? 'text-danger' : tone === 'accent' ? 'text-accent' : 'text-fg'}`}>
-        {value}
+        <AnimatedNumber value={value} />
       </div>
       <div className="text-xs text-fg-mute">{sub}</div>
     </div>

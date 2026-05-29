@@ -37,7 +37,7 @@ export function ScanInput({ initialUrl = '', pending, batchSize, onBatchSizeChan
   };
 
   const borderColor =
-    c.kind === 'video'   ? 'border-accent-dim' :
+    c.kind === 'video'   ? 'border-accent focus:shadow-glow-sm' :
     c.kind === 'channel' ? 'border-tier-elevated/60' :
     c.kind === 'unknown' ? 'border-danger/60' :
     'border-border-2';
