@@ -26,6 +26,12 @@ out/
 apps/api/data/
 .docker-data/
 
+# Dataset ingestion runtime artifacts (provenance is per-DB / per-run; the
+# source datasets themselves are committed, these generated outputs are not)
+datasets/.omi_ingest_ledger.json
+datasets/_generated/
+*.joblib
+
 # Editor
 .vscode/
 .idea/

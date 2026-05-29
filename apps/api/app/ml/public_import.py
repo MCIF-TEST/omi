@@ -98,12 +98,18 @@ def ingest_records(
     dataset_name: str = "public",
     label_confidence: str = "medium",
     user_id: int | None = None,
+    allow_textless: bool = False,
 ) -> dict:
     """Run each public record through the real engine, persist the account +
     its scan + fingerprint, and attach an ``imported_dataset`` label.
 
     Returns counts. Idempotent per ``external_id`` within the imported
     platform namespace (re-running updates the same account rows).
+
+    ``allow_textless`` lets behavioral-only account datasets (follower /
+    following / age + label, no raw post text) through: the account is scored
+    on its profile + metadata signals alone, with the text-based detectors
+    abstaining (zero confidence). Without this flag such rows are skipped.
     """
     from app.storage.models import Account, AccountLabel
 
@@ -114,7 +120,7 @@ def ingest_records(
 
     for rec in records:
         posts = _to_posts(rec)
-        if not posts:
+        if not posts and not allow_textless:
             n_skipped += 1
             continue
         profile = _to_profile(rec)
