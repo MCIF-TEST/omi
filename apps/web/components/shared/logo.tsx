@@ -1,15 +1,34 @@
-import { ShieldCheck } from "lucide-react";
+import { cn } from '@/lib/cn';
 
-export function Logo({ className = "" }: { className?: string }) {
+interface LogoProps {
+  className?: string;
+  showName?: boolean;
+}
+
+export function Logo({ className, showName = true }: LogoProps) {
   return (
-    <div className={`group flex items-center gap-2.5 ${className}`}>
-      <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient shadow-glow transition-transform duration-300 group-hover:scale-105">
-        <ShieldCheck size={18} className="text-primary-foreground" />
-        <div className="pointer-events-none absolute inset-0 rounded-lg bg-white/10 opacity-0 transition-opacity group-hover:opacity-100" />
-      </div>
-      <span className="font-mono text-lg font-bold tracking-tight">
-        OMI<span className="text-gradient">SPHERE</span>
-      </span>
+    <div className={cn('inline-flex items-center gap-2.5', className)}>
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 32 32"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden
+      >
+        <path
+          d="M16 2L29 9.5V22.5L16 30L3 22.5V9.5L16 2Z"
+          stroke="var(--accent)"
+          strokeWidth="1.5"
+          fill="rgba(34, 211, 238, 0.06)"
+        />
+        <circle cx="16" cy="16" r="4" fill="var(--accent)" />
+      </svg>
+      {showName && (
+        <span className="font-mono text-sm font-bold tracking-[0.18em] text-fg">
+          OMISPHERE
+        </span>
+      )}
     </div>
   );
 }
