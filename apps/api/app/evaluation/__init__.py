@@ -37,6 +37,17 @@ from app.evaluation.rescue_benchmark import (
     load_rescue_benchmark,
     run_rescue_scenario,
 )
+from app.evaluation.memory_benchmark import (
+    MEMORY_BENCHMARK_VERSION,
+    DEFAULT_MEMORY_BENCHMARK,
+    MemoryScenario,
+    MemoryScenarioResult,
+    compute_memory_report,
+    evaluate_memory,
+    evaluate_memory_default,
+    load_memory_benchmark,
+    run_memory_scenario,
+)
 from app.evaluation.metrics import (
     TIER_MIDPOINT,
     EvalRow,
@@ -72,6 +83,15 @@ __all__ = [
     "evaluate_rescue_default",
     "load_rescue_benchmark",
     "run_rescue_scenario",
+    "MEMORY_BENCHMARK_VERSION",
+    "DEFAULT_MEMORY_BENCHMARK",
+    "MemoryScenario",
+    "MemoryScenarioResult",
+    "compute_memory_report",
+    "evaluate_memory",
+    "evaluate_memory_default",
+    "load_memory_benchmark",
+    "run_memory_scenario",
     "TIER_MIDPOINT",
     "EvalRow",
     "compute_report",

@@ -1,0 +1,70 @@
+[
+  {
+    "label": "bad_neighborhood_rescue_burst_bot",
+    "neighborhood": "bad",
+    "role": "bot",
+    "neighbor_score": 0.86,
+    "neighbor_confidence": 0.72,
+    "expected_standalone_tier": "low",
+    "description": "A sparse burst-style bot that scores LOW alone. As the store fills with similar accounts we previously flagged, memory lifts it into a flagged tier.",
+    "profile": {"platform": "youtube", "handle": "@mem_bot1", "follower_count": 1, "following_count": 0, "created_at": "2024-02-01T00:00:00Z"},
+    "posts": [
+      {"id": "m1a", "author_handle": "@mem_bot1", "text": "Amazing video keep it up!", "created_at": "2024-03-10T15:00:00Z"},
+      {"id": "m1b", "author_handle": "@mem_bot1", "text": "So good thanks", "created_at": "2024-03-09T12:00:00Z"}
+    ]
+  },
+  {
+    "label": "bad_neighborhood_rescue_promo_bot",
+    "neighborhood": "bad",
+    "role": "bot",
+    "neighbor_score": 0.88,
+    "neighbor_confidence": 0.75,
+    "expected_standalone_tier": "low",
+    "description": "A sparse promo bot, LOW alone. Memory recognises the behavioral family from prior scans.",
+    "profile": {"platform": "youtube", "handle": "@mem_bot2", "follower_count": 0, "following_count": 2, "created_at": "2024-01-20T00:00:00Z"},
+    "posts": [
+      {"id": "m2a", "author_handle": "@mem_bot2", "text": "Check my channel for more", "created_at": "2024-03-11T09:00:00Z"}
+    ]
+  },
+  {
+    "label": "bad_neighborhood_rescue_generic_bot",
+    "neighborhood": "bad",
+    "role": "bot",
+    "neighbor_score": 0.83,
+    "neighbor_confidence": 0.70,
+    "expected_standalone_tier": "low",
+    "description": "Generic low-effort bot, LOW alone, rescued by accumulated memory.",
+    "profile": {"platform": "youtube", "handle": "@mem_bot3", "follower_count": 3, "following_count": 1, "created_at": "2024-02-12T00:00:00Z"},
+    "posts": [
+      {"id": "m3a", "author_handle": "@mem_bot3", "text": "first", "created_at": "2024-03-12T10:00:00Z"},
+      {"id": "m3b", "author_handle": "@mem_bot3", "text": "nice", "created_at": "2024-03-12T10:05:00Z"}
+    ]
+  },
+  {
+    "label": "good_neighborhood_no_false_lift",
+    "neighborhood": "good",
+    "role": "organic",
+    "neighbor_score": 0.14,
+    "neighbor_confidence": 0.70,
+    "expected_standalone_tier": "low",
+    "description": "A real viewer with a sparse-but-genuine comment. The store fills with similar accounts we previously cleared; memory must NOT escalate it.",
+    "profile": {"platform": "youtube", "handle": "@mem_org1", "follower_count": 410, "following_count": 230, "created_at": "2016-05-12T00:00:00Z", "bio": "Dad, runner, amateur investor."},
+    "posts": [
+      {"id": "g1a", "author_handle": "@mem_org1", "text": "The bond ladder example at 14 minutes was the clearest explanation of that I have seen, finally understand why my advisor structured mine the way he did.", "created_at": "2024-03-10T14:45:00Z"},
+      {"id": "g1b", "author_handle": "@mem_org1", "text": "Came back to rewatch the sequencing-risk part before my own retirement meeting next week. Thanks for keeping it jargon-light.", "created_at": "2024-02-28T08:00:00Z"}
+    ]
+  },
+  {
+    "label": "distant_neighborhood_inert",
+    "neighborhood": "distant",
+    "role": "bot",
+    "neighbor_score": 0.90,
+    "neighbor_confidence": 0.80,
+    "expected_standalone_tier": "low",
+    "description": "A bot whose fingerprint matches nothing in the store, even though the store is full of high-suspicion accounts. The memory signal must stay at zero confidence and leave the score untouched at every store size — conservatism guard.",
+    "profile": {"platform": "youtube", "handle": "@mem_bot_far", "follower_count": 2, "following_count": 0, "created_at": "2024-02-05T00:00:00Z"},
+    "posts": [
+      {"id": "d1a", "author_handle": "@mem_bot_far", "text": "great content", "created_at": "2024-03-13T11:00:00Z"}
+    ]
+  }
+]

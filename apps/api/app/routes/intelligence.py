@@ -30,6 +30,7 @@ from app.detection.scoring import _extract_reasons, _infer_intent
 from app.evaluation import (
     evaluate_coordination_default,
     evaluate_default,
+    evaluate_memory_default,
     evaluate_rescue_default,
 )
 from app.intelligence import OmiScore, compute_omiscore
@@ -140,6 +141,32 @@ def get_rescue_benchmark(current: CurrentUser = Depends(require_user)) -> dict:
     if cached is not None:
         return cached
     report = evaluate_rescue_default()
+    cache.set(key, report, ttl_seconds=600)
+    return report
+
+
+@router.get("/benchmark/memory")
+def get_memory_benchmark(current: CurrentUser = Depends(require_user)) -> dict:
+    """Admin scoreboard for memory learning — the "becomes smarter over time"
+    pillar.
+
+    Measures the longitudinal claim: as the persistent fingerprint store
+    accumulates previously-scored accounts, a sparse-history account that
+    behaves like known-bad accounts gets correctly flagged when a cold store
+    would miss it. Returns the cold→warm recall lift, the learning curve per
+    scenario, and the false-escalation / conservatism guards.
+    """
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+
+    from app.core.cache import get_cache
+
+    cache = get_cache()
+    key = "engine_benchmark:memory_v1"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    report = evaluate_memory_default()
     cache.set(key, report, ttl_seconds=600)
     return report
 

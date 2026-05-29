@@ -151,6 +151,48 @@ Callers:
 | `tests/test_coordination_elevate.py` | unit contract for the shared elevation logic |
 | `GET /v1/intelligence/benchmark/rescue` (admin) | In-product rescue scoreboard |
 
+## Memory learning (memory_v1) — the "becomes smarter over time" pillar
+
+The benchmarks above are all single-point-in-time. This one measures the
+vision's central promise — *becomes smarter as more videos are analyzed* — by
+probing the engine at a series of reference-store sizes and watching the
+**learning curve**.
+
+It is the across-scan analog of the rescue benchmark: *rescue* proved the
+**coordination** dimension recovers recall **within one scan** (peers on the
+same video); *memory* proves the **memory** dimension recovers recall **across
+scans** (the reference set grows every time a video is analyzed). It drives the
+real path: `analyze_account` → `extract_fingerprint` →
+`compute_memory_signal` (against a store of size N) → `aggregate`. The store is
+synthesised in-memory at each size, so it stays DB-free and deterministic.
+
+`app/evaluation/benchmarks/memory_v1.json` — 5 scenarios: 3 bad bots in a
+known-bad fingerprint neighborhood, 1 clean account in a previously-cleared
+neighborhood, 1 bot whose fingerprint matches nothing (conservatism guard).
+
+| Metric | Value | Meaning |
+|---|---|---|
+| cold_bad_recall | **0.000** | empty store: bad accounts slip through |
+| warm_bad_recall | **1.000** | full store: all caught |
+| memory_recall_lift | **+1.000** | the headline: the engine *learned* |
+| bad_monotonic_rate | **1.000** | the learning curve never goes backwards |
+| mean_warm_prob_lift | **+0.345** | average lift once the store is warm |
+| good_false_lift | **0.000** | behaving like *cleared* accounts never raises suspicion |
+| distant_inert_rate | **1.000** | unmatched accounts left exactly untouched |
+
+Representative curve (a bad bot): cold `0.20/low` → at store sizes 1,2,3 the
+memory confidence climbs `0 → 0.29 → 0.58 → 0.72` and the score rises
+monotonically, crossing into `0.53/elevated`. A clean account in a cleared
+neighborhood is nudged *down* (`0.154 → 0.150`); an unmatched account stays flat
+at zero memory confidence.
+
+Callers:
+
+| Caller | Purpose |
+|---|---|
+| `tests/test_memory_benchmark.py` | CI gate — cold→warm lift, monotonic curve, no false escalation, inert-on-no-match |
+| `GET /v1/intelligence/benchmark/memory` (admin) | In-product learning scoreboard |
+
 ## Recommended next steps (harness-gated)
 
 1. ~~**Expand the benchmark to multi-account / coordination scenarios**~~ — **DONE.**
