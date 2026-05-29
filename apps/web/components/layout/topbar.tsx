@@ -1,103 +1,109 @@
-'use client';
+"use client";
 
-import { useCallback } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Bell, LogOut, Search, Zap } from 'lucide-react';
-import { Logo } from '@/components/shared/logo';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { apiClient, type AlertsResponse, type User } from '@/lib/api';
-import { usePolling } from '@/lib/use-polling';
-import { ServiceHealthPill } from './service-health';
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { LogOut, CreditCard, User as UserIcon, Command, ChevronDown } from "lucide-react";
 
-interface TopbarProps {
-  user: User;
-  engineStatus?: {
-    fingerprints_stored: number;
-    total_scans: number;
-    youtube_configured: boolean;
-    storage_ephemeral?: boolean;
-    youtube_quota_used_today?: number;
-    youtube_quota_daily_limit?: number;
-  };
-}
-
-export function Topbar({ user, engineStatus }: TopbarProps) {
+export function Topbar({
+  user,
+}: {
+  user: { email: string; credits: number; isAdmin: boolean } | null;
+}) {
   const router = useRouter();
-  const credits = user.credits_remaining;
-  const creditTone =
-    credits === 0 ? 'danger' : credits <= 3 ? 'warn' : 'accent';
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const onLogout = async () => {
-    try {
-      await apiClient('/v1/auth/logout', { method: 'POST' });
-    } catch { /* ignore */ }
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  async function logout() {
+    await fetch("/api/v1/auth/logout", { method: "POST" });
+    router.push("/login");
     router.refresh();
-    router.push('/login');
-  };
-
-  // Poll the unread alert count every 60s for the bell badge.
-  const alerts = usePolling<AlertsResponse>(
-    useCallback(() => apiClient<AlertsResponse>('/v1/monitoring/alerts?unread=true&limit=1'), []),
-    60_000,
-  );
-  const unread = alerts.data?.unread_count ?? 0;
+  }
 
   return (
-    <header className="h-14 shrink-0 border-b border-border-1 bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60 px-6 flex items-center justify-between gap-6">
-      <div className="flex items-center gap-6">
-        <Logo />
-        <div className="hidden lg:flex items-center gap-3 font-mono text-2xs text-fg-mute tracking-wider uppercase">
-          {engineStatus && (
-            <>
-              <span>FP <span className="text-fg">{engineStatus.fingerprints_stored}</span></span>
-              <span>·</span>
-              <span>Scans <span className="text-fg">{engineStatus.total_scans}</span></span>
-            </>
-          )}
-        </div>
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/70 px-6 backdrop-blur-xl">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => {
+            const e = new KeyboardEvent("keydown", { key: "k", metaKey: true });
+            window.dispatchEvent(e);
+          }}
+          className="flex items-center gap-2 rounded-lg border border-border bg-card/40 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+        >
+          <Command size={14} />
+          <span className="hidden sm:inline">Quick search</span>
+          <kbd className="hidden rounded bg-muted px-1.5 font-mono text-2xs sm:inline">⌘K</kbd>
+        </button>
       </div>
 
       <div className="flex items-center gap-3">
-        {engineStatus && (
-          <ServiceHealthPill
-            youtubeConfigured={engineStatus.youtube_configured}
-            storageEphemeral={Boolean(engineStatus.storage_ephemeral)}
-            isAdmin={user.is_admin}
-            quotaUsedToday={engineStatus.youtube_quota_used_today}
-            quotaDailyLimit={engineStatus.youtube_quota_daily_limit}
-          />
+        {user ? (
+          <>
+            {user.isAdmin && (
+              <span className="hidden rounded-full border border-secondary/30 bg-secondary/10 px-2.5 py-1 text-2xs font-semibold uppercase tracking-wider text-secondary sm:inline">
+                Admin
+              </span>
+            )}
+            <Link
+              href="/settings"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-card/40 px-3 py-1.5 text-sm transition-colors hover:border-accent/40 hover:bg-card"
+            >
+              <CreditCard size={14} className="text-accent" />
+              <span className="font-mono font-semibold">{user.credits}</span>
+              <span className="hidden text-muted-foreground sm:inline">credits</span>
+            </Link>
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setOpen(!open)}
+                className="flex items-center gap-1.5 rounded-lg p-1 pr-2 text-sm transition-colors hover:bg-muted"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-gradient text-xs font-bold text-primary-foreground shadow-glow">
+                  {user.email[0]?.toUpperCase()}
+                </div>
+                <ChevronDown
+                  size={14}
+                  className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+                />
+              </button>
+              {open && (
+                <div className="absolute right-0 top-full mt-2 w-52 overflow-hidden rounded-xl glass py-1 shadow-card animate-fade-in">
+                  <div className="border-b border-border px-3 py-2.5">
+                    <div className="truncate text-sm font-medium">{user.email}</div>
+                    <div className="text-2xs text-muted-foreground">
+                      {user.credits} credits remaining
+                    </div>
+                  </div>
+                  <Link
+                    href="/settings"
+                    className="flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
+                  >
+                    <UserIcon size={14} /> Settings
+                  </Link>
+                  <button
+                    onClick={logout}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive transition-colors hover:bg-muted"
+                  >
+                    <LogOut size={14} /> Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <Link href="/login" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+            Login
+          </Link>
         )}
-        <Link
-          href="/search"
-          className="hidden md:inline-flex items-center gap-2 px-2.5 h-7 border border-border-2 rounded-sm font-mono text-2xs tracking-wider uppercase text-fg-mute hover:text-fg-dim hover:border-border-hot transition-colors"
-          aria-label="Search accounts"
-        >
-          <span>Search</span>
-          <Search size={11} className="text-fg-mute" />
-        </Link>
-        <Link
-          href="/monitoring"
-          className="relative inline-flex items-center justify-center w-8 h-8 rounded-sm border border-border-2 hover:border-border-hot text-fg-dim hover:text-fg transition-colors"
-          aria-label={`Alerts (${unread} unread)`}
-        >
-          <Bell size={14} />
-          {unread > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] leading-4 text-center font-mono">
-              {unread > 99 ? '99+' : unread}
-            </span>
-          )}
-        </Link>
-        <Badge variant={creditTone}>
-          <Zap size={11} />
-          {credits} credit{credits === 1 ? '' : 's'}
-        </Badge>
-        <div className="hidden sm:block font-mono text-2xs text-fg-dim">{user.email}</div>
-        <Button variant="ghost" size="sm" onClick={onLogout} aria-label="Log out">
-          <LogOut size={14} />
-          Logout
-        </Button>
       </div>
     </header>
   );
