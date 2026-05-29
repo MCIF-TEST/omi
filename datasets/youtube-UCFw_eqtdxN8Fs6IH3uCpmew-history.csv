@@ -1,2 +1,0 @@
-scanned_at,tier,probability,confidence,summary
-2026-05-28T13:26:20.966646Z,moderate,0.3015,0.0583,"Overall estimate: 30% probability of moderate signs of patterns that warrant a closer look (scan confidence ~6%). Primary contributing signals: profile. Limited data for: temporal, semantic, ai_writing, voice, engagement, memory. More posts or profile metadata would sharpen this estimate. This is a probabilistic estimate based on observable patterns, not a definitive judgement about the account or person behind it."
