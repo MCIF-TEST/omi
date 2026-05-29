@@ -1,5 +1,4 @@
-# Dataset files are large — not committed to git.
-# Drop your files in and let Claude know when they're ready.
+# Drop all dataset files here. Large files are not committed to git.
 *.csv
 *.tsv
 *.json
