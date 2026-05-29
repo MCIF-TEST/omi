@@ -48,6 +48,10 @@ from app.evaluation.memory_benchmark import (
     load_memory_benchmark,
     run_memory_scenario,
 )
+from app.evaluation.ai_writing_benchmark import (
+    evaluate_ai_writing,
+    evaluate_ai_writing_default,
+)
 from app.evaluation.metrics import (
     TIER_MIDPOINT,
     EvalRow,
@@ -92,6 +96,8 @@ __all__ = [
     "evaluate_memory_default",
     "load_memory_benchmark",
     "run_memory_scenario",
+    "evaluate_ai_writing",
+    "evaluate_ai_writing_default",
     "TIER_MIDPOINT",
     "EvalRow",
     "compute_report",
