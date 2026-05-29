@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Activity, Search, Zap, Network as NetworkIcon, ChevronDown, ChevronRight, Users, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { TierBadge } from '@/components/shared/tier-badge';
-import { ProbabilityBar } from '@/components/shared/probability-bar';
+import { ScoreRing } from '@/components/shared/score-ring';
 import { type ComprehensiveScanResult, type CoordinationCluster } from '@/lib/api';
 
 export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
@@ -12,20 +12,21 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
   const v = data.video;
   return (
     <article className="p-6 space-y-6">
-      <header>
-        <div className="flex items-center gap-3 mb-1">
-          <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
-            Comprehensive Intelligence Verdict
-          </span>
+      {/* Verdict hero */}
+      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/30 p-5 md:p-6">
+        <div className="absolute -top-12 -right-10 w-44 h-44 rounded-full bg-accent/[0.07] blur-3xl pointer-events-none" aria-hidden />
+        <div className="relative flex items-center gap-5 flex-wrap">
+          <ScoreRing value={prob} tier={data.overall_tier} size={96} stroke={8} />
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
+                Comprehensive verdict
+              </span>
+              <TierBadge tier={data.overall_tier} size="lg" />
+            </div>
+            <p className="text-sm text-fg-dim leading-relaxed">{data.summary}</p>
+          </div>
         </div>
-        <div className="flex items-baseline gap-4 mt-3 mb-3 flex-wrap">
-          <span className="text-5xl font-bold mono text-fg tracking-tight">
-            {Math.round(prob * 100)}%
-          </span>
-          <TierBadge tier={data.overall_tier} size="lg" />
-        </div>
-        <ProbabilityBar value={prob} tier={data.overall_tier} showLabel={false} />
-        <p className="mt-4 text-sm text-fg-dim leading-relaxed">{data.summary}</p>
       </header>
 
       {/* Stat strip */}
@@ -214,10 +215,10 @@ function RingCard({
       : 'text-fg-dim';
 
   return (
-    <div className={`border rounded-sm overflow-hidden ${headerColor}`}>
+    <div className={`border rounded-xl overflow-hidden transition-colors ${headerColor}`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-bg-elev-2/20 transition-colors"
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-mono text-2xs text-fg-mute shrink-0">R{index}</span>
@@ -310,10 +311,10 @@ function Stat({ icon, label, value, sub }: {
   icon: React.ReactNode; label: string; value: number | string; sub: string;
 }) {
   return (
-    <div className="bg-bg border border-border-1 rounded-sm p-3">
-      <div className="flex items-center justify-between mb-1">
+    <div className="bg-bg border border-border-1 rounded-xl p-3.5 hover:border-border-hot/60 transition-colors">
+      <div className="flex items-center justify-between mb-1.5">
         <span className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">{label}</span>
-        <span className="text-fg-mute">{icon}</span>
+        <span className="text-fg-faint">{icon}</span>
       </div>
       <div className="text-xl font-semibold text-fg mono tracking-tight">{value}</div>
       <div className="text-2xs text-fg-mute font-mono tracking-wider">{sub}</div>
@@ -325,7 +326,7 @@ function SubScan({ label, prob, tier, sub, customBody }: {
   label: string; prob?: number; tier?: any; sub?: string; customBody?: React.ReactNode;
 }) {
   return (
-    <div className="bg-bg border border-border-1 rounded-sm p-3">
+    <div className="bg-bg border border-border-1 rounded-xl p-3.5">
       <div className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase mb-2">
         {label}
       </div>

@@ -29,21 +29,26 @@ export default async function DashboardPage() {
     <div className="space-y-8 animate-fade-up">
 
       {/* Header */}
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <p className="font-mono text-2xs tracking-[0.18em] text-fg-faint uppercase mb-1">
-            Welcome back
-          </p>
-          <h1 className="text-xl font-semibold text-fg tracking-tight">
-            {user?.email}
-          </h1>
+      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-8 md:py-7 shadow-card">
+        <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-accent/[0.07] blur-3xl pointer-events-none" aria-hidden />
+        <div className="absolute inset-0 dot-bg opacity-[0.15] pointer-events-none" aria-hidden />
+        <div className="relative flex items-end justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-1.5 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-tier-low animate-pulse-dot" />
+              Welcome back
+            </p>
+            <h1 className="display text-xl md:text-2xl font-semibold text-fg tracking-tight truncate">
+              {user?.email}
+            </h1>
+          </div>
+          <Link href="/investigate" className="shrink-0">
+            <Button size="lg" className="btn-glow">
+              <Search size={15} />
+              New investigation
+            </Button>
+          </Link>
         </div>
-        <Link href="/investigate">
-          <Button size="lg" className="btn-glow">
-            <Search size={15} />
-            New investigation
-          </Button>
-        </Link>
       </header>
 
       {/* ── Stats ─────────────────────────────────────────────── */}
@@ -151,10 +156,10 @@ export default async function DashboardPage() {
             <Link
               key={href}
               href={href}
-              className="group flex items-center gap-3 p-3.5 rounded-md border border-border-1 bg-bg-elev/40 hover:border-border-hot hover:bg-bg-elev transition-all"
+              className="group flex items-center gap-3 p-3.5 rounded-xl border border-border-1 bg-bg-elev/40 spotlight card-interactive"
             >
-              <span className="shrink-0 w-8 h-8 rounded-sm bg-bg-elev-2 border border-border-2 flex items-center justify-center text-fg-mute group-hover:text-accent group-hover:border-accent/30 transition-colors">
-                <Icon size={14} strokeWidth={1.5} />
+              <span className="shrink-0 w-9 h-9 rounded-lg bg-bg-elev-2 border border-border-2 flex items-center justify-center text-fg-mute group-hover:text-accent group-hover:border-accent/40 group-hover:bg-accent/[0.08] transition-all">
+                <Icon size={15} strokeWidth={1.5} />
               </span>
               <div className="min-w-0">
                 <div className="text-sm text-fg font-medium">{label}</div>
