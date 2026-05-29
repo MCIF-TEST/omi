@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Target, ArrowRight, Clock } from 'lucide-react';
+import { Target, ArrowRight, Clock, Gauge } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -90,21 +90,39 @@ export default async function SettingsPage() {
       {user.is_admin && (
         <Card>
           <CardLabel>Admin</CardLabel>
-          <Link
-            href="/settings/calibration"
-            className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <Target size={16} className="text-accent" />
-              <div>
-                <div className="text-fg font-medium">Calibration</div>
-                <div className="text-xs text-fg-dim mt-0.5">
-                  Live engine accuracy against your labeled corpus.
+          <div className="space-y-2">
+            <Link
+              href="/settings/engine"
+              className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Gauge size={16} className="text-accent" />
+                <div>
+                  <div className="text-fg font-medium">Engine intelligence</div>
+                  <div className="text-xs text-fg-dim mt-0.5">
+                    Benchmark scoreboard — accuracy, coordination rescue, and the
+                    memory learning curve.
+                  </div>
                 </div>
               </div>
-            </div>
-            <ArrowRight size={14} className="text-fg-mute" />
-          </Link>
+              <ArrowRight size={14} className="text-fg-mute" />
+            </Link>
+            <Link
+              href="/settings/calibration"
+              className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Target size={16} className="text-accent" />
+                <div>
+                  <div className="text-fg font-medium">Calibration</div>
+                  <div className="text-xs text-fg-dim mt-0.5">
+                    Live engine accuracy against your labeled corpus.
+                  </div>
+                </div>
+              </div>
+              <ArrowRight size={14} className="text-fg-mute" />
+            </Link>
+          </div>
         </Card>
       )}
 

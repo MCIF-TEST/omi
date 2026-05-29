@@ -29,6 +29,11 @@ from app.detection.coordination import (
     detect_temporal_semantic_cliques,
 )
 from app.detection.coordination._types import CoordinationCluster
+from app.detection.coordination.elevate import (
+    apply_coordination,
+    build_coordination_signal,
+    coordination_membership,
+)
 from app.detection.coordination.cohort import CohortEntry
 from app.detection.coordination.co_engagement import EngagementEntry
 from app.detection.coordination.fingerprint_cluster import FingerprintEntry
@@ -422,31 +427,19 @@ def scan_video_full(
     clusters.extend(co_finding.clusters)
 
     # --- Phase 4: cross-inject coordination evidence into each commenter --
-    by_member: dict[str, list[CoordinationCluster]] = defaultdict(list)
-    for cl in clusters:
-        for m in cl.members:
-            by_member[m].append(cl)
-
+    # Shared, pure elevation logic (app.detection.coordination.elevate) so the
+    # rescue benchmark measures exactly what production runs here.
+    by_member = coordination_membership(clusters)
     for r in records:
         cl_for = by_member.get(r.external_id, [])
         if not cl_for:
             continue
-        methods = sorted({c.method for c in cl_for})
-        max_p = max(c.score for c in cl_for)
-        # More distinct detectors agreeing = stronger signal.
-        conf = min(1.0, 0.55 + 0.2 * len(methods))
-        coord_signal = SignalResult(
-            name="coordination",
-            probability=max_p,
-            confidence=conf,
-            evidence=[e for c in cl_for for e in c.evidence][:5],
-            sub_signals={"detector_count": float(len(methods))},
-        )
+        coord_signal = build_coordination_signal(cl_for)
         # Re-aggregate WITHOUT mutating the persisted scan: just compute the
         # what-if for the response. Cache stays clean.
-        adjusted = aggregate(list(r.scan_result.signals) + [coord_signal])
+        adjusted = apply_coordination(r.scan_result, cl_for)
         r.coordination_adjusted_probability = adjusted.overall_probability
-        r.coordination_evidence = coord_signal.evidence
+        r.coordination_evidence = coord_signal.evidence if coord_signal else []
 
     # --- Phase 4.5: persist coordination edges (cross-scan graph) ----------
     # Promote per-scan clusters into the persistent CoordinationEdge table

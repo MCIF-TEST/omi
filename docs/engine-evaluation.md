@@ -111,6 +111,88 @@ Callers:
 | `tests/test_coordination_benchmark.py` | CI gate — 4 accuracy + 4 invariant tests |
 | `GET /v1/intelligence/benchmark/coordination` (admin) | In-product coordination scoreboard |
 
+## Coordination rescue (coordination_rescue_v1) — the end-to-end thesis
+
+The two benchmarks above measure the halves in isolation. This one measures the
+**bridge** that is the entire product value proposition: when a sparse-history
+bot the single-account engine scores LOW sits inside a detected coordination
+cluster, the coordination signal lifts it into the correct tier.
+
+The elevation logic was inline in the orchestrator's full-scan path (Phase 4);
+it is now extracted to `app/detection/coordination/elevate.py` (`pure`,
+unit-tested) so the orchestrator and this benchmark run **the same code** —
+what CI measures is exactly what production does. The runner drives the real
+path end-to-end: `analyze_account` (standalone) → coordination detectors →
+`apply_coordination`.
+
+`app/evaluation/benchmarks/coordination_rescue_v1.json` — 3 scenarios (temporal
+burst, fingerprint family, age cohort), 21 sparse-history bots + 9 organics.
+
+| Metric | Value | Meaning |
+|---|---|---|
+| standalone_bot_recall | **0.000** | the engine *alone* catches none of the bots |
+| adjusted_bot_recall | **0.952** | coordination catches 95% of them |
+| recall_lift | **+0.952** | the headline: miss → catch |
+| rescue_rate | **1.000** | every under-flagged in-cluster bot lifted |
+| mean_prob_lift | **+0.488** | average probability jump |
+| organic_false_lift | **0.000** | zero clean accounts wrongly escalated |
+
+This is the empirical answer to the root-cause finding above: the single-account
+engine under-flags sparse YouTube commenters *by design*, but that is not the
+product's failure mode, because the product scans **videos** — and on a video,
+coordination rescues the recall the per-account path gives up, surgically
+(no organic escalation).
+
+Callers:
+
+| Caller | Purpose |
+|---|---|
+| `tests/test_rescue_benchmark.py` | CI gate — recall lift, rescue rate, no organic escalation |
+| `tests/test_coordination_elevate.py` | unit contract for the shared elevation logic |
+| `GET /v1/intelligence/benchmark/rescue` (admin) | In-product rescue scoreboard |
+
+## Memory learning (memory_v1) — the "becomes smarter over time" pillar
+
+The benchmarks above are all single-point-in-time. This one measures the
+vision's central promise — *becomes smarter as more videos are analyzed* — by
+probing the engine at a series of reference-store sizes and watching the
+**learning curve**.
+
+It is the across-scan analog of the rescue benchmark: *rescue* proved the
+**coordination** dimension recovers recall **within one scan** (peers on the
+same video); *memory* proves the **memory** dimension recovers recall **across
+scans** (the reference set grows every time a video is analyzed). It drives the
+real path: `analyze_account` → `extract_fingerprint` →
+`compute_memory_signal` (against a store of size N) → `aggregate`. The store is
+synthesised in-memory at each size, so it stays DB-free and deterministic.
+
+`app/evaluation/benchmarks/memory_v1.json` — 5 scenarios: 3 bad bots in a
+known-bad fingerprint neighborhood, 1 clean account in a previously-cleared
+neighborhood, 1 bot whose fingerprint matches nothing (conservatism guard).
+
+| Metric | Value | Meaning |
+|---|---|---|
+| cold_bad_recall | **0.000** | empty store: bad accounts slip through |
+| warm_bad_recall | **1.000** | full store: all caught |
+| memory_recall_lift | **+1.000** | the headline: the engine *learned* |
+| bad_monotonic_rate | **1.000** | the learning curve never goes backwards |
+| mean_warm_prob_lift | **+0.345** | average lift once the store is warm |
+| good_false_lift | **0.000** | behaving like *cleared* accounts never raises suspicion |
+| distant_inert_rate | **1.000** | unmatched accounts left exactly untouched |
+
+Representative curve (a bad bot): cold `0.20/low` → at store sizes 1,2,3 the
+memory confidence climbs `0 → 0.29 → 0.58 → 0.72` and the score rises
+monotonically, crossing into `0.53/elevated`. A clean account in a cleared
+neighborhood is nudged *down* (`0.154 → 0.150`); an unmatched account stays flat
+at zero memory confidence.
+
+Callers:
+
+| Caller | Purpose |
+|---|---|
+| `tests/test_memory_benchmark.py` | CI gate — cold→warm lift, monotonic curve, no false escalation, inert-on-no-match |
+| `GET /v1/intelligence/benchmark/memory` (admin) | In-product learning scoreboard |
+
 ## Recommended next steps (harness-gated)
 
 1. ~~**Expand the benchmark to multi-account / coordination scenarios**~~ — **DONE.**
