@@ -1,0 +1,10 @@
+# Drop all dataset files here. Large files are not committed to git.
+*.csv
+*.tsv
+*.json
+*.jsonl
+*.parquet
+*.zip
+*.tar.gz
+*.gz
+!.gitkeep

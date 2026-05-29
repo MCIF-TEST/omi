@@ -99,6 +99,24 @@ def scan_account_with_memory(
     )
 
     final = analyze_account(profile, posts, extra_signals=[memory_signal])
+
+    # ---- Learned re-scoring (ML track) ----
+    # No-op unless OMI_USE_ML_SCORER is on and a model artifact is loaded.
+    # Runs before fingerprint extraction so the persisted fingerprint still
+    # reflects the detector sub-signals (the ML blend only moves the
+    # aggregate probability + tier, not the behavioral sub-signals).
+    try:
+        from app.ml.scorer import get_scorer
+        final = get_scorer().rescore(
+            final,
+            profile=profile,
+            post_count=len(posts),
+            texts=[p.text for p in posts[:40] if p.text],
+            settings=settings,
+        )
+    except Exception:  # noqa: BLE001 — ML must never break a scan
+        pass
+
     final_fp = extract_fingerprint(final)
     repo.upsert_with_scan(
         platform=platform,
