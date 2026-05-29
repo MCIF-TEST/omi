@@ -8,6 +8,10 @@ import {
   ArrowRight,
   Cpu,
   Eye,
+  ScanSearch,
+  BarChart3,
+  Brain,
+  ShieldCheck,
 } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
 import { Reveal } from '@/components/shared/reveal';
@@ -50,7 +54,7 @@ export function LandingPage() {
       <section className="relative z-10 px-6 pt-20 md:pt-28 pb-16 max-w-5xl mx-auto w-full text-center">
         <div className="inline-flex items-center gap-2.5 font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase border border-accent/25 bg-accent/[0.07] px-4 py-2 rounded-full mb-8 animate-fade-up">
           <span className="w-1.5 h-1.5 rounded-full bg-tier-low animate-pulse-dot" />
-          YouTube Authenticity Intelligence · Beta
+          Online Media Intelligence · Beta
         </div>
 
         <h1 className="display text-[3.25rem] leading-[0.98] sm:text-7xl lg:text-[5.5rem] font-semibold tracking-[-0.03em] mb-7">
@@ -112,6 +116,26 @@ export function LandingPage() {
                 </div>
                 <div className="font-mono text-2xs text-fg uppercase tracking-wider">{label}</div>
                 <div className="font-mono text-2xs text-fg-faint mt-0.5">{sub}</div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Four pillars ────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 pt-6 pb-10 max-w-5xl mx-auto w-full">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {PILLARS.map((p, i) => (
+            <Reveal key={p.label} delay={i * 80} from="up">
+              <div className="group flex flex-col items-center text-center gap-3 py-2">
+                <div className="relative w-14 h-14 rounded-2xl border border-border-2 bg-bg-elev flex items-center justify-center text-accent-2 group-hover:border-accent/40 group-hover:shadow-glow-sm transition-all duration-300">
+                  <span className="absolute inset-0 rounded-2xl bg-accent/[0.06] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <span className="relative">{p.icon}</span>
+                </div>
+                <div>
+                  <div className="font-mono text-2xs tracking-[0.18em] uppercase text-fg">{p.label}</div>
+                  <div className="text-xs text-fg-mute mt-1 max-w-[16ch] mx-auto leading-snug">{p.sub}</div>
+                </div>
               </div>
             </Reveal>
           ))}
@@ -186,7 +210,7 @@ export function LandingPage() {
         <div className="max-w-5xl mx-auto flex items-center justify-between flex-wrap gap-4">
           <Logo />
           <p className="font-mono text-2xs tracking-wider text-fg-faint">
-            Probabilistic Authenticity Intelligence
+            Online Media Intelligence
           </p>
           <div className="flex items-center gap-1.5 font-mono text-2xs text-fg-mute uppercase tracking-wider">
             {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Pricing', '/pricing'], ['About', '/about']].map(([l, h]) => (
@@ -198,6 +222,13 @@ export function LandingPage() {
     </div>
   );
 }
+
+const PILLARS = [
+  { icon: <ScanSearch size={22} />, label: 'Detect',        sub: 'Bots, AI, coordination' },
+  { icon: <BarChart3 size={22} />,  label: 'Analyze',       sub: 'Eight independent signals' },
+  { icon: <Brain size={22} />,      label: 'Understand',    sub: 'Narratives & networks' },
+  { icon: <ShieldCheck size={22} />,label: 'Protect Truth', sub: 'Evidence, not verdicts' },
+];
 
 const FEATURES = [
   {

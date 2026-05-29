@@ -12,7 +12,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       <header className="relative z-10 px-6 py-5">
         <Link href="/" aria-label="OMISPHERE home">
-          <Logo />
+          <Logo tagline />
         </Link>
       </header>
 
