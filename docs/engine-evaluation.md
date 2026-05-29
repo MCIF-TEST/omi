@@ -111,6 +111,46 @@ Callers:
 | `tests/test_coordination_benchmark.py` | CI gate — 4 accuracy + 4 invariant tests |
 | `GET /v1/intelligence/benchmark/coordination` (admin) | In-product coordination scoreboard |
 
+## Coordination rescue (coordination_rescue_v1) — the end-to-end thesis
+
+The two benchmarks above measure the halves in isolation. This one measures the
+**bridge** that is the entire product value proposition: when a sparse-history
+bot the single-account engine scores LOW sits inside a detected coordination
+cluster, the coordination signal lifts it into the correct tier.
+
+The elevation logic was inline in the orchestrator's full-scan path (Phase 4);
+it is now extracted to `app/detection/coordination/elevate.py` (`pure`,
+unit-tested) so the orchestrator and this benchmark run **the same code** —
+what CI measures is exactly what production does. The runner drives the real
+path end-to-end: `analyze_account` (standalone) → coordination detectors →
+`apply_coordination`.
+
+`app/evaluation/benchmarks/coordination_rescue_v1.json` — 3 scenarios (temporal
+burst, fingerprint family, age cohort), 21 sparse-history bots + 9 organics.
+
+| Metric | Value | Meaning |
+|---|---|---|
+| standalone_bot_recall | **0.000** | the engine *alone* catches none of the bots |
+| adjusted_bot_recall | **0.952** | coordination catches 95% of them |
+| recall_lift | **+0.952** | the headline: miss → catch |
+| rescue_rate | **1.000** | every under-flagged in-cluster bot lifted |
+| mean_prob_lift | **+0.488** | average probability jump |
+| organic_false_lift | **0.000** | zero clean accounts wrongly escalated |
+
+This is the empirical answer to the root-cause finding above: the single-account
+engine under-flags sparse YouTube commenters *by design*, but that is not the
+product's failure mode, because the product scans **videos** — and on a video,
+coordination rescues the recall the per-account path gives up, surgically
+(no organic escalation).
+
+Callers:
+
+| Caller | Purpose |
+|---|---|
+| `tests/test_rescue_benchmark.py` | CI gate — recall lift, rescue rate, no organic escalation |
+| `tests/test_coordination_elevate.py` | unit contract for the shared elevation logic |
+| `GET /v1/intelligence/benchmark/rescue` (admin) | In-product rescue scoreboard |
+
 ## Recommended next steps (harness-gated)
 
 1. ~~**Expand the benchmark to multi-account / coordination scenarios**~~ — **DONE.**

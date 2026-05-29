@@ -26,6 +26,17 @@ from app.evaluation.coordination_benchmark import (
     load_coordination_benchmark,
     run_coordination_scenario,
 )
+from app.evaluation.rescue_benchmark import (
+    RESCUE_BENCHMARK_VERSION,
+    DEFAULT_RESCUE_BENCHMARK,
+    RescueScenario,
+    RescueAccountResult,
+    compute_rescue_report,
+    evaluate_rescue,
+    evaluate_rescue_default,
+    load_rescue_benchmark,
+    run_rescue_scenario,
+)
 from app.evaluation.metrics import (
     TIER_MIDPOINT,
     EvalRow,
@@ -52,6 +63,15 @@ __all__ = [
     "evaluate_coordination_default",
     "load_coordination_benchmark",
     "run_coordination_scenario",
+    "RESCUE_BENCHMARK_VERSION",
+    "DEFAULT_RESCUE_BENCHMARK",
+    "RescueScenario",
+    "RescueAccountResult",
+    "compute_rescue_report",
+    "evaluate_rescue",
+    "evaluate_rescue_default",
+    "load_rescue_benchmark",
+    "run_rescue_scenario",
     "TIER_MIDPOINT",
     "EvalRow",
     "compute_report",
