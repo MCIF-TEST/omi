@@ -85,11 +85,37 @@ cannot exercise the engine's real strength — cross-account **coordination** an
 this benchmark). The product flags coordinated campaigns via clusters on a
 video; the current benchmark doesn't measure that path at all.
 
+## Coordination benchmark (coordination_v1)
+
+`app/evaluation/benchmarks/coordination_v1.json` — 13 video scenarios exercising
+the five cross-account detectors (age_cohort, co_engagement, style_match,
+temporal_semantic, fingerprint_cluster).  The seed_v1 benchmark scores all
+of these at **zero influence** because they require a peer batch.
+
+| Metric | Value |
+|---|---|
+| Cluster recall | **0.857** (6/7 planted clusters matched) |
+| Member precision | **1.000** (zero false positives on current fixture) |
+| Member recall | **0.837** (one burst-bot member at cluster edge) |
+| Clean pass rate | **1.000** (6/6 organic-only scenarios correctly silent) |
+
+The one miss (cluster recall < 1): `mixed_bot_ring_with_organic_noise` has 6 bots
+in 26 accounts = 23% share, 2 points below the age_cohort detector's 25% threshold.
+This is expected behavior — the detector is deliberately conservative under sparse
+signal — and is now a documented baseline, not a silent failure.
+
+Callers:
+
+| Caller | Purpose |
+|---|---|
+| `tests/test_coordination_benchmark.py` | CI gate — 4 accuracy + 4 invariant tests |
+| `GET /v1/intelligence/benchmark/coordination` (admin) | In-product coordination scoreboard |
+
 ## Recommended next steps (harness-gated)
 
-1. **Expand the benchmark to multi-account / coordination scenarios** so we can
-   measure the path the product actually relies on, not just single-account
-   heuristics.
+1. ~~**Expand the benchmark to multi-account / coordination scenarios**~~ — **DONE.**
+   `coordination_v1.json` (13 scenarios, 5 detector types). Gate: 10 tests in
+   `tests/test_coordination_benchmark.py`. Scoreboard: `GET /v1/intelligence/benchmark/coordination`.
 2. **Collect real ground-truth labels** (the LabelWidget + auto-captured
    YouTube suspensions already feed `AccountLabel`) and build a real benchmark
    from them via `--from-db`.

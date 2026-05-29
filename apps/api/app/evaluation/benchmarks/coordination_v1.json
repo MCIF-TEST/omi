@@ -1,0 +1,478 @@
+[
+  {
+    "label": "age_cohort_heavy_ring",
+    "scenario_type": "age_cohort",
+    "expected_coordination": "high",
+    "description": "20 accounts, 16 created within 12 days — should fire cohort alarm at ~80% share.",
+    "accounts": [
+      {"external_id":"uc_ah01","handle":"@farm01","role":"bot","created_at":"2024-01-08T00:00:00Z"},
+      {"external_id":"uc_ah02","handle":"@farm02","role":"bot","created_at":"2024-01-09T00:00:00Z"},
+      {"external_id":"uc_ah03","handle":"@farm03","role":"bot","created_at":"2024-01-09T12:00:00Z"},
+      {"external_id":"uc_ah04","handle":"@farm04","role":"bot","created_at":"2024-01-10T00:00:00Z"},
+      {"external_id":"uc_ah05","handle":"@farm05","role":"bot","created_at":"2024-01-10T08:00:00Z"},
+      {"external_id":"uc_ah06","handle":"@farm06","role":"bot","created_at":"2024-01-11T00:00:00Z"},
+      {"external_id":"uc_ah07","handle":"@farm07","role":"bot","created_at":"2024-01-11T16:00:00Z"},
+      {"external_id":"uc_ah08","handle":"@farm08","role":"bot","created_at":"2024-01-12T00:00:00Z"},
+      {"external_id":"uc_ah09","handle":"@farm09","role":"bot","created_at":"2024-01-12T10:00:00Z"},
+      {"external_id":"uc_ah10","handle":"@farm10","role":"bot","created_at":"2024-01-13T00:00:00Z"},
+      {"external_id":"uc_ah11","handle":"@farm11","role":"bot","created_at":"2024-01-13T14:00:00Z"},
+      {"external_id":"uc_ah12","handle":"@farm12","role":"bot","created_at":"2024-01-14T00:00:00Z"},
+      {"external_id":"uc_ah13","handle":"@farm13","role":"bot","created_at":"2024-01-15T00:00:00Z"},
+      {"external_id":"uc_ah14","handle":"@farm14","role":"bot","created_at":"2024-01-16T00:00:00Z"},
+      {"external_id":"uc_ah15","handle":"@farm15","role":"bot","created_at":"2024-01-17T00:00:00Z"},
+      {"external_id":"uc_ah16","handle":"@farm16","role":"bot","created_at":"2024-01-19T00:00:00Z"},
+      {"external_id":"uc_or01","handle":"@real_viewer01","role":"organic","created_at":"2020-03-15T00:00:00Z"},
+      {"external_id":"uc_or02","handle":"@real_viewer02","role":"organic","created_at":"2018-07-22T00:00:00Z"},
+      {"external_id":"uc_or03","handle":"@real_viewer03","role":"organic","created_at":"2021-11-05T00:00:00Z"},
+      {"external_id":"uc_or04","handle":"@real_viewer04","role":"organic","created_at":"2019-04-30T00:00:00Z"}
+    ],
+    "planted_clusters": [
+      {"method": "age_cohort", "members": ["uc_ah01","uc_ah02","uc_ah03","uc_ah04","uc_ah05","uc_ah06","uc_ah07","uc_ah08","uc_ah09","uc_ah10","uc_ah11","uc_ah12","uc_ah13","uc_ah14","uc_ah15","uc_ah16"]}
+    ]
+  },
+
+  {
+    "label": "age_cohort_moderate_cluster",
+    "scenario_type": "age_cohort",
+    "expected_coordination": "moderate",
+    "description": "20 accounts, 6 created in a 2-week window (30% share) — borderline threshold.",
+    "accounts": [
+      {"external_id":"uc_am01","handle":"@mod_farm01","role":"bot","created_at":"2024-02-01T00:00:00Z"},
+      {"external_id":"uc_am02","handle":"@mod_farm02","role":"bot","created_at":"2024-02-03T00:00:00Z"},
+      {"external_id":"uc_am03","handle":"@mod_farm03","role":"bot","created_at":"2024-02-06T00:00:00Z"},
+      {"external_id":"uc_am04","handle":"@mod_farm04","role":"bot","created_at":"2024-02-10T00:00:00Z"},
+      {"external_id":"uc_am05","handle":"@mod_farm05","role":"bot","created_at":"2024-02-12T00:00:00Z"},
+      {"external_id":"uc_am06","handle":"@mod_farm06","role":"bot","created_at":"2024-02-14T00:00:00Z"},
+      {"external_id":"uc_xo01","handle":"@organic01","role":"organic","created_at":"2017-06-10T00:00:00Z"},
+      {"external_id":"uc_xo02","handle":"@organic02","role":"organic","created_at":"2019-02-14T00:00:00Z"},
+      {"external_id":"uc_xo03","handle":"@organic03","role":"organic","created_at":"2020-09-01T00:00:00Z"},
+      {"external_id":"uc_xo04","handle":"@organic04","role":"organic","created_at":"2016-12-20T00:00:00Z"},
+      {"external_id":"uc_xo05","handle":"@organic05","role":"organic","created_at":"2022-04-18T00:00:00Z"},
+      {"external_id":"uc_xo06","handle":"@organic06","role":"organic","created_at":"2018-08-07T00:00:00Z"},
+      {"external_id":"uc_xo07","handle":"@organic07","role":"organic","created_at":"2021-01-25T00:00:00Z"},
+      {"external_id":"uc_xo08","handle":"@organic08","role":"organic","created_at":"2015-11-30T00:00:00Z"},
+      {"external_id":"uc_xo09","handle":"@organic09","role":"organic","created_at":"2023-03-14T00:00:00Z"},
+      {"external_id":"uc_xo10","handle":"@organic10","role":"organic","created_at":"2020-07-04T00:00:00Z"},
+      {"external_id":"uc_xo11","handle":"@organic11","role":"organic","created_at":"2019-10-22T00:00:00Z"},
+      {"external_id":"uc_xo12","handle":"@organic12","role":"organic","created_at":"2017-03-08T00:00:00Z"},
+      {"external_id":"uc_xo13","handle":"@organic13","role":"organic","created_at":"2022-12-01T00:00:00Z"},
+      {"external_id":"uc_xo14","handle":"@organic14","role":"organic","created_at":"2016-05-19T00:00:00Z"}
+    ],
+    "planted_clusters": [
+      {"method": "age_cohort", "members": ["uc_am01","uc_am02","uc_am03","uc_am04","uc_am05","uc_am06"]}
+    ]
+  },
+
+  {
+    "label": "age_cohort_organic_spread",
+    "scenario_type": "age_cohort",
+    "expected_coordination": "none",
+    "description": "20 accounts created evenly over 6 years — no cohort signal, clean control.",
+    "accounts": [
+      {"external_id":"uc_as01","handle":"@spread01","role":"organic","created_at":"2018-01-01T00:00:00Z"},
+      {"external_id":"uc_as02","handle":"@spread02","role":"organic","created_at":"2018-04-01T00:00:00Z"},
+      {"external_id":"uc_as03","handle":"@spread03","role":"organic","created_at":"2018-07-01T00:00:00Z"},
+      {"external_id":"uc_as04","handle":"@spread04","role":"organic","created_at":"2018-10-01T00:00:00Z"},
+      {"external_id":"uc_as05","handle":"@spread05","role":"organic","created_at":"2019-01-01T00:00:00Z"},
+      {"external_id":"uc_as06","handle":"@spread06","role":"organic","created_at":"2019-04-01T00:00:00Z"},
+      {"external_id":"uc_as07","handle":"@spread07","role":"organic","created_at":"2019-07-01T00:00:00Z"},
+      {"external_id":"uc_as08","handle":"@spread08","role":"organic","created_at":"2019-10-01T00:00:00Z"},
+      {"external_id":"uc_as09","handle":"@spread09","role":"organic","created_at":"2020-01-01T00:00:00Z"},
+      {"external_id":"uc_as10","handle":"@spread10","role":"organic","created_at":"2020-04-01T00:00:00Z"},
+      {"external_id":"uc_as11","handle":"@spread11","role":"organic","created_at":"2020-07-01T00:00:00Z"},
+      {"external_id":"uc_as12","handle":"@spread12","role":"organic","created_at":"2020-10-01T00:00:00Z"},
+      {"external_id":"uc_as13","handle":"@spread13","role":"organic","created_at":"2021-01-01T00:00:00Z"},
+      {"external_id":"uc_as14","handle":"@spread14","role":"organic","created_at":"2021-04-01T00:00:00Z"},
+      {"external_id":"uc_as15","handle":"@spread15","role":"organic","created_at":"2021-07-01T00:00:00Z"},
+      {"external_id":"uc_as16","handle":"@spread16","role":"organic","created_at":"2021-10-01T00:00:00Z"},
+      {"external_id":"uc_as17","handle":"@spread17","role":"organic","created_at":"2022-01-01T00:00:00Z"},
+      {"external_id":"uc_as18","handle":"@spread18","role":"organic","created_at":"2022-04-01T00:00:00Z"},
+      {"external_id":"uc_as19","handle":"@spread19","role":"organic","created_at":"2022-07-01T00:00:00Z"},
+      {"external_id":"uc_as20","handle":"@spread20","role":"organic","created_at":"2022-10-01T00:00:00Z"}
+    ],
+    "planted_clusters": []
+  },
+
+  {
+    "label": "co_engagement_bot_network",
+    "scenario_type": "co_engagement",
+    "expected_coordination": "high",
+    "description": "8 bot accounts each appearing on the same 6 videos — strong co-engagement ring.",
+    "accounts": [
+      {"external_id":"uc_ce01","handle":"@cobot01","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a1"]},
+      {"external_id":"uc_ce02","handle":"@cobot02","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a2"]},
+      {"external_id":"uc_ce03","handle":"@cobot03","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a3"]},
+      {"external_id":"uc_ce04","handle":"@cobot04","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a4"]},
+      {"external_id":"uc_ce05","handle":"@cobot05","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a5"]},
+      {"external_id":"uc_ce06","handle":"@cobot06","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a6"]},
+      {"external_id":"uc_ce07","handle":"@cobot07","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a7"]},
+      {"external_id":"uc_ce08","handle":"@cobot08","role":"bot","engaged_video_ids":["v_shared1","v_shared2","v_shared3","v_shared4","v_shared5","v_shared6","v_unique_a8"]},
+      {"external_id":"uc_cr01","handle":"@real01","role":"organic","engaged_video_ids":["v_real_r1","v_real_r2","v_real_r3","v_real_r4","v_real_r5"]},
+      {"external_id":"uc_cr02","handle":"@real02","role":"organic","engaged_video_ids":["v_real_q1","v_real_q2","v_real_q3","v_real_q4","v_real_q5"]},
+      {"external_id":"uc_cr03","handle":"@real03","role":"organic","engaged_video_ids":["v_real_w1","v_real_w2","v_real_w3","v_real_w4","v_real_w5"]},
+      {"external_id":"uc_cr04","handle":"@real04","role":"organic","engaged_video_ids":["v_real_e1","v_real_e2","v_real_e3","v_real_e4","v_real_e5"]},
+      {"external_id":"uc_cr05","handle":"@real05","role":"organic","engaged_video_ids":["v_real_t1","v_real_t2","v_real_t3","v_real_t4","v_real_t5"]}
+    ],
+    "planted_clusters": [
+      {"method": "co_engagement", "members": ["uc_ce01","uc_ce02","uc_ce03","uc_ce04","uc_ce05","uc_ce06","uc_ce07","uc_ce08"]}
+    ]
+  },
+
+  {
+    "label": "co_engagement_no_overlap",
+    "scenario_type": "co_engagement",
+    "expected_coordination": "none",
+    "description": "8 accounts with completely distinct video histories — no overlap, clean control.",
+    "accounts": [
+      {"external_id":"uc_cn01","handle":"@nooverlap01","role":"organic","engaged_video_ids":["v_n01a","v_n01b","v_n01c","v_n01d"]},
+      {"external_id":"uc_cn02","handle":"@nooverlap02","role":"organic","engaged_video_ids":["v_n02a","v_n02b","v_n02c","v_n02d"]},
+      {"external_id":"uc_cn03","handle":"@nooverlap03","role":"organic","engaged_video_ids":["v_n03a","v_n03b","v_n03c","v_n03d"]},
+      {"external_id":"uc_cn04","handle":"@nooverlap04","role":"organic","engaged_video_ids":["v_n04a","v_n04b","v_n04c","v_n04d"]},
+      {"external_id":"uc_cn05","handle":"@nooverlap05","role":"organic","engaged_video_ids":["v_n05a","v_n05b","v_n05c","v_n05d"]},
+      {"external_id":"uc_cn06","handle":"@nooverlap06","role":"organic","engaged_video_ids":["v_n06a","v_n06b","v_n06c","v_n06d"]},
+      {"external_id":"uc_cn07","handle":"@nooverlap07","role":"organic","engaged_video_ids":["v_n07a","v_n07b","v_n07c","v_n07d"]},
+      {"external_id":"uc_cn08","handle":"@nooverlap08","role":"organic","engaged_video_ids":["v_n08a","v_n08b","v_n08c","v_n08d"]}
+    ],
+    "planted_clusters": []
+  },
+
+  {
+    "label": "style_match_ai_sockpuppets",
+    "scenario_type": "style_match",
+    "expected_coordination": "high",
+    "description": "5 AI-generated sock-puppet accounts with near-identical stylometric fingerprints.",
+    "accounts": [
+      {
+        "external_id":"uc_sm01","handle":"@ai_puppet01","role":"bot",
+        "texts": [
+          "This content is truly remarkable and noteworthy. Furthermore, the analysis presented here is exceptionally thorough and well-researched. Moreover, the production quality is outstanding and impressive. Additionally, it is worth noting that the information shared is highly accurate and valuable. In conclusion, this represents a significant contribution to the field.",
+          "The insights offered here are remarkable and noteworthy. Furthermore, the level of research and analysis is exceptional and thorough. Moreover, the presentation style is outstanding and engaging. Additionally, it is worth noting that the content consistently delivers valuable information. In conclusion, this channel is highly commendable.",
+          "The quality of this content is remarkable and noteworthy. Furthermore, the depth of analysis presented here is exceptional and thorough. Moreover, the production values are consistently outstanding and impressive. Additionally, it is worth noting that each video delivers remarkable insights. In conclusion, this represents exceptional work overall."
+        ]
+      },
+      {
+        "external_id":"uc_sm02","handle":"@ai_puppet02","role":"bot",
+        "texts": [
+          "This content is truly remarkable and noteworthy. Furthermore, the research presented here is exceptionally thorough and well-documented. Moreover, the quality is outstanding and impressive. Additionally, it is worth noting that the information provided is highly accurate and valuable. In conclusion, this represents a significant contribution overall.",
+          "The analysis offered here is remarkable and noteworthy. Furthermore, the level of detail and research is exceptional and thorough. Moreover, the presentation style is outstanding and clear. Additionally, it is worth noting that the content consistently delivers valuable insights. In conclusion, this work is highly commendable.",
+          "The depth of this content is remarkable and noteworthy. Furthermore, the analytical depth presented here is exceptional and thorough. Moreover, the production values are consistently outstanding and professional. Additionally, it is worth noting that each video delivers remarkable value. In conclusion, this represents exceptional quality overall."
+        ]
+      },
+      {
+        "external_id":"uc_sm03","handle":"@ai_puppet03","role":"bot",
+        "texts": [
+          "This material is truly remarkable and noteworthy. Furthermore, the analysis presented here is exceptionally thorough and comprehensive. Moreover, the production value is outstanding and impressive. Additionally, it is worth noting that the information shared is highly accurate and reliable. In conclusion, this represents a significant achievement overall.",
+          "The perspective offered here is remarkable and noteworthy. Furthermore, the level of analysis and research is exceptional and thorough. Moreover, the presentation format is outstanding and accessible. Additionally, it is worth noting that the content consistently delivers remarkable value. In conclusion, this channel is highly recommended.",
+          "The breadth of this content is remarkable and noteworthy. Furthermore, the research depth presented here is exceptional and thorough. Moreover, the production standards are consistently outstanding and polished. Additionally, it is worth noting that each installment delivers remarkable insights. In conclusion, this represents exceptional work."
+        ]
+      },
+      {
+        "external_id":"uc_sm04","handle":"@ai_puppet04","role":"bot",
+        "texts": [
+          "This video is truly remarkable and noteworthy. Furthermore, the insights presented here are exceptionally thorough and well-sourced. Moreover, the overall quality is outstanding and impressive. Additionally, it is worth noting that the content delivers highly accurate and valuable information. In conclusion, this represents a significant contribution to viewers.",
+          "The information offered here is remarkable and noteworthy. Furthermore, the level of thoroughness and research is exceptional and detailed. Moreover, the presentation approach is outstanding and engaging. Additionally, it is worth noting that the content consistently provides valuable perspectives. In conclusion, this work is highly impressive.",
+          "The scope of this content is remarkable and noteworthy. Furthermore, the analytical rigor presented here is exceptional and thorough. Moreover, the production quality is consistently outstanding and impressive. Additionally, it is worth noting that each video delivers remarkable educational value. In conclusion, this represents excellent work."
+        ]
+      },
+      {
+        "external_id":"uc_sm05","handle":"@ai_puppet05","role":"bot",
+        "texts": [
+          "This channel is truly remarkable and noteworthy. Furthermore, the analysis offered here is exceptionally thorough and well-presented. Moreover, the content quality is outstanding and impressive. Additionally, it is worth noting that the information provided is highly accurate and valuable. In conclusion, this represents a significant accomplishment.",
+          "The content here is remarkable and noteworthy. Furthermore, the depth of research and analysis is exceptional and thorough. Moreover, the presentation is outstanding and professional. Additionally, it is worth noting that the channel consistently delivers valuable insights. In conclusion, this work is highly commendable.",
+          "The quality of these videos is remarkable and noteworthy. Furthermore, the level of detail and analysis is exceptional and thorough. Moreover, the production is consistently outstanding and high-quality. Additionally, it is worth noting that each video delivers remarkable value to viewers. In conclusion, this represents excellent content creation."
+        ]
+      },
+      {
+        "external_id":"uc_smo01","handle":"@organic_viewer_a","role":"organic",
+        "texts": [
+          "I've been watching this channel for like 2 years now lol. My fav part was when he talked about the tax stuff, really helped me understand what I was doing wrong. Subscribed!",
+          "ok wait I didn't expect this to go that deep. genuinely surprised. gonna rewatch the part about compound interest because my brain couldn't keep up haha",
+          "I showed this to my dad and he loved it. He's been investing for 30 years and still found new stuff. That says a lot honestly."
+        ]
+      },
+      {
+        "external_id":"uc_smo02","handle":"@organic_viewer_b","role":"organic",
+        "texts": [
+          "Great video but I disagree with the point at 12:30 — in my experience the index fund argument breaks down when you're in a high-fee brokerage. Maybe mention that caveat next time?",
+          "this is exactly what I needed before my quarterly review. Saved it to share with my team. We've been debating this exact thing for weeks.",
+          "Does anyone else feel like YouTube specifically buries this type of content? I had to search for 20 minutes to find this. The algorithm just keeps pushing clickbait."
+        ]
+      },
+      {
+        "external_id":"uc_smo03","handle":"@organic_viewer_c","role":"organic",
+        "texts": [
+          "Started investing at 22, now 34 and this still teaches me things. The section on portfolio rebalancing was super practical, I'm redoing my allocations this weekend.",
+          "Quick question: does the 4% rule still hold if you retire before 50? I've seen conflicting stuff online and would love to see a full video on this.",
+          "Not gonna lie, I paused it 4 times to take notes. Best investment content I've found outside of actual textbooks. Keep going!"
+        ]
+      }
+    ],
+    "planted_clusters": [
+      {"method": "style_match", "members": ["uc_sm01","uc_sm02","uc_sm03","uc_sm04","uc_sm05"]}
+    ]
+  },
+
+  {
+    "label": "style_match_organic_diversity",
+    "scenario_type": "style_match",
+    "expected_coordination": "none",
+    "description": "6 organic accounts with visibly different writing styles — should not fire.",
+    "accounts": [
+      {
+        "external_id":"uc_so01","handle":"@organic_style01","role":"organic",
+        "texts": [
+          "lmao i cannot believe this worked. tried it last week on a demo account and made like 12% in 3 days. obviously not financial advice but still... interesting",
+          "the part at 8:44 hit different. felt like he was reading my diary from 2019 when I kept panic selling every dip. lesson learned the hard way unfortunately",
+          "anyway solid video. nothing i haven't heard before but it's nice to have it all in one place. would send to a friend who's just starting out"
+        ]
+      },
+      {
+        "external_id":"uc_so02","handle":"@organic_style02","role":"organic",
+        "texts": [
+          "I work in wealth management and I want to be clear: this is actually pretty accurate for a YouTube video. Most finance content gets the basics wrong but this one holds up. A few minor quibbles around the sequence-of-returns risk section, but nothing egregious.",
+          "The Monte Carlo simulation discussion starting around the 18-minute mark is where it gets genuinely sophisticated. Rare to see that level of rigor in public content.",
+          "My only criticism is the oversimplification of tax-loss harvesting. The wash-sale rules are more nuanced than presented, and the interaction with short-term vs long-term gains matters enormously in practice."
+        ]
+      },
+      {
+        "external_id":"uc_so03","handle":"@organic_style03","role":"organic",
+        "texts": [
+          "FINALLY someone explaining this properly!!! I have watched SO MANY videos about ETFs and nobody talks about expense ratios in real dollars until NOW!! You just saved me literally thousands of dollars over my lifetime thank you thank you!!!",
+          "showing my husband tonight he keeps saying 'we'll figure it out later' about retirement and this is exactly what I need him to see 😭 wish me luck lol",
+          "question: what about target date funds?? my company 401k only has those and a few expensive active funds. is it still worth contributing beyond the match??"
+        ]
+      },
+      {
+        "external_id":"uc_so04","handle":"@organic_style04","role":"organic",
+        "texts": [
+          "Subscribing after years of lurking. The point about behavioral finance is underrated — I'd argue it's the entire ballgame. Everything else is mostly solved by indexing. The hard part is not selling when the market drops 40%.",
+          "Off-topic but is anyone else annoyed that the YouTube algorithm buried this? I found it through a Reddit thread. Channels like this deserve better distribution.",
+          "One minor note: the comparison to inflation-adjusted returns would have been more honest if you'd used real historical data for the 1970s stagflation period. The decade matters enormously for sequence risk."
+        ]
+      },
+      {
+        "external_id":"uc_so05","handle":"@organic_style05","role":"organic",
+        "texts": [
+          "my uncle keeps telling me to buy gold and bitcoin and I keep sending him videos like this. he never watches them but i try",
+          "the budget breakdown part was actually really useful. i've been doing the 50/30/20 thing wrong this whole time apparently. no wonder i'm not saving enough",
+          "decent video. kinda long for what it covers but i get that youtube rewards watch time. if there was a 10 min version i'd probably share it more"
+        ]
+      },
+      {
+        "external_id":"uc_so06","handle":"@organic_style06","role":"organic",
+        "texts": [
+          "The Russell 3000 comparison at 22:15 is a nice touch. Most retail investors don't realize total market funds capture small/mid cap premium that S&P 500 funds miss. Whether that premium persists is debatable but the exposure difference is real.",
+          "I'd push back slightly on the international allocation recommendation. The currency risk and different accounting standards make direct comparison harder than the slide suggests. Still, the core argument for diversification holds.",
+          "This deserves more views. Bookmarking for the next time someone at work asks me for a 'quick intro' to investing."
+        ]
+      }
+    ],
+    "planted_clusters": []
+  },
+
+  {
+    "label": "temporal_burst_amplification",
+    "scenario_type": "temporal_semantic",
+    "expected_coordination": "high",
+    "description": "7 bots posting near-identical comments within a 40-second window — coordinated burst.",
+    "accounts": [
+      {
+        "external_id":"uc_tb01","handle":"@burst_bot01","role":"bot",
+        "video_comment": {"comment_id":"cmt_tb01","text":"This video is absolutely amazing and incredibly insightful. Please keep creating great content like this for us!","created_at":"2024-03-10T15:00:00Z"}
+      },
+      {
+        "external_id":"uc_tb02","handle":"@burst_bot02","role":"bot",
+        "video_comment": {"comment_id":"cmt_tb02","text":"This video is absolutely amazing and incredibly insightful. Please keep creating great content like this for everyone!","created_at":"2024-03-10T15:00:05Z"}
+      },
+      {
+        "external_id":"uc_tb03","handle":"@burst_bot03","role":"bot",
+        "video_comment": {"comment_id":"cmt_tb03","text":"This video is absolutely amazing and incredibly insightful. Please keep creating great content like this always!","created_at":"2024-03-10T15:00:11Z"}
+      },
+      {
+        "external_id":"uc_tb04","handle":"@burst_bot04","role":"bot",
+        "video_comment": {"comment_id":"cmt_tb04","text":"This video is absolutely amazing and incredibly insightful. Please keep creating great content for your audience!","created_at":"2024-03-10T15:00:18Z"}
+      },
+      {
+        "external_id":"uc_tb05","handle":"@burst_bot05","role":"bot",
+        "video_comment": {"comment_id":"cmt_tb05","text":"This video is absolutely amazing and incredibly insightful. Please keep creating wonderful content like this for us!","created_at":"2024-03-10T15:00:24Z"}
+      },
+      {
+        "external_id":"uc_tb06","handle":"@burst_bot06","role":"bot",
+        "video_comment": {"comment_id":"cmt_tb06","text":"This video is absolutely amazing and very insightful. Please keep creating great content like this for viewers!","created_at":"2024-03-10T15:00:30Z"}
+      },
+      {
+        "external_id":"uc_tb07","handle":"@burst_bot07","role":"bot",
+        "video_comment": {"comment_id":"cmt_tb07","text":"This video is absolutely amazing and incredibly helpful. Please keep creating great content like this for your fans!","created_at":"2024-03-10T15:00:38Z"}
+      },
+      {
+        "external_id":"uc_to01","handle":"@real_cmt01","role":"organic",
+        "video_comment": {"comment_id":"cmt_to01","text":"I've been following personal finance for years and this takes a really fresh angle on diversification. The bond ladder example at 14 minutes was particularly clarifying for me. Sharing this.","created_at":"2024-03-10T14:45:12Z"}
+      },
+      {
+        "external_id":"uc_to02","handle":"@real_cmt02","role":"organic",
+        "video_comment": {"comment_id":"cmt_to02","text":"The part about emergency funds as a psychological tool rather than a purely financial one was something I'd never thought about that way before. Really shifted my perspective honestly.","created_at":"2024-03-10T14:52:33Z"}
+      },
+      {
+        "external_id":"uc_to03","handle":"@real_cmt03","role":"organic",
+        "video_comment": {"comment_id":"cmt_to03","text":"My favorite takeaway: stop timing the market and start timing your contributions. Simple but I needed to hear it framed that way. Bookmarked for when I need a reminder.","created_at":"2024-03-10T15:18:07Z"}
+      },
+      {
+        "external_id":"uc_to04","handle":"@real_cmt04","role":"organic",
+        "video_comment": {"comment_id":"cmt_to04","text":"I disagree with the 60/40 recommendation for younger investors. The evidence for holding that much in bonds before 40 seems weak given the historical equity premium. Would love to see a follow-up video debating this.","created_at":"2024-03-10T15:31:44Z"}
+      },
+      {
+        "external_id":"uc_to05","handle":"@real_cmt05","role":"organic",
+        "video_comment": {"comment_id":"cmt_to05","text":"Been lurking for 6 months and finally felt compelled to comment. The section on survivorship bias in mutual fund performance is something every investor should understand. Thank you for explaining it so clearly.","created_at":"2024-03-10T16:02:18Z"}
+      }
+    ],
+    "planted_clusters": [
+      {"method": "temporal_semantic_clique", "members": ["uc_tb01","uc_tb02","uc_tb03","uc_tb04","uc_tb05","uc_tb06","uc_tb07"]}
+    ]
+  },
+
+  {
+    "label": "temporal_burst_organic_spread",
+    "scenario_type": "temporal_semantic",
+    "expected_coordination": "none",
+    "description": "8 organic accounts posting diverse comments spread over 3 hours — no burst pattern.",
+    "accounts": [
+      {
+        "external_id":"uc_ts01","handle":"@org_spread01","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts01","text":"Genuinely one of the best explainers on compound interest I have found. The visualization at the end really drove it home for me. Will be back for more.","created_at":"2024-03-11T09:00:00Z"}
+      },
+      {
+        "external_id":"uc_ts02","handle":"@org_spread02","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts02","text":"I came here from a Reddit comment and I am glad I did. My 401k situation is a mess and this gave me a clear starting framework. Going to rebalance this weekend.","created_at":"2024-03-11T09:47:00Z"}
+      },
+      {
+        "external_id":"uc_ts03","handle":"@org_spread03","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts03","text":"The sequence-of-returns risk section was dense but worth it. I had to pause and rewatch twice. Finally makes sense why retiring in a down year is so much worse than the average suggests.","created_at":"2024-03-11T10:22:00Z"}
+      },
+      {
+        "external_id":"uc_ts04","handle":"@org_spread04","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts04","text":"Quick question: how does this change if you have a pension? I feel like most personal finance content assumes you have zero guaranteed income in retirement and that changes the math significantly.","created_at":"2024-03-11T10:55:00Z"}
+      },
+      {
+        "external_id":"uc_ts05","handle":"@org_spread05","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts05","text":"I am a CPA and I want to say: the tax section is accurate and more nuanced than most YouTube content. The bit about Roth conversions during low-income years is legitimately good advice. Nice work.","created_at":"2024-03-11T11:30:00Z"}
+      },
+      {
+        "external_id":"uc_ts06","handle":"@org_spread06","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts06","text":"Shared this with my parents who are retiring in 3 years. They actually watched the whole thing which is saying something because they never watch videos I send them. Good sign.","created_at":"2024-03-11T11:58:00Z"}
+      },
+      {
+        "external_id":"uc_ts07","handle":"@org_spread07","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts07","text":"The analogy about buckets was a bit simplistic for my taste but I understand why you use it. Better to have a slightly imprecise mental model than an accurate one nobody understands.","created_at":"2024-03-11T12:15:00Z"}
+      },
+      {
+        "external_id":"uc_ts08","handle":"@org_spread08","role":"organic",
+        "video_comment": {"comment_id":"cmt_ts08","text":"Just discovered this channel. Marathon watching everything from the beginning. The consistency of quality is impressive. How do you keep this pace without burning out?","created_at":"2024-03-11T12:40:00Z"}
+      }
+    ],
+    "planted_clusters": []
+  },
+
+  {
+    "label": "temporal_similar_text_wide_window",
+    "scenario_type": "temporal_semantic",
+    "expected_coordination": "none",
+    "description": "5 accounts posting similar-sounding comments but hours apart — time window prevents flagging.",
+    "accounts": [
+      {
+        "external_id":"uc_tw01","handle":"@late_user01","role":"organic",
+        "video_comment": {"comment_id":"cmt_tw01","text":"This video is excellent and very informative. I really enjoyed watching it and learned a lot. Highly recommended to everyone interested in finance.","created_at":"2024-03-12T08:00:00Z"}
+      },
+      {
+        "external_id":"uc_tw02","handle":"@late_user02","role":"organic",
+        "video_comment": {"comment_id":"cmt_tw02","text":"This video is excellent and very informative. I really enjoyed watching it and learned so much. Highly recommended for anyone interested in investing.","created_at":"2024-03-12T11:30:00Z"}
+      },
+      {
+        "external_id":"uc_tw03","handle":"@late_user03","role":"organic",
+        "video_comment": {"comment_id":"cmt_tw03","text":"This video is excellent and very informative. I really enjoyed the content and learned quite a lot. Highly recommended for viewers interested in finance.","created_at":"2024-03-12T14:45:00Z"}
+      },
+      {
+        "external_id":"uc_tw04","handle":"@late_user04","role":"organic",
+        "video_comment": {"comment_id":"cmt_tw04","text":"This video is excellent and very informative. I really enjoyed watching it and learned a great deal. Highly recommended to everyone interested in money management.","created_at":"2024-03-12T17:20:00Z"}
+      },
+      {
+        "external_id":"uc_tw05","handle":"@late_user05","role":"organic",
+        "video_comment": {"comment_id":"cmt_tw05","text":"This video is excellent and very informative. I really enjoyed it and learned a lot from watching. Highly recommended to those interested in personal finance.","created_at":"2024-03-12T20:10:00Z"}
+      }
+    ],
+    "planted_clusters": []
+  },
+
+  {
+    "label": "fingerprint_cluster_bot_family",
+    "scenario_type": "fingerprint_cluster",
+    "expected_coordination": "high",
+    "description": "5 bot accounts with nearly identical behavioral fingerprints — same farm template.",
+    "accounts": [
+      {"external_id":"uc_fp01","handle":"@fp_bot01","role":"bot","fingerprint":[0.82,0.79,0.81,0.80,0.78,0.77,0.80,0.82,0.79,0.81,0.80,0.78,0.77,0.80,0.79,0.81,0.80,0.79,0.78,0.81,0.80],"individual_probability":0.80},
+      {"external_id":"uc_fp02","handle":"@fp_bot02","role":"bot","fingerprint":[0.83,0.78,0.80,0.81,0.79,0.78,0.79,0.81,0.80,0.82,0.81,0.77,0.78,0.81,0.80,0.80,0.79,0.80,0.79,0.80,0.81],"individual_probability":0.79},
+      {"external_id":"uc_fp03","handle":"@fp_bot03","role":"bot","fingerprint":[0.81,0.80,0.82,0.79,0.78,0.79,0.81,0.83,0.78,0.80,0.79,0.79,0.76,0.82,0.78,0.82,0.81,0.78,0.80,0.82,0.79],"individual_probability":0.81},
+      {"external_id":"uc_fp04","handle":"@fp_bot04","role":"bot","fingerprint":[0.80,0.81,0.79,0.82,0.80,0.78,0.80,0.80,0.81,0.79,0.80,0.80,0.79,0.79,0.81,0.79,0.82,0.81,0.77,0.79,0.82],"individual_probability":0.78},
+      {"external_id":"uc_fp05","handle":"@fp_bot05","role":"bot","fingerprint":[0.82,0.79,0.81,0.80,0.81,0.77,0.79,0.82,0.79,0.81,0.78,0.80,0.78,0.80,0.79,0.81,0.80,0.80,0.81,0.80,0.79],"individual_probability":0.82},
+      {"external_id":"uc_fp06","handle":"@fp_real01","role":"organic","fingerprint":[0.20,0.45,0.60,0.30,0.55,0.25,0.40,0.35,0.50,0.22,0.48,0.35,0.62,0.28,0.55,0.42,0.38,0.25,0.52,0.30,0.45],"individual_probability":0.25},
+      {"external_id":"uc_fp07","handle":"@fp_real02","role":"organic","fingerprint":[0.35,0.20,0.55,0.40,0.25,0.60,0.45,0.22,0.58,0.38,0.30,0.52,0.18,0.45,0.35,0.60,0.28,0.42,0.50,0.22,0.38],"individual_probability":0.18},
+      {"external_id":"uc_fp08","handle":"@fp_real03","role":"organic","fingerprint":[0.48,0.62,0.22,0.55,0.38,0.30,0.20,0.58,0.35,0.45,0.62,0.25,0.40,0.52,0.20,0.38,0.55,0.60,0.28,0.45,0.22],"individual_probability":0.22}
+    ],
+    "planted_clusters": [
+      {"method": "fingerprint_cluster", "members": ["uc_fp01","uc_fp02","uc_fp03","uc_fp04","uc_fp05"]}
+    ]
+  },
+
+  {
+    "label": "fingerprint_cluster_diverse_organic",
+    "scenario_type": "fingerprint_cluster",
+    "expected_coordination": "none",
+    "description": "6 organic accounts with widely spread fingerprints — no cluster signal.",
+    "accounts": [
+      {"external_id":"uc_fd01","handle":"@diverse01","role":"organic","fingerprint":[0.10,0.80,0.30,0.60,0.20,0.90,0.40,0.15,0.75,0.50,0.25,0.85,0.35,0.65,0.10,0.70,0.45,0.55,0.20,0.80,0.30],"individual_probability":0.15},
+      {"external_id":"uc_fd02","handle":"@diverse02","role":"organic","fingerprint":[0.90,0.10,0.70,0.20,0.80,0.30,0.60,0.85,0.15,0.65,0.40,0.75,0.25,0.55,0.90,0.20,0.70,0.35,0.80,0.10,0.60],"individual_probability":0.20},
+      {"external_id":"uc_fd03","handle":"@diverse03","role":"organic","fingerprint":[0.50,0.40,0.10,0.85,0.35,0.60,0.20,0.75,0.55,0.15,0.80,0.30,0.70,0.45,0.25,0.90,0.10,0.65,0.40,0.55,0.85],"individual_probability":0.18},
+      {"external_id":"uc_fd04","handle":"@diverse04","role":"organic","fingerprint":[0.25,0.65,0.85,0.10,0.55,0.40,0.75,0.30,0.20,0.90,0.50,0.15,0.60,0.35,0.80,0.45,0.60,0.20,0.70,0.40,0.15],"individual_probability":0.22},
+      {"external_id":"uc_fd05","handle":"@diverse05","role":"organic","fingerprint":[0.70,0.25,0.55,0.45,0.15,0.80,0.10,0.60,0.40,0.30,0.90,0.65,0.50,0.20,0.60,0.35,0.85,0.50,0.10,0.75,0.50],"individual_probability":0.19},
+      {"external_id":"uc_fd06","handle":"@diverse06","role":"organic","fingerprint":[0.40,0.55,0.20,0.75,0.65,0.10,0.90,0.45,0.80,0.25,0.35,0.70,0.85,0.30,0.50,0.15,0.55,0.80,0.30,0.25,0.70],"individual_probability":0.16}
+    ],
+    "planted_clusters": []
+  },
+
+  {
+    "label": "mixed_bot_ring_with_organic_noise",
+    "scenario_type": "age_cohort",
+    "expected_coordination": "moderate",
+    "description": "6 bot accounts (tight age cohort) embedded in 20 organic accounts — detects ring despite noise.",
+    "accounts": [
+      {"external_id":"uc_mb01","handle":"@noise_farm01","role":"bot","created_at":"2024-04-01T00:00:00Z"},
+      {"external_id":"uc_mb02","handle":"@noise_farm02","role":"bot","created_at":"2024-04-02T00:00:00Z"},
+      {"external_id":"uc_mb03","handle":"@noise_farm03","role":"bot","created_at":"2024-04-03T00:00:00Z"},
+      {"external_id":"uc_mb04","handle":"@noise_farm04","role":"bot","created_at":"2024-04-05T00:00:00Z"},
+      {"external_id":"uc_mb05","handle":"@noise_farm05","role":"bot","created_at":"2024-04-07T00:00:00Z"},
+      {"external_id":"uc_mb06","handle":"@noise_farm06","role":"bot","created_at":"2024-04-09T00:00:00Z"},
+      {"external_id":"uc_mn01","handle":"@noise01","role":"organic","created_at":"2016-03-15T00:00:00Z"},
+      {"external_id":"uc_mn02","handle":"@noise02","role":"organic","created_at":"2017-07-22T00:00:00Z"},
+      {"external_id":"uc_mn03","handle":"@noise03","role":"organic","created_at":"2015-11-05T00:00:00Z"},
+      {"external_id":"uc_mn04","handle":"@noise04","role":"organic","created_at":"2019-04-30T00:00:00Z"},
+      {"external_id":"uc_mn05","handle":"@noise05","role":"organic","created_at":"2018-09-14T00:00:00Z"},
+      {"external_id":"uc_mn06","handle":"@noise06","role":"organic","created_at":"2020-02-28T00:00:00Z"},
+      {"external_id":"uc_mn07","handle":"@noise07","role":"organic","created_at":"2014-06-17T00:00:00Z"},
+      {"external_id":"uc_mn08","handle":"@noise08","role":"organic","created_at":"2021-08-03T00:00:00Z"},
+      {"external_id":"uc_mn09","handle":"@noise09","role":"organic","created_at":"2016-12-20T00:00:00Z"},
+      {"external_id":"uc_mn10","handle":"@noise10","role":"organic","created_at":"2022-05-11T00:00:00Z"},
+      {"external_id":"uc_mn11","handle":"@noise11","role":"organic","created_at":"2013-10-08T00:00:00Z"},
+      {"external_id":"uc_mn12","handle":"@noise12","role":"organic","created_at":"2019-01-25T00:00:00Z"},
+      {"external_id":"uc_mn13","handle":"@noise13","role":"organic","created_at":"2017-03-04T00:00:00Z"},
+      {"external_id":"uc_mn14","handle":"@noise14","role":"organic","created_at":"2020-11-19T00:00:00Z"},
+      {"external_id":"uc_mn15","handle":"@noise15","role":"organic","created_at":"2023-02-07T00:00:00Z"},
+      {"external_id":"uc_mn16","handle":"@noise16","role":"organic","created_at":"2015-07-30T00:00:00Z"},
+      {"external_id":"uc_mn17","handle":"@noise17","role":"organic","created_at":"2018-04-22T00:00:00Z"},
+      {"external_id":"uc_mn18","handle":"@noise18","role":"organic","created_at":"2021-09-15T00:00:00Z"},
+      {"external_id":"uc_mn19","handle":"@noise19","role":"organic","created_at":"2016-08-10T00:00:00Z"},
+      {"external_id":"uc_mn20","handle":"@noise20","role":"organic","created_at":"2019-06-05T00:00:00Z"}
+    ],
+    "planted_clusters": [
+      {"method": "age_cohort", "members": ["uc_mb01","uc_mb02","uc_mb03","uc_mb04","uc_mb05","uc_mb06"]}
+    ]
+  }
+]
