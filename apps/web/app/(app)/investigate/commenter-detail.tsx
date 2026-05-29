@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { TrendingUp, AlertTriangle, MessageSquareText, ArrowRight, BarChart2, ShieldAlert } from 'lucide-react';
 import { TierBadge } from '@/components/shared/tier-badge';
-import { ProbabilityBar } from '@/components/shared/probability-bar';
+import { ScoreRing } from '@/components/shared/score-ring';
 import { type CommenterScanResult, type SignalResult } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 
@@ -25,44 +25,43 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
 
   return (
     <article className="space-y-5 p-5">
-      {/* Header */}
-      <header>
-        <div className="flex items-center gap-3 flex-wrap mb-2">
-          <TierBadge tier={c.tier} size="lg" />
-          {c.from_cache && (
-            <span className="font-mono text-2xs tracking-wider text-fg-mute uppercase">[cached]</span>
-          )}
-          {c.matched_prior_neighbors > 0 && (
-            <span className="font-mono text-2xs tracking-wider text-accent uppercase">
-              {c.matched_prior_neighbors} prior neighbor{c.matched_prior_neighbors === 1 ? '' : 's'}
+      {/* Hero — score ring + identity */}
+      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/20 p-5">
+        <div className="absolute -top-12 -right-10 w-40 h-40 rounded-full bg-accent/[0.06] blur-3xl pointer-events-none" aria-hidden />
+        <div className="relative flex items-start gap-5 flex-wrap">
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <ScoreRing value={displayProb} tier={c.tier} size={88} stroke={7} />
+            <span className="font-mono text-[0.6rem] tracking-[0.16em] text-fg-mute uppercase">
+              inauthentic
             </span>
-          )}
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <TierBadge tier={c.tier} size="lg" />
+              {c.from_cache && (
+                <span className="font-mono text-2xs tracking-wider text-fg-mute uppercase border border-border-2 rounded-full px-2 py-0.5">cached</span>
+              )}
+              {c.matched_prior_neighbors > 0 && (
+                <span className="font-mono text-2xs tracking-wider text-accent uppercase border border-accent/30 bg-accent/10 rounded-full px-2 py-0.5">
+                  {c.matched_prior_neighbors} prior neighbor{c.matched_prior_neighbors === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+            <h2 className="display text-xl font-semibold text-fg tracking-tight mb-0.5 break-words">
+              {c.handle || c.external_id}
+            </h2>
+            {c.display_name && <p className="text-sm text-fg-dim">{c.display_name}</p>}
+            <p className="font-mono text-2xs text-fg-faint mt-1 break-all">{c.external_id}</p>
+          </div>
         </div>
-        <h2 className="text-xl font-semibold text-fg tracking-tight mb-0.5">
-          {c.handle || c.external_id}
-        </h2>
-        {c.display_name && <p className="text-sm text-fg-dim">{c.display_name}</p>}
-        <p className="font-mono text-2xs text-fg-faint mt-1 break-all">{c.external_id}</p>
-      </header>
-
-      {/* Probability */}
-      <section>
-        <div className="flex items-baseline justify-between gap-3 mb-2">
-          <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
-            Inauthentic probability
-          </span>
-          <span className="text-3xl font-bold mono text-fg tracking-tight">
-            {Math.round(displayProb * 100)}%
-          </span>
-        </div>
-        <ProbabilityBar value={displayProb} tier={c.tier} showLabel={false} />
         {showAdjusted && (
-          <p className="mt-2 text-xs text-accent font-mono">
-            ↑ adjusted from {Math.round(c.overall_probability * 100)}% via coordination cluster
+          <p className="relative mt-3 text-xs text-accent font-mono flex items-center gap-1.5">
+            <TrendingUp size={12} />
+            adjusted from {Math.round(c.overall_probability * 100)}% via coordination cluster
           </p>
         )}
-        <p className="mt-2 text-sm text-fg-dim leading-relaxed">{c.summary}</p>
-      </section>
+        <p className="relative mt-3 text-sm text-fg-dim leading-relaxed">{c.summary}</p>
+      </header>
 
       {/* Per-detector signal breakdown */}
       {signals.length > 0 && (
@@ -107,7 +106,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
           />
           <div className="space-y-2">
             {(c.recent_activity ?? []).map((a, i) => (
-              <div key={i} className="bg-bg border border-border-1 rounded-sm p-3">
+              <div key={i} className="bg-bg border border-border-1 rounded-xl p-3 hover:border-border-hot/60 transition-colors">
                 <p className="text-sm text-fg leading-relaxed break-words">{a.text}</p>
                 <div className="mt-2 flex items-center justify-between gap-2 font-mono text-2xs tracking-wider uppercase text-fg-mute">
                   <span>{a.created_at ? timeAgo(a.created_at) : '—'}</span>
@@ -164,7 +163,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       <div className="pt-1 border-t border-border-1">
         <Link
           href={`/accounts/${encodeURIComponent(c.external_id)}?platform=${c.platform || 'youtube'}`}
-          className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm bg-bg border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors"
+          className="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-bg border border-border-1 hover:border-accent/40 hover:bg-accent/[0.04] transition-all"
         >
           <div>
             <p className="font-mono text-2xs tracking-wider uppercase text-accent mb-0.5">
@@ -174,7 +173,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
               AI behavioural analysis · signal breakdown · scan history
             </p>
           </div>
-          <ArrowRight size={14} className="text-fg-mute shrink-0" />
+          <ArrowRight size={14} className="text-fg-mute shrink-0 group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
         </Link>
       </div>
     </article>

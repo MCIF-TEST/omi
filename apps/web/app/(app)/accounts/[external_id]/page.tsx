@@ -8,7 +8,7 @@ import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkline } from '@/components/shared/sparkline';
 import { TierBadge } from '@/components/shared/tier-badge';
-import { ProbabilityBar } from '@/components/shared/probability-bar';
+import { ScoreRing } from '@/components/shared/score-ring';
 import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type ChannelIntelligenceResponse, type SignalResult } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { pct, timeAgo, tierBg } from '@/lib/format';
@@ -91,21 +91,34 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
       <div>
         <Link
           href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg-dim font-mono tracking-wider uppercase mb-4"
+          className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg transition-colors font-mono tracking-wider uppercase mb-4"
         >
           <ArrowLeft size={14} /> Back
         </Link>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
-          Account · {platform}
-        </p>
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <h1 className="text-2xl font-semibold text-fg tracking-tight">{history.handle}</h1>
-          {history.display_name && (
-            <span className="text-fg-mute">· {history.display_name}</span>
-          )}
-          {latest && <TierBadge tier={latest.tier} size="lg" />}
-        </div>
-        <p className="mt-1 font-mono text-xs text-fg-faint">{history.external_id}</p>
+
+        <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-7 shadow-card">
+          <div className="absolute -top-16 -right-12 w-56 h-56 rounded-full bg-accent/[0.07] blur-3xl pointer-events-none" aria-hidden />
+          <div className="absolute inset-0 dot-bg opacity-[0.12] pointer-events-none" aria-hidden />
+          <div className="relative flex items-center gap-5 flex-wrap">
+            {latest && (
+              <ScoreRing value={latest.overall_probability} tier={latest.tier} size={92} stroke={7} />
+            )}
+            <div className="flex-1 min-w-[200px]">
+              <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
+                Account · {platform}
+              </p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight">{history.handle}</h1>
+                {history.display_name && (
+                  <span className="text-fg-mute">· {history.display_name}</span>
+                )}
+                {latest && <TierBadge tier={latest.tier} size="lg" />}
+              </div>
+              <p className="mt-1.5 font-mono text-xs text-fg-faint break-all">{history.external_id}</p>
+            </div>
+          </div>
+        </header>
       </div>
 
       {/* Channel-level intelligence link — only shown when this account owns content */}
@@ -114,8 +127,8 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           href={`/channels/${platform}/${encodeURIComponent(history.external_id)}`}
           className="block group"
         >
-          <div className="flex items-center gap-4 p-4 rounded-md border border-accent/30 bg-accent/5 hover:border-accent hover:bg-accent/10 transition-colors">
-            <div className="shrink-0 w-10 h-10 rounded-sm border border-accent/40 bg-bg flex items-center justify-center text-accent">
+          <div className="flex items-center gap-4 p-4 rounded-xl border border-accent/30 bg-accent/[0.05] hover:border-accent/60 hover:bg-accent/[0.09] hover:shadow-glow-sm transition-all">
+            <div className="shrink-0 w-10 h-10 rounded-lg border border-accent/40 bg-bg flex items-center justify-center text-accent">
               <Video size={18} />
             </div>
             <div className="flex-1 min-w-0">
@@ -155,14 +168,13 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
             <span className="text-3xl font-bold tracking-tight mono text-fg">
               {pct(latest.overall_probability)}
             </span>
-            <span className={`px-2 py-0.5 rounded-sm border font-mono text-2xs uppercase tracking-wider ${tierBg(latest.tier)}`}>
+            <span className={`px-2.5 py-0.5 rounded-full border font-mono text-2xs uppercase tracking-wider ${tierBg(latest.tier)}`}>
               {latest.tier} suspicion
             </span>
             <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
               confidence {pct(latest.confidence)}
             </span>
           </div>
-          <ProbabilityBar value={latest.overall_probability} tier={latest.tier} showLabel={false} />
           <p className="mt-3 text-sm text-fg-dim">{latest.summary}</p>
 
           {latestSignals.length > 0 && (
@@ -332,7 +344,7 @@ function SignalCard({ signal }: { signal: SignalResult }) {
     'text-tier-low';
 
   return (
-    <div className="bg-bg border border-border-1 rounded-sm p-3">
+    <div className="bg-bg border border-border-1 rounded-xl p-3.5 hover:border-border-hot/60 transition-colors">
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">{label}</span>
         <span className={`font-mono font-bold text-sm ${textColor}`}>
