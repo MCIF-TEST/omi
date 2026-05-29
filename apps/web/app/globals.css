@@ -3,43 +3,41 @@
 @tailwind utilities;
 
 /* =====================================================================
-   OMISPHERE — "LUMEN" design identity
-   Warm graphite surfaces · electric-violet primary · spectral-coral
-   secondary · Space Grotesk display + Inter body + JetBrains mono.
-   Single source of truth for color / type / motion.
+   OMISPHERE — "Online Media Intelligence" identity
+   Pure-black canvas · electric-blue → violet brand gradient · chrome
+   silver wordmark accent. Sourced directly from the brand mark.
+   Space Grotesk display + Inter body + JetBrains mono.
    ===================================================================== */
 
 :root {
-  /* Surfaces — warm graphite, no blue cast */
-  --bg-deep:    #08080b;
-  --bg:         #0c0c10;
-  --bg-elev:    #131318;
-  --bg-elev-2:  #1c1c23;
+  /* Surfaces — near-pure black with the faintest blue depth */
+  --bg-deep:    #04050b;
+  --bg:         #080a12;
+  --bg-elev:    #0e1019;
+  --bg-elev-2:  #161a26;
 
-  /* Borders — warm violet-tinted neutrals */
-  --border:     #232330;
-  --border-2:   #33333f;
-  --border-hot: #4b4560;
+  /* Borders — cool blue-grey */
+  --border:     #1b2030;
+  --border-2:   #29303f;
+  --border-hot: #3c4a6c;
 
-  /* Text — warm off-white */
-  --text:       #f4f2f9;
-  --text-dim:   #b8b4c8;
-  --text-mute:  #837e96;
-  --text-faint: #4f4b60;
+  /* Text — cool white / silver (echoes the chrome "SPHERE") */
+  --text:       #eef2f9;
+  --text-dim:   #aab3c6;
+  --text-mute:  #6e7890;
+  --text-faint: #424c63;
 
-  /* Accents — electric violet primary */
-  --accent:     #8b7bff;
-  --accent-2:   #ab9dff;
-  --accent-dim: #5a48c9;
+  /* Accents — electric blue primary (the logo's "OMI" + ring) */
+  --accent:     #3b8eff;
+  --accent-2:   #6ba9ff;
+  --accent-dim: #1d5fd0;
 
-  /* Spectral secondary — warm coral (mapped onto the `violet` tokens
-     so existing `text-violet` utilities pick it up; the brand gradient
-     runs violet → coral for a true spectral feel) */
-  --violet:     #ff7a5c;
-  --violet-2:   #ff9e7a;
+  /* Spectral end — violet (the gradient's purple terminus) */
+  --violet:     #8b5cf6;
+  --violet-2:   #a78bfa;
 
-  /* Status / tiers — retuned for the warm world */
-  --tier-low:      #2dd4a7;
+  /* Status / tiers */
+  --tier-low:      #22d3a8;
   --tier-moderate: #f5b62f;
   --tier-elevated: #fb8c3c;
   --tier-high:     #fb3b6b;
@@ -64,16 +62,16 @@
     text-rendering: optimizeLegibility;
   }
   * { border-color: var(--border); }
-  ::selection { background: rgba(139, 123, 255, 0.28); color: #fff; }
+  ::selection { background: rgba(59, 142, 255, 0.3); color: #fff; }
 
-  /* Display face for all real headings — defines the new voice */
+  /* Display face for all real headings */
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
     font-weight: 600;
   }
 
-  /* Custom scrollbar */
+  /* Scrollbar */
   * { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
   *::-webkit-scrollbar { width: 10px; height: 10px; }
   *::-webkit-scrollbar-track { background: transparent; }
@@ -88,22 +86,20 @@
     background-clip: content-box;
   }
 
-  /* Legacy grid (some pages still reference it) — retuned to violet */
   .bg-grid {
     background-image:
-      radial-gradient(circle at 50% -20%, rgba(139, 123, 255, 0.09), transparent 60%),
-      radial-gradient(circle at 80% 110%, rgba(255, 122, 92, 0.05), transparent 60%),
-      linear-gradient(rgba(40, 40, 56, 0.35) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(40, 40, 56, 0.35) 1px, transparent 1px);
+      radial-gradient(circle at 50% -20%, rgba(59, 142, 255, 0.10), transparent 60%),
+      radial-gradient(circle at 80% 110%, rgba(139, 92, 246, 0.06), transparent 60%),
+      linear-gradient(rgba(30, 38, 56, 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 38, 56, 0.35) 1px, transparent 1px);
     background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
   }
 
   .dot-bg {
-    background-image: radial-gradient(circle, rgba(171, 157, 255, 0.12) 1px, transparent 1px);
+    background-image: radial-gradient(circle, rgba(107, 169, 255, 0.13) 1px, transparent 1px);
     background-size: 30px 30px;
   }
 
-  /* Film grain overlay */
   .grain::after {
     content: '';
     position: fixed;
@@ -125,23 +121,26 @@
   .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
   .display { font-family: var(--font-display); letter-spacing: -0.02em; }
 
-  /* Violet gradient text */
-  .text-gradient {
-    background: linear-gradient(130deg, var(--accent-2) 0%, var(--accent) 55%, var(--violet) 110%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  /* Brand gradient — violet → coral (the spectral signature) */
+  /* Brand gradient text — electric blue → violet (the logo sweep) */
+  .text-gradient,
   .text-brand {
-    background: linear-gradient(118deg, var(--accent-2) 0%, var(--accent) 42%, var(--violet) 100%);
+    background: linear-gradient(118deg, var(--accent-2) 0%, var(--accent) 44%, var(--violet) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+
+  /* Chrome silver text — the "SPHERE" treatment */
+  .text-silver {
+    background: linear-gradient(180deg, #ffffff 0%, #d2d9e6 48%, #9aa6bd 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
   /* Animated shimmer text */
   .text-shimmer {
-    background: linear-gradient(110deg, var(--accent) 20%, #ffffff 46%, var(--violet) 56%, var(--accent) 82%);
+    background: linear-gradient(110deg, var(--accent) 18%, #ffffff 46%, var(--violet) 58%, var(--accent) 84%);
     background-size: 200% auto;
     -webkit-background-clip: text;
     background-clip: text;
@@ -149,15 +148,15 @@
     animation: shimmer 4s ease-in-out infinite;
   }
 
-  /* Glassmorphism surface */
+  /* Glassmorphism */
   .glass {
-    background: rgba(19, 19, 24, 0.62);
+    background: rgba(14, 16, 25, 0.62);
     backdrop-filter: blur(22px) saturate(140%);
     -webkit-backdrop-filter: blur(22px) saturate(140%);
-    border: 1px solid rgba(75, 69, 96, 0.55);
+    border: 1px solid rgba(60, 74, 108, 0.5);
   }
 
-  /* Animated gradient hairline border — violet → coral */
+  /* Animated gradient hairline border — blue → violet */
   .gradient-border {
     position: relative;
     background: var(--bg-elev);
@@ -169,7 +168,7 @@
     inset: 0;
     padding: 1px;
     border-radius: inherit;
-    background: linear-gradient(130deg, rgba(139,123,255,0.6), rgba(255,122,92,0.4), rgba(139,123,255,0.12));
+    background: linear-gradient(130deg, rgba(59,142,255,0.65), rgba(139,92,246,0.45), rgba(59,142,255,0.12));
     background-size: 200% 200%;
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
@@ -178,7 +177,7 @@
     pointer-events: none;
   }
 
-  /* Interactive card — lift + violet ring + spotlight */
+  /* Interactive card */
   .card-interactive {
     transition: transform 0.26s var(--ease-omi),
                 box-shadow 0.26s var(--ease-omi),
@@ -186,17 +185,17 @@
   }
   .card-interactive:hover {
     transform: translateY(-3px);
-    box-shadow: 0 14px 44px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,123,255,0.2);
-    border-color: rgba(139, 123, 255, 0.28) !important;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.55), 0 0 0 1px rgba(59,142,255,0.22);
+    border-color: rgba(59, 142, 255, 0.3) !important;
   }
 
-  /* Spotlight sheen on hover */
+  /* Spotlight sheen */
   .spotlight { position: relative; overflow: hidden; }
   .spotlight::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(440px circle at 50% 0%, rgba(139,123,255,0.13), transparent 60%);
+    background: radial-gradient(440px circle at 50% 0%, rgba(59,142,255,0.14), transparent 60%);
     opacity: 0;
     transition: opacity 0.32s ease;
     pointer-events: none;
@@ -210,7 +209,7 @@
     transition: box-shadow 0.2s ease, background 0.15s ease, transform 0.12s ease;
   }
   .btn-glow:hover {
-    box-shadow: 0 0 22px rgba(139,123,255,0.4), 0 0 48px rgba(139,123,255,0.14);
+    box-shadow: 0 0 22px rgba(59,142,255,0.45), 0 0 48px rgba(59,142,255,0.16);
   }
   .btn-glow:active { transform: translateY(1px) scale(0.99); }
   .btn-glow::before {
@@ -218,7 +217,7 @@
     position: absolute;
     top: 0; bottom: 0;
     width: 42%;
-    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.32), transparent);
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.34), transparent);
     transform: translateX(-150%);
     pointer-events: none;
   }
@@ -236,10 +235,10 @@
     transition: color 0.15s ease, background 0.15s ease;
     position: relative;
   }
-  .nav-item:hover { color: var(--text); background: rgba(28, 28, 35, 0.9); }
+  .nav-item:hover { color: var(--text); background: rgba(22, 26, 38, 0.9); }
   .nav-item.active {
     color: var(--accent-2);
-    background: linear-gradient(90deg, rgba(139,123,255,0.14), rgba(139,123,255,0.03));
+    background: linear-gradient(90deg, rgba(59,142,255,0.16), rgba(59,142,255,0.03));
   }
   .nav-item.active::before {
     content: '';
@@ -250,7 +249,7 @@
     width: 2.5px;
     background: linear-gradient(var(--accent), var(--violet));
     border-radius: 0 3px 3px 0;
-    box-shadow: 0 0 10px rgba(139,123,255,0.7);
+    box-shadow: 0 0 10px rgba(59,142,255,0.75);
   }
 
   /* Animated bar fill sheen */
@@ -259,14 +258,13 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
     background-size: 200% 100%;
     animation: shimmer 2.4s ease-in-out infinite;
   }
 }
 
 @layer utilities {
-  /* Stagger — children fade-up in sequence */
   .stagger > * { animation: fade-up-lg 520ms var(--ease-omi) both; }
   .stagger > *:nth-child(1) { animation-delay: 0.04s; }
   .stagger > *:nth-child(2) { animation-delay: 0.10s; }
@@ -302,7 +300,7 @@
   .report-page .text-fg-faint,
   .report-page .report-muted { color: #555555 !important; }
   .report-page .text-accent,
-  .report-page .report-accent { color: #5a48c9 !important; }
+  .report-page .report-accent { color: #1d5fd0 !important; }
   .report-page .text-tier-elevated { color: #b8530c !important; }
   .report-page .text-tier-high     { color: #a4163a !important; }
   .report-page .text-tier-moderate { color: #92660a !important; }
