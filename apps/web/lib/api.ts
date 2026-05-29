@@ -799,6 +799,82 @@ export interface CalibrationEvaluation {
 }
 
 // ---------------------------------------------------------------------------
+// Engine benchmark scoreboards  (/v1/intelligence/benchmark*)
+// The synthetic, CI-gated counterpart to the real-label CalibrationEvaluation:
+// how good the engine is on curated benchmarks, surfaced in-product.
+// ---------------------------------------------------------------------------
+
+export interface SeedBenchmarkReport {
+  benchmark_version: string;
+  n_cases: number;
+  brier_score: number;
+  tier_accuracy: number;
+  macro_f1: number;
+  majority_class_rate: number;
+}
+
+export interface CoordinationBenchmarkReport {
+  benchmark_version: string;
+  n_scenarios: number;
+  n_with_planted: number;
+  n_clean: number;
+  cluster_recall: number;
+  member_precision: number;
+  member_recall: number;
+  clean_pass_rate: number;
+}
+
+export interface RescueBenchmarkReport {
+  benchmark_version: string;
+  n_accounts: number;
+  n_bots: number;
+  n_organic: number;
+  standalone_bot_recall: number;
+  adjusted_bot_recall: number;
+  recall_lift: number;
+  rescue_rate: number;
+  n_rescuable: number;
+  n_rescued: number;
+  mean_prob_lift: number;
+  organic_false_lift: number;
+}
+
+export interface MemoryCurvePoint {
+  store_size: number;
+  memory_confidence: number;
+  adjusted_probability: number;
+  adjusted_tier: Tier;
+}
+
+export interface MemoryScenarioReport {
+  label: string;
+  neighborhood: 'bad' | 'good' | 'distant';
+  role: 'bot' | 'organic';
+  standalone_tier: Tier;
+  standalone_probability: number;
+  learning_curve: MemoryCurvePoint[];
+  warm_flagged: boolean;
+  monotonic: boolean;
+}
+
+export interface MemoryBenchmarkReport {
+  benchmark_version: string;
+  n_scenarios: number;
+  n_bad: number;
+  n_good: number;
+  n_distant: number;
+  store_sizes: number[];
+  cold_bad_recall: number;
+  warm_bad_recall: number;
+  memory_recall_lift: number;
+  bad_monotonic_rate: number;
+  mean_warm_prob_lift: number;
+  good_false_lift: number;
+  distant_inert_rate: number;
+  per_scenario: MemoryScenarioReport[];
+}
+
+// ---------------------------------------------------------------------------
 // Cross-scan account search  (/v1/accounts/search)
 // ---------------------------------------------------------------------------
 
