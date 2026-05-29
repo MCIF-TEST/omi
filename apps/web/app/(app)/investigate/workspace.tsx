@@ -37,6 +37,14 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
         method: 'POST',
         body: JSON.stringify({ url, max_commenters: batchSize }),
       });
+      // Defensive: a 200 with no usable payload (e.g. an upstream timeout that
+      // returned an empty body) must not silently fall back to the empty state.
+      if (!body || typeof body !== 'object' || !('overall_tier' in body)) {
+        throw new Error(
+          'The scan finished but returned no result — it likely timed out. ' +
+            'Try again, or lower the batch size.',
+        );
+      }
       setState({ data: body, selectedId: null, pending: false, error: null, loadingMore: false });
       router.refresh();   // refresh credits chip + recent investigations
     } catch (e) {
@@ -45,6 +53,8 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
           ? e.status === 401 ? 'Please log in to scan.'
           : e.status === 402 ? 'Out of credits. Visit Settings to subscribe.'
           : e.message
+          : e instanceof Error && e.message
+          ? e.message
           : 'Network error.';
       setState((s) => ({ ...s, pending: false, error: msg }));
     }
