@@ -4,7 +4,6 @@
 
 /* =====================================================================
    OMISPHERE — design tokens (single source of truth for color/typography)
-   See docs/design-system.md
    ===================================================================== */
 
 :root {
@@ -62,6 +61,12 @@
     background-size: 100% 100%, 100% 100%, 56px 56px, 56px 56px;
   }
 
+  /* Dot grid pattern — used on hero/marketing backgrounds */
+  .dot-bg {
+    background-image: radial-gradient(circle, rgba(103, 232, 249, 0.10) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
   /* Focus visible — always visible, never default browser blue */
   :focus-visible {
     outline: 2px solid var(--accent);
@@ -72,14 +77,78 @@
 
 @layer components {
   .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
+
+  /* Gradient text — cyan sweep */
+  .text-gradient {
+    background: linear-gradient(130deg, var(--accent-2) 0%, var(--accent) 55%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Glassmorphism card surface */
+  .glass {
+    background: rgba(11, 17, 36, 0.65);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(31, 42, 72, 0.9);
+  }
+
+  /* Card with hover glow + lift */
+  .card-interactive {
+    transition: transform 0.22s cubic-bezier(0.16,1,0.3,1),
+                box-shadow 0.22s cubic-bezier(0.16,1,0.3,1),
+                border-color 0.22s ease;
+  }
+  .card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(34,211,238,0.14);
+    border-color: rgba(34, 211, 238, 0.2) !important;
+  }
+
+  /* Glow on hover — applied to buttons/CTAs */
+  .btn-glow {
+    transition: box-shadow 0.2s ease, background 0.15s ease;
+  }
+  .btn-glow:hover {
+    box-shadow: 0 0 20px rgba(34,211,238,0.3), 0 0 40px rgba(34,211,238,0.1);
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    transition: color 0.15s ease, background 0.15s ease;
+    position: relative;
+  }
+  .nav-item:hover {
+    color: var(--text);
+    background: rgba(11, 17, 36, 0.8);
+  }
+  .nav-item.active {
+    color: var(--accent);
+    background: rgba(34, 211, 238, 0.07);
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20%;
+    height: 60%;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+    box-shadow: 0 0 8px rgba(34,211,238,0.5);
+  }
 }
 
 /* ---------------------------------------------------------------------------
    Public report — print / PDF styling.
-   Targets the /r/[token] page (.report-page) so when an analyst hits
-   "Save as PDF" in their browser, the output is high-contrast, paginated
-   correctly, and looks like a professional intelligence brief — not a
-   screenshot of a dark UI.
 --------------------------------------------------------------------------- */
 
 @media print {
@@ -166,7 +235,6 @@
     border-radius: 2pt;
   }
 
-  /* Force print to honour background colors on tier bars */
   .report-page .bg-tier-low,
   .report-page .bg-tier-moderate,
   .report-page .bg-tier-elevated,
@@ -174,5 +242,11 @@
   .report-page .bg-accent {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-drift, .animate-drift-slow, .animate-float, .animate-shimmer, .animate-glow-pulse {
+    animation: none !important;
   }
 }

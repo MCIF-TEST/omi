@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bell, LogOut, Search, Zap } from 'lucide-react';
-import { Logo } from '@/components/shared/logo';
+import { cn } from '@/lib/cn';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { apiClient, type AlertsResponse, type User } from '@/lib/api';
@@ -37,7 +37,6 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
     router.push('/login');
   };
 
-  // Poll the unread alert count every 60s for the bell badge.
   const alerts = usePolling<AlertsResponse>(
     useCallback(() => apiClient<AlertsResponse>('/v1/monitoring/alerts?unread=true&limit=1'), []),
     60_000,
@@ -45,21 +44,24 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
   const unread = alerts.data?.unread_count ?? 0;
 
   return (
-    <header className="h-14 shrink-0 border-b border-border-1 bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60 px-6 flex items-center justify-between gap-6">
-      <div className="flex items-center gap-6">
-        <Logo />
-        <div className="hidden lg:flex items-center gap-3 font-mono text-2xs text-fg-mute tracking-wider uppercase">
-          {engineStatus && (
-            <>
-              <span>FP <span className="text-fg">{engineStatus.fingerprints_stored}</span></span>
-              <span>·</span>
-              <span>Scans <span className="text-fg">{engineStatus.total_scans}</span></span>
-            </>
-          )}
-        </div>
+    <header className="h-14 shrink-0 border-b border-border-1 bg-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-bg/60 px-5 flex items-center justify-between gap-4">
+
+      {/* Left: engine stats */}
+      <div className="hidden lg:flex items-center gap-3 font-mono text-2xs text-fg-mute tracking-wider">
+        {engineStatus && (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-tier-low" />
+              <span>FP <span className="text-fg-dim">{engineStatus.fingerprints_stored.toLocaleString()}</span></span>
+            </span>
+            <span className="text-border-2">·</span>
+            <span>Scans <span className="text-fg-dim">{engineStatus.total_scans.toLocaleString()}</span></span>
+          </>
+        )}
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Right: actions */}
+      <div className="flex items-center gap-2 ml-auto">
         {engineStatus && (
           <ServiceHealthPill
             youtubeConfigured={engineStatus.youtube_configured}
@@ -69,18 +71,23 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
             quotaDailyLimit={engineStatus.youtube_quota_daily_limit}
           />
         )}
+
+        {/* Search */}
         <Link
           href="/search"
-          className="hidden md:inline-flex items-center gap-2 px-2.5 h-7 border border-border-2 rounded-sm font-mono text-2xs tracking-wider uppercase text-fg-mute hover:text-fg-dim hover:border-border-hot transition-colors"
+          className="hidden md:inline-flex items-center gap-2 h-8 px-3 border border-border-2 rounded-sm font-mono text-2xs tracking-wider text-fg-mute hover:text-fg-dim hover:border-border-hot transition-colors"
           aria-label="Search accounts"
         >
+          <Search size={11} />
           <span>Search</span>
-          <Search size={11} className="text-fg-mute" />
+          <span className="text-fg-faint hidden lg:block">⌘K</span>
         </Link>
+
+        {/* Alerts bell */}
         <Link
           href="/monitoring"
-          className="relative inline-flex items-center justify-center w-8 h-8 rounded-sm border border-border-2 hover:border-border-hot text-fg-dim hover:text-fg transition-colors"
-          aria-label={`Alerts (${unread} unread)`}
+          className="relative inline-flex items-center justify-center w-8 h-8 rounded-sm border border-border-2 hover:border-border-hot text-fg-mute hover:text-fg-dim transition-colors"
+          aria-label={`Alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
         >
           <Bell size={14} />
           {unread > 0 && (
@@ -89,14 +96,22 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
             </span>
           )}
         </Link>
+
+        {/* Credit badge */}
         <Badge variant={creditTone}>
-          <Zap size={11} />
-          {credits} credit{credits === 1 ? '' : 's'}
+          <Zap size={10} />
+          {credits}
         </Badge>
-        <div className="hidden sm:block font-mono text-2xs text-fg-dim">{user.email}</div>
-        <Button variant="ghost" size="sm" onClick={onLogout} aria-label="Log out">
-          <LogOut size={14} />
-          Logout
+
+        {/* Email */}
+        <span className="hidden lg:block font-mono text-2xs text-fg-mute truncate max-w-[160px]">
+          {user.email}
+        </span>
+
+        {/* Logout */}
+        <Button variant="ghost" size="sm" onClick={onLogout} aria-label="Log out" className="gap-1.5">
+          <LogOut size={13} />
+          <span className="hidden sm:block">Out</span>
         </Button>
       </div>
     </header>
