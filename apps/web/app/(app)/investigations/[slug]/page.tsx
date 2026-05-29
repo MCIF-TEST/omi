@@ -33,40 +33,45 @@ export default async function InvestigationPage({ params }: { params: { slug: st
       <div>
         <Link
           href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg-dim font-mono tracking-wider uppercase"
+          className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg transition-colors font-mono tracking-wider uppercase"
         >
           <ArrowLeft size={14} /> Back to dashboard
         </Link>
       </div>
 
-      <header className="flex items-baseline justify-between gap-4 flex-wrap">
-        <div>
-          <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
-            Saved investigation · {inv.slug}
-          </p>
-          <h1 className="text-2xl font-semibold text-fg tracking-tight">{inv.label}</h1>
-          <p className="mt-1 font-mono text-xs text-fg-faint break-all">{inv.input_url}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {inv.verdict && inv.verdict !== 'pending' && (
-            <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-2 px-2 py-1 rounded-sm">
-              {VERDICT_LABELS[inv.verdict]}
-            </span>
-          )}
-          <TierBadge tier={inv.overall_tier} size="lg" />
-        </div>
-      </header>
+      {/* Hero header */}
+      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-8 shadow-card">
+        {/* Ambient glow */}
+        <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-accent/[0.08] blur-3xl pointer-events-none" aria-hidden />
+        <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-violet/[0.06] blur-2xl pointer-events-none" aria-hidden />
 
-      {/* Metadata strip */}
-      <Card>
-        <CardLabel>Metadata</CardLabel>
-        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+        <div className="relative flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-2 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
+              Saved investigation · {inv.slug}
+            </p>
+            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mb-2">{inv.label}</h1>
+            <p className="font-mono text-xs text-fg-faint break-all">{inv.input_url}</p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {inv.verdict && inv.verdict !== 'pending' && (
+              <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-hot px-2.5 py-1 rounded-full bg-bg-elev-2">
+                {VERDICT_LABELS[inv.verdict]}
+              </span>
+            )}
+            <TierBadge tier={inv.overall_tier} size="lg" />
+          </div>
+        </div>
+
+        {/* Inline metadata strip */}
+        <div className="relative mt-6 pt-5 border-t border-border-1/60 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
           <Row label="Probability" value={`${Math.round(inv.overall_probability * 100)}%`} />
           <Row label="Batches"     value={String(inv.batch_count)} />
           <Row label="YT quota"    value={`${inv.quota_used} units`} />
           <Row label="Created"     value={new Date(inv.created_at).toLocaleString()} />
-        </dl>
-      </Card>
+        </div>
+      </header>
 
       {/* Analyst verdict + notes */}
       <Card>

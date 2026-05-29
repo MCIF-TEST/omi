@@ -41,18 +41,23 @@ export default async function GraphPage({
 
   return (
     <div className="space-y-8">
-      <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
-          Coordination intelligence
-        </p>
-        <h1 className="text-2xl font-semibold text-fg tracking-tight">
-          Graph view
-        </h1>
-        <p className="mt-2 text-sm text-fg-dim max-w-2xl">
-          Persistent, cross-scan coordination edges. Edges accumulate every time
-          two accounts appear in the same per-scan cluster. Communities are
-          detected via Louvain modularity over the whole graph.
-        </p>
+      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-8 md:py-7 shadow-card">
+        <div className="absolute -top-20 -right-12 w-64 h-64 rounded-full bg-violet/[0.07] blur-3xl pointer-events-none" aria-hidden />
+        <div className="absolute -bottom-16 left-1/4 w-56 h-56 rounded-full bg-accent/[0.05] blur-3xl pointer-events-none" aria-hidden />
+        <div className="relative max-w-2xl">
+          <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-2 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
+            Coordination intelligence
+          </p>
+          <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight">
+            Graph view
+          </h1>
+          <p className="mt-2.5 text-sm text-fg-dim leading-relaxed">
+            Persistent, cross-scan coordination edges. Edges accumulate every time
+            two accounts appear in the same per-scan cluster. Communities are
+            detected via Louvain modularity over the whole graph.
+          </p>
+        </div>
       </header>
 
       <Card>
@@ -96,7 +101,7 @@ export default async function GraphPage({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
             {communities.communities.map((c) => (
-              <div key={c.id} className="border border-border-1 rounded-md p-4 bg-bg">
+              <div key={c.id} className="border border-border-1 rounded-xl p-4 bg-bg spotlight card-interactive">
                 <div className="flex items-center justify-between mb-2">
                   <Badge variant="accent">
                     <Users size={11} /> Community #{c.id}

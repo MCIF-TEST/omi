@@ -349,10 +349,39 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Hero-visual & loading-overlay keyframes (used via inline style attributes)
+--------------------------------------------------------------------------- */
+
+@keyframes hv-radar {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes hv-ripple {
+  0%   { transform: scale(1);   stroke-opacity: 0.45; }
+  100% { transform: scale(2.2); stroke-opacity: 0; }
+}
+
+@keyframes hv-node-pulse {
+  0%, 100% { opacity: 0.9; }
+  50%       { opacity: 0.5; }
+}
+
+@keyframes hv-chip-in {
+  from { opacity: 0; transform: translateY(5px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-drift, .animate-drift-slow, .animate-float, .animate-shimmer,
   .animate-glow-pulse, .animate-border-flow, .text-shimmer, .gradient-border::before,
   .stagger > *, .bar-fill::after, .btn-glow:hover::before {
+    animation: none !important;
+  }
+  /* hero visual */
+  [style*="hv-radar"], [style*="hv-ripple"], [style*="hv-node-pulse"],
+  [style*="hv-chip-in"] {
     animation: none !important;
   }
 }

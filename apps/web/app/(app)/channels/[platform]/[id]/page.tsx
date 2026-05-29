@@ -85,16 +85,19 @@ export default async function ChannelIntelligencePage({
       </Link>
 
       {/* Channel header */}
-      <header className="bg-bg-elev border border-border-1 rounded-md p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-full bg-bg border border-border-1 flex items-center justify-center text-fg-mute shrink-0">
+      <header className="relative overflow-hidden bg-bg-elev border border-border-1 rounded-2xl p-6 shadow-card">
+        <div className="absolute -top-16 -right-12 w-56 h-56 rounded-full bg-accent/[0.07] blur-3xl pointer-events-none" aria-hidden />
+        <div className="absolute inset-0 dot-bg opacity-[0.12] pointer-events-none" aria-hidden />
+        <div className="relative flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-bg border border-border-2 flex items-center justify-center text-accent-2 shrink-0">
             <User size={20} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
+            <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-1.5 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
               {data.platform} · channel intelligence
             </p>
-            <h1 className="text-2xl font-semibold text-fg tracking-tight truncate">
+            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight truncate">
               {data.display_name || data.handle}
             </h1>
             {data.display_name && (
@@ -116,7 +119,7 @@ export default async function ChannelIntelligencePage({
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-5 pt-5 border-t border-border-1">
+        <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-5 pt-5 border-t border-border-1/60">
           <Stat label="Videos scanned" value={data.video_count} icon={<Video size={11} />} />
           <Stat
             label="Total commenters"

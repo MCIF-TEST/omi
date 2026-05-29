@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.auth import CurrentUser, require_user
 from app.detection.engine import analyze_account, analyze_comments
 from app.detection.scoring import _extract_reasons, _infer_intent
+from app.evaluation import evaluate_coordination_default, evaluate_default
 from app.intelligence import OmiScore, compute_omiscore
 from app.schemas import (
     AccountAnalysisRequest,
@@ -58,6 +59,58 @@ def post_score_comments(req: CommentAnalysisRequest) -> OmiScore:
     """Compute the OmiScore for a batch of comments (content perspective)."""
     scan = analyze_comments(req.comments)
     return compute_omiscore(scan)
+
+
+@router.get("/benchmark")
+def get_engine_benchmark(current: CurrentUser = Depends(require_user)) -> dict:
+    """Admin scoreboard: run the engine over the seed benchmark and return the
+    full accuracy report (Brier, tier accuracy, macro-F1, per-tier P/R/F1,
+    confusion matrix, per-detector influence, tuning suggestions).
+
+    This is the visible counterpart to the pytest accuracy gate — it makes the
+    engine's measured quality observable in the product instead of buried in a
+    CLI. Cached briefly since the benchmark is deterministic.
+    """
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+
+    from app.core.cache import get_cache
+
+    cache = get_cache()
+    key = "engine_benchmark:seed_v1"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    report = evaluate_default()
+    cache.set(key, report, ttl_seconds=600)
+    return report
+
+
+@router.get("/benchmark/coordination")
+def get_coordination_benchmark(current: CurrentUser = Depends(require_user)) -> dict:
+    """Admin scoreboard for the multi-account coordination detectors.
+
+    Runs all five coordination detectors (age_cohort, co_engagement,
+    style_match, temporal_semantic, fingerprint_cluster) over the
+    coordination_v1 benchmark and returns cluster recall, member
+    precision/recall, and clean pass rate.
+
+    Complements ``GET /v1/intelligence/benchmark`` (single-account accuracy)
+    with the metrics that benchmark cannot measure at all.
+    """
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+
+    from app.core.cache import get_cache
+
+    cache = get_cache()
+    key = "engine_benchmark:coordination_v1"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    report = evaluate_coordination_default()
+    cache.set(key, report, ttl_seconds=600)
+    return report
 
 
 @router.get("/account/{platform}/{external_id}", response_model=OmiScore)
