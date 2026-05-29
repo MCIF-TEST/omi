@@ -141,9 +141,17 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
       <LoadingOverlay active={state.pending} />
 
       {state.data && (
-        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_360px] gap-4 min-h-[640px]">
-          {/* Left: commenter list (only if a video scan happened) */}
-          <div className="bg-bg-elev border border-border-1 rounded-md overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_360px] gap-3 min-h-[640px]">
+          {/* Left: commenter list */}
+          <div className="flex flex-col rounded-2xl border border-border-1 bg-bg-elev overflow-hidden shadow-card">
+            <div className="px-4 py-3 border-b border-border-1 bg-bg-elev-2/40 flex items-center justify-between gap-2 shrink-0">
+              <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
+                Commenters
+              </span>
+              <span className="font-mono text-2xs text-accent-2 tabular-nums">
+                {commenters.length}
+              </span>
+            </div>
             {commenters.length > 0 ? (
               <CommenterList
                 commenters={commenters}
@@ -151,14 +159,27 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
                 onSelect={onSelect}
               />
             ) : (
-              <div className="p-4 font-mono text-2xs text-fg-mute uppercase tracking-wider">
-                No commenter list (channel-only scan).
+              <div className="flex-1 flex items-center justify-center p-6 font-mono text-2xs text-fg-faint uppercase tracking-wider text-center">
+                Channel-only scan — no commenter list.
               </div>
             )}
           </div>
 
-          {/* Middle: synthesis or selected commenter */}
-          <div className="bg-bg-elev border border-border-1 rounded-md overflow-hidden flex flex-col min-w-0">
+          {/* Middle: synthesis / commenter detail */}
+          <div className="flex flex-col rounded-2xl border border-border-1 bg-bg-elev overflow-hidden shadow-card min-w-0">
+            <div className="px-4 py-3 border-b border-border-1 bg-bg-elev-2/40 flex items-center justify-between gap-2 shrink-0">
+              <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
+                {selectedCommenter ? 'Commenter detail' : 'Synthesis'}
+              </span>
+              {selectedCommenter && (
+                <button
+                  onClick={() => setState(s => ({ ...s, selectedId: null }))}
+                  className="font-mono text-2xs text-fg-mute hover:text-fg transition-colors tracking-wider uppercase"
+                >
+                  ← overview
+                </button>
+              )}
+            </div>
             <div className="flex-1 overflow-y-auto">
               {selectedCommenter ? (
                 <CommenterDetail c={selectedCommenter} />
@@ -167,9 +188,9 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
               )}
             </div>
             {state.data.next_page_token && commenters.length > 0 && (
-              <div className="border-t border-border-1 p-3 flex items-center justify-between gap-3 bg-bg-elev">
+              <div className="border-t border-border-1 p-3 flex items-center justify-between gap-3 bg-bg-elev-2/30 shrink-0">
                 <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-                  {commenters.length} commenters · more available
+                  {commenters.length} loaded · more available
                 </span>
                 <Button onClick={loadMore} disabled={state.loadingMore} size="sm">
                   {state.loadingMore ? (
@@ -183,7 +204,15 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
           </div>
 
           {/* Right: insights rail */}
-          <div className="bg-bg-elev border border-border-1 rounded-md overflow-hidden">
+          <div className="flex flex-col rounded-2xl border border-border-1 bg-bg-elev overflow-hidden shadow-card">
+            <div className="px-4 py-3 border-b border-border-1 bg-bg-elev-2/40 flex items-center justify-between gap-2 shrink-0">
+              <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
+                Cross-links
+              </span>
+              <span className="font-mono text-2xs text-accent-2 tabular-nums">
+                {state.data.cross_links.length}
+              </span>
+            </div>
             <InsightsRail crossLinks={state.data.cross_links} />
           </div>
         </div>
