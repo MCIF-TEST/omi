@@ -103,6 +103,20 @@ class Settings(BaseSettings):
     reasoning_max_input_chars: int = 4000
 
     # -----------------------------------------------------------------------
+    # Learned detector (ML track). Off by default: when use_ml_scorer is
+    # False or no model artifact is present, scanning runs the rule engine
+    # unchanged. Point ml_model_path at a joblib bundle (downloaded from the
+    # HuggingFace Hub repo named in hf_model_repo) to activate blended
+    # scoring. ml_blend_weight controls how much the model overrides the
+    # hand-tuned score (0 = ignore model, 1 = trust model fully).
+    # -----------------------------------------------------------------------
+    use_ml_scorer: bool = False
+    ml_model_path: str | None = None
+    ml_text_model_path: str | None = None
+    hf_model_repo: str | None = None
+    ml_blend_weight: float = 0.5
+
+    # -----------------------------------------------------------------------
     # Monitoring (Phase 8)
     # -----------------------------------------------------------------------
     enable_monitoring: bool = False

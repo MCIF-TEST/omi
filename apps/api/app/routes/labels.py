@@ -425,6 +425,44 @@ def evaluate_against_labels(
     }
 
 
+@router.get("/training/summary")
+def training_data_summary(
+    current: CurrentUser = Depends(require_user),
+    min_confidence: str = Query(default="medium"),
+) -> dict:
+    """Counts of available ML training rows — quick "are we ready to train?"
+    check without serializing the whole corpus."""
+    _require_admin(current)
+    if min_confidence not in LABEL_CONFIDENCES:
+        raise HTTPException(status_code=400, detail=f"min_confidence must be one of {sorted(LABEL_CONFIDENCES)}.")
+    from app.ml.export import export_summary
+    with get_session() as session:
+        return export_summary(session, min_confidence=min_confidence)
+
+
+@router.get("/training/export")
+def training_data_export(
+    current: CurrentUser = Depends(require_user),
+    min_confidence: str = Query(default="medium"),
+    include_unclear: bool = Query(default=False),
+):
+    """Stream the full labeled training corpus as JSONL for the Colab
+    notebook. First line is a schema header; every subsequent line is one
+    training example (features + label + sample weight)."""
+    _require_admin(current)
+    if min_confidence not in LABEL_CONFIDENCES:
+        raise HTTPException(status_code=400, detail=f"min_confidence must be one of {sorted(LABEL_CONFIDENCES)}.")
+    from fastapi.responses import PlainTextResponse
+    from app.ml.export import export_jsonl
+    with get_session() as session:
+        body = export_jsonl(session, min_confidence=min_confidence, include_unclear=include_unclear)
+    return PlainTextResponse(
+        body,
+        media_type="application/x-ndjson",
+        headers={"Content-Disposition": 'attachment; filename="omisphere_training.jsonl"'},
+    )
+
+
 def _profile_dict_from_account(account: Account) -> dict:
     """Reconstruct a Profile-shaped dict from a persisted Account row."""
     return {
