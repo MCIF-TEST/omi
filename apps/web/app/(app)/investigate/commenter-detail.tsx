@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { TrendingUp, AlertTriangle, MessageSquareText, ArrowRight, BarChart2, ShieldAlert } from 'lucide-react';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
+import { CommenterThreatPanel } from '@/components/shared/commenter-threat-panel';
 import { type CommenterScanResult, type SignalResult } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 
@@ -62,6 +63,9 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
         )}
         <p className="relative mt-3 text-sm text-fg-dim leading-relaxed">{c.summary}</p>
       </header>
+
+      {/* OmiScore intelligence — composed, explainable threat verdict */}
+      <CommenterThreatPanel platform={c.platform || 'youtube'} externalId={c.external_id} />
 
       {/* Per-detector signal breakdown */}
       {signals.length > 0 && (

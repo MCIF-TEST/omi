@@ -989,3 +989,69 @@ export interface ChannelIntelligenceResponse {
   avg_comments_per_video: number;
   returning_commenter_ratio: number;
 }
+
+// ---------------------------------------------------------------------------
+// OmiScore intelligence layer  (/v1/intelligence/*)
+// Mirrors app/intelligence/schemas.py. The flat 0–100 fields are the stable
+// public contract; `dimensions` is the explainability layer.
+// ---------------------------------------------------------------------------
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface DimensionContribution {
+  detector: string;
+  label: string;
+  /** Detector probability AFTER any inversion the dimension applies (0–1). */
+  contribution_probability: number;
+  confidence: number;
+  /** Share of the dimension this detector accounted for, 0–1. */
+  weight_share: number;
+  evidence: string[];
+}
+
+export interface IntelligenceDimension {
+  key: string;
+  label: string;
+  description: string;
+  /** 0–100 in the dimension's own direction. */
+  score: number;
+  confidence: number;
+  is_risk: boolean;
+  contributions: DimensionContribution[];
+}
+
+export interface OmiScore {
+  schema_version: number;
+  // Flat public contract (all 0–100)
+  omi_score: number;
+  authenticity_score: number;
+  coordination_probability: number;
+  amplification_probability: number;
+  spam_probability: number;
+  ai_generation_probability: number;
+  risk_level: RiskLevel;
+  // Explainability
+  confidence: number;
+  subject: string | null;
+  headline: string;
+  /** Key of the highest-scoring threat dimension, if any concerning. */
+  primary_threat: string | null;
+  dimensions: IntelligenceDimension[];
+  top_evidence: string[];
+}
+
+/** The four threat dimension keys, in canonical display order. */
+export const THREAT_KEYS = [
+  'coordination_probability',
+  'amplification_probability',
+  'spam_probability',
+  'ai_generation_probability',
+] as const;
+export type ThreatKey = (typeof THREAT_KEYS)[number];
+
+export const THREAT_META: Record<ThreatKey, { label: string; short: string }> = {
+  coordination_probability:  { label: 'Coordinated activity',   short: 'Coordination' },
+  amplification_probability: { label: 'Artificial amplification', short: 'Amplification' },
+  spam_probability:          { label: 'Spam behavior',          short: 'Spam' },
+  ai_generation_probability: { label: 'AI-generated content',   short: 'AI generation' },
+};

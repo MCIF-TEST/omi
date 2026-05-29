@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkline } from '@/components/shared/sparkline';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
-import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type ChannelIntelligenceResponse, type SignalResult } from '@/lib/api';
+import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type ChannelIntelligenceResponse, type OmiScore, type SignalResult } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { pct, timeAgo, tierBg } from '@/lib/format';
+import { ThreatBreakdown } from '@/components/shared/threat-breakdown';
 import { HistoryRow } from './history-row';
 import { AccountActivityPanel } from './activity-panel';
 import { AccountActionsClient } from './account-actions-wrapper';
@@ -56,6 +57,17 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
     );
   } catch {
     /* analysis is optional */
+  }
+
+  // OmiScore — the unified, explainable intelligence verdict over the most
+  // recent persisted scan. Cheap read path: no re-scan, no quota.
+  let omiscore: OmiScore | null = null;
+  try {
+    omiscore = await apiServer<OmiScore>(
+      `/v1/intelligence/account/${platform}/${encodeURIComponent(external_id)}`,
+    );
+  } catch {
+    /* optional — hidden when the account has no scan history */
   }
 
   // If this account is the author of any scanned content, expose a link to
@@ -144,6 +156,19 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
             <ArrowRight size={16} className="text-accent shrink-0 group-hover:translate-x-1 transition-transform" />
           </div>
         </Link>
+      )}
+
+      {/* OmiScore intelligence — unified, explainable threat breakdown */}
+      {omiscore && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <CardLabel className="m-0">OmiScore intelligence</CardLabel>
+            <span className="ml-auto font-mono text-2xs text-fg-faint tracking-wider uppercase">
+              composite verdict
+            </span>
+          </div>
+          <ThreatBreakdown score={omiscore} />
+        </Card>
       )}
 
       {/* AI Behavioural Analysis */}
