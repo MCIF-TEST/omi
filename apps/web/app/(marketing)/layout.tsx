@@ -3,7 +3,7 @@ import { Logo } from '@/components/shared/logo';
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col bg-bg-deep">
+    <div className="min-h-screen flex flex-col bg-bg-deep grain">
       {/* Subtle aurora */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
         <div className="absolute top-[-20%] left-[20%] w-[500px] h-[500px] rounded-full bg-accent/[0.04] blur-[120px]" />

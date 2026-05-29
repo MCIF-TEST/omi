@@ -24,9 +24,9 @@ export function ProbabilityBar({
   const h = size === 'sm' ? 'h-1' : 'h-1.5';
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <div className={cn('flex-1 bg-bg rounded-full overflow-hidden', h)}>
+      <div className={cn('flex-1 bg-bg rounded-full overflow-hidden ring-1 ring-border-1/60', h)}>
         <div
-          className={cn('h-full rounded-full transition-all', fill)}
+          className={cn('bar-fill h-full rounded-full transition-all duration-700 ease-omi', fill)}
           style={{ width: `${Math.max(2, pct)}%` }}
         />
       </div>

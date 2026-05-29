@@ -10,6 +10,7 @@ import { type EngineStatus, type InvestigationsListResponse, VERDICT_LABELS } fr
 import { apiServer } from '@/lib/api-server';
 import { getCurrentUser } from '@/lib/auth';
 import { timeAgo } from '@/lib/format';
+import { cn } from '@/lib/cn';
 
 export const metadata = { title: 'Dashboard — OMISPHERE' };
 
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
       </header>
 
       {/* ── Stats ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger">
         <StatCard
           icon={<Zap size={14} />}
           label="Credits"
@@ -235,10 +236,17 @@ function StatCard({
   tone?: 'accent' | 'danger';
 }) {
   return (
-    <div className="bg-bg-elev border border-border-1 rounded-lg p-5 shadow-inner-top hover:border-border-hot transition-colors group">
+    <div className="bg-bg-elev border border-border-1 rounded-lg p-5 shadow-inner-top card-interactive spotlight group">
       <div className="flex items-center justify-between mb-3">
         <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">{label}</span>
-        <span className={tone === 'danger' ? 'text-danger' : tone === 'accent' ? 'text-accent' : 'text-fg-mute'}>
+        <span className={cn(
+          'w-7 h-7 rounded-md flex items-center justify-center border transition-colors',
+          tone === 'danger'
+            ? 'text-danger border-danger/30 bg-danger/10'
+            : tone === 'accent'
+              ? 'text-accent border-accent/30 bg-accent/10'
+              : 'text-fg-mute border-border-2 bg-bg-elev-2 group-hover:text-accent group-hover:border-accent/30',
+        )}>
           {icon}
         </span>
       </div>

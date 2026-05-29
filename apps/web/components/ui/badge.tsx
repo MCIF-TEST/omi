@@ -13,11 +13,11 @@ export function Badge({ variant = 'neutral', tier, className, children, ...props
   if (variant === 'tier' && tier) {
     classes = tierBg(tier);
   } else if (variant === 'accent') {
-    classes = 'border border-accent-dim bg-accent/10 text-accent';
+    classes = 'border border-accent/40 bg-accent/10 text-accent shadow-glow-sm';
   } else if (variant === 'warn') {
     classes = 'border border-warn/40 bg-warn/10 text-warn';
   } else if (variant === 'danger') {
-    classes = 'border border-danger/50 bg-danger/10 text-danger';
+    classes = 'border border-danger/50 bg-danger/10 text-danger shadow-glow-danger';
   }
   return (
     <span

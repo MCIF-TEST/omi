@@ -19,7 +19,12 @@ export async function AppShell({ user, children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg-deep">
+    <div className="min-h-screen flex flex-col bg-bg-deep grain relative">
+      {/* Ambient depth — fixed, behind everything */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
+        <div className="absolute top-[-20%] right-[-5%] w-[600px] h-[500px] rounded-full bg-accent/[0.025] blur-[140px]" />
+        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[400px] rounded-full bg-violet/[0.02] blur-[130px]" />
+      </div>
       <Topbar user={user} engineStatus={engineStatus} />
       {/* User-visible banner — everyone sees it, no env-var jargon. */}
       {engineStatus && (
@@ -40,7 +45,7 @@ export async function AppShell({ user, children }: AppShellProps) {
           {' '}in the API service env to restore scanning.
         </div>
       )}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex relative z-10">
         <Sidebar />
         <main className="flex-1 min-w-0">
           <div className="max-w-[1440px] mx-auto px-6 py-8 animate-fade-up">

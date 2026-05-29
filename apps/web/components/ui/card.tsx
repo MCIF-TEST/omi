@@ -1,12 +1,23 @@
 import { type HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/cn';
 
-export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  /** Adds hover lift + accent ring + top-spotlight sheen. */
+  interactive?: boolean;
+  /** Animated cyan→violet gradient hairline border. */
+  gradient?: boolean;
+}
+
+export const Card = forwardRef<HTMLDivElement, CardProps>(
+  ({ className, interactive, gradient, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        'bg-bg-elev border border-border-1 rounded-md p-6',
+        'rounded-lg p-6 shadow-inner-top',
+        gradient
+          ? 'gradient-border'
+          : 'bg-bg-elev border border-border-1',
+        interactive && 'card-interactive spotlight',
         className,
       )}
       {...props}

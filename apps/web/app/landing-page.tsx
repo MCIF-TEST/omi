@@ -15,7 +15,7 @@ import { DemoScanForm } from './demo-scan-form';
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-bg-deep flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-bg-deep flex flex-col relative overflow-hidden grain">
 
       {/* Aurora blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
@@ -58,7 +58,7 @@ export function LandingPage() {
           {/* Headline */}
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-semibold tracking-tight leading-[1.06] text-fg">
             See who&apos;s{' '}
-            <span className="text-gradient">really</span>
+            <span className="text-shimmer">really</span>
             <br />behind the comments.
           </h1>
 
@@ -129,7 +129,7 @@ export function LandingPage() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger">
           <FeatureCard
             icon={<ShieldAlert size={20} />}
             title="Per-commenter detection"
@@ -236,7 +236,7 @@ function FeatureCard({
   body: string;
 }) {
   return (
-    <div className="group bg-bg-elev rounded-lg border border-border-1 p-6 card-interactive shadow-inner-top">
+    <div className="group bg-bg-elev rounded-lg border border-border-1 p-6 card-interactive spotlight shadow-inner-top">
       <div className="flex items-center gap-3 mb-3">
         <div className="w-9 h-9 rounded-md bg-accent/[0.08] border border-accent/20 flex items-center justify-center text-accent group-hover:bg-accent/[0.13] transition-colors">
           {icon}
