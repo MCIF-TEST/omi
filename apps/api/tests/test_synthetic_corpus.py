@@ -28,7 +28,13 @@ from app.ml.datasets.synthetic import (
     corpus_label_distribution,
     generate_corpus,
 )
-from app.ml.public_import import PublicRecord, ingest_records, _resolve_ground_truth
+from app.ml.export import export_summary, iter_training_rows
+from app.ml.public_import import (
+    PublicRecord,
+    coalesce_records,
+    ingest_records,
+    _resolve_ground_truth,
+)
 from app.storage.db import get_session
 from app.storage.models import Account, AccountLabel
 
@@ -208,3 +214,111 @@ def test_io_disclosure_parses_to_political_coord(tmp_path: Path):
     assert all(r.label == "political_coord" and r.expected_tier == "high" for r in recs)
     assert all(r.campaign_id == "ira_campaign" for r in recs)
     assert recs[0].external_id == "u100"
+
+
+# --- Fix 1: synthetic provenance is separable -----------------------------
+
+def test_synthetic_ingest_tags_synthetic_source():
+    recs = generate_corpus(n_per_persona=3)
+    with get_session() as session:
+        ingest_records(session, recs, dataset_name="synthetic", source="synthetic")
+        sources = {row.source for row in session.query(AccountLabel).all()}
+        assert sources == {"synthetic"}
+
+
+def test_synthetic_excluded_from_training_by_default():
+    recs = generate_corpus(n_per_persona=3)
+    with get_session() as session:
+        ingest_records(session, recs, dataset_name="synthetic", source="synthetic")
+        # Default training export must not see synthetic rows...
+        default_rows = list(iter_training_rows(session, include_unclear=True))
+        assert default_rows == []
+        # ...but an explicit opt-in surfaces them.
+        opted_in = list(iter_training_rows(session, include_unclear=True, include_synthetic=True))
+        assert len(opted_in) == len(recs)
+        assert all(r.source == "synthetic" for r in opted_in)
+
+
+def test_synthetic_and_real_imports_stay_separable():
+    synth = generate_corpus(n_per_persona=2)
+    real = [PublicRecord(external_id="real1", texts=["totally normal comment"], is_bot=False)]
+    with get_session() as session:
+        ingest_records(session, synth, dataset_name="synthetic", source="synthetic")
+        ingest_records(session, real, dataset_name="public")  # default imported_dataset
+        summary = export_summary(session)  # excludes synthetic
+        assert "synthetic" not in summary["by_source"]
+        assert summary["by_source"].get("imported_dataset") == 1
+
+
+# --- Fix 2: per-tweet archives coalesce into one account ------------------
+
+def test_coalesce_merges_texts_by_external_id():
+    recs = [
+        PublicRecord(external_id="u1", texts=["first"], is_bot=True,
+                     label="political_coord", expected_tier="high", follower_count=5),
+        PublicRecord(external_id="u1", texts=["second"], is_bot=True,
+                     label="political_coord", expected_tier="high", following_count=900),
+        PublicRecord(external_id="u2", texts=["only"], is_bot=True),
+    ]
+    merged = coalesce_records(recs)
+    assert [m.external_id for m in merged] == ["u1", "u2"]
+    u1 = merged[0]
+    assert u1.texts == ["first", "second"]      # both posts retained, in order
+    assert u1.follower_count == 5               # first-row scalar kept
+    assert u1.following_count == 900            # blank backfilled from later row
+
+
+def test_coalesce_dedupes_and_is_noop_for_unique_ids():
+    recs = [
+        PublicRecord(external_id="u1", texts=["dup", "dup", "x"], is_bot=False),
+        PublicRecord(external_id="u1", texts=["x", "y"], is_bot=False),
+    ]
+    [u1] = coalesce_records(recs)
+    assert u1.texts == ["dup", "x", "y"]
+    # Unique-id records pass through untouched.
+    uniq = [PublicRecord(external_id=f"u{i}", texts=["t"], is_bot=False) for i in range(3)]
+    assert len(coalesce_records(uniq)) == 3
+
+
+def test_io_multi_tweet_user_scored_on_full_history(tmp_path: Path):
+    """End-to-end: a 3-tweet IO user becomes ONE account whose scan saw all
+    three posts, not just the last one."""
+    p = tmp_path / "io_camp.csv"
+    with p.open("w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["tweetid", "userid", "user_screen_name", "follower_count",
+                    "following_count", "account_creation_date", "tweet_text"])
+        for j in range(3):
+            w.writerow([str(j), "uX", "agent", "8", "2200", "2016-01-01",
+                        f"coordinated message number {j}"])
+    [df] = [d for d in discover(tmp_path) if d.supported]
+    recs, _ = read_records(df)
+    assert len(recs) == 3  # one per row before coalescing
+    merged = coalesce_records(recs)
+    assert len(merged) == 1
+    assert len(merged[0].texts) == 3
+    with get_session() as session:
+        res = ingest_records(session, recs, dataset_name="io", source="imported_dataset")
+        assert res["ingested"] == 1
+        assert session.query(Account).count() == 1
+
+
+# --- Fix 3: text variety scales with volume ------------------------------
+
+@pytest.mark.parametrize("persona", ["organic_human", "esl_human", "engagement_farm",
+                                     "commercial_spam", "ai_assisted_human"])
+def test_post_sets_stay_distinct_at_volume(persona):
+    """Decoration must keep accounts distinct as --n grows, otherwise the
+    corpus collapses into duplicates and stops being useful ground truth."""
+    only = (PERSONAS_BY_NAME[persona],)
+    recs = generate_corpus(n_per_persona=150, personas=only)
+    unique = {tuple(r.texts) for r in recs}
+    # Allow a small number of collisions but require the corpus to remain
+    # overwhelmingly varied at 150 accounts.
+    assert len(unique) / len(recs) >= 0.95, f"{persona}: only {len(unique)}/{len(recs)} unique"
+
+
+def test_decoration_preserves_determinism():
+    a = generate_corpus(n_per_persona=20, seed=7)
+    b = generate_corpus(n_per_persona=20, seed=7)
+    assert [r.texts for r in a] == [r.texts for r in b]

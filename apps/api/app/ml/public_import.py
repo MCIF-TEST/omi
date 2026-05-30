@@ -138,6 +138,59 @@ def _resolve_ground_truth(rec: "PublicRecord") -> tuple[str, str]:
     return label_kind, expected
 
 
+def coalesce_records(records: list[PublicRecord]) -> list[PublicRecord]:
+    """Merge records that describe the same account into one.
+
+    Per-row archives (information-operation disclosures are one row *per
+    tweet*) yield many records sharing an ``external_id``. Persisting them
+    one-by-one would make each overwrite the last, so an account ends up scored
+    on a single post instead of its whole history. Coalescing first means the
+    engine sees the account's full text corpus — the temporal and repetition
+    detectors only have signal across multiple posts.
+
+    Texts are unioned (order-preserving, de-duplicated, capped to keep a single
+    pathological account from dominating). The first occurrence wins for the
+    scalar profile/label fields; later occurrences only contribute text and
+    fill in any profile field the first row left blank. Records with unique
+    ids pass through untouched, so account-per-row datasets are a no-op.
+    """
+    _TEXT_CAP = 50
+    merged: dict[str, PublicRecord] = {}
+    order: list[str] = []
+    for rec in records:
+        key = rec.external_id
+        if key not in merged:
+            # Copy so we never mutate the caller's records.
+            merged[key] = PublicRecord(
+                external_id=rec.external_id,
+                texts=list(dict.fromkeys(t for t in rec.texts if t and t.strip()))[:_TEXT_CAP],
+                is_bot=rec.is_bot,
+                follower_count=rec.follower_count,
+                following_count=rec.following_count,
+                account_age_days=rec.account_age_days,
+                handle=rec.handle,
+                label=rec.label,
+                expected_tier=rec.expected_tier,
+                campaign_id=rec.campaign_id,
+            )
+            order.append(key)
+            continue
+        acc = merged[key]
+        for t in rec.texts:
+            if t and t.strip() and t not in acc.texts and len(acc.texts) < _TEXT_CAP:
+                acc.texts.append(t)
+        # Backfill profile fields the first row left unset.
+        if acc.follower_count is None:
+            acc.follower_count = rec.follower_count
+        if acc.following_count is None:
+            acc.following_count = rec.following_count
+        if acc.account_age_days is None:
+            acc.account_age_days = rec.account_age_days
+        if not acc.handle:
+            acc.handle = rec.handle
+    return [merged[k] for k in order]
+
+
 def ingest_records(
     session: Session,
     records: list[PublicRecord],
@@ -146,9 +199,19 @@ def ingest_records(
     label_confidence: str = "medium",
     user_id: int | None = None,
     allow_textless: bool = False,
+    source: str = "imported_dataset",
 ) -> dict:
     """Run each public record through the real engine, persist the account +
-    its scan + fingerprint, and attach an ``imported_dataset`` label.
+    its scan + fingerprint, and attach a ground-truth label.
+
+    Records sharing an ``external_id`` are coalesced first (see
+    :func:`coalesce_records`) so a per-tweet archive becomes one account scored
+    on its full post history.
+
+    ``source`` tags the resulting :class:`AccountLabel` provenance. Real public
+    archives use the default ``imported_dataset``; the synthetic regression
+    corpus passes ``synthetic`` so it stays separable everywhere downstream and
+    never silently inflates real-data calibration or training metrics.
 
     Returns counts. Idempotent per ``external_id`` within the imported
     platform namespace (re-running updates the same account rows).
@@ -160,6 +223,7 @@ def ingest_records(
     """
     from app.storage.models import Account, AccountLabel
 
+    records = coalesce_records(records)
     repo = AccountRepository(session)
     n_ok = 0
     n_skipped = 0
@@ -207,13 +271,13 @@ def ingest_records(
                 label=label_kind,
                 expected_tier=expected,
                 confidence=label_confidence,
-                source="imported_dataset",
+                source=source,
                 rationale=rationale,
             ))
         else:
             existing.label = label_kind
             existing.expected_tier = expected
-            existing.source = "imported_dataset"
+            existing.source = source
             existing.rationale = rationale
 
         n_ok += 1

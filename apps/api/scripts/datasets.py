@@ -176,6 +176,7 @@ def _cmd_synthetic(args) -> int:
             session, records,
             dataset_name="synthetic",
             label_confidence=args.confidence,
+            source="synthetic",
         )
     print(json.dumps({
         "generated": len(records),

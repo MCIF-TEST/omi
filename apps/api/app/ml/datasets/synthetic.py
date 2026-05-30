@@ -117,9 +117,59 @@ _AI_ASSISTED_POSTS = [
 ]
 
 
+# Per-style decoration pools. Applying an independent prefix / suffix / emoji
+# choice to each post multiplies the effective text space far beyond the raw
+# bank size, so the corpus keeps producing distinct accounts at large --n
+# instead of saturating into duplicates — while preserving each persona's
+# voice (casual slang for natives, non-native phrasing for ESL, hype for farms,
+# promo language for spam). An empty string in a pool means "no decoration",
+# which keeps plenty of posts plain.
+_DECOR: dict[str, dict[str, list[str]]] = {
+    "casual": {
+        "pre": ["", "honestly ", "ngl ", "tbh ", "ok so ", "lowkey ", "wait "],
+        "suf": ["", " lol", " imo", " ngl", " honestly", " fr"],
+        "emoji": ["", "", "", " 😂", " 👀", " 🙌"],
+    },
+    "esl": {
+        "pre": ["", "i think ", "for me ", "in my opinion ", "maybe "],
+        "suf": ["", " thank you", " greetings", " i hope is correct", " :)"],
+        "emoji": ["", "", "", " 🙏"],
+    },
+    "hype": {
+        "pre": ["", "omg ", "yooo ", "wait ", "bro "],
+        "suf": ["", " keep it up", " love it", " so good"],
+        "emoji": ["", " 💯", " ❤️", " 🙌", " 🔥🔥"],
+    },
+    "promo": {
+        "pre": ["", "🚨 ", "ATTENTION: ", "psst — "],
+        "suf": ["", " (limited time)", " act now", " dont miss out"],
+        "emoji": ["", " 💸", " 🔥", " ✅"],
+    },
+    # Clean, grammatical register — a real person polishing with a writing tool.
+    # No slang or emoji; variety comes from measured openers and closers.
+    "polished": {
+        "pre": ["", "Honestly, ", "Truly, ", "For what it's worth, ", "If I may add, "],
+        "suf": ["", " Thanks for sharing this.", " Looking forward to more.",
+                " It gave me a lot to think about.", " Well done."],
+        "emoji": [""],
+    },
+}
+
+
+def _decorate(rng: random.Random, text: str, style: str) -> str:
+    d = _DECOR[style]
+    return f"{rng.choice(d['pre'])}{text}{rng.choice(d['suf'])}{rng.choice(d['emoji'])}"
+
+
 def _pick_some(rng: random.Random, bank: list[str], lo: int, hi: int) -> list[str]:
     k = rng.randint(lo, min(hi, len(bank)))
     return rng.sample(bank, k)
+
+
+def _posts(rng: random.Random, bank: list[str], lo: int, hi: int, style: str) -> list[str]:
+    """Pick a subset of base posts and decorate each — the decoration is what
+    keeps accounts distinct as volume grows."""
+    return [_decorate(rng, t, style) for t in _pick_some(rng, bank, lo, hi)]
 
 
 def _build_coordinated_io(rng: random.Random, i: int) -> PublicRecord:
@@ -147,7 +197,7 @@ def _build_coordinated_io(rng: random.Random, i: int) -> PublicRecord:
 def _build_engagement_farm(rng: random.Random, i: int) -> PublicRecord:
     return PublicRecord(
         external_id=f"engagement_farm_{i}",
-        texts=_pick_some(rng, _FARM_POSTS, 4, 7),
+        texts=_posts(rng, _FARM_POSTS, 4, 7, "hype"),
         is_bot=True,
         follower_count=rng.randint(50, 400),
         following_count=rng.randint(2000, 8000),
@@ -161,7 +211,7 @@ def _build_engagement_farm(rng: random.Random, i: int) -> PublicRecord:
 def _build_commercial_spam(rng: random.Random, i: int) -> PublicRecord:
     return PublicRecord(
         external_id=f"commercial_spam_{i}",
-        texts=_pick_some(rng, _SPAM_POSTS, 3, 6),
+        texts=_posts(rng, _SPAM_POSTS, 3, 6, "promo"),
         is_bot=True,
         follower_count=rng.randint(0, 100),
         following_count=rng.randint(100, 1500),
@@ -175,7 +225,7 @@ def _build_commercial_spam(rng: random.Random, i: int) -> PublicRecord:
 def _build_organic_human(rng: random.Random, i: int) -> PublicRecord:
     return PublicRecord(
         external_id=f"organic_human_{i}",
-        texts=_pick_some(rng, _ORGANIC_POSTS, 3, 6),
+        texts=_posts(rng, _ORGANIC_POSTS, 3, 6, "casual"),
         is_bot=False,
         follower_count=rng.randint(20, 1500),
         following_count=rng.randint(30, 800),
@@ -189,7 +239,7 @@ def _build_organic_human(rng: random.Random, i: int) -> PublicRecord:
 def _build_esl_human(rng: random.Random, i: int) -> PublicRecord:
     return PublicRecord(
         external_id=f"esl_human_{i}",
-        texts=_pick_some(rng, _ESL_POSTS, 3, 6),
+        texts=_posts(rng, _ESL_POSTS, 3, 6, "esl"),
         is_bot=False,
         follower_count=rng.randint(5, 600),
         following_count=rng.randint(40, 1200),
@@ -203,7 +253,7 @@ def _build_esl_human(rng: random.Random, i: int) -> PublicRecord:
 def _build_ai_assisted_human(rng: random.Random, i: int) -> PublicRecord:
     return PublicRecord(
         external_id=f"ai_assisted_human_{i}",
-        texts=_pick_some(rng, _AI_ASSISTED_POSTS, 3, 5),
+        texts=_posts(rng, _AI_ASSISTED_POSTS, 3, 5, "polished"),
         is_bot=False,
         follower_count=rng.randint(50, 5000),
         following_count=rng.randint(60, 1000),

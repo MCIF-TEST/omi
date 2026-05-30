@@ -42,6 +42,10 @@ _SOURCE_WEIGHT = {
     "youtube_suspension": 1.5,
     "manual": 1.0,
     "imported_dataset": 0.6,
+    # Synthetic rows are known-answer regression fixtures, not real signal.
+    # They are excluded from training by default (see ``include_synthetic``);
+    # the weight applies only when an operator deliberately opts them in.
+    "synthetic": 0.3,
 }
 
 
@@ -110,11 +114,20 @@ def iter_training_rows(
     *,
     min_confidence: str = "medium",
     include_unclear: bool = False,
+    include_synthetic: bool = False,
 ) -> Iterator[TrainingRow]:
-    """Yield one TrainingRow per labeled account that has a persisted scan."""
+    """Yield one TrainingRow per labeled account that has a persisted scan.
+
+    Synthetic ground truth (``source="synthetic"``) is excluded by default: it
+    is a deterministic regression fixture, and training a model on its toy
+    distribution would teach shortcuts that don't transfer to real accounts.
+    Pass ``include_synthetic=True`` only for deliberate experiments.
+    """
     filters = []
     if min_confidence == "high":
         filters.append(AccountLabel.confidence == "high")
+    if not include_synthetic:
+        filters.append(AccountLabel.source != "synthetic")
 
     rows = session.execute(
         select(AccountLabel, Account)
@@ -162,7 +175,8 @@ def iter_training_rows(
 
 
 def export_jsonl(session: Session, *, min_confidence: str = "medium",
-                 include_unclear: bool = False) -> str:
+                 include_unclear: bool = False,
+                 include_synthetic: bool = False) -> str:
     """Return a JSONL string. First line is a header record describing the
     feature schema so the notebook can assert compatibility."""
     lines: list[str] = []
@@ -175,20 +189,23 @@ def export_jsonl(session: Session, *, min_confidence: str = "medium",
     lines.append(json.dumps(header))
     n = 0
     for row in iter_training_rows(session, min_confidence=min_confidence,
-                                  include_unclear=include_unclear):
+                                  include_unclear=include_unclear,
+                                  include_synthetic=include_synthetic):
         lines.append(json.dumps(asdict(row)))
         n += 1
     return "\n".join(lines) + "\n"
 
 
-def export_summary(session: Session, *, min_confidence: str = "medium") -> dict:
+def export_summary(session: Session, *, min_confidence: str = "medium",
+                   include_synthetic: bool = False) -> dict:
     """Counts only — quick way to check whether there's enough data to train
     without serializing the whole corpus."""
     by_label: dict[str, int] = {}
     by_source: dict[str, int] = {}
     by_target = {"inauthentic": 0, "authentic": 0, "unclear": 0}
     total = 0
-    for row in iter_training_rows(session, min_confidence=min_confidence, include_unclear=True):
+    for row in iter_training_rows(session, min_confidence=min_confidence, include_unclear=True,
+                                  include_synthetic=include_synthetic):
         total += 1
         by_label[row.label] = by_label.get(row.label, 0) + 1
         by_source[row.source] = by_source.get(row.source, 0) + 1

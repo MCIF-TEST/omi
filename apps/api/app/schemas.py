@@ -977,7 +977,7 @@ LABEL_KINDS = (
     "bot", "human", "unclear", "commercial_spam", "political_coord",
     "engagement_farm", "ai_content", "suspended",
 )
-LABEL_SOURCES = ("manual", "youtube_suspension", "imported_dataset")
+LABEL_SOURCES = ("manual", "youtube_suspension", "imported_dataset", "synthetic")
 LABEL_CONFIDENCES = ("high", "medium")
 
 
