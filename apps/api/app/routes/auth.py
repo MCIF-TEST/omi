@@ -329,6 +329,84 @@ def reset_password(
         )
 
 
+class DeleteAccountRequest(BaseModel):
+    # Require the user to retype their email — guards against accidental or
+    # cross-site deletion. Must match the logged-in account.
+    confirm_email: str
+
+
+@router.delete("/account")
+def delete_account(
+    payload: DeleteAccountRequest,
+    response: Response,
+    current: CurrentUser | None = Depends(get_optional_user),
+) -> dict:
+    """Permanently delete the current user's account and personal data.
+
+    Honors the deletion right stated in the Privacy Policy:
+    * hard-deletes the rows that are personal to the user — scan logs, saved
+      investigations, watchlists, alerts, bulk-scan jobs, and graphs;
+    * anonymizes the rows we keep for integrity / de-identified intelligence —
+      billing events, content batches, and ground-truth labels have their
+      ``user_id`` nulled rather than being destroyed;
+    * nulls the back-reference on anyone this user referred.
+
+    Explicit per-table deletes (rather than relying on ON DELETE CASCADE) so
+    it behaves identically on SQLite (no FK enforcement) and Postgres.
+    """
+    if current is None or current.id == 0:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Log in to delete your account.",
+        )
+
+    uid = current.id
+    if payload.confirm_email.strip().lower() != (current.email or "").lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The email you entered doesn't match this account.",
+        )
+
+    from sqlalchemy import select as _select
+
+    from app.storage.models import (
+        Alert, AccountLabel, BillingEvent, CommentBatch, Investigation,
+        ScanJob, ScanLog, UserGraph, UserGraphMember, Watchlist,
+    )
+
+    with get_session() as session:
+        # Graph members first (children of the user's graphs), then graphs.
+        session.query(UserGraphMember).filter(
+            UserGraphMember.graph_id.in_(
+                _select(UserGraph.id).where(UserGraph.user_id == uid)
+            )
+        ).delete(synchronize_session=False)
+
+        for model in (UserGraph, Investigation, Watchlist, Alert, ScanJob, ScanLog):
+            session.query(model).filter(model.user_id == uid).delete(
+                synchronize_session=False
+            )
+
+        # Keep but de-identify: financial records + de-identified intelligence.
+        for model in (BillingEvent, CommentBatch, AccountLabel):
+            session.query(model).filter(model.user_id == uid).update(
+                {"user_id": None}, synchronize_session=False
+            )
+
+        # Anyone this user referred loses the back-reference, not their account.
+        session.query(User).filter(User.referred_by_user_id == uid).update(
+            {"referred_by_user_id": None}, synchronize_session=False
+        )
+
+        user = session.get(User, uid)
+        if user is not None:
+            session.delete(user)
+        session.commit()
+
+    clear_session(response)
+    return {"ok": True}
+
+
 @router.get("/me", response_model=UserOut | None)
 def me(
     current: CurrentUser | None = Depends(get_optional_user),

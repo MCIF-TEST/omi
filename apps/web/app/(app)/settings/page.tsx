@@ -2,11 +2,11 @@ import Link from 'next/link';
 import { Target, ArrowRight, Clock, Gauge } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth';
 import { ManageSubscriptionButton } from './manage-subscription-button';
 import { NotificationsBlock } from './notifications-block';
 import { ReferralBlock } from './referral-block';
+import { DeleteAccountButton } from './delete-account-button';
 
 export const metadata = { title: 'Settings — OMISPHERE' };
 
@@ -131,9 +131,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-fg-dim mb-4">
           Delete your account and all associated data. This cannot be undone.
         </p>
-        <Button variant="danger" disabled title="Coming in Phase 2">
-          Delete account
-        </Button>
+        <DeleteAccountButton email={user.email} />
       </Card>
     </div>
   );
