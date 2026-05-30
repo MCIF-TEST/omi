@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ChevronDown, ShieldCheck, AlertTriangle, Network, Megaphone, Repeat2, Bot } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { THREAT_KEYS, THREAT_META, type OmiScore, type ThreatKey, type IntelligenceDimension } from '@/lib/api';
+import { THREAT_KEYS, CONTEXT_KEYS, THREAT_META, type OmiScore, type ThreatKey, type ContextKey, type IntelligenceDimension } from '@/lib/api';
 
 const RISK_STYLE: Record<OmiScore['risk_level'], { text: string; bg: string; ring: string; label: string }> = {
   high:   { text: 'text-tier-high',     bg: 'bg-tier-high/10 border-tier-high/40',     ring: 'var(--tier-high)',     label: 'High risk' },
@@ -11,7 +11,7 @@ const RISK_STYLE: Record<OmiScore['risk_level'], { text: string; bg: string; rin
   low:    { text: 'text-tier-low',      bg: 'bg-tier-low/10 border-tier-low/40',       ring: 'var(--tier-low)',      label: 'Low risk' },
 };
 
-const THREAT_ICON: Record<ThreatKey, React.ReactNode> = {
+const THREAT_ICON: Record<ThreatKey | ContextKey, React.ReactNode> = {
   coordination_probability:  <Network size={13} />,
   amplification_probability: <Megaphone size={13} />,
   spam_probability:          <Repeat2 size={13} />,
@@ -70,7 +70,7 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
         </div>
       </div>
 
-      {/* Threat dimension bars */}
+      {/* Threat dimension bars — only the dimensions that feed the risk score */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {THREAT_KEYS.map((key) => {
           const dim = score.dimensions.find((d) => d.key === key);
@@ -87,6 +87,33 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
             />
           );
         })}
+      </div>
+
+      {/* Contextual signals — reported for information, NOT part of the risk score.
+          AI-assisted writing is not evidence of inauthenticity (it false-positives
+          on ESL, formal, and Grammarly/LLM-assisted writers), so it is shown as
+          context that never raises suspicion on its own. */}
+      <div>
+        <div className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">
+          Context · not counted toward risk
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {CONTEXT_KEYS.map((key) => {
+            const dim = score.dimensions.find((d) => d.key === key);
+            const value = Math.round((score as any)[key] as number);
+            return (
+              <ThreatBar
+                key={key}
+                icon={THREAT_ICON[key]}
+                label={THREAT_META[key].short}
+                value={value}
+                isPrimary={false}
+                contextual
+                dimension={dim}
+              />
+            );
+          })}
+        </div>
       </div>
 
       {/* Top evidence */}
@@ -109,22 +136,30 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
 }
 
 function ThreatBar({
-  icon, label, value, isPrimary, dimension,
+  icon, label, value, isPrimary, dimension, contextual = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
   isPrimary: boolean;
   dimension?: IntelligenceDimension;
+  contextual?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const { bar, text } = probColor(value);
+  // Contextual signals are never colored as risk — they read as neutral
+  // information regardless of magnitude, so a high "AI generation" reading
+  // can't masquerade as a high-risk bar.
+  const { bar, text } = contextual
+    ? { bar: 'bg-fg-mute/40', text: 'text-fg-mute' }
+    : probColor(value);
   const hasDetail = (dimension?.contributions.length ?? 0) > 0;
 
   return (
     <div className={cn(
       'rounded-xl border p-3.5 transition-colors',
-      isPrimary ? 'border-tier-high/40 bg-tier-high/[0.05]' : 'border-border-1 bg-bg',
+      isPrimary ? 'border-tier-high/40 bg-tier-high/[0.05]'
+        : contextual ? 'border-border-1/60 bg-bg-elev/20 border-dashed'
+        : 'border-border-1 bg-bg',
     )}>
       <button
         type="button"
@@ -139,6 +174,11 @@ function ThreatBar({
             {isPrimary && (
               <span className="font-mono text-[0.55rem] tracking-wider text-tier-high border border-tier-high/40 bg-tier-high/10 rounded-full px-1.5 py-px">
                 primary
+              </span>
+            )}
+            {contextual && (
+              <span className="font-mono text-[0.55rem] tracking-wider text-fg-mute border border-border-2 bg-bg-elev/40 rounded-full px-1.5 py-px">
+                context
               </span>
             )}
           </span>

@@ -32,8 +32,33 @@ from app.schemas import ScanResult, SignalResult, Tier
 # get the stable default semantics.
 _axis_of = static_axis_of
 
+# ---------------------------------------------------------------------------
+# Supplemental detectors (GAP-03)
+#
+# A supplemental detector is computed and surfaced for *context*, but is
+# structurally excluded from every path that produces or escalates a suspicion
+# verdict: the weighted log-odds sum, the convergence bonus, the single-axis
+# HIGH cap, intent inference, the "why flagged" reasons, and the weak-signal
+# confidence penalty.
+#
+# ``ai_writing`` is supplemental because AI-assisted phrasing is not evidence
+# of inauthenticity. Stylometric "AI tells" (low burstiness, hedging boilerplate,
+# em-dashes, templated openings) are produced just as readily by ESL writers,
+# formal/professional writers, and the very large population of legitimate users
+# who run their text through Grammarly or an LLM. Letting it drive suspicion
+# manufactures false positives against exactly those groups. We keep the signal
+# visible (it is genuinely useful to know that text reads as AI-assisted) but it
+# can never, on its own or in combination, raise an account's risk tier.
+SUPPLEMENTAL_DETECTORS: frozenset[str] = frozenset({"ai_writing"})
+
 # Keep the name importable for any external reference.
-__all__ = ["aggregate", "CORRELATION_GROUPS", "_axis_of", "_redundancy_factors"]
+__all__ = [
+    "aggregate",
+    "CORRELATION_GROUPS",
+    "SUPPLEMENTAL_DETECTORS",
+    "_axis_of",
+    "_redundancy_factors",
+]
 
 
 def _redundancy_factors(
@@ -72,6 +97,19 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     effective_weight_sum = 0.0
     adjustments: list[str] = []
 
+    # Stamp supplemental signals so downstream consumers (UI, exports) know they
+    # are contextual and were not counted toward suspicion. They still ride along
+    # in ``signals`` with their real probability/confidence for display.
+    for sig in signals:
+        if sig.name in SUPPLEMENTAL_DETECTORS:
+            sig.supplemental = True
+
+    # The signals that actually participate in scoring — supplemental detectors
+    # are removed up-front so they cannot influence the composite through any
+    # path (sum, convergence, cap, confidence). This is the authoritative
+    # exclusion; the zero weight in Settings is only a mechanical backstop.
+    scored_signals = [s for s in signals if s.name not in SUPPLEMENTAL_DETECTORS]
+
     # Active correlation model: learned matrix when an artifact exists, else the
     # hand-tuned default groups. Drives both the redundancy discount and the
     # independence-axis assignment used by the convergence bonus / single-axis cap.
@@ -80,10 +118,10 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
 
     # Decorrelate: discount redundant members of each correlated detector group
     # before combining, so shared evidence isn't double-counted.
-    factors, decorr_notes = model.compute_factors(signals, weights, prior_logit)
+    factors, decorr_notes = model.compute_factors(scored_signals, weights, prior_logit)
     adjustments.extend(decorr_notes)
 
-    for sig in signals:
+    for sig in scored_signals:
         if sig.confidence <= 0:
             continue
         w = weights.get(sig.name, 0.0)
@@ -103,7 +141,7 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     # stronger than any single signal. We count axes, not raw detectors, so a
     # cluster of correlated detectors (e.g. temporal+engagement+coordination)
     # can't masquerade as broad independent corroboration.
-    strong = [s for s in signals
+    strong = [s for s in scored_signals
               if s.probability > 0.60 and s.confidence > 0.30
               and weights.get(s.name, 0.0) > 0]
     strong_axes = {axis_of(s.name) for s in strong}
@@ -121,7 +159,7 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     # trigger a HIGH verdict on its own. HIGH requires corroboration from at
     # least one *other independent* axis (two correlated detectors do not
     # count). Cap at the ELEVATED ceiling.
-    confident = [s for s in signals if s.confidence > 0.30 and weights.get(s.name, 0.0) > 0]
+    confident = [s for s in scored_signals if s.confidence > 0.30 and weights.get(s.name, 0.0) > 0]
     confident_axes = {axis_of(s.name) for s in confident}
     if len(confident_axes) <= 1 and overall >= 0.75:
         overall = 0.74
@@ -191,7 +229,7 @@ def _detect_weak_signals(
     flags: list[str] = []
     by_name = {s.name: s for s in signals}
     for name, w in weights.items():
-        if w <= 0:
+        if w <= 0 or name in SUPPLEMENTAL_DETECTORS:
             continue
         sig = by_name.get(name)
         if sig is None or sig.confidence < 0.25:
@@ -246,7 +284,9 @@ def _infer_intent(signals: list[SignalResult], tier: Tier) -> tuple[str | None, 
     if tier == Tier.LOW:
         return None, None
 
-    by_name = {s.name: s for s in signals}
+    # Supplemental detectors (ai_writing) never imply an inauthentic *intent* —
+    # exclude them so intent inference reads only the scored evidence.
+    by_name = {s.name: s for s in signals if s.name not in SUPPLEMENTAL_DETECTORS}
 
     def strong(name: str, min_p: float = 0.55, min_c: float = 0.25) -> bool:
         s = by_name.get(name)
@@ -256,7 +296,7 @@ def _infer_intent(signals: list[SignalResult], tier: Tier) -> tuple[str | None, 
 
     # Multi-vector: 3+ different strong detectors covering distinct angles
     diversity = {
-        "content": strong_signals & {"ai_writing", "semantic"},
+        "content": strong_signals & {"semantic"},
         "engagement": strong_signals & {"engagement"},
         "coord": strong_signals & {"coordination", "memory"},
         "behavioral": strong_signals & {"temporal", "voice", "profile"},
@@ -284,9 +324,8 @@ def _infer_intent(signals: list[SignalResult], tier: Tier) -> tuple[str | None, 
             return "spam_promotion", _INTENT_LABELS["spam_promotion"]
         return "engagement_farming", _INTENT_LABELS["engagement_farming"]
 
-    # AI-writing detector dominates → AI content
-    if strong("ai_writing"):
-        return "ai_content", _INTENT_LABELS["ai_content"]
+    # NOTE: ai_writing is supplemental (GAP-03) and is intentionally NOT an
+    # intent driver — AI-assisted phrasing is not evidence of inauthentic intent.
 
     # Semantic detector (repetition/templates) dominates → copy-paste
     if strong("semantic"):
@@ -321,9 +360,12 @@ def _extract_reasons(signals: list[SignalResult], tier: Tier) -> list[str]:
     if tier == Tier.LOW:
         return []
     reasons: list[str] = []
+    # Supplemental detectors (ai_writing) are contextual, not grounds for a
+    # flag — exclude them so they never appear in the "why flagged" reasons.
+    scored = [s for s in signals if s.name not in SUPPLEMENTAL_DETECTORS]
     # Sort: highest contributing detector first (probability × confidence)
     ranked = sorted(
-        signals,
+        scored,
         key=lambda s: s.probability * s.confidence,
         reverse=True,
     )
@@ -346,8 +388,11 @@ def _summarize(prob: float, tier: Tier, confidence: float, signals: list[SignalR
     pct = round(prob * 100)
     conf_pct = round(confidence * 100)
 
-    strong = [s.name for s in signals if s.confidence > 0.3 and s.probability > 0.6]
-    weak_data = [s.name for s in signals if s.confidence < 0.2]
+    # Supplemental detectors (ai_writing) are contextual — never list them as
+    # "primary contributing signals" in the suspicion summary.
+    scored = [s for s in signals if s.name not in SUPPLEMENTAL_DETECTORS]
+    strong = [s.name for s in scored if s.confidence > 0.3 and s.probability > 0.6]
+    weak_data = [s.name for s in scored if s.confidence < 0.2]
 
     tier_phrase = {
         Tier.LOW: "low suspicion of synthetic or coordinated behavior",

@@ -58,6 +58,14 @@ class SignalResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, description="How much data backed the estimate")
     evidence: list[str] = Field(default_factory=list)
     sub_signals: dict[str, float] = Field(default_factory=dict)
+    # Supplemental signals are computed and surfaced for context, but are
+    # deliberately excluded from the suspicion composite (overall_probability,
+    # tier, convergence, intent, reasons). The ai_writing detector is the first
+    # such signal: AI-assisted phrasing is not evidence of inauthenticity —
+    # it false-positives on ESL writers, formal writers, and anyone using
+    # Grammarly — so it informs context without ever raising suspicion.
+    # Set by the aggregator from ``app.detection.scoring.SUPPLEMENTAL_DETECTORS``.
+    supplemental: bool = False
 
     @field_validator("evidence")
     @classmethod

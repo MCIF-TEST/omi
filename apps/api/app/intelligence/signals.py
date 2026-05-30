@@ -68,6 +68,13 @@ class DimensionSpec:
     # when False it measures *trust* (higher = more organic). Drives summary
     # phrasing and the authenticity inversion.
     is_risk: bool = True
+    # When True the dimension is *contextual* — reported and explainable, but
+    # deliberately excluded from the composite omi_score, the primary-threat
+    # selection, and the top-evidence roll-up. Used for signals that are
+    # informative but must not raise suspicion on their own (GAP-03:
+    # ai_generation_probability, which is driven by the supplemental ai_writing
+    # detector — AI-assisted phrasing is not evidence of inauthenticity).
+    is_contextual: bool = False
     aliases: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -130,16 +137,21 @@ INTELLIGENCE_DIMENSIONS: dict[str, DimensionSpec] = {
             _c("semantic", 0.40),
         ),
     ),
-    # AI generation: synthetic text. The ai_writing detector is the primary
-    # witness; semantic (templated phrasing) and voice (unusually low
-    # first-person rate) corroborate.
+    # AI generation: synthetic text. CONTEXTUAL (GAP-03) — reported and fully
+    # explainable, but excluded from the composite omi_score and primary-threat
+    # selection. The ai_writing detector that drives it false-positives on ESL
+    # writers, formal writers, and legitimate Grammarly/LLM-assisted humans, so
+    # "this reads as AI-assisted" is shown as information, never as suspicion.
     "ai_generation_probability": DimensionSpec(
         key="ai_generation_probability",
         label="AI-generated content",
         description=(
             "Likelihood the content is AI-generated or AI-assisted — burstiness, "
-            "templated phrasing, and an unusually impersonal voice."
+            "templated phrasing, and an unusually impersonal voice. Contextual "
+            "only: this is informational and does not contribute to the risk score, "
+            "because AI-assisted writing is not by itself a sign of inauthenticity."
         ),
+        is_contextual=True,
         contributions=(
             _c("ai_writing", 0.70),
             _c("semantic", 0.20),
@@ -148,7 +160,9 @@ INTELLIGENCE_DIMENSIONS: dict[str, DimensionSpec] = {
     ),
     # Authenticity: the trust-framed dimension. Built from the *inverse* of the
     # behavioral detectors that most directly distinguish organic humans from
-    # synthetic/automated accounts.
+    # synthetic/automated accounts. ai_writing is intentionally NOT a member
+    # (GAP-03): penalising AI-assisted phrasing as "inauthentic" is precisely
+    # the false-positive harm we are removing.
     "authenticity_score": DimensionSpec(
         key="authenticity_score",
         label="Authenticity",
@@ -158,23 +172,30 @@ INTELLIGENCE_DIMENSIONS: dict[str, DimensionSpec] = {
         ),
         is_risk=False,
         contributions=(
-            _c("temporal", 0.25, invert=True),
-            _c("ai_writing", 0.25, invert=True),
-            _c("semantic", 0.20, invert=True),
-            _c("voice", 0.15, invert=True),
-            _c("profile", 0.15, invert=True),
+            _c("temporal", 0.30, invert=True),
+            _c("semantic", 0.30, invert=True),
+            _c("voice", 0.20, invert=True),
+            _c("profile", 0.20, invert=True),
         ),
     ),
 }
 
 
-# Dimensions whose value the engine reports as a 0–100 *probability* number.
-# (authenticity_score is reported but framed as trust, handled separately.)
-THREAT_DIMENSIONS: tuple[str, ...] = (
-    "coordination_probability",
-    "amplification_probability",
-    "spam_probability",
-    "ai_generation_probability",
+# Threat dimensions: the risk-framed dimensions that actually feed the
+# composite omi_score, primary-threat selection, and top-evidence roll-up.
+# Derived from the registry so it stays in sync: a risk dimension is a threat
+# dimension unless it is explicitly marked contextual (GAP-03 demoted
+# ai_generation_probability to contextual — reported, but not scored).
+THREAT_DIMENSIONS: tuple[str, ...] = tuple(
+    spec.key
+    for spec in INTELLIGENCE_DIMENSIONS.values()
+    if spec.is_risk and not spec.is_contextual
+)
+
+# Contextual dimensions: reported and explainable, but excluded from the
+# composite. Surfaced separately so the UI can render them as information.
+CONTEXTUAL_DIMENSIONS: tuple[str, ...] = tuple(
+    spec.key for spec in INTELLIGENCE_DIMENSIONS.values() if spec.is_contextual
 )
 
 

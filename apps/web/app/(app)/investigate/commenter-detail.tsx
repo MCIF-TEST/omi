@@ -450,27 +450,41 @@ function SignalRow({ signal }: { signal: SignalResult }) {
   const conf = signal.confidence ?? 0;
   const label = SIGNAL_LABELS[signal.name] ?? signal.name;
   const topEvidence = signal.evidence?.[0];
+  const supplemental = signal.supplemental ?? false;
 
-  const barColor =
-    prob >= 0.75 ? 'bg-tier-high' :
-    prob >= 0.5  ? 'bg-tier-elevated' :
-    prob >= 0.25 ? 'bg-tier-moderate' :
-    'bg-tier-low';
+  // Supplemental signals (ai_writing) are contextual — never color them as
+  // risk, regardless of how high they read. A high "AI-writing patterns"
+  // value is information, not suspicion.
+  const barColor = supplemental
+    ? 'bg-fg-mute/40'
+    : prob >= 0.75 ? 'bg-tier-high' :
+      prob >= 0.5  ? 'bg-tier-elevated' :
+      prob >= 0.25 ? 'bg-tier-moderate' :
+      'bg-tier-low';
+
+  const valueColor = supplemental
+    ? 'text-fg-mute'
+    : prob >= 0.75 ? 'text-tier-high' :
+      prob >= 0.5  ? 'text-tier-elevated' :
+      prob >= 0.25 ? 'text-tier-moderate' :
+      'text-tier-low';
 
   return (
     <div className="text-xs">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="font-mono text-fg-dim uppercase tracking-wider text-2xs">{label}</span>
+        <span className="flex items-center gap-1.5 font-mono text-fg-dim uppercase tracking-wider text-2xs">
+          {label}
+          {supplemental && (
+            <span className="font-mono text-[0.55rem] tracking-wider text-fg-mute border border-border-2 bg-bg-elev/40 rounded-full px-1.5 py-px normal-case">
+              context · not scored
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-mono text-fg-mute text-2xs">
             conf {Math.round(conf * 100)}%
           </span>
-          <span className={`font-mono font-semibold ${
-            prob >= 0.75 ? 'text-tier-high' :
-            prob >= 0.5  ? 'text-tier-elevated' :
-            prob >= 0.25 ? 'text-tier-moderate' :
-            'text-tier-low'
-          }`}>
+          <span className={`font-mono font-semibold ${valueColor}`}>
             {Math.round(prob * 100)}%
           </span>
         </div>

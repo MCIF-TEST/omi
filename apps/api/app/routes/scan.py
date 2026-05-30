@@ -886,36 +886,39 @@ def scan_link(
     # for the database write. Persistence is offloaded to a background worker
     # — if the DB is slow or the 200KB+ payload serialization stalls, the
     # user still gets their scan result immediately.
-    if current.id != 0:  # skip in local / demo mode
-        import secrets
-        existing_slug = payload.get("investigation_slug")
-        slug = existing_slug or ("inv_" + secrets.token_hex(4))
-        result.investigation_slug = slug
+    #
+    # This runs for BOTH authenticated users and the local-mode user (id=0):
+    # a solo/local install still wants every scan saved to its history. The
+    # background worker resolves id=0 to the stable local-user row so the FK
+    # holds. (The anonymous demo endpoint never reaches here — it calls
+    # scan_comprehensive_endpoint directly — so demo scans are not persisted.)
+    import secrets
+    existing_slug = payload.get("investigation_slug")
+    slug = existing_slug or ("inv_" + secrets.token_hex(4))
+    result.investigation_slug = slug
 
-        # Serialise on the request thread before handing off: (1) Pydantic
-        # models are not guaranteed immutable once FastAPI starts serialising
-        # the response concurrently; (2) keeps the expensive model_dump() off
-        # the bounded background pool where it would hold a worker slot.
-        try:
-            result_payload = _serialize_result(result)
-        except Exception:
-            import logging as _log
-            _log.getLogger("omi.scan").exception(
-                "could not serialise investigation payload for %s", slug
-            )
-            result_payload = {}
-
-        from app.core import background as _bg
-        _bg.submit(
-            _persist_investigation_async,
-            slug=slug,
-            user_id=current.id,
-            classification=classification,
-            url=url,
-            payload=result_payload,
+    # Serialise on the request thread before handing off: (1) Pydantic
+    # models are not guaranteed immutable once FastAPI starts serialising
+    # the response concurrently; (2) keeps the expensive model_dump() off
+    # the bounded background pool where it would hold a worker slot.
+    try:
+        result_payload = _serialize_result(result)
+    except Exception:
+        import logging as _log
+        _log.getLogger("omi.scan").exception(
+            "could not serialise investigation payload for %s", slug
         )
-        return result
+        result_payload = {}
 
+    from app.core import background as _bg
+    _bg.submit(
+        _persist_investigation_async,
+        slug=slug,
+        user_id=current.id,
+        classification=classification,
+        url=url,
+        payload=result_payload,
+    )
     return result
 
 
@@ -1171,13 +1174,19 @@ def _persist_investigation_async(
             with get_session() as session:
                 from app.storage.repository import AccountRepository
                 repo = AccountRepository(session)
+                # Local mode (id=0) has no real users row; resolve it to the
+                # stable local-user id so the investigation FK holds and the
+                # history accumulates under one owner.
+                effective_user_id = (
+                    repo.ensure_local_user_id() if user_id == 0 else user_id
+                )
                 # Always look up first — handles both new investigations and
                 # continuation batches, and races where the first batch's save
                 # hasn't committed yet when the second batch arrives.
-                inv = repo.get_investigation(slug=slug, user_id=user_id)
+                inv = repo.get_investigation(slug=slug, user_id=effective_user_id)
                 if inv is None:
                     repo.create_investigation(
-                        user_id=user_id, slug=slug, label=label,
+                        user_id=effective_user_id, slug=slug, label=label,
                         input_url=url[:500], target_id=target_id,
                         kind=classification.get("kind", "comprehensive"),
                         overall_probability=overall_probability,

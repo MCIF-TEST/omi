@@ -1,8 +1,8 @@
 [
   {
-    "label": "ai_content_high",
-    "expected_tier": "high",
-    "expected_probability": 0.85,
+    "label": "clean_ai_assisted_writer",
+    "expected_tier": "low",
+    "expected_probability": 0.12,
     "profile": {
       "platform": "youtube",
       "handle": "@TechFlowDaily",
@@ -1185,9 +1185,9 @@
     ]
   },
   {
-    "label": "moderate_ai_assisted_light",
-    "expected_tier": "moderate",
-    "expected_probability": 0.42,
+    "label": "clean_ai_light_assist",
+    "expected_tier": "low",
+    "expected_probability": 0.12,
     "profile": {
       "platform": "youtube",
       "handle": "@insightful_takes",
@@ -1890,9 +1890,9 @@
     ]
   },
   {
-    "label": "elevated_ai_writing_medium",
-    "expected_tier": "elevated",
-    "expected_probability": 0.64,
+    "label": "clean_ai_formal_writer",
+    "expected_tier": "low",
+    "expected_probability": 0.15,
     "profile": {
       "platform": "youtube",
       "handle": "@ContentEdgeDaily",
@@ -3555,9 +3555,9 @@
     ]
   },
   {
-    "label": "high_ai_broadcast_no_voice",
-    "expected_tier": "high",
-    "expected_probability": 0.85,
+    "label": "clean_broadcast_impersonal",
+    "expected_tier": "moderate",
+    "expected_probability": 0.35,
     "profile": {
       "platform": "youtube",
       "handle": "@MarketInsightAI",
@@ -4006,9 +4006,9 @@
     ]
   },
   {
-    "label": "high_ai_dense_repetitive",
-    "expected_tier": "high",
-    "expected_probability": 0.86,
+    "label": "clean_ai_verbose_writer",
+    "expected_tier": "low",
+    "expected_probability": 0.15,
     "profile": {
       "platform": "youtube",
       "handle": "@AlphaInsightsPro",

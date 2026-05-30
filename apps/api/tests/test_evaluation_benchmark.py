@@ -32,9 +32,20 @@ from app.evaluation import (
 )
 
 # --- Calibration ratchet (tighten as the engine improves) ------------------
-GATE_MAX_BRIER = 0.135      # current 0.1163
-GATE_MIN_ACCURACY = 0.35    # current 0.385; majority baseline 0.338
-GATE_MIN_MACRO_F1 = 0.20    # current 0.230
+# Re-baselined for GAP-03: the ai_writing detector was demoted to a supplemental
+# (contextual, non-scoring) signal because AI-assisted writing is not evidence of
+# inauthenticity — it false-positives on ESL/formal/Grammarly-assisted humans.
+# The seed benchmark's "ai_*" archetypes were correspondingly relabeled to their
+# true (benign) ground truth. Net effect: calibration *improved* (Brier 0.1163 →
+# 0.1107, tier accuracy 0.385 → 0.415), but macro-F1 fell (0.230 → 0.182) because
+# the engine's prior elevated/high recall on this fallback-embedder benchmark was
+# partly produced by ai_writing flagging legitimate writers — recall we are
+# deliberately giving up to eliminate that harm. The high/elevated recall gap is
+# a real, now-unmasked calibration weakness tracked separately (confidence
+# calibration), not something to paper over by reinstating a harmful signal.
+GATE_MAX_BRIER = 0.120      # current 0.1107 (improved post-GAP-03)
+GATE_MIN_ACCURACY = 0.38    # current 0.415; majority baseline 0.338
+GATE_MIN_MACRO_F1 = 0.17    # current 0.182 (down from 0.230 — see note above)
 
 
 @pytest.fixture(scope="module")

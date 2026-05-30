@@ -18,6 +18,12 @@ from sqlalchemy.orm import Session
 from app.schemas import Profile, ScanResult
 from app.storage.models import Account, CommenterEngagement, Scan, ScanLog, VideoScan
 
+# Stable identity for the synthetic user that owns data on a local install
+# (``OMI_REQUIRE_AUTH=false``). Resolved to a real ``users`` row id via
+# ``AccountRepository.ensure_local_user_id`` so investigations can be persisted
+# and listed even when no real authentication is configured.
+LOCAL_USER_EMAIL = "local@omi.local"
+
 
 class AccountRepository:
     def __init__(self, session: Session):
@@ -38,6 +44,46 @@ class AccountRepository:
         return list(self.session.execute(stmt).scalars())
 
     # ---- Investigations ----  (Phase 5)
+
+    def ensure_local_user_id(self) -> int:
+        """Get-or-create the synthetic local-mode user and return its id.
+
+        When ``OMI_REQUIRE_AUTH=false`` (the default for solo / local installs)
+        every request runs as a synthetic user with ``id=0`` that has no row in
+        the ``users`` table. ``Investigation.user_id`` is a non-nullable FK into
+        that table, so to persist investigations for a local install we need a
+        real, stable user row to own them. This creates one on first use and
+        returns the same id forever after, so local scans accumulate a history
+        exactly like an authenticated account does.
+        """
+        from app.storage.models import User
+
+        user = self.session.execute(
+            select(User).where(User.email == LOCAL_USER_EMAIL)
+        ).scalar_one_or_none()
+        if user is None:
+            user = User(
+                email=LOCAL_USER_EMAIL,
+                # Unusable password hash — the local user can never log in; it
+                # exists only to own local-install data.
+                password_hash="!local-no-login",
+                credits_remaining=999_999,
+                is_admin=1,
+            )
+            self.session.add(user)
+            self.session.flush()
+        return user.id
+
+    def local_user_id(self) -> int | None:
+        """Read-only counterpart to :meth:`ensure_local_user_id` — return the
+        local user's id if the row exists, else ``None``. Used by read/update
+        endpoints so they don't create the row as a side effect of a GET."""
+        from app.storage.models import User
+
+        user = self.session.execute(
+            select(User).where(User.email == LOCAL_USER_EMAIL)
+        ).scalar_one_or_none()
+        return user.id if user is not None else None
 
     def create_investigation(
         self,

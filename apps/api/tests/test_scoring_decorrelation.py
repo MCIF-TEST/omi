@@ -90,7 +90,11 @@ def test_correlated_pair_scores_lower_than_independent_pair():
     """Two correlated detectors firing identically must yield a LOWER overall
     than two independent detectors firing identically — that is the whole point
     of decorrelation."""
-    correlated = aggregate([_sig("semantic", 0.85, 0.8), _sig("ai_writing", 0.85, 0.8)])
+    # Use the timing group (temporal+engagement share an axis and are both
+    # scored). The content group's second member, ai_writing, is supplemental
+    # (GAP-03) and no longer participates in the composite, so it can't be used
+    # to demonstrate the decorrelation of two *scored* detectors.
+    correlated = aggregate([_sig("temporal", 0.85, 0.8), _sig("engagement", 0.85, 0.8)])
     independent = aggregate([_sig("semantic", 0.85, 0.8), _sig("profile", 0.85, 0.8)])
     assert correlated.overall_probability < independent.overall_probability
     assert correlated.confidence < independent.confidence
@@ -121,7 +125,8 @@ def test_three_correlated_signals_do_not_earn_convergence_bonus():
 def test_two_correlated_confident_signals_cannot_reach_high():
     """Two detectors on the same axis are not independent corroboration, so even
     at high probability they are capped below HIGH."""
-    res = aggregate([_sig("semantic", 0.97, 0.95), _sig("ai_writing", 0.97, 0.95)])
+    # temporal+engagement share the behavioral_timing axis (both scored).
+    res = aggregate([_sig("temporal", 0.97, 0.95), _sig("engagement", 0.97, 0.95)])
     assert res.tier != Tier.HIGH
     assert any("Capped below HIGH" in a for a in res.score_adjustments)
 
@@ -146,8 +151,9 @@ def test_decorrelation_setting_changes_only_the_score_not_the_signals():
     Both signals here share one axis, so the single-axis cap pins overall at the
     ELEVATED ceiling in both runs; the decorrelation effect is therefore visible
     in reported *confidence* (shared evidence no longer inflates it)."""
-    sigs = [_sig("semantic", 0.85, 0.8), _sig("ai_writing", 0.85, 0.8)]
+    # Timing group (both scored); toggle its redundancy factor.
+    sigs = [_sig("temporal", 0.85, 0.8), _sig("engagement", 0.85, 0.8)]
     on = aggregate(sigs, _settings())
-    off = aggregate(sigs, _settings(decorrelation_redundancy_content=1.0))
+    off = aggregate(sigs, _settings(decorrelation_redundancy_timing=1.0))
     assert off.confidence > on.confidence
     assert [s.probability for s in on.signals] == [s.probability for s in off.signals]

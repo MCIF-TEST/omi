@@ -272,6 +272,13 @@ export interface SignalResult {
   confidence: number;
   evidence: string[];
   sub_signals: Record<string, number>;
+  /**
+   * Supplemental signals (e.g. ai_writing) are computed and shown for context
+   * but excluded from the suspicion score — AI-assisted writing is not evidence
+   * of inauthenticity. Render these distinctly so a high reading can't be
+   * mistaken for a risk contribution.
+   */
+  supplemental?: boolean;
 }
 
 export interface CommenterScanResult {
@@ -1152,6 +1159,12 @@ export interface IntelligenceDimension {
   score: number;
   confidence: number;
   is_risk: boolean;
+  /**
+   * Contextual dimensions (e.g. AI-generated content) are reported for
+   * information but excluded from the composite risk score — AI-assisted
+   * writing is not by itself a sign of inauthenticity. Render distinctly.
+   */
+  is_contextual?: boolean;
   contributions: DimensionContribution[];
 }
 
@@ -1175,16 +1188,26 @@ export interface OmiScore {
   top_evidence: string[];
 }
 
-/** The four threat dimension keys, in canonical display order. */
+/**
+ * The threat dimension keys that actually contribute to the composite risk
+ * score, in canonical display order. AI generation is deliberately NOT here —
+ * it is a contextual signal (see CONTEXT_KEYS): AI-assisted writing is not
+ * evidence of inauthenticity, so it informs without raising risk.
+ */
 export const THREAT_KEYS = [
   'coordination_probability',
   'amplification_probability',
   'spam_probability',
-  'ai_generation_probability',
 ] as const;
 export type ThreatKey = (typeof THREAT_KEYS)[number];
 
-export const THREAT_META: Record<ThreatKey, { label: string; short: string }> = {
+/** Contextual dimensions: reported for information, excluded from the risk score. */
+export const CONTEXT_KEYS = [
+  'ai_generation_probability',
+] as const;
+export type ContextKey = (typeof CONTEXT_KEYS)[number];
+
+export const THREAT_META: Record<ThreatKey | ContextKey, { label: string; short: string }> = {
   coordination_probability:  { label: 'Coordinated activity',   short: 'Coordination' },
   amplification_probability: { label: 'Artificial amplification', short: 'Amplification' },
   spam_probability:          { label: 'Spam behavior',          short: 'Spam' },
