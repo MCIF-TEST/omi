@@ -128,6 +128,10 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     # Password reset (single-use token hash + expiry)
     ("users", "reset_token_hash", "VARCHAR(64)"),
     ("users", "reset_token_expires", "TIMESTAMP WITH TIME ZONE"),
+    # Investigation analyst verdict + notes (added after initial release)
+    ("investigations", "verdict", "VARCHAR(32)"),
+    ("investigations", "concluded_at", "TIMESTAMP WITH TIME ZONE"),
+    ("investigations", "notes", "TEXT"),
 ]
 
 
