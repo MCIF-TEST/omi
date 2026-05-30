@@ -125,11 +125,14 @@ emergency recovery.
 ## Running the tests
 
 ```bash
+# Backend — 370+ tests
 cd apps/api
-pytest -q       # 190+ tests
-```
+pytest -q
 
-Frontend tests are still pending.
+# Frontend — Vitest unit tests for the shared client + formatters
+cd apps/web
+npm test
+```
 
 ---
 
