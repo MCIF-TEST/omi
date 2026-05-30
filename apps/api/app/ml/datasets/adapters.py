@@ -146,6 +146,36 @@ def _parse_reddit(row: dict, filename: str, row_id: str) -> PublicRecord | None:
     )
 
 
+def _parse_io_disclosure(row: dict, filename: str, row_id: str) -> PublicRecord | None:
+    """State-backed information-operation disclosure (e.g. the Twitter/X
+    Transparency releases, Stanford Internet Observatory mirrors).
+
+    Every account in these archives was attributed to a coordinated influence
+    operation by the platform itself — the highest-confidence inauthentic
+    ground truth that exists. We label them ``political_coord`` / ``high``
+    rather than the generic ``bot`` so the corpus distinguishes coordinated
+    amplification from lone automation. The campaign is taken from the file
+    stem so multiple disclosure files stay attributable.
+    """
+    user_id = str(row.get("userid") or row.get("user_id") or "").strip()
+    if not user_id:
+        return None
+    text = str(row.get("tweet_text") or row.get("text") or "").strip()
+    handle = str(row.get("user_screen_name") or row.get("user_display_name") or user_id).strip()
+    campaign = filename.rsplit(".", 1)[0]
+    return PublicRecord(
+        external_id=user_id,                     # collapses a user's tweets to one account
+        texts=[text] if text else [],
+        is_bot=True,
+        follower_count=to_count(row.get("follower_count")),
+        following_count=to_count(row.get("following_count")),
+        handle=handle or user_id,
+        label="political_coord",
+        expected_tier="high",
+        campaign_id=campaign,
+    )
+
+
 def _parse_accounts_generic(row: dict, filename: str, row_id: str) -> PublicRecord | None:
     label_val = _first(row, *_ACCOUNT_LABEL_COLS)
     is_bot = parse_bool_label(label_val) if label_val is not None else None
@@ -218,6 +248,17 @@ register_adapter(DatasetAdapter(
     match=lambda h, f: 13 if _subset(h, "is_bot_flag", "account_age_days", "user_karma") else 0,
     parse_row=_parse_reddit,
     description="Reddit comment-level bot flags + account age.",
+))
+
+register_adapter(DatasetAdapter(
+    name="io_disclosure", kind="accounts",
+    match=lambda h, f: 15 if (
+        ("userid" in h or "user_id" in h)
+        and ("tweet_text" in h or "text" in h)
+        and _any_in(h, ("follower_count", "following_count", "account_creation_date"))
+    ) else 0,
+    parse_row=_parse_io_disclosure,
+    description="State-backed IO disclosure (Twitter/X Transparency); labels accounts political_coord/high.",
 ))
 
 register_adapter(DatasetAdapter(

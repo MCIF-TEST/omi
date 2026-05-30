@@ -40,7 +40,18 @@ _IMPORT_PLATFORM = "imported"
 
 @dataclass
 class PublicRecord:
-    """One row from a public dataset, reduced to platform-agnostic fields."""
+    """One row from a public dataset, reduced to platform-agnostic fields.
+
+    The binary ``is_bot`` flag is the lowest-common-denominator label every
+    public dataset carries. Richer corpora (coordinated influence-operation
+    archives, the synthetic persona generator) additionally set ``label`` and
+    ``expected_tier`` to assert a *specific* ground-truth category — e.g. a
+    state-backed amplifier is ``political_coord``/``high``, while a genuine
+    non-native-English commenter is ``human``/``low`` even though a naive bot
+    detector might mistake their phrasing for automation. When ``label`` /
+    ``expected_tier`` are unset they fall back to the ``is_bot`` mapping, so the
+    existing binary datasets keep working unchanged.
+    """
     external_id: str            # stable id from the source dataset
     texts: list[str]            # one or more posts authored by the account
     is_bot: bool                # the source's ground-truth label
@@ -48,6 +59,12 @@ class PublicRecord:
     following_count: int | None = None
     account_age_days: int | None = None
     handle: str | None = None
+    # Optional explicit ground truth — overrides the is_bot-derived defaults.
+    label: str | None = None            # one of schemas.LABEL_KINDS
+    expected_tier: str | None = None    # one of "low|moderate|elevated|high"
+    # Provenance for coordinated-operation rows: which campaign this account
+    # belongs to. Recorded in the label rationale so the corpus stays auditable.
+    campaign_id: str | None = None
 
 
 def _to_profile(rec: PublicRecord) -> Profile:
@@ -89,6 +106,36 @@ def _expected_tier(is_bot: bool) -> str:
 
 def _label_kind(is_bot: bool) -> str:
     return "bot" if is_bot else "human"
+
+
+# Valid value sets, imported lazily-by-reference to avoid a heavy schemas import
+# at module load. Populated on first use by _resolve_ground_truth.
+_VALID_TIERS = ("low", "moderate", "elevated", "high")
+
+
+def _resolve_ground_truth(rec: "PublicRecord") -> tuple[str, str]:
+    """Decide the (label_kind, expected_tier) this record asserts.
+
+    Honors an explicit ``rec.label`` / ``rec.expected_tier`` when present and
+    valid, otherwise falls back to the binary ``is_bot`` mapping. Invalid
+    explicit values are rejected loudly rather than silently poisoning the
+    ground-truth corpus — a typo'd label is worse than no label.
+    """
+    from app.schemas import LABEL_KINDS
+
+    label_kind = rec.label if rec.label is not None else _label_kind(rec.is_bot)
+    expected = rec.expected_tier if rec.expected_tier is not None else _expected_tier(rec.is_bot)
+    if label_kind not in LABEL_KINDS:
+        raise ValueError(
+            f"PublicRecord.label='{label_kind}' is not a valid label kind "
+            f"(expected one of {sorted(LABEL_KINDS)})."
+        )
+    if expected not in _VALID_TIERS:
+        raise ValueError(
+            f"PublicRecord.expected_tier='{expected}' is not a valid tier "
+            f"(expected one of {list(_VALID_TIERS)})."
+        )
+    return label_kind, expected
 
 
 def ingest_records(
@@ -144,6 +191,11 @@ def ingest_records(
             n_skipped += 1
             continue
 
+        label_kind, expected = _resolve_ground_truth(rec)
+        rationale = f"Imported from public dataset '{dataset_name}'."
+        if rec.campaign_id:
+            rationale += f" Campaign: {rec.campaign_id}."
+
         existing = session.query(AccountLabel).filter(
             AccountLabel.account_id == account.id,
             AccountLabel.user_id == user_id,
@@ -152,19 +204,22 @@ def ingest_records(
             session.add(AccountLabel(
                 account_id=account.id,
                 user_id=user_id,
-                label=_label_kind(rec.is_bot),
-                expected_tier=_expected_tier(rec.is_bot),
+                label=label_kind,
+                expected_tier=expected,
                 confidence=label_confidence,
                 source="imported_dataset",
-                rationale=f"Imported from public dataset '{dataset_name}'.",
+                rationale=rationale,
             ))
         else:
-            existing.label = _label_kind(rec.is_bot)
-            existing.expected_tier = _expected_tier(rec.is_bot)
+            existing.label = label_kind
+            existing.expected_tier = expected
             existing.source = "imported_dataset"
+            existing.rationale = rationale
 
         n_ok += 1
-        if rec.is_bot:
+        # "bot" in the count sense = any inauthentic ground truth, not just the
+        # literal "bot" label — so coordinated/spam/farm rows count too.
+        if rec.is_bot or expected in ("elevated", "high"):
             n_bot += 1
 
     return {

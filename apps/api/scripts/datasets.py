@@ -134,6 +134,60 @@ def _cmd_benchmark_text(args) -> int:
     return 0
 
 
+def _cmd_synthetic(args) -> int:
+    """Generate the labeled synthetic ground-truth corpus and (unless
+    ``--dry-run``) ingest it through the real engine into AccountLabel rows."""
+    from app.ml.datasets.synthetic import (
+        PERSONAS, PERSONAS_BY_NAME, corpus_label_distribution, generate_corpus,
+    )
+
+    selected = PERSONAS
+    if args.persona:
+        missing = [p for p in args.persona if p not in PERSONAS_BY_NAME]
+        if missing:
+            print(f"Unknown persona(s): {missing}. "
+                  f"Choose from {sorted(PERSONAS_BY_NAME)}.", file=sys.stderr)
+            return 2
+        selected = tuple(PERSONAS_BY_NAME[p] for p in args.persona)
+
+    records = generate_corpus(args.n, seed=args.seed, personas=selected)
+    dist = corpus_label_distribution(records)
+
+    if args.dry_run:
+        print(json.dumps({
+            "generated": len(records),
+            "n_per_persona": args.n,
+            "seed": args.seed,
+            "personas": [p.name for p in selected],
+            "by_label": dist,
+        }, indent=2))
+        return 0
+
+    try:
+        from app.ml.public_import import ingest_records
+        from app.storage.db import get_session
+    except Exception as e:  # noqa: BLE001
+        print(f"Cannot ingest without a DB session ({e}). "
+              f"Re-run with --dry-run to preview.", file=sys.stderr)
+        return 1
+
+    with get_session() as session:
+        res = ingest_records(
+            session, records,
+            dataset_name="synthetic",
+            label_confidence=args.confidence,
+        )
+    print(json.dumps({
+        "generated": len(records),
+        "by_label": dist,
+        "ingested": res["ingested"],
+        "inauthentic": res["bots"],
+        "authentic": res["humans"],
+        "seed": args.seed,
+    }, indent=2))
+    return 0
+
+
 def _cmd_export(args) -> int:
     out_dir = generated_dir(args.root)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -187,6 +241,21 @@ def main() -> int:
     p.add_argument("--json", action="store_true")
     p.add_argument("--limit", type=int, default=None)
     p.set_defaults(func=_cmd_benchmark_text)
+
+    p = sub.add_parser(
+        "synthetic",
+        help="Generate + ingest the labeled synthetic ground-truth corpus "
+             "(coordinated/farm/spam + organic/ESL/AI-assisted humans).",
+    )
+    p.add_argument("--n", type=int, default=25, help="Records per persona (default 25).")
+    p.add_argument("--seed", type=int, default=1729, help="Deterministic seed (default 1729).")
+    p.add_argument("--confidence", choices=("high", "medium"), default="high",
+                   help="Label confidence to stamp (synthetic answers are known → high).")
+    p.add_argument("--persona", action="append",
+                   help="Restrict to one persona (repeatable). Default: all.")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Generate + summarize without touching the DB.")
+    p.set_defaults(func=_cmd_synthetic)
 
     p = sub.add_parser("export", help="Write the combined training corpus to datasets/_generated/.")
     p.add_argument("--min-confidence", choices=("high", "medium"), default="medium")
