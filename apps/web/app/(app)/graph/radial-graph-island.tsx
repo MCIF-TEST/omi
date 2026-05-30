@@ -24,7 +24,6 @@ export function RadialGraphIsland({ data }: { data: AccountSubgraphResponse }) {
       <aside className="relative overflow-hidden bg-bg-elev border border-border-1 rounded-2xl p-5 shadow-card min-h-[280px]">
         {selected ? (
           <div className="animate-fade-up">
-            <div className="absolute -top-12 -right-10 w-36 h-36 rounded-full bg-accent/[0.06] blur-3xl pointer-events-none" aria-hidden />
             <div className="relative">
               <div className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-4">
                 Selected node

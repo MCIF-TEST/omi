@@ -3,36 +3,34 @@
 @tailwind utilities;
 
 /* =====================================================================
-   OMISPHERE — "Online Media Intelligence" identity
-   Pure-black canvas · electric-blue → violet brand gradient · chrome
-   silver wordmark accent. Sourced directly from the brand mark.
-   Space Grotesk display + Inter body + JetBrains mono.
+   OMISPHERE — Online Media Intelligence
+   Deep black · electric blue · Space Grotesk + Inter + JetBrains Mono
    ===================================================================== */
 
 :root {
-  /* Surfaces — near-pure black with the faintest blue depth */
+  /* Surfaces */
   --bg-deep:    #04050b;
   --bg:         #080a12;
   --bg-elev:    #0e1019;
   --bg-elev-2:  #161a26;
 
-  /* Borders — cool blue-grey */
+  /* Borders */
   --border:     #1b2030;
   --border-2:   #29303f;
   --border-hot: #3c4a6c;
 
-  /* Text — cool white / silver (echoes the chrome "SPHERE") */
+  /* Text */
   --text:       #eef2f9;
   --text-dim:   #aab3c6;
   --text-mute:  #6e7890;
   --text-faint: #424c63;
 
-  /* Accents — electric blue primary (the logo's "OMI" + ring) */
+  /* Accents */
   --accent:     #3b8eff;
   --accent-2:   #6ba9ff;
   --accent-dim: #1d5fd0;
 
-  /* Spectral end — violet (the gradient's purple terminus) */
+  /* Spectral end — violet (logo gradient terminus only) */
   --violet:     #8b5cf6;
   --violet-2:   #a78bfa;
 
@@ -60,18 +58,14 @@
     font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    /* Mobile ergonomics: kill the grey tap flash, lock font scaling on
-       rotate, and stop the whole page from rubber-banding so the app feels
-       native rather than like a scrolled web document. */
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     overscroll-behavior-y: none;
   }
   * { border-color: var(--border); }
-  ::selection { background: rgba(59, 142, 255, 0.3); color: #fff; }
+  ::selection { background: rgba(59, 142, 255, 0.25); color: #fff; }
 
-  /* Display face for all real headings */
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
@@ -84,7 +78,7 @@
   *::-webkit-scrollbar-track { background: transparent; }
   *::-webkit-scrollbar-thumb {
     background: var(--border-2);
-    border-radius: 8px;
+    border-radius: 4px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
@@ -93,20 +87,15 @@
     background-clip: content-box;
   }
 
+  /* Structural grid lines — no radial blobs */
   .bg-grid {
     background-image:
-      radial-gradient(circle at 50% -20%, rgba(59, 142, 255, 0.10), transparent 60%),
-      radial-gradient(circle at 80% 110%, rgba(139, 92, 246, 0.06), transparent 60%),
-      linear-gradient(rgba(30, 38, 56, 0.35) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(30, 38, 56, 0.35) 1px, transparent 1px);
-    background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
+      linear-gradient(rgba(30, 38, 56, 0.28) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 38, 56, 0.28) 1px, transparent 1px);
+    background-size: 60px 60px, 60px 60px;
   }
 
-  .dot-bg {
-    background-image: radial-gradient(circle, rgba(107, 169, 255, 0.13) 1px, transparent 1px);
-    background-size: 30px 30px;
-  }
-
+  /* Film grain — adds surface texture, keeps it from feeling digital-flat */
   .grain::after {
     content: '';
     position: fixed;
@@ -120,7 +109,7 @@
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: 3px;
   }
 }
 
@@ -128,7 +117,7 @@
   .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
   .display { font-family: var(--font-display); letter-spacing: -0.02em; }
 
-  /* Brand gradient text — electric blue → violet (the logo sweep) */
+  /* Brand gradient text */
   .text-gradient,
   .text-brand {
     background: linear-gradient(118deg, var(--accent-2) 0%, var(--accent) 44%, var(--violet) 100%);
@@ -137,7 +126,7 @@
     -webkit-text-fill-color: transparent;
   }
 
-  /* Chrome silver text — the "SPHERE" treatment */
+  /* Chrome silver text */
   .text-silver {
     background: linear-gradient(180deg, #ffffff 0%, #d2d9e6 48%, #9aa6bd 100%);
     -webkit-background-clip: text;
@@ -145,144 +134,82 @@
     -webkit-text-fill-color: transparent;
   }
 
-  /* Animated shimmer text */
-  .text-shimmer {
-    background: linear-gradient(110deg, var(--accent) 18%, #ffffff 46%, var(--violet) 58%, var(--accent) 84%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: shimmer 4s ease-in-out infinite;
-  }
-
-  /* Glassmorphism */
+  /* Glass surface */
   .glass {
-    background: rgba(14, 16, 25, 0.62);
-    backdrop-filter: blur(22px) saturate(140%);
-    -webkit-backdrop-filter: blur(22px) saturate(140%);
-    border: 1px solid rgba(60, 74, 108, 0.5);
+    background: rgba(14, 16, 25, 0.7);
+    backdrop-filter: blur(20px) saturate(130%);
+    -webkit-backdrop-filter: blur(20px) saturate(130%);
+    border: 1px solid rgba(60, 74, 108, 0.45);
   }
 
-  /* Animated gradient hairline border — blue → violet */
+  /* Accent border card — replaces the animated gradient-border */
   .gradient-border {
-    position: relative;
     background: var(--bg-elev);
-    border-radius: 16px;
-  }
-  .gradient-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(130deg, rgba(59,142,255,0.65), rgba(139,92,246,0.45), rgba(59,142,255,0.12));
-    background-size: 200% 200%;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: border-flow 6s ease infinite;
-    pointer-events: none;
+    border-radius: 8px;
+    border: 1px solid rgba(59, 142, 255, 0.28);
   }
 
-  /* Interactive card */
+  /* Interactive card — border brightening only, no lift transform */
   .card-interactive {
-    transition: transform 0.26s var(--ease-omi),
-                box-shadow 0.26s var(--ease-omi),
-                border-color 0.26s ease;
+    transition: border-color 0.18s ease;
   }
   .card-interactive:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 14px 44px rgba(0,0,0,0.55), 0 0 0 1px rgba(59,142,255,0.22);
-    border-color: rgba(59, 142, 255, 0.3) !important;
+    border-color: rgba(59, 142, 255, 0.24) !important;
   }
 
-  /* Spotlight sheen */
-  .spotlight { position: relative; overflow: hidden; }
-  .spotlight::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(440px circle at 50% 0%, rgba(59,142,255,0.14), transparent 60%);
-    opacity: 0;
-    transition: opacity 0.32s ease;
-    pointer-events: none;
-  }
-  .spotlight:hover::after { opacity: 1; }
-
-  /* Button glow + sheen sweep */
+  /* Primary button */
   .btn-glow {
-    position: relative;
-    overflow: hidden;
-    transition: box-shadow 0.2s ease, background 0.15s ease, transform 0.12s ease;
+    transition: box-shadow 0.15s ease, background 0.12s ease;
   }
   .btn-glow:hover {
-    box-shadow: 0 0 22px rgba(59,142,255,0.45), 0 0 48px rgba(59,142,255,0.16);
+    box-shadow: 0 0 0 1px rgba(59, 142, 255, 0.45), 0 4px 20px rgba(59, 142, 255, 0.08);
   }
-  .btn-glow:active { transform: translateY(1px) scale(0.99); }
-  .btn-glow::before {
-    content: '';
-    position: absolute;
-    top: 0; bottom: 0;
-    width: 42%;
-    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.34), transparent);
-    transform: translateX(-150%);
-    pointer-events: none;
-  }
-  .btn-glow:hover::before { animation: shimmer-sweep 0.9s ease; }
+  .btn-glow:active { transform: translateY(1px); }
 
   /* Sidebar nav item */
   .nav-item {
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 8px 12px;
-    border-radius: 9px;
+    padding: 7px 10px;
+    border-radius: 4px;
     font-size: 0.875rem;
     color: var(--text-dim);
-    transition: color 0.15s ease, background 0.15s ease;
+    transition: color 0.14s ease, background 0.14s ease;
     position: relative;
   }
-  .nav-item:hover { color: var(--text); background: rgba(22, 26, 38, 0.9); }
+  .nav-item:hover { color: var(--text); background: rgba(22, 26, 38, 0.85); }
   .nav-item.active {
     color: var(--accent-2);
-    background: linear-gradient(90deg, rgba(59,142,255,0.16), rgba(59,142,255,0.03));
+    background: rgba(59, 142, 255, 0.09);
   }
   .nav-item.active::before {
     content: '';
     position: absolute;
     left: 0;
-    top: 18%;
-    height: 64%;
-    width: 2.5px;
-    background: linear-gradient(var(--accent), var(--violet));
-    border-radius: 0 3px 3px 0;
-    box-shadow: 0 0 10px rgba(59,142,255,0.75);
+    top: 20%;
+    height: 60%;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
   }
 
-  /* Animated bar fill sheen */
+  /* Animated bar */
   .bar-fill { position: relative; overflow: hidden; }
-  .bar-fill::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    background-size: 200% 100%;
-    animation: shimmer 2.4s ease-in-out infinite;
-  }
 }
 
 @layer utilities {
-  .stagger > * { animation: fade-up-lg 520ms var(--ease-omi) both; }
+  .stagger > * { animation: fade-up-lg 480ms var(--ease-omi) both; }
   .stagger > *:nth-child(1) { animation-delay: 0.04s; }
-  .stagger > *:nth-child(2) { animation-delay: 0.10s; }
-  .stagger > *:nth-child(3) { animation-delay: 0.16s; }
-  .stagger > *:nth-child(4) { animation-delay: 0.22s; }
-  .stagger > *:nth-child(5) { animation-delay: 0.28s; }
-  .stagger > *:nth-child(6) { animation-delay: 0.34s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.09s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.14s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.19s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.24s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.29s; }
 }
 
 /* ---------------------------------------------------------------------------
-   Public report — print / PDF styling.
+   Print / PDF styling.
 --------------------------------------------------------------------------- */
 
 @media print {
@@ -357,7 +284,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Hero-visual & loading-overlay keyframes (used via inline style attributes)
+   Hero-visual keyframes (server-rendered, no JS)
 --------------------------------------------------------------------------- */
 
 @keyframes hv-radar {
@@ -381,12 +308,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-drift, .animate-drift-slow, .animate-float, .animate-shimmer,
-  .animate-glow-pulse, .animate-border-flow, .text-shimmer, .gradient-border::before,
-  .stagger > *, .bar-fill::after, .btn-glow:hover::before {
+  .stagger > *,
+  .btn-glow:active {
     animation: none !important;
+    transform: none !important;
   }
-  /* hero visual */
   [style*="hv-radar"], [style*="hv-ripple"], [style*="hv-node-pulse"],
   [style*="hv-chip-in"] {
     animation: none !important;
@@ -395,24 +321,16 @@
 
 /* =====================================================================
    Mobile — bottom tab bar, sheet, safe areas, tactile feedback.
-   Designed thumb-first: persistent navigation within reach, the home
-   indicator respected, and a light press-spring on every tap so the
-   surface feels alive.
    ===================================================================== */
 
-/* Respect the home-indicator / notch. */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-top    { padding-top: env(safe-area-inset-top); }
 
-/* Press feedback — a subtle, quick spring inward. Pointer-fine devices
-   (mouse) keep their hover styling and skip this. */
 @media (hover: none) and (pointer: coarse) {
   .tap { transition: transform 0.12s var(--ease-omi); }
   .tap:active { transform: scale(0.94); }
 }
 
-/* Bottom tab item. Apple HIG: ≥44pt target, icon over short label,
-   unmistakable active state. */
 .tabbar-item {
   display: flex;
   flex-direction: column;
@@ -425,7 +343,7 @@
   font-size: 0.6rem;
   letter-spacing: 0.04em;
   position: relative;
-  transition: color 0.16s var(--ease-omi), transform 0.12s var(--ease-omi);
+  transition: color 0.14s var(--ease-omi), transform 0.1s var(--ease-omi);
   -webkit-tap-highlight-color: transparent;
 }
 .tabbar-item:active { transform: scale(0.92); }
@@ -434,14 +352,12 @@
   content: '';
   position: absolute;
   top: 0;
-  width: 26px;
-  height: 2.5px;
-  border-radius: 0 0 3px 3px;
-  background: linear-gradient(90deg, var(--accent), var(--violet));
-  box-shadow: 0 0 10px rgba(59, 142, 255, 0.7);
+  width: 24px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--accent);
 }
 
-/* Slide-up sheet for the "More" menu. */
 @keyframes sheet-up {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
@@ -450,8 +366,8 @@
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-.sheet-panel { animation: sheet-up 0.32s var(--ease-omi); }
-.sheet-scrim { animation: sheet-fade 0.24s ease; }
+.sheet-panel { animation: sheet-up 0.28s var(--ease-omi); }
+.sheet-scrim { animation: sheet-fade 0.2s ease; }
 
 @media (prefers-reduced-motion: reduce) {
   .sheet-panel, .sheet-scrim { animation: none !important; }

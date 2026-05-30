@@ -9,7 +9,6 @@ export const metadata = { title: 'Sign up — OMISPHERE' };
 export default function SignupPage() {
   return (
     <Card gradient className="shadow-card-lg relative overflow-hidden">
-      <div className="absolute -top-12 -left-12 w-40 h-40 rounded-full bg-violet/[0.06] blur-3xl pointer-events-none" aria-hidden />
       <div className="relative">
         <div className="inline-flex items-center gap-2 font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-4">
           <Sparkles size={13} />

@@ -21,11 +21,6 @@ export async function AppShell({ user, children }: AppShellProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-deep grain relative">
-      {/* Ambient depth — fixed, behind everything */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-[-20%] right-[-5%] w-[600px] h-[500px] rounded-full bg-accent/[0.025] blur-[140px]" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[400px] rounded-full bg-violet/[0.02] blur-[130px]" />
-      </div>
       <Topbar user={user} engineStatus={engineStatus} />
       {/* User-visible banner — everyone sees it, no env-var jargon. */}
       {engineStatus && (

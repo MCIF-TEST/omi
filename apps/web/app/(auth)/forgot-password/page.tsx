@@ -8,7 +8,6 @@ export const metadata = { title: 'Reset password — OMISPHERE' };
 export default function ForgotPasswordPage() {
   return (
     <Card gradient className="shadow-card-lg relative overflow-hidden">
-      <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-accent/[0.07] blur-3xl pointer-events-none" aria-hidden />
       <div className="relative">
         <div className="inline-flex items-center gap-2 font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-4">
           <KeyRound size={13} />

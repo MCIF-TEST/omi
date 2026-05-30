@@ -42,7 +42,6 @@ export default async function InvestigationPage({ params }: { params: { slug: st
       {/* Hero header */}
       <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-8 shadow-card">
         {/* Ambient glow */}
-        <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-accent/[0.08] blur-3xl pointer-events-none" aria-hidden />
         <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-violet/[0.06] blur-2xl pointer-events-none" aria-hidden />
 
         <div className="relative flex items-start justify-between gap-4 flex-wrap">

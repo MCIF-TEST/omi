@@ -140,8 +140,6 @@ export function GraphClient() {
     <div className="space-y-8">
       {/* Header */}
       <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-8 md:py-7 shadow-card">
-        <div className="absolute -top-20 -right-12 w-64 h-64 rounded-full bg-violet/[0.07] blur-3xl pointer-events-none" aria-hidden />
-        <div className="absolute -bottom-16 left-1/4 w-56 h-56 rounded-full bg-accent/[0.05] blur-3xl pointer-events-none" aria-hidden />
         <div className="relative flex items-start justify-between gap-4 flex-wrap">
           <div className="max-w-2xl">
             <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-2 flex items-center gap-2">

@@ -2,9 +2,9 @@ import { type HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/cn';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** Adds hover lift + accent ring + top-spotlight sheen. */
+  /** Adds hover border brightening. */
   interactive?: boolean;
-  /** Animated cyan→violet gradient hairline border. */
+  /** Accent blue static border variant. */
   gradient?: boolean;
 }
 
@@ -17,7 +17,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
         gradient
           ? 'gradient-border'
           : 'bg-bg-elev border border-border-1',
-        interactive && 'card-interactive spotlight',
+        interactive && 'card-interactive',
         className,
       )}
       {...props}
