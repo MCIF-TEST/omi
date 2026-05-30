@@ -12,7 +12,7 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const hasSession = req.cookies.has('omi_session');
 
-  const isAppRoute = /^\/(dashboard|investigate|investigations|accounts|graph|narratives|monitoring|reports|settings)(\/|$)/.test(pathname);
+  const isAppRoute = /^\/(dashboard|investigate|investigations|accounts|graph|narratives|content|channels|monitoring|search|bulk|reports|settings)(\/|$)/.test(pathname);
   if (isAppRoute && !hasSession) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';

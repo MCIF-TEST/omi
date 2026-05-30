@@ -14,7 +14,7 @@ Two systems sharing a backbone:
 
 | System | Purpose | Stack |
 |--------|---------|-------|
-| `omi` (the engine) | Probabilistic detection, fingerprinting, coordination analysis. Runs without LLMs. | FastAPI + Python + Postgres + (later) Neo4j |
+| `omi` (the engine) | Probabilistic detection, fingerprinting, coordination analysis. Runs without LLMs. | FastAPI + Python + Postgres + networkx |
 | `OMISPHERE` (the product) | Investigative workspace. Saved investigations, graph views, reports, billing. | Next.js 14 + TypeScript + Tailwind |
 
 The split matters because:
@@ -35,7 +35,7 @@ omisphere/                              ← monorepo root
 │   │   │   ├── detection/              probabilistic detectors (preserved)
 │   │   │   ├── coordination/           cross-account clustering (Phase 4)
 │   │   │   ├── narrative/              narrative intel (Phase 3)
-│   │   │   ├── graph/                  Neo4j-backed queries (Phase 4)
+│   │   │   ├── graph/                  coordination graph — networkx (Phase 4)
 │   │   │   ├── reports/                report generation (Phase 6)
 │   │   │   ├── monitoring/             live anomaly feeds (Phase 8)
 │   │   │   ├── reasoning/              LLM enhancement (Phase 7, optional)
@@ -103,7 +103,7 @@ These are load-bearing rules. Crossing them creates tech debt.
 
 1. **No JS in `apps/api`.** It is a Python service. Period.
 2. **No Python in `apps/web`.** It is a Next.js app. It talks to the API via HTTP.
-3. **The browser never calls Stripe, YouTube, or Neo4j directly.** All third-party APIs are server-side (FastAPI or Next.js server components).
+3. **The browser never calls Stripe or YouTube directly.** All third-party APIs are server-side (FastAPI or Next.js server components).
 4. **Detection code is pure.** `app/detection/` has no I/O — no DB, no network. It computes signals from inputs. The orchestrator (`app/orchestrator.py`) handles I/O.
 5. **The fingerprint feature list is append-only.** Removing or reordering invalidates every stored vector. New dims go at the end.
 6. **LLM calls are never in the per-scan hot path.** They live in `app/reasoning/` and run only on user-triggered report generation.
@@ -145,15 +145,20 @@ Next.js renders the investigation view
 
 ## 5. State management (frontend)
 
+As shipped, the frontend deliberately avoids client-state libraries — no
+TanStack Query, Zustand, or React Hook Form. Next.js server components do the
+data fetching, and the few interactive surfaces use plain React state.
+
 | State | Lives in | Why |
 |-------|----------|-----|
-| Current user, credits | TanStack Query (`/v1/auth/me`) | Server-owned; cache + refetch |
-| Active scan / investigation | TanStack Query | Server-owned |
-| UI selection (selected cluster, drawer open, panel sizes) | Zustand | Client-owned, ephemeral |
-| Form state (login, signup, investigate) | React Hook Form | Component-local |
+| Current user, credits | Server components via `getCurrentUser()` (`/v1/auth/me`) | Server-owned; fetched per request |
+| Active scan / investigation | Server components + `apiServer`/`apiClient` | Server-owned |
+| Polling (alerts, bulk-job status) | `usePolling` hook (no dependency) | Lightweight client polling |
+| UI selection (selected node, sheet open, filters) | Component-local `useState` | Client-owned, ephemeral |
+| Form state (login, signup, investigate) | Component-local `useState` | Small forms, no library needed |
 | Theme | CSS variables | No JS needed |
 
-Saved investigations get a stable URL (`/investigations/{id}`) so users can share or revisit.
+Saved investigations get a stable URL (`/investigations/{slug}`) so users can share or revisit.
 
 ---
 
@@ -172,12 +177,18 @@ Saved investigations get a stable URL (`/investigations/{id}`) so users can shar
 
 ## 7. Database
 
-* **Local dev:** Postgres 16 via `docker-compose up` (replaces SQLite).
-* **Production:** Supabase managed Postgres (free tier covers early use).
-  We use Supabase as a Postgres provider only — not their Auth or
-  Storage. Our auth stays bcrypt + signed cookies.
-* **Migration tool:** alembic, added in Phase 2.
-* **Graph DB:** Neo4j Aura free tier, added in Phase 4.
+* **Local dev:** SQLite by default (zero infra), or Postgres via
+  `docker-compose up`.
+* **Production:** managed Postgres (provider-agnostic — set
+  `OMI_DATABASE_URL`). Auth stays bcrypt + signed cookies, independent of
+  the provider. Production boot refuses to start on SQLite.
+* **Schema provisioning:** `Base.metadata.create_all` at boot plus an
+  idempotent incremental-column pass (`app/storage/db.py`). Alembic
+  migrations under `apps/api/alembic/` are the reviewable record of schema
+  changes and run cleanly as idempotent patches on top of a create_all'd DB.
+* **Graph:** in-process `networkx` over the persistent `coordination_edges`
+  table (no external graph DB). The `GraphStore` abstraction leaves room to
+  swap in a dedicated graph database if the graph outgrows memory.
 
 Schema is owned by `apps/api/app/storage/models.py`. Web app never
 touches the DB directly.
@@ -216,14 +227,21 @@ touches the DB directly.
 
 ## 10. Phase status
 
+All nine build phases are complete (see `docs/roadmap.md`). Subsequent work
+has continued past the original plan — content intelligence, dataset
+training, referrals, password reset, account deletion, a user-curated graph
+feature, a mobile shell, and a frontend test suite among them.
+
 | Phase | Status |
 |-------|--------|
-| 1 — Foundation + core architecture | ⏳ in progress |
-| 2 — Core authenticity engine | preserved from v0 |
-| 3 — Semantic + AI engagement intel | partial (semantic exists, narrative new) |
-| 4 — Graph + coordination intelligence | partial (5 detectors exist; Neo4j graph new) |
-| 5 — Investigative dashboard UI | scaffolded in Phase 1, built in Phase 5 |
-| 6 — Report generation | not started |
-| 7 — Optional LLM enhancement | not started |
-| 8 — Real-time monitoring | not started |
-| 9 — Scalability + optimization | not started |
+| 1 — Foundation + core architecture | ✅ done |
+| 2 — Core authenticity engine | ✅ done |
+| 3 — Semantic + AI engagement intel | ✅ done |
+| 4 — Graph + coordination intelligence | ✅ done (networkx, not Neo4j) |
+| 5 — Investigative dashboard UI | ✅ done |
+| 6 — Report generation | ✅ done |
+| 7 — Optional LLM enhancement | ✅ done |
+| 8 — Real-time monitoring | ✅ done |
+| 9 — Scalability + optimization | ✅ done |
+
+> Note: the endpoint catalog lives in [`api-spec.md`](api-spec.md).
