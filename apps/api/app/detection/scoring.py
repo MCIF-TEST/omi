@@ -19,7 +19,38 @@ from __future__ import annotations
 import math
 
 from app.core.config import Settings, get_settings
+from app.detection.correlation import (
+    CORRELATION_GROUPS,
+    get_correlation_model,
+    static_axis_of,
+)
 from app.schemas import ScanResult, SignalResult, Tier
+
+# Re-exported for backward compatibility: the independence-axis helper under the
+# default group model. Internally the aggregator uses the *active* correlation
+# model (which may be the learned one), but callers/tests importing ``_axis_of``
+# get the stable default semantics.
+_axis_of = static_axis_of
+
+# Keep the name importable for any external reference.
+__all__ = ["aggregate", "CORRELATION_GROUPS", "_axis_of", "_redundancy_factors"]
+
+
+def _redundancy_factors(
+    signals: list[SignalResult],
+    weights: dict[str, float],
+    settings: Settings,
+    prior_logit: float,
+) -> tuple[dict[str, float], list[str]]:
+    """Per-detector contribution multiplier in [0, 1], plus plain-language notes.
+
+    Delegates to the active correlation model: the default group model (each
+    additional member of a correlated group discounted by a compounding
+    redundancy factor) when no learned artifact exists, or the fitted matrix
+    model (continuous discount from measured pairwise correlation) when it does.
+    """
+    model = get_correlation_model(settings)
+    return model.compute_factors(signals, weights, prior_logit)
 
 
 def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> ScanResult:
@@ -39,6 +70,18 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     prior_logit = _logit(prior)
     posterior_logit = prior_logit
     effective_weight_sum = 0.0
+    adjustments: list[str] = []
+
+    # Active correlation model: learned matrix when an artifact exists, else the
+    # hand-tuned default groups. Drives both the redundancy discount and the
+    # independence-axis assignment used by the convergence bonus / single-axis cap.
+    model = get_correlation_model(settings)
+    axis_of = model.axis_of
+
+    # Decorrelate: discount redundant members of each correlated detector group
+    # before combining, so shared evidence isn't double-counted.
+    factors, decorr_notes = model.compute_factors(signals, weights, prior_logit)
+    adjustments.extend(decorr_notes)
 
     for sig in signals:
         if sig.confidence <= 0:
@@ -48,34 +91,49 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
             continue
         # Bound the per-signal probability so we don't get infinite logits.
         p = min(0.98, max(0.02, sig.probability))
-        delta = (_logit(p) - prior_logit) * sig.confidence * w
+        factor = factors.get(sig.name, 1.0)
+        effective = sig.confidence * w * factor
+        delta = (_logit(p) - prior_logit) * effective
         posterior_logit += delta
-        effective_weight_sum += sig.confidence * w
+        effective_weight_sum += effective
 
     # ----- Convergence bonus -----
-    # When several detectors *independently* agree at high probability with
-    # meaningful confidence, the joint evidence is much stronger than any
-    # single signal alone. Add a logit lift proportional to how many
-    # detectors converge past the suspicion threshold.
+    # When detectors from *distinct independence axes* agree at high
+    # probability with meaningful confidence, the joint evidence is much
+    # stronger than any single signal. We count axes, not raw detectors, so a
+    # cluster of correlated detectors (e.g. temporal+engagement+coordination)
+    # can't masquerade as broad independent corroboration.
     strong = [s for s in signals
               if s.probability > 0.60 and s.confidence > 0.30
               and weights.get(s.name, 0.0) > 0]
-    if len(strong) >= 3:
-        posterior_logit += 0.45 * (len(strong) - 2)
+    strong_axes = {axis_of(s.name) for s in strong}
+    if len(strong_axes) >= 3:
+        posterior_logit += 0.45 * (len(strong_axes) - 2)
+        adjustments.append(
+            f"Convergence bonus: {len(strong_axes)} independent signal axes "
+            f"agree, which is stronger evidence than any one detector alone."
+        )
 
     overall = _sigmoid(posterior_logit)
 
     # ----- Single-signal cap -----
-    # No single detector — no matter how confident — should be able to
-    # trigger a HIGH verdict on its own. HIGH requires corroboration from
-    # at least one other independent detector. Cap at the ELEVATED ceiling.
+    # No single independence axis — no matter how confident — should be able to
+    # trigger a HIGH verdict on its own. HIGH requires corroboration from at
+    # least one *other independent* axis (two correlated detectors do not
+    # count). Cap at the ELEVATED ceiling.
     confident = [s for s in signals if s.confidence > 0.30 and weights.get(s.name, 0.0) > 0]
-    if len(confident) <= 1 and overall >= 0.75:
+    confident_axes = {axis_of(s.name) for s in confident}
+    if len(confident_axes) <= 1 and overall >= 0.75:
         overall = 0.74
+        adjustments.append(
+            "Capped below HIGH: only one independent signal axis had enough "
+            "data, so there is no cross-detector corroboration to justify HIGH."
+        )
 
     # Confidence: how much weighted evidence backed the estimate, normalised so
     # that ~all detectors firing at full confidence with their nominal weights
-    # gives ~1.0.
+    # gives ~1.0. Uses the *decorrelated* effective weight, so correlated
+    # detectors don't inflate reported confidence either.
     nominal_max = sum(weights.values())
     confidence = min(1.0, effective_weight_sum / nominal_max) if nominal_max > 0 else 0.0
 
@@ -95,6 +153,7 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
         intent_label=intent_label,
         reasons=reasons,
         weak_signals=weak_signals,
+        score_adjustments=adjustments,
     )
 
 

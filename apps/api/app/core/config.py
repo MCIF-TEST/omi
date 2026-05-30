@@ -31,6 +31,26 @@ class Settings(BaseSettings):
     weight_engagement: float = Field(default=0.9)
     weight_coordination: float = Field(default=0.9)
 
+    # Signal-decorrelation factors. Several detectors share an underlying
+    # evidence basis: ``semantic`` + ``ai_writing`` both read text patterns,
+    # while ``temporal`` + ``engagement`` + ``coordination`` all partly read
+    # posting timing/cadence. Combining them in log-odds space as if they were
+    # independent double-counts the shared component and produces overconfident
+    # scores. When more than one member of a correlated group fires, every
+    # member beyond the strongest has its contribution multiplied by the group's
+    # redundancy factor (compounding for a third member). 1.0 disables the
+    # discount (treat as fully independent); lower discounts harder.
+    decorrelation_redundancy_content: float = Field(default=0.55)
+    decorrelation_redundancy_timing: float = Field(default=0.65)
+
+    # Optional learned signal-correlation model. When this JSON artifact exists
+    # (produced by ``scripts/fit_correlation.py`` from the labeled corpus), the
+    # aggregator derives its decorrelation factors AND its independence-axis
+    # assignment from the *measured* pairwise detector correlations instead of
+    # the hand-tuned groups above. Absent or unreadable → fall back to the
+    # default group model, so behavior is unchanged out of the box.
+    correlation_model_path: str = "models/signal_correlation.json"
+
     # Baseline prior probability that an arbitrary scanned account exhibits
     # synthetic / coordinated behavior. Accounts being scanned have selection
     # bias (they're suspected enough to be worth scanning), so 0.15 is more
