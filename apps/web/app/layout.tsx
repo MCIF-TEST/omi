@@ -12,7 +12,10 @@ export const metadata: Metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#08080b',
+  themeColor: '#04050b',
+  // Extend under the notch / home indicator so our safe-area padding can
+  // place the tab bar flush against the device edge.
+  viewportFit: 'cover' as const,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
