@@ -32,13 +32,19 @@ def list_investigations(
     limit: int = Query(50, ge=1, le=200),
     current: CurrentUser = Depends(require_user),
 ) -> InvestigationsListResponse:
-    """Recent investigations for the logged-in user, newest first."""
-    if current.id == 0:
-        return InvestigationsListResponse(investigations=[])
+    """Recent investigations for the logged-in user, newest first.
 
+    In local mode (``OMI_REQUIRE_AUTH=false``, ``current.id == 0``) this lists
+    the local-install user's history instead of returning nothing — a solo
+    install keeps a real investigation history just like an authenticated one.
+    """
     with get_session() as session:
         repo = AccountRepository(session)
-        rows = repo.list_user_investigations(current.id, limit=limit)
+        user_id = repo.local_user_id() if current.id == 0 else current.id
+        if user_id is None:
+            # Local mode but no scans saved yet.
+            return InvestigationsListResponse(investigations=[])
+        rows = repo.list_user_investigations(user_id, limit=limit)
         return InvestigationsListResponse(
             investigations=[_to_summary(r) for r in rows]
         )
@@ -51,9 +57,10 @@ def get_investigation(
 ) -> InvestigationDetailResponse:
     with get_session() as session:
         repo = AccountRepository(session)
-        inv = repo.get_investigation(
-            slug=slug, user_id=current.id if current.id != 0 else None
-        )
+        # Local mode: scope to the local user so a saved local investigation is
+        # retrievable. Authenticated: scope to the owner.
+        user_id = repo.local_user_id() if current.id == 0 else current.id
+        inv = repo.get_investigation(slug=slug, user_id=user_id)
         if inv is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -81,9 +88,8 @@ def update_investigation(
 
     with get_session() as session:
         repo = AccountRepository(session)
-        inv = repo.get_investigation(
-            slug=slug, user_id=current.id if current.id != 0 else None
-        )
+        user_id = repo.local_user_id() if current.id == 0 else current.id
+        inv = repo.get_investigation(slug=slug, user_id=user_id)
         if inv is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
