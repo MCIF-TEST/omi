@@ -50,6 +50,10 @@ class IntelligenceDimension(BaseModel):
     score: float = Field(ge=0.0, le=100.0, description="0–100 in the dimension's own direction")
     confidence: float = Field(ge=0.0, le=1.0)
     is_risk: bool
+    # Contextual dimensions are reported for information but excluded from the
+    # composite omi_score and primary-threat selection (GAP-03). The UI should
+    # render these distinctly — as context, not as a risk contribution.
+    is_contextual: bool = False
     contributions: list[DimensionContribution] = Field(default_factory=list)
 
 

@@ -110,6 +110,7 @@ def _score_dimension(spec: DimensionSpec, by_name: dict[str, SignalResult]) -> I
         score=round(score01 * 100.0, 1),
         confidence=round(dim_conf, 4),
         is_risk=spec.is_risk,
+        is_contextual=spec.is_contextual,
         contributions=contributions,
     )
 

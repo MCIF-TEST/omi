@@ -19,7 +19,7 @@ from app.detection.profile import analyze_profile
 from app.detection.scoring import aggregate
 from app.detection.semantic import analyze_semantic
 from app.detection.temporal import analyze_temporal
-from app.schemas import Post, Profile, Tier
+from app.schemas import Post, Profile, SignalResult, Tier
 
 
 # ---------------------------------------------------------------------------
@@ -238,10 +238,43 @@ def test_engine_bot_like_scores_higher_than_human_like():
         assert sig.evidence
 
 
-def test_engine_comments_endpoint_flags_ai_spam():
+def test_ai_writing_is_supplemental_and_does_not_drive_comment_suspicion():
+    """GAP-03: AI-writing tells must not raise suspicion on their own.
+
+    The ai_writing detector still runs and detects the heavy AI tells in this
+    corpus, but it is supplemental — the comment-scan aggregate is driven purely
+    by the *scored* detectors (here, semantic). Demoting ai_writing must leave
+    the composite identical to a semantic-only aggregate.
+    """
     comments = make_ai_text_corpus()
     result = analyze_comments(comments)
-    assert result.overall_probability > 0.55
+
+    ai_sig = next(s for s in result.signals if s.name == "ai_writing")
+    assert ai_sig.supplemental is True
+    # The detector itself still works — it sees the burstiness / hedging tells.
+    assert ai_sig.probability > 0.6
+    # …but it contributes nothing to suspicion: the aggregate equals what the
+    # scored detectors alone produce.
+    semantic_only = aggregate([analyze_semantic(comments)])
+    assert result.overall_probability == pytest.approx(semantic_only.overall_probability)
+
+
+def test_ai_tells_alone_do_not_elevate_an_account():
+    """An account whose only 'signal' is AI-style writing (e.g. an ESL writer or
+    a Grammarly user) must not be elevated above LOW by that fact alone."""
+    signals = [
+        analyze_ai_writing(make_ai_text_corpus()),  # high AI-tell probability
+        # No other detector has data.
+        SignalResult(name="temporal", probability=0.5, confidence=0.0, evidence=[]),
+        SignalResult(name="semantic", probability=0.2, confidence=0.6, evidence=[]),
+        SignalResult(name="profile", probability=0.2, confidence=0.5, evidence=[]),
+    ]
+    result = aggregate(signals)
+    assert result.tier == Tier.LOW, (
+        f"AI-writing tells alone should not elevate; got {result.tier} "
+        f"at prob {result.overall_probability:.3f}"
+    )
+    assert result.suspected_intent is None  # no intent inferred at LOW
 
 
 def test_scoring_with_no_confident_signals_falls_back_to_prior():

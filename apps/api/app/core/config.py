@@ -24,7 +24,14 @@ class Settings(BaseSettings):
     # labeled fixture set in Phase 1.
     weight_temporal: float = Field(default=1.0)
     weight_semantic: float = Field(default=1.2)
-    weight_ai_writing: float = Field(default=0.8)
+    # ai_writing is a SUPPLEMENTAL signal (see ``SUPPLEMENTAL_DETECTORS`` in
+    # app.detection.scoring): it is computed and shown as context but never
+    # contributes to the suspicion composite. The weight is 0.0 as a mechanical
+    # backstop — the supplemental exclusion in the aggregator is authoritative
+    # and holds even if this weight is later changed. AI-assisted phrasing is
+    # not evidence of inauthenticity; treating it as such false-positives on
+    # ESL writers, formal writers, and legitimate Grammarly/LLM-assisted humans.
+    weight_ai_writing: float = Field(default=0.0)
     weight_profile: float = Field(default=0.7)
     weight_memory: float = Field(default=0.6)
     weight_voice: float = Field(default=0.5)
