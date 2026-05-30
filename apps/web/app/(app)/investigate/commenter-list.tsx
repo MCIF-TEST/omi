@@ -71,6 +71,7 @@ export function CommenterList({ commenters, selectedId, onSelect }: Props) {
         <div className="relative">
           <Filter size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-fg-mute" />
           <input
+            aria-label="Filter commenters by handle"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="filter by handle…"

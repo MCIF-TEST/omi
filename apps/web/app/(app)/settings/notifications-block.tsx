@@ -102,6 +102,7 @@ export function NotificationsBlock() {
           />
           <div className="pl-7 flex items-stretch gap-2">
             <input
+              aria-label="Webhook URL"
               type="url"
               value={webhookInput}
               onChange={(e) => setWebhookInput(e.target.value)}

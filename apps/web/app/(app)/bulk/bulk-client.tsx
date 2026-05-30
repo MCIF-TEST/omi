@@ -76,6 +76,7 @@ export function BulkClient({ credits }: { credits: number }) {
             URLs to scan (one per line, max 20)
           </label>
           <textarea
+            aria-label="YouTube URLs to scan, one per line"
             value={urlText}
             onChange={(e) => setUrlText(e.target.value)}
             placeholder={`https://youtube.com/watch?v=abc123\nhttps://youtube.com/watch?v=xyz789\nhttps://youtube.com/@ChannelName`}
@@ -95,6 +96,7 @@ export function BulkClient({ credits }: { credits: number }) {
           </label>
           <div className="flex items-center gap-3">
             <input
+              aria-label="Max commenters per scan"
               type="range"
               min={5} max={300} step={5}
               value={maxCommenters}

@@ -171,6 +171,7 @@ export function GraphClient() {
           <div className="relative mt-4 flex items-center gap-2">
             <input
               autoFocus
+              aria-label="New graph name"
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -294,6 +295,7 @@ function GraphCard({
         {renaming ? (
           <input
             autoFocus
+            aria-label="Rename graph"
             type="text"
             value={renameValue}
             onChange={(e) => onRenameChange(e.target.value)}
@@ -312,8 +314,8 @@ function GraphCard({
         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
           {renaming ? (
             <>
-              <button type="button" onClick={onRenameSubmit} className="p-1 rounded hover:bg-bg-elev-2 text-accent"><Check size={12} /></button>
-              <button type="button" onClick={onRenameCancel} className="p-1 rounded hover:bg-bg-elev-2 text-fg-mute"><X size={12} /></button>
+              <button type="button" aria-label="Save graph name" onClick={onRenameSubmit} className="p-1 rounded hover:bg-bg-elev-2 text-accent"><Check size={12} /></button>
+              <button type="button" aria-label="Cancel rename" onClick={onRenameCancel} className="p-1 rounded hover:bg-bg-elev-2 text-fg-mute"><X size={12} /></button>
             </>
           ) : (
             <>

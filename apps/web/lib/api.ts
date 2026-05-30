@@ -916,6 +916,22 @@ export interface MemoryBenchmarkReport {
   per_scenario: MemoryScenarioReport[];
 }
 
+// Learned (ML) scorer status — /v1/intelligence/ml-status (admin)
+export interface MlScorerStatus {
+  active: boolean;
+  enabled_flag: boolean;
+  library_available: boolean;
+  model_path_configured: boolean;
+  model_loaded: boolean;
+  expected_feature_schema: number;
+  loaded_feature_schema: number | null;
+  model_kind: string | null;
+  text_head_configured: boolean;
+  blend_weight: number;
+  metrics: Record<string, unknown>;
+  reason: string;
+}
+
 // ---------------------------------------------------------------------------
 // Cross-scan account search  (/v1/accounts/search)
 // ---------------------------------------------------------------------------

@@ -94,6 +94,7 @@ export default async function ContentPage({
             className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none"
           />
           <input
+            aria-label="Search content"
             type="search"
             name="q"
             defaultValue={query}

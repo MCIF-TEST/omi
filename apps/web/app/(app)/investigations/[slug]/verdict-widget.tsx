@@ -119,6 +119,7 @@ export function VerdictWidget({ slug, initialVerdict, initialNotes }: Props) {
           Analyst notes (private)
         </label>
         <textarea
+          aria-label="Investigation notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={saveNotes}

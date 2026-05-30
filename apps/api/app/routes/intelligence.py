@@ -91,6 +91,21 @@ def get_engine_benchmark(current: CurrentUser = Depends(require_user)) -> dict:
     return report
 
 
+@router.get("/ml-status")
+def get_ml_status(current: CurrentUser = Depends(require_user)) -> dict:
+    """Admin: snapshot of the learned (ML) scorer — active or not, and why.
+
+    The learned detector is the vision's answer to under-flagging sparse
+    accounts, but it ships dormant (flag off, no artifact). This makes that
+    state observable so an operator can deploy a trained model and confirm it
+    took, rather than reverse-engineering it from logs.
+    """
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+    from app.ml.scorer import get_scorer
+    return get_scorer().status()
+
+
 @router.get("/benchmark/coordination")
 def get_coordination_benchmark(current: CurrentUser = Depends(require_user)) -> dict:
     """Admin scoreboard for the multi-account coordination detectors.

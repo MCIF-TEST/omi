@@ -170,6 +170,57 @@ class MLScorer:
         settings = settings or get_settings()
         return bool(settings.use_ml_scorer) and self._ensure_loaded(settings) is not None
 
+    def status(self, settings: Settings | None = None) -> dict:
+        """Operator-facing snapshot of the learned scorer — why it is (or
+        isn't) running. This makes the dormant ML track observable so an
+        operator can deploy a model and confirm it took, instead of guessing
+        from logs. Never raises; reflects exactly the serving behavior.
+        """
+        settings = settings or get_settings()
+        flag = bool(settings.use_ml_scorer)
+        path = (settings.ml_model_path or "").strip()
+
+        try:
+            import joblib  # type: ignore  # noqa: F401
+            lib_ok = True
+        except Exception:  # noqa: BLE001
+            lib_ok = False
+
+        # Only attempt a load when it could actually serve; otherwise just
+        # report whatever is already loaded (no side effects when disabled).
+        loaded = (
+            self._ensure_loaded(settings) if (flag and path and lib_ok) else self._loaded
+        )
+        active = bool(flag and loaded is not None)
+
+        if active:
+            reason = "Active — blending learned model into every scan."
+        elif not flag:
+            reason = "Disabled. Set OMI_USE_ML_SCORER=true to enable."
+        elif not path:
+            reason = "No model artifact configured. Set OMI_ML_MODEL_PATH to a trained .joblib bundle."
+        elif not lib_ok:
+            reason = "joblib not installed. Install the ml extra: pip install -e .[ml]"
+        elif loaded is None:
+            reason = "Model failed to load (missing file or feature-schema mismatch). See server logs."
+        else:
+            reason = "Inactive."
+
+        return {
+            "active": active,
+            "enabled_flag": flag,
+            "library_available": lib_ok,
+            "model_path_configured": bool(path),
+            "model_loaded": loaded is not None,
+            "expected_feature_schema": FEATURE_SCHEMA_VERSION,
+            "loaded_feature_schema": loaded.schema_version if loaded else None,
+            "model_kind": loaded.kind if loaded else None,
+            "text_head_configured": bool((settings.ml_text_model_path or "").strip()),
+            "blend_weight": round(float(settings.ml_blend_weight), 3),
+            "metrics": loaded.metrics if loaded else {},
+            "reason": reason,
+        }
+
     def rescore(
         self,
         scan: ScanResult,
