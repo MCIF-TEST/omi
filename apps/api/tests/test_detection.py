@@ -345,6 +345,121 @@ def test_engagement_neutral_on_organic_comments():
 
 
 # ---------------------------------------------------------------------------
+# Engagement detector — GAP-03 remaining-risk hardening
+#
+# The engagement detector is the legitimate, behavior-based way to catch the
+# promo / follow-bait / spam accounts that GAP-03 stopped catching via the
+# (harmful) ai_writing signal. These pin the new coverage and — just as
+# importantly — the false-positive guards that keep legitimate link-sharers and
+# topic enthusiasts OUT of the suspicion bucket.
+# ---------------------------------------------------------------------------
+
+
+def _engagement(texts: list[str]):
+    from app.detection.engagement import analyze_engagement
+    base = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    posts = [_post(i, t, base + timedelta(hours=i)) for i, t in enumerate(texts)]
+    return analyze_engagement(posts)
+
+
+def test_engagement_single_link_axis_carries_the_score():
+    """100%-link affiliate posting must register as clearly suspicious even with
+    no emoji or bait — the disjunctive combiner lets one blatant axis carry,
+    where the old weighted-average capped it around 0.3."""
+    texts = [
+        f"Found an even better deal here: https://amzn.to/d{i} — limited time, link in my bio for more"
+        for i in range(8)
+    ]
+    sig = _engagement(texts)
+    assert sig.probability > 0.6, f"link spam under-detected: {sig.probability:.3f}"
+
+
+def test_engagement_catches_follow_bait_without_links_or_emoji():
+    """Follow-bait / DM-bait self-promo with no URLs and no emoji must still be
+    caught — this is the 'promo/follow_bait mixed' family that regressed."""
+    texts = [
+        "Follow me if you want daily tips on what actually works right now",
+        "Comment 'HOOK' below and I'll DM you my 50 proven templates for free",
+        "Subscribe for daily growth tips — I post every single day",
+        "I cover this in depth on my channel, worth checking out",
+        "Drop a like if this helped and follow for more no-fluff advice",
+        "Want the full breakdown? It's on my channel — link in my bio",
+    ]
+    sig = _engagement(texts)
+    assert sig.probability > 0.5, f"follow-bait under-detected: {sig.probability:.3f}"
+
+
+def test_engagement_does_not_flag_journalist_citing_sources():
+    """A journalist linking to news sites and public documents — no shorteners,
+    no promo CTA — must NOT be scored as a link spammer. This is the false
+    positive the link-precision rule exists to prevent."""
+    texts = [
+        "I covered this last month — here's the piece I filed: https://reuters.com/technology/story-x",
+        "my sources say the timeline accelerated after the Q4 miss. story still developing.",
+        "the regulatory docs are public — pulled them last night: https://eu-regulator.example/case-4421",
+        "going to push back here — three of those reports were industry-funded. footnote matters.",
+        "my follow-up ran this morning: https://reuters.com/technology/followup-y",
+        "correction to my earlier note — the deal closed on the 12th, not the 14th.",
+    ]
+    sig = _engagement(texts)
+    assert sig.probability < 0.4, f"journalist false-positive: {sig.probability:.3f}"
+
+
+def test_engagement_does_not_flag_genuine_crypto_discussion():
+    """Genuine markets/crypto *discussion* (no cashtag, no pump phrases — even if
+    it mentions '10x' in passing) must not trip the shill axis."""
+    texts = [
+        "been through three cycles now and the pattern is always the same",
+        "if you're buying for the tech you'll make it through the dips, if you're buying for 10x you won't",
+        "the regulatory environment has genuinely shifted, this time feels structurally different",
+        "honestly most of the alt narratives don't survive a real bear market",
+        "i think self-custody matters more than people admit after the exchange blowups",
+        "fees on the L2s have made a real difference to actually using this stuff",
+    ]
+    sig = _engagement(texts)
+    assert sig.probability < 0.4, f"crypto-discussion false-positive: {sig.probability:.3f}"
+
+
+def test_engagement_two_axes_reach_high_one_axis_stays_elevated():
+    """One spam axis = elevated; two independent axes (promo CTA + emoji-bombing)
+    escalate to high. This is the calibrated spread the group-ceiling produces."""
+    one_axis = _engagement([
+        f"Follow me and subscribe for daily tips — link in my bio for the full guide {i}"
+        for i in range(8)
+    ])
+    two_axis = _engagement([
+        f"🔥🔥🔥 SMASH that like!! 🚀🚀🚀 Subscribe NOW!! link in bio 🔗 https://bit.ly/x{i} 💥💥💥"
+        for i in range(8)
+    ])
+    assert one_axis.probability < two_axis.probability
+    assert two_axis.probability > 0.75, f"multi-axis spam should be high: {two_axis.probability:.3f}"
+
+
+def test_engagement_strength_aware_confidence_on_blatant_spam():
+    """Blatant, consistent spam across only a handful of posts is a CONFIDENT
+    call — confidence must not be gated purely on post volume."""
+    sig = _engagement([
+        f"🔥 DEAL ALERT 🚀 50% OFF link in bio 🔗 https://amzn.to/d{i} don't miss out!!"
+        for i in range(6)
+    ])
+    assert sig.confidence > 0.5, f"blatant spam should be confident: {sig.confidence:.3f}"
+
+
+def test_semantic_catches_fill_in_the_blank_templates():
+    """Template spam that varies one or two words per post ('did an
+    [amazing/fantastic] job') must be caught by the 3-gram skeleton supplement
+    even on the fallback embedder."""
+    base = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    adjectives = ["amazing", "incredible", "fantastic", "brilliant", "outstanding",
+                  "wonderful", "superb", "excellent", "great", "stellar"]
+    texts = [f"Loved this video! The creator did an {a} job. 10/10 would recommend." for a in adjectives]
+    posts = [_post(i, t, base + timedelta(hours=i)) for i, t in enumerate(texts)]
+    sig = analyze_semantic(posts)
+    assert sig.probability > 0.6, f"template spam under-detected: {sig.probability:.3f}"
+    assert sig.confidence > 0.5, f"obvious templating should be confident: {sig.confidence:.3f}"
+
+
+# ---------------------------------------------------------------------------
 # Scoring: convergence bonus + single-signal cap
 # ---------------------------------------------------------------------------
 

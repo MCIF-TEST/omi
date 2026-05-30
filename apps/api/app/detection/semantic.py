@@ -43,6 +43,16 @@ def analyze_semantic(posts: list[Post]) -> SignalResult:
 
     embed_prob, mean_sim, top_cluster_mass = _embedding_signal(texts)
     ngram_prob, ngram_jaccard = _ngram_signal(texts)
+    # Template-skeleton supplement: "fill-in-the-blank" spam ("Loved this video!
+    # The creator did an [amazing/fantastic] job. 10/10 would recommend.") shares
+    # a long fixed skeleton with one or two variable slots. The fallback TF-IDF
+    # embedder and the 5-gram overlap both understate it (a single swapped word
+    # breaks a 5-gram), but the 3-gram overlap captures it — and it stays ~0 on
+    # genuine, varied human text, so it adds recall without adding false
+    # positives.
+    skeleton_prob, skeleton_jaccard = _ngram_signal(texts, n=3, threshold=0.12, slope=25.0)
+    ngram_prob = max(ngram_prob, skeleton_prob)
+    ngram_jaccard = max(ngram_jaccard, skeleton_jaccard)
 
     # Weight embeddings higher when we have many samples.
     embed_weight = min(0.75, 0.4 + len(texts) / 200.0)
@@ -75,7 +85,17 @@ def analyze_semantic(posts: list[Post]) -> SignalResult:
 
     # Repetition becomes statistically meaningful well before 150 samples:
     # 30 posts already give 435 pairwise comparisons.
-    confidence = min(1.0, len(texts) / 40.0)
+    volume_conf = min(1.0, len(texts) / 40.0)
+    # Strength-aware confidence: unambiguous, consistent repetition (a high
+    # cluster mass or n-gram overlap) is a confident call even on a handful of
+    # posts — 15 near-identical templates are self-evidently templated, not a
+    # low-confidence reading. Only applied when the signal is genuinely elevated,
+    # so varied human text keeps its modest volume-based confidence.
+    confidence = volume_conf
+    if blended >= 0.45:
+        strength = max(ngram_jaccard, top_cluster_mass)
+        strength_conf = _clip01(0.45 + 0.55 * strength)
+        confidence = max(confidence, strength_conf)
 
     return SignalResult(
         name="semantic",
@@ -200,8 +220,16 @@ def _largest_cluster_fraction(sim: np.ndarray, threshold: float) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _ngram_signal(texts: list[str], n: int = 5) -> tuple[float, float]:
-    """Mean Jaccard similarity over character-aware word n-grams."""
+def _ngram_signal(
+    texts: list[str], n: int = 5, threshold: float = 0.15, slope: float = 18.0
+) -> tuple[float, float]:
+    """Mean Jaccard similarity over word n-grams, mapped to a probability.
+
+    ``n=5`` (default) targets verbatim copy-paste; a shorter ``n`` with its own
+    ``threshold``/``slope`` targets template skeletons that survive small slot
+    substitutions. The logistic is calibrated so genuinely-varied text (Jaccard
+    ≈ 0) maps near 0.
+    """
     shingles = [_shingles(t, n) for t in texts]
     shingles = [s for s in shingles if s]
     if len(shingles) < 2:
@@ -224,7 +252,7 @@ def _ngram_signal(texts: list[str], n: int = 5) -> tuple[float, float]:
 
     mean_j = total / pairs
     # Jaccard 0.25 is already alarming for organic posting.
-    prob = 1.0 / (1.0 + math.exp(-(mean_j - 0.15) * 18))
+    prob = 1.0 / (1.0 + math.exp(-(mean_j - threshold) * slope))
     return prob, mean_j
 
 

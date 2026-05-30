@@ -79,6 +79,45 @@ Legend for each entry:
 
 ---
 
+## GAP-03 — AI-writing is not evidence of inauthenticity  ✅ done
+
+**Shipped (the demotion)**
+- First-class **supplemental signal** concept: `SUPPLEMENTAL_DETECTORS = {"ai_writing"}` in `app/detection/scoring.py`. A supplemental detector is computed and shown for context but structurally excluded from every suspicion path — the weighted log-odds sum, convergence-axis count, single-axis HIGH cap, intent inference, the "why flagged" reasons, the summary's primary-signals line, and the weak-signal penalty. It still rides along in `signals` with its real probability/confidence, stamped `supplemental=True`.
+- Intelligence layer: `ai_generation_probability` is now a **contextual** dimension (`DimensionSpec.is_contextual`) — reported and fully explainable, but excluded from the composite omi_score, primary-threat selection, and the top-evidence roll-up. `THREAT_DIMENSIONS` is derived as `is_risk AND NOT is_contextual`. Removed `ai_writing` from `authenticity_score` (penalising AI-assisted phrasing as "inauthentic" was the core harm).
+- `weight_ai_writing` default `0.8 → 0.0` as a mechanical backstop; the supplemental exclusion is the authoritative one.
+- Frontend: AI generation renders as a neutral "Context · not counted toward risk" section (dashed border), and supplemental signal rows are tagged "context · not scored" and never coloured as risk.
+
+**Shipped (the remaining-risk resolution — rebuild recall the RIGHT way)**
+Demoting `ai_writing` unmasked an elevated/high **recall gap** (macro-F1 had fallen to 0.182) because some of the engine's prior recall was `ai_writing` flagging legitimate ESL/formal/Grammarly writers. We rebuilt that recall through legitimate **behavioral** detection instead of stylometric tells:
+- **Engagement detector overhaul** (`app/detection/engagement.py`):
+  - Combine spam axes **disjunctively** (noisy-OR) instead of a convex weighted-average, so a single blatant behavior (e.g. 100% affiliate links) actually registers instead of being averaged down to ~0.3.
+  - Axes are **correlation-grouped** before combining (link + bait + self-promo = one "promotional CTA" group; emoji + bursts = one "emoji-spam" group; shill is its own), each capped at the ELEVATED ceiling — so one promo behavior reads *elevated* and it takes a **second independent axis** to reach *high* (same anti-double-counting principle as GAP-02, applied inside the detector).
+  - **New coverage**: follow-bait / DM-bait (`follow me`, `comment 'X' below`, `I'll DM you`), self-promotion / traffic redirection (`link in bio`, `on my channel`, `my course`), and crypto/financial shilling (cashtags + pump language).
+  - **Strength-aware confidence**: blatant, consistent spam across even a handful of posts is a confident call, not a low-confidence one gated purely on volume.
+  - **Link precision** (false-positive guard): a URL counts toward the spam-link axis only when it's a shortener/affiliate domain or posted alongside promo framing — so journalists/researchers citing `reuters.com` or public documents are **not** flagged.
+- **Semantic detector** (`app/detection/semantic.py`): added a **3-gram template-skeleton** supplement (catches "fill-in-the-blank" template spam where one word varies per post — invisible to the 5-gram overlap and understated by the fallback TF-IDF embedder) plus the same **strength-aware confidence**. Stays ~0 on varied human text, so no new false positives.
+
+**🧭 Decisions**
+- AI-assisted writing is **not** suspicion evidence and never raises a tier — only context. This is a permanent contract pinned by `tests/test_ai_writing_demotion.py`.
+- Recall is recovered through **observable behavior** (promo/bait/shill/templating), never by reinstating stylometric AI tells.
+- The single-axis HIGH cap (GAP-02) is **not** weakened. A pure single-axis case (e.g. an account whose only anomaly is templated comments) is intentionally capped at ELEVATED; lifting those to HIGH is owned by the confidence-calibration gap, not by content-style detection.
+
+**🎛 New knobs**
+- None added as config. Engagement thresholds/slopes and the group-ceiling (0.72) are in-code constants with documented rationale.
+
+**📊 Benchmark impact** (seed_v1, fallback embedder — deterministic, matches CI)
+- Brier `0.1107 → 0.0588`, tier accuracy `0.415 → 0.646`, macro-F1 `0.182 → 0.583` — macro-F1 now **far above** the pre-GAP-03 0.230, achieved without the harmful signal.
+- **Zero** new false positives on the clean/ESL/edge/human archetypes (journalist-with-links and genuine-crypto-discussion are explicit regression guards).
+- Gates ratcheted in `tests/test_evaluation_benchmark.py`: `GATE_MAX_BRIER 0.120 → 0.070`, `GATE_MIN_ACCURACY 0.38 → 0.60`, `GATE_MIN_MACRO_F1 0.17 → 0.52`.
+
+**⏳ Deferred / out-of-scope (owned by later gaps)**
+- The residual benchmark misses are **temporal / profile / coordination / voice** archetypes (scheduler bots, profile-age cohorts, light astroturf, broadcast voice). Those are systematic under-confidence in *other* detectors and belong to **GAP-05 (confidence calibration)** and **GAP-07 (community anchor / false positives)** — deliberately not touched here to avoid destabilising GAP-02's decorrelation/cap work.
+- Two template archetypes still under-shoot on tier because they're genuinely single-axis (semantic only) and the GAP-02 corroboration cap holds them below HIGH — correct by design; tier recovery there is a GAP-05 calibration question.
+
+**✅ Baseline:** 467 backend tests (8 new engagement/semantic hardening tests + ratcheted gate).
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)
