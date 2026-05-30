@@ -109,8 +109,6 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </Link>
 
         <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-7 shadow-card">
-          <div className="absolute -top-16 -right-12 w-56 h-56 rounded-full bg-accent/[0.07] blur-3xl pointer-events-none" aria-hidden />
-          <div className="absolute inset-0 dot-bg opacity-[0.12] pointer-events-none" aria-hidden />
           <div className="relative flex items-center gap-5 flex-wrap">
             {latest && (
               <ScoreRing value={latest.overall_probability} tier={latest.tier} size={92} stroke={7} />

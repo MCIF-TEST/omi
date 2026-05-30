@@ -35,8 +35,6 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
     <div className={cn('space-y-5', className)}>
       {/* Headline row: composite OmiScore + risk + authenticity */}
       <div className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/20 p-5">
-        <div className="absolute -top-12 -right-10 w-40 h-40 rounded-full blur-3xl pointer-events-none"
-          style={{ background: `${risk.ring}1f` }} aria-hidden />
         <div className="relative flex items-center gap-5 flex-wrap">
           {/* Composite score dial */}
           <div className="relative shrink-0 w-[88px] h-[88px]">

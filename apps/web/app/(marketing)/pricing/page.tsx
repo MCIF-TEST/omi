@@ -58,7 +58,6 @@ export default function PricingPage() {
       <div className="max-w-2xl mx-auto">
         <Card gradient className="relative overflow-hidden shadow-card-lg">
           {/* corner glow */}
-          <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-accent/[0.08] blur-3xl pointer-events-none" aria-hidden />
 
           <div className="relative">
             <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">

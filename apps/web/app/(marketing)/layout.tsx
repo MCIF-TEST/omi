@@ -6,11 +6,6 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen flex flex-col bg-bg-deep grain">
       <ScrollProgress />
-      {/* Subtle aurora */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-[-20%] left-[20%] w-[500px] h-[500px] rounded-full bg-accent/[0.04] blur-[120px]" />
-      </div>
-      <div className="fixed inset-0 pointer-events-none dot-bg opacity-[0.18]" aria-hidden />
 
       <header className="relative z-10 px-6 py-4 flex items-center justify-between border-b border-border-1/60 backdrop-blur-sm bg-bg-deep/80 sticky top-0">
         <Link href="/" aria-label="OMISPHERE home">

@@ -1,20 +1,7 @@
 import Link from 'next/link';
 import {
-  ShieldAlert,
-  Activity,
-  Network,
-  Database,
-  CheckCircle2,
-  ArrowRight,
-  Cpu,
-  Eye,
-  ScanSearch,
-  BarChart3,
-  Brain,
-  ShieldCheck,
-  Zap,
-  Lock,
-  TrendingUp,
+  ShieldAlert, Activity, Network, Database,
+  CheckCircle2, ArrowRight, Cpu, Eye,
 } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
 import { Reveal } from '@/components/shared/reveal';
@@ -28,97 +15,90 @@ export function LandingPage() {
     <div className="min-h-screen bg-bg-deep flex flex-col relative overflow-hidden grain">
       <ScrollProgress />
 
-      {/* ── Ambient spectral field ──────────────────────────────── */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-[-18%] left-[8%] w-[680px] h-[620px] rounded-full bg-accent/[0.09] blur-[160px] animate-drift" />
-        <div className="absolute top-[5%] right-[-10%] w-[560px] h-[520px] rounded-full bg-violet/[0.06] blur-[140px] animate-drift-slow" />
-        <div className="absolute bottom-[4%] left-[-6%] w-[420px] h-[420px] rounded-full bg-accent-2/[0.04] blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
-      </div>
-      <div className="fixed inset-0 pointer-events-none dot-bg opacity-[0.28]" aria-hidden />
-
       {/* ── Nav ─────────────────────────────────────────────────── */}
-      <header className="relative z-20 px-6 py-4 flex items-center justify-between border-b border-border-1/40 backdrop-blur-xl bg-bg-deep/70 sticky top-0">
+      <header className="relative z-20 h-14 px-6 md:px-8 flex items-center justify-between border-b border-border-1/50 bg-bg-deep/95 backdrop-blur-sm sticky top-0">
         <Link href="/" aria-label="omisphere home">
           <Logo />
         </Link>
-        <nav className="flex items-center gap-1.5 sm:gap-2 font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">
-          <Link href="/pricing" className="hidden sm:block px-3 py-1.5 rounded-full hover:text-fg hover:bg-bg-elev transition-colors">Pricing</Link>
-          <Link href="/about"   className="hidden sm:block px-3 py-1.5 rounded-full hover:text-fg hover:bg-bg-elev transition-colors">About</Link>
-          <Link href="/login"   className="px-3 py-1.5 rounded-full hover:text-fg hover:bg-bg-elev transition-colors">Log in</Link>
+        <nav className="flex items-center gap-5 font-mono text-2xs tracking-[0.14em] text-fg-mute">
+          <Link href="/pricing" className="hidden sm:block hover:text-fg transition-colors">Pricing</Link>
+          <Link href="/about"   className="hidden sm:block hover:text-fg transition-colors">About</Link>
+          <span className="hidden sm:block w-px h-3.5 bg-border-2" aria-hidden />
+          <Link href="/login"   className="hover:text-fg transition-colors">Log in</Link>
           <Link
             href="/signup"
-            className="text-bg-deep bg-accent font-semibold px-4 py-1.5 rounded-full hover:bg-accent-2 transition-all btn-glow"
+            className="inline-flex items-center gap-1.5 bg-accent text-bg-deep text-[0.7rem] font-semibold px-3.5 py-1.5 rounded-sm hover:bg-accent-2 transition-colors"
           >
             Sign up
+            <ArrowRight size={11} />
           </Link>
         </nav>
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 pt-16 md:pt-24 pb-8 max-w-6xl mx-auto w-full">
-        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+      <section className="relative z-10 px-6 md:px-8 pt-16 md:pt-20 pb-12 max-w-6xl mx-auto w-full">
+        <div className="grid lg:grid-cols-[1fr_440px] gap-10 lg:gap-14 items-start">
 
           {/* Left: copy */}
-          <div className="order-2 lg:order-1">
+          <div className="order-2 lg:order-1 lg:pt-4">
             <div
-              className="inline-flex items-center gap-2.5 font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase border border-accent/25 bg-accent/[0.07] px-4 py-2 rounded-full mb-8"
-              style={{ animation: 'fade-up 240ms cubic-bezier(0.16,1,0.3,1) both' }}
+              className="inline-flex items-center gap-2 font-mono text-2xs tracking-[0.18em] text-accent-2 uppercase border border-accent/20 bg-accent/[0.06] px-3 py-1.5 rounded-sm mb-8"
+              style={{ animation: 'fade-up 220ms cubic-bezier(0.16,1,0.3,1) both' }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-tier-low animate-pulse-dot" />
               Online Media Intelligence · Beta
             </div>
 
             <h1
-              className="display font-semibold tracking-[-0.035em] leading-[0.94] mb-7"
+              className="display font-semibold tracking-[-0.03em] leading-[0.92] mb-7"
               style={{
-                fontSize: 'clamp(2.8rem, 6vw, 4.75rem)',
-                animation: 'fade-up-lg 520ms cubic-bezier(0.16,1,0.3,1) both',
+                fontSize: 'clamp(2.6rem, 5.5vw, 4.4rem)',
+                animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both',
                 animationDelay: '60ms',
               }}
             >
-              See who&apos;s{' '}
-              <span className="text-shimmer">really</span>
+              Detect coordinated
               <br />
-              behind the{' '}
-              <br className="hidden sm:block" />
-              <span className="text-gradient">comments.</span>
+              <span className="text-gradient">influence</span>
+              <br />
+              at scale.
             </h1>
 
             <p
-              className="text-lg text-fg-dim leading-relaxed max-w-lg mb-10"
-              style={{ animation: 'fade-up-lg 520ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '120ms' }}
+              className="text-base text-fg-dim leading-relaxed max-w-[480px] mb-9"
+              style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '100ms' }}
             >
-              Paste any YouTube URL. OMISPHERE scores every commenter on eight
-              independent signals, surfaces coordinated networks, and tracks
-              narrative campaigns — probabilistic, with full evidence.
+              Probabilistic intelligence on YouTube comment sections. Score every
+              commenter across 8 independent signals, surface coordination networks,
+              and track narrative campaigns — with full evidence chains.
             </p>
 
             <div
-              className="flex items-center gap-4 flex-wrap mb-8"
-              style={{ animation: 'fade-up-lg 520ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '180ms' }}
+              className="flex items-center gap-3 flex-wrap mb-9"
+              style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '150ms' }}
             >
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-7 py-3.5 rounded-full hover:bg-accent-2 transition-all btn-glow text-[0.95rem]"
+                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-6 py-2.5 rounded-sm hover:bg-accent-2 transition-colors text-sm btn-glow"
               >
-                Start free trial
-                <ArrowRight size={16} />
+                Begin investigating
+                <ArrowRight size={14} />
               </Link>
               <Link
                 href="/pricing"
-                className="font-mono text-2xs tracking-wider uppercase text-fg-dim hover:text-fg transition-colors px-2 py-3.5"
+                className="font-mono text-2xs tracking-wider text-fg-mute hover:text-fg-dim transition-colors"
               >
-                See pricing →
+                View pricing →
               </Link>
             </div>
 
             <div
-              className="flex items-center gap-x-6 gap-y-2 flex-wrap font-mono text-2xs text-fg-mute tracking-wider"
-              style={{ animation: 'fade-up-lg 520ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '230ms' }}
+              className="flex items-center gap-6 flex-wrap font-mono text-2xs text-fg-faint tracking-wider"
+              style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '200ms' }}
             >
-              {['No card required', 'Real scan on your URL', 'Always probabilistic'].map((t) => (
+              {['3 free scans', 'No credit card', 'Always probabilistic'].map((t) => (
                 <span key={t} className="flex items-center gap-1.5">
-                  <CheckCircle2 size={11} className="text-tier-low" />
+                  <CheckCircle2 size={10} className="text-tier-low shrink-0" />
                   {t}
                 </span>
               ))}
@@ -126,73 +106,88 @@ export function LandingPage() {
           </div>
 
           {/* Right: visualization */}
-          <div className="order-1 lg:order-2 flex justify-center lg:justify-end">
+          <div className="order-1 lg:order-2">
             <HeroVisual />
           </div>
         </div>
       </section>
 
-      {/* ── Demo console ────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 py-10 max-w-5xl mx-auto w-full">
+      {/* ── Stats strip ─────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-8 pb-14 max-w-6xl mx-auto w-full">
         <Reveal from="up">
-          <div className="gradient-border shadow-card-lg">
-            <div className="p-6 md:p-8">
-              <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-tier-high/75" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-tier-moderate/75" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-tier-low/75" />
-                  </span>
-                  <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
-                    live console — no signup required
-                  </p>
+          <div className="border-y border-border-1 py-7">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              {[
+                { value: 8,    label: 'Detection signals', sub: 'per commenter' },
+                { value: 3,    label: 'Coord. detectors',  sub: 'cross-account' },
+                { value: 0,    label: 'LLMs in core path', sub: 'pure heuristics' },
+                { value: null, suffix: '∞', label: 'Self-improving', sub: 'every scan trains it' },
+              ].map(({ value, suffix, label, sub }) => (
+                <div key={label}>
+                  <div className="display text-3xl font-semibold text-fg mb-1 tabular-nums">
+                    {value !== null ? <AnimatedNumber value={value!} format={false} onView /> : suffix}
+                  </div>
+                  <div className="font-mono text-2xs text-fg-dim uppercase tracking-wider">{label}</div>
+                  <div className="font-mono text-2xs text-fg-faint mt-0.5">{sub}</div>
                 </div>
-                <span className="font-mono text-2xs text-fg-faint tracking-wider">
-                  10 commenters · ~10s · 1 free / day
+              ))}
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* ── Demo console ────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
+        <Reveal from="up">
+          <div className="border border-border-2 rounded-sm bg-bg-elev">
+            <div className="px-5 py-3 border-b border-border-1/60 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-3">
+                <span className="flex gap-1.5" aria-hidden>
+                  <span className="w-2 h-2 rounded-full bg-tier-high/55" />
+                  <span className="w-2 h-2 rounded-full bg-tier-moderate/55" />
+                  <span className="w-2 h-2 rounded-full bg-tier-low/55" />
+                </span>
+                <span className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">
+                  Live console · no account required
                 </span>
               </div>
+              <span className="font-mono text-2xs text-fg-faint tracking-wider">
+                10 commenters · ≈10 s · 1 free / day
+              </span>
+            </div>
+            <div className="p-6 md:p-8">
               <DemoScanForm />
             </div>
           </div>
         </Reveal>
       </section>
 
-      {/* ── Stat strip ──────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 pb-12 max-w-5xl mx-auto w-full">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-2xl overflow-hidden border border-border-1 bg-border-1/60">
-          {[
-            { num: 8,    suffix: '',  label: 'Detection signals', sub: 'per commenter' },
-            { num: 3,    suffix: '',  label: 'Coord. detectors',  sub: 'cross-account' },
-            { num: 0,    suffix: '',  label: 'LLMs in core path',  sub: 'pure heuristics' },
-            { num: null, suffix: '∞', label: 'Self-improving',     sub: 'every scan trains it' },
-          ].map(({ num, suffix, label, sub }, i) => (
-            <Reveal key={label} delay={i * 70} from="up" className="bg-bg-elev/80">
-              <div className="group p-6 text-center spotlight h-full transition-colors hover:bg-bg-elev-2/60">
-                <div className="display text-4xl font-semibold text-brand mb-1">
-                  {num !== null ? <AnimatedNumber value={num} format={false} onView /> : suffix}
-                </div>
-                <div className="font-mono text-2xs text-fg uppercase tracking-wider">{label}</div>
-                <div className="font-mono text-2xs text-fg-faint mt-0.5">{sub}</div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
+      {/* ── Capabilities ────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
+        <Reveal className="mb-8">
+          <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">Capabilities</p>
+          <h2 className="display text-2xl md:text-3xl font-semibold tracking-tight">
+            Intelligence across every dimension
+          </h2>
+        </Reveal>
 
-      {/* ── Four pillars ────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 pb-14 max-w-5xl mx-auto w-full">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-          {PILLARS.map((p, i) => (
-            <Reveal key={p.label} delay={i * 80} from="up">
-              <div className="group flex flex-col items-center text-center gap-3 py-1">
-                <div className="relative w-14 h-14 rounded-2xl border border-border-2 bg-bg-elev flex items-center justify-center text-accent-2 group-hover:border-accent/40 group-hover:shadow-glow-sm transition-all duration-300">
-                  <span className="absolute inset-0 rounded-2xl bg-accent/[0.06] opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <span className="relative">{p.icon}</span>
+        <div className="border border-border-1 rounded-sm divide-y divide-border-1">
+          {CAPABILITIES.map((cap, i) => (
+            <Reveal key={cap.title} delay={i * 55} from="up">
+              <div className="group flex gap-4 p-5 hover:bg-bg-elev/50 transition-colors">
+                <div className="shrink-0 w-8 h-8 border border-border-2 rounded-sm flex items-center justify-center text-fg-mute group-hover:text-accent group-hover:border-accent/35 transition-colors mt-0.5">
+                  {cap.icon}
                 </div>
-                <div>
-                  <div className="font-mono text-2xs tracking-[0.18em] uppercase text-fg">{p.label}</div>
-                  <div className="text-xs text-fg-mute mt-1 max-w-[16ch] mx-auto leading-snug">{p.sub}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-3 mb-1 flex-wrap">
+                    <span className="text-sm font-semibold text-fg">{cap.title}</span>
+                    {cap.tag && (
+                      <span className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-fg-faint border border-border-2 px-1.5 py-0.5 rounded-sm">
+                        {cap.tag}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-fg-dim leading-relaxed">{cap.body}</p>
                 </div>
               </div>
             </Reveal>
@@ -201,28 +196,27 @@ export function LandingPage() {
       </section>
 
       {/* ── How it works ────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 py-16 max-w-5xl mx-auto w-full">
-        <Reveal className="mb-12 text-center">
-          <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-3">How it works</p>
-          <h2 className="display text-3xl md:text-4xl font-semibold tracking-tight">
+      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
+        <Reveal className="mb-8">
+          <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">How it works</p>
+          <h2 className="display text-2xl md:text-3xl font-semibold tracking-tight">
             From URL to insight in seconds
           </h2>
         </Reveal>
 
-        <div className="grid md:grid-cols-3 gap-5 md:gap-6 relative">
-          {/* Connector line (desktop) */}
-          <div className="hidden md:block absolute top-[3.5rem] left-[calc(33%+1rem)] right-[calc(33%+1rem)] h-px bg-gradient-to-r from-accent/40 to-violet/40" aria-hidden />
+        <div className="grid md:grid-cols-3 gap-4 relative">
+          <div className="hidden md:block absolute top-[2.5rem] left-[calc(33%+0.75rem)] right-[calc(33%+0.75rem)] h-px bg-border-2" aria-hidden />
 
           {STEPS.map((s, i) => (
-            <Reveal key={s.title} delay={i * 100} from="up">
-              <div className="group relative bg-bg-elev border border-border-1 rounded-2xl p-6 spotlight card-interactive shadow-inner-top text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-bg-elev-2 border border-border-2 text-accent mb-4 group-hover:border-accent/50 group-hover:bg-accent/[0.08] transition-all duration-300 relative z-10">
+            <Reveal key={s.title} delay={i * 80} from="up">
+              <div className="border border-border-1 rounded-sm p-5 bg-bg-elev shadow-inner-top card-interactive relative">
+                <div className="absolute -top-2.5 left-5 font-mono text-[0.6rem] tracking-[0.16em] text-fg-faint uppercase bg-bg-deep border border-border-1 px-2 py-0.5">
+                  {String(i + 1).padStart(2, '0')}
+                </div>
+                <div className="w-9 h-9 border border-border-2 rounded-sm flex items-center justify-center text-fg-mute mb-4 mt-1">
                   {s.icon}
                 </div>
-                <div className="absolute -top-3 -right-2 font-mono text-[0.55rem] tracking-[0.18em] text-fg-faint uppercase bg-bg-deep border border-border-1 px-2 py-0.5 rounded-full">
-                  step {i + 1}
-                </div>
-                <h3 className="text-base font-semibold text-fg mb-2">{s.title}</h3>
+                <h3 className="text-sm font-semibold text-fg mb-2">{s.title}</h3>
                 <p className="text-sm text-fg-dim leading-relaxed">{s.body}</p>
               </div>
             </Reveal>
@@ -230,79 +224,61 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ── Bento features ──────────────────────────────────────── */}
-      <section className="relative z-10 px-6 pb-16 max-w-5xl mx-auto w-full">
-        <Reveal className="mb-12 max-w-2xl">
-          <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-3">
-            Capabilities
-          </p>
-          <h2 className="display text-3xl md:text-4xl font-semibold tracking-tight">
-            Intelligence across every dimension
-          </h2>
-        </Reveal>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-fr">
-          {FEATURES.map((f, i) => (
-            <Reveal key={f.title} delay={(i % 3) * 80} from="up" className={f.span}>
-              <FeatureCard {...f} />
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
       {/* ── Scope ───────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 pb-10 max-w-4xl mx-auto w-full">
-        <Reveal className="glass rounded-2xl p-7">
-          <p className="font-mono text-2xs tracking-[0.18em] uppercase text-accent-2 mb-3">
-            Scope, plainly
-          </p>
-          <p className="text-base text-fg-dim leading-relaxed">
-            Today OMISPHERE scans <span className="text-fg font-medium">YouTube</span> only — videos and channels.
-            The detection engine is platform-agnostic; ingestion for X / Twitter, Reddit, and TikTok
-            is on the roadmap. We&apos;d rather ship one platform with depth than four with stubs.
-          </p>
+      <section className="relative z-10 px-6 md:px-8 pb-12 max-w-5xl mx-auto w-full">
+        <Reveal>
+          <div className="border border-border-1 rounded-sm p-6">
+            <p className="font-mono text-2xs tracking-[0.18em] uppercase text-fg-mute mb-3">Scope, plainly</p>
+            <p className="text-sm text-fg-dim leading-relaxed">
+              Today OMISPHERE scans <span className="text-fg font-medium">YouTube</span> only — videos and channels.
+              The detection engine is platform-agnostic; ingestion for X&nbsp;/&nbsp;Twitter, Reddit, and TikTok
+              is on the roadmap. We&apos;d rather ship one platform with depth than four with stubs.
+            </p>
+          </div>
         </Reveal>
       </section>
 
       {/* ── CTA ─────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 py-24 max-w-3xl mx-auto w-full text-center">
-        <Reveal from="scale" className="space-y-7">
-          <h2 className="display text-4xl md:text-5xl font-semibold tracking-[-0.025em] leading-[1.05]">
-            Ready to see what&apos;s{' '}
-            <span className="text-brand">real?</span>
-          </h2>
-          <p className="text-lg text-fg-dim max-w-xl mx-auto">
-            $9.99/month · 20 scans · 3 free on signup. Cancel anytime.
-            Built for journalists, researchers, and platform integrity teams.
-          </p>
-          <div className="flex items-center justify-center gap-4 pt-2 flex-wrap">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-8 py-3.5 rounded-full hover:bg-accent-2 transition-all btn-glow"
-            >
-              Start free trial
-              <ArrowRight size={16} />
-            </Link>
-            <Link
-              href="/pricing"
-              className="font-mono text-2xs tracking-wider uppercase text-fg-dim hover:text-fg transition-colors px-4 py-3"
-            >
-              See full pricing →
-            </Link>
+      <section className="relative z-10 px-6 md:px-8 py-20 max-w-3xl mx-auto w-full">
+        <Reveal from="up">
+          <div className="border-t border-border-1 pt-16 text-center">
+            <p className="font-mono text-2xs tracking-[0.22em] text-fg-mute uppercase mb-5">
+              Start your investigation
+            </p>
+            <h2 className="display text-3xl md:text-4xl font-semibold tracking-tight mb-5">
+              See what&apos;s real.
+            </h2>
+            <p className="text-sm text-fg-dim max-w-md mx-auto mb-8">
+              $9.99/month · 20 scans · 3 free on signup. Cancel anytime.
+              Built for journalists, researchers, and platform integrity teams.
+            </p>
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <Link
+                href="/signup"
+                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-7 py-2.5 rounded-sm hover:bg-accent-2 transition-colors btn-glow"
+              >
+                Begin investigating
+                <ArrowRight size={14} />
+              </Link>
+              <Link
+                href="/pricing"
+                className="font-mono text-2xs tracking-wider text-fg-mute hover:text-fg-dim transition-colors"
+              >
+                See full pricing →
+              </Link>
+            </div>
           </div>
         </Reveal>
       </section>
 
       {/* ── Footer ──────────────────────────────────────────────── */}
-      <footer className="relative z-10 border-t border-border-1/40 px-6 py-9 mt-auto">
+      <footer className="relative z-10 border-t border-border-1/40 px-6 md:px-8 py-8 mt-auto">
         <div className="max-w-5xl mx-auto flex items-center justify-between flex-wrap gap-4">
           <Logo />
-          <p className="font-mono text-2xs tracking-wider text-fg-faint">
-            Online Media Intelligence
-          </p>
-          <div className="flex items-center gap-1.5 font-mono text-2xs text-fg-mute uppercase tracking-wider">
+          <p className="font-mono text-2xs tracking-wider text-fg-faint">Online Media Intelligence</p>
+          <div className="flex items-center gap-px font-mono text-2xs text-fg-mute tracking-wider">
             {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Pricing', '/pricing'], ['About', '/about']].map(([l, h]) => (
-              <Link key={h} href={h} className="px-2.5 py-1 rounded-full hover:text-fg hover:bg-bg-elev transition-colors">{l}</Link>
+              <Link key={h} href={h} className="px-2.5 py-1 hover:text-fg transition-colors">{l}</Link>
             ))}
           </div>
         </div>
@@ -311,86 +287,59 @@ export function LandingPage() {
   );
 }
 
-const PILLARS = [
-  { icon: <ScanSearch size={22} />, label: 'Detect',        sub: 'Bots, AI, coordination' },
-  { icon: <BarChart3 size={22} />,  label: 'Analyze',       sub: 'Eight independent signals' },
-  { icon: <Brain size={22} />,      label: 'Understand',    sub: 'Narratives & networks' },
-  { icon: <ShieldCheck size={22} />,label: 'Protect Truth', sub: 'Evidence, not verdicts' },
+const CAPABILITIES = [
+  {
+    icon: <ShieldAlert size={15} />,
+    title: 'Per-commenter detection',
+    body: 'Each commenter scored on temporal cadence, semantic repetition, AI-writing tells, profile metadata, personal-voice rate, engagement farming, fingerprint memory, and coordination. Probabilistic with explicit evidence.',
+    tag: 'core',
+  },
+  {
+    icon: <Network size={15} />,
+    title: 'Coordination mapping',
+    body: 'Three cross-account detectors find groups acting together: temporal-semantic bursts, age cohorts, and co-engagement patterns across multiple videos.',
+    tag: null,
+  },
+  {
+    icon: <Activity size={15} />,
+    title: 'Narrative tracking',
+    body: 'Semantic clusters across all your scans surface which talking points are organic and which are amplified campaigns.',
+    tag: null,
+  },
+  {
+    icon: <Database size={15} />,
+    title: 'Behavioral fingerprint database',
+    body: 'Every scan adds a behavioral fingerprint and persists coordination edges. Future scans pull priors from the growing dataset — the engine sharpens with use.',
+    tag: null,
+  },
+  {
+    icon: <Cpu size={15} />,
+    title: 'Pure-signal engine',
+    body: 'No LLMs in the core detection path. Pure Python heuristics, embeddings, and graph algorithms. Fast, deterministic, auditable.',
+    tag: 'no llm',
+  },
+  {
+    icon: <Eye size={15} />,
+    title: 'Full evidence chain',
+    body: 'Every score shows its work. Click any flag to see the raw signals that triggered it. No black boxes, no unexplained verdicts.',
+    tag: null,
+  },
 ];
 
 const STEPS = [
   {
-    icon: <Zap size={20} />,
+    icon: <ArrowRight size={16} />,
     title: 'Paste a YouTube URL',
-    body: 'Any video or channel URL. OMISPHERE pulls the top commenters immediately with no preprocessing required.',
+    body: 'Any video or channel URL. OMISPHERE pulls the top commenters immediately — no preprocessing required.',
   },
   {
-    icon: <TrendingUp size={20} />,
+    icon: <Activity size={16} />,
     title: 'Engine scores each commenter',
     body: 'Eight independent signals run in parallel: temporal cadence, semantic repetition, AI-writing tells, profile metadata, and more.',
   },
   {
-    icon: <Lock size={20} />,
+    icon: <Eye size={16} />,
     title: 'Review the evidence',
-    body: 'Every score shows its work. Click any flag to see the raw signals. Save investigations and track narratives over time.',
+    body: 'Every score shows its work. Save investigations and track narratives over time. Share or export to PDF.',
   },
 ];
-
-const FEATURES = [
-  {
-    icon: <ShieldAlert size={22} />,
-    title: 'Per-commenter detection',
-    body: 'Each commenter scored on temporal cadence, semantic repetition, AI-writing tells, profile metadata, personal-voice rate, engagement farming, fingerprint memory, and coordination. Probabilistic with explicit evidence.',
-    span: 'md:col-span-2',
-  },
-  {
-    icon: <Network size={22} />,
-    title: 'Coordination clusters',
-    body: 'Three cross-account detectors find groups acting together: temporal-semantic bursts, age cohorts, and co-engagement.',
-    span: '',
-  },
-  {
-    icon: <Activity size={22} />,
-    title: 'Narrative tracking',
-    body: 'Semantic clusters across all your scans. See which talking points are organic and which are amplified.',
-    span: '',
-  },
-  {
-    icon: <Database size={22} />,
-    title: 'Self-improving database',
-    body: 'Every scan adds a behavioural fingerprint and persists coordination edges. Future scans pull priors from the growing set, so the engine sharpens the more you use it.',
-    span: 'md:col-span-2',
-  },
-  {
-    icon: <Cpu size={22} />,
-    title: 'Pure-signal engine',
-    body: 'No LLMs in the core path — pure Python heuristics, embeddings, and graph algorithms. Fast, deterministic, auditable.',
-    span: '',
-  },
-  {
-    icon: <Eye size={22} />,
-    title: 'Full evidence chain',
-    body: 'Every score shows its work. Click any flag to see the raw signals that triggered it. No black boxes.',
-    span: 'md:col-span-2',
-  },
-];
-
-function FeatureCard({
-  icon,
-  title,
-  body,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="group h-full bg-bg-elev rounded-2xl border border-border-1 p-6 card-interactive spotlight shadow-inner-top">
-      <div className="w-11 h-11 rounded-xl bg-accent/[0.10] border border-accent/25 flex items-center justify-center text-accent-2 mb-4 group-hover:scale-110 group-hover:bg-accent/[0.16] transition-all duration-300">
-        {icon}
-      </div>
-      <h3 className="text-lg font-semibold text-fg mb-2">{title}</h3>
-      <p className="text-sm text-fg-dim leading-relaxed">{body}</p>
-    </div>
-  );
-}

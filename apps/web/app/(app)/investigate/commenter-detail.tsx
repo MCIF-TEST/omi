@@ -150,7 +150,6 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
     <article className="space-y-5 p-5">
       {/* Hero — score ring + identity */}
       <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/20 p-5">
-        <div className="absolute -top-12 -right-10 w-40 h-40 rounded-full bg-accent/[0.06] blur-3xl pointer-events-none" aria-hidden />
         <div className="relative flex items-start gap-5 flex-wrap">
           <div className="flex flex-col items-center gap-2 shrink-0">
             <ScoreRing value={displayProb} tier={c.tier} size={88} stroke={7} />

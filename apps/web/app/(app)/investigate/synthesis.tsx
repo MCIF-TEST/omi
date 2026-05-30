@@ -14,7 +14,6 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
     <article className="p-6 space-y-6">
       {/* Verdict hero */}
       <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/30 p-5 md:p-6">
-        <div className="absolute -top-12 -right-10 w-44 h-44 rounded-full bg-accent/[0.07] blur-3xl pointer-events-none" aria-hidden />
         <div className="relative flex items-center gap-5 flex-wrap">
           <ScoreRing value={prob} tier={data.overall_tier} size={96} stroke={8} />
           <div className="flex-1 min-w-[200px]">

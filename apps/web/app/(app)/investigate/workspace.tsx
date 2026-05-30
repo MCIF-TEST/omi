@@ -230,7 +230,6 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
 
       {!state.data && !state.pending && (
         <Card gradient className="relative overflow-hidden">
-          <div className="absolute -top-16 -right-10 w-48 h-48 rounded-full bg-accent/[0.06] blur-3xl pointer-events-none" aria-hidden />
           <div className="relative flex gap-4">
             <div className="shrink-0 w-12 h-12 rounded-lg bg-accent/[0.08] border border-accent/20 flex items-center justify-center text-accent">
               <Sparkles size={22} />
