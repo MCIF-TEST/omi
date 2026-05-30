@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
-  ArrowLeft, ArrowRight, Gauge, Users, ShieldCheck, Brain, TrendingUp,
+  ArrowLeft, ArrowRight, Gauge, Users, ShieldCheck, Brain, TrendingUp, Cpu,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Sparkline } from '@/components/shared/sparkline';
@@ -13,6 +13,7 @@ import {
   type CoordinationBenchmarkReport,
   type RescueBenchmarkReport,
   type MemoryBenchmarkReport,
+  type MlScorerStatus,
 } from '@/lib/api';
 
 export const metadata = { title: 'Engine Intelligence — OMISPHERE' };
@@ -27,11 +28,12 @@ export default async function EnginePage() {
     redirect('/settings');
   }
 
-  const [seed, coord, rescue, memory] = await Promise.all([
+  const [seed, coord, rescue, memory, ml] = await Promise.all([
     apiServer<SeedBenchmarkReport>('/v1/intelligence/benchmark').catch(() => null),
     apiServer<CoordinationBenchmarkReport>('/v1/intelligence/benchmark/coordination').catch(() => null),
     apiServer<RescueBenchmarkReport>('/v1/intelligence/benchmark/rescue').catch(() => null),
     apiServer<MemoryBenchmarkReport>('/v1/intelligence/benchmark/memory').catch(() => null),
+    apiServer<MlScorerStatus>('/v1/intelligence/ml-status').catch(() => null),
   ]);
 
   return (
@@ -58,6 +60,9 @@ export default async function EnginePage() {
           tracked number rather than an assertion.
         </p>
       </div>
+
+      {/* Learned (ML) scorer status */}
+      <MlStatusCard ml={ml} />
 
       {/* 1 — Single-account accuracy */}
       <Card>
@@ -249,6 +254,61 @@ python -m pytest tests/test_memory_benchmark.py          # memory_v1`}
 
 function rate(x: number): Tone {
   return x >= 0.8 ? 'good' : x >= 0.5 ? 'warn' : 'bad';
+}
+
+function MlStatusCard({ ml }: { ml: MlScorerStatus | null }) {
+  return (
+    <Card>
+      <CardLabel className="flex items-center gap-1.5">
+        <Cpu size={11} className="text-accent" /> Learned scorer · ML track
+      </CardLabel>
+      {!ml ? (
+        <Unavailable />
+      ) : (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <CardTitle className="mb-0">The learned detector</CardTitle>
+            <span
+              className={`font-mono text-2xs uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                ml.active
+                  ? 'text-tier-low border-tier-low/40 bg-tier-low/10'
+                  : 'text-fg-mute border-border-2 bg-bg-elev'
+              }`}
+            >
+              {ml.active ? 'Active' : 'Dormant'}
+            </span>
+          </div>
+          <p className="text-sm text-fg-dim leading-relaxed mb-4">{ml.reason}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Metric label="Feature flag" value={ml.enabled_flag ? 'on' : 'off'}
+              tone={ml.enabled_flag ? 'good' : 'neutral'} sub="OMI_USE_ML_SCORER" />
+            <Metric label="Model loaded" value={ml.model_loaded ? 'yes' : 'no'}
+              tone={ml.model_loaded ? 'good' : 'neutral'}
+              sub={ml.model_kind ? String(ml.model_kind) : 'artifact'} />
+            <Metric label="Blend weight" value={ml.blend_weight.toFixed(2)} tone="neutral"
+              sub="rule ↔ model" />
+            <Metric
+              label="Feature schema"
+              value={ml.loaded_feature_schema != null
+                ? `v${ml.loaded_feature_schema}`
+                : `v${ml.expected_feature_schema}`}
+              tone={ml.loaded_feature_schema != null && ml.loaded_feature_schema !== ml.expected_feature_schema
+                ? 'bad' : 'neutral'}
+              sub={`serving v${ml.expected_feature_schema}`}
+            />
+          </div>
+          <p className="mt-4 text-sm text-fg-dim leading-relaxed">
+            The learned scorer is the vision&apos;s answer to under-flagging sparse
+            accounts — it combines weak, low-confidence signals jointly in a way the
+            hand-weighted aggregator cannot. It ships dormant and safe: train a model
+            offline, point <span className="font-mono text-fg-mute">OMI_ML_MODEL_PATH</span> at
+            the artifact, set <span className="font-mono text-fg-mute">OMI_USE_ML_SCORER=true</span>,
+            and confirm it took here. A feature-schema mismatch is refused automatically.
+          </p>
+        </>
+      )}
+    </Card>
+  );
 }
 
 function hoodColor(h: string): string {
