@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
-from app.core.auth import CurrentUser, consume_credits, refund_credits, require_user
+from app.core.auth import CurrentUser, compute_scan_credits, consume_credits, refund_credits, require_user
 from app.core.config import Settings, get_settings
 from app.integrations import youtube as yt
 from app.integrations.youtube import (
@@ -247,7 +247,9 @@ def scan_youtube_video(
     settings: Settings = Depends(get_settings),
     current: CurrentUser = Depends(require_user),
 ) -> VideoScanSummary:
-    consume_credits(current.id, 1,
+    max_commenters = req.max_commenters or settings.scan_max_commenters
+    cost = compute_scan_credits("youtube", max_commenters, settings)
+    consume_credits(current.id, cost,
         platform="youtube", scan_type="youtube_video",
         target_input=req.video_url_or_id[:500], settings=settings)
     video_id = parse_video_id(req.video_url_or_id)
@@ -260,7 +262,6 @@ def scan_youtube_video(
     factory = _client_factory_override or (lambda: _resolve_client(settings))
     client = factory()
 
-    max_commenters = req.max_commenters or settings.scan_max_commenters
     stats = FetchStats()
     try:
         commenters = fetch_video_commenters(
@@ -268,7 +269,7 @@ def scan_youtube_video(
         )
     except YouTubeClientError as e:
         raise _handle_youtube_error(
-            e, user_id=current.id, credits_to_refund=1,
+            e, user_id=current.id, credits_to_refund=cost,
             target_input=req.video_url_or_id,
         )
 
@@ -418,15 +419,17 @@ def scan_youtube_video_full(
     settings: Settings = Depends(get_settings),
     current: CurrentUser = Depends(require_user),
 ) -> FullVideoScanResult:
-    consume_credits(current.id, 1,
-        platform="youtube", scan_type="youtube_full",
-        target_input=req.video_url_or_id[:500], settings=settings)
     """Unified scan: every commenter (account-level), the whole comment thread
     (content-level), and cross-account coordination analysis, all in one
     call. The three perspectives cross-pollinate — commenters flagged in
     coordination clusters get adjusted scores, the video gets its own
     coordination verdict, and high-suspicion handles surface to the top.
     """
+    max_commenters = req.max_commenters or settings.scan_max_commenters
+    cost = compute_scan_credits("youtube", max_commenters, settings)
+    consume_credits(current.id, cost,
+        platform="youtube", scan_type="youtube_full",
+        target_input=req.video_url_or_id[:500], settings=settings)
     video_id = parse_video_id(req.video_url_or_id)
     if not video_id:
         raise HTTPException(
@@ -437,7 +440,6 @@ def scan_youtube_video_full(
     factory = _client_factory_override or (lambda: _resolve_client(settings))
     client = factory()
 
-    max_commenters = req.max_commenters or settings.scan_max_commenters
     stats = FetchStats()
     try:
         commenters_meta, all_comments, next_page_token = fetch_video_full(
@@ -470,7 +472,7 @@ def scan_youtube_video_full(
             )
     except YouTubeClientError as e:
         raise _handle_youtube_error(
-            e, user_id=current.id, credits_to_refund=1,
+            e, user_id=current.id, credits_to_refund=cost,
             target_input=req.video_url_or_id,
         )
 
@@ -833,7 +835,8 @@ def scan_link(
     comprehensive scan — the post, every commenter, their histories, and
     cross-account coordination — all in one shot.
 
-    Costs 1 credit per call (including continuation batches).
+    Credit cost: ceil(max_commenters / scan_batch_unit) × credits_per_batch[platform].
+    YouTube default: 1 credit per 50 commenters. Twitter: 10 per 50.
     """
     url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
     if not url:
@@ -851,10 +854,13 @@ def scan_link(
             ),
         )
 
-    # Deduct one credit before running the scan. 402 if user is out.
+    # Deduct credits before running the scan. 402 if user is out.
+    max_commenters = int(payload.get("max_commenters", 25))
+    platform = classification.get("platform", "youtube")
+    cost = compute_scan_credits(platform, max_commenters, settings)
     consume_credits(
-        current.id, 1,
-        platform="youtube",
+        current.id, cost,
+        platform=platform,
         scan_type="link",
         target_input=url[:500],
         settings=settings,
@@ -864,7 +870,7 @@ def scan_link(
         video_url_or_id=classification.get("video_id"),
         account_url_or_handle=classification.get("account_input"),
         comments_text=None,
-        max_commenters=int(payload.get("max_commenters", 25)),
+        max_commenters=max_commenters,
         force_refresh=bool(payload.get("force_refresh", False)),
         start_page_token=payload.get("start_page_token") or None,
     )
@@ -981,7 +987,7 @@ def scan_comprehensive_endpoint(
     verdict — this is the interconnection that single-source detection
     can't see.
 
-    Costs 1 credit per call.
+    Costs credits per batch of commenters scanned (see compute_scan_credits).
     """
     if not any([
         req.account_url_or_handle and req.account_url_or_handle.strip(),
@@ -993,9 +999,11 @@ def scan_comprehensive_endpoint(
             detail="At least one of account_url_or_handle, video_url_or_id, or comments_text must be provided.",
         )
 
+    max_comm = req.max_commenters or settings.scan_max_commenters
+    cost = compute_scan_credits("youtube", max_comm, settings) if _charge_credit else 0
     if _charge_credit:
         consume_credits(
-            current.id, 1,
+            current.id, cost,
             platform="youtube",
             scan_type="comprehensive",
             target_input=(req.video_url_or_id or req.account_url_or_handle or "")[:500],
@@ -1026,12 +1034,10 @@ def scan_comprehensive_endpoint(
                 start_page_token=req.start_page_token,
             )
     except YouTubeClientError as e:
-        # If this was a continuation (we only charged on the first call),
-        # there's nothing to refund; the helper handles credits_to_refund=0.
         raise _handle_youtube_error(
             e,
             user_id=current.id,
-            credits_to_refund=1 if _charge_credit else 0,
+            credits_to_refund=cost,
             target_input=(req.video_url_or_id or req.account_url_or_handle or ""),
         )
 
