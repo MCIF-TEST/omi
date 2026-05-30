@@ -141,6 +141,40 @@ Demoting `ai_writing` unmasked an elevated/high **recall gap** (macro-F1 had fal
 
 ---
 
+## GAP-04 — Hybrid operation detection  ✅ done
+
+**Shipped**
+- **Narrative detector** (`app/detection/narrative.py`) — new detector scanning for political/disinformation astroturf language drawn from public IO disclosures (Twitter/X transparency reports, DFRLab, Stanford IO Observatory). 11 compiled regex patterns covering: mainstream-media delegitimisation, establishment fear-framing, amplification CTAs ("spread this everywhere before they delete it"), deep-state/globalist conspiracy markers, media-corruption tropes, hidden-truth framing, DYOR, silencing/censorship claims, narrative-collapse celebration. Probability: logistic on the fraction of posts containing markers (centred at 30%). Confidence: product of absolute count and corpus-size components — a single suspicious post on a tiny account doesn't look like an operation.
+- **Voice broadcast exception** (`app/detection/voice.py`) — zero first-person pronouns across a non-trivial corpus (≥ MIN_WORDS_FOR_VOICE) now triggers a confidence boost via the broadcast exception, even when individual posts are short. The existing `length_factor` guard was calibrated for conversational text, not news-brief summaries; broadcast accounts are intentionally impersonal. Confidence now scales from 0.35 to 0.75 with corpus size.
+- **Profile fresh-account compound signal** (`app/detection/profile.py`) — `_fresh_account_signal()` fires on accounts <90 days old that exhibit a cluster of ≥2 suspicious attributes: auto-generated handle (long numeric tail), sparse social graph (<10 total connections), and minimal bio (<3 words). Any single attribute on a new account is too common to signal on; the cluster is not. Returns up to 0.90 suspicion for the full three-attribute pattern.
+- **Temporal strength-aware confidence** (`app/detection/temporal.py`) — machine-precision scheduling (CoV < 5%) is essentially impossible in human posting (requires machine-controlled interval timing). When CoV < 0.05 AND cov_prob ≥ 0.90, confidence is boosted to 0.25–0.60 regardless of post count. Typical automated content bots with Gaussian jitter (CoV ≥ 0.10) are NOT boosted — keeping them at MODERATE as expected.
+- **Single-axis cap fix** (`app/detection/scoring.py`) — the "no HIGH without corroboration" cap now counts only *suspicious* confident signals (probability > 0.40 AND confidence > 0.30) as independent axes. Previously, clean-scoring high-confidence detectors (e.g. engagement p=0.000 conf=0.320) were falsely counted as axes and bypassed the cap, allowing single-axis accounts to reach HIGH.
+- **Narrative wired into the engine** (`app/detection/engine.py`, `app/detection/scoring.py`, `app/detection/correlation.py`) — `analyze_narrative` added to `analyze_account`; weight 0.8; added to `_WEAK_REASON`, `_DETECTOR_HEADLINES`, `_infer_intent` (coordinated_campaign path); added to `DETECTORS` tuple in the correlation module.
+- **23 new detector tests** (`tests/test_gap04_detectors.py`) covering all four improvements end-to-end.
+
+**📊 Benchmark impact** (seed_v1, fallback embedder)
+- Brier `0.0588 → 0.0345` (**41% improvement** — by far the largest single-gap improvement).
+- Macro-F1 `0.583 → 0.588` (slight improvement; narrative catches astroturf archetypes).
+- Tier accuracy `0.646 → 0.631` (slight dip — explained by the single-axis cap fix correctly classifying `engagement_farm_high` as ELEVATED rather than HIGH; one suspicious axis alone should be ELEVATED, not HIGH).
+- Gates ratcheted in `tests/test_evaluation_benchmark.py`: `GATE_MAX_BRIER 0.070 → 0.045`, `GATE_MIN_ACCURACY 0.60 → 0.62`, `GATE_MIN_MACRO_F1 0.52 → 0.57`.
+
+**🧭 Decisions**
+- Narrative patterns are conservative by design: each pattern requires the characteristic *combination* of phrases that makes them specific to influence operations (not just any reference to "media"). Single incidental occurrences never raise confidence above 0.15.
+- The CoV < 0.05 threshold for temporal boosting was chosen because 5% interval variation requires sub-minute scheduling precision — humans on any posting platform never achieve this. The threshold is deliberately NOT applied to typical automation (CoV 0.10–0.50) to avoid false positives on podcast auto-posts or social media schedulers with natural jitter.
+- The fresh-account signal requires ≥2 attributes. A new account with only a numeric handle, or only no followers, is common enough (new users, dormant early adopters) to be benign. The three-attribute cluster is the sockpuppet setup pattern.
+- The single-axis cap change is a **bug fix**, not a policy change. The original intent was "HIGH requires multiple independent axes." The old implementation was incorrectly counting clean detectors as axes.
+
+**🎛 New knobs** (all in config with safe defaults)
+- `OMI_WEIGHT_NARRATIVE` (0.8) — weight of the narrative detector in the composite.
+
+**⏳ Deferred**
+- The `engagement_farm_high` benchmark case now lands at ELEVATED (probability 0.740) because engagement is the only suspicious axis. This is correct by the single-axis policy. Reaching HIGH would require a second independent signal — e.g. coordination evidence from a cross-account scan, or profile signals. That is owned by GAP-10 (cross-account) and GAP-07 (community anchor), not this gap.
+- Narrative patterns are English-only. Multi-language astroturf detection is out of scope for this gap.
+
+**✅ Baseline:** 505 backend tests (23 new GAP-04 detector tests, ratcheted benchmark gate).
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)

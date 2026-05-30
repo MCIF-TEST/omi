@@ -65,6 +65,24 @@ def analyze_profile(profile: Profile, post_count: int | None = None) -> SignalRe
                 "Bio is empty, generic, or contains low-information / suspicious link patterns."
             )
 
+    # ---- Fresh-account suspicion (compound signal) ----
+    # A single suspicious attribute on a new account is borderline; a cluster
+    # of them (auto-handle + tiny social graph + minimal bio) is compelling.
+    # Each individual sub-signal above may be low; the combination is not.
+    fresh_prob, fresh_detail = _fresh_account_signal(
+        profile.handle, profile.created_at,
+        profile.follower_count, profile.following_count,
+        profile.bio,
+    )
+    if fresh_prob is not None:
+        contributions.append(fresh_prob)
+        sub["fresh_account_suspicion"] = fresh_prob
+        if fresh_prob > 0.55:
+            evidence.append(
+                "Very new account exhibiting a cluster of suspicious attributes "
+                "(auto-generated handle, minimal social graph, sparse bio)."
+            )
+
     if not contributions:
         return SignalResult(
             name="profile",
@@ -169,6 +187,62 @@ def _follower_ratio_signal(
     # log_ratio 0 → 0.3; log_ratio ±2 → ~0.75
     prob = 0.3 + 0.45 * min(1.0, abs(log_ratio) / 2.0)
     return prob, ratio
+
+
+def _fresh_account_signal(
+    handle: str | None,
+    created_at: datetime | None,
+    followers: int | None,
+    following: int | None,
+    bio: str | None,
+) -> tuple[float | None, dict]:
+    """Compound suspicion for very new accounts with multiple suspicious attributes.
+
+    Individual attributes (auto-handle, no followers, short bio) each score
+    borderline on their own — the same handle entropy on a 5-year-old account
+    with 10k followers is not suspicious. But a brand-new account with ALL
+    three attributes is a recognisable sockpuppet/astroturf setup pattern.
+
+    Returns (probability, details) or (None, {}) when the account is not new
+    (age > 90 days) or when fewer than two suspicious attributes are present.
+    """
+    if created_at is None:
+        return None, {}
+    created = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
+    age_days = max(1.0, (datetime.now(timezone.utc) - created).total_seconds() / 86400.0)
+    if age_days > 90:
+        return None, {}
+
+    suspicion = 0.0
+    details: dict = {"age_days": age_days}
+
+    # Auto-generated handle (numeric tail is the clearest signal)
+    h = (handle or "").lstrip("@")
+    if h and _HANDLE_NUMBER_TAIL.search(h):
+        suspicion += 0.35
+        details["auto_handle"] = True
+
+    # Tiny social graph — not just new but not yet connected to anyone
+    total_conn = (followers or 0) + (following or 0)
+    if total_conn < 10:
+        suspicion += 0.30
+        details["sparse_graph"] = True
+    elif total_conn < 25:
+        suspicion += 0.12
+
+    # Minimal or missing bio
+    bio_words = len(_WORD_RE.findall((bio or "").strip()))
+    if bio_words < 3:
+        suspicion += 0.20
+        details["minimal_bio"] = True
+
+    # Require at least two independent attributes to fire (single-attribute
+    # new accounts are too common to signal on).
+    triggered = sum(1 for k in ("auto_handle", "sparse_graph", "minimal_bio") if details.get(k))
+    if triggered < 2:
+        return None, details
+
+    return min(0.90, 0.28 + suspicion), details
 
 
 def _bio_quality_signal(bio: str | None) -> tuple[float | None, float]:

@@ -106,6 +106,15 @@ def analyze_temporal(posts: list[Post]) -> SignalResult:
         evidence.append("No strong temporal anomalies detected.")
 
     confidence = min(1.0, len(primary_ts) / 200.0)
+    # Strength-aware: CoV < 0.05 (< 5% variation) is essentially impossible in
+    # human posting — it requires machine-precision interval control. Even 8
+    # posts at perfect 4-hour intervals are self-evidently scheduled, not a
+    # low-confidence reading. Only the sub-5% threshold is this certain; normal
+    # automated content bots have natural variation (CoV ≥ 0.1) and are NOT
+    # boosted by this path, keeping them at MODERATE as expected.
+    if cov_value < 0.05 and cov_prob >= 0.90:
+        strength_conf = _clip01(0.25 + 0.35 * (1.0 - cov_value / 0.05))
+        confidence = max(confidence, strength_conf)
 
     return SignalResult(
         name="temporal",

@@ -89,6 +89,7 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
         "voice": settings.weight_voice,
         "engagement": settings.weight_engagement,
         "coordination": settings.weight_coordination,
+        "narrative": settings.weight_narrative,
     }
 
     prior = settings.prior_probability
@@ -159,7 +160,9 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     # trigger a HIGH verdict on its own. HIGH requires corroboration from at
     # least one *other independent* axis (two correlated detectors do not
     # count). Cap at the ELEVATED ceiling.
-    confident = [s for s in scored_signals if s.confidence > 0.30 and weights.get(s.name, 0.0) > 0]
+    confident = [s for s in scored_signals
+                 if s.confidence > 0.30 and s.probability > 0.40
+                 and weights.get(s.name, 0.0) > 0]
     confident_axes = {axis_of(s.name) for s in confident}
     if len(confident_axes) <= 1 and overall >= 0.75:
         overall = 0.74
@@ -214,6 +217,7 @@ _WEAK_REASON: dict[str, str] = {
     "engagement": "Too few posts to detect engagement-spam patterns (need ~20+).",
     "memory":     "Fingerprint database has no close neighbors yet — scan more accounts to train it.",
     "coordination": "No cross-account signal — this account wasn't scanned with peers.",
+    "narrative":  "Too few posts for narrative-injection pattern analysis (need ~3+).",
 }
 
 
@@ -305,8 +309,8 @@ def _infer_intent(signals: list[SignalResult], tier: Tier) -> tuple[str | None, 
     if distinct_axes >= 3:
         return "multi_vector", _INTENT_LABELS["multi_vector"]
 
-    # Coordination evidence in the mix → campaign
-    if strong("coordination"):
+    # Coordination or narrative injection evidence → campaign
+    if strong("coordination") or strong("narrative"):
         return "coordinated_campaign", _INTENT_LABELS["coordinated_campaign"]
 
     # Profile cohort + low age signal often indicates sockpuppets
@@ -348,6 +352,7 @@ _DETECTOR_HEADLINES: dict[str, str] = {
     "engagement": "Comments show spam / engagement-farming patterns",
     "memory": "Behavioral fingerprint matches previously-flagged accounts",
     "coordination": "Account appears in a cross-account coordination cluster",
+    "narrative": "Posts contain coordinated-narrative / political-astroturf language",
 }
 
 

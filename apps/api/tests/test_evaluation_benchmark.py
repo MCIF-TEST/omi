@@ -46,14 +46,29 @@ from app.evaluation import (
 #   • semantic detector — a 3-gram template-skeleton supplement + strength-aware
 #     confidence so fill-in-the-blank template spam is detected even on the
 #     fallback embedder.
-# Net effect on the seed benchmark: Brier 0.1107 → 0.0588, tier accuracy
-# 0.415 → 0.646, macro-F1 0.182 → 0.583 — with ZERO new false positives on the
-# clean/ESL/edge archetypes. The residual misses are temporal/profile/
-# coordination archetypes owned by the confidence-calibration / community-anchor
-# gaps, not by content-style detection.
-GATE_MAX_BRIER = 0.070      # current 0.0588
-GATE_MIN_ACCURACY = 0.60    # current 0.646; majority baseline 0.338
-GATE_MIN_MACRO_F1 = 0.52    # current 0.583
+# GAP-04 targeted hybrid-operation archetypes (astroturf, broadcast bots, fresh
+# sockpuppets, mechanical schedulers) that were under-detected with low-data
+# confidence:
+#   • narrative detector — new detector scanning for political/disinformation
+#     language patterns from IO disclosures (deep-state, media-corruption tropes,
+#     amplification CTAs, etc.); primary signal for coordinated narrative ops.
+#   • voice broadcast exception — zero first-person across a non-trivial corpus
+#     now raises confidence even for short posts (pure amplification bots).
+#   • profile fresh-account compound signal — clusters of auto-handle + sparse
+#     graph + minimal bio on <90-day accounts now flags sockpuppet setups.
+#   • temporal strength-aware confidence — machine-precision scheduling (CoV <
+#     5%) gets a confidence boost even on small post histories; typical bots with
+#     Gaussian jitter (CoV >> 5%) are NOT boosted.
+#   • single-axis cap fix — the "no HIGH without corroboration" cap now only
+#     counts *suspicious* confident signals (p > 0.40) as axes, preventing clean
+#     detectors from falsely bypassing the cap.
+# Net effect on the seed benchmark: Brier 0.0588 → 0.0345 (41% improvement),
+# tier accuracy 0.646 → 0.631, macro-F1 0.583 → 0.588. The slight accuracy dip
+# is explained by the single-axis cap correctly classifying engagement_farm_high
+# as ELEVATED (one suspicious axis only), which is the right policy tradeoff.
+GATE_MAX_BRIER = 0.045      # current 0.0345; was 0.070 after GAP-03
+GATE_MIN_ACCURACY = 0.62    # current 0.631; was 0.646 after GAP-03 (majority baseline 0.338)
+GATE_MIN_MACRO_F1 = 0.57    # current 0.588; was 0.583 after GAP-03
 
 
 @pytest.fixture(scope="module")

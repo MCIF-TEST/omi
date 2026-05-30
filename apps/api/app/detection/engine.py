@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from app.detection.ai_writing import analyze_ai_writing
 from app.detection.engagement import analyze_engagement
+from app.detection.narrative import analyze_narrative
 from app.detection.profile import analyze_profile
 from app.detection.scoring import aggregate
 from app.detection.semantic import analyze_semantic
@@ -35,6 +36,7 @@ def analyze_account(
         analyze_ai_writing(posts),
         analyze_voice(posts),
         analyze_engagement(posts),
+        analyze_narrative(posts),
         analyze_profile(profile, post_count=len(posts) or None),
     ]
     if extra_signals:

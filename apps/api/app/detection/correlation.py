@@ -32,10 +32,11 @@ from functools import lru_cache
 
 _log = logging.getLogger("omi.detection.correlation")
 
-# The eight detectors, in a stable order. New detectors append here.
+# Detectors in a stable order. New detectors append here.
 DETECTORS: tuple[str, ...] = (
     "temporal", "semantic", "ai_writing", "profile",
     "memory", "voice", "engagement", "coordination",
+    "narrative",
 )
 
 # Hand-curated correlation groups: which detectors share an evidence basis, the

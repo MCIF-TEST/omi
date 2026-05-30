@@ -244,10 +244,11 @@ def test_fit_from_ingested_synthetic_corpus():
     assert len(obs) > 0
     art = fit_correlation(obs, min_pairs=5)
     assert art["n_observations"] == len(obs)
-    assert len(art["detectors"]) == 8
+    n = len(art["detectors"])
+    assert n >= 8  # grows as new detectors are added
     # Diagonal is 1.0, matrix is symmetric and in range.
-    for i in range(8):
+    for i in range(n):
         assert art["matrix"][i][i] == 1.0
-        for j in range(8):
+        for j in range(n):
             assert art["matrix"][i][j] == art["matrix"][j][i]
             assert 0.0 <= art["matrix"][i][j] <= 1.0

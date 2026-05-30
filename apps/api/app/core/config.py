@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     weight_voice: float = Field(default=0.5)
     weight_engagement: float = Field(default=0.9)
     weight_coordination: float = Field(default=0.9)
+    weight_narrative: float = Field(default=0.8)
 
     # Signal-decorrelation factors. Several detectors share an underlying
     # evidence basis: ``semantic`` + ``ai_writing`` both read text patterns,
