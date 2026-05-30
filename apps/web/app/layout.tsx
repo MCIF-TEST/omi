@@ -22,9 +22,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Body — Inter (variable, optical) */}
         <link rel="preconnect" href="https://rsms.me/" />
         <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
-        {/* Display — Space Grotesk · Mono — JetBrains Mono */}
+        {/* Display — Space Grotesk · Mono — JetBrains Mono.
+            Intentional CDN <link> (alongside rsms.me/inter above): these
+            three external font sources are loaded globally from the root
+            layout, so the next/font page-scoping warning doesn't apply. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"

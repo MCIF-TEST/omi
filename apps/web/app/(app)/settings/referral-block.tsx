@@ -95,7 +95,7 @@ export function ReferralBlock({ referralCode, creditsEarned }: ReferralBlockProp
 
       <p className="mt-4 text-2xs text-fg-faint font-mono">
         Anti-abuse: signups from an IP that already created an account skip the trial credits
-        and don't trigger referral bonuses.
+        and don&apos;t trigger referral bonuses.
       </p>
     </Card>
   );

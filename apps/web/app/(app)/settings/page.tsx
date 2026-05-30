@@ -79,7 +79,7 @@ export default async function SettingsPage() {
             <div>
               <div className="text-fg font-medium">Activity log</div>
               <div className="text-xs text-fg-dim mt-0.5">
-                Every scan you've run · credit usage · refunds
+                Every scan you&apos;ve run · credit usage · refunds
               </div>
             </div>
           </div>

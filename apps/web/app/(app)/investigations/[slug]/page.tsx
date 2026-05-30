@@ -77,7 +77,7 @@ export default async function InvestigationPage({ params }: { params: { slug: st
       <Card>
         <CardLabel>Analyst verdict</CardLabel>
         <p className="text-xs text-fg-mute mb-4">
-          Mark this investigation once you've reached a conclusion. Visible only to you.
+          Mark this investigation once you&apos;ve reached a conclusion. Visible only to you.
         </p>
         <VerdictWidget
           slug={inv.slug}

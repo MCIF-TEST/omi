@@ -13,7 +13,7 @@ export default function PrivacyPage() {
         <ul className="list-disc list-inside space-y-1">
           <li>Your account email (for login and billing receipts)</li>
           <li>A hashed password (we never see your real password)</li>
-          <li>A log of scans you've run (to track credit usage and improve detection)</li>
+          <li>A log of scans you&apos;ve run (to track credit usage and improve detection)</li>
           <li>Payment information is handled exclusively by Stripe; we never see card details</li>
         </ul>
       </Section>
@@ -28,7 +28,7 @@ export default function PrivacyPage() {
 
       <Section title="Data retention">
         Behavioral fingerprints are retained indefinitely (this is the core value of
-        OMISPHERE's self-improving database). You can request deletion of your account
+        OMISPHERE&apos;s self-improving database). You can request deletion of your account
         and personal scan history at any time by contacting us.
       </Section>
 

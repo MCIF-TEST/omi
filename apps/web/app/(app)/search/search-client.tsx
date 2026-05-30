@@ -95,7 +95,7 @@ export function SearchClient({ initialQuery }: { initialQuery: string }) {
       {searched && results.length === 0 && !loading && (
         <div className="text-center py-12">
           <Users size={32} className="mx-auto text-fg-faint mb-3" />
-          <p className="text-fg-dim text-sm">No accounts found for <strong className="text-fg">"{query}"</strong>.</p>
+          <p className="text-fg-dim text-sm">No accounts found for <strong className="text-fg">&quot;{query}&quot;</strong>.</p>
           <p className="text-xs text-fg-mute mt-1">Try a partial handle or YouTube channel ID (UC…).</p>
         </div>
       )}
@@ -121,7 +121,7 @@ export function SearchClient({ initialQuery }: { initialQuery: string }) {
             or paste a YouTube channel ID.
           </p>
           <p className="text-xs text-fg-mute mt-2">
-            Every commenter and channel you've scanned is searchable here.
+            Every commenter and channel you&apos;ve scanned is searchable here.
           </p>
         </div>
       )}

@@ -18,7 +18,7 @@ export default function TermsPage() {
         All output is <strong>probabilistic</strong> and <strong>for research purposes only</strong>.
         Scores are statistical estimates based on observable patterns. They are never a definitive
         judgement about an account or the person behind it. You agree not to present
-        OMISPHERE's output as proof of anyone's identity, intent, or affiliation.
+        OMISPHERE&apos;s output as proof of anyone&apos;s identity, intent, or affiliation.
       </Section>
 
       <Section title="Acceptable use">
@@ -34,8 +34,8 @@ export default function TermsPage() {
       </Section>
 
       <Section title="Liability">
-        OMISPHERE's output is provided "as is" with no warranty. You are solely responsible
-        for any decisions or actions you take based on OMISPHERE's output.
+        OMISPHERE&apos;s output is provided &quot;as is&quot; with no warranty. You are solely responsible
+        for any decisions or actions you take based on OMISPHERE&apos;s output.
       </Section>
 
       <p className="font-mono text-2xs text-fg-mute mt-8 italic">

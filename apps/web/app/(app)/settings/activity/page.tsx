@@ -51,7 +51,7 @@ export default async function ActivityPage({
       <header>
         <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">Settings</p>
         <h1 className="text-2xl font-semibold text-fg tracking-tight">Activity log</h1>
-        <p className="mt-1 text-sm text-fg-dim">Every scan you've initiated, with credit usage.</p>
+        <p className="mt-1 text-sm text-fg-dim">Every scan you&apos;ve initiated, with credit usage.</p>
       </header>
 
       {/* Summary strip */}

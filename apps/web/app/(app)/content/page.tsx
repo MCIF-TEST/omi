@@ -51,14 +51,18 @@ export default async function ContentPage({
     : 'low') as string;
   const query = (searchParams.q || '').trim();
 
-  let data: ContentEntityListResponse;
+  let data: ContentEntityListResponse = { total: 0, platform: null, entities: [] };
+  let loadError = false;
   try {
     const params = new URLSearchParams({ min_risk_tier, limit: '40' });
     if (platform) params.set('platform', platform);
     if (query) params.set('q', query);
     data = await apiServer<ContentEntityListResponse>(`/v1/content?${params}`);
   } catch {
-    data = { total: 0, platform: null, entities: [] };
+    // Surface the failure instead of masquerading as an empty database —
+    // an operator must be able to tell "nothing scanned yet" from "the
+    // content service is down".
+    loadError = true;
   }
 
   const entities = data.entities;
@@ -168,7 +172,26 @@ export default async function ContentPage({
         </div>
       )}
 
-      {entities.length === 0 ? (
+      {loadError ? (
+        <Card>
+          <CardLabel className="flex items-center gap-1.5 text-tier-elevated">
+            <AlertTriangle size={10} />
+            Content service unavailable
+          </CardLabel>
+          <CardTitle>Couldn&apos;t load the content database</CardTitle>
+          <p className="text-sm text-fg-dim max-w-xl mb-4">
+            The request to the content service failed — this is a connection or
+            server error, not an empty database. Your scanned content is safe.
+            Try again in a moment.
+          </p>
+          <Link
+            href={buildHref({ platform, min: min_risk_tier, q: query })}
+            className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-3 py-2 rounded-sm border border-border-2 text-fg-dim hover:text-fg hover:border-border-hot transition-colors"
+          >
+            Retry
+          </Link>
+        </Card>
+      ) : entities.length === 0 ? (
         <Card>
           <CardLabel>{query ? 'No matches' : 'Empty database'}</CardLabel>
           <CardTitle>
