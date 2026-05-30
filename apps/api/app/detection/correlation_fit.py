@@ -43,12 +43,26 @@ def fit_correlation(
     strength: float = 0.5,
     floor: float = 0.15,
     axis_threshold: float = 0.5,
+    prior_matrix: list[list[float]] | None = None,
+    shrink_k: float = 30.0,
 ) -> dict:
     """Compute a pairwise correlation matrix from per-account signal vectors.
 
-    A pair with fewer than ``min_pairs`` joint observations is set to 0.0
-    (insufficient evidence → treat as independent) and its low support is
-    recorded so an operator can see which cells are trustworthy.
+    Two regimes:
+
+    * **No prior** (``prior_matrix is None``): a pair with fewer than
+      ``min_pairs`` joint observations is set to 0.0 (insufficient evidence →
+      treat as independent).
+
+    * **With a prior** (recommended): every cell is shrunk toward the prior via
+      empirical Bayes — ``r_eff = (n·r_measured + k·r_prior) / (n + k)``. A pair
+      with no data (e.g. ``coordination`` before any cross-account scans) keeps
+      the curated prior instead of falsely asserting independence; a pair with
+      ample data is dominated by the measurement. ``shrink_k`` is the prior's
+      pseudo-count (how many observations of evidence it's worth).
+
+    Low support is always recorded in ``pair_support`` so an operator can see
+    which cells are measurement-driven vs. prior-driven.
     """
     n = len(detectors)
     matrix = [[0.0] * n for _ in range(n)]
@@ -64,17 +78,26 @@ def fit_correlation(
                 if di in obs and dj in obs:
                     xs.append(obs[di])
                     ys.append(obs[dj])
-            support[i][j] = support[j][i] = len(xs)
-            r = _pearson(xs, ys) if len(xs) >= min_pairs else 0.0
+            cnt = len(xs)
+            support[i][j] = support[j][i] = cnt
             # Only positive correlation represents double-counted evidence; clamp
             # negatives to 0 so anti-correlated detectors aren't discounted.
-            matrix[i][j] = matrix[j][i] = round(max(0.0, r), 4)
+            r_measured = max(0.0, _pearson(xs, ys)) if cnt >= 2 else 0.0
+            if prior_matrix is not None:
+                r_prior = prior_matrix[i][j]
+                denom = cnt + shrink_k
+                r_eff = (cnt * r_measured + shrink_k * r_prior) / denom if denom > 0 else r_prior
+            else:
+                r_eff = r_measured if cnt >= min_pairs else 0.0
+            matrix[i][j] = matrix[j][i] = round(r_eff, 4)
 
     return {
         "version": ARTIFACT_VERSION,
         "fitted_at": datetime.now(timezone.utc).isoformat(),
         "n_observations": len(observations),
         "min_pairs": min_pairs,
+        "shrink_k": shrink_k if prior_matrix is not None else 0.0,
+        "prior_used": prior_matrix is not None,
         "detectors": list(detectors),
         "matrix": matrix,
         "pair_support": support,

@@ -65,6 +65,36 @@ def static_axis_of(name: str) -> str:
     return name
 
 
+def default_prior_matrix(
+    settings,
+    detectors: tuple[str, ...] = DETECTORS,
+    strength: float = 0.5,
+) -> list[list[float]]:
+    """The correlation matrix implied by the hand-tuned default groups.
+
+    Used as the *prior* the learned fitter shrinks toward: where the data has no
+    evidence for a pair (e.g. ``coordination``, which only fires in cross-account
+    scans), the model should fall back to this curated belief rather than
+    asserting independence (0.0). The within-group correlation is chosen so the
+    learned discount formula ``1 - ρ·strength`` reproduces the group's redundancy
+    factor exactly, keeping the prior self-consistent with the default model.
+    """
+    n = len(detectors)
+    idx = {d: i for i, d in enumerate(detectors)}
+    m = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+    for g in CORRELATION_GROUPS.values():
+        r = float(getattr(settings, g["setting"], 1.0))
+        if r >= 1.0 or strength <= 0:
+            continue
+        rho = max(0.0, min(1.0, (1.0 - r) / strength))
+        members = [mn for mn in g["members"] if mn in idx]
+        for a in range(len(members)):
+            for b in range(a + 1, len(members)):
+                ia, ib = idx[members[a]], idx[members[b]]
+                m[ia][ib] = m[ib][ia] = round(rho, 4)
+    return m
+
+
 def _logit(p: float) -> float:
     p = min(0.999, max(0.001, p))
     return math.log(p / (1 - p))

@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import get_settings  # noqa: E402
-from app.detection.correlation import DETECTORS  # noqa: E402
+from app.detection.correlation import DETECTORS, default_prior_matrix  # noqa: E402
 from app.detection.correlation_fit import (  # noqa: E402
     fit_correlation,
     observations_from_session,
@@ -60,6 +60,12 @@ def main() -> int:
                     help="Lower bound on any single detector's contribution factor.")
     ap.add_argument("--axis-threshold", type=float, default=0.5,
                     help="Correlation at/above which two detectors share an axis.")
+    ap.add_argument("--shrink-k", type=float, default=30.0,
+                    help="Prior pseudo-count: how many observations the curated "
+                         "default prior is worth (empirical-Bayes shrinkage).")
+    ap.add_argument("--no-prior", action="store_true",
+                    help="Disable shrinkage; low-support pairs become 0.0 instead "
+                         "of falling back to the curated default prior.")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print the matrix; do not write the artifact.")
     args = ap.parse_args()
@@ -79,6 +85,9 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
+    prior = None if args.no_prior else default_prior_matrix(
+        settings, DETECTORS, strength=args.strength)
+
     artifact = fit_correlation(
         observations,
         detectors=DETECTORS,
@@ -86,9 +95,14 @@ def main() -> int:
         strength=args.strength,
         floor=args.floor,
         axis_threshold=args.axis_threshold,
+        prior_matrix=prior,
+        shrink_k=args.shrink_k,
     )
 
     _print_matrix(artifact)
+    if artifact["prior_used"]:
+        print(f"(shrinkage on: low-support cells fall back to the curated prior, "
+              f"k={artifact['shrink_k']:g})")
 
     if args.dry_run:
         print("\n(dry run — artifact not written)")

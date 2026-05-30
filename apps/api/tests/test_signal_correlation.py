@@ -16,7 +16,9 @@ import pytest
 
 from app.core.config import Settings
 from app.detection.correlation import (
+    DETECTORS,
     CorrelationModel,
+    default_prior_matrix,
     get_correlation_model,
     static_axis_of,
 )
@@ -76,6 +78,58 @@ def test_negative_correlation_clamped_to_zero():
     art = fit_correlation(obs, detectors=("semantic", "voice"), min_pairs=5)
     idx = {d: i for i, d in enumerate(art["detectors"])}
     assert art["matrix"][idx["semantic"]][idx["voice"]] == 0.0  # anti-corr not discounted
+
+
+# --- empirical-Bayes shrinkage toward the curated prior ------------------
+
+def test_default_prior_matrix_encodes_groups():
+    s = Settings()
+    m = default_prior_matrix(s, DETECTORS, strength=0.5)
+    idx = {d: i for i, d in enumerate(DETECTORS)}
+    # content pair: rho = (1 - 0.55)/0.5 = 0.9; timing pair: (1 - 0.65)/0.5 = 0.7
+    assert m[idx["semantic"]][idx["ai_writing"]] == pytest.approx(0.9)
+    assert m[idx["temporal"]][idx["coordination"]] == pytest.approx(0.7)
+    assert m[idx["temporal"]][idx["engagement"]] == pytest.approx(0.7)
+    # cross-group prior is independence; diagonal is 1.
+    assert m[idx["semantic"]][idx["temporal"]] == 0.0
+    assert m[idx["profile"]][idx["profile"]] == 1.0
+
+
+def test_no_data_pair_falls_back_to_prior_not_zero():
+    """The crux of the fix: with zero observations for the timing detectors, the
+    coordination–temporal cell keeps the curated prior (0.7) instead of being
+    asserted independent (0.0)."""
+    prior = default_prior_matrix(Settings(), DETECTORS, strength=0.5)
+    idx = {d: i for i, d in enumerate(DETECTORS)}
+    # Observations only exercise the content detectors; timing never fires.
+    obs = [{"semantic": v, "ai_writing": v} for v in (0.2, 0.4, 0.6, 0.8)]
+    art = fit_correlation(obs, prior_matrix=prior, shrink_k=30.0)
+    assert art["prior_used"] is True
+    coord_temp = art["matrix"][idx["temporal"]][idx["coordination"]]
+    assert coord_temp == pytest.approx(0.7, abs=1e-6)   # prior preserved, not 0
+    assert art["pair_support"][idx["temporal"]][idx["coordination"]] == 0
+
+
+def test_measurement_dominates_prior_with_ample_support():
+    """A pair the prior calls independent (profile–voice) but the data shows
+    strongly correlated should move toward the measurement once support is high."""
+    prior = default_prior_matrix(Settings(), DETECTORS, strength=0.5)
+    idx = {d: i for i, d in enumerate(DETECTORS)}
+    obs = [{"profile": v, "voice": min(0.98, v + 0.01)}
+           for v in [i / 200 for i in range(5, 196)]]  # ~190 obs, corr ~1
+    art = fit_correlation(obs, prior_matrix=prior, shrink_k=30.0)
+    pv = art["matrix"][idx["profile"]][idx["voice"]]
+    # prior was 0.0; with ~190 obs at corr~1, shrinkage lands near n/(n+k) ≈ 0.86
+    assert pv > 0.8
+
+
+def test_shrinkage_disabled_without_prior_is_backward_compatible():
+    obs = [{"semantic": 0.5, "ai_writing": 0.5} for _ in range(3)]
+    art = fit_correlation(obs, detectors=("semantic", "ai_writing", "profile"),
+                          min_pairs=20)  # no prior_matrix
+    idx = {d: i for i, d in enumerate(art["detectors"])}
+    assert art["prior_used"] is False
+    assert art["matrix"][idx["semantic"]][idx["ai_writing"]] == 0.0  # old behavior
 
 
 # --- learned model behavior ----------------------------------------------
