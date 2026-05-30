@@ -31,6 +31,9 @@ class FingerprintEntry:
     individual_probability: float
 
 
+_MAX_ENTRIES = 300  # O(n²) Euclidean loop — cap to stay bounded for huge scans
+
+
 def detect_fingerprint_clusters(
     entries: list[FingerprintEntry],
     *,
@@ -38,6 +41,11 @@ def detect_fingerprint_clusters(
     min_cluster_size: int = 3,
     min_mean_probability: float = 0.45,
 ) -> CoordinationFinding:
+    # Subsample: sort by descending individual_probability so the highest-risk
+    # accounts are always checked even when the total exceeds the cap.
+    if len(entries) > _MAX_ENTRIES:
+        entries = sorted(entries, key=lambda e: e.individual_probability, reverse=True)[:_MAX_ENTRIES]
+
     if len(entries) < min_cluster_size:
         return CoordinationFinding(
             method="fingerprint_cluster",

@@ -885,32 +885,34 @@ def scan_link(
     # Pre-generate the slug so we can stamp it on the response WITHOUT waiting
     # for the database write. Persistence is offloaded to a background worker
     # — if the DB is slow or the 200KB+ payload serialization stalls, the
-    # user still gets their scan result immediately. The slug is reserved
-    # client-side; on first follow-up scan the bg worker has long since
-    # committed the row.
-    if current.id != 0:  # skip in local mode
+    # user still gets their scan result immediately.
+    if current.id != 0:  # skip in local / demo mode
         import secrets
         existing_slug = payload.get("investigation_slug")
         slug = existing_slug or ("inv_" + secrets.token_hex(4))
-
-        # Stamp the slug directly on the existing model. The previous
-        # implementation round-tripped the whole 200-300KB result through
-        # model_dump() + model_validate() just to add one string field — two
-        # full traversals of a large object on the request thread, for every
-        # authenticated scan. Pydantic v2 allows plain attribute assignment,
-        # so set it in place and skip the round-trip entirely.
         result.investigation_slug = slug
 
-        # Offload persistence to the background pool.
+        # Serialise on the request thread before handing off: (1) Pydantic
+        # models are not guaranteed immutable once FastAPI starts serialising
+        # the response concurrently; (2) keeps the expensive model_dump() off
+        # the bounded background pool where it would hold a worker slot.
+        try:
+            result_payload = _serialize_result(result)
+        except Exception:
+            import logging as _log
+            _log.getLogger("omi.scan").exception(
+                "could not serialise investigation payload for %s", slug
+            )
+            result_payload = {}
+
         from app.core import background as _bg
         _bg.submit(
             _persist_investigation_async,
             slug=slug,
-            existing=bool(existing_slug),
             user_id=current.id,
             classification=classification,
             url=url,
-            result=result,
+            payload=result_payload,
         )
         return result
 
@@ -1140,56 +1142,81 @@ def _full_summary_text(
 def _persist_investigation_async(
     *,
     slug: str,
-    existing: bool,
     user_id: int,
     classification: dict,
     url: str,
-    result,
+    payload: dict,
 ) -> None:
     """Background worker — saves an investigation row WITHOUT blocking the
-    request response. Heavy operations (model_dump on a 200KB+ payload,
-    JSON DB write) happen here instead of on the request thread, so the
-    user always sees their scan finish promptly even when the DB is slow.
+    request response. Retries up to 3 times with exponential back-off to
+    handle transient SQLite contention from other concurrent background tasks.
+
+    The payload dict is pre-serialised on the request thread (no Pydantic
+    objects here) so this function is safe to run in any thread.
     """
     import logging
     import time as _time
     log = logging.getLogger("omi.scan")
-    try:
-        from app.storage.repository import AccountRepository
-        label = _investigation_label(classification, url)
-        target_id = (
-            classification.get("video_id")
-            or classification.get("account_input")
-        )
-        t0 = _time.time()
-        with get_session() as session:
-            repo = AccountRepository(session)
-            inv = repo.get_investigation(slug=slug, user_id=user_id) if existing else None
-            if inv is None:
-                repo.create_investigation(
-                    user_id=user_id, slug=slug, label=label,
-                    input_url=url, target_id=target_id,
-                    kind=classification.get("kind", "comprehensive"),
-                    overall_probability=result.overall_probability,
-                    overall_tier=result.overall_tier.value,
-                    summary=result.summary,
-                    quota_used=result.quota_used,
-                    payload_json=_serialize_result(result),
+
+    label = _investigation_label(classification, url)
+    target_id = classification.get("video_id") or classification.get("account_input")
+    overall_probability = float(payload.get("overall_probability") or 0.0)
+    overall_tier = str(payload.get("overall_tier") or "low")
+    summary = str(payload.get("summary") or "")
+    quota_used = int(payload.get("quota_used") or 0)
+
+    for attempt in range(3):
+        try:
+            t0 = _time.time()
+            with get_session() as session:
+                from app.storage.repository import AccountRepository
+                repo = AccountRepository(session)
+                # Always look up first — handles both new investigations and
+                # continuation batches, and races where the first batch's save
+                # hasn't committed yet when the second batch arrives.
+                inv = repo.get_investigation(slug=slug, user_id=user_id)
+                if inv is None:
+                    repo.create_investigation(
+                        user_id=user_id, slug=slug, label=label,
+                        input_url=url[:500], target_id=target_id,
+                        kind=classification.get("kind", "comprehensive"),
+                        overall_probability=overall_probability,
+                        overall_tier=overall_tier,
+                        summary=summary,
+                        quota_used=quota_used,
+                        payload_json=payload,
+                    )
+                    log.info(
+                        "investigation %s created in %.1fs", slug, _time.time() - t0
+                    )
+                else:
+                    merged = _merge_payloads(inv.payload_json or {}, payload)
+                    repo.update_investigation_payload(
+                        inv,
+                        payload_json=merged,
+                        quota_used_delta=quota_used,
+                        overall_probability=overall_probability,
+                        overall_tier=overall_tier,
+                        summary=summary,
+                    )
+                    log.info(
+                        "investigation %s updated (batch %d) in %.1fs",
+                        slug, inv.batch_count, _time.time() - t0,
+                    )
+            return  # success
+        except Exception as e:  # noqa: BLE001
+            if attempt < 2:
+                wait = 2 ** attempt  # 1 s, 2 s
+                log.warning(
+                    "investigation %s persistence attempt %d failed (%s) — "
+                    "retrying in %ds",
+                    slug, attempt + 1, e, wait,
                 )
+                _time.sleep(wait)
             else:
-                merged_payload = _merge_payloads(inv.payload_json or {}, _serialize_result(result))
-                repo.update_investigation_payload(
-                    inv,
-                    payload_json=merged_payload,
-                    quota_used_delta=result.quota_used,
-                    overall_probability=result.overall_probability,
-                    overall_tier=result.overall_tier.value,
-                    summary=result.summary,
+                log.exception(
+                    "investigation %s persistence failed after 3 attempts", slug
                 )
-            session.commit()
-        log.info("investigation %s persisted in %.1fs", slug, _time.time() - t0)
-    except Exception as e:  # noqa: BLE001
-        log.exception("investigation %s persistence failed: %s", slug, e)
 
 
 def _persist_reply_pods(session, entity, platform: str, content_id: str, log) -> None:

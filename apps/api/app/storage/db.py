@@ -29,6 +29,7 @@ _logger = logging.getLogger("omi.storage")
 def _build_engine(url: str) -> Engine:
     connect_args: dict = {}
     kwargs: dict = {"future": True}
+    is_file_sqlite = url.startswith("sqlite") and ":memory:" not in url
     if url.startswith("sqlite"):
         # Allow multiple threads (FastAPI uses a threadpool for sync endpoints).
         connect_args["check_same_thread"] = False
@@ -41,7 +42,28 @@ def _build_engine(url: str) -> Engine:
             # Make sure the parent directory exists for file-backed sqlite.
             path = url.split("sqlite:///", 1)[-1]
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    return create_engine(url, connect_args=connect_args, **kwargs)
+            # Background tasks (narrative ingestion, content intelligence,
+            # investigation persistence) contend for the write lock. Without a
+            # timeout they fail immediately with "database is locked". 30 seconds
+            # is generous — any longer and the background pool would back up.
+            connect_args["timeout"] = 30
+    engine = create_engine(url, connect_args=connect_args, **kwargs)
+    if is_file_sqlite:
+        # WAL journal mode: readers never block writers; multiple readers can
+        # proceed concurrently with a single writer. NORMAL synchronous is safe
+        # under WAL (a crash mid-write at worst loses the last unflushed
+        # transaction, not the whole DB) and is significantly faster than FULL.
+        from sqlalchemy import event, text as _text
+
+        @event.listens_for(engine, "connect")
+        def _set_sqlite_pragmas(dbapi_conn, _record):
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.execute("PRAGMA wal_autocheckpoint=1000")
+            cur.close()
+
+    return engine
 
 
 def init_db(url: str | None = None) -> Engine:
