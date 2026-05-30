@@ -96,6 +96,12 @@ class ScanResult(BaseModel):
     # Surfaces "we didn't have enough posts to run the temporal detector"
     # so the UI can show data-quality caveats explicitly.
     weak_signals: list[str] = Field(default_factory=list)
+    # Plain-language record of post-hoc adjustments the aggregator made to the
+    # raw log-odds: correlated detectors discounted to avoid double-counting
+    # shared evidence, the single-signal HIGH cap, or the convergence bonus.
+    # Lets the UI explain *why* the headline number isn't just the sum of the
+    # bars. Empty when no adjustment applied.
+    score_adjustments: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +154,9 @@ class CommenterScanResult(BaseModel):
     recent_activity: list[dict] = Field(default_factory=list)
     activity_total: int = 0
     weak_signals: list[str] = Field(default_factory=list)
+    # Plain-language record of how the aggregator adjusted the raw signal sum:
+    # correlated detectors discounted, single-axis HIGH cap, convergence bonus.
+    score_adjustments: list[str] = Field(default_factory=list)
     # Per-detector breakdown — populated when signals are available.
     signals: list[SignalResult] = Field(default_factory=list)
 

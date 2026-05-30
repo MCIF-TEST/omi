@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     weight_engagement: float = Field(default=0.9)
     weight_coordination: float = Field(default=0.9)
 
+    # Signal-decorrelation factors. Several detectors share an underlying
+    # evidence basis: ``semantic`` + ``ai_writing`` both read text patterns,
+    # while ``temporal`` + ``engagement`` + ``coordination`` all partly read
+    # posting timing/cadence. Combining them in log-odds space as if they were
+    # independent double-counts the shared component and produces overconfident
+    # scores. When more than one member of a correlated group fires, every
+    # member beyond the strongest has its contribution multiplied by the group's
+    # redundancy factor (compounding for a third member). 1.0 disables the
+    # discount (treat as fully independent); lower discounts harder.
+    decorrelation_redundancy_content: float = Field(default=0.55)
+    decorrelation_redundancy_timing: float = Field(default=0.65)
+
     # Baseline prior probability that an arbitrary scanned account exhibits
     # synthetic / coordinated behavior. Accounts being scanned have selection
     # bias (they're suspected enough to be worth scanning), so 0.15 is more

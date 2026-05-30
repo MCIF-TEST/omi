@@ -406,6 +406,18 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
         </section>
       )}
 
+      {/* How the headline score was adjusted (decorrelation, caps, bonuses) */}
+      {(c.score_adjustments ?? []).length > 0 && (
+        <section>
+          <Label text="How this score was calibrated" />
+          <ul className="space-y-1 text-xs text-fg-mute">
+            {(c.score_adjustments ?? []).map((a, i) => (
+              <li key={i}>· {a}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {c.error && (
         <p className="text-xs text-danger bg-danger/10 border border-danger/40 rounded-sm px-3 py-2 font-mono">
           Scan error: {c.error}

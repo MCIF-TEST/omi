@@ -293,6 +293,7 @@ export interface CommenterScanResult {
   intent_label: string | null;
   reasons: string[];
   weak_signals: string[];
+  score_adjustments: string[];
   recent_activity: Array<{
     text: string;
     created_at: string | null;
