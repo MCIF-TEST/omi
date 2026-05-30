@@ -68,7 +68,7 @@ export function MonitoringClient() {
           <p className="text-sm text-fg-dim">
             No anomalies in the last 24 hours. The detector pass runs every 5
             minutes when enabled on the server. Spikes and surges appear here
-            as they're detected.
+            as they&apos;re detected.
           </p>
         ) : (
           <ul className="divide-y divide-border-1 -mx-2">
@@ -109,8 +109,8 @@ export function MonitoringClient() {
         </div>
         {(alerts.data?.alerts?.length ?? 0) === 0 ? (
           <p className="text-sm text-fg-dim">
-            No alerts yet. Add a watchlist below; you'll get notified when a
-            watched channel's tier changes or crosses your threshold.
+            No alerts yet. Add a watchlist below; you&apos;ll get notified when a
+            watched channel&apos;s tier changes or crosses your threshold.
           </p>
         ) : (
           <ul className="divide-y divide-border-1 -mx-2">

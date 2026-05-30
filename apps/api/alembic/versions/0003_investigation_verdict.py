@@ -26,6 +26,11 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    # Guard against a missing table, consistent with the sibling migrations:
+    # the supported workflow runs create_all first (which lays down
+    # `investigations`), then these migrations as idempotent patches.
+    if "investigations" not in inspector.get_table_names():
+        return
     cols = {c["name"] for c in inspector.get_columns("investigations")}
 
     if "verdict" not in cols:

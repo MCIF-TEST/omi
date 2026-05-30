@@ -620,6 +620,32 @@ export interface CommunitiesResponse {
   communities: CommunityOut[];
 }
 
+// User-curated named graphs — /v1/graphs/*
+export interface UserGraphMemberOut {
+  id: number;
+  external_id: string;
+  platform: string;
+  handle: string;
+  display_name: string | null;
+  tier: Tier | null;
+  avatar_url: string | null;
+  added_at: string;
+}
+
+export interface UserGraphOut {
+  id: number;
+  name: string;
+  platform: string;
+  member_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserGraphDetail extends UserGraphOut {
+  members: UserGraphMemberOut[];
+  edges: GraphEdge[];
+}
+
 export interface NarrativesResponse {
   window_days: number;
   embedder: string;

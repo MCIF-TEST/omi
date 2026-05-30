@@ -103,6 +103,9 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "referral_subscription_bonus_paid", "INTEGER DEFAULT 0"),
     # Phase C — reply-pod count on content entities
     ("content_entities", "latest_reply_pod_count", "INTEGER DEFAULT 0"),
+    # Password reset (single-use token hash + expiry)
+    ("users", "reset_token_hash", "VARCHAR(64)"),
+    ("users", "reset_token_expires", "TIMESTAMP WITH TIME ZONE"),
 ]
 
 

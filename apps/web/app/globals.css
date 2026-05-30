@@ -60,6 +60,13 @@
     font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* Mobile ergonomics: kill the grey tap flash, lock font scaling on
+       rotate, and stop the whole page from rubber-banding so the app feels
+       native rather than like a scrolled web document. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overscroll-behavior-y: none;
   }
   * { border-color: var(--border); }
   ::selection { background: rgba(59, 142, 255, 0.3); color: #fff; }
@@ -384,4 +391,69 @@
   [style*="hv-chip-in"] {
     animation: none !important;
   }
+}
+
+/* =====================================================================
+   Mobile — bottom tab bar, sheet, safe areas, tactile feedback.
+   Designed thumb-first: persistent navigation within reach, the home
+   indicator respected, and a light press-spring on every tap so the
+   surface feels alive.
+   ===================================================================== */
+
+/* Respect the home-indicator / notch. */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-top    { padding-top: env(safe-area-inset-top); }
+
+/* Press feedback — a subtle, quick spring inward. Pointer-fine devices
+   (mouse) keep their hover styling and skip this. */
+@media (hover: none) and (pointer: coarse) {
+  .tap { transition: transform 0.12s var(--ease-omi); }
+  .tap:active { transform: scale(0.94); }
+}
+
+/* Bottom tab item. Apple HIG: ≥44pt target, icon over short label,
+   unmistakable active state. */
+.tabbar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 52px;
+  flex: 1 1 0%;
+  color: var(--text-mute, #6b7488);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  position: relative;
+  transition: color 0.16s var(--ease-omi), transform 0.12s var(--ease-omi);
+  -webkit-tap-highlight-color: transparent;
+}
+.tabbar-item:active { transform: scale(0.92); }
+.tabbar-item.active { color: var(--accent-2); }
+.tabbar-item.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 26px;
+  height: 2.5px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, var(--accent), var(--violet));
+  box-shadow: 0 0 10px rgba(59, 142, 255, 0.7);
+}
+
+/* Slide-up sheet for the "More" menu. */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.sheet-panel { animation: sheet-up 0.32s var(--ease-omi); }
+.sheet-scrim { animation: sheet-fade 0.24s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel, .sheet-scrim { animation: none !important; }
+  .tap:active, .tabbar-item:active { transform: none !important; }
 }

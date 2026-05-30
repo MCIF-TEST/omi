@@ -7,6 +7,7 @@ import { Bell, LogOut, Search, Zap } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Logo } from '@/components/shared/logo';
 import { apiClient, type AlertsResponse, type User } from '@/lib/api';
 import { usePolling } from '@/lib/use-polling';
 import { ServiceHealthPill } from './service-health';
@@ -44,9 +45,14 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
   const unread = alerts.data?.unread_count ?? 0;
 
   return (
-    <header className="h-14 shrink-0 border-b border-border-1 bg-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-bg/60 px-5 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 bg-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-bg/60 px-4 md:px-5 flex items-center justify-between gap-4">
 
-      {/* Left: engine stats */}
+      {/* Brand — phones have no sidebar, so the wordmark lives here. */}
+      <Link href="/dashboard" className="md:hidden tap" aria-label="OMISPHERE home">
+        <Logo size="sm" />
+      </Link>
+
+      {/* Left: engine stats (desktop) */}
       <div className="hidden lg:flex items-center gap-3 font-mono text-2xs text-fg-mute tracking-wider">
         {engineStatus && (
           <>

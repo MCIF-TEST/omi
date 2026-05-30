@@ -64,7 +64,7 @@ export function CommentaryBlock({
           <CardTitle>No commentary yet</CardTitle>
           <p className="text-sm text-fg-dim mb-4 max-w-xl">
             Generate a brief, evidence-grounded analyst paragraph synthesizing this
-            investigation's verdict and key findings. Uses Claude Haiku when an
+            investigation&apos;s verdict and key findings. Uses Claude Haiku when an
             Anthropic API key is configured on the server; otherwise falls back
             to a deterministic template — both work, both ground the prose in
             the structured findings.

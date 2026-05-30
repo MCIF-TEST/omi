@@ -53,3 +53,5 @@ class SlidingWindowLimiter:
 # Pre-instantiated limiters used across the app
 LOGIN_LIMITER = SlidingWindowLimiter(max_hits=10, per_seconds=60)
 SIGNUP_LIMITER = SlidingWindowLimiter(max_hits=5, per_seconds=3600)
+# Password reset requests — tight, to slow token-mining + email bombing.
+RESET_LIMITER = SlidingWindowLimiter(max_hits=5, per_seconds=3600)

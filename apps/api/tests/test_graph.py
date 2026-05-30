@@ -198,52 +198,114 @@ def test_account_subgraph_includes_two_hop_neighbors():
 
 
 # ---------------------------------------------------------------------------
-# HTTP routes
+# HTTP routes — user-curated named graphs (/v1/graphs)
 # ---------------------------------------------------------------------------
 
 
-def test_subgraph_endpoint_returns_empty_for_unknown_account():
+def test_list_graphs_initially_empty():
     with TestClient(app) as tc:
-        r = tc.get("/v1/graph/account/youtube/UC_doesnotexist")
+        r = tc.get("/v1/graphs")
         assert r.status_code == 200
+        assert r.json() == []
+
+
+def test_create_and_list_graph():
+    with TestClient(app) as tc:
+        r = tc.post("/v1/graphs", json={"name": "Test Graph", "platform": "youtube"})
+        assert r.status_code == 201, r.text
         body = r.json()
-        assert body["nodes"] == []
-        assert body["edges"] == []
+        assert body["name"] == "Test Graph"
+        assert body["platform"] == "youtube"
+        assert body["member_count"] == 0
+        gid = body["id"]
+
+        r2 = tc.get("/v1/graphs")
+        assert r2.status_code == 200
+        graphs = r2.json()
+        assert len(graphs) == 1
+        assert graphs[0]["id"] == gid
 
 
-def test_communities_endpoint_returns_list():
+def test_duplicate_graph_name_returns_409():
+    with TestClient(app) as tc:
+        tc.post("/v1/graphs", json={"name": "dupe", "platform": "youtube"})
+        r = tc.post("/v1/graphs", json={"name": "dupe", "platform": "youtube"})
+        assert r.status_code == 409
+
+
+def test_rename_graph():
+    with TestClient(app) as tc:
+        r = tc.post("/v1/graphs", json={"name": "old name"})
+        gid = r.json()["id"]
+
+        r2 = tc.patch(f"/v1/graphs/{gid}", json={"name": "new name"})
+        assert r2.status_code == 200
+        assert r2.json()["name"] == "new name"
+
+
+def test_delete_graph():
+    with TestClient(app) as tc:
+        r = tc.post("/v1/graphs", json={"name": "to delete"})
+        gid = r.json()["id"]
+
+        r2 = tc.delete(f"/v1/graphs/{gid}")
+        assert r2.status_code == 204
+
+        r3 = tc.get("/v1/graphs")
+        assert r3.json() == []
+
+
+def test_add_and_remove_member():
+    with TestClient(app) as tc:
+        gid = tc.post("/v1/graphs", json={"name": "g1"}).json()["id"]
+
+        r = tc.post(
+            f"/v1/graphs/{gid}/members",
+            json={"external_id": "UCaaa", "handle": "@chan", "tier": "elevated"},
+        )
+        assert r.status_code == 201, r.text
+        body = r.json()
+        assert body["external_id"] == "UCaaa"
+        assert body["tier"] == "elevated"
+
+        detail = tc.get(f"/v1/graphs/{gid}").json()
+        assert len(detail["members"]) == 1
+
+        r2 = tc.delete(f"/v1/graphs/{gid}/members/UCaaa")
+        assert r2.status_code == 204
+
+        detail2 = tc.get(f"/v1/graphs/{gid}").json()
+        assert len(detail2["members"]) == 0
+
+
+def test_add_member_idempotent():
+    """Adding the same external_id twice returns the existing member (201 first, then same data)."""
+    with TestClient(app) as tc:
+        gid = tc.post("/v1/graphs", json={"name": "g2"}).json()["id"]
+        payload = {"external_id": "UCbbb", "handle": "@dup"}
+        r1 = tc.post(f"/v1/graphs/{gid}/members", json=payload)
+        r2 = tc.post(f"/v1/graphs/{gid}/members", json=payload)
+        assert r1.status_code == 201
+        assert r2.json()["external_id"] == "UCbbb"
+
+        detail = tc.get(f"/v1/graphs/{gid}").json()
+        assert len(detail["members"]) == 1
+
+
+def test_graph_detail_includes_coordination_edges_between_members():
+    """When two members share a coordination edge, the graph detail returns it."""
     with get_session() as session:
         store = GraphStore(session)
-        store.upsert_cluster(platform="youtube", members=["A", "B", "C", "D"],
-                             method="temporal_semantic_clique", cluster_score=0.8)
-        store.upsert_cluster(platform="youtube", members=["A", "B", "C", "D"],
-                             method="fingerprint_cluster", cluster_score=0.85)
-
+        store.upsert_observation(
+            platform="youtube", a="UCmem1", b="UCmem2",
+            method="co_engagement", cluster_score=0.8,
+        )
     with TestClient(app) as tc:
-        r = tc.get("/v1/graph/communities?platform=youtube&min_size=2")
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert "communities" in body
-        assert len(body["communities"]) >= 1
-
-
-def test_edge_detail_returns_404_when_missing():
-    with TestClient(app) as tc:
-        r = tc.get("/v1/graph/edges/youtube/AAA/BBB")
-        assert r.status_code == 404
-
-
-def test_edge_detail_returns_strength_and_methods():
-    with get_session() as session:
-        store = GraphStore(session)
-        store.upsert_cluster(platform="youtube", members=["A", "B"],
-                             method="co_engagement", cluster_score=0.5)
-        store.upsert_observation(platform="youtube", a="A", b="B",
-                                 method="style_match", cluster_score=0.7)
-    with TestClient(app) as tc:
-        r = tc.get("/v1/graph/edges/youtube/A/B")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["observation_count"] == 2
-        assert set(body["methods"]) == {"co_engagement", "style_match"}
-        assert 0.0 <= body["strength"] <= 1.0
+        gid = tc.post("/v1/graphs", json={"name": "coord-test", "platform": "youtube"}).json()["id"]
+        tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCmem1", "handle": "mem1"})
+        tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCmem2", "handle": "mem2"})
+        detail = tc.get(f"/v1/graphs/{gid}").json()
+        assert len(detail["edges"]) == 1
+        edge = detail["edges"][0]
+        assert {edge["a"], edge["b"]} == {"UCmem1", "UCmem2"}
+        assert 0.0 <= edge["strength"] <= 1.0

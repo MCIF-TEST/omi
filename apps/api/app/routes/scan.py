@@ -177,16 +177,27 @@ def _autolabel_suspension(target_input: str) -> None:
         ))
 
 
-def _activity_payload(posts: list, tier: Tier) -> tuple[list[dict], int]:
-    """Build the recent_activity samples for a non-low-tier account.
+def _activity_payload(
+    posts: list,
+    tier: Tier,
+    *,
+    limit: int = 10,
+    include_low: bool = False,
+) -> tuple[list[dict], int]:
+    """Build the recent_activity samples (the commenter's pulled comments).
 
-    Returns (samples, total). Low-tier accounts get empty samples to keep
-    the response payload small — the UI doesn't render activity for them.
+    Returns ``(samples, total)``. By default low-tier accounts get empty
+    samples to keep bulk scan payloads small — the list view doesn't render
+    activity for them. An explicit single-account deep scan passes
+    ``include_low=True`` (and usually a higher ``limit``) so the operator can
+    always see what an account has actually commented when they ask for it.
     """
-    if tier == Tier.LOW or not posts:
-        return [], len(posts) if posts else 0
+    if not posts:
+        return [], 0
+    if tier == Tier.LOW and not include_low:
+        return [], len(posts)
     samples: list[dict] = []
-    for p in posts[:10]:
+    for p in posts[:limit]:
         text = (getattr(p, "text", "") or "").strip()
         if len(text) > 280:
             text = text[:280] + "…"
@@ -667,7 +678,11 @@ def scan_youtube_account(
             force_refresh=force_refresh,
         )
 
-    activity_samples, activity_total = _activity_payload(history, orch.result.tier)
+    # A single-account scan is an explicit deep dive — always surface the
+    # pulled comment history (any tier) and show more of it than the bulk view.
+    activity_samples, activity_total = _activity_payload(
+        history, orch.result.tier, limit=30, include_low=True
+    )
     return AccountScanOut(
         external_id=channel_id,
         handle=profile.handle,
@@ -1024,6 +1039,9 @@ def scan_comprehensive_endpoint(
         # Build the video result the same way /youtube/full does
         commenter_results: list[CommenterScanResult] = []
         for r in out.video_output.commenter_records:
+            activity_samples, activity_total = _activity_payload(
+                r.posts, r.scan_result.tier
+            )
             commenter_results.append(CommenterScanResult(
                 external_id=r.external_id,
                 handle=r.handle,
@@ -1043,6 +1061,8 @@ def scan_comprehensive_endpoint(
                 reasons=list(r.scan_result.reasons or []),
                 weak_signals=list(r.scan_result.weak_signals or []),
                 signals=list(r.scan_result.signals or []),
+                recent_activity=activity_samples,
+                activity_total=activity_total,
             ))
         tier_counts = Counter(c.tier.value for c in commenter_results)
         high_handles = sorted(

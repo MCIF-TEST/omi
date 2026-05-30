@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
+import { MobileNav } from './mobile-nav';
 import { ServiceDegradedBanner } from './service-health';
 import { type User, type EngineStatus } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
@@ -32,14 +33,14 @@ export async function AppShell({ user, children }: AppShellProps) {
       )}
       {/* Admin diagnostics — env-var names, action items. */}
       {engineStatus?.storage_ephemeral && user.is_admin && (
-        <div className="bg-danger/15 border-b border-danger/40 px-6 py-2 text-xs font-mono text-danger">
+        <div className="bg-danger/15 border-b border-danger/40 px-4 md:px-6 py-2 text-xs font-mono text-danger">
           ⚠ Admin: database is ephemeral (SQLite). Every redeploy wipes all user
           accounts and saved investigations — provision Postgres and set{' '}
           <code className="bg-bg/40 px-1 rounded-sm">OMI_DATABASE_URL</code> before going live.
         </div>
       )}
       {engineStatus && !engineStatus.youtube_configured && user.is_admin && (
-        <div className="bg-warn/15 border-b border-warn/40 px-6 py-2 text-xs font-mono text-warn">
+        <div className="bg-warn/15 border-b border-warn/40 px-4 md:px-6 py-2 text-xs font-mono text-warn">
           ⚠ Admin: YouTube API key not configured. Set{' '}
           <code className="bg-bg/40 px-1 rounded-sm">OMI_YOUTUBE_API_KEY</code>
           {' '}in the API service env to restore scanning.
@@ -48,11 +49,15 @@ export async function AppShell({ user, children }: AppShellProps) {
       <div className="flex-1 flex relative z-10">
         <Sidebar />
         <main className="flex-1 min-w-0">
-          <div className="max-w-[1440px] mx-auto px-6 py-8 animate-fade-up">
+          {/* Bottom padding clears the mobile tab bar (+ home-indicator inset). */}
+          <div className="max-w-[1440px] mx-auto px-4 py-5 md:px-6 md:py-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 animate-fade-up">
             {children}
           </div>
         </main>
       </div>
+
+      {/* Thumb-reachable primary navigation — phones only. */}
+      <MobileNav email={user.email} />
     </div>
   );
 }

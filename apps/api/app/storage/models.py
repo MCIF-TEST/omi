@@ -204,6 +204,12 @@ class User(Base):
     # only once even if Stripe sends the subscription.created event twice.
     referral_subscription_bonus_paid: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Password reset. We store only a SHA-256 hash of the reset token (never
+    # the raw token), with a short expiry. Cleared after a successful reset
+    # so a token is single-use.
+    reset_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    reset_token_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
 
 class ScanLog(Base):
     """One row per scan a user initiates. Auditable history + analytics."""
@@ -318,6 +324,43 @@ class CoordinationEdge(Base):
     last_shared_parent: Mapped[str | None] = mapped_column(String(128), nullable=True)
     first_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     last_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+# ---------------------------------------------------------------------------
+# User-curated named graphs — operators manually collect profiles into
+# named graphs; Omi draws coordination edges between members automatically.
+# ---------------------------------------------------------------------------
+
+
+class UserGraph(Base):
+    __tablename__ = "user_graphs"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_user_graph_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    platform: Mapped[str] = mapped_column(String(32), default="youtube")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class UserGraphMember(Base):
+    __tablename__ = "user_graph_members"
+    __table_args__ = (
+        UniqueConstraint("graph_id", "external_id", name="uq_graph_member"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    graph_id: Mapped[int] = mapped_column(ForeignKey("user_graphs.id", ondelete="CASCADE"), index=True)
+    external_id: Mapped[str] = mapped_column(String(128), index=True)
+    platform: Mapped[str] = mapped_column(String(32), default="youtube")
+    handle: Mapped[str] = mapped_column(String(280), default="")
+    display_name: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 # ---------------------------------------------------------------------------

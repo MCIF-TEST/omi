@@ -879,8 +879,6 @@ def _compute_cross_links(
         # For each cluster in the video, check semantic overlap between pasted
         # comments and the cluster's members' comments.
         comment_texts_by_author: dict[str, list[str]] = {}
-        for item in []:  # placeholder; we'll iterate commenter_records.posts
-            pass
         for r in video_output.commenter_records:
             comment_texts_by_author[r.external_id] = [p.text for p in r.posts if p.text]
 
