@@ -93,12 +93,21 @@ def _euclid(a: list[float], b: list[float]) -> float:
     return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
 
 
+_MAX_ENTRIES = 150  # O(n²) loop — cap to keep latency bounded for large scans
+
+
 def detect_style_matches(
     entries: list[StyleEntry],
     *,
     distance_threshold: float = 0.10,
     min_cluster_size: int = 2,
 ) -> CoordinationFinding:
+    # Subsample: style matching is O(n²); beyond _MAX_ENTRIES the CPU cost
+    # dominates the request thread. Prioritise entries with more text (richer
+    # signal) so the most characterisable commenters are always included.
+    if len(entries) > _MAX_ENTRIES:
+        entries = sorted(entries, key=lambda e: sum(len(t) for t in e.texts), reverse=True)[:_MAX_ENTRIES]
+
     vectors: list[tuple[StyleEntry, list[float]]] = []
     for e in entries:
         v = _style_vector(e.texts)

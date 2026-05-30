@@ -41,6 +41,9 @@ class CommentEntry:
     created_at: datetime
 
 
+_MAX_COMMENTS = 500  # beyond this, keep the most-recent subset to stay O(1) memory
+
+
 def detect_temporal_semantic_cliques(
     comments: list[CommentEntry],
     *,
@@ -49,6 +52,12 @@ def detect_temporal_semantic_cliques(
     min_cluster_authors: int = 3,
 ) -> CoordinationFinding:
     """Find dense same-content-same-time cliques across multiple authors."""
+    # Cap input: bursts are time-concentrated so the most-recent window is the
+    # most signal-rich. Keeping only _MAX_COMMENTS prevents the N×N cosine
+    # matrix from blowing up memory/CPU for large video scans.
+    if len(comments) > _MAX_COMMENTS:
+        comments = sorted(comments, key=lambda c: c.created_at, reverse=True)[:_MAX_COMMENTS]
+
     if len(comments) < min_cluster_authors:
         return CoordinationFinding(
             method="temporal_semantic_clique",
@@ -85,20 +94,19 @@ def detect_temporal_semantic_cliques(
     vectors = matrix.toarray().astype(np.float32)
     sim = cosine_similarity(vectors)
 
+    # Build the edge list using numpy vectorised operations — avoids an O(n²)
+    # Python loop that would dominate runtime for large batches.
     n = len(comments)
+    timestamps = np.array([c.created_at.timestamp() for c in comments], dtype=np.float64)
+    dt_matrix = np.abs(timestamps[:, None] - timestamps[None, :])
+    match = np.triu((dt_matrix <= time_window_seconds) & (sim >= similarity_threshold), k=1)
+    row_idxs, col_idxs = match.nonzero()
+
     uf = _UnionFind(range(n))
     edge_pairs: list[tuple[int, int, float]] = []
-    for i in range(n):
-        ti = comments[i].created_at.timestamp()
-        for j in range(i + 1, n):
-            tj = comments[j].created_at.timestamp()
-            if abs(ti - tj) > time_window_seconds:
-                continue
-            s = float(sim[i, j])
-            if s < similarity_threshold:
-                continue
-            uf.union(i, j)
-            edge_pairs.append((i, j, s))
+    for i, j in zip(row_idxs.tolist(), col_idxs.tolist()):
+        uf.union(i, j)
+        edge_pairs.append((i, int(j), float(sim[i, j])))
 
     clusters: list[CoordinationCluster] = []
     for _, member_idxs in uf.components().items():
