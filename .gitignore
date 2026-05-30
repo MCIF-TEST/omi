@@ -40,3 +40,8 @@ datasets/_generated/
 # OS
 Thumbs.db
 apps/web/tsconfig.tsbuildinfo
+
+# Fitted ML artifacts — environment-specific, produced by scripts/fit_correlation.py.
+# A dev-fit committed here would silently change scoring behavior; deploy via the
+# environment instead. Remove this line to ship a validated model.
+apps/api/models/signal_correlation.json

@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     decorrelation_redundancy_content: float = Field(default=0.55)
     decorrelation_redundancy_timing: float = Field(default=0.65)
 
+    # Optional learned signal-correlation model. When this JSON artifact exists
+    # (produced by ``scripts/fit_correlation.py`` from the labeled corpus), the
+    # aggregator derives its decorrelation factors AND its independence-axis
+    # assignment from the *measured* pairwise detector correlations instead of
+    # the hand-tuned groups above. Absent or unreadable → fall back to the
+    # default group model, so behavior is unchanged out of the box.
+    correlation_model_path: str = "models/signal_correlation.json"
+
     # Baseline prior probability that an arbitrary scanned account exhibits
     # synthetic / coordinated behavior. Accounts being scanned have selection
     # bias (they're suspected enough to be worth scanning), so 0.15 is more

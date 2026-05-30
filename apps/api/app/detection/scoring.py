@@ -19,46 +19,21 @@ from __future__ import annotations
 import math
 
 from app.core.config import Settings, get_settings
+from app.detection.correlation import (
+    CORRELATION_GROUPS,
+    get_correlation_model,
+    static_axis_of,
+)
 from app.schemas import ScanResult, SignalResult, Tier
 
+# Re-exported for backward compatibility: the independence-axis helper under the
+# default group model. Internally the aggregator uses the *active* correlation
+# model (which may be the learned one), but callers/tests importing ``_axis_of``
+# get the stable default semantics.
+_axis_of = static_axis_of
 
-# ---------------------------------------------------------------------------
-# Signal-correlation model
-#
-# Detectors are not independent likelihood sources. Two families share an
-# underlying evidence basis, so when several members fire together they are
-# partly re-measuring the same thing. Combining them in log-odds space as if
-# independent double-counts that shared component → overconfident scores and
-# overconfident confidence. We discount the redundant members (see
-# ``_redundancy_factors``) and we count *axes*, not raw detector counts, when
-# deciding whether independent detectors have truly converged.
-#
-# Each group names its members and the Settings attribute holding its
-# redundancy factor (so the discount is tunable / calibratable without code
-# changes; 1.0 disables it for that group).
-# ---------------------------------------------------------------------------
-
-CORRELATION_GROUPS: dict[str, dict] = {
-    "content_text": {
-        "members": frozenset({"semantic", "ai_writing"}),
-        "setting": "decorrelation_redundancy_content",
-        "label": "text-pattern",
-    },
-    "behavioral_timing": {
-        "members": frozenset({"temporal", "engagement", "coordination"}),
-        "setting": "decorrelation_redundancy_timing",
-        "label": "posting-timing",
-    },
-}
-
-
-def _axis_of(name: str) -> str:
-    """Return the independence axis a detector belongs to. Correlated detectors
-    share their group's axis; everything else is its own axis."""
-    for axis, group in CORRELATION_GROUPS.items():
-        if name in group["members"]:
-            return axis
-    return name
+# Keep the name importable for any external reference.
+__all__ = ["aggregate", "CORRELATION_GROUPS", "_axis_of", "_redundancy_factors"]
 
 
 def _redundancy_factors(
@@ -67,46 +42,15 @@ def _redundancy_factors(
     settings: Settings,
     prior_logit: float,
 ) -> tuple[dict[str, float], list[str]]:
-    """Compute a per-detector contribution multiplier in [0, 1].
+    """Per-detector contribution multiplier in [0, 1], plus plain-language notes.
 
-    Within each correlated group the strongest-contributing member keeps its
-    full weight; each additional member is multiplied by the group's redundancy
-    factor, compounding by rank (2nd → r, 3rd → r²). Detectors outside any group
-    keep factor 1.0. Returns ``(factors, notes)`` where notes are plain-language
-    explanations of any discount applied (for ScanResult.score_adjustments).
+    Delegates to the active correlation model: the default group model (each
+    additional member of a correlated group discounted by a compounding
+    redundancy factor) when no learned artifact exists, or the fitted matrix
+    model (continuous discount from measured pairwise correlation) when it does.
     """
-    prior = prior_logit
-    info: dict[str, float] = {}
-    for s in signals:
-        w = weights.get(s.name, 0.0)
-        if s.confidence <= 0 or w <= 0:
-            continue
-        p = min(0.98, max(0.02, s.probability))
-        info[s.name] = abs(_logit(p) - prior) * s.confidence * w
-
-    factors: dict[str, float] = {name: 1.0 for name in info}
-    notes: list[str] = []
-    for group in CORRELATION_GROUPS.values():
-        present = [n for n in info if n in group["members"]]
-        if len(present) <= 1:
-            continue
-        r = float(getattr(settings, group["setting"], 1.0))
-        if r >= 1.0:
-            continue  # discount disabled for this group
-        ranked = sorted(present, key=lambda n: info[n], reverse=True)
-        discounted = []
-        for rank, name in enumerate(ranked):
-            if rank == 0:
-                continue
-            factors[name] = r ** rank
-            discounted.append(name)
-        if discounted:
-            notes.append(
-                f"Discounted overlapping {group['label']} evidence "
-                f"({', '.join(discounted)}) so correlated detectors aren't "
-                f"counted as independent corroboration."
-            )
-    return factors, notes
+    model = get_correlation_model(settings)
+    return model.compute_factors(signals, weights, prior_logit)
 
 
 def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> ScanResult:
@@ -128,9 +72,15 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     effective_weight_sum = 0.0
     adjustments: list[str] = []
 
+    # Active correlation model: learned matrix when an artifact exists, else the
+    # hand-tuned default groups. Drives both the redundancy discount and the
+    # independence-axis assignment used by the convergence bonus / single-axis cap.
+    model = get_correlation_model(settings)
+    axis_of = model.axis_of
+
     # Decorrelate: discount redundant members of each correlated detector group
     # before combining, so shared evidence isn't double-counted.
-    factors, decorr_notes = _redundancy_factors(signals, weights, settings, prior_logit)
+    factors, decorr_notes = model.compute_factors(signals, weights, prior_logit)
     adjustments.extend(decorr_notes)
 
     for sig in signals:
@@ -156,7 +106,7 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     strong = [s for s in signals
               if s.probability > 0.60 and s.confidence > 0.30
               and weights.get(s.name, 0.0) > 0]
-    strong_axes = {_axis_of(s.name) for s in strong}
+    strong_axes = {axis_of(s.name) for s in strong}
     if len(strong_axes) >= 3:
         posterior_logit += 0.45 * (len(strong_axes) - 2)
         adjustments.append(
@@ -172,7 +122,7 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     # least one *other independent* axis (two correlated detectors do not
     # count). Cap at the ELEVATED ceiling.
     confident = [s for s in signals if s.confidence > 0.30 and weights.get(s.name, 0.0) > 0]
-    confident_axes = {_axis_of(s.name) for s in confident}
+    confident_axes = {axis_of(s.name) for s in confident}
     if len(confident_axes) <= 1 and overall >= 0.75:
         overall = 0.74
         adjustments.append(
