@@ -68,6 +68,7 @@ export function SearchClient({ initialQuery }: { initialQuery: string }) {
         <div className="relative">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none" />
           <input
+            aria-label="Search accounts"
             type="text"
             value={query}
             onChange={(e) => handleChange(e.target.value)}

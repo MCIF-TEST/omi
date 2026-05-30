@@ -55,6 +55,7 @@ export function DeleteAccountButton({ email }: { email: string }) {
       <Input
         type="email"
         autoComplete="off"
+        aria-label="Confirm your email to delete your account"
         placeholder="Retype your email"
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}

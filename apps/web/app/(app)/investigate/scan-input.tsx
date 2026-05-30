@@ -46,6 +46,7 @@ export function ScanInput({ initialUrl = '', pending, batchSize, onBatchSizeChan
     <form onSubmit={onSubmit} className="space-y-3">
       <div className="flex flex-col sm:flex-row gap-3">
         <Input
+          aria-label="YouTube video or channel URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Paste a YouTube video or channel URL…"

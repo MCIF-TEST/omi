@@ -118,6 +118,7 @@ export function AccountActivityPanel({ platform, externalId }: Props) {
               className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none"
             />
             <input
+              aria-label="Search comments"
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
