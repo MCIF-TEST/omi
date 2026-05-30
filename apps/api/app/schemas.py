@@ -444,6 +444,53 @@ class CommunitiesResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# User-curated named graphs — /v1/graphs/*
+# ---------------------------------------------------------------------------
+
+
+class CreateGraphRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    platform: str = "youtube"
+
+
+class RenameGraphRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class AddGraphMemberRequest(BaseModel):
+    external_id: str
+    handle: str = ""
+    display_name: str | None = None
+    tier: str | None = None
+    avatar_url: str | None = None
+
+
+class UserGraphMemberOut(BaseModel):
+    id: int
+    external_id: str
+    platform: str
+    handle: str
+    display_name: str | None = None
+    tier: str | None = None
+    avatar_url: str | None = None
+    added_at: datetime
+
+
+class UserGraphOut(BaseModel):
+    id: int
+    name: str
+    platform: str
+    member_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserGraphDetail(UserGraphOut):
+    members: list[UserGraphMemberOut]
+    edges: list[GraphEdge]
+
+
+# ---------------------------------------------------------------------------
 # Investigations (Phase 5) — persistent scan records
 # ---------------------------------------------------------------------------
 
