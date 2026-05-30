@@ -1,10 +1,15 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { TrendingUp, AlertTriangle, MessageSquareText, ArrowRight, BarChart2, ShieldAlert } from 'lucide-react';
+import { TrendingUp, AlertTriangle, MessageSquareText, ArrowRight, BarChart2, ShieldAlert, Radar, Loader2 } from 'lucide-react';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
 import { CommenterThreatPanel } from '@/components/shared/commenter-threat-panel';
-import { type CommenterScanResult, type SignalResult } from '@/lib/api';
+import { apiClient, ApiError, type AccountScanOut, type CommenterScanResult, type SignalResult } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
+
+type ActivitySample = CommenterScanResult['recent_activity'][number];
 
 const SIGNAL_LABELS: Record<string, string> = {
   temporal:    'Posting cadence',
@@ -23,6 +28,46 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
   const showAdjusted = adjusted != null && Math.abs(adjusted - c.overall_probability) > 0.005;
   const isFlagged = c.tier !== 'low';
   const signals = (c.signals ?? []).filter((s) => s.confidence > 0);
+
+  // On-demand deep scan of THIS commenter: pulls their recent comment history
+  // (and a fresh score) via the single-account scan, so the operator can see
+  // what an account has actually been commenting — even for low-tier or cached
+  // commenters whose history wasn't bundled into the bulk scan.
+  const [deep, setDeep] = useState<{
+    loading: boolean;
+    error: string | null;
+    activity: ActivitySample[] | null;
+    total: number;
+  }>({ loading: false, error: null, activity: null, total: 0 });
+
+  const runDeepScan = async () => {
+    setDeep((d) => ({ ...d, loading: true, error: null }));
+    try {
+      const res = await apiClient<AccountScanOut>('/v1/scan/youtube/account', {
+        method: 'POST',
+        body: JSON.stringify({ account_url_or_handle: c.external_id, force_refresh: true }),
+      });
+      setDeep({
+        loading: false,
+        error: null,
+        activity: res.recent_activity ?? [],
+        total: res.activity_total ?? (res.recent_activity?.length ?? 0),
+      });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.status === 402 ? 'Out of credits — visit Settings to subscribe.'
+          : e.status === 401 ? 'Please log in to scan.'
+          : e.message
+          : e instanceof Error && e.message ? e.message
+          : 'Scan failed. Try again.';
+      setDeep((d) => ({ ...d, loading: false, error: msg }));
+    }
+  };
+
+  // Prefer freshly-pulled history; fall back to whatever the bulk scan bundled.
+  const activity = deep.activity ?? c.recent_activity ?? [];
+  const activityTotal = deep.activity ? deep.total : c.activity_total;
 
   return (
     <article className="space-y-5 p-5">
@@ -101,15 +146,44 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
         </section>
       )}
 
-      {/* Activity sample */}
-      {isFlagged && (c.recent_activity ?? []).length > 0 && (
-        <section>
+      {/* Comment history — what this account has actually been commenting.
+          Omi bundles a sample on the bulk scan for flagged accounts; the
+          button pulls (or refreshes) the full recent history on demand for
+          anyone, including low-tier or cached commenters. */}
+      <section>
+        <div className="flex items-center justify-between gap-2 mb-2">
           <Label
             icon={<MessageSquareText size={11} />}
-            text={`Activity — showing ${c.recent_activity.length} of ${c.activity_total}`}
+            text={
+              activity.length > 0
+                ? `Comment history — showing ${activity.length} of ${activityTotal}`
+                : 'Comment history'
+            }
           />
+          <button
+            type="button"
+            onClick={runDeepScan}
+            disabled={deep.loading}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 font-mono text-2xs uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
+            title="Pull this account's recent comments from YouTube (uses 1 credit)"
+          >
+            {deep.loading ? (
+              <><Loader2 size={11} className="animate-spin" /> Scanning…</>
+            ) : (
+              <><Radar size={11} /> {activity.length > 0 ? 'Rescan history' : 'Scan history'}</>
+            )}
+          </button>
+        </div>
+
+        {deep.error && (
+          <p className="text-xs text-danger bg-danger/10 border border-danger/40 rounded-sm px-3 py-2 font-mono mb-2">
+            {deep.error}
+          </p>
+        )}
+
+        {activity.length > 0 ? (
           <div className="space-y-2">
-            {(c.recent_activity ?? []).map((a, i) => (
+            {activity.map((a, i) => (
               <div key={i} className="bg-bg border border-border-1 rounded-xl p-3 hover:border-border-hot/60 transition-colors">
                 <p className="text-sm text-fg leading-relaxed break-words">{a.text}</p>
                 <div className="mt-2 flex items-center justify-between gap-2 font-mono text-2xs tracking-wider uppercase text-fg-mute">
@@ -128,8 +202,15 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
               </div>
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          !deep.loading && (
+            <p className="text-xs text-fg-mute leading-relaxed">
+              No comments pulled yet. Scan to fetch this account&apos;s recent
+              comment history from YouTube.
+            </p>
+          )
+        )}
+      </section>
 
       {/* Coordination evidence */}
       {(c.coordination_evidence ?? []).length > 0 && (
