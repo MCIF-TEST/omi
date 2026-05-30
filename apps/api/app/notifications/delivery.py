@@ -147,6 +147,48 @@ def deliver_alert(alert_id: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Transactional email (password reset, etc.) — not tied to an Alert row.
+# ---------------------------------------------------------------------------
+
+
+def send_transactional_email(to: str, subject: str, text: str) -> tuple[bool, str | None]:
+    """Send a one-off transactional email (e.g. a password-reset link).
+
+    Reuses the same SMTP configuration and the ``_email_sender_for_tests``
+    hook as alert delivery, so tests can intercept it without real I/O.
+    Returns ``(ok, error)``. Never raises.
+    """
+    payload = {"to": to, "subject": subject, "text": text, "from": get_settings().smtp_from}
+
+    if _email_sender_for_tests is not None:
+        try:
+            _email_sender_for_tests(payload)
+            return True, None
+        except Exception as e:  # noqa: BLE001
+            return False, str(e)[:200]
+
+    settings = get_settings()
+    if not settings.smtp_host:
+        return False, "smtp_not_configured"
+
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = settings.smtp_from
+        msg["To"] = to
+        msg.set_content(text)
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as s:
+            if settings.smtp_use_tls:
+                s.starttls()
+            if settings.smtp_user and settings.smtp_password:
+                s.login(settings.smtp_user, settings.smtp_password)
+            s.send_message(msg)
+        return True, None
+    except Exception as e:  # noqa: BLE001
+        return False, type(e).__name__ + ": " + str(e)[:160]
+
+
+# ---------------------------------------------------------------------------
 # Email
 # ---------------------------------------------------------------------------
 

@@ -192,6 +192,143 @@ def logout(response: Response) -> dict:
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# Password reset — request a token by email, then set a new password.
+# ---------------------------------------------------------------------------
+
+# Reset tokens live for one hour. Long enough to walk away from the inbox,
+# short enough that a leaked link is mostly stale.
+_RESET_TOKEN_TTL_MINUTES = 60
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=4, max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=128)
+    password: str = Field(min_length=8, max_length=200)
+
+
+def _hash_reset_token(raw: str) -> str:
+    import hashlib
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+@router.post("/forgot-password")
+def forgot_password(
+    req: ForgotPasswordRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Issue a password-reset token and email it.
+
+    Always returns the same 200 response whether or not the email exists —
+    this prevents the endpoint from being used to enumerate registered
+    accounts. The token is single-use, hashed at rest, and expires in an hour.
+    """
+    from datetime import timedelta
+    import secrets
+
+    from app.core.rate_limit import RESET_LIMITER
+
+    ip = client_ip(request)
+    if not RESET_LIMITER.hit(ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many reset requests. Try again later.",
+        )
+
+    generic_ok = {
+        "ok": True,
+        "message": "If an account exists for that email, a reset link is on its way.",
+    }
+
+    email = req.email.strip().lower()
+    if not is_valid_email(email):
+        # Don't leak validity — same generic response.
+        return generic_ok
+
+    with get_session() as session:
+        user = session.query(User).filter(User.email == email).first()
+        if user is None:
+            return generic_ok
+
+        raw_token = secrets.token_urlsafe(32)
+        user.reset_token_hash = _hash_reset_token(raw_token)
+        user.reset_token_expires = datetime.now(timezone.utc) + timedelta(
+            minutes=_RESET_TOKEN_TTL_MINUTES
+        )
+        session.commit()
+
+    # Build the reset link against the public web origin and email it.
+    base = (settings.public_base_url or "").rstrip("/")
+    link = f"{base}/reset-password?token={raw_token}"
+    text = (
+        "We received a request to reset your OMISPHERE password.\n\n"
+        f"Reset it here (valid for {_RESET_TOKEN_TTL_MINUTES} minutes):\n"
+        f"{link}\n\n"
+        "If you didn't request this, you can safely ignore this email — your "
+        "password won't change.\n\n"
+        "— OMISPHERE"
+    )
+    try:
+        from app.notifications.delivery import send_transactional_email
+        send_transactional_email(email, "[OMISPHERE] Reset your password", text)
+    except Exception:  # noqa: BLE001 — delivery failure must not 500 the request
+        pass
+
+    return generic_ok
+
+
+@router.post("/reset-password", response_model=UserOut)
+def reset_password(
+    req: ResetPasswordRequest,
+    response: Response,
+    settings: Settings = Depends(get_settings),
+) -> UserOut:
+    """Consume a reset token and set a new password.
+
+    On success the token is cleared (single-use) and the user is logged in
+    so they land straight in the app.
+    """
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    token_hash = _hash_reset_token(req.token)
+    now = datetime.now(timezone.utc)
+
+    with get_session() as session:
+        user = session.query(User).filter(User.reset_token_hash == token_hash).first()
+        expires = user.reset_token_expires if user else None
+        # Normalize to aware UTC — SQLite can hand back naive datetimes.
+        if expires is not None and expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if user is None or expires is None or expires < now:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This reset link is invalid or has expired. Request a new one.",
+            )
+
+        user.password_hash = hash_password(req.password)
+        user.reset_token_hash = None
+        user.reset_token_expires = None
+        user.last_login_at = now
+        session.commit()
+
+        issue_session(response, user, settings)
+        return UserOut(
+            id=user.id,
+            email=user.email,
+            credits_remaining=user.credits_remaining,
+            subscription_status=user.subscription_status,
+            subscription_renews_at=user.subscription_renews_at,
+            is_admin=bool(user.is_admin),
+            referral_code=user.referral_code,
+            referral_credits_earned=user.referral_credits_earned,
+        )
+
+
 @router.get("/me", response_model=UserOut | None)
 def me(
     current: CurrentUser | None = Depends(get_optional_user),

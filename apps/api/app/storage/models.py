@@ -204,6 +204,12 @@ class User(Base):
     # only once even if Stripe sends the subscription.created event twice.
     referral_subscription_bonus_paid: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Password reset. We store only a SHA-256 hash of the reset token (never
+    # the raw token), with a short expiry. Cleared after a successful reset
+    # so a token is single-use.
+    reset_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    reset_token_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
 
 class ScanLog(Base):
     """One row per scan a user initiates. Auditable history + analytics."""

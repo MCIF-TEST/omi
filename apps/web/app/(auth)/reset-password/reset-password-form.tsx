@@ -2,31 +2,43 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { apiClient, ApiError } from '@/lib/api';
 
-export function LoginForm({ next }: { next?: string }) {
+export function ResetPasswordForm({ token }: { token: string }) {
   const router = useRouter();
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (password !== confirm) {
+      setError('Passwords don’t match.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setPending(true);
     try {
-      await apiClient('/v1/auth/login', {
+      await apiClient('/v1/auth/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ token, password }),
       });
+      // Reset logs the user in — go straight to the app.
       router.refresh();
-      router.push(next || '/dashboard');
+      router.push('/dashboard');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Login failed. Try again.');
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : 'Couldn’t reset your password. Request a new link and try again.',
+      );
     } finally {
       setPending(false);
     }
@@ -35,34 +47,27 @@ export function LoginForm({ next }: { next?: string }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4" autoComplete="on">
       <div>
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </div>
-      <div>
-        <div className="flex items-center justify-between">
-          <Label htmlFor="password">Password</Label>
-          <Link
-            href="/forgot-password"
-            className="text-2xs font-mono text-fg-mute hover:text-accent transition-colors"
-          >
-            Forgot password?
-          </Link>
-        </div>
+        <Label htmlFor="password">New password</Label>
         <Input
           id="password"
           type="password"
-          autoComplete="current-password"
+          autoComplete="new-password"
           required
           minLength={8}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
+      <div>
+        <Label htmlFor="confirm">Confirm new password</Label>
+        <Input
+          id="confirm"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
         />
       </div>
       {error && (
@@ -71,7 +76,7 @@ export function LoginForm({ next }: { next?: string }) {
         </p>
       )}
       <Button type="submit" size="lg" className="w-full" disabled={pending}>
-        {pending ? 'Signing in…' : 'Log in'}
+        {pending ? 'Updating…' : 'Update password'}
       </Button>
     </form>
   );
