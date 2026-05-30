@@ -118,6 +118,29 @@ Demoting `ai_writing` unmasked an elevated/high **recall gap** (macro-F1 had fal
 
 ---
 
+## BILLING-01 — Batch-based scan credit pricing  ✅ done
+
+**Shipped**
+- `compute_scan_credits(platform, max_commenters, settings) → int` in `app/core/auth.py`.
+  Formula: `ceil(max_commenters / scan_batch_unit) × credits_per_batch[platform]`, minimum 1.
+- Wired into all batch-scan endpoints: `scan_link`, `scan_youtube_video`, `scan_youtube_video_full`, `scan_comprehensive_endpoint`. `scan_youtube_account` stays at 1 credit (single-account, not a batch).
+- Error-path refunds in `_handle_youtube_error` now pass the computed cost, so refunds match what was actually charged.
+- 15 unit tests (`tests/test_batch_pricing.py`) covering YouTube/Twitter math, edge cases, and formula regression guard.
+
+**🎛 New knobs** (all in config, safe defaults)
+- `OMI_SCAN_BATCH_UNIT` (50) — commenters per billing unit.
+- `OMI_CREDITS_PER_BATCH_YOUTUBE` (1) — credits per 50 YouTube commenters.
+- `OMI_CREDITS_PER_BATCH_TWITTER` (10) — credits per 50 Twitter commenters.
+
+**🧭 Decisions**
+- YouTube is cheap (free quota), so 1 credit/50 is essentially unchanged from the old flat rate for most scans (≤50 commenters = 1 credit, ≤100 = 2 credits).
+- Twitter is metered at $0.005/read; 50 commenters × 10 posts of history ≈ $3.50 cost; 10 credits × $0.50/credit = $5.00 revenue → ~30% margin.
+- Unknown platforms fall back to the YouTube rate (conservative, not penalizing).
+
+**✅ Baseline:** 482 backend tests.
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)

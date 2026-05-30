@@ -103,6 +103,30 @@ class Settings(BaseSettings):
     free_trial_credits: int = 3
     # Credits added when a subscription becomes active or renews.
     monthly_credit_grant: int = 20
+
+    # -----------------------------------------------------------------------
+    # Batch-based scan pricing.
+    #
+    # A comment-batch scan is billed *per batch of commenters scanned* rather
+    # than a flat rate per call, so credit cost tracks the per-commenter API
+    # cost. This matters most for metered data APIs: YouTube's quota is
+    # effectively free (10k units/day ≈ 195 scans), but X/Twitter charges
+    # ~$0.005 per post read, so a 50-commenter batch with H posts of history
+    # each costs ~50×(H+4)×$0.005 in real money.
+    #
+    # Credits charged = ceil(commenters_requested / scan_batch_unit)
+    #                   × credits_per_batch[platform].
+    #
+    # With the defaults below: a YouTube batch of ≤50 commenters costs 1 credit
+    # (unchanged from the old flat rate); a Twitter batch of ≤50 costs 10. At
+    # ~$0.50/credit that is $5.00 of revenue per Twitter batch — which only
+    # clears the API cost if the Twitter history depth is kept lean (≈10 posts
+    # per commenter → ~50×14×$0.005 ≈ $3.50 cost, ~30% margin). Raise
+    # credits_per_batch_twitter or lower the Twitter history depth if you scan
+    # deeper than that.
+    scan_batch_unit: int = 50
+    credits_per_batch_youtube: int = 1
+    credits_per_batch_twitter: int = 10
     # Comma-separated list of email addresses auto-promoted to admin on
     # signup. Admins skip credit consumption and see /v1/metrics. Lowercased
     # for comparison.

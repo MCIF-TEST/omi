@@ -17,6 +17,7 @@ no-op.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import secrets
@@ -299,6 +300,26 @@ def refund_credits(
             recent.success = 0
             recent.target_input = (recent.target_input or "")[:480] + f" [REFUND:{reason[:20]}]"
         return u.credits_remaining
+
+
+def compute_scan_credits(
+    platform: str,
+    max_commenters: int,
+    settings: Settings | None = None,
+) -> int:
+    """Credits for one batch scan.
+
+    Formula: ceil(max_commenters / scan_batch_unit) × credits_per_batch[platform].
+    Minimum 1. Unknown platforms fall back to the YouTube rate.
+    """
+    settings = settings or get_settings()
+    batches = math.ceil(max_commenters / settings.scan_batch_unit) if max_commenters > 0 else 1
+    per_batch = (
+        settings.credits_per_batch_twitter
+        if platform == "twitter"
+        else settings.credits_per_batch_youtube
+    )
+    return max(1, batches * per_batch)
 
 
 def generate_secret() -> str:
