@@ -66,9 +66,24 @@ from app.evaluation import (
 # tier accuracy 0.646 → 0.631, macro-F1 0.583 → 0.588. The slight accuracy dip
 # is explained by the single-axis cap correctly classifying engagement_farm_high
 # as ELEVATED (one suspicious axis only), which is the right policy tradeoff.
-GATE_MAX_BRIER = 0.045      # current 0.0345; was 0.070 after GAP-03
-GATE_MIN_ACCURACY = 0.62    # current 0.631; was 0.646 after GAP-03 (majority baseline 0.338)
-GATE_MIN_MACRO_F1 = 0.57    # current 0.588; was 0.583 after GAP-03
+# GAP-05 confidence calibration recalibrated the narrative detector's probability
+# curve (centre 0.30 → 0.12 — explicit IO-disclosure phrasing is suspicious at
+# much lower marker rates than the old curve assumed; a 30%-marker account was
+# mapping to a useless 0.50) and expanded its pattern recall to catch common
+# real-world astroturf phrasings the original set missed ("they are trying to
+# silence us", "before it gets taken down", "(mainstream) media won't cover").
+# A 2-axis convergence bonus was tested and REJECTED — it worsened Brier by
+# pushing ambiguous over-detected cases higher without cleanly recovering the
+# under-detected ones (the residual misses are genuinely signal-ambiguous, e.g.
+# clean_ai_verbose_writer vs elevated_broadcast_voice share a near-identical
+# signal vector — separating them needs new discriminating features owned by
+# GAP-07/GAP-10, not threshold tuning).
+# Net effect on the seed benchmark: Brier 0.0345 → 0.0275 (20% further
+# improvement), accuracy 0.631 (held), macro-F1 0.588 → 0.585, ZERO new false
+# positives (narrative fires only on the two genuine astroturf archetypes).
+GATE_MAX_BRIER = 0.032      # current 0.0275; was 0.045 after GAP-04
+GATE_MIN_ACCURACY = 0.62    # current 0.631
+GATE_MIN_MACRO_F1 = 0.57    # current 0.585
 
 
 @pytest.fixture(scope="module")

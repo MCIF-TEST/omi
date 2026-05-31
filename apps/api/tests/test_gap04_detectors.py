@@ -188,11 +188,18 @@ def test_narrative_insufficient_posts():
 
 
 def test_narrative_mixed_moderate_rate():
-    """2 out of 10 posts (20%) should produce below-neutral probability."""
+    """2 of 10 posts (20%) with EXPLICIT astroturf markers is suspicious.
+
+    GAP-05 recalibration: legitimate accounts essentially never use catalogued
+    IO-disclosure phrases, so even a 20% marker rate signals a likely narrative
+    operation (probability well above neutral). The moderate absolute count is
+    reflected in a moderate confidence, not a low probability."""
     posts = _posts_with_texts(ASTROTURF_POSTS[:2] + CLEAN_POSTS[:8])
     result = analyze_narrative(posts)
-    # rate=0.2 → logistic((0.2-0.3)*14) < 0.5
-    assert result.probability < 0.5
+    # rate=0.20 → logistic((0.20-0.12)*14) ≈ 0.75
+    assert result.probability > 0.60
+    # 2 marker posts → abs_conf = 2/4 = 0.5; corpus_conf = 1.0; confidence = 0.5
+    assert result.confidence == pytest.approx(0.5)
 
 
 def test_narrative_confidence_scales_with_corpus_size():
@@ -210,6 +217,37 @@ def test_narrative_single_post_does_not_inflate_confidence():
     result = analyze_narrative(posts)
     # abs_conf = 1/4 = 0.25; corpus_conf = 3/8 = 0.375; confidence = 0.09375
     assert result.confidence < 0.15
+
+
+def test_narrative_thirty_percent_markers_is_strongly_suspicious():
+    """GAP-05 calibration regression guard.
+
+    A 30% marker rate (3 of 10 posts containing overt, catalogued astroturf
+    phrasing) must read as strongly suspicious — NOT neutral. The original
+    curve was centred at 0.30, which mapped exactly this case to p=0.50 and
+    contributed nothing to the composite. The recalibrated centre (0.12) makes
+    it ~0.93."""
+    posts = _posts_with_texts(ASTROTURF_POSTS[:3] + CLEAN_POSTS[:7])
+    result = analyze_narrative(posts)
+    assert result.sub_signals["marker_rate"] == pytest.approx(0.30)
+    assert result.probability > 0.85
+
+
+def test_narrative_recall_real_astroturf_phrasings():
+    """The patterns must catch common real-world astroturf phrasings that the
+    original 11-pattern set missed: 'they are trying to silence us', amplification
+    with 'before it gets taken down', and media-suppression framing."""
+    phrasings = [
+        "Every real patriot needs to see this. They are trying to silence us.",
+        "SHARE THIS NOW before it gets taken down! Do your part.",
+        "The mainstream media won't cover this. Spread the truth.",
+        "This is the information they banned from every mainstream platform.",
+    ]
+    posts = _posts_with_texts(phrasings)
+    result = analyze_narrative(posts)
+    # All four should match → marker_rate near 1.0
+    assert result.sub_signals["marker_rate"] >= 0.75
+    assert result.probability > 0.90
 
 
 def test_narrative_evidence_contains_snippet():

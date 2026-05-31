@@ -175,6 +175,36 @@ Demoting `ai_writing` unmasked an elevated/high **recall gap** (macro-F1 had fal
 
 ---
 
+## GAP-05 — Confidence calibration  ✅ done (first pass)
+
+**Diagnosis (data-driven, before touching code)**
+The engine's Brier was already excellent (0.0345) — probabilities *rank* correctly — but tiers skewed low: **17 of 24 benchmark misses were under-detection** (8× moderate→low, 4× elevated→moderate, 3× high→elevated) vs only 7 over-detection. That asymmetry is a calibration signature, not a coverage gap. But a global threshold shift was ruled out immediately: some `moderate→low` cases sit at p≈0.09 while some `low→moderate` cases sit at p≈0.48, so no single cut cleanly separates them.
+
+**Root cause found:** the highest-value miss, `high_political_astroturf`, had the narrative detector firing on 3 of 10 posts (overt "share before they delete it / mainstream media is hiding this" content) yet contributing **nothing** — its probability curve was centred at 0.30, so a 30% marker rate mapped to exactly 0.50 (neutral). Legitimate accounts essentially never use catalogued IO-disclosure phrasing, so even a 15–20% marker rate is strong evidence.
+
+**Shipped**
+- **Narrative probability recalibration** (`app/detection/narrative.py`) — logistic centre `0.30 → 0.12`. Now: rate 0.10 → ~0.43, 0.20 → ~0.75, 0.30 → ~0.93. Low absolute counts are still reined in by the confidence term (unchanged), not by the probability.
+- **Narrative recall expansion** — added 3 patterns (14 total) for common real-world astroturf phrasings the original set missed: media-suppression framing ("(mainstream|corporate) media won't cover/show/report"), urgency amplification ("share … before it gets removed/banned/taken down/disappears", "share share share"), and broadened silencing/censorship ("they are trying to silence us", "shut it/us down", "banned from every mainstream platform"). On the benchmark astroturf case this lifted marker coverage from 3/10 to 10/10 posts.
+
+**🧭 Decisions / what was deliberately NOT done**
+- **2-axis convergence bonus: tested and REJECTED.** Adding a bonus for two strong independent axes worsened Brier (0.0275 → 0.0284) with no accuracy gain — it pushed ambiguous over-detected cases (e.g. `moderate_stock_alerts_auto`) higher without recovering the under-detected ones. Reverted.
+- **The residual under-detection is genuinely signal-ambiguous, not a calibration bug.** `clean_ai_verbose_writer` (expected LOW) and `elevated_broadcast_voice` (expected ELEVATED) have near-identical signal vectors (voice≈0.80 + temporal≈0.57). The current detectors cannot separate "human who writes impersonally" from "broadcast amplifier" — that needs new discriminating features (cross-account co-engagement, community anchoring), owned by **GAP-07** and **GAP-10**. Forcing them apart on the seed set would be overfitting.
+- **`high_political_astroturf` lands at ELEVATED, not HIGH — and that's correct.** Narrative is its only suspicious axis; the single-axis cap (GAP-02/GAP-04) holds it at the ELEVATED ceiling. Pure content evidence with no behavioral/profile/coordination corroboration is appropriately ELEVATED. The single-axis cap was **not** weakened.
+- **The 8× moderate→low cases were left alone.** They're legit auto-bots (weather/news/sports) and clean/ESL/academic writers that genuinely look clean; pushing them up means firing on the exact populations the false-positive guards protect.
+
+**📊 Benchmark impact** (seed_v1, fallback embedder)
+- Brier `0.0345 → 0.0275` (20% further improvement; cumulative since GAP-03: 0.0588 → 0.0275, a 53% reduction).
+- Tier accuracy `0.631` (held), macro-F1 `0.588 → 0.585` (noise-level; the astroturf case moved moderate→elevated, shifting a confusion cell).
+- **Zero** new false positives — narrative fires only on the two genuine astroturf archetypes.
+- Gate ratcheted: `GATE_MAX_BRIER 0.045 → 0.032`.
+
+**⏳ Deferred (owned by later gaps)**
+- Separating impersonal-but-human from broadcast-amplifier, and benign-automation (weather/news bots → MODERATE) from malicious-automation (template spam → HIGH), both need features beyond single-account content/cadence. → GAP-07 (community anchor / false positives), GAP-10 (cross-account behavioral).
+
+**✅ Baseline:** 507 backend tests (2 new narrative-calibration regression tests, ratcheted Brier gate).
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)

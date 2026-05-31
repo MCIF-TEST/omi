@@ -32,6 +32,13 @@ _ASTROTURF_PATTERNS: list[re.Pattern] = [
         r"mainstream\s+media.{0,35}(doesn.?t|won.?t|can.?t|refuse[sd]?|never)\s+want",
         re.I,
     ),
+    # Media-suppression framing: "(mainstream|corporate) media (won't|will never|
+    # refuse to) (cover|show|report|tell)" — the press is hiding the story.
+    re.compile(
+        r"(mainstream|corporate|legacy|state)\s+media\s+(will\s+)?"
+        r"(won.?t|never|refuse[sd]?\s+to|wont)\s+(cover|show|report|tell|touch)",
+        re.I,
+    ),
     # Establishment fear-framing
     re.compile(
         r"(they|them|the\s+establishment|the\s+elites?).{0,35}"
@@ -44,6 +51,16 @@ _ASTROTURF_PATTERNS: list[re.Pattern] = [
         r"(everywhere|before\s+they\s+delete|before\s+it.?s\s+gone|to\s+everyone)",
         re.I,
     ),
+    # Urgency amplification: "share/spread ... before it gets removed/banned/
+    # taken down/deleted/disappears" — coordinated pre-emptive distribution.
+    re.compile(
+        r"(share|spread|repost|send)\b.{0,40}"
+        r"before\s+(it|they|this)\s+(gets?\s+)?"
+        r"(remov|delet|ban|taken\s+down|disappear|gone|shut)",
+        re.I,
+    ),
+    # Imperative repetition: "share share share", "share this now/before"
+    re.compile(r"\bshare\s+(this\s+)?(now|share\s+share)\b", re.I),
     # Consciousness-raising call
     re.compile(r"\bwake\s+up\b.{0,25}(people|everyone|america|world|sheeple)", re.I),
     # Deep-state conspiracy marker
@@ -59,8 +76,10 @@ _ASTROTURF_PATTERNS: list[re.Pattern] = [
     re.compile(r"\bdo\s+your\s+own\s+research\b", re.I),
     # Silencing/censorship claims
     re.compile(
-        r"(they.?re?\s+trying\s+to\s+silence|they\s+want\s+to\s+silence|"
-        r"being\s+silenced|shadow.?ban(ned)?)",
+        r"(tr(y|ying)\s+to\s+silence|want\s+to\s+silence|silence\s+us|"
+        r"being\s+silenced|shadow.?ban(ned)?|"
+        r"(shut|take)\s+(it|this|us|them|him|her)\s+down|"
+        r"banned\s+from\s+(every\s+)?(mainstream\s+)?(platform|social))",
         re.I,
     ),
     # Narrative-collapse celebration
@@ -109,8 +128,15 @@ def analyze_narrative(posts: list[Post]) -> SignalResult:
     marker_rate = posts_with_markers / total_posts
 
     # Probability: logistic on the fraction of posts that contain markers.
-    # rate=0.20 → ~0.41, rate=0.30 → ~0.62, rate=0.50 → ~0.90.
-    prob = 1.0 / (1.0 + math.exp(-(marker_rate - 0.30) * 14))
+    # Centred LOW (0.12) because these are *explicit* astroturf phrases catalogued
+    # from IO disclosures — legitimate accounts essentially never use them, so a
+    # marker rate of even 15-20% is already strong evidence of a narrative-
+    # injection operation. The old 0.30 centre mapped a 30%-marker account (3 of
+    # 10 posts of overt "share before they delete it / mainstream media is hiding
+    # this" content) to a neutral 0.50, contributing nothing to the composite.
+    # rate=0.10 → ~0.43, rate=0.20 → ~0.75, rate=0.30 → ~0.93, rate=0.50 → ~0.996.
+    # Low absolute counts are reined in by the confidence term below, not here.
+    prob = 1.0 / (1.0 + math.exp(-(marker_rate - 0.12) * 14))
 
     # Confidence: absolute count of marker posts (not just rate) matters here.
     # 2 markers on 3 posts is different from 2 on 30. Also require a non-trivial
