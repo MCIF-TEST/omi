@@ -239,6 +239,28 @@ The engine's Brier was already excellent (0.0345) — probabilities *rank* corre
 
 ---
 
+## GAP-06 — Explainability (faithful contribution breakdown)  ✅ done
+
+**The problem with the old explanation surface.** The engine emitted `reasons` (suspicious-only, non-low tier only), `summary`, and prose `score_adjustments` — but the *numeric* per-detector contribution it actually computed in the log-odds loop was thrown away. So the explanation could narrate a plausible story without being provably tied to the score, the exculpatory community-anchor contribution (GAP-07) was invisible, and nothing let a consumer reconstruct the headline number.
+
+**Shipped — faithful-by-construction attribution.**
+- **`DetectorContribution`** (schemas.py) — per detector: `logit_delta` (the *exact* signed log-odds it added to the posterior), `direction` (raises/lowers/neutral), `impact` (share of total absolute movement, for UI bars), `decorrelation_factor`, plus probability/confidence/weight/evidence and a `supplemental` flag.
+- **`ScoreBreakdown`** (schemas.py) — the auditable arithmetic: `prior_logit + detector_logit_sum + convergence_bonus_logit == posterior_logit`, and `sigmoid(posterior) == final_probability` unless `single_axis_capped`. Any consumer can reconstruct and verify the score end-to-end.
+- **`aggregate()`** now captures the deltas it already computes (zero scoring change — the convergence refactor is numerically identical) and emits `contributions` + `score_breakdown` on every `ScanResult`. Both are **purely additive** schema fields — no existing consumer breaks.
+- **Completeness in both directions.** Unlike `reasons`, the breakdown is populated even for LOW verdicts and includes EXCULPATORY contributions — the community anchor now shows as a `lowers` entry with its real negative delta. Supplemental `ai_writing` shows as `neutral` with delta exactly 0.
+- **LLM grounding.** The account-analysis digest (`reasoning/commentary.py`) now feeds the model a `raised_suspicion` / `lowered_suspicion` attribution block (optional param, backward-compatible) so the prose reflects real contribution — including the exculpatory side — instead of guessing.
+
+**🧭 Decisions**
+- **Faithfulness over narrative.** The breakdown is the same numbers that build the score, not a post-hoc rationalization. Pinned by `test_breakdown_reconstructs_the_score` and `test_contribution_deltas_sum_to_detector_logit_sum` (exact, 1e-9 tolerance).
+- **Persistence deferred.** The live `ScanResult` from every scan endpoint carries the breakdown (that's where explainability matters most — at scan time). Persisting it on the stored `Scan` model for the historical account-analysis path needs a DB migration; left as a clean follow-up so the stored path stays backward-compatible (`contributions` defaults to None).
+- **Frontend rendering deferred.** The API contract is the source of truth and is delivered; surfacing the breakdown bars + "what lowered suspicion" in `apps/web` is follow-up wiring, not engine work.
+
+**✅ Baseline:** 532 backend tests (12 new contribution-breakdown tests + 2 reasoning-digest tests).
+
+**⏳ Deferred:** persist `contributions`/`score_breakdown` on the `Scan` model (migration); render the breakdown in the web UI.
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)

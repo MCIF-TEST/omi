@@ -181,3 +181,61 @@ def test_injected_provider_is_used():
         assert body["text"].startswith("FAKE COMMENTARY OK")
         assert body["provider"] == "fake-llm-v1"
         assert body["tokens_used"] == 42
+
+
+# ---------------------------------------------------------------------------
+# GAP-06: faithful attribution reaches the account-analysis prompt
+# ---------------------------------------------------------------------------
+
+
+class _CapturingProvider:
+    """Records the user prompt it was handed so we can assert what the digest
+    told the model."""
+
+    name = "capture-v1"
+
+    def __init__(self) -> None:
+        self.last_user = ""
+
+    def synthesize(self, *, system: str, user: str, max_tokens: int) -> ProviderResult:
+        self.last_user = user
+        return ProviderResult(text="ok", provider=self.name, tokens_used=0)
+
+
+def test_account_digest_surfaces_exculpatory_contributions():
+    """When contributions include a 'lowers' entry (e.g. community anchor), the
+    digest must tell the model about the exculpatory side, not just the
+    suspicious signals."""
+    from app.reasoning.commentary import synthesize_account_analysis
+
+    cap = _CapturingProvider()
+    contributions = [
+        {"name": "semantic", "direction": "raises", "impact": 0.6},
+        {"name": "community", "direction": "lowers", "impact": 0.3},
+    ]
+    synthesize_account_analysis(
+        handle="@acct", platform="youtube", overall_probability=0.45, tier="moderate",
+        confidence=0.6, summary="Mixed signals.", signals=[],
+        trend_direction="flat", trend_summary="stable", scan_count=3,
+        reasons=[], weak_signals=[], contributions=contributions, provider=cap,
+    )
+    assert "raised_suspicion:" in cap.last_user
+    assert "lowered_suspicion:" in cap.last_user
+    assert "community" in cap.last_user
+    assert "exculpatory" in cap.last_user
+
+
+def test_account_digest_omits_attribution_when_absent():
+    """Backward compatibility: callers that don't pass contributions get the
+    original digest shape (no attribution block)."""
+    from app.reasoning.commentary import synthesize_account_analysis
+
+    cap = _CapturingProvider()
+    synthesize_account_analysis(
+        handle="@acct", platform="youtube", overall_probability=0.2, tier="low",
+        confidence=0.5, summary="Clean.", signals=[],
+        trend_direction="flat", trend_summary="stable", scan_count=1,
+        reasons=[], weak_signals=[], provider=cap,
+    )
+    assert "raised_suspicion:" not in cap.last_user
+    assert "lowered_suspicion:" not in cap.last_user
