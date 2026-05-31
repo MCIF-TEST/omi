@@ -205,6 +205,40 @@ The engine's Brier was already excellent (0.0345) — probabilities *rank* corre
 
 ---
 
+## GAP-07 — Community anchor / false-positive reduction  ✅ done (first pass)
+
+**Premise validated before building.** Across the seed benchmark, the HIGH archetypes are *uniformly* small and young — every one has ≤840 followers and ≤515 days of age, most <100 followers and <215 days. The false-positive cases are the opposite: large and established (`moderate_stock_alerts_auto` 9.2k followers / 3.6y, `moderate_podcast_auto` 12.4k / 3.8y, `clean_ai_verbose_writer` 3.1k / 1.1y). The synthetic generator encodes the same physics — bots are built with 0–400 followers + thousands following + 1–200 days old; humans with real follower bases and multi-year ages. So follower-base × maturity is a genuine, generative separator.
+
+**Shipped**
+- **`community` detector** (`app/detection/community.py`) — a **downward-only** Bayesian anchor. A large, multi-year follower base is hard to fabricate and is evidence *against* synthetic operation, so the signal subtracts suspicion from established accounts that trip the behavioral detectors (impersonal voice, regular cadence, templated phrasing) the same way bots do. Design constraints that keep it honest:
+  - *Downward only* — probability is always ≤ the 0.15 prior, so in the log-odds aggregator it can lower a verdict but never raise one. (Pinned by `test_anchor_probability_never_exceeds_prior`.)
+  - *Age-gated* — anchoring requires genuine maturity (age ramp 1y→4y), not just follower count. This deliberately leaves the **young high-follower** region undampened — that's exactly where bought-audience operations live. A 50k-follower 3-month-old account does NOT anchor.
+  - *Bounded* — confidence capped at 0.70 so the dampener pulls ~one tier, never a HIGH→LOW collapse. Anchoring is evidence, not an override; a blatant multi-axis bot still outweighs it.
+  - *Silent when weak* — below a minimum anchor it returns zero confidence and contributes nothing, so ordinary accounts are unaffected. Excluded from weak-signal flagging (a quiet community detector is not a "low-data scan").
+  - *Mass-follow penalty* — the "follows thousands, followed by few" farm shape discounts the anchor when the ratio is visible.
+  - Verification is an independent anchor floor.
+- Wired into the engine, `weight_community` (0.9) in config, the scoring weights map, and the correlation `DETECTORS` tuple. Naturally excluded from every "why flagged" surface (`_extract_reasons` needs p≥0.5; `_infer_intent` reads only suspicious signals).
+- **11 unit tests** (`tests/test_community_anchor.py`) pinning the contract, plus an integration test that the same posting history scores **no higher** on an established account than on a fresh no-audience one.
+
+**🧭 Decisions / honesty about the benchmark**
+- **Zero regressions was the hard requirement, and it holds.** Every case the detector touched either improved or held its existing (already-wrong) tier — no previously-correct case was broken. It fixed `moderate_podcast_auto` (elevated→moderate).
+- **The seed set structurally under-rewards this feature**, and I did not overfit to force more wins:
+  1. It labels established automated feeds (`moderate_legitimate_news_bot` 248k/5.2y, `moderate_weather_service` 18.7k/4.9y) as MODERATE, while honest community anchoring pulls the *most*-established of them toward LOW. Those were already under-detected at LOW pre-GAP-07, so anchoring doesn't change their tier — it just deepens an existing miss (the only source of the tiny Brier rise). I will **not** relabel ground truth to match the engine.
+  2. It carries **no engagement-reciprocity data** — every post's `like_count`/`reply_count`/`reply_to_id` is null. Reciprocal real conversation is the most decisive anchor and it simply isn't in the fixtures. That signal arrives with **GAP-10** (cross-account co-engagement).
+- **`moderate_stock_alerts_auto` was left at the HIGH boundary (0.753) rather than tuned across it.** Nudging the weight to win one boundary case is the overfitting trap; the principled default (0.9, modest, below semantic's 1.2) stays.
+
+**📊 Benchmark impact** (seed_v1, fallback embedder)
+- Tier accuracy `0.631 → 0.646`, macro-F1 `0.585 → 0.608` (+2.3pts — the balanced-performance metric moved most), Brier `0.0275 → 0.0286` (noise-level rise, well within the 0.032 gate).
+- Gates ratcheted: `GATE_MIN_ACCURACY 0.62 → 0.64`, `GATE_MIN_MACRO_F1 0.57 → 0.60`. Brier gate held at 0.032 (GAP-07 traded a hair of Brier for accuracy/F1).
+
+**⏳ Deferred (owned by later gaps)**
+- Engagement-reciprocity anchoring (real replies received, genuine back-and-forth) — needs the co-engagement graph from **GAP-10**.
+- Separating benign established automation (news/weather → MODERATE) from the LOW the anchor wants to assign is a labeling-philosophy question better resolved with reciprocity data than with threshold tuning.
+
+**✅ Baseline:** 518 backend tests (11 new community-anchor tests, ratcheted accuracy + macro-F1 gates).
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)

@@ -36,7 +36,7 @@ _log = logging.getLogger("omi.detection.correlation")
 DETECTORS: tuple[str, ...] = (
     "temporal", "semantic", "ai_writing", "profile",
     "memory", "voice", "engagement", "coordination",
-    "narrative",
+    "narrative", "community",
 )
 
 # Hand-curated correlation groups: which detectors share an evidence basis, the

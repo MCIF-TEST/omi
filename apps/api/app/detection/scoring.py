@@ -51,6 +51,13 @@ _axis_of = static_axis_of
 # can never, on its own or in combination, raise an account's risk tier.
 SUPPLEMENTAL_DETECTORS: frozenset[str] = frozenset({"ai_writing"})
 
+# Downward-only detectors (GAP-07): they can subtract suspicion but never add it,
+# and their *silence* on an unremarkable account is meaningful — not a data
+# deficiency. So they are excluded from weak-signal flagging (a quiet community
+# detector doesn't mean "low-confidence scan") while still participating fully in
+# the log-odds aggregation.
+_DOWNWARD_DETECTORS: frozenset[str] = frozenset({"community"})
+
 # Keep the name importable for any external reference.
 __all__ = [
     "aggregate",
@@ -90,6 +97,7 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
         "engagement": settings.weight_engagement,
         "coordination": settings.weight_coordination,
         "narrative": settings.weight_narrative,
+        "community": settings.weight_community,
     }
 
     prior = settings.prior_probability
@@ -233,7 +241,7 @@ def _detect_weak_signals(
     flags: list[str] = []
     by_name = {s.name: s for s in signals}
     for name, w in weights.items():
-        if w <= 0 or name in SUPPLEMENTAL_DETECTORS:
+        if w <= 0 or name in SUPPLEMENTAL_DETECTORS or name in _DOWNWARD_DETECTORS:
             continue
         sig = by_name.get(name)
         if sig is None or sig.confidence < 0.25:

@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     weight_engagement: float = Field(default=0.9)
     weight_coordination: float = Field(default=0.9)
     weight_narrative: float = Field(default=0.8)
+    # community is a DOWNWARD-only anchor (GAP-07): it can subtract suspicion for
+    # established, audience-bearing accounts but never add it. Weight controls how
+    # much an established community can offset behavioral suspicion — kept modest
+    # so a blatant multi-axis bot still outweighs it.
+    weight_community: float = Field(default=0.9)
 
     # Signal-decorrelation factors. Several detectors share an underlying
     # evidence basis: ``semantic`` + ``ai_writing`` both read text patterns,

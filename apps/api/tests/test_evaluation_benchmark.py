@@ -81,9 +81,28 @@ from app.evaluation import (
 # Net effect on the seed benchmark: Brier 0.0345 → 0.0275 (20% further
 # improvement), accuracy 0.631 (held), macro-F1 0.588 → 0.585, ZERO new false
 # positives (narrative fires only on the two genuine astroturf archetypes).
-GATE_MAX_BRIER = 0.032      # current 0.0275; was 0.045 after GAP-04
-GATE_MIN_ACCURACY = 0.62    # current 0.631
-GATE_MIN_MACRO_F1 = 0.57    # current 0.585
+# GAP-07 false-positive reduction added a DOWNWARD-ONLY community-anchor detector
+# (app/detection/community.py): a large, multi-year follower base is Bayesian
+# evidence *against* synthetic operation, so it subtracts suspicion from
+# established accounts (brands, long-running news/weather feeds, audience-bearing
+# AI-assisted humans) that trip the behavioral detectors the same way bots do.
+# It is age-gated (anchoring needs 1-4yr maturity, NOT just follower count — this
+# protects the young high-follower region where bought-audience ops live) and
+# confidence-bounded (pulls ~one tier, never a HIGH→LOW collapse). It fixed
+# moderate_podcast_auto (elevated→moderate) with ZERO regressions — every case it
+# touched either improved or held its existing (already-wrong) tier; no
+# previously-correct case was broken. Note: the seed set under-rewards this
+# feature — it labels established automated feeds (news bot, weather service) as
+# MODERATE while strong anchoring pulls the most-established of them toward LOW,
+# and it carries NO engagement-reciprocity data (replies/likes are all null),
+# which is where anchoring is most decisive. Full value needs the cross-account
+# co-engagement signals owned by GAP-10.
+# Net effect on the seed benchmark: accuracy 0.631 → 0.646, macro-F1 0.585 →
+# 0.608, Brier 0.0275 → 0.0286 (noise-level rise from pushing already-misclassified
+# legit feeds deeper into LOW; well within gate).
+GATE_MAX_BRIER = 0.032      # current 0.0286; held (GAP-07 did not improve Brier)
+GATE_MIN_ACCURACY = 0.64    # current 0.646; was 0.62 after GAP-05
+GATE_MIN_MACRO_F1 = 0.60    # current 0.608; was 0.57 after GAP-05
 
 
 @pytest.fixture(scope="module")
