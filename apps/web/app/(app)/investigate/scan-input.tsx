@@ -7,13 +7,20 @@ import { Input } from '@/components/ui/input';
 
 const VIDEO_RE = /(?:v=|\/shorts\/|youtu\.be\/|\/embed\/|\/v\/)([A-Za-z0-9_-]{11})|^([A-Za-z0-9_-]{11})$/;
 const CHANNEL_RE = /^(UC[A-Za-z0-9_-]{22})$|youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})|youtube\.com\/@([A-Za-z0-9_.\-]+)|^@([A-Za-z0-9_.\-]+)$|youtube\.com\/(?:c|user)\/([A-Za-z0-9_.\-]+)/;
+// X / Twitter. A post URL (…/status/<id>) → scan its repliers; a bare profile
+// URL → deep-scan the account. (Bare @handles stay YouTube, matching the
+// server's youtube-first dispatch for ambiguous handles.)
+const X_TWEET_RE = /(?:twitter\.com|x\.com)\/[A-Za-z0-9_]+\/status\/(\d+)/i;
+const X_ACCOUNT_RE = /(?:twitter\.com|x\.com)\/([A-Za-z0-9_]{1,15})\/?(?:$|\?|#)/i;
 
 function classify(raw: string): { kind: 'video' | 'channel' | 'unknown' | 'idle'; label: string } {
   const s = raw.trim();
-  if (!s) return { kind: 'idle', label: 'Paste a YouTube video or channel URL' };
+  if (!s) return { kind: 'idle', label: 'Paste a YouTube or X (Twitter) link' };
   if (VIDEO_RE.test(s)) return { kind: 'video', label: 'YouTube video detected — will scan every commenter + coordination' };
   if (CHANNEL_RE.test(s)) return { kind: 'channel', label: 'YouTube channel detected — will deep-scan account history + fingerprint' };
-  return { kind: 'unknown', label: 'Unrecognized link. Paste a YouTube video or channel URL.' };
+  if (X_TWEET_RE.test(s)) return { kind: 'video', label: 'X (Twitter) post detected — will scan every replier + coordination' };
+  if (X_ACCOUNT_RE.test(s)) return { kind: 'channel', label: 'X (Twitter) profile detected — will deep-scan account history + fingerprint' };
+  return { kind: 'unknown', label: 'Unrecognized link. Paste a YouTube or X (Twitter) URL.' };
 }
 
 interface Props {
@@ -46,10 +53,10 @@ export function ScanInput({ initialUrl = '', pending, batchSize, onBatchSizeChan
     <form onSubmit={onSubmit} className="space-y-3">
       <div className="flex flex-col sm:flex-row gap-3">
         <Input
-          aria-label="YouTube video or channel URL"
+          aria-label="YouTube or X (Twitter) URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste a YouTube video or channel URL…"
+          placeholder="Paste a YouTube or X (Twitter) link…"
           className={`h-12 text-base ${borderColor} flex-1`}
           autoFocus
         />

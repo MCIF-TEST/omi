@@ -39,6 +39,10 @@ _DEFAULT_BASE_URL = "https://api.twitterapi.io"
 # twitterapi.io paths.
 _USER_INFO_PATH = "/twitter/user/info"
 _USER_TWEETS_PATH = "/twitter/user/last_tweets"
+# Tweet replies ("comments" on a tweet). NOTE: confirm this path/params against
+# your twitterapi.io plan — the response envelope + pagination match the other
+# endpoints, so only the path string should ever need adjusting.
+_TWEET_REPLIES_PATH = "/twitter/tweet/replies"
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +62,12 @@ class FetchStats:
     """Tracks how many upstream calls a scan made (for cost/observability)."""
 
     api_calls: int = 0
+
+    @property
+    def quota_used(self) -> int:
+        """Alias so Twitter stats satisfy the same `.quota_used` contract the
+        shared scan path reads (twitterapi.io bills per call)."""
+        return self.api_calls
 
 
 class HttpTwitterClient:
@@ -143,12 +153,29 @@ def classify_twitter_url(url: str) -> dict:
         return {"platform": "x", "kind": "unknown", "handle": None}
 
     first = segments[0]
+    # Tweet/status URL: /<handle>/status/<id> (the handle is the tweet author).
+    if (
+        len(segments) >= 3
+        and segments[1].lower() in ("status", "statuses")
+        and segments[2].isdigit()
+    ):
+        author = first if _HANDLE_RE.match(first) and first.lower() not in _RESERVED else None
+        return {"platform": "x", "kind": "tweet", "tweet_id": segments[2], "handle": author}
     if first.lower() in _RESERVED:
         return {"platform": "x", "kind": "unknown", "handle": None}
     hm = _HANDLE_RE.match(first)
     if hm:
         return {"platform": "x", "kind": "account", "handle": hm.group(1)}
     return {"platform": "x", "kind": "unknown", "handle": None}
+
+
+def parse_tweet_id(url_or_id: str) -> str | None:
+    """Extract a numeric tweet id from a status URL or a bare id."""
+    raw = (url_or_id or "").strip()
+    if raw.isdigit():
+        return raw
+    info = classify_twitter_url(raw)
+    return info.get("tweet_id") if info.get("kind") == "tweet" else None
 
 
 def normalize_handle(value: str) -> str | None:
@@ -285,6 +312,79 @@ def _map_tweet(tw: dict, handle: str) -> Post | None:
         repost_count=_int_or_none(tw.get("retweetCount") or tw.get("retweet_count")),
         source_client=_clean_source(tw.get("source")),
     )
+
+
+def fetch_tweet_engagers(
+    client: TwitterClient,
+    tweet_id: str,
+    *,
+    max_commenters: int = 100,
+    max_comments: int | None = None,
+    stats: FetchStats | None = None,
+) -> tuple[list[dict], list[dict], str | None]:
+    """Fetch the accounts replying to a tweet (its "commenters") + the raw reply
+    items, shaped to mirror YouTube's ``fetch_video_full`` output so the shared
+    ``scan_video_full`` consumes it unchanged.
+
+    Returns ``(commenters_meta, all_comments, next_cursor)`` where:
+      * ``commenters_meta`` — one entry per unique replying account
+        (``{"channel_id": handle, "handle": handle, "avatar_url": …}``); the
+        ``channel_id`` is the handle so per-commenter profile/history fetches
+        resolve through :class:`TwitterSource`.
+      * ``all_comments`` — every reply (``{"comment_id","author_external_id",
+        "text","created_at"}``), the thread corpus + co-engagement input.
+    """
+    stats = stats or FetchStats()
+    max_comments = max_comments or max(max_commenters * 3, 100)
+    commenters: dict[str, dict] = {}
+    all_comments: list[dict] = []
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    next_cursor: str | None = None
+
+    while len(commenters) < max_commenters and len(all_comments) < max_comments:
+        params: dict[str, Any] = {"tweetId": tweet_id}
+        if cursor:
+            params["cursor"] = cursor
+        payload = client.get(_TWEET_REPLIES_PATH, params)
+        stats.api_calls += 1
+        data = _unwrap(payload)
+
+        tweets = _extract_tweets(data)
+        if not tweets:
+            break
+
+        for tw in tweets:
+            post = _map_tweet(tw, handle="")
+            if post is None or not post.author_handle:
+                continue
+            author = post.author_handle
+            all_comments.append({
+                "comment_id": post.id,
+                "author_external_id": author,
+                "text": post.text,
+                "created_at": post.created_at,
+            })
+            if author not in commenters and len(commenters) < max_commenters:
+                a = tw.get("author") if isinstance(tw.get("author"), dict) else {}
+                commenters[author] = {
+                    "channel_id": author,
+                    "handle": author,
+                    "avatar_url": a.get("profilePicture") or a.get("profile_image_url_https"),
+                }
+            if len(all_comments) >= max_comments:
+                break
+
+        has_next = payload.get("has_next_page")
+        if has_next is None:
+            has_next = data.get("has_next_page")
+        cursor = payload.get("next_cursor") or data.get("next_cursor")
+        next_cursor = cursor
+        if not has_next or not cursor or cursor in seen_cursors:
+            break
+        seen_cursors.add(cursor)
+
+    return list(commenters.values()), all_comments, next_cursor
 
 
 # ---------------------------------------------------------------------------

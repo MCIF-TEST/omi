@@ -5,7 +5,7 @@ import { Check } from 'lucide-react';
 
 const PHASES = [
   'Resolving URL…',
-  'Fetching commenters from YouTube…',
+  'Fetching commenters / repliers…',
   'Pulling commenter history…',
   'Running detection engine…',
   'Computing cross-account coordination…',

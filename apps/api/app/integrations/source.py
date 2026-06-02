@@ -141,6 +141,72 @@ class YouTubeSource:
         )
 
 
+class TwitterSource:
+    """Twitter/X data source — a thin adapter over ``app.integrations.twitter``.
+
+    Normalizes to the same ``Profile`` / ``Post`` schemas as YouTube, so the
+    identical detector / coordination / memory / OmiScore stack scores Twitter
+    accounts and a tweet's repliers. ``fetch_content_engagers`` pulls a tweet's
+    replies as the cross-account batch (the Twitter analog of a video's
+    commenters).
+    """
+
+    platform = "x"
+
+    def __init__(self, client: Any) -> None:
+        from app.integrations.twitter import FetchStats
+
+        self._client = client
+        self._stats = FetchStats()
+
+    @property
+    def quota_used(self) -> int:
+        # twitterapi.io bills per call; surface call count as the cost proxy.
+        return self._stats.api_calls
+
+    @property
+    def stats(self) -> Any:
+        return self._stats
+
+    def parse_content_id(self, url_or_id: str) -> str | None:
+        from app.integrations.twitter import parse_tweet_id
+
+        return parse_tweet_id(url_or_id)
+
+    def resolve_account_id(self, handle_or_url: str) -> str | None:
+        from app.integrations.twitter import normalize_handle
+
+        return normalize_handle(handle_or_url)
+
+    def fetch_account_profile(self, account_id: str) -> Profile | None:
+        from app.integrations.twitter import fetch_user_profile
+
+        return fetch_user_profile(self._client, account_id, stats=self._stats)
+
+    def fetch_account_posts(self, account_id: str, max_posts: int) -> list[Post]:
+        from app.integrations.twitter import fetch_user_recent_tweets
+
+        return fetch_user_recent_tweets(
+            self._client, account_id, max_tweets=max_posts, stats=self._stats
+        )
+
+    def fetch_content_engagers(
+        self,
+        content_id: str,
+        *,
+        max_commenters: int,
+        max_comments: int,
+        start_page_token: str | None = None,
+    ) -> tuple[list[dict], list[dict], str | None]:
+        from app.integrations.twitter import fetch_tweet_engagers
+
+        return fetch_tweet_engagers(
+            self._client, content_id,
+            max_commenters=max_commenters, max_comments=max_comments,
+            stats=self._stats,
+        )
+
+
 def classify_link(url: str) -> dict:
     """Unified, platform-agnostic URL / handle classifier for the single-input
     investigation entry.

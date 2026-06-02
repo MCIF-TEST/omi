@@ -18,7 +18,7 @@ from sqlalchemy import select
 from app.core.auth import CurrentUser, compute_scan_credits, consume_credits, refund_credits, require_user
 from app.core.config import Settings, get_settings
 from app.integrations import youtube as yt
-from app.integrations.source import YouTubeSource
+from app.integrations.source import Source, TwitterSource, YouTubeSource, classify_link
 from app.integrations.youtube import (
     FetchStats,
     YouTubeClient,
@@ -904,8 +904,9 @@ def scan_twitter_account(
 @router.get("/classify")
 def classify_link_endpoint(url: str = "") -> dict:
     """Live URL classification for the UI: tells the operator what OMI will
-    do with a pasted URL before they commit to scanning. No quota cost."""
-    return classify_url(url)
+    do with a pasted URL before they commit to scanning. No quota cost.
+    Platform-aware (YouTube + X/Twitter)."""
+    return classify_link(url)
 
 
 def _hash_ip(ip: str | None) -> str:
@@ -996,7 +997,7 @@ def scan_demo(
 
     success_flag = 1
     try:
-        result = scan_comprehensive_endpoint(creq, settings, current=anon, _charge_credit=False)
+        result = _run_comprehensive(creq, settings, anon, _charge_credit=False)
     except YouTubeClientError as e:
         # The inner endpoint now propagates YouTube failures raw to whoever owns
         # the charge. The demo charges nothing, so credits_to_refund=0 — this just
@@ -1044,59 +1045,74 @@ def scan_link(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="url is required.",
         )
-    classification = classify_url(url)
-    if classification["kind"] == "unknown":
+    classification = classify_link(url)
+    platform = classification.get("platform", "unknown")
+    if platform == "unknown" or classification.get("kind") == "unknown":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Unrecognized link. Paste a YouTube video or channel URL. "
-                "(More platforms coming as Omi grows.)"
+                "Unrecognized link. Paste a YouTube video/channel URL or an "
+                "X (Twitter) profile or tweet URL."
             ),
         )
 
-    # Deduct credits before running the scan (refunded on any failure below).
-    #
-    # max_commenters arrives via a raw dict here (not the Pydantic ScanRequest),
-    # so we clamp it ourselves: bound it to the operator's configured cap so a
-    # client can't bypass cost control, over-charge themselves, trip the schema's
-    # le=500 validator (a 500 error), or make one request fetch an unbounded
-    # number of commenters. Parse defensively so bad input never 500s.
+    # max_commenters arrives via a raw dict (not the Pydantic ScanRequest), so
+    # clamp it to the operator cap and parse defensively (bad input never 500s).
     try:
         requested_commenters = int(payload.get("max_commenters", 25) or 25)
     except (TypeError, ValueError):
         requested_commenters = 25
     max_commenters = max(1, min(requested_commenters, settings.scan_max_commenters))
-    platform = classification.get("platform", "youtube")
+    force_refresh = bool(payload.get("force_refresh", False))
+    start_token = payload.get("start_page_token") or None
+
+    # Build the platform-appropriate inputs + Source BEFORE charging, so a
+    # mis-config (missing API key → 503) never bills the user. scan_comprehensive
+    # is platform-agnostic (T0): the SAME engine runs for every platform.
+    if platform == "x":
+        creq = ComprehensiveScanRequest(
+            video_url_or_id=classification.get("tweet_id"),      # a tweet → scan its repliers
+            account_url_or_handle=classification.get("handle"),  # a profile/author → deep-scan it
+            comments_text=None, max_commenters=max_commenters,
+            force_refresh=force_refresh, start_page_token=start_token,
+        )
+        tw_factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
+        source: Source = TwitterSource(tw_factory())
+    else:  # youtube
+        creq = ComprehensiveScanRequest(
+            video_url_or_id=classification.get("video_id"),
+            account_url_or_handle=classification.get("account_input"),
+            comments_text=None, max_commenters=max_commenters,
+            force_refresh=force_refresh, start_page_token=start_token,
+        )
+        yt_factory = _client_factory_override or (lambda: _resolve_client(settings))
+        source = YouTubeSource(yt_factory())
+
+    # Deduct credits (refunded on ANY failure below).
     cost = compute_scan_credits(platform, max_commenters, settings)
     consume_credits(
         current.id, cost,
-        platform=platform,
-        scan_type="link",
-        target_input=url[:500],
-        settings=settings,
-    )
-
-    creq = ComprehensiveScanRequest(
-        video_url_or_id=classification.get("video_id"),
-        account_url_or_handle=classification.get("account_input"),
-        comments_text=None,
-        max_commenters=max_commenters,
-        force_refresh=bool(payload.get("force_refresh", False)),
-        start_page_token=payload.get("start_page_token") or None,
+        platform=platform, scan_type="link",
+        target_input=url[:500], settings=settings,
     )
 
     import logging
     import time as _time
     log = logging.getLogger("omi.scan")
     t_scan = _time.time()
-    # A failed scan must never cost a credit. We charged the real cost above;
-    # guarantee a refund on ANY failure: typed YouTube errors keep their specific
-    # status (and the YouTubeAccessError "no refund" policy is preserved inside
-    # _handle_youtube_error); anything else returns a clean 502 with a full refund.
+    # A failed scan must never cost a credit. Typed platform errors keep their
+    # specific status (+ the no-refund policies inside the handlers); anything
+    # else returns a clean 502 with a full refund.
     try:
-        result = scan_comprehensive_endpoint(creq, settings, current=current, _charge_credit=False)
+        result = _run_comprehensive(
+            creq, settings, current, _charge_credit=False, source=source,
+        )
     except YouTubeClientError as e:
         raise _handle_youtube_error(
+            e, user_id=current.id, credits_to_refund=cost, target_input=url[:500],
+        )
+    except TwitterClientError as e:
+        raise _handle_twitter_error(
             e, user_id=current.id, credits_to_refund=cost, target_input=url[:500],
         )
     except HTTPException:
@@ -1124,7 +1140,7 @@ def scan_link(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                "The scan reached YouTube but could not analyze any commenters. "
+                "The scan reached the platform but could not analyze any commenters. "
                 "Your credit was refunded — please try again."
             ),
         )
@@ -1222,22 +1238,34 @@ def scan_comprehensive_endpoint(
     req: ComprehensiveScanRequest,
     settings: Settings = Depends(get_settings),
     current: CurrentUser = Depends(require_user),
-    _charge_credit: bool = True,
 ) -> ComprehensiveScanResult:
-    """The unified intelligence endpoint — provide any combination of:
+    """The unified intelligence endpoint (HTTP surface). Charges credits and
+    runs on YouTube; the shared implementation scores any platform when a
+    ``Source`` is injected internally (see ``scan_link``)."""
+    return _run_comprehensive(req, settings, current, _charge_credit=True, source=None)
+
+
+def _run_comprehensive(
+    req: ComprehensiveScanRequest,
+    settings: Settings,
+    current: CurrentUser,
+    *,
+    _charge_credit: bool = True,
+    source: "Source | None" = None,
+) -> ComprehensiveScanResult:
+    """Shared comprehensive-scan implementation. Platform-agnostic via the
+    injected ``source`` (defaults to a YouTube source). Internal callers
+    (scan_link, demo, bulk) pass ``_charge_credit=False`` + the platform Source.
+
+    Provide any combination of:
 
     * **account_url_or_handle** — focus account to deep-scan
-    * **video_url_or_id** — video to scan every commenter on
+    * **video_url_or_id** — content (video/tweet) to scan every commenter on
     * **comments_text** — pasted comments / posts / threads (one per line)
 
-    Each provided input is scanned, then the orchestrator computes
-    cross-links describing how the inputs relate (focus account in
-    cluster, fellow-traveler overlap, style match, etc.). Multiple
-    independent cross-links converging on the same entity strengthen the
-    verdict — this is the interconnection that single-source detection
-    can't see.
-
-    Costs credits per batch of commenters scanned (see compute_scan_credits).
+    Each provided input is scanned, then the orchestrator computes cross-links
+    describing how the inputs relate. Costs credits per batch of commenters
+    scanned (see compute_scan_credits).
     """
     if not any([
         req.account_url_or_handle and req.account_url_or_handle.strip(),
@@ -1260,15 +1288,19 @@ def scan_comprehensive_endpoint(
             settings=settings,
         )
 
-    # Pasted-comments-only flow doesn't need YouTube; everything else does.
-    needs_youtube = bool(
-        (req.account_url_or_handle and req.account_url_or_handle.strip())
-        or (req.video_url_or_id and req.video_url_or_id.strip())
-    )
-    client = None
-    if needs_youtube:
-        factory = _client_factory_override or (lambda: _resolve_client(settings))
-        client = factory()
+    # Default to a YouTube source when none is injected (direct /comprehensive,
+    # demo, bulk). scan_link injects a platform-appropriate Source (YouTube or
+    # Twitter) so the SAME engine runs for every platform.
+    if source is None:
+        needs_client = bool(
+            (req.account_url_or_handle and req.account_url_or_handle.strip())
+            or (req.video_url_or_id and req.video_url_or_id.strip())
+        )
+        client = None
+        if needs_client:
+            factory = _client_factory_override or (lambda: _resolve_client(settings))
+            client = factory()
+        source = YouTubeSource(client)
 
     try:
         with get_session() as session:
@@ -1279,7 +1311,7 @@ def scan_comprehensive_endpoint(
                 comments_text=req.comments_text,
                 max_commenters=max_comm,
                 force_refresh=req.force_refresh,
-                source=YouTubeSource(client),
+                source=source,
                 start_page_token=req.start_page_token,
             )
     except YouTubeClientError as e:

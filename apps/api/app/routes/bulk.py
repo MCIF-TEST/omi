@@ -225,7 +225,7 @@ def _process_one_url(
 def _scan_url(url: str, *, max_commenters: int, user_id: int, settings) -> dict:
     """Run a comprehensive scan for one URL. Credit already consumed by caller."""
     from app.integrations.youtube import classify_url
-    from app.routes.scan import scan_comprehensive_endpoint
+    from app.routes.scan import _run_comprehensive
     from app.schemas import ComprehensiveScanRequest
 
     url_type = classify_url(url)
@@ -243,7 +243,7 @@ def _scan_url(url: str, *, max_commenters: int, user_id: int, settings) -> dict:
                      subscription_status=None, subscription_renews_at=None,
                      is_admin=False)
 
-    result = scan_comprehensive_endpoint(req, settings, current=fake_user, _charge_credit=False)
+    result = _run_comprehensive(req, settings, fake_user, _charge_credit=False)
 
     slug = result.investigation_slug
     tier = result.overall_tier.value if hasattr(result.overall_tier, "value") else str(result.overall_tier)
