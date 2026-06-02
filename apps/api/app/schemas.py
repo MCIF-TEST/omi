@@ -224,6 +224,10 @@ class CommenterScanResult(BaseModel):
     score_adjustments: list[str] = Field(default_factory=list)
     # Per-detector breakdown — populated when signals are available.
     signals: list[SignalResult] = Field(default_factory=list)
+    # Signed per-detector attribution (GAP-06): what RAISED vs LOWERED the score
+    # — including the exculpatory "community" footprint — so the verdict reads as
+    # balanced, not suspicion-only. Empty on cached commenters.
+    contributions: list[DetectorContribution] = Field(default_factory=list)
 
 
 class CoordinationClusterOut(BaseModel):

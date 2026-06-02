@@ -517,6 +517,7 @@ def scan_youtube_video_full(
                 weak_signals=list(r.scan_result.weak_signals or []),
                 score_adjustments=list(r.scan_result.score_adjustments or []),
                 signals=list(r.scan_result.signals or []),
+                contributions=list(r.scan_result.contributions or []),
                 recent_activity=activity_samples,
                 activity_total=activity_total,
             ))
@@ -1368,6 +1369,7 @@ def _run_comprehensive(
                 weak_signals=list(r.scan_result.weak_signals or []),
                 score_adjustments=list(r.scan_result.score_adjustments or []),
                 signals=list(r.scan_result.signals or []),
+                contributions=list(r.scan_result.contributions or []),
                 recent_activity=activity_samples,
                 activity_total=activity_total,
             ))
