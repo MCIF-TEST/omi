@@ -75,6 +75,21 @@ class Settings(BaseSettings):
     # override with a Postgres URL in production.
     database_url: str = "sqlite:///./data/omi.db"
 
+    # Twitter / X ingestion (twitterapi.io adapter). The detection engine is
+    # platform-agnostic; this key only powers the ingestion layer that maps
+    # tweets/profiles onto the shared Profile/Post schemas. Never commit it —
+    # set OMI_TWITTER_API_KEY in the environment / .env.
+    twitter_api_key: str | None = None
+    twitter_api_base_url: str = "https://api.twitterapi.io"
+    # Max recent tweets to pull per single-account scan (history depth bounds
+    # the per-scan provider cost).
+    scan_twitter_max_history: int = 50
+    # Credits charged for a single-account Twitter deep-scan. Flat (not batch):
+    # one account's ~50-tweet history is a fraction of a 50-commenter batch, so
+    # this is intentionally cheap. The 10-credits-per-50 batch rate
+    # (credits_per_batch_twitter) applies to multi-account tweet-thread scans.
+    credits_per_twitter_account: int = 1
+
     # YouTube ingestion.
     youtube_api_key: str | None = None
     # Max commenters to fetch per video scan (bounds YouTube quota use).
