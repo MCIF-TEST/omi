@@ -996,6 +996,15 @@ def scan_demo(
     success_flag = 1
     try:
         result = scan_comprehensive_endpoint(creq, settings, current=anon, _charge_credit=False)
+    except YouTubeClientError as e:
+        # The inner endpoint now propagates YouTube failures raw to whoever owns
+        # the charge. The demo charges nothing, so credits_to_refund=0 — this just
+        # maps the failure to a clean HTTP response instead of leaking a 500.
+        success_flag = 0
+        raise _handle_youtube_error(
+            e, user_id=anon.id, credits_to_refund=0,
+            target_input=classification.get("video_id") or url,
+        )
     except HTTPException:
         success_flag = 0
         raise
@@ -1044,8 +1053,18 @@ def scan_link(
             ),
         )
 
-    # Deduct credits before running the scan. 402 if user is out.
-    max_commenters = int(payload.get("max_commenters", 25))
+    # Deduct credits before running the scan (refunded on any failure below).
+    #
+    # max_commenters arrives via a raw dict here (not the Pydantic ScanRequest),
+    # so we clamp it ourselves: bound it to the operator's configured cap so a
+    # client can't bypass cost control, over-charge themselves, trip the schema's
+    # le=500 validator (a 500 error), or make one request fetch an unbounded
+    # number of commenters. Parse defensively so bad input never 500s.
+    try:
+        requested_commenters = int(payload.get("max_commenters", 25) or 25)
+    except (TypeError, ValueError):
+        requested_commenters = 25
+    max_commenters = max(1, min(requested_commenters, settings.scan_max_commenters))
     platform = classification.get("platform", "youtube")
     cost = compute_scan_credits(platform, max_commenters, settings)
     consume_credits(
@@ -1069,7 +1088,26 @@ def scan_link(
     import time as _time
     log = logging.getLogger("omi.scan")
     t_scan = _time.time()
-    result = scan_comprehensive_endpoint(creq, settings, current=current, _charge_credit=False)
+    # A failed scan must never cost a credit. We charged the real cost above;
+    # guarantee a refund on ANY failure: typed YouTube errors keep their specific
+    # status (and the YouTubeAccessError "no refund" policy is preserved inside
+    # _handle_youtube_error); anything else returns a clean 502 with a full refund.
+    try:
+        result = scan_comprehensive_endpoint(creq, settings, current=current, _charge_credit=False)
+    except YouTubeClientError as e:
+        raise _handle_youtube_error(
+            e, user_id=current.id, credits_to_refund=cost, target_input=url[:500],
+        )
+    except HTTPException:
+        refund_credits(current.id, cost, reason="scan_failed")
+        raise
+    except Exception:
+        log.exception("comprehensive scan failed for %s", url[:120])
+        refund_credits(current.id, cost, reason="scan_error")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The scan failed unexpectedly and your credit was refunded. Please try again.",
+        )
     log.info(
         "comprehensive scan finished in %.1fs (commenters=%s, tier=%s)",
         _time.time() - t_scan,
@@ -1077,44 +1115,54 @@ def scan_link(
         result.overall_tier.value if hasattr(result.overall_tier, "value") else result.overall_tier,
     )
 
-    # ---- Phase 5: persist as a saved investigation ----
-    # Pre-generate the slug so we can stamp it on the response WITHOUT waiting
-    # for the database write. Persistence is offloaded to a background worker
-    # — if the DB is slow or the 200KB+ payload serialization stalls, the
-    # user still gets their scan result immediately.
-    #
-    # This runs for BOTH authenticated users and the local-mode user (id=0):
-    # a solo/local install still wants every scan saved to its history. The
-    # background worker resolves id=0 to the stable local-user row so the FK
-    # holds. (The anonymous demo endpoint never reaches here — it calls
-    # scan_comprehensive_endpoint directly — so demo scans are not persisted.)
-    import secrets
-    existing_slug = payload.get("investigation_slug")
-    slug = existing_slug or ("inv_" + secrets.token_hex(4))
-    result.investigation_slug = slug
+    # A scan where EVERY commenter errored is a systemic failure, not a result —
+    # don't persist a uniformly-empty investigation or charge for it. (A partial
+    # failure, where only some commenters errored, is a legitimate saveable result.)
+    if _all_commenters_failed(result):
+        refund_credits(current.id, cost, reason="scan_all_failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "The scan reached YouTube but could not analyze any commenters. "
+                "Your credit was refunded — please try again."
+            ),
+        )
 
-    # Serialise on the request thread before handing off: (1) Pydantic
-    # models are not guaranteed immutable once FastAPI starts serialising
-    # the response concurrently; (2) keeps the expensive model_dump() off
-    # the bounded background pool where it would hold a worker slot.
+    # ---- Phase 5: persist as a saved investigation (SYNCHRONOUS) ----
+    # We persist BEFORE returning so the slug we hand back ALWAYS resolves: no
+    # read-after-write 404, and never an empty-payload row. The cost is a single
+    # indexed insert — the expensive work (scan + serialise) already happened, so
+    # this adds negligible latency to a multi-second scan.
+    #
+    # Runs for BOTH authenticated users and the local-mode user (id=0): a solo
+    # install still saves every scan. The persister resolves id=0 to the stable
+    # local-user row so the FK holds. (The anonymous demo endpoint never reaches
+    # here — it calls scan_comprehensive_endpoint directly — so demos aren't saved.)
+    slug = _resolve_investigation_slug(
+        requested_slug=payload.get("investigation_slug"), user_id=current.id,
+    )
+    result.investigation_slug = slug
     try:
         result_payload = _serialize_result(result)
     except Exception:
-        import logging as _log
-        _log.getLogger("omi.scan").exception(
-            "could not serialise investigation payload for %s", slug
-        )
-        result_payload = {}
+        log.exception("could not serialise investigation payload for %s", slug)
+        # The scan succeeded and is already in the response. We refuse to persist
+        # an empty payload, and we don't hand back a slug that points at nothing.
+        result.investigation_slug = None
+        return result
 
-    from app.core import background as _bg
-    _bg.submit(
-        _persist_investigation_async,
+    saved = _persist_investigation(
         slug=slug,
         user_id=current.id,
         classification=classification,
         url=url,
         payload=result_payload,
     )
+    if not saved:
+        # Persistence genuinely failed after retries — the user keeps their
+        # result, but we don't advertise a saved investigation that isn't there.
+        log.error("investigation %s could not be persisted; returning unsaved result", slug)
+        result.investigation_slug = None
     return result
 
 
@@ -1131,6 +1179,17 @@ def _investigation_label(classification: dict, url: str) -> str:
 def _serialize_result(result) -> dict:
     """ComprehensiveScanResult → JSON-serializable dict via Pydantic v2."""
     return result.model_dump(mode="json")
+
+
+def _all_commenters_failed(result) -> bool:
+    """True only when a video scan produced commenters and EVERY one carries an
+    error (systemic failure). False for partial failures, empty/None videos, and
+    non-video scans — so a legitimately partial result is still saved/charged."""
+    video = getattr(result, "video", None)
+    commenters = getattr(video, "commenters", None) if video is not None else None
+    if not commenters:
+        return False
+    return all(getattr(c, "error", None) for c in commenters)
 
 
 def _merge_payloads(existing: dict, new: dict) -> dict:
@@ -1217,19 +1276,32 @@ def scan_comprehensive_endpoint(
                 account_url_or_handle=req.account_url_or_handle,
                 video_url_or_id=req.video_url_or_id,
                 comments_text=req.comments_text,
-                max_commenters=req.max_commenters,
+                max_commenters=max_comm,
                 force_refresh=req.force_refresh,
                 client=client,
                 youtube=yt,
                 start_page_token=req.start_page_token,
             )
     except YouTubeClientError as e:
-        raise _handle_youtube_error(
-            e,
-            user_id=current.id,
-            credits_to_refund=cost,
-            target_input=(req.video_url_or_id or req.account_url_or_handle or ""),
-        )
+        # Refund + map here ONLY when this endpoint owns the charge. When called
+        # internally with _charge_credit=False (scan_link, scan_demo, bulk), the
+        # caller charged the real cost and owns the refund + HTTP mapping, so
+        # propagate raw — otherwise the refund is computed against cost==0 and the
+        # caller's real charge is never returned.
+        if _charge_credit:
+            raise _handle_youtube_error(
+                e,
+                user_id=current.id,
+                credits_to_refund=cost,
+                target_input=(req.video_url_or_id or req.account_url_or_handle or ""),
+            )
+        raise
+    except Exception:
+        # A failed scan never costs a credit. If we charged, refund before the
+        # error surfaces; internal callers (cost==0 here) own their own refund.
+        if _charge_credit:
+            refund_credits(current.id, cost, reason="scan_error")
+        raise
 
     # Convert to the response schemas
     focus_account_out = None
@@ -1338,23 +1410,60 @@ def _full_summary_text(
     return " ".join(parts)
 
 
-def _persist_investigation_async(
+def _resolve_investigation_slug(*, requested_slug: str | None, user_id: int) -> str:
+    """Pick the slug for this scan, synchronously and collision-safely.
+
+    A client-supplied slug is honoured ONLY when it names an investigation the
+    caller already owns (a continuation batch). Otherwise a fresh server-side
+    slug is minted. ``Investigation.slug`` is globally unique, so honouring a
+    slug owned by a *different* user would collide on the unique constraint and
+    silently fail to persist — this closes that hole while preserving the
+    continuation workflow. Read-only: never creates the local-user row.
+    """
+    import logging
+    import secrets
+
+    if requested_slug:
+        try:
+            with get_session() as session:
+                from app.storage.repository import AccountRepository
+                repo = AccountRepository(session)
+                eff = repo.local_user_id() if user_id == 0 else user_id
+                if eff is not None and repo.get_investigation(
+                    slug=requested_slug, user_id=eff
+                ) is not None:
+                    return requested_slug
+        except Exception:
+            logging.getLogger("omi.scan").exception(
+                "slug ownership check failed for %s; minting a fresh slug",
+                requested_slug,
+            )
+    return "inv_" + secrets.token_hex(4)
+
+
+def _persist_investigation(
     *,
     slug: str,
     user_id: int,
     classification: dict,
     url: str,
     payload: dict,
-) -> None:
-    """Background worker — saves an investigation row WITHOUT blocking the
-    request response. Retries up to 3 times with exponential back-off to
-    handle transient SQLite contention from other concurrent background tasks.
+) -> bool:
+    """Persist (create or merge) an investigation row. Returns True on success.
 
-    The payload dict is pre-serialised on the request thread (no Pydantic
-    objects here) so this function is safe to run in any thread.
+    Called SYNCHRONOUSLY on the request thread so the slug handed back to the
+    client always resolves — no read-after-write 404, no empty-payload row.
+    Race-safe: a concurrent batch that creates the same owned slug first is
+    absorbed (IntegrityError → retry, which finds the row and merges into it).
+    Transient DB contention is retried with a short back-off. Never raises — the
+    caller decides what to do when persistence ultimately fails.
+
+    The payload dict is pre-serialised by the caller (no Pydantic objects here).
     """
     import logging
     import time as _time
+    from sqlalchemy.exc import IntegrityError
+
     log = logging.getLogger("omi.scan")
 
     label = _investigation_label(classification, url)
@@ -1408,20 +1517,24 @@ def _persist_investigation_async(
                         "investigation %s updated (batch %d) in %.1fs",
                         slug, inv.batch_count, _time.time() - t0,
                     )
-            return  # success
+            return True  # success — row is committed before we return
+        except IntegrityError:
+            # A concurrent batch created this slug between our lookup and insert.
+            # Retry — the next pass finds the committed row and merges into it.
+            log.warning("investigation %s create race — retrying as update", slug)
+            _time.sleep(0.1 * (attempt + 1))
         except Exception as e:  # noqa: BLE001
             if attempt < 2:
-                wait = 2 ** attempt  # 1 s, 2 s
                 log.warning(
-                    "investigation %s persistence attempt %d failed (%s) — "
-                    "retrying in %ds",
-                    slug, attempt + 1, e, wait,
+                    "investigation %s persistence attempt %d failed (%s) — retrying",
+                    slug, attempt + 1, e,
                 )
-                _time.sleep(wait)
+                _time.sleep(0.1 * (attempt + 1))
             else:
                 log.exception(
                     "investigation %s persistence failed after 3 attempts", slug
                 )
+    return False
 
 
 def _persist_reply_pods(session, entity, platform: str, content_id: str, log) -> None:

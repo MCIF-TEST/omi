@@ -199,10 +199,22 @@ class YouTubeClient(Protocol):
     def channels(self) -> Any: ...
 
 
+# Per-call socket timeout (seconds) for YouTube Data API requests. Bounds a
+# single hung connection so it can't pin a FastAPI threadpool worker forever —
+# a comprehensive scan issues ~2 calls per commenter, so one stuck socket with
+# no timeout would otherwise stall the whole request (and the worker) until the
+# OS gave up. Comfortably above YouTube's normal sub-second latency.
+_YOUTUBE_HTTP_TIMEOUT_SECONDS = 20.0
+
+
 def build_default_client(api_key: str) -> YouTubeClient:
     """Construct the production YouTube Data API v3 client.
 
-    Lazy import — ``google-api-python-client`` is an optional extra.
+    Lazy import — ``google-api-python-client`` is an optional extra. Every call
+    is bounded by ``_YOUTUBE_HTTP_TIMEOUT_SECONDS``; if the timeout-aware
+    transport can't be constructed (httplib2 missing, or a client version that
+    rejects an explicit ``http`` alongside ``developerKey``), we fall back to the
+    default transport so client construction can never break a scan.
     """
     try:
         from googleapiclient.discovery import build  # type: ignore
@@ -211,7 +223,18 @@ def build_default_client(api_key: str) -> YouTubeClient:
             "google-api-python-client is not installed. "
             "Install with `pip install omi-api[youtube]`."
         ) from e
-    return build("youtube", "v3", developerKey=api_key, cache_discovery=False)
+
+    try:
+        import httplib2  # type: ignore
+
+        timed_http = httplib2.Http(timeout=_YOUTUBE_HTTP_TIMEOUT_SECONDS)
+        return build(
+            "youtube", "v3", developerKey=api_key,
+            http=timed_http, cache_discovery=False,
+        )
+    except Exception:
+        # Never let timeout wiring break the client — fall back to the default.
+        return build("youtube", "v3", developerKey=api_key, cache_discovery=False)
 
 
 # ---------------------------------------------------------------------------

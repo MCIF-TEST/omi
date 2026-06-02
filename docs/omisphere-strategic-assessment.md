@@ -9,6 +9,58 @@
 
 ---
 
+## Addendum — post-snapshot corrections (2026-06-02)
+
+Two updates since this assessment's clone snapshot (`774ab1b`):
+
+1. **Twitter/X ingestion shipped to `main`** (PR #26, via `twitterapi.io`). This
+   partially addresses **Weakness #17** ("single-platform") and overtakes
+   **Do-Not-Build #1** ("don't build other platforms yet") — X ingestion already
+   landed. The core thesis is *unchanged and arguably reinforced*: a second
+   platform — one that costs real money per call (Twitter is priced at
+   ~$0.005/post → 10 credits/batch, vs YouTube's effectively-free 1) — has been
+   added on top of an engine still validated only by synthetic fixtures. That
+   makes real-data validation (**Improvement #4**) *more* urgent, not less.
+
+2. **Tier-1 Foundation — completed on this branch.** The reliability,
+   data-integrity, error-handling and recovery items in the priority hierarchy's
+   Tier 1 are now closed:
+   - **Investigation persistence** is synchronous + collision-safe: the slug
+     `/scan/link` returns always resolves (no read-after-write 404, no
+     empty-payload rows), and a client can't collide on another user's
+     globally-unique slug and silently drop a save (Weakness #1).
+   - **Honest billing**: a failed scan never costs a credit — `/scan/link`
+     refunds on any failure (and `/comprehensive` on non-YouTube errors),
+     preserving the `YouTubeAccessError` "no refund" policy (Weakness #3). A scan
+     where *every* commenter errors is treated as a failure (refund + 502), not a
+     uniformly-empty charged result.
+   - **Data durability** (Weakness #7): the prod blueprint no longer provisions a
+     `free` Postgres (deleted ~90 days after creation) — it uses a paid, backed-up
+     tier. Boot now runs an idempotent **index gap-fill** so composite indexes
+     added after a table already exists are created on long-lived production DBs
+     (no silent full scans).
+   - **Resource bounding** (part of Weakness #4/#15): `/scan/link` clamps
+     `max_commenters` to the operator cap (closing a raw-dict bypass that could
+     over-charge, 422, or fetch an unbounded batch) and parses bad input
+     defensively; the YouTube client bounds every call with a socket timeout so a
+     hung connection can't pin a worker.
+   - **Recovery**: `background.shutdown` now honours its time budget instead of
+     blocking a redeploy indefinitely on a hung best-effort task.
+   - Covered by new regressions in `tests/test_investigation_hardening.py` and
+     `tests/test_tier1_hardening.py`; full backend suite green.
+
+   **Deliberately deferred (documented, not skipped):** releasing the DB session
+   across YouTube I/O via an async job model for very large scans, and hoisting
+   the per-commenter brute-force fingerprint-neighbor load (O(commenters ×
+   accounts)). Both are larger, orchestrator-/detection-touching refactors whose
+   worst case is already bounded by the new `max_commenters` clamp; per the
+   operating directive ("prefer the simplest solution", "don't destabilize"),
+   they belong in a dedicated, separately-tested effort and are the headline
+   items for the scalability track once real-data validation (Tier 2 /
+   Improvement #4) is underway.
+
+---
+
 ## Executive Summary
 
 OmiSphere is **much better built than a pre-PMF product has any right to be — and that is

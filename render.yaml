@@ -96,8 +96,14 @@ services:
         sync: false
 
 databases:
+  # IMPORTANT: never run production on Render's `free` Postgres — free databases
+  # are DELETED ~90 days after creation, which means total loss of the only
+  # irreplaceable data we hold (investigations, fingerprints, watchlists,
+  # ground-truth labels). Use a paid tier, which also includes automatic daily
+  # backups. `basic-256mb` (~$6/mo) is the entry paid plan; bump to
+  # `basic-1gb`/`basic-4gb` as data grows. Adjust the plan string to your account.
   - name: omisphere-postgres
-    plan: free
+    plan: basic-256mb
     region: oregon
     databaseName: omi
     user: omi
