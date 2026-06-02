@@ -1053,8 +1053,18 @@ def scan_link(
             ),
         )
 
-    # Deduct credits before running the scan. 402 if user is out.
-    max_commenters = int(payload.get("max_commenters", 25))
+    # Deduct credits before running the scan (refunded on any failure below).
+    #
+    # max_commenters arrives via a raw dict here (not the Pydantic ScanRequest),
+    # so we clamp it ourselves: bound it to the operator's configured cap so a
+    # client can't bypass cost control, over-charge themselves, trip the schema's
+    # le=500 validator (a 500 error), or make one request fetch an unbounded
+    # number of commenters. Parse defensively so bad input never 500s.
+    try:
+        requested_commenters = int(payload.get("max_commenters", 25) or 25)
+    except (TypeError, ValueError):
+        requested_commenters = 25
+    max_commenters = max(1, min(requested_commenters, settings.scan_max_commenters))
     platform = classification.get("platform", "youtube")
     cost = compute_scan_credits(platform, max_commenters, settings)
     consume_credits(
@@ -1104,6 +1114,19 @@ def scan_link(
         (result.video.commenter_count if result.video else 0),
         result.overall_tier.value if hasattr(result.overall_tier, "value") else result.overall_tier,
     )
+
+    # A scan where EVERY commenter errored is a systemic failure, not a result —
+    # don't persist a uniformly-empty investigation or charge for it. (A partial
+    # failure, where only some commenters errored, is a legitimate saveable result.)
+    if _all_commenters_failed(result):
+        refund_credits(current.id, cost, reason="scan_all_failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "The scan reached YouTube but could not analyze any commenters. "
+                "Your credit was refunded — please try again."
+            ),
+        )
 
     # ---- Phase 5: persist as a saved investigation (SYNCHRONOUS) ----
     # We persist BEFORE returning so the slug we hand back ALWAYS resolves: no
@@ -1156,6 +1179,17 @@ def _investigation_label(classification: dict, url: str) -> str:
 def _serialize_result(result) -> dict:
     """ComprehensiveScanResult → JSON-serializable dict via Pydantic v2."""
     return result.model_dump(mode="json")
+
+
+def _all_commenters_failed(result) -> bool:
+    """True only when a video scan produced commenters and EVERY one carries an
+    error (systemic failure). False for partial failures, empty/None videos, and
+    non-video scans — so a legitimately partial result is still saved/charged."""
+    video = getattr(result, "video", None)
+    commenters = getattr(video, "commenters", None) if video is not None else None
+    if not commenters:
+        return False
+    return all(getattr(c, "error", None) for c in commenters)
 
 
 def _merge_payloads(existing: dict, new: dict) -> dict:
@@ -1242,7 +1276,7 @@ def scan_comprehensive_endpoint(
                 account_url_or_handle=req.account_url_or_handle,
                 video_url_or_id=req.video_url_or_id,
                 comments_text=req.comments_text,
-                max_commenters=req.max_commenters,
+                max_commenters=max_comm,
                 force_refresh=req.force_refresh,
                 client=client,
                 youtube=yt,

@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 from app.core.config import get_settings
 from app.main import app
 from app.routes.scan import (
+    _all_commenters_failed,
     _investigation_label,
     _merge_payloads,
     _persist_investigation,
@@ -295,6 +296,58 @@ def test_resolve_slug_only_reuses_callers_own_slug():
     # No requested slug → always fresh.
     fresh = _resolve_investigation_slug(requested_slug=None, user_id=1)
     assert fresh.startswith("inv_") and fresh != slug
+
+
+def test_scan_link_clamps_max_commenters_to_operator_cap(auth_client):
+    """A raw-dict max_commenters can't bypass the operator's cost cap, over-charge
+    the user, or trip the schema's le=500 validator with a 500/422. It is clamped
+    to settings.scan_max_commenters, and the credit cost reflects the clamp."""
+    import math
+    s = get_settings()
+    cap = s.scan_max_commenters
+    expected_cost = max(
+        1, math.ceil(cap / s.scan_batch_unit) * s.credits_per_batch_youtube
+    )
+
+    before = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": 10_000},
+    )
+    assert r.status_code == 200, r.text  # not 422 (schema) and not 500 (crash)
+    after = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+    assert before - after == expected_cost, (
+        f"charged {before - after} credits; expected clamped cost {expected_cost} "
+        f"(an unclamped 10k request would have cost "
+        f"{math.ceil(10_000 / s.scan_batch_unit)} and 402'd)"
+    )
+
+
+def test_scan_link_handles_garbage_max_commenters(auth_client):
+    """Non-numeric max_commenters must default gracefully, not 500."""
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": "lots"},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_all_commenters_failed_helper():
+    """Systemic-failure detector: True only when a video produced commenters and
+    every one errored; False for partial failures, empty, and non-video scans."""
+    from types import SimpleNamespace as NS
+
+    partial = NS(video=NS(commenters=[NS(error=None), NS(error="boom")]))
+    assert _all_commenters_failed(partial) is False
+
+    systemic = NS(video=NS(commenters=[NS(error="boom"), NS(error="boom2")]))
+    assert _all_commenters_failed(systemic) is True
+
+    empty = NS(video=NS(commenters=[]))
+    assert _all_commenters_failed(empty) is False
+
+    no_video = NS(video=None)
+    assert _all_commenters_failed(no_video) is False
 
 
 # ---------------------------------------------------------------------------

@@ -100,6 +100,7 @@ def init_db(url: str | None = None) -> Engine:
         _logger.warning("could not verify table creation: %s", e)
 
     _add_missing_columns(_engine)
+    _ensure_indexes(_engine)
     return _engine
 
 
@@ -167,6 +168,47 @@ def _add_missing_columns(engine: Engine) -> None:
             _logger.info("Added column %s.%s (%s)", table, column, ddl)
         except Exception as e:
             _logger.warning("Could not add column %s.%s: %s", table, column, e)
+
+
+def _ensure_indexes(engine: Engine) -> None:
+    """Create any model-declared index that doesn't exist on an existing table.
+
+    ``create_all`` builds indexes only for tables it *newly* creates; an index
+    added to the model AFTER a table already exists in production is never
+    created (create_all leaves existing tables untouched, and the column-upgrade
+    pass only adds columns). On a long-lived database that means large tables
+    silently fall back to full scans for queries the composite indexes were
+    meant to serve (e.g. ``Scan(account_id, scanned_at)``,
+    ``Investigation(user_id, created_at)``, ``Alert(user_id, created_at)``).
+
+    This pass closes that gap. Idempotent (``checkfirst``) and best-effort: a
+    failure to add one index is logged, never raised, so boot always proceeds.
+    """
+    try:
+        insp = inspect(engine)
+        existing_tables = set(insp.get_table_names())
+    except Exception as e:
+        _logger.warning("could not inspect schema for index upgrades: %s", e)
+        return
+
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue  # create_all already built this table and its indexes
+        try:
+            present = {ix.get("name") for ix in insp.get_indexes(table.name)}
+        except Exception as e:
+            _logger.warning("could not read indexes for %s: %s", table.name, e)
+            continue
+        for index in table.indexes:
+            if index.name in present:
+                continue
+            try:
+                index.create(bind=engine, checkfirst=True)
+                _logger.info("Created missing index %s on %s", index.name, table.name)
+            except Exception as e:
+                _logger.warning(
+                    "could not create index %s on %s: %s", index.name, table.name, e
+                )
 
 
 def reset_db_for_tests(url: str = "sqlite:///:memory:") -> Engine:
