@@ -83,6 +83,55 @@ class CommentAnalysisRequest(BaseModel):
     context_platform: Platform = "unknown"
 
 
+class DetectorContribution(BaseModel):
+    """Faithful, quantified record of how one detector moved the final score.
+
+    ``logit_delta`` is the *exact* signed amount this detector added to the
+    posterior log-odds inside ``aggregate()`` — positive raises suspicion,
+    negative lowers it, zero means it did not move the score. Because the score
+    is built by summing these same deltas onto the prior (plus the convergence
+    bonus), this breakdown reconstructs the headline number: it is faithful by
+    construction, not a post-hoc rationalization of an already-chosen verdict.
+
+    ``impact`` is the detector's share of the *total* absolute movement across
+    all detectors, in [0, 1] — a UI-friendly "how much of the picture was this
+    signal" number that is comparable across detectors regardless of sign.
+    """
+
+    name: str
+    headline: str
+    probability: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    weight: float
+    decorrelation_factor: float = 1.0
+    logit_delta: float
+    impact: float = Field(ge=0.0, le=1.0)
+    direction: Literal["raises", "lowers", "neutral"]
+    supplemental: bool = False
+    evidence: str | None = None
+
+
+class ScoreBreakdown(BaseModel):
+    """Auditable prior→posterior arithmetic behind the headline probability.
+
+    Invariant (holds to floating-point tolerance):
+        prior_logit + detector_logit_sum + convergence_bonus_logit
+            == posterior_logit
+    and ``sigmoid(posterior_logit)`` equals the final probability *unless* the
+    single-axis HIGH cap fired, in which case ``single_axis_capped`` is True and
+    the final probability is the ELEVATED ceiling. This object lets any consumer
+    reconstruct and audit the score end-to-end.
+    """
+
+    prior_probability: float = Field(ge=0.0, le=1.0)
+    prior_logit: float
+    detector_logit_sum: float
+    convergence_bonus_logit: float = 0.0
+    posterior_logit: float
+    single_axis_capped: bool = False
+    final_probability: float = Field(ge=0.0, le=1.0)
+
+
 class ScanResult(BaseModel):
     """Aggregated detection output. Always probabilistic, always with evidence."""
 
@@ -110,6 +159,14 @@ class ScanResult(BaseModel):
     # Lets the UI explain *why* the headline number isn't just the sum of the
     # bars. Empty when no adjustment applied.
     score_adjustments: list[str] = Field(default_factory=list)
+    # Faithful, quantified per-detector attribution (GAP-06). Each entry is the
+    # exact signed log-odds contribution a detector made to this score, ranked by
+    # impact. Unlike ``reasons`` (suspicious-only, non-low tier only), this
+    # includes EXCULPATORY contributions — e.g. an established community footprint
+    # that LOWERED suspicion — so the explanation is complete in both directions.
+    contributions: list[DetectorContribution] = Field(default_factory=list)
+    # Auditable prior→posterior arithmetic that reconstructs the headline number.
+    score_breakdown: ScoreBreakdown | None = None
 
 
 # ---------------------------------------------------------------------------

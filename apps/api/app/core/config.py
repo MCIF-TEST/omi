@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     weight_voice: float = Field(default=0.5)
     weight_engagement: float = Field(default=0.9)
     weight_coordination: float = Field(default=0.9)
+    weight_narrative: float = Field(default=0.8)
+    # community is a DOWNWARD-only anchor (GAP-07): it can subtract suspicion for
+    # established, audience-bearing accounts but never add it. Weight controls how
+    # much an established community can offset behavioral suspicion — kept modest
+    # so a blatant multi-axis bot still outweighs it.
+    weight_community: float = Field(default=0.9)
 
     # Signal-decorrelation factors. Several detectors share an underlying
     # evidence basis: ``semantic`` + ``ai_writing`` both read text patterns,
@@ -68,6 +74,21 @@ class Settings(BaseSettings):
     # Storage. SQLite by default so the engine works with zero infrastructure;
     # override with a Postgres URL in production.
     database_url: str = "sqlite:///./data/omi.db"
+
+    # Twitter / X ingestion (twitterapi.io adapter). The detection engine is
+    # platform-agnostic; this key only powers the ingestion layer that maps
+    # tweets/profiles onto the shared Profile/Post schemas. Never commit it —
+    # set OMI_TWITTER_API_KEY in the environment / .env.
+    twitter_api_key: str | None = None
+    twitter_api_base_url: str = "https://api.twitterapi.io"
+    # Max recent tweets to pull per single-account scan (history depth bounds
+    # the per-scan provider cost).
+    scan_twitter_max_history: int = 50
+    # Credits charged for a single-account Twitter deep-scan. Flat (not batch):
+    # one account's ~50-tweet history is a fraction of a 50-commenter batch, so
+    # this is intentionally cheap. The 10-credits-per-50 batch rate
+    # (credits_per_batch_twitter) applies to multi-account tweet-thread scans.
+    credits_per_twitter_account: int = 1
 
     # YouTube ingestion.
     youtube_api_key: str | None = None

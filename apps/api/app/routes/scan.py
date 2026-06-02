@@ -38,6 +38,21 @@ from app.integrations.youtube_errors import (
     YouTubeNotFoundError,
     YouTubeQuotaExceededError,
 )
+from app.integrations.twitter import (
+    FetchStats as TwitterFetchStats,
+    TwitterClient,
+    build_default_client as build_default_twitter_client,
+    fetch_user_profile as fetch_twitter_profile,
+    fetch_user_recent_tweets,
+    normalize_handle,
+)
+from app.integrations.twitter_errors import (
+    TwitterAccessError,
+    TwitterAuthError,
+    TwitterClientError,
+    TwitterNotFoundError,
+    TwitterRateLimitError,
+)
 from app.orchestrator import (
     scan_account_with_memory,
     scan_comprehensive,
@@ -702,6 +717,181 @@ def scan_youtube_account(
         from_cache=orch.from_cache,
         matched_prior_neighbors=orch.matched_neighbors,
         history_size=len(history),
+        suspected_intent=orch.result.suspected_intent,
+        intent_label=orch.result.intent_label,
+        reasons=list(orch.result.reasons or []),
+        recent_activity=activity_samples,
+        activity_total=activity_total,
+    )
+
+
+def _handle_twitter_error(
+    e: TwitterClientError,
+    *,
+    user_id: int,
+    credits_to_refund: int,
+    target_input: str,
+) -> "HTTPException":
+    """Translate a typed Twitter error into an HTTPException, refunding the
+    user's credit unless the failure was their fault (access/suspension)."""
+    import logging
+    log = logging.getLogger("omi.scan.twitter")
+
+    if isinstance(e, TwitterRateLimitError):
+        refund_credits(user_id, credits_to_refund, reason="tw_ratelimit")
+        log.warning("Twitter rate limit hit: %s", e.admin_detail)
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.user_message,
+            headers={"Retry-After": "60"},
+        )
+    if isinstance(e, TwitterAuthError):
+        refund_credits(user_id, credits_to_refund, reason="tw_auth")
+        log.error("Twitter auth error: %s", e.admin_detail)
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.user_message,
+        )
+    if isinstance(e, TwitterNotFoundError):
+        refund_credits(user_id, credits_to_refund, reason="tw_404")
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.user_message,
+        )
+    if isinstance(e, TwitterAccessError):
+        # Lookup ran — the user's handle was valid but the account is
+        # protected or suspended. Do not refund: the work happened.
+        log.info("Twitter access denied for %s: %s", target_input[:80], e.admin_detail)
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.user_message,
+        )
+    # Generic TwitterClientError — assume transient.
+    refund_credits(user_id, credits_to_refund, reason="tw_other")
+    log.exception("Unexpected Twitter error: %s", e.admin_detail)
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=e.user_message,
+    )
+
+
+def _resolve_twitter_client(settings: Settings) -> TwitterClient:
+    key = (settings.twitter_api_key or "").strip()
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Twitter/X API key is not configured. Set OMI_TWITTER_API_KEY "
+                "in the environment."
+            ),
+        )
+    try:
+        return build_default_twitter_client(key, base_url=settings.twitter_api_base_url)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
+
+
+# Module-level override for tests — mirrors the YouTube pattern.
+_twitter_client_factory_override = None
+
+
+def set_twitter_client_factory_for_tests(factory) -> None:
+    global _twitter_client_factory_override
+    _twitter_client_factory_override = factory
+
+
+@router.post("/twitter/account", response_model=AccountScanOut)
+def scan_twitter_account(
+    payload: dict,
+    settings: Settings = Depends(get_settings),
+    current: CurrentUser = Depends(require_user),
+) -> AccountScanOut:
+    """Deep-scan a single Twitter/X account by URL or @handle.
+
+    Costs 1 credit per call. The same platform-agnostic detection engine
+    that scores YouTube commenters is applied here; Twitter's richer
+    profile data (follower/following counts, account age, verification,
+    per-tweet engagement) fully powers the community-anchor, profile,
+    engagement, and temporal detectors.
+    """
+    account_input = (payload or {}).get("account_url_or_handle") or ""
+    force_refresh = bool((payload or {}).get("force_refresh", False))
+    if not account_input.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="account_url_or_handle is required.",
+        )
+
+    handle = normalize_handle(account_input)
+    if not handle:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Could not parse a Twitter/X handle from the input. "
+                "Provide a handle (e.g. '@elonmusk'), URL, or bare username."
+            ),
+        )
+
+    consume_credits(current.id, settings.credits_per_twitter_account,
+        platform="x", scan_type="twitter_account",
+        target_input=account_input[:500], settings=settings)
+
+    factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
+    client = factory()
+    stats = TwitterFetchStats()
+
+    try:
+        profile = fetch_twitter_profile(client, handle, stats=stats)
+        if profile is None:
+            refund_credits(current.id, settings.credits_per_twitter_account, reason="tw_no_profile")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No Twitter/X profile found for '{handle}'.",
+            )
+        posts = fetch_user_recent_tweets(
+            client, handle,
+            max_tweets=settings.scan_twitter_max_history,
+            stats=stats,
+        )
+    except TwitterClientError as e:
+        raise _handle_twitter_error(
+            e, user_id=current.id,
+            credits_to_refund=settings.credits_per_twitter_account,
+            target_input=account_input,
+        )
+
+    with get_session() as session:
+        orch = scan_account_with_memory(
+            session,
+            platform="x",
+            external_id=handle,
+            profile=profile,
+            posts=posts,
+            force_refresh=force_refresh,
+        )
+
+    activity_samples, activity_total = _activity_payload(
+        posts, orch.result.tier, limit=30, include_low=True
+    )
+    return AccountScanOut(
+        external_id=handle,
+        handle=profile.handle,
+        display_name=profile.display_name,
+        avatar_url=profile.avatar_url,
+        bio=profile.bio,
+        follower_count=profile.follower_count,
+        account_created_at=profile.created_at,
+        overall_probability=orch.result.overall_probability,
+        confidence=orch.result.confidence,
+        tier=orch.result.tier,
+        summary=orch.result.summary,
+        signals=list(orch.result.signals),
+        from_cache=orch.from_cache,
+        matched_prior_neighbors=orch.matched_neighbors,
+        history_size=len(posts),
         suspected_intent=orch.result.suspected_intent,
         intent_label=orch.result.intent_label,
         reasons=list(orch.result.reasons or []),

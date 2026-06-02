@@ -46,14 +46,63 @@ from app.evaluation import (
 #   • semantic detector — a 3-gram template-skeleton supplement + strength-aware
 #     confidence so fill-in-the-blank template spam is detected even on the
 #     fallback embedder.
-# Net effect on the seed benchmark: Brier 0.1107 → 0.0588, tier accuracy
-# 0.415 → 0.646, macro-F1 0.182 → 0.583 — with ZERO new false positives on the
-# clean/ESL/edge archetypes. The residual misses are temporal/profile/
-# coordination archetypes owned by the confidence-calibration / community-anchor
-# gaps, not by content-style detection.
-GATE_MAX_BRIER = 0.070      # current 0.0588
-GATE_MIN_ACCURACY = 0.60    # current 0.646; majority baseline 0.338
-GATE_MIN_MACRO_F1 = 0.52    # current 0.583
+# GAP-04 targeted hybrid-operation archetypes (astroturf, broadcast bots, fresh
+# sockpuppets, mechanical schedulers) that were under-detected with low-data
+# confidence:
+#   • narrative detector — new detector scanning for political/disinformation
+#     language patterns from IO disclosures (deep-state, media-corruption tropes,
+#     amplification CTAs, etc.); primary signal for coordinated narrative ops.
+#   • voice broadcast exception — zero first-person across a non-trivial corpus
+#     now raises confidence even for short posts (pure amplification bots).
+#   • profile fresh-account compound signal — clusters of auto-handle + sparse
+#     graph + minimal bio on <90-day accounts now flags sockpuppet setups.
+#   • temporal strength-aware confidence — machine-precision scheduling (CoV <
+#     5%) gets a confidence boost even on small post histories; typical bots with
+#     Gaussian jitter (CoV >> 5%) are NOT boosted.
+#   • single-axis cap fix — the "no HIGH without corroboration" cap now only
+#     counts *suspicious* confident signals (p > 0.40) as axes, preventing clean
+#     detectors from falsely bypassing the cap.
+# Net effect on the seed benchmark: Brier 0.0588 → 0.0345 (41% improvement),
+# tier accuracy 0.646 → 0.631, macro-F1 0.583 → 0.588. The slight accuracy dip
+# is explained by the single-axis cap correctly classifying engagement_farm_high
+# as ELEVATED (one suspicious axis only), which is the right policy tradeoff.
+# GAP-05 confidence calibration recalibrated the narrative detector's probability
+# curve (centre 0.30 → 0.12 — explicit IO-disclosure phrasing is suspicious at
+# much lower marker rates than the old curve assumed; a 30%-marker account was
+# mapping to a useless 0.50) and expanded its pattern recall to catch common
+# real-world astroturf phrasings the original set missed ("they are trying to
+# silence us", "before it gets taken down", "(mainstream) media won't cover").
+# A 2-axis convergence bonus was tested and REJECTED — it worsened Brier by
+# pushing ambiguous over-detected cases higher without cleanly recovering the
+# under-detected ones (the residual misses are genuinely signal-ambiguous, e.g.
+# clean_ai_verbose_writer vs elevated_broadcast_voice share a near-identical
+# signal vector — separating them needs new discriminating features owned by
+# GAP-07/GAP-10, not threshold tuning).
+# Net effect on the seed benchmark: Brier 0.0345 → 0.0275 (20% further
+# improvement), accuracy 0.631 (held), macro-F1 0.588 → 0.585, ZERO new false
+# positives (narrative fires only on the two genuine astroturf archetypes).
+# GAP-07 false-positive reduction added a DOWNWARD-ONLY community-anchor detector
+# (app/detection/community.py): a large, multi-year follower base is Bayesian
+# evidence *against* synthetic operation, so it subtracts suspicion from
+# established accounts (brands, long-running news/weather feeds, audience-bearing
+# AI-assisted humans) that trip the behavioral detectors the same way bots do.
+# It is age-gated (anchoring needs 1-4yr maturity, NOT just follower count — this
+# protects the young high-follower region where bought-audience ops live) and
+# confidence-bounded (pulls ~one tier, never a HIGH→LOW collapse). It fixed
+# moderate_podcast_auto (elevated→moderate) with ZERO regressions — every case it
+# touched either improved or held its existing (already-wrong) tier; no
+# previously-correct case was broken. Note: the seed set under-rewards this
+# feature — it labels established automated feeds (news bot, weather service) as
+# MODERATE while strong anchoring pulls the most-established of them toward LOW,
+# and it carries NO engagement-reciprocity data (replies/likes are all null),
+# which is where anchoring is most decisive. Full value needs the cross-account
+# co-engagement signals owned by GAP-10.
+# Net effect on the seed benchmark: accuracy 0.631 → 0.646, macro-F1 0.585 →
+# 0.608, Brier 0.0275 → 0.0286 (noise-level rise from pushing already-misclassified
+# legit feeds deeper into LOW; well within gate).
+GATE_MAX_BRIER = 0.032      # current 0.0286; held (GAP-07 did not improve Brier)
+GATE_MIN_ACCURACY = 0.64    # current 0.646; was 0.62 after GAP-05
+GATE_MIN_MACRO_F1 = 0.60    # current 0.608; was 0.57 after GAP-05
 
 
 @pytest.fixture(scope="module")

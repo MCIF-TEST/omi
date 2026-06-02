@@ -141,6 +141,126 @@ Demoting `ai_writing` unmasked an elevated/high **recall gap** (macro-F1 had fal
 
 ---
 
+## GAP-04 — Hybrid operation detection  ✅ done
+
+**Shipped**
+- **Narrative detector** (`app/detection/narrative.py`) — new detector scanning for political/disinformation astroturf language drawn from public IO disclosures (Twitter/X transparency reports, DFRLab, Stanford IO Observatory). 11 compiled regex patterns covering: mainstream-media delegitimisation, establishment fear-framing, amplification CTAs ("spread this everywhere before they delete it"), deep-state/globalist conspiracy markers, media-corruption tropes, hidden-truth framing, DYOR, silencing/censorship claims, narrative-collapse celebration. Probability: logistic on the fraction of posts containing markers (centred at 30%). Confidence: product of absolute count and corpus-size components — a single suspicious post on a tiny account doesn't look like an operation.
+- **Voice broadcast exception** (`app/detection/voice.py`) — zero first-person pronouns across a non-trivial corpus (≥ MIN_WORDS_FOR_VOICE) now triggers a confidence boost via the broadcast exception, even when individual posts are short. The existing `length_factor` guard was calibrated for conversational text, not news-brief summaries; broadcast accounts are intentionally impersonal. Confidence now scales from 0.35 to 0.75 with corpus size.
+- **Profile fresh-account compound signal** (`app/detection/profile.py`) — `_fresh_account_signal()` fires on accounts <90 days old that exhibit a cluster of ≥2 suspicious attributes: auto-generated handle (long numeric tail), sparse social graph (<10 total connections), and minimal bio (<3 words). Any single attribute on a new account is too common to signal on; the cluster is not. Returns up to 0.90 suspicion for the full three-attribute pattern.
+- **Temporal strength-aware confidence** (`app/detection/temporal.py`) — machine-precision scheduling (CoV < 5%) is essentially impossible in human posting (requires machine-controlled interval timing). When CoV < 0.05 AND cov_prob ≥ 0.90, confidence is boosted to 0.25–0.60 regardless of post count. Typical automated content bots with Gaussian jitter (CoV ≥ 0.10) are NOT boosted — keeping them at MODERATE as expected.
+- **Single-axis cap fix** (`app/detection/scoring.py`) — the "no HIGH without corroboration" cap now counts only *suspicious* confident signals (probability > 0.40 AND confidence > 0.30) as independent axes. Previously, clean-scoring high-confidence detectors (e.g. engagement p=0.000 conf=0.320) were falsely counted as axes and bypassed the cap, allowing single-axis accounts to reach HIGH.
+- **Narrative wired into the engine** (`app/detection/engine.py`, `app/detection/scoring.py`, `app/detection/correlation.py`) — `analyze_narrative` added to `analyze_account`; weight 0.8; added to `_WEAK_REASON`, `_DETECTOR_HEADLINES`, `_infer_intent` (coordinated_campaign path); added to `DETECTORS` tuple in the correlation module.
+- **23 new detector tests** (`tests/test_gap04_detectors.py`) covering all four improvements end-to-end.
+
+**📊 Benchmark impact** (seed_v1, fallback embedder)
+- Brier `0.0588 → 0.0345` (**41% improvement** — by far the largest single-gap improvement).
+- Macro-F1 `0.583 → 0.588` (slight improvement; narrative catches astroturf archetypes).
+- Tier accuracy `0.646 → 0.631` (slight dip — explained by the single-axis cap fix correctly classifying `engagement_farm_high` as ELEVATED rather than HIGH; one suspicious axis alone should be ELEVATED, not HIGH).
+- Gates ratcheted in `tests/test_evaluation_benchmark.py`: `GATE_MAX_BRIER 0.070 → 0.045`, `GATE_MIN_ACCURACY 0.60 → 0.62`, `GATE_MIN_MACRO_F1 0.52 → 0.57`.
+
+**🧭 Decisions**
+- Narrative patterns are conservative by design: each pattern requires the characteristic *combination* of phrases that makes them specific to influence operations (not just any reference to "media"). Single incidental occurrences never raise confidence above 0.15.
+- The CoV < 0.05 threshold for temporal boosting was chosen because 5% interval variation requires sub-minute scheduling precision — humans on any posting platform never achieve this. The threshold is deliberately NOT applied to typical automation (CoV 0.10–0.50) to avoid false positives on podcast auto-posts or social media schedulers with natural jitter.
+- The fresh-account signal requires ≥2 attributes. A new account with only a numeric handle, or only no followers, is common enough (new users, dormant early adopters) to be benign. The three-attribute cluster is the sockpuppet setup pattern.
+- The single-axis cap change is a **bug fix**, not a policy change. The original intent was "HIGH requires multiple independent axes." The old implementation was incorrectly counting clean detectors as axes.
+
+**🎛 New knobs** (all in config with safe defaults)
+- `OMI_WEIGHT_NARRATIVE` (0.8) — weight of the narrative detector in the composite.
+
+**⏳ Deferred**
+- The `engagement_farm_high` benchmark case now lands at ELEVATED (probability 0.740) because engagement is the only suspicious axis. This is correct by the single-axis policy. Reaching HIGH would require a second independent signal — e.g. coordination evidence from a cross-account scan, or profile signals. That is owned by GAP-10 (cross-account) and GAP-07 (community anchor), not this gap.
+- Narrative patterns are English-only. Multi-language astroturf detection is out of scope for this gap.
+
+**✅ Baseline:** 505 backend tests (23 new GAP-04 detector tests, ratcheted benchmark gate).
+
+---
+
+## GAP-05 — Confidence calibration  ✅ done (first pass)
+
+**Diagnosis (data-driven, before touching code)**
+The engine's Brier was already excellent (0.0345) — probabilities *rank* correctly — but tiers skewed low: **17 of 24 benchmark misses were under-detection** (8× moderate→low, 4× elevated→moderate, 3× high→elevated) vs only 7 over-detection. That asymmetry is a calibration signature, not a coverage gap. But a global threshold shift was ruled out immediately: some `moderate→low` cases sit at p≈0.09 while some `low→moderate` cases sit at p≈0.48, so no single cut cleanly separates them.
+
+**Root cause found:** the highest-value miss, `high_political_astroturf`, had the narrative detector firing on 3 of 10 posts (overt "share before they delete it / mainstream media is hiding this" content) yet contributing **nothing** — its probability curve was centred at 0.30, so a 30% marker rate mapped to exactly 0.50 (neutral). Legitimate accounts essentially never use catalogued IO-disclosure phrasing, so even a 15–20% marker rate is strong evidence.
+
+**Shipped**
+- **Narrative probability recalibration** (`app/detection/narrative.py`) — logistic centre `0.30 → 0.12`. Now: rate 0.10 → ~0.43, 0.20 → ~0.75, 0.30 → ~0.93. Low absolute counts are still reined in by the confidence term (unchanged), not by the probability.
+- **Narrative recall expansion** — added 3 patterns (14 total) for common real-world astroturf phrasings the original set missed: media-suppression framing ("(mainstream|corporate) media won't cover/show/report"), urgency amplification ("share … before it gets removed/banned/taken down/disappears", "share share share"), and broadened silencing/censorship ("they are trying to silence us", "shut it/us down", "banned from every mainstream platform"). On the benchmark astroturf case this lifted marker coverage from 3/10 to 10/10 posts.
+
+**🧭 Decisions / what was deliberately NOT done**
+- **2-axis convergence bonus: tested and REJECTED.** Adding a bonus for two strong independent axes worsened Brier (0.0275 → 0.0284) with no accuracy gain — it pushed ambiguous over-detected cases (e.g. `moderate_stock_alerts_auto`) higher without recovering the under-detected ones. Reverted.
+- **The residual under-detection is genuinely signal-ambiguous, not a calibration bug.** `clean_ai_verbose_writer` (expected LOW) and `elevated_broadcast_voice` (expected ELEVATED) have near-identical signal vectors (voice≈0.80 + temporal≈0.57). The current detectors cannot separate "human who writes impersonally" from "broadcast amplifier" — that needs new discriminating features (cross-account co-engagement, community anchoring), owned by **GAP-07** and **GAP-10**. Forcing them apart on the seed set would be overfitting.
+- **`high_political_astroturf` lands at ELEVATED, not HIGH — and that's correct.** Narrative is its only suspicious axis; the single-axis cap (GAP-02/GAP-04) holds it at the ELEVATED ceiling. Pure content evidence with no behavioral/profile/coordination corroboration is appropriately ELEVATED. The single-axis cap was **not** weakened.
+- **The 8× moderate→low cases were left alone.** They're legit auto-bots (weather/news/sports) and clean/ESL/academic writers that genuinely look clean; pushing them up means firing on the exact populations the false-positive guards protect.
+
+**📊 Benchmark impact** (seed_v1, fallback embedder)
+- Brier `0.0345 → 0.0275` (20% further improvement; cumulative since GAP-03: 0.0588 → 0.0275, a 53% reduction).
+- Tier accuracy `0.631` (held), macro-F1 `0.588 → 0.585` (noise-level; the astroturf case moved moderate→elevated, shifting a confusion cell).
+- **Zero** new false positives — narrative fires only on the two genuine astroturf archetypes.
+- Gate ratcheted: `GATE_MAX_BRIER 0.045 → 0.032`.
+
+**⏳ Deferred (owned by later gaps)**
+- Separating impersonal-but-human from broadcast-amplifier, and benign-automation (weather/news bots → MODERATE) from malicious-automation (template spam → HIGH), both need features beyond single-account content/cadence. → GAP-07 (community anchor / false positives), GAP-10 (cross-account behavioral).
+
+**✅ Baseline:** 507 backend tests (2 new narrative-calibration regression tests, ratcheted Brier gate).
+
+---
+
+## GAP-07 — Community anchor / false-positive reduction  ✅ done (first pass)
+
+**Premise validated before building.** Across the seed benchmark, the HIGH archetypes are *uniformly* small and young — every one has ≤840 followers and ≤515 days of age, most <100 followers and <215 days. The false-positive cases are the opposite: large and established (`moderate_stock_alerts_auto` 9.2k followers / 3.6y, `moderate_podcast_auto` 12.4k / 3.8y, `clean_ai_verbose_writer` 3.1k / 1.1y). The synthetic generator encodes the same physics — bots are built with 0–400 followers + thousands following + 1–200 days old; humans with real follower bases and multi-year ages. So follower-base × maturity is a genuine, generative separator.
+
+**Shipped**
+- **`community` detector** (`app/detection/community.py`) — a **downward-only** Bayesian anchor. A large, multi-year follower base is hard to fabricate and is evidence *against* synthetic operation, so the signal subtracts suspicion from established accounts that trip the behavioral detectors (impersonal voice, regular cadence, templated phrasing) the same way bots do. Design constraints that keep it honest:
+  - *Downward only* — probability is always ≤ the 0.15 prior, so in the log-odds aggregator it can lower a verdict but never raise one. (Pinned by `test_anchor_probability_never_exceeds_prior`.)
+  - *Age-gated* — anchoring requires genuine maturity (age ramp 1y→4y), not just follower count. This deliberately leaves the **young high-follower** region undampened — that's exactly where bought-audience operations live. A 50k-follower 3-month-old account does NOT anchor.
+  - *Bounded* — confidence capped at 0.70 so the dampener pulls ~one tier, never a HIGH→LOW collapse. Anchoring is evidence, not an override; a blatant multi-axis bot still outweighs it.
+  - *Silent when weak* — below a minimum anchor it returns zero confidence and contributes nothing, so ordinary accounts are unaffected. Excluded from weak-signal flagging (a quiet community detector is not a "low-data scan").
+  - *Mass-follow penalty* — the "follows thousands, followed by few" farm shape discounts the anchor when the ratio is visible.
+  - Verification is an independent anchor floor.
+- Wired into the engine, `weight_community` (0.9) in config, the scoring weights map, and the correlation `DETECTORS` tuple. Naturally excluded from every "why flagged" surface (`_extract_reasons` needs p≥0.5; `_infer_intent` reads only suspicious signals).
+- **11 unit tests** (`tests/test_community_anchor.py`) pinning the contract, plus an integration test that the same posting history scores **no higher** on an established account than on a fresh no-audience one.
+
+**🧭 Decisions / honesty about the benchmark**
+- **Zero regressions was the hard requirement, and it holds.** Every case the detector touched either improved or held its existing (already-wrong) tier — no previously-correct case was broken. It fixed `moderate_podcast_auto` (elevated→moderate).
+- **The seed set structurally under-rewards this feature**, and I did not overfit to force more wins:
+  1. It labels established automated feeds (`moderate_legitimate_news_bot` 248k/5.2y, `moderate_weather_service` 18.7k/4.9y) as MODERATE, while honest community anchoring pulls the *most*-established of them toward LOW. Those were already under-detected at LOW pre-GAP-07, so anchoring doesn't change their tier — it just deepens an existing miss (the only source of the tiny Brier rise). I will **not** relabel ground truth to match the engine.
+  2. It carries **no engagement-reciprocity data** — every post's `like_count`/`reply_count`/`reply_to_id` is null. Reciprocal real conversation is the most decisive anchor and it simply isn't in the fixtures. That signal arrives with **GAP-10** (cross-account co-engagement).
+- **`moderate_stock_alerts_auto` was left at the HIGH boundary (0.753) rather than tuned across it.** Nudging the weight to win one boundary case is the overfitting trap; the principled default (0.9, modest, below semantic's 1.2) stays.
+
+**📊 Benchmark impact** (seed_v1, fallback embedder)
+- Tier accuracy `0.631 → 0.646`, macro-F1 `0.585 → 0.608` (+2.3pts — the balanced-performance metric moved most), Brier `0.0275 → 0.0286` (noise-level rise, well within the 0.032 gate).
+- Gates ratcheted: `GATE_MIN_ACCURACY 0.62 → 0.64`, `GATE_MIN_MACRO_F1 0.57 → 0.60`. Brier gate held at 0.032 (GAP-07 traded a hair of Brier for accuracy/F1).
+
+**⏳ Deferred (owned by later gaps)**
+- Engagement-reciprocity anchoring (real replies received, genuine back-and-forth) — needs the co-engagement graph from **GAP-10**.
+- Separating benign established automation (news/weather → MODERATE) from the LOW the anchor wants to assign is a labeling-philosophy question better resolved with reciprocity data than with threshold tuning.
+
+**✅ Baseline:** 518 backend tests (11 new community-anchor tests, ratcheted accuracy + macro-F1 gates).
+
+---
+
+## GAP-06 — Explainability (faithful contribution breakdown)  ✅ done
+
+**The problem with the old explanation surface.** The engine emitted `reasons` (suspicious-only, non-low tier only), `summary`, and prose `score_adjustments` — but the *numeric* per-detector contribution it actually computed in the log-odds loop was thrown away. So the explanation could narrate a plausible story without being provably tied to the score, the exculpatory community-anchor contribution (GAP-07) was invisible, and nothing let a consumer reconstruct the headline number.
+
+**Shipped — faithful-by-construction attribution.**
+- **`DetectorContribution`** (schemas.py) — per detector: `logit_delta` (the *exact* signed log-odds it added to the posterior), `direction` (raises/lowers/neutral), `impact` (share of total absolute movement, for UI bars), `decorrelation_factor`, plus probability/confidence/weight/evidence and a `supplemental` flag.
+- **`ScoreBreakdown`** (schemas.py) — the auditable arithmetic: `prior_logit + detector_logit_sum + convergence_bonus_logit == posterior_logit`, and `sigmoid(posterior) == final_probability` unless `single_axis_capped`. Any consumer can reconstruct and verify the score end-to-end.
+- **`aggregate()`** now captures the deltas it already computes (zero scoring change — the convergence refactor is numerically identical) and emits `contributions` + `score_breakdown` on every `ScanResult`. Both are **purely additive** schema fields — no existing consumer breaks.
+- **Completeness in both directions.** Unlike `reasons`, the breakdown is populated even for LOW verdicts and includes EXCULPATORY contributions — the community anchor now shows as a `lowers` entry with its real negative delta. Supplemental `ai_writing` shows as `neutral` with delta exactly 0.
+- **LLM grounding.** The account-analysis digest (`reasoning/commentary.py`) now feeds the model a `raised_suspicion` / `lowered_suspicion` attribution block (optional param, backward-compatible) so the prose reflects real contribution — including the exculpatory side — instead of guessing.
+
+**🧭 Decisions**
+- **Faithfulness over narrative.** The breakdown is the same numbers that build the score, not a post-hoc rationalization. Pinned by `test_breakdown_reconstructs_the_score` and `test_contribution_deltas_sum_to_detector_logit_sum` (exact, 1e-9 tolerance).
+- **Persistence deferred.** The live `ScanResult` from every scan endpoint carries the breakdown (that's where explainability matters most — at scan time). Persisting it on the stored `Scan` model for the historical account-analysis path needs a DB migration; left as a clean follow-up so the stored path stays backward-compatible (`contributions` defaults to None).
+- **Frontend rendering deferred.** The API contract is the source of truth and is delivered; surfacing the breakdown bars + "what lowered suspicion" in `apps/web` is follow-up wiring, not engine work.
+
+**✅ Baseline:** 532 backend tests (12 new contribution-breakdown tests + 2 reasoning-digest tests).
+
+**⏳ Deferred:** persist `contributions`/`score_breakdown` on the `Scan` model (migration); render the breakdown in the web UI.
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)
