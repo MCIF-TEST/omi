@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.core.auth import CurrentUser, compute_scan_credits, consume_credits, refund_credits, require_user
 from app.core.config import Settings, get_settings
 from app.integrations import youtube as yt
+from app.integrations.source import YouTubeSource
 from app.integrations.youtube import (
     FetchStats,
     YouTubeClient,
@@ -1278,8 +1279,7 @@ def scan_comprehensive_endpoint(
                 comments_text=req.comments_text,
                 max_commenters=max_comm,
                 force_refresh=req.force_refresh,
-                client=client,
-                youtube=yt,
+                source=YouTubeSource(client),
                 start_page_token=req.start_page_token,
             )
     except YouTubeClientError as e:

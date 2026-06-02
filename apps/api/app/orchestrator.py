@@ -45,6 +45,7 @@ from app.memory.fingerprint import extract_fingerprint
 from app.memory.prior import compute_memory_signal
 from app.schemas import Post, Profile, ScanResult, SignalResult, Tier
 from app.storage.repository import AccountRepository
+from app.integrations.source import Source
 
 
 @dataclass
@@ -258,7 +259,7 @@ def scan_video_full(
                     display_name=acc.display_name,
                     avatar_url=avatar,
                     profile=Profile(
-                        platform="youtube",
+                        platform=platform,
                         handle=acc.handle or handle,
                         display_name=acc.display_name,
                         bio=acc.bio,
@@ -577,20 +578,18 @@ def scan_comprehensive(
     comments_text: str | None,
     max_commenters: int,
     force_refresh: bool,
-    client,
-    youtube,  # the integrations.youtube module — injected for testability
+    source: Source,
     start_page_token: str | None = None,
 ) -> ComprehensiveOutput:
-    """Run whatever the user supplied + cross-link the results."""
-    from app.integrations.youtube import (
-        FetchStats, parse_video_id, resolve_channel_id,
-        fetch_channel_profile, fetch_channel_recent_comments,
-        fetch_video_full,
-    )
+    """Run whatever the user supplied + cross-link the results.
 
+    Platform-agnostic: every fetch goes through the injected :class:`Source`
+    (the only platform-specific seam). YouTube, Twitter, etc. each provide a
+    Source; the detector / coordination / memory / OmiScore stack below is
+    shared and consumes the normalized Profile / Post objects unchanged.
+    """
     settings = get_settings()
     AccountRepository(session)
-    stats = FetchStats()
     inputs_provided: list[str] = []
 
     # ---- 1. Pasted comments scan (no API quota) ----
@@ -610,19 +609,17 @@ def scan_comprehensive(
     focus_fingerprint: list[float] | None = None
     focus_scan: ScanResult | None = None
     if account_url_or_handle and account_url_or_handle.strip():
-        channel_id = resolve_channel_id(client, account_url_or_handle, stats=stats)
+        channel_id = source.resolve_account_id(account_url_or_handle)
         if channel_id:
             focus_external_id = channel_id
-            focus_profile = fetch_channel_profile(client, channel_id, stats=stats)
+            focus_profile = source.fetch_account_profile(channel_id)
             if focus_profile is not None:
-                focus_posts = fetch_channel_recent_comments(
-                    client, channel_id,
-                    max_comments=settings.scan_max_history_per_commenter,
-                    stats=stats,
+                focus_posts = source.fetch_account_posts(
+                    channel_id, settings.scan_max_history_per_commenter
                 )
                 orch = scan_account_with_memory(
                     session,
-                    platform="youtube",
+                    platform=source.platform,
                     external_id=channel_id,
                     profile=focus_profile,
                     posts=focus_posts,
@@ -672,32 +669,25 @@ def scan_comprehensive(
     next_page_token: str | None = None
     resolved_video_id: str | None = None
     if video_url_or_id and video_url_or_id.strip():
-        video_id = parse_video_id(video_url_or_id)
+        video_id = source.parse_content_id(video_url_or_id)
         if video_id:
             resolved_video_id = video_id
-            commenters_meta, all_comments, next_page_token = fetch_video_full(
-                client, video_id,
+            commenters_meta, all_comments, next_page_token = source.fetch_content_engagers(
+                video_id,
                 max_commenters=max_commenters,
                 max_comments=max_commenters * 3,
-                stats=stats,
                 start_page_token=start_page_token,
             )
 
-            def _profile(cid):
-                return fetch_channel_profile(client, cid, stats=stats)
-
-            def _history(cid, max_n):
-                return fetch_channel_recent_comments(client, cid, max_comments=max_n, stats=stats)
-
             video_output = scan_video_full(
                 session,
-                platform="youtube",
+                platform=source.platform,
                 video_id=video_id,
                 commenters_meta=commenters_meta,
                 all_comments_under_video=all_comments,
-                fetch_profile=_profile,
-                fetch_history=_history,
-                stats=stats,
+                fetch_profile=source.fetch_account_profile,
+                fetch_history=source.fetch_account_posts,
+                stats=source.stats,
                 force_refresh=force_refresh,
             )
             inputs_provided.append("video")
@@ -705,6 +695,7 @@ def scan_comprehensive(
     # ---- 4. Cross-link computation (the interconnection layer) ----
     cross_links = _compute_cross_links(
         session=session,
+        platform=source.platform,
         focus_external_id=focus_external_id,
         focus_fingerprint=focus_fingerprint,
         focus_posts=focus_posts,
@@ -743,7 +734,7 @@ def scan_comprehensive(
         matrix_rows=matrix_rows,
         matrix_methods=matrix_methods,
         inputs_provided=inputs_provided,
-        quota_used=stats.quota_used,
+        quota_used=source.quota_used,
         next_page_token=next_page_token,
         video_id=resolved_video_id,
     )
@@ -752,6 +743,7 @@ def scan_comprehensive(
 def _compute_cross_links(
     *,
     session: Session,
+    platform: str,
     focus_external_id: str | None,
     focus_fingerprint: list[float] | None,
     focus_posts: list[Post],
@@ -834,7 +826,7 @@ def _compute_cross_links(
 
         # A4: Fellow-traveler (co-engagement) with video's commenters
         commenter_ids = [r.external_id for r in video_output.commenter_records]
-        engagement_sets = repo.load_engagement_sets(platform="youtube", account_external_ids=commenter_ids + [focus_external_id])
+        engagement_sets = repo.load_engagement_sets(platform=platform, account_external_ids=commenter_ids + [focus_external_id])
         focus_videos = engagement_sets.get(focus_external_id, set())
         if focus_videos:
             for cid in commenter_ids:
