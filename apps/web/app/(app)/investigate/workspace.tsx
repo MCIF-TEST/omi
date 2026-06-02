@@ -236,11 +236,12 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
             </div>
             <div>
               <CardLabel>Empty workspace</CardLabel>
-              <CardTitle>Paste a YouTube link above to begin</CardTitle>
+              <CardTitle>Paste a YouTube or X (Twitter) link above to begin</CardTitle>
               <p className="text-sm text-fg-dim leading-relaxed max-w-xl">
-                Every comprehensive scan analyzes the video, every commenter,
-                their recent histories, and cross-account coordination signals.
-                Results are saved as an investigation you can return to later.
+                Every comprehensive scan analyzes the post, every commenter or
+                replier, their recent histories, and cross-account coordination
+                signals — the same engine across platforms. Results are saved as
+                an investigation you can return to later.
               </p>
             </div>
           </div>
