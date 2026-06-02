@@ -26,7 +26,8 @@ from app.main import app
 from app.routes.scan import (
     _investigation_label,
     _merge_payloads,
-    _persist_investigation_async,
+    _persist_investigation,
+    _resolve_investigation_slug,
     _serialize_result,
     set_client_factory_for_tests,
 )
@@ -93,7 +94,7 @@ def test_new_investigation_created_by_background_worker():
     payload = _make_payload(slug=slug)
     classification = {"kind": "video", "video_id": VID}
 
-    _persist_investigation_async(
+    _persist_investigation(
         slug=slug,
         user_id=1,
         classification=classification,
@@ -120,9 +121,9 @@ def test_continuation_batch_merges_into_existing_investigation():
     payload2 = _make_payload(slug=slug, quota_used=4, overall_probability=0.75)
 
     # First batch — creates the row.
-    _persist_investigation_async(slug=slug, user_id=1, classification=classification, url=url, payload=payload1)
+    _persist_investigation(slug=slug, user_id=1, classification=classification, url=url, payload=payload1)
     # Second batch — should update, not create a second row.
-    _persist_investigation_async(slug=slug, user_id=1, classification=classification, url=url, payload=payload2)
+    _persist_investigation(slug=slug, user_id=1, classification=classification, url=url, payload=payload2)
 
     with get_session() as session:
         repo = AccountRepository(session)
@@ -160,7 +161,7 @@ def test_persist_retries_on_transient_db_error():
 
     with patch("app.routes.scan.get_session", _failing_once_session):
         # Should not raise — retry absorbs the first failure.
-        _persist_investigation_async(
+        _persist_investigation(
             slug=slug, user_id=1, classification=classification, url=url, payload=payload
         )
 
@@ -224,6 +225,76 @@ def test_scan_link_continuation_updates_investigation(auth_client):
     detail = auth_client.get(f"/v1/investigations/{slug}").json()
     assert detail["slug"] == slug
     assert detail["batch_count"] == 2, f"expected 2 batches, got {detail['batch_count']}"
+
+
+# ---------------------------------------------------------------------------
+# 3b. Tier-1 hardening regressions: synchronous persistence, guaranteed refund,
+#     and collision-safe slug resolution.
+# ---------------------------------------------------------------------------
+
+def test_scan_link_slug_resolves_immediately(auth_client):
+    """The slug returned by /scan/link must resolve WITHOUT draining the
+    background pool — persistence is synchronous now, so there is no
+    read-after-write race and never an empty-payload row."""
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": 6},
+    )
+    assert r.status_code == 200, r.text
+    slug = r.json()["investigation_slug"]
+    assert slug.startswith("inv_")
+
+    # No background.shutdown() on purpose: the row must already exist.
+    detail = auth_client.get(f"/v1/investigations/{slug}")
+    assert detail.status_code == 200, "returned slug must resolve immediately"
+    body = detail.json()
+    assert body["slug"] == slug
+    assert body["payload"], "persisted investigation must carry a non-empty payload"
+
+
+def test_scan_link_refunds_credit_on_youtube_failure(auth_client):
+    """A failed /scan/link must not cost a credit. The bug: the link path charged
+    the real cost but only refunded YouTubeClientError on the /comprehensive
+    entry, where the inner cost was 0 — so link failures charged for nothing."""
+    from tests.test_youtube_quota_handling import QuotaExhaustedClient
+
+    set_client_factory_for_tests(lambda: QuotaExhaustedClient())
+    before = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": 5},
+    )
+    assert r.status_code == 503, r.text
+    assert "Retry-After" in r.headers
+
+    after = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+    assert after == before, (
+        f"a failed /scan/link must refund the credit (before={before}, after={after})"
+    )
+
+
+def test_resolve_slug_only_reuses_callers_own_slug():
+    """A client may only continue an investigation it owns. Supplying another
+    user's slug must mint a fresh one instead of colliding on the global-unique
+    slug constraint (which previously caused a silent non-save)."""
+    slug = "inv_owner001"
+    ok = _persist_investigation(
+        slug=slug, user_id=1,
+        classification={"kind": "video", "video_id": VID},
+        url=f"https://youtube.com/watch?v={VID}",
+        payload=_make_payload(slug=slug),
+    )
+    assert ok is True
+
+    # The owner continuing the same slug → reused.
+    assert _resolve_investigation_slug(requested_slug=slug, user_id=1) == slug
+    # A different user supplying that slug → a fresh slug is minted.
+    other = _resolve_investigation_slug(requested_slug=slug, user_id=2)
+    assert other != slug and other.startswith("inv_")
+    # No requested slug → always fresh.
+    fresh = _resolve_investigation_slug(requested_slug=None, user_id=1)
+    assert fresh.startswith("inv_") and fresh != slug
 
 
 # ---------------------------------------------------------------------------

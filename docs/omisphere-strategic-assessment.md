@@ -9,6 +9,33 @@
 
 ---
 
+## Addendum — post-snapshot corrections (2026-06-02)
+
+Two updates since this assessment's clone snapshot (`774ab1b`):
+
+1. **Twitter/X ingestion shipped to `main`** (PR #26, via `twitterapi.io`). This
+   partially addresses **Weakness #17** ("single-platform") and overtakes
+   **Do-Not-Build #1** ("don't build other platforms yet") — X ingestion already
+   landed. The core thesis is *unchanged and arguably reinforced*: a second
+   platform — one that costs real money per call (Twitter is priced at
+   ~$0.005/post → 10 credits/batch, vs YouTube's effectively-free 1) — has been
+   added on top of an engine still validated only by synthetic fixtures. That
+   makes real-data validation (**Improvement #4**) *more* urgent, not less.
+
+2. **Tier-1 Foundation fix implemented** (this branch). Investigation
+   persistence is now synchronous and collision-safe — the slug returned by
+   `/scan/link` always resolves (no read-after-write 404, no empty-payload rows),
+   and a client can no longer collide on another user's globally-unique slug and
+   silently drop a save. `/scan/link` now refunds the charged credit on **any**
+   failure (closing the "charged for a failed scan" hole), preserving the
+   `YouTubeAccessError` "no refund" policy. New regressions in
+   `tests/test_investigation_hardening.py` pin all three. **Weaknesses #1 and #3
+   are addressed**; the remaining Tier-1 items (free-Postgres durability, missing
+   indexes on pre-existing tables, synchronous-scan timeouts at scale) are still
+   open.
+
+---
+
 ## Executive Summary
 
 OmiSphere is **much better built than a pre-PMF product has any right to be — and that is
