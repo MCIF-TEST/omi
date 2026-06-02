@@ -112,10 +112,13 @@ INTELLIGENCE_DIMENSIONS: dict[str, DimensionSpec] = {
     # posting bursts are the mechanism.
     "amplification_probability": DimensionSpec(
         key="amplification_probability",
-        label="Artificial amplification",
+        label="Amplification behavior",
         description=(
-            "Likelihood of artificial reach inflation — cluster amplification, "
-            "engagement farming, or burst-timed posting designed to boost reach."
+            "Behavioral indicators associated with artificial amplification — "
+            "coordination, engagement-farming, and burst-timed posting. NOTE: this "
+            "is INFERRED from behaviour; it is NOT a measurement of actual reach "
+            "(views, likes, shares, and engagement velocity are not yet ingested), "
+            "so read it as a behavioural signal, not confirmed reach inflation."
         ),
         contributions=(
             _c("coordination", 0.45),
