@@ -29,6 +29,7 @@ from app.detection.coordination import (
     detect_temporal_semantic_cliques,
 )
 from app.detection.coordination._types import CoordinationCluster
+from app.detection.coordination.aggregate import aggregate_coordination
 from app.detection.coordination.elevate import (
     apply_coordination,
     build_coordination_signal,
@@ -566,13 +567,14 @@ def scan_video_full(
         pass
 
     # --- Phase 5: video-level coordination score -------------------------
+    # Tier-2B calibration: reliability-weighted consensus, lifted by a
+    # positive-evidence noisy-OR so two strong corroborating signatures
+    # (e.g. fingerprint + style) are no longer diluted by detectors that
+    # abstain on this data shape. See app.detection.coordination.aggregate.
     findings = [f for f in [ts_finding, fp_finding, cohort_finding,
                             style_finding, co_finding] if f is not None]
-    weights = [f.confidence for f in findings]
-    if sum(weights) > 0:
-        coord_score = sum(f.overall_score * f.confidence for f in findings) / sum(weights)
-    else:
-        coord_score = 0.0
+    coord = aggregate_coordination(findings)
+    coord_score = coord.score
     coord_tier = _tier_for(coord_score)
 
     return FullScanOutput(
