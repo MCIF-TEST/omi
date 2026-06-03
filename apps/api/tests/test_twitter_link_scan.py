@@ -121,3 +121,81 @@ def test_scan_link_twitter_tweet_scans_repliers(authed):
 def test_scan_link_rejects_unknown_link(authed):
     r = authed.post("/v1/scan/link", json={"url": "https://example.com/foo"})
     assert r.status_code == 400
+
+
+# --- production incident regression: httpx missing in prod ------------------
+# The real client (no fake factory) must fail BEFORE charging, with a clean 503
+# that tells the user they weren't charged — never the generic "scan failed
+# unexpectedly" + a silently charged-then-refunded credit.
+
+
+def _signup_with_credits(tc, email: str, credits: int = 50) -> None:
+    tc.post("/v1/auth/signup", json={"email": email, "password": "tw-password-123"})
+    with get_session() as s:
+        from sqlalchemy import select
+        u = s.execute(select(User).where(User.email == email)).scalar_one()
+        u.credits_remaining = credits
+
+
+def _prep_twitter_env(monkeypatch, *, httpx_ok: bool) -> None:
+    monkeypatch.setenv("OMI_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("OMI_SESSION_SECRET", "x" * 64)
+    monkeypatch.setenv("OMI_TWITTER_API_KEY", "test-key")
+    get_settings.cache_clear()
+    from app.core.rate_limit import LOGIN_LIMITER, SIGNUP_LIMITER
+    SIGNUP_LIMITER._windows.clear()
+    LOGIN_LIMITER._windows.clear()
+    set_twitter_client_factory_for_tests(None)  # exercise the REAL resolve path
+    monkeypatch.setattr("app.integrations.twitter.httpx_available", lambda: httpx_ok)
+
+
+def test_scan_link_twitter_503_and_no_charge_when_httpx_missing(monkeypatch):
+    _prep_twitter_env(monkeypatch, httpx_ok=False)
+    try:
+        with TestClient(app) as tc:
+            _signup_with_credits(tc, "tw-httpx@x.com")
+            before = tc.get("/v1/auth/me").json()["credits_remaining"]
+            r = tc.post("/v1/scan/link", json={"url": "https://x.com/someprofile"})
+            assert r.status_code == 503, r.text
+            detail = r.json()["detail"].lower()
+            assert "not been charged" in detail
+            assert "unexpectedly" not in detail  # never the generic catch-all
+            after = tc.get("/v1/auth/me").json()["credits_remaining"]
+            assert after == before, "a config-failure 503 must not charge the user"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_twitter_account_endpoint_503_no_charge_when_httpx_missing(monkeypatch):
+    _prep_twitter_env(monkeypatch, httpx_ok=False)
+    try:
+        with TestClient(app) as tc:
+            _signup_with_credits(tc, "tw-acct@x.com")
+            before = tc.get("/v1/auth/me").json()["credits_remaining"]
+            r = tc.post("/v1/scan/twitter/account",
+                        json={"account_url_or_handle": "@someone"})
+            assert r.status_code == 503, r.text
+            after = tc.get("/v1/auth/me").json()["credits_remaining"]
+            assert after == before, "resolve-before-charge must hold on /twitter/account"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_status_reports_twitter_health(monkeypatch):
+    from app.core.cache import get_cache
+    monkeypatch.setenv("OMI_TWITTER_API_KEY", "k")
+    get_settings.cache_clear()
+    try:
+        with TestClient(app) as tc:
+            get_cache().invalidate("v1.status")
+            s = tc.get("/v1/status").json()
+            assert s["twitter_configured"] is True
+            assert s["twitter_available"] is True  # httpx is installed in the test env
+            # Degraded: key set but the dep is missing — the incident, now visible.
+            monkeypatch.setattr("app.integrations.twitter.httpx_available", lambda: False)
+            get_cache().invalidate("v1.status")
+            s2 = tc.get("/v1/status").json()
+            assert s2["twitter_configured"] is True
+            assert s2["twitter_available"] is False
+    finally:
+        get_settings.cache_clear()

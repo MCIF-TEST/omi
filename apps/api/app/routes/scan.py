@@ -778,21 +778,39 @@ def _handle_twitter_error(
 
 
 def _resolve_twitter_client(settings: Settings) -> TwitterClient:
+    """Build the live Twitter client, or raise a clean, user-friendly 503.
+
+    Called while constructing the Source — which the scan routes do BEFORE
+    charging credits — so any failure here means the user is never billed. The
+    user-facing message states that explicitly; the admin-actionable cause
+    (missing key / missing httpx) goes to the logs, never to the user.
+    """
+    import logging
+    log = logging.getLogger("omi.scan.twitter")
+
     key = (settings.twitter_api_key or "").strip()
     if not key:
+        log.error("Twitter scan requested but OMI_TWITTER_API_KEY is not set.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "Twitter/X API key is not configured. Set OMI_TWITTER_API_KEY "
-                "in the environment."
+                "Twitter/X scanning isn't configured on this server yet. "
+                "You have not been charged."
             ),
         )
     try:
         return build_default_twitter_client(key, base_url=settings.twitter_api_base_url)
     except RuntimeError as e:
+        # Server-side construction failure (e.g. httpx not installed). A config
+        # problem on our side, surfaced before any credit is charged.
+        log.error("Twitter client unavailable: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e),
+            detail=(
+                "Twitter/X scanning is temporarily unavailable on this server. "
+                "You have not been charged — this is a configuration issue on "
+                "our side, not a problem with your link. Please try again later."
+            ),
         )
 
 
@@ -837,12 +855,16 @@ def scan_twitter_account(
             ),
         )
 
+    # Resolve the client BEFORE charging: a missing key / missing httpx then
+    # 503s for free (never billing the user, keeping the "not charged" message
+    # true) instead of charging at line 1 and stranding the credit on a config
+    # error that escapes the refund path below.
+    factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
+    client = factory()
+
     consume_credits(current.id, settings.credits_per_twitter_account,
         platform="x", scan_type="twitter_account",
         target_input=account_input[:500], settings=settings)
-
-    factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
-    client = factory()
     stats = TwitterFetchStats()
 
     try:

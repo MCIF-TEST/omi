@@ -413,6 +413,12 @@ class EngineStatus(BaseModel):
     fingerprints_stored: int
     last_scan_at: datetime | None = None
     youtube_configured: bool
+    # Twitter/X ingestion health. `twitter_configured` = key present;
+    # `twitter_available` = key present AND the httpx runtime dep importable.
+    # available=False while configured=True is the exact production incident
+    # (key set, httpx missing) — now visible instead of a generic scan failure.
+    twitter_configured: bool = False
+    twitter_available: bool = False
     # Multi-tenant flags for the UI
     auth_required: bool = False
     billing_configured: bool = False

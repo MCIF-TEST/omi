@@ -15,6 +15,17 @@ from app.storage.models import Account, CommenterEngagement, Scan, VideoScan
 router = APIRouter(tags=["health"])
 
 
+def _twitter_available(settings) -> bool:
+    """Twitter scanning is only truly available when the key is set AND the
+    httpx runtime dependency is importable. Surfaced in /v1/status so the
+    'key set but dep missing' production failure mode is visible at a glance."""
+    if not (settings.twitter_api_key and settings.twitter_api_key.strip()):
+        return False
+    from app.integrations.twitter import httpx_available
+
+    return httpx_available()
+
+
 @router.get("/")
 def root() -> dict[str, str]:
     """Root landing — explains this is the API and points at the docs."""
@@ -90,6 +101,8 @@ def engine_status() -> EngineStatus:
         fingerprints_stored=int(fingerprints or 0),
         last_scan_at=last_scan,
         youtube_configured=bool(settings.youtube_api_key and settings.youtube_api_key.strip()),
+        twitter_configured=bool(settings.twitter_api_key and settings.twitter_api_key.strip()),
+        twitter_available=_twitter_available(settings),
         auth_required=bool(settings.require_auth),
         billing_configured=bool(
             settings.stripe_secret_key and settings.stripe_price_id
