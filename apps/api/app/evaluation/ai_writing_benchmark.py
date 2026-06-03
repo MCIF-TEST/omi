@@ -92,7 +92,14 @@ def evaluate_ai_writing(records: list[TextRecord]) -> dict:
 
     def _metrics(subset: list[_Scored]) -> dict:
         if not subset:
-            return {"n": 0}
+            # Zero-coverage is a real, honest state (e.g. a clean corpus of only
+            # short comments, on which the rule detector abstains). Return the
+            # full key shape with null metrics so consumers never KeyError.
+            return {
+                "n": 0, "accuracy": None, "ai_precision": None, "ai_recall": None,
+                "ai_f1": None, "brier": None, "majority_class_rate": None,
+                "roc_auc": None, "confusion": {"tp": 0, "fp": 0, "fn": 0, "tn": 0},
+            }
         tp = sum(1 for s in subset if s.is_ai and s.probability > _DECISION_THRESHOLD)
         fp = sum(1 for s in subset if not s.is_ai and s.probability > _DECISION_THRESHOLD)
         fn = sum(1 for s in subset if s.is_ai and s.probability <= _DECISION_THRESHOLD)

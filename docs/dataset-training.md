@@ -150,6 +150,8 @@ that starts mislabeling human text as AI trips CI.
 | `app/ml/datasets/ledger.py` | content-hash ledger (incremental ingestion) |
 | `app/ml/datasets/discovery.py` | walk folder, detect adapter, read records |
 | `app/ml/datasets/ingest.py` | orchestration: plan + ingest a directory |
+| `app/ml/datasets/manifest.py` | governance manifest loader (quarantine / vouch) |
+| `app/ml/datasets/quality.py` | runtime quality gate (poison net) |
 | `app/ml/datasets/text_corpus.py` | load / export the labeled text corpus |
 | `app/ml/public_import.py` | account row → engine → persisted scan + label |
 | `app/ml/export.py` | union of imported + captured labels → training JSONL |
@@ -157,3 +159,52 @@ that starts mislabeling human text as AI trips CI.
 | `app/evaluation/ai_writing_benchmark.py` | rule-detector-vs-corpus metrics |
 | `scripts/datasets.py` | operator CLI (status / ingest / benchmark / export) |
 | `scripts/train_model.py` | train the tabular model from the corpus |
+
+---
+
+## Dataset governance (Tier 2 — poison can't reach training by accident)
+
+Two layers keep bad data out of the model. **Nothing is ever deleted** — bad
+files stay in the repo for provenance; they just can't be ingested.
+
+**1. The manifest — `datasets/manifest.toml`.** The human-edited source of truth.
+Each file gets a `status`:
+
+| status | ingested? | meaning |
+|---|---|---|
+| `train` | ✅ | training data |
+| `validation` | ✅ (vouched) | hold-out / benchmark only — never train on it |
+| `reference` / `heuristic` | ✅ (vouched) | distributions / threshold tuning, not training |
+| `archive` | ❌ excluded | low value / wrong domain / untrainable |
+| `quarantine` | ❌ excluded | actively harmful (random-label noise, error-string poison) |
+
+`archive`/`quarantine` files are forced `supported = False` in discovery, so they
+never reach ingestion regardless of what an adapter thinks. A missing manifest is
+a no-op (back-compat). `scripts/datasets status` prints each file's status + the
+exclusion reason.
+
+**2. The quality gate — `app/ml/datasets/quality.py`.** The generic net for files
+the manifest hasn't covered (e.g. a *new* upload). It runs on the parsed records
+right before persistence and **hard-blocks** ingestion on unambiguous poison:
+
+- **random-label noise** — a large, ~balanced account file whose label has no
+  better-than-chance correlation with any feature (the 50k `bot_detection_data`
+  signature, corr ≈ 0.001; the threshold is chance-relative `4/√n`, so it is
+  correct at any size);
+- **error-string contamination** — a text corpus whose "AI" class is full of API
+  / HTTP error bodies;
+- **degenerate single-class** — a 2-class file collapsed to one class.
+
+A file **operator-vouched in the manifest** (`train`/`validation`/…) is exempt
+from the hard block — the gate failure becomes an advisory warning in the ingest
+report, not a refusal. Blocked files are **not** written to the ledger, so a
+fixed version re-checks on the next run.
+
+**Effect today:** `bot_detection_data.csv` (50k random-label) and
+`ai_human_detection_v1.csv` (error-string) are quarantined; `fake_social_media.csv`
+(99.8% single-class) and `ai_vs_human_text.csv` (templated stubs) are archived.
+Ingestable files dropped 7 → 4 (the clean account sets + the 2026 text validation
+set). This also removed the templated/poison long-form text the AI-writing
+benchmark had been scoring against, so coverage on the **clean** corpus is ~0 —
+the honest baseline: the rule detector is blind to short social text, which is
+exactly what the learned text head is meant to fix.
