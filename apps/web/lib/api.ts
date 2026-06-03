@@ -93,6 +93,8 @@ export interface EngineStatus {
   fingerprints_stored: number;
   last_scan_at: string | null;
   youtube_configured: boolean;
+  twitter_configured: boolean;
+  twitter_available: boolean;
   auth_required: boolean;
   billing_configured: boolean;
   monthly_credit_grant: number;

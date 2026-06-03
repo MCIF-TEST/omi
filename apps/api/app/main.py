@@ -28,7 +28,7 @@ from app.monitoring import lifespan_monitoring
 from app.routes import (
     accounts, activity, analyze, auth, billing, bulk, channels, content, graph, health,
     intelligence, investigations, labels, metrics, monitoring, narratives, reasoning,
-    reports, scan, watchlists,
+    reports, scan, scan_async, watchlists,
 )
 from app.storage.db import init_db
 
@@ -62,6 +62,15 @@ def _log_optional_feature_state() -> None:
     s = get_settings()
     parts: list[str] = []
     parts.append(f"YouTube ingestion: {'on' if s.youtube_api_key else 'OFF — no scans will work'}")
+    from app.integrations.twitter import httpx_available
+    if not s.twitter_api_key:
+        tw_state = "off (no OMI_TWITTER_API_KEY)"
+    elif not httpx_available():
+        tw_state = ("DEGRADED — key set but httpx is NOT installed; every Twitter "
+                    "scan will fail. Add httpx to the production dependencies.")
+    else:
+        tw_state = "on"
+    parts.append(f"Twitter/X ingestion: {tw_state}")
     parts.append(f"Anthropic LLM: {'on' if s.anthropic_api_key else 'off (using template fallback)'}")
     parts.append(f"SMTP email alerts: {'on (' + s.smtp_host + ')' if s.smtp_host else 'off — webhook delivery still works'}")
     parts.append(f"Stripe billing: {'on' if s.stripe_secret_key and s.stripe_price_id else 'off (free tier only)'}")
@@ -252,6 +261,7 @@ def create_app() -> FastAPI:
     app.include_router(analyze.router)
     app.include_router(intelligence.router)
     app.include_router(scan.router)
+    app.include_router(scan_async.router)
     app.include_router(accounts.router)
     app.include_router(channels.router)
     app.include_router(narratives.router)

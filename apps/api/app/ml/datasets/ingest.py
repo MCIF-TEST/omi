@@ -16,6 +16,8 @@ from pathlib import Path
 
 from app.ml.datasets.discovery import DiscoveredFile, discover, read_records
 from app.ml.datasets.ledger import LEDGER_FILENAME, Ledger, LedgerEntry
+from app.ml.datasets.manifest import VOUCHED_STATUSES
+from app.ml.datasets.quality import assess_records
 from app.ml.datasets.records import PublicRecord, TextRecord
 
 
@@ -28,6 +30,7 @@ class FilePlan:
     sha256: str
     is_new: bool
     reason: str = ""
+    manifest_status: str = ""
 
 
 @dataclass
@@ -60,6 +63,7 @@ def plan_directory(root: Path) -> DirectoryPlan:
             sha256=df.sha256,
             is_new=is_new,
             reason=df.reason,
+            manifest_status=df.manifest_status,
         ))
     return plan
 
@@ -69,6 +73,7 @@ class IngestReport:
     root: str
     files_processed: int = 0
     files_skipped_unchanged: int = 0
+    files_blocked: int = 0
     accounts_ingested: int = 0
     accounts_bots: int = 0
     accounts_humans: int = 0
@@ -111,6 +116,25 @@ def ingest_directory(
         records, n_rows = read_records(df, limit=limit_per_file)
         n_ingested = 0
 
+        # Quality gate — the generic poison net for anything the manifest hasn't
+        # already excluded. A failure HARD-BLOCKS ingestion unless the file is
+        # operator-vouched in the manifest (then it is advisory, not fatal), and
+        # the file is NOT recorded in the ledger so a fixed version re-checks.
+        gate = assess_records(records, df.kind)
+        if not gate.passed and df.manifest_status not in VOUCHED_STATUSES:
+            report.files_blocked += 1
+            report.per_file.append({
+                "file": df.rel_path, "kind": df.kind,
+                "adapter": df.adapter.name if df.adapter else None,
+                "rows": n_rows, "parsed": len(records), "ingested": 0,
+                "blocked": True, "quality_reasons": gate.reasons,
+                "quality_stats": gate.stats,
+            })
+            continue
+        quality = {"quality_passed": gate.passed, "quality_stats": gate.stats}
+        if not gate.passed:  # vouched override let it through — surface the risk
+            quality["quality_warning"] = gate.reasons
+
         if df.kind == "accounts":
             accounts = [r for r in records if isinstance(r, PublicRecord)]
             if session is None:
@@ -119,6 +143,7 @@ def ingest_directory(
                     "adapter": df.adapter.name if df.adapter else None,
                     "rows": n_rows, "parsed": len(accounts),
                     "ingested": 0, "note": "no DB session — not persisted",
+                    **quality,
                 })
                 continue
             res = ingest_records(
@@ -136,7 +161,7 @@ def ingest_directory(
             report.per_file.append({
                 "file": df.rel_path, "kind": "accounts",
                 "adapter": df.adapter.name if df.adapter else None,
-                "rows": n_rows, "parsed": len(accounts), **res,
+                "rows": n_rows, "parsed": len(accounts), **res, **quality,
             })
 
         elif df.kind == "text":
@@ -152,7 +177,7 @@ def ingest_directory(
                 "file": df.rel_path, "kind": "text",
                 "adapter": df.adapter.name if df.adapter else None,
                 "rows": n_rows, "parsed": len(texts),
-                "ai": n_ai, "human": len(texts) - n_ai,
+                "ai": n_ai, "human": len(texts) - n_ai, **quality,
             })
 
         ledger.record(df.rel_path, LedgerEntry(

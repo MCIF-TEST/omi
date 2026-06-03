@@ -82,10 +82,14 @@ class HttpTwitterClient:
     def get(self, path: str, params: dict) -> dict:
         try:
             import httpx
-        except ImportError as e:  # pragma: no cover - dep guard
-            raise RuntimeError(
-                "httpx is required for live Twitter scanning. Install it or use "
-                "POST /v1/analyze/account with pre-fetched data."
+        except ImportError as e:  # pragma: no cover - guarded by build_default_client preflight
+            # Typed (not a bare RuntimeError) so if this is ever reached mid-scan
+            # it maps to a clean refund + specific message via
+            # _handle_twitter_error, never the generic "scan failed unexpectedly".
+            raise TwitterClientError(
+                "Twitter/X scanning is temporarily unavailable on this server "
+                "(a required component isn't installed). You were not charged.",
+                admin_detail="httpx not installed; add it to the production dependencies.",
             ) from e
 
         url = f"{self._base_url}{path}"
@@ -102,9 +106,28 @@ class HttpTwitterClient:
             ) from e
 
 
+def httpx_available() -> bool:
+    """True when httpx (required for live Twitter scanning) is importable.
+
+    Powers a pre-charge preflight in :func:`build_default_client` + the
+    ``/v1/status`` diagnostic, so a missing dependency surfaces as a clean,
+    free 503 instead of a generic mid-scan crash that charges then refunds.
+    """
+    import importlib.util
+
+    return importlib.util.find_spec("httpx") is not None
+
+
 def build_default_client(api_key: str, *, base_url: str = _DEFAULT_BASE_URL) -> TwitterClient:
     if not api_key:
         raise RuntimeError("Twitter API key is not configured.")
+    if not httpx_available():
+        # Surfaced at client-construction time (which the routes do BEFORE
+        # charging credits), so the user gets a clean 503 and is never billed.
+        raise RuntimeError(
+            "httpx is not installed, so live Twitter/X scanning is unavailable. "
+            "Add httpx to the production dependencies and redeploy."
+        )
     return HttpTwitterClient(api_key, base_url=base_url)
 
 
