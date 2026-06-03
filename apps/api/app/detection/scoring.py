@@ -310,6 +310,7 @@ _INTENT_LABELS: dict[str, str] = {
     "engagement_farming": "Engagement farming (likes/subs/follow farming)",
     "spam_promotion": "Spam / affiliate / link promotion",
     "coordinated_campaign": "Coordinated inauthentic behavior (likely campaign)",
+    "possible_coordination": "Possible coordination (single, uncorroborated signal)",
     "sockpuppet_cohort": "Fresh-account cohort (potential sockpuppets)",
     "copy_paste_template": "Templated / copy-paste activity",
     "broadcast_persona": "Broadcast-style persona (low personal voice)",
@@ -349,9 +350,18 @@ def _infer_intent(signals: list[SignalResult], tier: Tier) -> tuple[str | None, 
     if distinct_axes >= 3:
         return "multi_vector", _INTENT_LABELS["multi_vector"]
 
-    # Coordination or narrative injection evidence → campaign
-    if strong("coordination") or strong("narrative"):
+    # Coordination / narrative → campaign, but REQUIRE CORROBORATION before the
+    # accusatory "campaign" verdict. A single coordination method (e.g. 3 accounts
+    # posting similar text within a 2-minute window) is suggestive, not a confirmed
+    # campaign; two+ independent methods — or narrative-injection evidence — is the
+    # confident call. The coordination signal still lifts the score either way
+    # (rescue is unchanged); this only governs the *named intent*.
+    coord = by_name.get("coordination")
+    coord_methods = int((coord.sub_signals or {}).get("detector_count", 0)) if coord else 0
+    if strong("narrative") or (strong("coordination") and coord_methods >= 2):
         return "coordinated_campaign", _INTENT_LABELS["coordinated_campaign"]
+    if strong("coordination"):
+        return "possible_coordination", _INTENT_LABELS["possible_coordination"]
 
     # Profile cohort + low age signal often indicates sockpuppets
     profile = by_name.get("profile")

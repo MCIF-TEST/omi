@@ -58,6 +58,9 @@ services:
       # Manual-fill in dashboard
       - key: OMI_YOUTUBE_API_KEY
         sync: false
+      # twitterapi.io key — required for Twitter/X scans (Twitter routes 503 without it).
+      - key: OMI_TWITTER_API_KEY
+        sync: false
       - key: OMI_STRIPE_SECRET_KEY
         sync: false
       - key: OMI_STRIPE_WEBHOOK_SECRET
