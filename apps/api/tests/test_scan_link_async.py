@@ -119,6 +119,48 @@ def test_scan_link_status_404_for_unknown_job(auth_client):
     assert r.status_code == 404, r.text
 
 
+def _insert_running_job(email: str, job_id: str, *, age_seconds: int, credits: int = 2):
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from app.storage.db import get_session
+    from app.storage.models import ScanJob, User
+    with get_session() as s:
+        uid = s.execute(select(User).where(User.email == email)).scalar_one().id
+        when = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+        s.add(ScanJob(
+            job_id=job_id, user_id=uid, urls_json=["https://x.com/p"],
+            results_json=[{"url": "https://x.com/p", "platform": "x",
+                           "status": "pending", "slug": "inv_stale"}],
+            status="running", total=1, completed=0, failed_count=0,
+            credits_estimate=credits, credits_used=credits, max_commenters=25,
+            created_at=when, started_at=when,
+        ))
+        s.flush()
+
+
+def test_stale_job_reaped_and_refunded_on_poll(auth_client):
+    """A job stuck past the budget (e.g. an OOM-killed worker) must flip to a
+    clean failed+refunded on the next poll — never poll forever."""
+    _insert_running_job("async@t.com", "link_stale", age_seconds=600, credits=2)
+    before = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+
+    r = auth_client.get("/v1/scan/link/status/link_stale")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "failed", body
+    assert "budget" in (body["error"] or "").lower()
+
+    after = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+    assert after == before + 2, (before, after)  # refunded exactly the charge
+
+
+def test_fresh_running_job_not_reaped(auth_client):
+    _insert_running_job("async@t.com", "link_fresh", age_seconds=5, credits=2)
+    r = auth_client.get("/v1/scan/link/status/link_fresh")
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "running"  # within budget — left alone
+
+
 def test_scan_link_async_refunds_credit_on_failure(auth_client):
     """A failed async scan must mark the job 'failed' AND refund the credit —
     the whole point of charging up front is that a failure costs nothing."""

@@ -20,8 +20,10 @@ client so the rest of the API runs without it.
 
 from __future__ import annotations
 
+import random
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
@@ -82,13 +84,35 @@ class FetchStats:
 
 
 class HttpTwitterClient:
-    """Default twitterapi.io client. Auth via the ``X-API-Key`` header."""
+    """Default twitterapi.io client. Auth via the ``X-API-Key`` header.
+
+    Resilient to rate limits and transient blips: a 429 (or a network
+    timeout/transport error) is retried up to ``max_retries`` times, honoring
+    the ``Retry-After`` header when present, with capped, jittered backoff. This
+    matters under the bounded-concurrency fetch (C>1), where a brief 429 burst
+    would otherwise drop commenters from a large scan — the directive's
+    optimize-for-completion goal. Backoff is bounded so a scan can't hang.
+    """
 
     def __init__(self, api_key: str, *, base_url: str = _DEFAULT_BASE_URL,
-                 timeout: float = 15.0) -> None:
+                 timeout: float = 15.0, max_retries: int = 2,
+                 max_backoff: float = 5.0) -> None:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._max_retries = max_retries
+        self._max_backoff = max_backoff
+
+    def _backoff_seconds(self, attempt: int, retry_after: str | None) -> float:
+        """Capped exponential backoff (0.5, 1, 2, …s) + jitter; the provider's
+        Retry-After header wins when present and parseable."""
+        wait = min(self._max_backoff, 0.5 * (2 ** attempt))
+        if retry_after:
+            try:
+                wait = min(self._max_backoff, float(retry_after))
+            except (TypeError, ValueError):
+                pass
+        return wait + random.uniform(0.0, 0.25)
 
     def get(self, path: str, params: dict) -> dict:
         try:
@@ -105,16 +129,33 @@ class HttpTwitterClient:
 
         url = f"{self._base_url}{path}"
         headers = {"X-API-Key": self._api_key}
-        resp = httpx.get(url, params=params, headers=headers, timeout=self._timeout)
-        if resp.status_code >= 400:
-            raise translate_status(resp.status_code, resp.text)
-        try:
-            return resp.json()
-        except ValueError as e:
-            raise TwitterClientError(
-                "The Twitter data provider returned a malformed response.",
-                admin_detail=resp.text[:500],
-            ) from e
+        attempt = 0
+        while True:
+            try:
+                resp = httpx.get(url, params=params, headers=headers, timeout=self._timeout)
+            except (httpx.TimeoutException, httpx.TransportError) as e:
+                if attempt < self._max_retries:
+                    time.sleep(self._backoff_seconds(attempt, None))
+                    attempt += 1
+                    continue
+                raise TwitterClientError(
+                    "The Twitter data provider is unreachable or timed out.",
+                    admin_detail=f"{type(e).__name__}: {e}",
+                ) from e
+
+            if resp.status_code == 429 and attempt < self._max_retries:
+                time.sleep(self._backoff_seconds(attempt, resp.headers.get("Retry-After")))
+                attempt += 1
+                continue
+            if resp.status_code >= 400:
+                raise translate_status(resp.status_code, resp.text)
+            try:
+                return resp.json()
+            except ValueError as e:
+                raise TwitterClientError(
+                    "The Twitter data provider returned a malformed response.",
+                    admin_detail=resp.text[:500],
+                ) from e
 
 
 def httpx_available() -> bool:
