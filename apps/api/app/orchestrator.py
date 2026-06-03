@@ -55,6 +55,18 @@ class OrchestratedScan:
     matched_neighbors: int  # how many close memory neighbors backed the scan
 
 
+@dataclass
+class _ScannedNeighbor:
+    """Duck-types the subset of ``Account`` that ``compute_memory_signal`` reads
+    (external_id, fingerprint_json, last_score, last_confidence), so an account
+    just scored in this run can be appended to the in-memory neighbor list with
+    no DB round-trip."""
+    external_id: str
+    fingerprint_json: list[float]
+    last_score: float
+    last_confidence: float
+
+
 def scan_account_with_memory(
     session: Session,
     *,
@@ -63,8 +75,19 @@ def scan_account_with_memory(
     profile: Profile,
     posts: list[Post],
     force_refresh: bool = False,
+    neighbors: list | None = None,
 ) -> OrchestratedScan:
-    """Score an account, consulting and updating the persistent fingerprint store."""
+    """Score an account, consulting and updating the persistent fingerprint store.
+
+    ``neighbors`` is the fingerprint candidate set for the memory detector. When
+    a caller passes one (the per-commenter loop in :func:`scan_video_full`), it
+    is loaded ONCE per scan and reused — and this function appends the
+    just-scored account to it — so a large scan no longer re-runs the full-table
+    ``all_with_fingerprints()`` load once per commenter (O(commenters × store)).
+    Behaviour is identical to the per-call load: later commenters still see
+    earlier ones (appended below), exactly as the old DB re-query did. When
+    ``neighbors`` is None (single-account endpoints) it is loaded here as before.
+    """
     settings = get_settings()
     repo = AccountRepository(session)
 
@@ -95,7 +118,8 @@ def scan_account_with_memory(
     preliminary = analyze_account(profile, posts)
     preliminary_fp = extract_fingerprint(preliminary)
 
-    neighbors = repo.all_with_fingerprints()
+    if neighbors is None:
+        neighbors = repo.all_with_fingerprints()
     memory_signal = compute_memory_signal(
         preliminary_fp,
         neighbors,
@@ -139,6 +163,17 @@ def scan_account_with_memory(
             account_external_id=external_id,
             parent_ids=parent_ids,
         )
+
+    # Keep a shared per-scan neighbor list current so later commenters in the
+    # same scan see this account — without re-querying the full table (the old
+    # behaviour re-loaded the DB, which now reflects this upsert; we mirror that
+    # in memory). Harmless when ``neighbors`` was a one-off local load.
+    neighbors.append(_ScannedNeighbor(
+        external_id=external_id,
+        fingerprint_json=final_fp,
+        last_score=final.overall_probability,
+        last_confidence=final.confidence,
+    ))
 
     matched = int(memory_signal.sub_signals.get("close_neighbors", 0))
 
@@ -201,6 +236,54 @@ class FullScanOutput:
     cached_count: int
 
 
+def _cached_commenter_record(cache_hit, c: dict, platform: str) -> CommenterRecord:
+    """Build a CommenterRecord from a cache hit (no network/scoring)."""
+    acc, scan_row = cache_hit
+    cached_signals = [SignalResult(**s) for s in scan_row.signals_json]
+    cached_tier = Tier(scan_row.tier)
+    intent_code, intent_label = _infer_intent(cached_signals, cached_tier)
+    cached_result = ScanResult(
+        overall_probability=scan_row.overall_probability,
+        confidence=scan_row.confidence,
+        tier=cached_tier,
+        signals=cached_signals,
+        summary=scan_row.summary,
+        subject=acc.handle,
+        suspected_intent=intent_code,
+        intent_label=intent_label,
+        reasons=_extract_reasons(cached_signals, cached_tier),
+    )
+    return CommenterRecord(
+        external_id=c["channel_id"],
+        handle=acc.handle or c["handle"],
+        display_name=acc.display_name,
+        avatar_url=c.get("avatar_url"),
+        profile=Profile(
+            platform=platform,
+            handle=acc.handle or c["handle"],
+            display_name=acc.display_name,
+            bio=acc.bio,
+            follower_count=acc.follower_count,
+            created_at=acc.account_created_at,
+        ),
+        posts=[],  # not refetched on cache hit
+        scan_result=cached_result,
+        fingerprint=acc.fingerprint_json,
+        from_cache=True,
+        matched_neighbors=0,
+    )
+
+
+def _error_commenter_record(c: dict, error_name: str) -> CommenterRecord:
+    return CommenterRecord(
+        external_id=c["channel_id"], handle=c["handle"], display_name=None,
+        avatar_url=c.get("avatar_url"), profile=None, posts=[],
+        scan_result=_empty_scan(c["handle"]),
+        fingerprint=None, from_cache=False, matched_neighbors=0,
+        error=error_name,
+    )
+
+
 def scan_video_full(
     session: Session,
     *,
@@ -212,81 +295,98 @@ def scan_video_full(
     fetch_history,
     stats,
     force_refresh: bool = False,
+    fetch_concurrency: int = 1,
 ) -> FullScanOutput:
     """The unified scan: account-level + comment-thread + coordination.
 
     ``fetch_profile(channel_id) -> Profile | None`` and
     ``fetch_history(channel_id, max_comments) -> list[Post]`` are injected
     so this function stays platform-agnostic and easy to test with fakes.
+
+    ``fetch_concurrency`` (declared by the Source) parallelizes ONLY the
+    read-only per-commenter network fetch; scoring + all DB writes stay
+    sequential on the single session. >1 only for sources with a thread-safe
+    client (Twitter/httpx); YouTube keeps 1 (shared googleapiclient Resource).
     """
     settings = get_settings()
     repo = AccountRepository(session)
 
-    records: list[CommenterRecord] = []
+    import logging as _logging
+    import time as _time
+    _log = _logging.getLogger("omi.scan")
+
     fresh = 0
     cached = 0
+    errored = 0
+    slots: list[CommenterRecord | None] = [None] * len(commenters_meta)
 
-    # --- Phase 1: per-commenter scans (account perspective) --------------
-    for c in commenters_meta:
-        channel_id = c["channel_id"]
-        handle = c["handle"]
-        avatar = c.get("avatar_url")
+    # Load the fingerprint candidate set ONCE for the whole batch instead of
+    # re-querying the full table per commenter (was O(commenters × store) DB
+    # loads — the dominant DB cost on large scans, growing with the moat).
+    # scan_account_with_memory appends each freshly-scored account, so later
+    # commenters still see earlier ones exactly as the old per-call reload did.
+    scan_neighbors = repo.all_with_fingerprints()
+
+    # --- Phase 0: classify cached vs needs-fetch (sequential, cheap DB reads) ---
+    to_fetch: list[tuple[int, dict]] = []
+    for idx, c in enumerate(commenters_meta):
+        cache_hit = None
+        if not force_refresh:
+            cache_hit = repo.cached_scan_within(
+                platform, c["channel_id"], settings.scan_cache_ttl_days
+            )
+        if cache_hit is not None:
+            slots[idx] = _cached_commenter_record(cache_hit, c, platform)
+            cached += 1
+        else:
+            to_fetch.append((idx, c))
+
+    # --- Phase 1: prefetch (profile, posts) — bounded-concurrent, NETWORK ONLY ---
+    # Read-only HTTP; touches no DB/session, so it is safe to parallelize for a
+    # source whose client is thread-safe (fetch_concurrency>1). Turns the wall
+    # cost of ~N sequential round-trips into ~N/concurrency. Scoring (Phase 2)
+    # stays sequential on the single session.
+    prefetched: dict[int, tuple] = {}
+
+    def _prefetch(item):
+        idx, c = item
+        cid = c["channel_id"]
         try:
-            cache_hit = None
-            if not force_refresh:
-                cache_hit = repo.cached_scan_within(
-                    platform, channel_id, settings.scan_cache_ttl_days
-                )
-            if cache_hit is not None:
-                acc, scan_row = cache_hit
-                cached_signals = [SignalResult(**s) for s in scan_row.signals_json]
-                cached_tier = Tier(scan_row.tier)
-                intent_code, intent_label = _infer_intent(cached_signals, cached_tier)
-                cached_result = ScanResult(
-                    overall_probability=scan_row.overall_probability,
-                    confidence=scan_row.confidence,
-                    tier=cached_tier,
-                    signals=cached_signals,
-                    summary=scan_row.summary,
-                    subject=acc.handle,
-                    suspected_intent=intent_code,
-                    intent_label=intent_label,
-                    reasons=_extract_reasons(cached_signals, cached_tier),
-                )
-                records.append(CommenterRecord(
-                    external_id=channel_id,
-                    handle=acc.handle or handle,
-                    display_name=acc.display_name,
-                    avatar_url=avatar,
-                    profile=Profile(
-                        platform=platform,
-                        handle=acc.handle or handle,
-                        display_name=acc.display_name,
-                        bio=acc.bio,
-                        follower_count=acc.follower_count,
-                        created_at=acc.account_created_at,
-                    ),
-                    posts=[],  # not refetched on cache hit
-                    scan_result=cached_result,
-                    fingerprint=acc.fingerprint_json,
-                    from_cache=True,
-                    matched_neighbors=0,
-                ))
-                cached += 1
-                continue
+            profile = fetch_profile(cid)
+            posts = (fetch_history(cid, settings.scan_max_history_per_commenter)
+                     if profile is not None else [])
+            return idx, profile, posts, None
+        except Exception as e:  # noqa: BLE001 — surfaced as an error record in Phase 2
+            return idx, None, [], e
 
-            profile = fetch_profile(channel_id)
-            if profile is None:
-                records.append(CommenterRecord(
-                    external_id=channel_id, handle=handle, display_name=None,
-                    avatar_url=avatar, profile=None, posts=[],
-                    scan_result=_empty_scan(handle),
-                    fingerprint=None, from_cache=False, matched_neighbors=0,
-                    error="channel_not_found",
-                ))
-                continue
+    t0 = _time.perf_counter()
+    if to_fetch:
+        if fetch_concurrency > 1 and len(to_fetch) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            workers = min(fetch_concurrency, len(to_fetch))
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="omi-fetch") as ex:
+                for idx, profile, posts, err in ex.map(_prefetch, to_fetch):
+                    prefetched[idx] = (profile, posts, err)
+        else:
+            for item in to_fetch:
+                idx, profile, posts, err = _prefetch(item)
+                prefetched[idx] = (profile, posts, err)
+    prefetch_seconds = _time.perf_counter() - t0
 
-            posts = fetch_history(channel_id, settings.scan_max_history_per_commenter)
+    # --- Phase 2: scoring — SEQUENTIAL (DB writes + neighbor append, in order) ---
+    t0 = _time.perf_counter()
+    for idx, c in to_fetch:
+        channel_id = c["channel_id"]
+        profile, posts, err = prefetched.get(idx, (None, [], None))
+        if err is not None:
+            slots[idx] = _error_commenter_record(c, type(err).__name__)
+            errored += 1
+            continue
+        if profile is None:
+            slots[idx] = _error_commenter_record(c, "channel_not_found")
+            errored += 1
+            continue
+        try:
             orch = scan_account_with_memory(
                 session,
                 platform=platform,
@@ -294,31 +394,36 @@ def scan_video_full(
                 profile=profile,
                 posts=posts,
                 force_refresh=force_refresh,
+                neighbors=scan_neighbors,
             )
-            records.append(CommenterRecord(
+            slots[idx] = CommenterRecord(
                 external_id=channel_id,
                 handle=profile.handle,
                 display_name=profile.display_name,
-                avatar_url=avatar,
+                avatar_url=c.get("avatar_url"),
                 profile=profile,
                 posts=posts,
                 scan_result=orch.result,
                 fingerprint=extract_fingerprint(orch.result),
                 from_cache=orch.from_cache,
                 matched_neighbors=orch.matched_neighbors,
-            ))
+            )
             if orch.from_cache:
                 cached += 1
             else:
                 fresh += 1
         except Exception as e:  # noqa: BLE001
-            records.append(CommenterRecord(
-                external_id=channel_id, handle=handle, display_name=None,
-                avatar_url=avatar, profile=None, posts=[],
-                scan_result=_empty_scan(handle),
-                fingerprint=None, from_cache=False, matched_neighbors=0,
-                error=type(e).__name__,
-            ))
+            slots[idx] = _error_commenter_record(c, type(e).__name__)
+            errored += 1
+    score_seconds = _time.perf_counter() - t0
+
+    records: list[CommenterRecord] = [r for r in slots if r is not None]
+    _log.info(
+        "scan_video_full: platform=%s commenters=%d fresh=%d cached=%d errored=%d "
+        "prefetch_s=%.2f score_s=%.2f concurrency=%d",
+        platform, len(commenters_meta), fresh, cached, errored,
+        prefetch_seconds, score_seconds, fetch_concurrency,
+    )
 
     # --- Phase 2: thread-level scan (treat all comments as one corpus) ---
     thread_posts = [
@@ -689,6 +794,7 @@ def scan_comprehensive(
                 fetch_history=source.fetch_account_posts,
                 stats=source.stats,
                 force_refresh=force_refresh,
+                fetch_concurrency=getattr(source, "fetch_concurrency", 1),
             )
             inputs_provided.append("video")
 

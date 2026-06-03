@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     scan_max_history_per_commenter: int = 50
     # If we've scanned an account within this many days, reuse the cached score.
     scan_cache_ttl_days: int = 7
+    # Wall-clock budget for an async scan job. A job stuck queued/running past
+    # this (slow/hung scan, or a worker killed by OOM/restart) is reaped: marked
+    # failed + refunded, so it can never poll forever. Kept under the client's
+    # ~8-min poll window so the user sees a clean failure, not a timeout.
+    scan_job_timeout_seconds: int = 300
     # YouTube Data API v3 daily quota cap. Defaults to the free-tier limit;
     # set higher if you've requested a quota increase from Google. Used for
     # the health-pill warning level and the /v1/status quota_used_today number.

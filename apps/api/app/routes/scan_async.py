@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -73,12 +73,18 @@ class LinkScanJobOut(BaseModel):
 def _link_job_result(
     *, url: str, platform: str, status: str, slug: str | None,
     tier: str | None = None, probability: float | None = None,
-    error: str | None = None,
+    error: str | None = None, telemetry: dict | None = None,
 ) -> dict:
-    """The single bookkeeping dict stored in ``ScanJob.results_json[0]``."""
+    """The single bookkeeping dict stored in ``ScanJob.results_json[0]``.
+
+    ``telemetry`` persists the measured investigation cost (api calls, runtime,
+    commenters, peak RSS, outcome) on the job row so it can be analyzed later —
+    the observability sink, alongside the structured log line.
+    """
     return {
         "url": url, "platform": platform, "status": status, "slug": slug,
         "tier": tier, "probability": probability, "error": error,
+        "telemetry": telemetry or {},
     }
 
 
@@ -97,6 +103,66 @@ def _link_job_out(job: ScanJob) -> LinkScanJobOut:
         overall_probability=r.get("probability"),
         error=r.get("error"),
     )
+
+
+def reap_stale_scan_jobs(
+    timeout_seconds: int, *, user_id: int | None = None, job_id: str | None = None
+) -> int:
+    """Mark scan jobs stuck in queued/running past the budget as failed + refund.
+
+    The safety net for the cases the worker can't self-report: a scan slower than
+    the budget, or a worker killed mid-scan (OOM / redeploy) that never wrote a
+    terminal status. Without this a job polls forever and the credit is stranded.
+    Idempotent and transition-guarded (row lock + status check) so the credit is
+    refunded exactly once, even racing a late-finishing worker. Returns the count
+    reaped. Scope to a user/job to keep the per-request sweep cheap.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
+    with get_session() as session:
+        q = select(ScanJob).where(
+            ScanJob.status.in_(["queued", "running"]),
+            ScanJob.created_at < cutoff,
+        )
+        if user_id is not None:
+            q = q.where(ScanJob.user_id == user_id)
+        if job_id is not None:
+            q = q.where(ScanJob.job_id == job_id)
+        candidate_ids = [j.id for j in session.execute(q).scalars()]
+
+    reaped = 0
+    for cid in candidate_ids:
+        refund_amt = 0
+        uid = None
+        with get_session() as session:
+            job = session.get(ScanJob, cid, with_for_update=True)
+            if job is None or job.status not in ("queued", "running"):
+                continue  # finished or reaped by someone else first
+            job.status = "failed"
+            job.completed = 1
+            job.failed_count = 1
+            refund_amt = int(job.credits_estimate or 0)
+            uid = job.user_id
+            job.credits_used = 0
+            job.completed_at = datetime.now(timezone.utc)
+            existing = (job.results_json or [{}])
+            r = dict(existing[0]) if existing else {}
+            r["status"] = "failed"
+            r["error"] = (
+                "This scan ran past its time budget and was stopped. Your credit "
+                "was refunded — try a smaller batch, or retry."
+            )
+            r["telemetry"] = {**(r.get("telemetry") or {}), "outcome": "failed", "reaped": True}
+            job.results_json = [r]
+            session.flush()
+        if refund_amt and uid is not None:
+            try:
+                refund_credits(uid, refund_amt, reason="scan_timeout_reap")
+            except Exception:
+                log.exception("refund failed reaping scan job id=%s", cid)
+        reaped += 1
+    if reaped:
+        log.warning("reaped %d stale scan job(s) past %ds budget", reaped, timeout_seconds)
+    return reaped
 
 
 @router.post(
@@ -141,6 +207,10 @@ def scan_link_start(
     force_refresh = bool(payload.get("force_refresh", False))
     start_token = payload.get("start_page_token") or None
     requested_slug = payload.get("investigation_slug")
+
+    # Reap any of this user's jobs stuck past the budget (refund + clear stale
+    # 'running' rows) before kicking off a new one.
+    reap_stale_scan_jobs(settings.scan_job_timeout_seconds, user_id=current.id)
 
     # Build the creq + platform Source BEFORE charging — a mis-config (e.g. a
     # missing API key → 503) must never bill the user, exactly as /link does.
@@ -246,10 +316,18 @@ def scan_link_start(
 @router.get("/link/status/{job_id}", response_model=LinkScanJobOut)
 def scan_link_status(
     job_id: str,
+    settings: Settings = Depends(get_settings),
     current: CurrentUser = Depends(require_user),
 ) -> LinkScanJobOut:
     """Poll an async link-scan job. Terminal states are "done" and "failed"; on
-    "done" the investigation_slug resolves to a fully saved investigation."""
+    "done" the investigation_slug resolves to a fully saved investigation.
+
+    Reaps this job first if it's stuck past the time budget, so a hung/dead scan
+    returns a clean failed+refunded status here instead of polling forever.
+    """
+    reap_stale_scan_jobs(
+        settings.scan_job_timeout_seconds, user_id=current.id, job_id=job_id
+    )
     with get_session() as session:
         job = session.execute(
             select(ScanJob).where(
@@ -276,17 +354,40 @@ def _run_link_scan_job(
     ScanJob row. A failed scan refunds the full charge — a failed scan must
     never cost a credit."""
     settings = get_settings()
+    import time as _time
+    t0 = _time.perf_counter()
+
+    def _telemetry(state: str, *, commenters: int = 0) -> dict:
+        """Measured investigation cost. api_calls = upstream provider calls
+        (single provider per scan = the platform); max_rss_mb is process-wide
+        peak (a high-water mark, not strictly per-scan under concurrency)."""
+        rss_mb = 0.0
+        try:
+            import resource
+            rss_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+        except Exception:
+            pass
+        return {
+            "platform": platform,
+            "outcome": state,
+            "api_calls": int(getattr(source, "quota_used", 0) or 0),
+            "commenters": int(commenters or 0),
+            "runtime_s": round(_time.perf_counter() - t0, 2),
+            "max_rss_mb": rss_mb,
+        }
 
     def _finish(state: str, *, tier=None, probability=None, error=None,
-                refund: bool = False) -> None:
-        if refund:
-            try:
-                refund_credits(user_id, cost, reason="scan_failed")
-            except Exception:
-                log.exception("refund failed for link job %s", db_id)
+                refund: bool = False, commenters: int = 0) -> None:
+        telemetry = _telemetry(state, commenters=commenters)
+        log.info("scan telemetry job=%s %s", db_id, telemetry)
+        transitioned = False
         with get_session() as session:
-            job = session.get(ScanJob, db_id)
-            if job is None:
+            # Row-lock + terminal guard: if the reaper (or anyone) already
+            # terminalized this job, do NOT overwrite or double-refund. Only the
+            # caller that performs the queued/running → terminal transition
+            # owns the (single) refund.
+            job = session.get(ScanJob, db_id, with_for_update=True)
+            if job is None or job.status in ("done", "failed"):
                 return
             job.status = state
             job.completed = 1
@@ -297,8 +398,15 @@ def _run_link_scan_job(
                 url=url, platform=platform,
                 status=("ok" if state == "done" else "failed"),
                 slug=slug, tier=tier, probability=probability, error=error,
+                telemetry=telemetry,
             )]
             session.flush()
+            transitioned = True
+        if transitioned and refund:
+            try:
+                refund_credits(user_id, cost, reason="scan_failed")
+            except Exception:
+                log.exception("refund failed for link job %s", db_id)
 
     # Mark running.
     with get_session() as session:
@@ -376,4 +484,7 @@ def _run_link_scan_job(
         return
 
     tier = result.overall_tier.value if hasattr(result.overall_tier, "value") else str(result.overall_tier)
-    _finish("done", tier=tier, probability=result.overall_probability)
+    commenters = result.video.commenter_count if getattr(result, "video", None) else (
+        1 if getattr(result, "focus_account", None) else 0
+    )
+    _finish("done", tier=tier, probability=result.overall_probability, commenters=commenters)
