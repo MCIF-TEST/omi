@@ -261,6 +261,47 @@ register_adapter(DatasetAdapter(
     description="State-backed IO disclosure (Twitter/X Transparency); labels accounts political_coord/high.",
 ))
 
+
+def _parse_astroturf(row: dict, filename: str, row_id: str) -> PublicRecord | None:
+    """OSoMe astroturf set — headerless `account_id<TAB>label` (label is
+    'political_Bot'). Confirmed automated political accounts → bot ground truth.
+    Text lives elsewhere, so these are label-only accounts (useful for the ML /
+    memory tracks + bot recall)."""
+    uid = str(row.get("_0") or "").strip()
+    if not uid.isdigit():
+        return None
+    return PublicRecord(external_id=uid, texts=[], is_bot=True, handle=uid, label="bot")
+
+
+def _parse_cresci(row: dict, filename: str, row_id: str) -> PublicRecord | None:
+    """Cresci RTbust-2019 — headerless `account_id<TAB>label` (human|bot). The
+    tweet text is in the sibling `_tweets.json` (joinable later); label-only for
+    now."""
+    uid = str(row.get("_0") or "").strip()
+    if not uid.isdigit():
+        return None
+    label = str(row.get("_1") or "").strip().lower()
+    is_bot = label in ("bot", "1", "true")
+    return PublicRecord(
+        external_id=uid, texts=[], is_bot=is_bot, handle=uid,
+        label=("bot" if is_bot else "human"),
+    )
+
+
+register_adapter(DatasetAdapter(
+    name="astroturf", kind="accounts", has_header=False,
+    match=lambda h, f: 16 if "astroturf" in f.lower() else 0,
+    parse_row=_parse_astroturf,
+    description="OSoMe astroturf political bots (headerless id+label TSV) → bot.",
+))
+
+register_adapter(DatasetAdapter(
+    name="cresci_rtbust", kind="accounts", has_header=False,
+    match=lambda h, f: 16 if ("cresci" in f.lower() and f.lower().endswith((".tsv", ".csv"))) else 0,
+    parse_row=_parse_cresci,
+    description="Cresci RTbust-2019 human/bot labels (headerless id+label TSV).",
+))
+
 register_adapter(DatasetAdapter(
     name="accounts_generic", kind="accounts",
     match=lambda h, f: 1 if _any_in(h, _ACCOUNT_LABEL_COLS) and (

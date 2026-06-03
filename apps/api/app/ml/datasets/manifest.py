@@ -45,10 +45,24 @@ class ManifestEntry:
 
 @dataclass
 class Manifest:
-    entries: dict[str, ManifestEntry] = field(default_factory=dict)  # keyed by normalised rel path
+    entries: dict[str, ManifestEntry] = field(default_factory=dict)  # exact rel path → entry
+    dir_rules: list[ManifestEntry] = field(default_factory=list)     # path-prefix rules
 
     def get(self, rel_path: str) -> ManifestEntry | None:
-        return self.entries.get(_norm(rel_path))
+        """Exact file rule wins; otherwise the longest matching directory-prefix
+        rule. Lets a whole archive (many per-year IO files) be governed by one
+        ``[[dir]]`` entry while still allowing per-file overrides."""
+        norm = _norm(rel_path)
+        exact = self.entries.get(norm)
+        if exact is not None:
+            return exact
+        best: ManifestEntry | None = None
+        for rule in self.dir_rules:
+            prefix = _norm(rule.path).rstrip("/")
+            if norm == prefix or norm.startswith(prefix + "/"):
+                if best is None or len(prefix) > len(_norm(best.path).rstrip("/")):
+                    best = rule
+        return best
 
     def status(self, rel_path: str) -> str:
         entry = self.get(rel_path)
@@ -80,19 +94,26 @@ def load_manifest(root: Path) -> Manifest:
     except (OSError, tomllib.TOMLDecodeError):
         return Manifest()
 
-    entries: dict[str, ManifestEntry] = {}
-    for raw in data.get("file", []) or []:
-        if not isinstance(raw, dict):
-            continue
+    def _parse(raw: dict) -> ManifestEntry | None:
         rel = raw.get("path")
         status = str(raw.get("status", "")).strip().lower()
         if not rel or status not in KNOWN_STATUSES:
-            continue
-        entries[_norm(rel)] = ManifestEntry(
-            path=str(rel),
-            status=status,
+            return None
+        return ManifestEntry(
+            path=str(rel), status=status,
             kind=str(raw.get("kind", "")),
             reason=str(raw.get("reason", "")),
             provenance=str(raw.get("provenance", "")),
         )
-    return Manifest(entries=entries)
+
+    entries: dict[str, ManifestEntry] = {}
+    for raw in data.get("file", []) or []:
+        if isinstance(raw, dict) and (e := _parse(raw)) is not None:
+            entries[_norm(e.path)] = e
+
+    dir_rules: list[ManifestEntry] = []
+    for raw in data.get("dir", []) or []:
+        if isinstance(raw, dict) and (e := _parse(raw)) is not None:
+            dir_rules.append(e)
+
+    return Manifest(entries=entries, dir_rules=dir_rules)

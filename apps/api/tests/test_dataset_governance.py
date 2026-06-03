@@ -11,6 +11,8 @@ from __future__ import annotations
 import csv
 import random
 
+import pytest
+
 from app.ml.datasets.discovery import discover
 from app.ml.datasets.ingest import ingest_directory
 from app.ml.datasets.manifest import load_manifest
@@ -23,30 +25,21 @@ from app.ml.public_import import PublicRecord
 # --- Manifest quarantine over the real committed datasets --------------------
 
 def test_manifest_quarantines_committed_poison():
-    root = default_datasets_dir()
-    manifest = load_manifest(root)
-    # The manifest itself loads and knows the poison files.
-    assert manifest.is_excluded(
-        "Fake Social Media Account Detection Dataset/bot_detection_data.csv"
-    )
-    assert manifest.is_excluded("ai vs human text/ai_human_detection_v1.csv")
-
-    files = {f.rel_path: f for f in discover(root)}
-    bot = files["Fake Social Media Account Detection Dataset/bot_detection_data.csv"]
-    assert not bot.supported, "50k random-label noise file must not be ingestable"
-    assert bot.manifest_status == "quarantine"
-    assert "manifest" in bot.reason.lower()
-
-    err = files["ai vs human text/ai_human_detection_v1.csv"]
-    assert not err.supported, "error-string poison file must not be ingestable"
-    assert err.manifest_status == "quarantine"
+    # Manifest-only (the full tree is now multi-GB; the manifest→discover→
+    # supported link is covered by test_headerless_bot_adapters + the ingest
+    # tests). Paths reflect the post-reorg layout (corpus under Datasets/).
+    manifest = load_manifest(default_datasets_dir())
+    bot = "Datasets/Fake Social Media Account Detection Dataset/bot_detection_data.csv"
+    assert manifest.is_excluded(bot) and manifest.status(bot) == "quarantine"
+    err = "ai vs human text/ai_human_detection_v1.csv"
+    assert manifest.is_excluded(err) and manifest.status(err) == "quarantine"
 
 
 def test_manifest_keeps_vouched_training_files_supported():
-    files = {f.rel_path: f for f in discover(default_datasets_dir())}
-    real = files.get("Fake Social Media Account Detection Dataset/real_users.csv")
-    assert real is not None and real.supported
-    assert real.manifest_status == "train"
+    manifest = load_manifest(default_datasets_dir())
+    assert manifest.status(
+        "Datasets/Fake Social Media Account Detection Dataset/real_users.csv"
+    ) == "train"
 
 
 # --- Quality gate: random-label noise (accounts) -----------------------------
@@ -162,3 +155,60 @@ def test_manifest_vouch_downgrades_gate_to_advisory(tmp_path):
     entry = next(f for f in report.per_file if f["file"] == "noise.csv")
     assert entry.get("quality_passed") is False
     assert "quality_warning" in entry
+
+
+# --- Tier-2A: dir-rules + headerless bot adapters + re-quarantine ----------
+
+def test_manifest_dir_rule_and_file_override(tmp_path):
+    from app.ml.datasets.manifest import load_manifest
+    (tmp_path / "manifest.toml").write_text(
+        'schema_version = 2\n'
+        '[[dir]]\npath = "campaigns"\nstatus = "validation"\n'
+        '[[file]]\npath = "campaigns/bad.csv"\nstatus = "quarantine"\n',
+        encoding="utf-8",
+    )
+    m = load_manifest(tmp_path)
+    assert m.status("campaigns/2020/x.csv") == "validation"   # dir prefix rule
+    assert m.is_excluded("campaigns/bad.csv")                  # exact file overrides
+    assert m.status("elsewhere/y.csv") == ""                   # unmatched → ungoverned
+
+
+_HAS_BOT_GT = (default_datasets_dir() / "astroturf" / "astroturf.tsv").exists()
+
+
+@pytest.mark.skipif(not _HAS_BOT_GT, reason="bot ground-truth datasets not present")
+def test_headerless_bot_adapters(tmp_path):
+    import shutil
+    from app.ml.datasets.discovery import discover, read_records
+    src = default_datasets_dir()
+    for rel in ("astroturf/astroturf.tsv", "cresci-rtbust-2019/cresci-rtbust-2019.tsv"):
+        dst = tmp_path / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(src / rel, dst)
+    files = {f.rel_path: f for f in discover(tmp_path)}
+
+    a = files["astroturf/astroturf.tsv"]
+    assert a.supported and a.adapter.name == "astroturf"
+    recs, _ = read_records(a)
+    assert recs and all(r.is_bot and r.label == "bot" for r in recs)
+
+    c = files["cresci-rtbust-2019/cresci-rtbust-2019.tsv"]
+    assert c.supported and c.adapter.name == "cresci_rtbust"
+    recs, _ = read_records(c)
+    assert {r.label for r in recs} == {"human", "bot"}
+
+
+@pytest.mark.skipif(
+    not (default_datasets_dir() / "manifest.toml").exists(),
+    reason="repaired manifest not present",
+)
+def test_real_manifest_requarantines_moved_poison_and_governs_io():
+    from app.ml.datasets.manifest import load_manifest
+    m = load_manifest(default_datasets_dir())
+    # poison re-gated at its new Datasets/ path
+    assert m.is_excluded(
+        "Datasets/Fake Social Media Account Detection Dataset/bot_detection_data.csv"
+    )
+    # IO archives governed as validation via dir-rules
+    assert m.status("2020-09/iran_092020_tweets_csv_hashed.csv") == "validation"
+    assert m.status("Datasets/GRU/x.csv") == "validation"

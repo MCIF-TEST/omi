@@ -127,10 +127,20 @@ def read_records(
     n_rows = 0
     stem = df.path.stem
     with df.path.open("r", encoding="utf-8", errors="replace", newline="") as fh:
-        reader = csv.DictReader(fh, delimiter=delim)
-        for i, raw in enumerate(reader):
+        if getattr(df.adapter, "has_header", True):
+            rows = (
+                {norm_key(k): v for k, v in raw.items() if k is not None}
+                for raw in csv.DictReader(fh, delimiter=delim)
+            )
+        else:
+            # Headerless (e.g. astroturf / cresci `id<TAB>label`): every line is
+            # data, passed positionally as {"_0": .., "_1": ..}.
+            rows = (
+                {f"_{j}": v for j, v in enumerate(cols)}
+                for cols in csv.reader(fh, delimiter=delim)
+            )
+        for i, row in enumerate(rows):
             n_rows += 1
-            row = {norm_key(k): v for k, v in raw.items() if k is not None}
             rec = df.adapter.parse_row(row, df.path.name, f"{stem}:{i}")
             if rec is not None:
                 records.append(rec)

@@ -37,6 +37,11 @@ class DatasetAdapter:
     # should be skipped if the filename carries no fake/real/bot/human/ai
     # signal. Used by per-class split datasets (fake_users.csv / real_users.csv).
     needs_filename_label: bool = False
+    # When False the file has NO header row (every line is data, e.g. the
+    # astroturf / cresci `id<TAB>label` TSVs). read_records then reads
+    # positionally and passes each row as {"_0": .., "_1": ..}; such adapters
+    # match by filename rather than column names.
+    has_header: bool = True
     description: str = ""
 
 
