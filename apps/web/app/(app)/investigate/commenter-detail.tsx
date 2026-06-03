@@ -334,7 +334,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
               })}
           </div>
           <p className="mt-2 text-2xs text-fg-faint leading-relaxed">
-            Each detector's share of the total score movement. ▲ raised suspicion · ▼ lowered it.
+            Each detector&apos;s share of the total score movement. ▲ raised suspicion · ▼ lowered it.
           </p>
         </section>
       )}
