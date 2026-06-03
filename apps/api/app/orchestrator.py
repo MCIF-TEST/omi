@@ -55,6 +55,18 @@ class OrchestratedScan:
     matched_neighbors: int  # how many close memory neighbors backed the scan
 
 
+@dataclass
+class _ScannedNeighbor:
+    """Duck-types the subset of ``Account`` that ``compute_memory_signal`` reads
+    (external_id, fingerprint_json, last_score, last_confidence), so an account
+    just scored in this run can be appended to the in-memory neighbor list with
+    no DB round-trip."""
+    external_id: str
+    fingerprint_json: list[float]
+    last_score: float
+    last_confidence: float
+
+
 def scan_account_with_memory(
     session: Session,
     *,
@@ -63,8 +75,19 @@ def scan_account_with_memory(
     profile: Profile,
     posts: list[Post],
     force_refresh: bool = False,
+    neighbors: list | None = None,
 ) -> OrchestratedScan:
-    """Score an account, consulting and updating the persistent fingerprint store."""
+    """Score an account, consulting and updating the persistent fingerprint store.
+
+    ``neighbors`` is the fingerprint candidate set for the memory detector. When
+    a caller passes one (the per-commenter loop in :func:`scan_video_full`), it
+    is loaded ONCE per scan and reused — and this function appends the
+    just-scored account to it — so a large scan no longer re-runs the full-table
+    ``all_with_fingerprints()`` load once per commenter (O(commenters × store)).
+    Behaviour is identical to the per-call load: later commenters still see
+    earlier ones (appended below), exactly as the old DB re-query did. When
+    ``neighbors`` is None (single-account endpoints) it is loaded here as before.
+    """
     settings = get_settings()
     repo = AccountRepository(session)
 
@@ -95,7 +118,8 @@ def scan_account_with_memory(
     preliminary = analyze_account(profile, posts)
     preliminary_fp = extract_fingerprint(preliminary)
 
-    neighbors = repo.all_with_fingerprints()
+    if neighbors is None:
+        neighbors = repo.all_with_fingerprints()
     memory_signal = compute_memory_signal(
         preliminary_fp,
         neighbors,
@@ -139,6 +163,17 @@ def scan_account_with_memory(
             account_external_id=external_id,
             parent_ids=parent_ids,
         )
+
+    # Keep a shared per-scan neighbor list current so later commenters in the
+    # same scan see this account — without re-querying the full table (the old
+    # behaviour re-loaded the DB, which now reflects this upsert; we mirror that
+    # in memory). Harmless when ``neighbors`` was a one-off local load.
+    neighbors.append(_ScannedNeighbor(
+        external_id=external_id,
+        fingerprint_json=final_fp,
+        last_score=final.overall_probability,
+        last_confidence=final.confidence,
+    ))
 
     matched = int(memory_signal.sub_signals.get("close_neighbors", 0))
 
@@ -226,6 +261,13 @@ def scan_video_full(
     fresh = 0
     cached = 0
 
+    # Load the fingerprint candidate set ONCE for the whole batch instead of
+    # re-querying the full table per commenter (was O(commenters × store) DB
+    # loads — the dominant DB cost on large scans, growing with the moat).
+    # scan_account_with_memory appends each freshly-scored account, so later
+    # commenters still see earlier ones exactly as the old per-call reload did.
+    scan_neighbors = repo.all_with_fingerprints()
+
     # --- Phase 1: per-commenter scans (account perspective) --------------
     for c in commenters_meta:
         channel_id = c["channel_id"]
@@ -294,6 +336,7 @@ def scan_video_full(
                 profile=profile,
                 posts=posts,
                 force_refresh=force_refresh,
+                neighbors=scan_neighbors,
             )
             records.append(CommenterRecord(
                 external_id=channel_id,
