@@ -53,12 +53,18 @@ def seed_store(n: int, dim: int) -> None:
 
 
 class CountingFake:
-    """Paginating twitterapi.io fake; counts every .get (= 1 upstream call)."""
-    def __init__(self) -> None:
+    """Paginating twitterapi.io fake; counts every .get (= 1 upstream call) and
+    optionally sleeps ``latency`` seconds per call to model network round-trips."""
+    def __init__(self, latency: float = 0.0) -> None:
         self.calls = 0
+        self.latency = latency
+        self._lock = __import__("threading").Lock()
 
     def get(self, path: str, params: dict) -> dict:
-        self.calls += 1
+        with self._lock:
+            self.calls += 1
+        if self.latency:
+            time.sleep(self.latency)
         if "user/info" in path:
             h = params.get("userName") or "u"
             return {"data": {"user": {"userName": h, "name": h, "followers": 120,
@@ -78,12 +84,14 @@ class CountingFake:
                 "data": {"tweets": tweets}}
 
 
-def profile_scan(n: int, seed_size: int, dim: int) -> dict:
+def profile_scan(n: int, seed_size: int, dim: int, *, concurrency: int = 1,
+                 latency: float = 0.0) -> dict:
     reset_db_for_tests("sqlite:///:memory:")
     seed_store(seed_size, dim)
 
-    fake = CountingFake()
+    fake = CountingFake(latency=latency)
     src = TwitterSource(fake)
+    src.fetch_concurrency = concurrency  # exercise sequential vs bounded-concurrent
 
     # instrument all_with_fingerprints
     orig_afp = AccountRepository.all_with_fingerprints
@@ -121,7 +129,7 @@ def profile_scan(n: int, seed_size: int, dim: int) -> dict:
     orch._compute_cross_links = orig_cross
 
     n_comm = len(out.video_output.commenter_records) if out.video_output else 0
-    return {"N": n, "commenters_scanned": n_comm, "api_calls": fake.calls,
+    return {"N": n, "C": concurrency, "commenters_scanned": n_comm, "api_calls": fake.calls,
             "afp_calls": stats["afp_calls"], "afp_time_ms": round(stats["afp_time"] * 1000, 1),
             "coord_ms": round(stats["coord_time"] * 1000, 1),
             "wall_ms": round(wall * 1000, 1), "peak_mb": round(peak / 1e6, 1)}
@@ -150,12 +158,15 @@ if __name__ == "__main__":
     print("=== all_with_fingerprints() per-call cost vs store size ===")
     for r in microbench_afp(dim):
         print(f"  store={r['store_size']:>5}  {r['per_call_ms']:>7} ms/call")
-    print("\n=== scan profile (seed store = 300 accounts) ===")
-    hdr = ("N", "scanned", "api_calls", "afp_calls", "afp_ms", "coord_ms", "wall_ms", "peak_mb")
+    LAT = 0.04  # 40 ms/call modelled network round-trip
+    print(f"\n=== scan profile (seed store = 300, modelled latency {int(LAT*1000)}ms/call) ===")
+    hdr = ("N", "C", "scanned", "api_calls", "afp_calls", "afp_ms", "wall_ms", "peak_mb")
     print("  " + "  ".join(f"{h:>10}" for h in hdr))
     for n in (10, 20, 50):
-        r = profile_scan(n, seed_size=300, dim=dim)
-        print("  " + "  ".join(f"{str(r[k]):>10}" for k in
-              ("N", "commenters_scanned", "api_calls", "afp_calls", "afp_time_ms", "coord_ms", "wall_ms", "peak_mb")))
+        for c in (1, 6):  # sequential baseline vs bounded-concurrent
+            r = profile_scan(n, seed_size=300, dim=dim, concurrency=c, latency=LAT)
+            print("  " + "  ".join(f"{str(r[k]):>10}" for k in
+                  ("N", "C", "commenters_scanned", "api_calls", "afp_calls",
+                   "afp_time_ms", "wall_ms", "peak_mb")))
     from app.core import background
     background.shutdown(wait_seconds=10.0)

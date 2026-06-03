@@ -21,6 +21,7 @@ client so the rest of the API runs without it.
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
@@ -59,9 +60,19 @@ class TwitterClient(Protocol):
 
 @dataclass
 class FetchStats:
-    """Tracks how many upstream calls a scan made (for cost/observability)."""
+    """Tracks how many upstream calls a scan made (for cost/observability).
+
+    Thread-safe: the per-commenter fetch is bounded-concurrent, so the call
+    counter is guarded — the count (and the per-call billing/quota proxy) stays
+    accurate under parallel fetches. Use :meth:`bump`, not ``+= 1``.
+    """
 
     api_calls: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+
+    def bump(self, n: int = 1) -> None:
+        with self._lock:
+            self.api_calls += n
 
     @property
     def quota_used(self) -> int:
@@ -232,7 +243,7 @@ def fetch_user_profile(
     """Look up a user's metadata and normalize to a ``Profile``."""
     stats = stats or FetchStats()
     payload = client.get(_USER_INFO_PATH, {"userName": handle})
-    stats.api_calls += 1
+    stats.bump()
     data = _unwrap(payload)
 
     user = data.get("user") if isinstance(data.get("user"), dict) else data
@@ -276,7 +287,7 @@ def fetch_user_recent_tweets(
         if cursor:
             params["cursor"] = cursor
         payload = client.get(_USER_TWEETS_PATH, params)
-        stats.api_calls += 1
+        stats.bump()
         data = _unwrap(payload)
 
         tweets = _extract_tweets(data)
@@ -370,7 +381,7 @@ def fetch_tweet_engagers(
         if cursor:
             params["cursor"] = cursor
         payload = client.get(_TWEET_REPLIES_PATH, params)
-        stats.api_calls += 1
+        stats.bump()
         data = _unwrap(payload)
 
         tweets = _extract_tweets(data)

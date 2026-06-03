@@ -82,6 +82,30 @@ def test_scan_link_async_completes_and_persists(auth_client):
     assert any(i["slug"] == slug for i in listing), listing
 
 
+def test_scan_link_async_records_telemetry(auth_client):
+    """Investigation telemetry is persisted on the job row for later analysis:
+    measured api calls, commenters, runtime, peak RSS, and the outcome."""
+    start = auth_client.post(
+        "/v1/scan/link/start",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": 8},
+    ).json()
+    job_id = start["job_id"]
+
+    from app.core import background
+    background.shutdown(wait_seconds=15.0)
+
+    from sqlalchemy import select
+    from app.storage.db import get_session
+    from app.storage.models import ScanJob
+    with get_session() as s:
+        job = s.execute(select(ScanJob).where(ScanJob.job_id == job_id)).scalar_one()
+        tel = (job.results_json or [{}])[0].get("telemetry") or {}
+    assert tel.get("outcome") == "done", tel
+    assert tel.get("commenters") == 8, tel
+    for key in ("api_calls", "runtime_s", "max_rss_mb", "platform"):
+        assert key in tel, (key, tel)
+
+
 def test_scan_link_start_rejects_unknown_link(auth_client):
     r = auth_client.post(
         "/v1/scan/link/start",

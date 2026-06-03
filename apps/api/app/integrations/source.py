@@ -31,6 +31,11 @@ class Source(Protocol):
     #: Stable platform key used for storage + the ``Profile.platform`` field.
     platform: str
 
+    #: Max threads for the read-only per-commenter fetch (profile+posts). >1
+    #: ONLY when the underlying client is thread-safe. The orchestrator never
+    #: parallelizes scoring/DB writes — just the network fetch.
+    fetch_concurrency: int
+
     @property
     def quota_used(self) -> int:
         """Cumulative API cost (units/calls) this source has spent so far."""
@@ -84,6 +89,9 @@ class YouTubeSource:
     """
 
     platform = "youtube"
+    # 1 = sequential: the googleapiclient Resource/httplib2 client is NOT safe
+    # to call concurrently from multiple threads. Keep YouTube fetches serial.
+    fetch_concurrency = 1
 
     def __init__(self, client: Any) -> None:
         from app.integrations.youtube import FetchStats
@@ -152,6 +160,10 @@ class TwitterSource:
     """
 
     platform = "x"
+    # twitterapi.io over httpx (a fresh connection per call) is thread-safe, so
+    # the per-commenter fetch is parallelized. Kept conservative (6) to respect
+    # provider rate limits and prioritize reliable completion over peak speed.
+    fetch_concurrency = 6
 
     def __init__(self, client: Any) -> None:
         from app.integrations.twitter import FetchStats

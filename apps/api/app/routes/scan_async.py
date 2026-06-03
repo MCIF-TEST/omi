@@ -73,12 +73,18 @@ class LinkScanJobOut(BaseModel):
 def _link_job_result(
     *, url: str, platform: str, status: str, slug: str | None,
     tier: str | None = None, probability: float | None = None,
-    error: str | None = None,
+    error: str | None = None, telemetry: dict | None = None,
 ) -> dict:
-    """The single bookkeeping dict stored in ``ScanJob.results_json[0]``."""
+    """The single bookkeeping dict stored in ``ScanJob.results_json[0]``.
+
+    ``telemetry`` persists the measured investigation cost (api calls, runtime,
+    commenters, peak RSS, outcome) on the job row so it can be analyzed later —
+    the observability sink, alongside the structured log line.
+    """
     return {
         "url": url, "platform": platform, "status": status, "slug": slug,
         "tier": tier, "probability": probability, "error": error,
+        "telemetry": telemetry or {},
     }
 
 
@@ -276,14 +282,37 @@ def _run_link_scan_job(
     ScanJob row. A failed scan refunds the full charge — a failed scan must
     never cost a credit."""
     settings = get_settings()
+    import time as _time
+    t0 = _time.perf_counter()
+
+    def _telemetry(state: str, *, commenters: int = 0) -> dict:
+        """Measured investigation cost. api_calls = upstream provider calls
+        (single provider per scan = the platform); max_rss_mb is process-wide
+        peak (a high-water mark, not strictly per-scan under concurrency)."""
+        rss_mb = 0.0
+        try:
+            import resource
+            rss_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+        except Exception:
+            pass
+        return {
+            "platform": platform,
+            "outcome": state,
+            "api_calls": int(getattr(source, "quota_used", 0) or 0),
+            "commenters": int(commenters or 0),
+            "runtime_s": round(_time.perf_counter() - t0, 2),
+            "max_rss_mb": rss_mb,
+        }
 
     def _finish(state: str, *, tier=None, probability=None, error=None,
-                refund: bool = False) -> None:
+                refund: bool = False, commenters: int = 0) -> None:
         if refund:
             try:
                 refund_credits(user_id, cost, reason="scan_failed")
             except Exception:
                 log.exception("refund failed for link job %s", db_id)
+        telemetry = _telemetry(state, commenters=commenters)
+        log.info("scan telemetry job=%s %s", db_id, telemetry)
         with get_session() as session:
             job = session.get(ScanJob, db_id)
             if job is None:
@@ -297,6 +326,7 @@ def _run_link_scan_job(
                 url=url, platform=platform,
                 status=("ok" if state == "done" else "failed"),
                 slug=slug, tier=tier, probability=probability, error=error,
+                telemetry=telemetry,
             )]
             session.flush()
 
@@ -376,4 +406,7 @@ def _run_link_scan_job(
         return
 
     tier = result.overall_tier.value if hasattr(result.overall_tier, "value") else str(result.overall_tier)
-    _finish("done", tier=tier, probability=result.overall_probability)
+    commenters = result.video.commenter_count if getattr(result, "video", None) else (
+        1 if getattr(result, "focus_account", None) else 0
+    )
+    _finish("done", tier=tier, probability=result.overall_probability, commenters=commenters)
