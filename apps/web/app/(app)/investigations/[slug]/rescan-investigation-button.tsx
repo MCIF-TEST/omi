@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Zap, RefreshCw, AlertTriangle, CheckCircle2, X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { apiClient, ApiError } from '@/lib/api';
+import { ApiError } from '@/lib/api';
+import { runLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
 
 interface Props {
   inputUrl: string;
@@ -17,10 +18,12 @@ type State =
   | { kind: 'error'; title: string; detail: string; canRetry: boolean };
 
 /**
- * In-place rescan for a saved investigation. POSTs the original input URL
- * back to /v1/scan/link, then full-reloads the page. Hardened against
- * timeouts, 5xx, and cold-start failures: shows a real error with a
- * fallback link into the scan workspace.
+ * In-place rescan for a saved investigation. Starts an async scan job for the
+ * original input URL, polls it to completion, then full-reloads the page so the
+ * fresh batch renders. Because the scan runs on the backend's background pool
+ * (not a single long request), it can't trip a proxy timeout. Hardened against
+ * 5xx and cold-start failures: shows a real error with a fallback link into the
+ * scan workspace.
  */
 export function RescanInvestigationButton({ inputUrl }: Props) {
   const [state, setState] = useState<State>({ kind: 'idle' });
@@ -41,37 +44,36 @@ export function RescanInvestigationButton({ inputUrl }: Props) {
       );
     }, 1000);
 
-    const controller = new AbortController();
-    // Comprehensive scans take time — give it 3 minutes before we give up.
-    const abortTimer = setTimeout(() => controller.abort(), 180_000);
-
+    // Stop polling + the ticker if the user navigates away mid-scan. The scan
+    // itself keeps running server-side and will be there on the next visit.
+    let cancelled = false;
     cleanupRef.current = () => {
+      cancelled = true;
       clearInterval(tick);
-      clearTimeout(abortTimer);
-      controller.abort();
     };
 
     try {
-      await apiClient<unknown>('/v1/scan/link', {
-        method: 'POST',
-        body: JSON.stringify({ url: inputUrl, max_commenters: 25 }),
-        signal: controller.signal,
-      });
+      const job = await runLinkScanJob(
+        { url: inputUrl, max_commenters: 25 },
+        () => !cancelled,
+      );
       cleanupRef.current();
-      setState({ kind: 'success' });
-      setTimeout(() => window.location.reload(), 800);
-    } catch (err) {
-      cleanupRef.current();
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (job.status !== 'done' || !job.investigation_slug) {
         setState({
           kind: 'error',
-          title: 'Scan timed out',
+          title: 'Scan failed',
           detail:
-            'The browser request hit our 3-minute limit. The scan may still be running on the server — refresh in a minute to check, or open the workspace to monitor live.',
+            job.error ||
+            'The scan failed. Your credit was refunded — please try again.',
           canRetry: true,
         });
         return;
       }
+      setState({ kind: 'success' });
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      cleanupRef.current();
+      if (err instanceof ScanCancelledError) return; // unmounted — leave as-is
       setState(toErrorState(err));
     }
   }
@@ -84,8 +86,9 @@ export function RescanInvestigationButton({ inputUrl }: Props) {
           Re-scanning… {state.elapsedSeconds}s
         </Button>
         {state.elapsedSeconds >= 30 && (
-          <span className="font-mono text-2xs text-fg-mute max-w-[260px]">
-            Comprehensive scans can take 30-90 s. Stay on this page.
+          <span className="font-mono text-2xs text-fg-mute max-w-[280px]">
+            Comprehensive scans can take 30-90 s. Stay to auto-refresh — it keeps
+            running on the server either way.
           </span>
         )}
       </div>

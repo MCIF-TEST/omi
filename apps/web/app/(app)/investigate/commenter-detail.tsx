@@ -151,10 +151,20 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       {/* Hero — score ring + identity */}
       <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/20 p-5">
         <div className="relative flex items-start gap-5 flex-wrap">
-          <div className="flex flex-col items-center gap-2 shrink-0">
+          <div className="flex flex-col items-center gap-1.5 shrink-0">
             <ScoreRing value={displayProb} tier={c.tier} size={88} stroke={7} />
             <span className="font-mono text-[0.6rem] tracking-[0.16em] text-fg-mute uppercase">
               inauthentic
+            </span>
+            <span
+              className={`font-mono text-[0.6rem] tracking-wider uppercase rounded-full px-2 py-0.5 border ${
+                c.confidence < 0.4
+                  ? 'text-tier-elevated border-tier-elevated/40 bg-tier-elevated/10'
+                  : 'text-fg-mute border-border-2'
+              }`}
+              title="How much data backed this estimate. Low confidence means the score is tentative — treat it cautiously, not as a firm verdict."
+            >
+              {c.confidence < 0.4 ? 'low · ' : ''}conf {Math.round(c.confidence * 100)}%
             </span>
           </div>
           <div className="flex-1 min-w-[180px]">
@@ -289,6 +299,43 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
               <SignalRow key={s.name} signal={s} />
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Score attribution — what RAISED vs LOWERED the verdict (balanced view) */}
+      {(c.contributions ?? []).some((x) => x.impact > 0 || x.direction === 'lowers') && (
+        <section>
+          <Label icon={<BarChart2 size={11} />} text="What raised / lowered the score" />
+          <div className="space-y-1.5">
+            {[...(c.contributions ?? [])]
+              .filter((x) => x.impact > 0 || x.direction === 'lowers')
+              .sort((a, b) => b.impact - a.impact)
+              .map((x) => {
+                const raises = x.direction === 'raises';
+                const lowers = x.direction === 'lowers';
+                const color = raises ? 'text-danger' : lowers ? 'text-green-400' : 'text-fg-mute';
+                const arrow = raises ? '▲' : lowers ? '▼' : '•';
+                return (
+                  <div key={x.name} className="flex items-start gap-2 text-sm">
+                    <span className={`font-mono ${color} shrink-0`} aria-hidden>{arrow}</span>
+                    <span className="flex-1 leading-snug text-fg">
+                      {x.headline}
+                      {lowers && (
+                        <span className="ml-1 font-mono text-2xs uppercase tracking-wider text-green-400/80">
+                          · lowers suspicion
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-mono text-2xs text-fg-mute shrink-0 tabular-nums">
+                      {Math.round(x.impact * 100)}%
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+          <p className="mt-2 text-2xs text-fg-faint leading-relaxed">
+            Each detector&apos;s share of the total score movement. ▲ raised suspicion · ▼ lowered it.
+          </p>
         </section>
       )}
 

@@ -154,6 +154,7 @@ def _build_account_digest(
     reasons: list[str],
     weak_signals: list[str],
     max_chars: int,
+    contributions: list[dict] | None = None,
 ) -> str:
     pct = int(round(overall_probability * 100))
     conf_pct = int(round(confidence * 100))
@@ -171,6 +172,27 @@ def _build_account_digest(
 
     if reasons:
         lines.append("reasons: " + " | ".join(reasons[:4]))
+
+    # Faithful score attribution (GAP-06): tell the model exactly which detectors
+    # RAISED and which LOWERED the score, with their impact share, so the prose is
+    # grounded in real contribution — including the exculpatory side (e.g. an
+    # established community footprint that pulled the score down), which the
+    # suspicious-only ``reasons`` list never surfaces.
+    if contributions:
+        raisers = [c for c in contributions if c.get("direction") == "raises"]
+        lowerers = [c for c in contributions if c.get("direction") == "lowers"]
+
+        def _fmt(c: dict) -> str:
+            share = int(round((c.get("impact") or 0) * 100))
+            return f"{c.get('name', '?')} ({share}%)"
+
+        if raisers:
+            lines.append("raised_suspicion: " + ", ".join(_fmt(c) for c in raisers[:5]))
+        if lowerers:
+            lines.append(
+                "lowered_suspicion: " + ", ".join(_fmt(c) for c in lowerers[:5])
+                + " — these are exculpatory; reflect them honestly."
+            )
 
     # Per-detector breakdown
     sig_lines = []
@@ -203,6 +225,7 @@ def synthesize_account_analysis(
     scan_count: int,
     reasons: list[str],
     weak_signals: list[str],
+    contributions: list[dict] | None = None,
     settings: "Settings | None" = None,
     provider: "LLMProvider | None" = None,
 ) -> "ProviderResult":
@@ -225,6 +248,7 @@ def synthesize_account_analysis(
         reasons=reasons,
         weak_signals=weak_signals,
         max_chars=settings.reasoning_max_input_chars,
+        contributions=contributions,
     )
     user = (
         "Write a 150–220 word behavioural profile for this account based on "

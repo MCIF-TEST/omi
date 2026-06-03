@@ -93,6 +93,8 @@ export interface EngineStatus {
   fingerprints_stored: number;
   last_scan_at: string | null;
   youtube_configured: boolean;
+  twitter_configured: boolean;
+  twitter_available: boolean;
   auth_required: boolean;
   billing_configured: boolean;
   monthly_credit_grant: number;
@@ -309,6 +311,21 @@ export interface CommenterScanResult {
   }>;
   activity_total: number;
   signals: SignalResult[];
+  /** Signed per-detector attribution: what RAISED vs LOWERED the score —
+   *  including the exculpatory "community" footprint. Optional: empty on cached
+   *  commenters and absent from investigations saved before this shipped. */
+  contributions?: DetectorContribution[];
+}
+
+export interface DetectorContribution {
+  name: string;
+  headline: string;
+  probability: number;
+  confidence: number;
+  impact: number; // share of total score movement, 0–1
+  direction: 'raises' | 'lowers' | 'neutral';
+  supplemental: boolean;
+  evidence: string | null;
 }
 
 export interface AccountAnalysisResponse {

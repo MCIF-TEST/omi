@@ -1,9 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Plus, Sparkles } from 'lucide-react';
-import { apiClient, ApiError, type CommenterScanResult, type ComprehensiveScanResult } from '@/lib/api';
+import {
+  apiClient,
+  ApiError,
+  type CommenterScanResult,
+  type ComprehensiveScanResult,
+  type InvestigationDetailResponse,
+} from '@/lib/api';
+import { runLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
 import { Button } from '@/components/ui/button';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { ScanInput } from './scan-input';
@@ -28,26 +35,43 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
   const [state, setState] = useState<State>({
     data: null, selectedId: null, pending: false, error: null, loadingMore: false,
   });
+  // Monotonic token: a newer scan supersedes any in-flight poll so a slow first
+  // scan can't clobber the result of a second one the user kicked off.
+  const activeRun = useRef(0);
 
   const runScan = async (url: string) => {
+    const runId = ++activeRun.current;
     setScanUrl(url);
     setState((s) => ({ ...s, pending: true, error: null, data: null, selectedId: null }));
     try {
-      const body = await apiClient<ComprehensiveScanResult>('/v1/scan/link', {
-        method: 'POST',
-        body: JSON.stringify({ url, max_commenters: batchSize }),
-      });
-      // Defensive: a 200 with no usable payload (e.g. an upstream timeout that
-      // returned an empty body) must not silently fall back to the empty state.
-      if (!body || typeof body !== 'object' || !('overall_tier' in body)) {
+      // Async job: the scan runs on the backend's background pool; we poll the
+      // job, then load the finished investigation. Nothing here holds an HTTP
+      // connection open for the scan's duration, so it can't trip a proxy
+      // timeout — the "reaches the last step then shows no result" failure.
+      const job = await runLinkScanJob(
+        { url, max_commenters: batchSize },
+        () => activeRun.current === runId,
+      );
+      if (activeRun.current !== runId) return; // superseded
+      if (job.status !== 'done' || !job.investigation_slug) {
         throw new Error(
-          'The scan finished but returned no result — it likely timed out. ' +
-            'Try again, or lower the batch size.',
+          job.error ||
+            'The scan finished but produced no result. Your credit was refunded — ' +
+              'try again, or lower the batch size.',
         );
       }
-      setState({ data: body, selectedId: null, pending: false, error: null, loadingMore: false });
+      const detail = await apiClient<InvestigationDetailResponse>(
+        `/v1/investigations/${job.investigation_slug}`,
+      );
+      if (activeRun.current !== runId) return;
+      const data = detail.payload;
+      if (!data || typeof data !== 'object' || !('overall_tier' in data)) {
+        throw new Error('The scan finished but returned no result. Please try again.');
+      }
+      setState({ data, selectedId: null, pending: false, error: null, loadingMore: false });
       router.refresh();   // refresh credits chip + recent investigations
     } catch (e) {
+      if (e instanceof ScanCancelledError || activeRun.current !== runId) return;
       const msg =
         e instanceof ApiError
           ? e.status === 401 ? 'Please log in to scan.'
@@ -61,47 +85,41 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
   };
 
   const loadMore = async () => {
-    if (!state.data || !state.data.next_page_token) return;
+    const d = state.data;
+    if (!d || !d.next_page_token || !d.investigation_slug) return;
     setState((s) => ({ ...s, loadingMore: true, error: null }));
     try {
-      const body = await apiClient<ComprehensiveScanResult>('/v1/scan/link', {
-        method: 'POST',
-        body: JSON.stringify({
-          url: scanUrl,
-          max_commenters: batchSize,
-          start_page_token: state.data.next_page_token,
-          investigation_slug: state.data.investigation_slug,
-        }),
+      // Continuation batch via the same async job, keyed by the existing slug —
+      // the worker merges (and deduplicates) the new commenters into the saved
+      // investigation, so the reloaded payload is already the full list.
+      const job = await runLinkScanJob({
+        url: scanUrl,
+        max_commenters: batchSize,
+        start_page_token: d.next_page_token,
+        investigation_slug: d.investigation_slug,
       });
-      // Append new commenters to existing
-      setState((prev) => {
-        if (!prev.data) return { ...prev, data: body, loadingMore: false };
-        const existing = prev.data.video?.commenters || [];
-        const incoming = body.video?.commenters || [];
-        const seen = new Set(existing.map((c) => c.external_id));
-        const merged = [...existing];
-        for (const c of incoming) {
-          if (!seen.has(c.external_id)) {
-            merged.push(c);
-            seen.add(c.external_id);
-          }
-        }
-        return {
-          ...prev,
-          loadingMore: false,
-          data: {
-            ...body,
-            quota_used: (prev.data.quota_used || 0) + body.quota_used,
-            video: body.video ? { ...body.video, commenters: merged, commenter_count: merged.length } : null,
-          },
-        };
-      });
+      if (job.status !== 'done' || !job.investigation_slug) {
+        throw new Error(job.error || 'Failed to load more.');
+      }
+      const detail = await apiClient<InvestigationDetailResponse>(
+        `/v1/investigations/${job.investigation_slug}`,
+      );
+      setState((prev) => ({
+        ...prev,
+        loadingMore: false,
+        // Preserve the running quota total the workspace has shown so far; the
+        // reloaded payload only carries the latest batch's quota.
+        data: prev.data
+          ? { ...detail.payload, quota_used: (prev.data.quota_used || 0) + detail.payload.quota_used }
+          : detail.payload,
+      }));
       router.refresh();
     } catch (e) {
+      if (e instanceof ScanCancelledError) return;
       setState((s) => ({
         ...s,
         loadingMore: false,
-        error: e instanceof ApiError ? e.message : 'Failed to load more.',
+        error: e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Failed to load more.',
       }));
     }
   };
@@ -236,11 +254,12 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
             </div>
             <div>
               <CardLabel>Empty workspace</CardLabel>
-              <CardTitle>Paste a YouTube link above to begin</CardTitle>
+              <CardTitle>Paste a YouTube or X (Twitter) link above to begin</CardTitle>
               <p className="text-sm text-fg-dim leading-relaxed max-w-xl">
-                Every comprehensive scan analyzes the video, every commenter,
-                their recent histories, and cross-account coordination signals.
-                Results are saved as an investigation you can return to later.
+                Every comprehensive scan analyzes the post, every commenter or
+                replier, their recent histories, and cross-account coordination
+                signals — the same engine across platforms. Results are saved as
+                an investigation you can return to later.
               </p>
             </div>
           </div>

@@ -24,9 +24,11 @@ from fastapi.testclient import TestClient
 from app.core.config import get_settings
 from app.main import app
 from app.routes.scan import (
+    _all_commenters_failed,
     _investigation_label,
     _merge_payloads,
-    _persist_investigation_async,
+    _persist_investigation,
+    _resolve_investigation_slug,
     _serialize_result,
     set_client_factory_for_tests,
 )
@@ -93,7 +95,7 @@ def test_new_investigation_created_by_background_worker():
     payload = _make_payload(slug=slug)
     classification = {"kind": "video", "video_id": VID}
 
-    _persist_investigation_async(
+    _persist_investigation(
         slug=slug,
         user_id=1,
         classification=classification,
@@ -120,9 +122,9 @@ def test_continuation_batch_merges_into_existing_investigation():
     payload2 = _make_payload(slug=slug, quota_used=4, overall_probability=0.75)
 
     # First batch — creates the row.
-    _persist_investigation_async(slug=slug, user_id=1, classification=classification, url=url, payload=payload1)
+    _persist_investigation(slug=slug, user_id=1, classification=classification, url=url, payload=payload1)
     # Second batch — should update, not create a second row.
-    _persist_investigation_async(slug=slug, user_id=1, classification=classification, url=url, payload=payload2)
+    _persist_investigation(slug=slug, user_id=1, classification=classification, url=url, payload=payload2)
 
     with get_session() as session:
         repo = AccountRepository(session)
@@ -160,7 +162,7 @@ def test_persist_retries_on_transient_db_error():
 
     with patch("app.routes.scan.get_session", _failing_once_session):
         # Should not raise — retry absorbs the first failure.
-        _persist_investigation_async(
+        _persist_investigation(
             slug=slug, user_id=1, classification=classification, url=url, payload=payload
         )
 
@@ -224,6 +226,128 @@ def test_scan_link_continuation_updates_investigation(auth_client):
     detail = auth_client.get(f"/v1/investigations/{slug}").json()
     assert detail["slug"] == slug
     assert detail["batch_count"] == 2, f"expected 2 batches, got {detail['batch_count']}"
+
+
+# ---------------------------------------------------------------------------
+# 3b. Tier-1 hardening regressions: synchronous persistence, guaranteed refund,
+#     and collision-safe slug resolution.
+# ---------------------------------------------------------------------------
+
+def test_scan_link_slug_resolves_immediately(auth_client):
+    """The slug returned by /scan/link must resolve WITHOUT draining the
+    background pool — persistence is synchronous now, so there is no
+    read-after-write race and never an empty-payload row."""
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": 6},
+    )
+    assert r.status_code == 200, r.text
+    slug = r.json()["investigation_slug"]
+    assert slug.startswith("inv_")
+
+    # No background.shutdown() on purpose: the row must already exist.
+    detail = auth_client.get(f"/v1/investigations/{slug}")
+    assert detail.status_code == 200, "returned slug must resolve immediately"
+    body = detail.json()
+    assert body["slug"] == slug
+    assert body["payload"], "persisted investigation must carry a non-empty payload"
+
+
+def test_scan_link_refunds_credit_on_youtube_failure(auth_client):
+    """A failed /scan/link must not cost a credit. The bug: the link path charged
+    the real cost but only refunded YouTubeClientError on the /comprehensive
+    entry, where the inner cost was 0 — so link failures charged for nothing."""
+    from tests.test_youtube_quota_handling import QuotaExhaustedClient
+
+    set_client_factory_for_tests(lambda: QuotaExhaustedClient())
+    before = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": 5},
+    )
+    assert r.status_code == 503, r.text
+    assert "Retry-After" in r.headers
+
+    after = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+    assert after == before, (
+        f"a failed /scan/link must refund the credit (before={before}, after={after})"
+    )
+
+
+def test_resolve_slug_only_reuses_callers_own_slug():
+    """A client may only continue an investigation it owns. Supplying another
+    user's slug must mint a fresh one instead of colliding on the global-unique
+    slug constraint (which previously caused a silent non-save)."""
+    slug = "inv_owner001"
+    ok = _persist_investigation(
+        slug=slug, user_id=1,
+        classification={"kind": "video", "video_id": VID},
+        url=f"https://youtube.com/watch?v={VID}",
+        payload=_make_payload(slug=slug),
+    )
+    assert ok is True
+
+    # The owner continuing the same slug → reused.
+    assert _resolve_investigation_slug(requested_slug=slug, user_id=1) == slug
+    # A different user supplying that slug → a fresh slug is minted.
+    other = _resolve_investigation_slug(requested_slug=slug, user_id=2)
+    assert other != slug and other.startswith("inv_")
+    # No requested slug → always fresh.
+    fresh = _resolve_investigation_slug(requested_slug=None, user_id=1)
+    assert fresh.startswith("inv_") and fresh != slug
+
+
+def test_scan_link_clamps_max_commenters_to_operator_cap(auth_client):
+    """A raw-dict max_commenters can't bypass the operator's cost cap, over-charge
+    the user, or trip the schema's le=500 validator with a 500/422. It is clamped
+    to settings.scan_max_commenters, and the credit cost reflects the clamp."""
+    import math
+    s = get_settings()
+    cap = s.scan_max_commenters
+    expected_cost = max(
+        1, math.ceil(cap / s.scan_batch_unit) * s.credits_per_batch_youtube
+    )
+
+    before = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": 10_000},
+    )
+    assert r.status_code == 200, r.text  # not 422 (schema) and not 500 (crash)
+    after = auth_client.get("/v1/auth/me").json()["credits_remaining"]
+    assert before - after == expected_cost, (
+        f"charged {before - after} credits; expected clamped cost {expected_cost} "
+        f"(an unclamped 10k request would have cost "
+        f"{math.ceil(10_000 / s.scan_batch_unit)} and 402'd)"
+    )
+
+
+def test_scan_link_handles_garbage_max_commenters(auth_client):
+    """Non-numeric max_commenters must default gracefully, not 500."""
+    r = auth_client.post(
+        "/v1/scan/link",
+        json={"url": f"https://www.youtube.com/watch?v={VID}", "max_commenters": "lots"},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_all_commenters_failed_helper():
+    """Systemic-failure detector: True only when a video produced commenters and
+    every one errored; False for partial failures, empty, and non-video scans."""
+    from types import SimpleNamespace as NS
+
+    partial = NS(video=NS(commenters=[NS(error=None), NS(error="boom")]))
+    assert _all_commenters_failed(partial) is False
+
+    systemic = NS(video=NS(commenters=[NS(error="boom"), NS(error="boom2")]))
+    assert _all_commenters_failed(systemic) is True
+
+    empty = NS(video=NS(commenters=[]))
+    assert _all_commenters_failed(empty) is False
+
+    no_video = NS(video=None)
+    assert _all_commenters_failed(no_video) is False
 
 
 # ---------------------------------------------------------------------------

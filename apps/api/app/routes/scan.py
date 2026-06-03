@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.core.auth import CurrentUser, compute_scan_credits, consume_credits, refund_credits, require_user
 from app.core.config import Settings, get_settings
 from app.integrations import youtube as yt
+from app.integrations.source import Source, TwitterSource, YouTubeSource, classify_link
 from app.integrations.youtube import (
     FetchStats,
     YouTubeClient,
@@ -37,6 +38,21 @@ from app.integrations.youtube_errors import (
     YouTubeClientError,
     YouTubeNotFoundError,
     YouTubeQuotaExceededError,
+)
+from app.integrations.twitter import (
+    FetchStats as TwitterFetchStats,
+    TwitterClient,
+    build_default_client as build_default_twitter_client,
+    fetch_user_profile as fetch_twitter_profile,
+    fetch_user_recent_tweets,
+    normalize_handle,
+)
+from app.integrations.twitter_errors import (
+    TwitterAccessError,
+    TwitterAuthError,
+    TwitterClientError,
+    TwitterNotFoundError,
+    TwitterRateLimitError,
 )
 from app.orchestrator import (
     scan_account_with_memory,
@@ -501,6 +517,7 @@ def scan_youtube_video_full(
                 weak_signals=list(r.scan_result.weak_signals or []),
                 score_adjustments=list(r.scan_result.score_adjustments or []),
                 signals=list(r.scan_result.signals or []),
+                contributions=list(r.scan_result.contributions or []),
                 recent_activity=activity_samples,
                 activity_total=activity_total,
             ))
@@ -710,11 +727,209 @@ def scan_youtube_account(
     )
 
 
+def _handle_twitter_error(
+    e: TwitterClientError,
+    *,
+    user_id: int,
+    credits_to_refund: int,
+    target_input: str,
+) -> "HTTPException":
+    """Translate a typed Twitter error into an HTTPException, refunding the
+    user's credit unless the failure was their fault (access/suspension)."""
+    import logging
+    log = logging.getLogger("omi.scan.twitter")
+
+    if isinstance(e, TwitterRateLimitError):
+        refund_credits(user_id, credits_to_refund, reason="tw_ratelimit")
+        log.warning("Twitter rate limit hit: %s", e.admin_detail)
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.user_message,
+            headers={"Retry-After": "60"},
+        )
+    if isinstance(e, TwitterAuthError):
+        refund_credits(user_id, credits_to_refund, reason="tw_auth")
+        log.error("Twitter auth error: %s", e.admin_detail)
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=e.user_message,
+        )
+    if isinstance(e, TwitterNotFoundError):
+        refund_credits(user_id, credits_to_refund, reason="tw_404")
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.user_message,
+        )
+    if isinstance(e, TwitterAccessError):
+        # Lookup ran — the user's handle was valid but the account is
+        # protected or suspended. Do not refund: the work happened.
+        log.info("Twitter access denied for %s: %s", target_input[:80], e.admin_detail)
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.user_message,
+        )
+    # Generic TwitterClientError — assume transient.
+    refund_credits(user_id, credits_to_refund, reason="tw_other")
+    log.exception("Unexpected Twitter error: %s", e.admin_detail)
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=e.user_message,
+    )
+
+
+def _resolve_twitter_client(settings: Settings) -> TwitterClient:
+    """Build the live Twitter client, or raise a clean, user-friendly 503.
+
+    Called while constructing the Source — which the scan routes do BEFORE
+    charging credits — so any failure here means the user is never billed. The
+    user-facing message states that explicitly; the admin-actionable cause
+    (missing key / missing httpx) goes to the logs, never to the user.
+    """
+    import logging
+    log = logging.getLogger("omi.scan.twitter")
+
+    key = (settings.twitter_api_key or "").strip()
+    if not key:
+        log.error("Twitter scan requested but OMI_TWITTER_API_KEY is not set.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Twitter/X scanning isn't configured on this server yet. "
+                "You have not been charged."
+            ),
+        )
+    try:
+        return build_default_twitter_client(key, base_url=settings.twitter_api_base_url)
+    except RuntimeError as e:
+        # Server-side construction failure (e.g. httpx not installed). A config
+        # problem on our side, surfaced before any credit is charged.
+        log.error("Twitter client unavailable: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Twitter/X scanning is temporarily unavailable on this server. "
+                "You have not been charged — this is a configuration issue on "
+                "our side, not a problem with your link. Please try again later."
+            ),
+        )
+
+
+# Module-level override for tests — mirrors the YouTube pattern.
+_twitter_client_factory_override = None
+
+
+def set_twitter_client_factory_for_tests(factory) -> None:
+    global _twitter_client_factory_override
+    _twitter_client_factory_override = factory
+
+
+@router.post("/twitter/account", response_model=AccountScanOut)
+def scan_twitter_account(
+    payload: dict,
+    settings: Settings = Depends(get_settings),
+    current: CurrentUser = Depends(require_user),
+) -> AccountScanOut:
+    """Deep-scan a single Twitter/X account by URL or @handle.
+
+    Costs 1 credit per call. The same platform-agnostic detection engine
+    that scores YouTube commenters is applied here; Twitter's richer
+    profile data (follower/following counts, account age, verification,
+    per-tweet engagement) fully powers the community-anchor, profile,
+    engagement, and temporal detectors.
+    """
+    account_input = (payload or {}).get("account_url_or_handle") or ""
+    force_refresh = bool((payload or {}).get("force_refresh", False))
+    if not account_input.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="account_url_or_handle is required.",
+        )
+
+    handle = normalize_handle(account_input)
+    if not handle:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Could not parse a Twitter/X handle from the input. "
+                "Provide a handle (e.g. '@elonmusk'), URL, or bare username."
+            ),
+        )
+
+    # Resolve the client BEFORE charging: a missing key / missing httpx then
+    # 503s for free (never billing the user, keeping the "not charged" message
+    # true) instead of charging at line 1 and stranding the credit on a config
+    # error that escapes the refund path below.
+    factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
+    client = factory()
+
+    consume_credits(current.id, settings.credits_per_twitter_account,
+        platform="x", scan_type="twitter_account",
+        target_input=account_input[:500], settings=settings)
+    stats = TwitterFetchStats()
+
+    try:
+        profile = fetch_twitter_profile(client, handle, stats=stats)
+        if profile is None:
+            refund_credits(current.id, settings.credits_per_twitter_account, reason="tw_no_profile")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No Twitter/X profile found for '{handle}'.",
+            )
+        posts = fetch_user_recent_tweets(
+            client, handle,
+            max_tweets=settings.scan_twitter_max_history,
+            stats=stats,
+        )
+    except TwitterClientError as e:
+        raise _handle_twitter_error(
+            e, user_id=current.id,
+            credits_to_refund=settings.credits_per_twitter_account,
+            target_input=account_input,
+        )
+
+    with get_session() as session:
+        orch = scan_account_with_memory(
+            session,
+            platform="x",
+            external_id=handle,
+            profile=profile,
+            posts=posts,
+            force_refresh=force_refresh,
+        )
+
+    activity_samples, activity_total = _activity_payload(
+        posts, orch.result.tier, limit=30, include_low=True
+    )
+    return AccountScanOut(
+        external_id=handle,
+        handle=profile.handle,
+        display_name=profile.display_name,
+        avatar_url=profile.avatar_url,
+        bio=profile.bio,
+        follower_count=profile.follower_count,
+        account_created_at=profile.created_at,
+        overall_probability=orch.result.overall_probability,
+        confidence=orch.result.confidence,
+        tier=orch.result.tier,
+        summary=orch.result.summary,
+        signals=list(orch.result.signals),
+        from_cache=orch.from_cache,
+        matched_prior_neighbors=orch.matched_neighbors,
+        history_size=len(posts),
+        suspected_intent=orch.result.suspected_intent,
+        intent_label=orch.result.intent_label,
+        reasons=list(orch.result.reasons or []),
+        recent_activity=activity_samples,
+        activity_total=activity_total,
+    )
+
+
 @router.get("/classify")
 def classify_link_endpoint(url: str = "") -> dict:
     """Live URL classification for the UI: tells the operator what OMI will
-    do with a pasted URL before they commit to scanning. No quota cost."""
-    return classify_url(url)
+    do with a pasted URL before they commit to scanning. No quota cost.
+    Platform-aware (YouTube + X/Twitter)."""
+    return classify_link(url)
 
 
 def _hash_ip(ip: str | None) -> str:
@@ -805,7 +1020,16 @@ def scan_demo(
 
     success_flag = 1
     try:
-        result = scan_comprehensive_endpoint(creq, settings, current=anon, _charge_credit=False)
+        result = _run_comprehensive(creq, settings, anon, _charge_credit=False)
+    except YouTubeClientError as e:
+        # The inner endpoint now propagates YouTube failures raw to whoever owns
+        # the charge. The demo charges nothing, so credits_to_refund=0 — this just
+        # maps the failure to a clean HTTP response instead of leaking a 500.
+        success_flag = 0
+        raise _handle_youtube_error(
+            e, user_id=anon.id, credits_to_refund=0,
+            target_input=classification.get("video_id") or url,
+        )
     except HTTPException:
         success_flag = 0
         raise
@@ -844,42 +1068,86 @@ def scan_link(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="url is required.",
         )
-    classification = classify_url(url)
-    if classification["kind"] == "unknown":
+    classification = classify_link(url)
+    platform = classification.get("platform", "unknown")
+    if platform == "unknown" or classification.get("kind") == "unknown":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Unrecognized link. Paste a YouTube video or channel URL. "
-                "(More platforms coming as Omi grows.)"
+                "Unrecognized link. Paste a YouTube video/channel URL or an "
+                "X (Twitter) profile or tweet URL."
             ),
         )
 
-    # Deduct credits before running the scan. 402 if user is out.
-    max_commenters = int(payload.get("max_commenters", 25))
-    platform = classification.get("platform", "youtube")
+    # max_commenters arrives via a raw dict (not the Pydantic ScanRequest), so
+    # clamp it to the operator cap and parse defensively (bad input never 500s).
+    try:
+        requested_commenters = int(payload.get("max_commenters", 25) or 25)
+    except (TypeError, ValueError):
+        requested_commenters = 25
+    max_commenters = max(1, min(requested_commenters, settings.scan_max_commenters))
+    force_refresh = bool(payload.get("force_refresh", False))
+    start_token = payload.get("start_page_token") or None
+
+    # Build the platform-appropriate inputs + Source BEFORE charging, so a
+    # mis-config (missing API key → 503) never bills the user. scan_comprehensive
+    # is platform-agnostic (T0): the SAME engine runs for every platform.
+    if platform == "x":
+        creq = ComprehensiveScanRequest(
+            video_url_or_id=classification.get("tweet_id"),      # a tweet → scan its repliers
+            account_url_or_handle=classification.get("handle"),  # a profile/author → deep-scan it
+            comments_text=None, max_commenters=max_commenters,
+            force_refresh=force_refresh, start_page_token=start_token,
+        )
+        tw_factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
+        source: Source = TwitterSource(tw_factory())
+    else:  # youtube
+        creq = ComprehensiveScanRequest(
+            video_url_or_id=classification.get("video_id"),
+            account_url_or_handle=classification.get("account_input"),
+            comments_text=None, max_commenters=max_commenters,
+            force_refresh=force_refresh, start_page_token=start_token,
+        )
+        yt_factory = _client_factory_override or (lambda: _resolve_client(settings))
+        source = YouTubeSource(yt_factory())
+
+    # Deduct credits (refunded on ANY failure below).
     cost = compute_scan_credits(platform, max_commenters, settings)
     consume_credits(
         current.id, cost,
-        platform=platform,
-        scan_type="link",
-        target_input=url[:500],
-        settings=settings,
-    )
-
-    creq = ComprehensiveScanRequest(
-        video_url_or_id=classification.get("video_id"),
-        account_url_or_handle=classification.get("account_input"),
-        comments_text=None,
-        max_commenters=max_commenters,
-        force_refresh=bool(payload.get("force_refresh", False)),
-        start_page_token=payload.get("start_page_token") or None,
+        platform=platform, scan_type="link",
+        target_input=url[:500], settings=settings,
     )
 
     import logging
     import time as _time
     log = logging.getLogger("omi.scan")
     t_scan = _time.time()
-    result = scan_comprehensive_endpoint(creq, settings, current=current, _charge_credit=False)
+    # A failed scan must never cost a credit. Typed platform errors keep their
+    # specific status (+ the no-refund policies inside the handlers); anything
+    # else returns a clean 502 with a full refund.
+    try:
+        result = _run_comprehensive(
+            creq, settings, current, _charge_credit=False, source=source,
+        )
+    except YouTubeClientError as e:
+        raise _handle_youtube_error(
+            e, user_id=current.id, credits_to_refund=cost, target_input=url[:500],
+        )
+    except TwitterClientError as e:
+        raise _handle_twitter_error(
+            e, user_id=current.id, credits_to_refund=cost, target_input=url[:500],
+        )
+    except HTTPException:
+        refund_credits(current.id, cost, reason="scan_failed")
+        raise
+    except Exception:
+        log.exception("comprehensive scan failed for %s", url[:120])
+        refund_credits(current.id, cost, reason="scan_error")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The scan failed unexpectedly and your credit was refunded. Please try again.",
+        )
     log.info(
         "comprehensive scan finished in %.1fs (commenters=%s, tier=%s)",
         _time.time() - t_scan,
@@ -887,44 +1155,54 @@ def scan_link(
         result.overall_tier.value if hasattr(result.overall_tier, "value") else result.overall_tier,
     )
 
-    # ---- Phase 5: persist as a saved investigation ----
-    # Pre-generate the slug so we can stamp it on the response WITHOUT waiting
-    # for the database write. Persistence is offloaded to a background worker
-    # — if the DB is slow or the 200KB+ payload serialization stalls, the
-    # user still gets their scan result immediately.
-    #
-    # This runs for BOTH authenticated users and the local-mode user (id=0):
-    # a solo/local install still wants every scan saved to its history. The
-    # background worker resolves id=0 to the stable local-user row so the FK
-    # holds. (The anonymous demo endpoint never reaches here — it calls
-    # scan_comprehensive_endpoint directly — so demo scans are not persisted.)
-    import secrets
-    existing_slug = payload.get("investigation_slug")
-    slug = existing_slug or ("inv_" + secrets.token_hex(4))
-    result.investigation_slug = slug
+    # A scan where EVERY commenter errored is a systemic failure, not a result —
+    # don't persist a uniformly-empty investigation or charge for it. (A partial
+    # failure, where only some commenters errored, is a legitimate saveable result.)
+    if _all_commenters_failed(result):
+        refund_credits(current.id, cost, reason="scan_all_failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "The scan reached the platform but could not analyze any commenters. "
+                "Your credit was refunded — please try again."
+            ),
+        )
 
-    # Serialise on the request thread before handing off: (1) Pydantic
-    # models are not guaranteed immutable once FastAPI starts serialising
-    # the response concurrently; (2) keeps the expensive model_dump() off
-    # the bounded background pool where it would hold a worker slot.
+    # ---- Phase 5: persist as a saved investigation (SYNCHRONOUS) ----
+    # We persist BEFORE returning so the slug we hand back ALWAYS resolves: no
+    # read-after-write 404, and never an empty-payload row. The cost is a single
+    # indexed insert — the expensive work (scan + serialise) already happened, so
+    # this adds negligible latency to a multi-second scan.
+    #
+    # Runs for BOTH authenticated users and the local-mode user (id=0): a solo
+    # install still saves every scan. The persister resolves id=0 to the stable
+    # local-user row so the FK holds. (The anonymous demo endpoint never reaches
+    # here — it calls scan_comprehensive_endpoint directly — so demos aren't saved.)
+    slug = _resolve_investigation_slug(
+        requested_slug=payload.get("investigation_slug"), user_id=current.id,
+    )
+    result.investigation_slug = slug
     try:
         result_payload = _serialize_result(result)
     except Exception:
-        import logging as _log
-        _log.getLogger("omi.scan").exception(
-            "could not serialise investigation payload for %s", slug
-        )
-        result_payload = {}
+        log.exception("could not serialise investigation payload for %s", slug)
+        # The scan succeeded and is already in the response. We refuse to persist
+        # an empty payload, and we don't hand back a slug that points at nothing.
+        result.investigation_slug = None
+        return result
 
-    from app.core import background as _bg
-    _bg.submit(
-        _persist_investigation_async,
+    saved = _persist_investigation(
         slug=slug,
         user_id=current.id,
         classification=classification,
         url=url,
         payload=result_payload,
     )
+    if not saved:
+        # Persistence genuinely failed after retries — the user keeps their
+        # result, but we don't advertise a saved investigation that isn't there.
+        log.error("investigation %s could not be persisted; returning unsaved result", slug)
+        result.investigation_slug = None
     return result
 
 
@@ -941,6 +1219,17 @@ def _investigation_label(classification: dict, url: str) -> str:
 def _serialize_result(result) -> dict:
     """ComprehensiveScanResult → JSON-serializable dict via Pydantic v2."""
     return result.model_dump(mode="json")
+
+
+def _all_commenters_failed(result) -> bool:
+    """True only when a video scan produced commenters and EVERY one carries an
+    error (systemic failure). False for partial failures, empty/None videos, and
+    non-video scans — so a legitimately partial result is still saved/charged."""
+    video = getattr(result, "video", None)
+    commenters = getattr(video, "commenters", None) if video is not None else None
+    if not commenters:
+        return False
+    return all(getattr(c, "error", None) for c in commenters)
 
 
 def _merge_payloads(existing: dict, new: dict) -> dict:
@@ -972,22 +1261,34 @@ def scan_comprehensive_endpoint(
     req: ComprehensiveScanRequest,
     settings: Settings = Depends(get_settings),
     current: CurrentUser = Depends(require_user),
-    _charge_credit: bool = True,
 ) -> ComprehensiveScanResult:
-    """The unified intelligence endpoint — provide any combination of:
+    """The unified intelligence endpoint (HTTP surface). Charges credits and
+    runs on YouTube; the shared implementation scores any platform when a
+    ``Source`` is injected internally (see ``scan_link``)."""
+    return _run_comprehensive(req, settings, current, _charge_credit=True, source=None)
+
+
+def _run_comprehensive(
+    req: ComprehensiveScanRequest,
+    settings: Settings,
+    current: CurrentUser,
+    *,
+    _charge_credit: bool = True,
+    source: "Source | None" = None,
+) -> ComprehensiveScanResult:
+    """Shared comprehensive-scan implementation. Platform-agnostic via the
+    injected ``source`` (defaults to a YouTube source). Internal callers
+    (scan_link, demo, bulk) pass ``_charge_credit=False`` + the platform Source.
+
+    Provide any combination of:
 
     * **account_url_or_handle** — focus account to deep-scan
-    * **video_url_or_id** — video to scan every commenter on
+    * **video_url_or_id** — content (video/tweet) to scan every commenter on
     * **comments_text** — pasted comments / posts / threads (one per line)
 
-    Each provided input is scanned, then the orchestrator computes
-    cross-links describing how the inputs relate (focus account in
-    cluster, fellow-traveler overlap, style match, etc.). Multiple
-    independent cross-links converging on the same entity strengthen the
-    verdict — this is the interconnection that single-source detection
-    can't see.
-
-    Costs credits per batch of commenters scanned (see compute_scan_credits).
+    Each provided input is scanned, then the orchestrator computes cross-links
+    describing how the inputs relate. Costs credits per batch of commenters
+    scanned (see compute_scan_credits).
     """
     if not any([
         req.account_url_or_handle and req.account_url_or_handle.strip(),
@@ -1010,15 +1311,19 @@ def scan_comprehensive_endpoint(
             settings=settings,
         )
 
-    # Pasted-comments-only flow doesn't need YouTube; everything else does.
-    needs_youtube = bool(
-        (req.account_url_or_handle and req.account_url_or_handle.strip())
-        or (req.video_url_or_id and req.video_url_or_id.strip())
-    )
-    client = None
-    if needs_youtube:
-        factory = _client_factory_override or (lambda: _resolve_client(settings))
-        client = factory()
+    # Default to a YouTube source when none is injected (direct /comprehensive,
+    # demo, bulk). scan_link injects a platform-appropriate Source (YouTube or
+    # Twitter) so the SAME engine runs for every platform.
+    if source is None:
+        needs_client = bool(
+            (req.account_url_or_handle and req.account_url_or_handle.strip())
+            or (req.video_url_or_id and req.video_url_or_id.strip())
+        )
+        client = None
+        if needs_client:
+            factory = _client_factory_override or (lambda: _resolve_client(settings))
+            client = factory()
+        source = YouTubeSource(client)
 
     try:
         with get_session() as session:
@@ -1027,19 +1332,31 @@ def scan_comprehensive_endpoint(
                 account_url_or_handle=req.account_url_or_handle,
                 video_url_or_id=req.video_url_or_id,
                 comments_text=req.comments_text,
-                max_commenters=req.max_commenters,
+                max_commenters=max_comm,
                 force_refresh=req.force_refresh,
-                client=client,
-                youtube=yt,
+                source=source,
                 start_page_token=req.start_page_token,
             )
     except YouTubeClientError as e:
-        raise _handle_youtube_error(
-            e,
-            user_id=current.id,
-            credits_to_refund=cost,
-            target_input=(req.video_url_or_id or req.account_url_or_handle or ""),
-        )
+        # Refund + map here ONLY when this endpoint owns the charge. When called
+        # internally with _charge_credit=False (scan_link, scan_demo, bulk), the
+        # caller charged the real cost and owns the refund + HTTP mapping, so
+        # propagate raw — otherwise the refund is computed against cost==0 and the
+        # caller's real charge is never returned.
+        if _charge_credit:
+            raise _handle_youtube_error(
+                e,
+                user_id=current.id,
+                credits_to_refund=cost,
+                target_input=(req.video_url_or_id or req.account_url_or_handle or ""),
+            )
+        raise
+    except Exception:
+        # A failed scan never costs a credit. If we charged, refund before the
+        # error surfaces; internal callers (cost==0 here) own their own refund.
+        if _charge_credit:
+            refund_credits(current.id, cost, reason="scan_error")
+        raise
 
     # Convert to the response schemas
     focus_account_out = None
@@ -1074,6 +1391,7 @@ def scan_comprehensive_endpoint(
                 weak_signals=list(r.scan_result.weak_signals or []),
                 score_adjustments=list(r.scan_result.score_adjustments or []),
                 signals=list(r.scan_result.signals or []),
+                contributions=list(r.scan_result.contributions or []),
                 recent_activity=activity_samples,
                 activity_total=activity_total,
             ))
@@ -1148,23 +1466,60 @@ def _full_summary_text(
     return " ".join(parts)
 
 
-def _persist_investigation_async(
+def _resolve_investigation_slug(*, requested_slug: str | None, user_id: int) -> str:
+    """Pick the slug for this scan, synchronously and collision-safely.
+
+    A client-supplied slug is honoured ONLY when it names an investigation the
+    caller already owns (a continuation batch). Otherwise a fresh server-side
+    slug is minted. ``Investigation.slug`` is globally unique, so honouring a
+    slug owned by a *different* user would collide on the unique constraint and
+    silently fail to persist — this closes that hole while preserving the
+    continuation workflow. Read-only: never creates the local-user row.
+    """
+    import logging
+    import secrets
+
+    if requested_slug:
+        try:
+            with get_session() as session:
+                from app.storage.repository import AccountRepository
+                repo = AccountRepository(session)
+                eff = repo.local_user_id() if user_id == 0 else user_id
+                if eff is not None and repo.get_investigation(
+                    slug=requested_slug, user_id=eff
+                ) is not None:
+                    return requested_slug
+        except Exception:
+            logging.getLogger("omi.scan").exception(
+                "slug ownership check failed for %s; minting a fresh slug",
+                requested_slug,
+            )
+    return "inv_" + secrets.token_hex(4)
+
+
+def _persist_investigation(
     *,
     slug: str,
     user_id: int,
     classification: dict,
     url: str,
     payload: dict,
-) -> None:
-    """Background worker — saves an investigation row WITHOUT blocking the
-    request response. Retries up to 3 times with exponential back-off to
-    handle transient SQLite contention from other concurrent background tasks.
+) -> bool:
+    """Persist (create or merge) an investigation row. Returns True on success.
 
-    The payload dict is pre-serialised on the request thread (no Pydantic
-    objects here) so this function is safe to run in any thread.
+    Called SYNCHRONOUSLY on the request thread so the slug handed back to the
+    client always resolves — no read-after-write 404, no empty-payload row.
+    Race-safe: a concurrent batch that creates the same owned slug first is
+    absorbed (IntegrityError → retry, which finds the row and merges into it).
+    Transient DB contention is retried with a short back-off. Never raises — the
+    caller decides what to do when persistence ultimately fails.
+
+    The payload dict is pre-serialised by the caller (no Pydantic objects here).
     """
     import logging
     import time as _time
+    from sqlalchemy.exc import IntegrityError
+
     log = logging.getLogger("omi.scan")
 
     label = _investigation_label(classification, url)
@@ -1218,20 +1573,24 @@ def _persist_investigation_async(
                         "investigation %s updated (batch %d) in %.1fs",
                         slug, inv.batch_count, _time.time() - t0,
                     )
-            return  # success
+            return True  # success — row is committed before we return
+        except IntegrityError:
+            # A concurrent batch created this slug between our lookup and insert.
+            # Retry — the next pass finds the committed row and merges into it.
+            log.warning("investigation %s create race — retrying as update", slug)
+            _time.sleep(0.1 * (attempt + 1))
         except Exception as e:  # noqa: BLE001
             if attempt < 2:
-                wait = 2 ** attempt  # 1 s, 2 s
                 log.warning(
-                    "investigation %s persistence attempt %d failed (%s) — "
-                    "retrying in %ds",
-                    slug, attempt + 1, e, wait,
+                    "investigation %s persistence attempt %d failed (%s) — retrying",
+                    slug, attempt + 1, e,
                 )
-                _time.sleep(wait)
+                _time.sleep(0.1 * (attempt + 1))
             else:
                 log.exception(
                     "investigation %s persistence failed after 3 attempts", slug
                 )
+    return False
 
 
 def _persist_reply_pods(session, entity, platform: str, content_id: str, log) -> None:

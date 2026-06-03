@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.ml.datasets.ledger import LEDGER_FILENAME, sha256_file
+from app.ml.datasets.manifest import MANIFEST_FILENAME, load_manifest
 from app.ml.datasets.normalize import norm_key
 from app.ml.datasets.records import PublicRecord, TextRecord
 from app.ml.datasets.registry import DatasetAdapter, detect_adapter
@@ -36,6 +37,9 @@ class DiscoveredFile:
     adapter: DatasetAdapter | None = None
     supported: bool = False
     reason: str = ""
+    # Governance status from datasets/manifest.toml ("" when the file isn't
+    # listed). archive/quarantine force supported=False.
+    manifest_status: str = ""
 
     @property
     def kind(self) -> str:
@@ -58,19 +62,24 @@ def discover(root: Path) -> list[DiscoveredFile]:
     found: list[DiscoveredFile] = []
     if not root.exists():
         return found
+    manifest = load_manifest(root)
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
-        if path.name == LEDGER_FILENAME or "_generated" in path.parts:
+        if (path.name in (LEDGER_FILENAME, MANIFEST_FILENAME)
+                or "_generated" in path.parts):
             continue
         suffix = path.suffix.lower()
         rel = str(path.relative_to(root))
+        ment = manifest.get(rel)
+        mstatus = ment.status if ment else ""
         if suffix in _KNOWN_UNSUPPORTED:
             found.append(DiscoveredFile(
                 path=path, rel_path=rel, sha256="",
                 supported=False,
                 reason=f"{suffix} not readable without an extra dependency; "
                        "export to CSV to ingest.",
+                manifest_status=mstatus,
             ))
             continue
         if suffix not in _CSV_SUFFIXES:
@@ -82,6 +91,7 @@ def discover(root: Path) -> list[DiscoveredFile]:
         df = DiscoveredFile(
             path=path, rel_path=rel, sha256=sha256_file(path), header=header,
             adapter=adapter, supported=adapter is not None,
+            manifest_status=mstatus,
         )
         if adapter is None:
             df.reason = "No adapter matched this column signature."
@@ -93,6 +103,11 @@ def discover(root: Path) -> list[DiscoveredFile]:
                     f"Adapter '{adapter.name}' needs a fake/real label in the "
                     "filename, but the name carries none."
                 )
+        # Governance override: archive/quarantine files never ingest, whatever
+        # the adapter says — closing the "one rename from poisoning training" hole.
+        if ment is not None and ment.excluded:
+            df.supported = False
+            df.reason = f"excluded by manifest ({ment.status}): {ment.reason}"
         found.append(df)
     return found
 

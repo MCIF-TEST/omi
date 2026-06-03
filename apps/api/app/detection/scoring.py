@@ -24,7 +24,13 @@ from app.detection.correlation import (
     get_correlation_model,
     static_axis_of,
 )
-from app.schemas import ScanResult, SignalResult, Tier
+from app.schemas import (
+    DetectorContribution,
+    ScanResult,
+    ScoreBreakdown,
+    SignalResult,
+    Tier,
+)
 
 # Re-exported for backward compatibility: the independence-axis helper under the
 # default group model. Internally the aggregator uses the *active* correlation
@@ -50,6 +56,13 @@ _axis_of = static_axis_of
 # visible (it is genuinely useful to know that text reads as AI-assisted) but it
 # can never, on its own or in combination, raise an account's risk tier.
 SUPPLEMENTAL_DETECTORS: frozenset[str] = frozenset({"ai_writing"})
+
+# Downward-only detectors (GAP-07): they can subtract suspicion but never add it,
+# and their *silence* on an unremarkable account is meaningful — not a data
+# deficiency. So they are excluded from weak-signal flagging (a quiet community
+# detector doesn't mean "low-confidence scan") while still participating fully in
+# the log-odds aggregation.
+_DOWNWARD_DETECTORS: frozenset[str] = frozenset({"community"})
 
 # Keep the name importable for any external reference.
 __all__ = [
@@ -89,6 +102,8 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
         "voice": settings.weight_voice,
         "engagement": settings.weight_engagement,
         "coordination": settings.weight_coordination,
+        "narrative": settings.weight_narrative,
+        "community": settings.weight_community,
     }
 
     prior = settings.prior_probability
@@ -121,6 +136,11 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     factors, decorr_notes = model.compute_factors(scored_signals, weights, prior_logit)
     adjustments.extend(decorr_notes)
 
+    # Per-detector deltas, captured for the faithful contribution breakdown
+    # (GAP-06). ``deltas[name]`` is the exact signed log-odds this detector added
+    # to the posterior — the same number that builds the score, so the breakdown
+    # reconstructs the headline rather than narrating it after the fact.
+    deltas: dict[str, float] = {}
     for sig in scored_signals:
         if sig.confidence <= 0:
             continue
@@ -134,6 +154,9 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
         delta = (_logit(p) - prior_logit) * effective
         posterior_logit += delta
         effective_weight_sum += effective
+        deltas[sig.name] = delta
+
+    detector_logit_sum = posterior_logit - prior_logit
 
     # ----- Convergence bonus -----
     # When detectors from *distinct independence axes* agree at high
@@ -145,13 +168,16 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
               if s.probability > 0.60 and s.confidence > 0.30
               and weights.get(s.name, 0.0) > 0]
     strong_axes = {axis_of(s.name) for s in strong}
+    convergence_bonus = 0.0
     if len(strong_axes) >= 3:
-        posterior_logit += 0.45 * (len(strong_axes) - 2)
+        convergence_bonus = 0.45 * (len(strong_axes) - 2)
+        posterior_logit += convergence_bonus
         adjustments.append(
             f"Convergence bonus: {len(strong_axes)} independent signal axes "
             f"agree, which is stronger evidence than any one detector alone."
         )
 
+    posterior_logit_final = posterior_logit
     overall = _sigmoid(posterior_logit)
 
     # ----- Single-signal cap -----
@@ -159,10 +185,14 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     # trigger a HIGH verdict on its own. HIGH requires corroboration from at
     # least one *other independent* axis (two correlated detectors do not
     # count). Cap at the ELEVATED ceiling.
-    confident = [s for s in scored_signals if s.confidence > 0.30 and weights.get(s.name, 0.0) > 0]
+    confident = [s for s in scored_signals
+                 if s.confidence > 0.30 and s.probability > 0.40
+                 and weights.get(s.name, 0.0) > 0]
     confident_axes = {axis_of(s.name) for s in confident}
+    single_axis_capped = False
     if len(confident_axes) <= 1 and overall >= 0.75:
         overall = 0.74
+        single_axis_capped = True
         adjustments.append(
             "Capped below HIGH: only one independent signal axis had enough "
             "data, so there is no cross-detector corroboration to justify HIGH."
@@ -181,6 +211,17 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
     reasons = _extract_reasons(signals, tier)
     weak_signals = _detect_weak_signals(signals, weights)
 
+    contributions = _build_contributions(signals, weights, factors, deltas)
+    score_breakdown = ScoreBreakdown(
+        prior_probability=prior,
+        prior_logit=prior_logit,
+        detector_logit_sum=detector_logit_sum,
+        convergence_bonus_logit=convergence_bonus,
+        posterior_logit=posterior_logit_final,
+        single_axis_capped=single_axis_capped,
+        final_probability=overall,
+    )
+
     return ScanResult(
         overall_probability=overall,
         confidence=confidence,
@@ -192,6 +233,8 @@ def aggregate(signals: list[SignalResult], settings: Settings | None = None) -> 
         reasons=reasons,
         weak_signals=weak_signals,
         score_adjustments=adjustments,
+        contributions=contributions,
+        score_breakdown=score_breakdown,
     )
 
 
@@ -214,6 +257,7 @@ _WEAK_REASON: dict[str, str] = {
     "engagement": "Too few posts to detect engagement-spam patterns (need ~20+).",
     "memory":     "Fingerprint database has no close neighbors yet — scan more accounts to train it.",
     "coordination": "No cross-account signal — this account wasn't scanned with peers.",
+    "narrative":  "Too few posts for narrative-injection pattern analysis (need ~3+).",
 }
 
 
@@ -229,7 +273,7 @@ def _detect_weak_signals(
     flags: list[str] = []
     by_name = {s.name: s for s in signals}
     for name, w in weights.items():
-        if w <= 0 or name in SUPPLEMENTAL_DETECTORS:
+        if w <= 0 or name in SUPPLEMENTAL_DETECTORS or name in _DOWNWARD_DETECTORS:
             continue
         sig = by_name.get(name)
         if sig is None or sig.confidence < 0.25:
@@ -266,6 +310,7 @@ _INTENT_LABELS: dict[str, str] = {
     "engagement_farming": "Engagement farming (likes/subs/follow farming)",
     "spam_promotion": "Spam / affiliate / link promotion",
     "coordinated_campaign": "Coordinated inauthentic behavior (likely campaign)",
+    "possible_coordination": "Possible coordination (single, uncorroborated signal)",
     "sockpuppet_cohort": "Fresh-account cohort (potential sockpuppets)",
     "copy_paste_template": "Templated / copy-paste activity",
     "broadcast_persona": "Broadcast-style persona (low personal voice)",
@@ -305,9 +350,18 @@ def _infer_intent(signals: list[SignalResult], tier: Tier) -> tuple[str | None, 
     if distinct_axes >= 3:
         return "multi_vector", _INTENT_LABELS["multi_vector"]
 
-    # Coordination evidence in the mix → campaign
-    if strong("coordination"):
+    # Coordination / narrative → campaign, but REQUIRE CORROBORATION before the
+    # accusatory "campaign" verdict. A single coordination method (e.g. 3 accounts
+    # posting similar text within a 2-minute window) is suggestive, not a confirmed
+    # campaign; two+ independent methods — or narrative-injection evidence — is the
+    # confident call. The coordination signal still lifts the score either way
+    # (rescue is unchanged); this only governs the *named intent*.
+    coord = by_name.get("coordination")
+    coord_methods = int((coord.sub_signals or {}).get("detector_count", 0)) if coord else 0
+    if strong("narrative") or (strong("coordination") and coord_methods >= 2):
         return "coordinated_campaign", _INTENT_LABELS["coordinated_campaign"]
+    if strong("coordination"):
+        return "possible_coordination", _INTENT_LABELS["possible_coordination"]
 
     # Profile cohort + low age signal often indicates sockpuppets
     profile = by_name.get("profile")
@@ -348,7 +402,57 @@ _DETECTOR_HEADLINES: dict[str, str] = {
     "engagement": "Comments show spam / engagement-farming patterns",
     "memory": "Behavioral fingerprint matches previously-flagged accounts",
     "coordination": "Account appears in a cross-account coordination cluster",
+    "narrative": "Posts contain coordinated-narrative / political-astroturf language",
+    "community": "Established audience / community footprint (lowers suspicion)",
 }
+
+
+def _build_contributions(
+    signals: list[SignalResult],
+    weights: dict[str, float],
+    factors: dict[str, float],
+    deltas: dict[str, float],
+) -> list[DetectorContribution]:
+    """Assemble the faithful per-detector attribution (GAP-06).
+
+    ``deltas`` holds the exact signed log-odds each scoring detector added to the
+    posterior — we surface those verbatim so the breakdown reconstructs the
+    headline number. Supplemental detectors (e.g. ai_writing) are included for
+    context but with a zero delta and ``supplemental=True``, making explicit that
+    they were shown but never scored. ``impact`` is each detector's share of the
+    total absolute movement, a sign-agnostic "how much of the picture" value.
+    """
+    total_abs = sum(abs(d) for d in deltas.values())
+    items: list[DetectorContribution] = []
+    for sig in signals:
+        is_supp = sig.name in SUPPLEMENTAL_DETECTORS
+        delta = 0.0 if is_supp else deltas.get(sig.name, 0.0)
+        if abs(delta) < 1e-9:
+            direction = "neutral"
+        elif delta > 0:
+            direction = "raises"
+        else:
+            direction = "lowers"
+        impact = (abs(delta) / total_abs) if total_abs > 0 else 0.0
+        items.append(
+            DetectorContribution(
+                name=sig.name,
+                headline=_DETECTOR_HEADLINES.get(sig.name, f"Detector '{sig.name}'"),
+                probability=sig.probability,
+                confidence=sig.confidence,
+                weight=weights.get(sig.name, 0.0),
+                decorrelation_factor=factors.get(sig.name, 1.0),
+                logit_delta=delta,
+                impact=impact,
+                direction=direction,
+                supplemental=is_supp,
+                evidence=sig.evidence[0] if sig.evidence else None,
+            )
+        )
+    # Rank by impact (largest mover first); neutral/zero contributions sink to
+    # the bottom but are retained so the explanation is complete.
+    items.sort(key=lambda c: abs(c.logit_delta), reverse=True)
+    return items
 
 
 def _extract_reasons(signals: list[SignalResult], tier: Tier) -> list[str]:

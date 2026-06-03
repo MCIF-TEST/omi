@@ -73,6 +73,14 @@ def analyze_voice(posts: list[Post]) -> SignalResult:
     else:
         length_factor = 1.0
     confidence = min(1.0, len(words) / 800.0) * length_factor
+    # Broadcast exception: news-brief style posts are intentionally written
+    # in third person. Zero first-person pronouns across a non-trivial corpus
+    # IS meaningful even when individual posts are short (unlike conversational
+    # text where implied-I is common). The length_factor guard above is
+    # calibrated for human-social-media posts, not broadcast summaries.
+    if rate < 0.005 and len(words) >= MIN_WORDS_FOR_VOICE:
+        broadcast_conf = _clip01(0.35 + 0.40 * min(1.0, len(words) / 250.0))
+        confidence = max(confidence, broadcast_conf)
 
     evidence: list[str] = []
     if rate < 0.005:

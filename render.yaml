@@ -26,6 +26,9 @@ services:
     plan: starter
     branch: main
     rootDir: apps/api
+    # Installs core deps (incl. httpx — required by the Twitter/X client) plus
+    # the youtube + postgres extras. httpx is intentionally a CORE dependency,
+    # not an extra, so this command can never ship without it.
     buildCommand: pip install -e .[youtube,postgres]
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
@@ -57,6 +60,9 @@ services:
         value: '7'
       # Manual-fill in dashboard
       - key: OMI_YOUTUBE_API_KEY
+        sync: false
+      # twitterapi.io key — required for Twitter/X scans (Twitter routes 503 without it).
+      - key: OMI_TWITTER_API_KEY
         sync: false
       - key: OMI_STRIPE_SECRET_KEY
         sync: false
@@ -96,8 +102,14 @@ services:
         sync: false
 
 databases:
+  # IMPORTANT: never run production on Render's `free` Postgres — free databases
+  # are DELETED ~90 days after creation, which means total loss of the only
+  # irreplaceable data we hold (investigations, fingerprints, watchlists,
+  # ground-truth labels). Use a paid tier, which also includes automatic daily
+  # backups. `basic-256mb` (~$6/mo) is the entry paid plan; bump to
+  # `basic-1gb`/`basic-4gb` as data grows. Adjust the plan string to your account.
   - name: omisphere-postgres
-    plan: free
+    plan: basic-256mb
     region: oregon
     databaseName: omi
     user: omi
