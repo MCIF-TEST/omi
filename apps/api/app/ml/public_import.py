@@ -23,7 +23,7 @@ names to the canonical keys below, then calls :func:`ingest_records`.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -59,6 +59,11 @@ class PublicRecord:
     following_count: int | None = None
     account_age_days: int | None = None
     handle: str | None = None
+    # Real per-post timestamps, index-aligned with ``texts`` (tz-aware UTC).
+    # When a per-tweet adapter supplies these, ``_to_posts`` uses the genuine
+    # cadence instead of fabricating one; ``None`` entries fall back to the
+    # synthetic spacing. Empty list = the legacy behavioral-only path.
+    post_times: list[datetime | None] = field(default_factory=list)
     # Optional explicit ground truth — overrides the is_bot-derived defaults.
     label: str | None = None            # one of schemas.LABEL_KINDS
     expected_tier: str | None = None    # one of "low|moderate|elevated|high"
@@ -84,18 +89,27 @@ def _to_profile(rec: PublicRecord) -> Profile:
 
 
 def _to_posts(rec: PublicRecord) -> list[Post]:
+    # Use the account's REAL post timestamps when the adapter supplied them
+    # (index-aligned with texts) so the temporal detector reads genuine cadence.
+    # Only posts with no real time fall back to synthetic hourly spacing — and
+    # that fallback is counted separately so it never interleaves fabricated
+    # gaps into a real timeline.
     base = datetime.now(timezone.utc) - timedelta(days=30)
+    times = rec.post_times or []
     posts: list[Post] = []
+    synthetic_n = 0
     for i, text in enumerate(rec.texts):
         if not text or not text.strip():
             continue
+        ts = times[i] if i < len(times) else None
+        if ts is None:
+            ts = base + timedelta(hours=synthetic_n)
+            synthetic_n += 1
         posts.append(Post(
             id=f"{rec.external_id}:{i}",
             author_handle=rec.handle or rec.external_id,
             text=text.strip(),
-            # Spread synthetic timestamps so the temporal detector has
-            # something to chew on without implying a real cadence.
-            created_at=base + timedelta(hours=i),
+            created_at=ts,
         ))
     return posts
 
@@ -155,15 +169,27 @@ def coalesce_records(records: list[PublicRecord]) -> list[PublicRecord]:
     ids pass through untouched, so account-per-row datasets are a no-op.
     """
     _TEXT_CAP = 50
+
+    def _append(acc: PublicRecord, rec: PublicRecord) -> None:
+        """Add rec's unique texts (and their aligned timestamps) to acc."""
+        times = rec.post_times or []
+        for i, t in enumerate(rec.texts):
+            if not t or not t.strip() or t in acc.texts or len(acc.texts) >= _TEXT_CAP:
+                continue
+            acc.texts.append(t)
+            acc.post_times.append(times[i] if i < len(times) else None)
+
     merged: dict[str, PublicRecord] = {}
     order: list[str] = []
     for rec in records:
         key = rec.external_id
         if key not in merged:
-            # Copy so we never mutate the caller's records.
-            merged[key] = PublicRecord(
+            # Copy so we never mutate the caller's records. texts/post_times are
+            # built together so they stay index-aligned (the temporal cadence
+            # depends on it).
+            acc = PublicRecord(
                 external_id=rec.external_id,
-                texts=list(dict.fromkeys(t for t in rec.texts if t and t.strip()))[:_TEXT_CAP],
+                texts=[],
                 is_bot=rec.is_bot,
                 follower_count=rec.follower_count,
                 following_count=rec.following_count,
@@ -172,13 +198,14 @@ def coalesce_records(records: list[PublicRecord]) -> list[PublicRecord]:
                 label=rec.label,
                 expected_tier=rec.expected_tier,
                 campaign_id=rec.campaign_id,
+                post_times=[],
             )
+            _append(acc, rec)
+            merged[key] = acc
             order.append(key)
             continue
         acc = merged[key]
-        for t in rec.texts:
-            if t and t.strip() and t not in acc.texts and len(acc.texts) < _TEXT_CAP:
-                acc.texts.append(t)
+        _append(acc, rec)
         # Backfill profile fields the first row left unset.
         if acc.follower_count is None:
             acc.follower_count = rec.follower_count

@@ -163,9 +163,9 @@ reason = "~321k rows, unverified Label semantics; one of three overlapping 80-10
 
 [[file]]
 path = "Datasets/TwitterData_Joined.csv"
-status = "archive"
+status = "validation"
 kind = "accounts"
-reason = "Overlapping variant of TwitterData_FE; review + dedupe before use."
+reason = "Canonical TwitterData variant: 96 deep-timeline accounts, balanced human/bot (Label 1=human/0=bot), clean text + real Tweet_created_at + Verified/Followers. Ingested via the twitterdata adapter; FE/Twitter_Data stay archived to avoid triple-counting the same accounts. First text-bearing human+bot validation set."
 
 [[file]]
 path = "Datasets/Twitter_Data.csv"
