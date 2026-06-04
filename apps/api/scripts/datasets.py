@@ -221,6 +221,23 @@ def _cmd_export(args) -> int:
     return 0 if (wrote_accounts or texts) else 1
 
 
+def _cmd_botscore_ref(args) -> int:
+    """External bot-score base rate (activity_botscore) — a calibration anchor:
+    the share an independent detector calls bot-like, to compare Omi's flag rate
+    against."""
+    from app.ml.datasets.botscore_reference import botscore_distribution
+    path = args.root / "Datasets" / "activity_botscore.csv"
+    if not path.exists():
+        print(f"not found: {path}", file=sys.stderr)
+        return 1
+    d = botscore_distribution(path)
+    print(json.dumps(d, indent=2))
+    print(f"\nExternal base rate (Botometer elevated+high): {d['flagged_fraction']:.1%} "
+          f"of {d['n']} accounts (mean score {d['mean_bot_score']:.3f}).")
+    print("Sanity anchor: compare Omi's escalation rate on a comparable population.")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="OMISPHERE dataset ingestion + corpus tools.")
     ap.add_argument("--root", type=Path, default=default_datasets_dir(),
@@ -262,6 +279,10 @@ def main() -> int:
     p.add_argument("--min-confidence", choices=("high", "medium"), default="medium")
     p.add_argument("--limit", type=int, default=None)
     p.set_defaults(func=_cmd_export)
+
+    p = sub.add_parser("botscore-ref",
+                       help="External Botometer base rate (calibration anchor; no DB).")
+    p.set_defaults(func=_cmd_botscore_ref)
 
     args = ap.parse_args()
     return args.func(args)

@@ -31,8 +31,10 @@ def test_manifest_quarantines_committed_poison():
     manifest = load_manifest(default_datasets_dir())
     bot = "Datasets/Fake Social Media Account Detection Dataset/bot_detection_data.csv"
     assert manifest.is_excluded(bot) and manifest.status(bot) == "quarantine"
+    # ai_human_detection_v1 was salvaged (the ~6 API-error rows are now dropped
+    # at parse), so it is no longer quarantined wholesale — it's a validation set.
     err = "ai vs human text/ai_human_detection_v1.csv"
-    assert manifest.is_excluded(err) and manifest.status(err) == "quarantine"
+    assert not manifest.is_excluded(err) and manifest.status(err) == "validation"
 
 
 def test_manifest_keeps_vouched_training_files_supported():

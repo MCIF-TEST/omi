@@ -81,6 +81,11 @@ def _parse_text_2026(row: dict, filename: str, row_id: str) -> TextRecord | None
 
 def _parse_text_detection_v1(row: dict, filename: str, row_id: str) -> TextRecord | None:
     text = str(row.get("text") or "").strip()
+    # A handful of rows captured an API failure ("Error: 400 Client Error ...")
+    # instead of generated text. Skip just those so the file no longer has to be
+    # quarantined wholesale for ~1% poisoned rows.
+    if text.startswith("Error:") or "Client Error:" in text:
+        return None
     is_ai = parse_bool_label(row.get("human_or_ai"))
     if not text or is_ai is None:
         return None
