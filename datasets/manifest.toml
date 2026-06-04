@@ -132,9 +132,9 @@ reason = "50k rows; label ~uncorrelated with any feature (random-label noise). R
 
 [[file]]
 path = "ai vs human text/ai_human_detection_v1.csv"
-status = "quarantine"
+status = "validation"
 kind = "text"
-reason = "AI class contaminated with API 'Error: 400' strings."
+reason = "AI/human text benchmark (686 rows). The ~6 API-error rows ('Error: 4xx Client Error') are now skipped at parse (adapters._parse_text_detection_v1), so the file is salvaged rather than quarantined wholesale."
 
 # --- Archive (low value / wrong domain / unknown-quality large generic) ---
 [[file]]
@@ -200,9 +200,15 @@ reason = "Labeled fake Twitter profiles (filename-labeled)."
 
 [[file]]
 path = "Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0_with_missing.xlsx"
+status = "archive"
+kind = "accounts"
+reason = "Superseded by the CSV export below (the pipeline can't read .xlsx). Kept for provenance."
+
+[[file]]
+path = "Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0.csv"
 status = "train"
 kind = "accounts"
-reason = "Best behavioral set (1941/1059). UNREADABLE as .xlsx — export to CSV to unlock."
+reason = "Balanced behavioral set (is_fake 1941/1059), exported from the .xlsx. Matches the fake_social_media adapter; the one clean balanced profile-feature set."
 
 # --- Validation ---
 [[file]]
