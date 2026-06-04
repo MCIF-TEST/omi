@@ -27,6 +27,10 @@ _TEXT_LABEL_COLS = ("label", "human_or_ai", "is_ai", "ai_generated", "generated"
 _ACCOUNT_LABEL_COLS = ("is_fake", "is_bot", "is_bot_flag", "fake", "bot", "account_type", "label", "class", "target")
 _FOLLOWER_COLS = ("followers", "follower_count", "followers_count")
 _FOLLOWING_COLS = ("following", "following_count", "friends_count", "friends")
+# Per-tweet timeline files (Cresci-2017 genuine/bot tweets, Known-Mixed
+# timelines): a user-id column + a tweet-text column, one row per tweet.
+_TWEET_TEXT_COLS = ("tweet_text", "full_text", "text", "tweet", "content")
+_USER_ID_COLS = ("user_id", "userid", "author_id", "tweet_user_id")
 
 
 def _first(row: dict, *keys: str) -> object | None:
@@ -262,6 +266,56 @@ register_adapter(DatasetAdapter(
 ))
 
 
+def _tweet_label_from_filename(filename: str) -> str | None:
+    """Resolve the ground-truth label of a per-tweet timeline file from its name.
+
+    Returns ``"bot"`` / ``"human"`` / ``None``. Known-Mixed timelines
+    (legitimate-but-coordination-shaped: journalists, brands, ...) are named
+    ``*mixed*`` and treated as ``human`` — the directive is explicit that the
+    goal is *not* to label them bad, only to measure behavior. Their category is
+    preserved via ``campaign_id`` (the file stem) for cohort evaluation.
+    """
+    f = filename.lower()
+    if "mixed" in f:
+        return "human"
+    hint = label_hint_from_filename(filename)  # True=inauthentic, False=authentic
+    if hint is True:
+        return "bot"
+    if hint is False:
+        return "human"
+    return None
+
+
+def _parse_labeled_tweets(row: dict, filename: str, row_id: str) -> PublicRecord | None:
+    """Per-tweet timeline with the label in the FILENAME (not a column).
+
+    Covers Cresci-2017 ``genuine_accounts``/spambot tweet exports and the
+    Known-Mixed timelines. One row per tweet → one record per tweet sharing the
+    account's ``user_id``; :func:`coalesce_records` then merges them so the
+    engine sees the account's whole text corpus (the win over the profile-only
+    ``twitter_user_features`` adapter, which carries no text). Unlike
+    ``io_disclosure`` this does NOT hard-label coordination — genuine accounts
+    stay ``human``/``low``.
+    """
+    label = _tweet_label_from_filename(filename)
+    if label is None:
+        return None
+    uid = str(_first(row, *_USER_ID_COLS) or "").strip()
+    text = str(_first(row, *_TWEET_TEXT_COLS) or "").strip()
+    if not uid or not text:
+        return None
+    is_bot = label == "bot"
+    return PublicRecord(
+        external_id=uid,                 # collapses a user's tweets to one account
+        texts=[text],
+        is_bot=is_bot,
+        handle=uid,
+        label=label,
+        expected_tier=("high" if is_bot else "low"),
+        campaign_id=filename.rsplit(".", 1)[0],
+    )
+
+
 def _parse_astroturf(row: dict, filename: str, row_id: str) -> PublicRecord | None:
     """OSoMe astroturf set — headerless `account_id<TAB>label` (label is
     'political_Bot'). Confirmed automated political accounts → bot ground truth.
@@ -295,11 +349,39 @@ register_adapter(DatasetAdapter(
     description="OSoMe astroturf political bots (headerless id+label TSV) → bot.",
 ))
 
+def _is_headerless_id_label(h: set) -> bool:
+    """The headerless id+label signature: the 'header' is really the first data
+    row, so it has no recognizable column names (no user_id / text / follower /
+    screen_name columns). Distinguishes the RTbust TSV from a headered
+    Cresci-2017 tweets/users export that merely has 'cresci' in its name."""
+    known = set(_USER_ID_COLS) | set(_TWEET_TEXT_COLS) | set(_FOLLOWER_COLS) \
+        | set(_FOLLOWING_COLS) | {"screen_name", "id", "name", "statuses_count"}
+    return not (h & known)
+
+
 register_adapter(DatasetAdapter(
     name="cresci_rtbust", kind="accounts", has_header=False,
-    match=lambda h, f: 16 if ("cresci" in f.lower() and f.lower().endswith((".tsv", ".csv"))) else 0,
+    match=lambda h, f: 16 if (
+        "cresci" in f.lower() and f.lower().endswith((".tsv", ".csv"))
+        and "rtbust" in f.lower() and _is_headerless_id_label(h)
+    ) else 0,
     parse_row=_parse_cresci,
     description="Cresci RTbust-2019 human/bot labels (headerless id+label TSV).",
+))
+
+register_adapter(DatasetAdapter(
+    name="labeled_tweets", kind="accounts",
+    match=lambda h, f: 16 if (
+        _any_in(h, _USER_ID_COLS) and _any_in(h, _TWEET_TEXT_COLS)
+        and _tweet_label_from_filename(f) is not None
+        # Stay disjoint from io_disclosure: any of its column triad means this is
+        # a state-IO disclosure file, which it owns (and labels political_coord)
+        # regardless of a spurious filename token like "ai" inside "campaign".
+        and not _any_in(h, ("follower_count", "following_count", "account_creation_date"))
+    ) else 0,
+    parse_row=_parse_labeled_tweets,
+    description="Per-tweet timeline + filename label (Cresci-2017 genuine/bot, "
+                "Known-Mixed); collapses to accounts WITH text.",
 ))
 
 register_adapter(DatasetAdapter(
