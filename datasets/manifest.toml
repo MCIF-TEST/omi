@@ -101,6 +101,24 @@ kind = "accounts"
 provenance = "cresci_botometer_repository"
 reason = "Cresci RTbust 2019 human/bot labels (+ tweets JSON). Needs an adapter."
 
+# Tier-2C intake locations (see datasets/INTAKE.md). Governed as validation so
+# committed Known-Good / Known-Mixed corpora are gated + adapter-matched on
+# arrival (the labeled_tweets adapter collapses per-tweet files to accounts
+# WITH text). Promote to train after the first calibration review.
+[[dir]]
+path = "known-good"
+status = "validation"
+kind = "accounts"
+provenance = "curated_known_good"
+reason = "Tier-2C Known Good: active humans WITH tweet text (e.g. Cresci-2017 genuine_accounts + tweets). Label from filename (genuine/human vs bot/spam)."
+
+[[dir]]
+path = "known-mixed"
+status = "validation"
+kind = "accounts"
+provenance = "curated_known_mixed"
+reason = "Tier-2C Known Mixed: legitimate-but-coordination-shaped accounts (journalists/news orgs/influencers/brands/politicians/activists) WITH timelines. Labeled human; category tracked via campaign_id."
+
 # ===========================================================================
 # File rules — the relocated original corpus + the large generic sets.
 # ===========================================================================
