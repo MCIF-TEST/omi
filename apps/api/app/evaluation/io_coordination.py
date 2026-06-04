@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
 from app.detection.coordination.aggregate import aggregate_coordination
+from app.detection.coordination.co_tag import CoTagEntry, detect_co_tag, extract_tags
 from app.detection.coordination.temporal_semantic import (
     CommentEntry, detect_temporal_semantic_cliques,
 )
@@ -93,12 +94,30 @@ def _temporal_on_event_stream(records: Iterable[PublicRecord], cap_events: int =
     }
 
 
+def _co_tag_finding(scn: CoordinationScenario):
+    entries = [CoTagEntry(external_id=a.external_id, handle=a.handle,
+                          tags=extract_tags(a.texts)) for a in scn.accounts]
+    return detect_co_tag(entries)
+
+
 def evaluate_scenario(scn: CoordinationScenario,
-                      event_records: list[PublicRecord] | None = None) -> dict:
-    """Run all detectors on the scenario, aggregate, and return precision/recall
-    inputs + the signed per-detector contribution breakdown."""
-    findings = _run_detectors(scn)
-    agg = aggregate_coordination(findings)
+                      event_records: list[PublicRecord] | None = None,
+                      *, with_network: bool = True) -> dict:
+    """Run the detectors, aggregate, and return a before/after precision view.
+
+    ``baseline_score`` is the Phase-2 behavior (existing detectors, no gate);
+    ``score`` is Phase 3 (adds the ``co_tag`` network detector + the
+    corroboration gate). Both come from the same machinery so the comparison is
+    apples-to-apples.
+    """
+    base_findings = _run_detectors(scn)
+    agg_base = aggregate_coordination(base_findings)   # Phase 2: ungated, no network
+
+    findings = list(base_findings)
+    if with_network:
+        findings.append(_co_tag_finding(scn))
+    agg = aggregate_coordination(findings)             # Phase 3: + co_tag + gate
+
     n = len(scn.accounts)
     flagged: set[str] = {m for f in findings for c in f.clusters for m in c.members}
     bots = {a.external_id for a in scn.accounts if a.role == "bot"}
@@ -108,12 +127,14 @@ def evaluate_scenario(scn: CoordinationScenario,
         "role": scn.accounts[0].role if scn.accounts else "?",
         "expected": scn.expected_coordination,
         "n_accounts": n,
-        "score": round(agg.score, 3),
+        "baseline_score": round(agg_base.ungated_score, 3),   # Phase 2
+        "score": round(agg.score, 3),                         # Phase 3 (gated)
+        "ungated_score": round(agg.ungated_score, 3),         # Phase 3 pre-gate
+        "gated": agg.gated,
         "weighted_mean": round(agg.weighted_mean, 3),
         "corroboration": round(agg.corroboration, 3),
         "flagged_members": len(flagged),
         "flagged_fraction": round(len(flagged) / max(1, n), 3),
-        # recall = caught bots / bots; fpr = flagged organic / organic
         "recall": round(len(flagged & bots) / len(bots), 3) if bots else None,
         "fpr": round(len(flagged & organic) / len(organic), 3) if organic else None,
         "clusters_by_method": {f.method: len(f.clusters) for f in findings},

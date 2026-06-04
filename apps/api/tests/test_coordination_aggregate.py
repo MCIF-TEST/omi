@@ -98,6 +98,42 @@ def test_all_abstain_is_zero():
     assert aggregate_coordination([]).score == 0.0
 
 
+def test_corroboration_gate_caps_lone_supporting_detector():
+    """Phase 3: the legitimate-humans shape — style_match alone fires maximal,
+    everything else floored. The gate must cap the verdict at MODERATE (it is
+    not corroborated by a discriminative lens or a second detector)."""
+    findings = [
+        _f("style_match", 1.0, 1.0, 5),
+        _f("fingerprint_cluster", 0.27, 1.0, 0),   # below neutral → no evidence
+        _f("temporal_semantic_clique", 0.23, 1.0, 0),
+        _f("co_tag", 0.23, 1.0, 0),                # network detector silent
+    ]
+    agg = aggregate_coordination(findings)
+    assert agg.gated
+    assert agg.score <= 0.49 < agg.ungated_score   # would have been maximal pre-gate
+    assert agg.ungated_score > 0.9
+
+
+def test_discriminative_detector_lifts_the_gate():
+    """style + a discriminative network signal (co_tag) → corroborated → full."""
+    findings = [_f("style_match", 1.0, 1.0, 1), _f("co_tag", 1.0, 1.0, 2)]
+    agg = aggregate_coordination(findings)
+    assert not agg.gated and agg.score >= ELEVATED
+
+
+def test_two_independent_supporting_detectors_corroborate():
+    """A single supporting detector is gated; two independent ones corroborate."""
+    lone = aggregate_coordination([_f("style_match", 0.9, 1.0, 1)])
+    assert lone.gated and lone.score <= 0.49
+    pair = aggregate_coordination([
+        _f("style_match", 0.9, 1.0, 1), _f("age_cohort", 0.9, 1.0, 1)])
+    assert not pair.gated and pair.score > 0.49
+
+
+def test_co_tag_is_a_discriminative_prior():
+    assert DETECTOR_RELIABILITY["co_tag"] == 1.0
+
+
 def test_reliability_priors_favor_discriminative_detectors():
     """The proven discriminators (fingerprint, style) must out-weight the weak/
     data-shape-sensitive ones (cohort, temporal)."""
