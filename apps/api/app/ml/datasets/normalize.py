@@ -8,6 +8,7 @@ declarative.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Iterable
 
 # Tokens that, appearing in a label/column value, mean "inauthentic"
@@ -45,6 +46,59 @@ def to_float(value: object) -> float | None:
         return float(s)
     except ValueError:
         return None
+
+
+# Timestamp formats seen across the corpus, tried in order after ISO-8601.
+# IO disclosures: "2019-10-23 06:05" / "2019-10-21". TwitterData: day-first
+# "27-11-2016 06:15". Twitter_Data.csv: ISO with seconds "2016-11-27 06:15:03".
+_DT_FORMATS = (
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d",
+    "%d-%m-%Y %H:%M:%S",
+    "%d-%m-%Y %H:%M",
+    "%d-%m-%Y",
+    "%a %b %d %H:%M:%S %z %Y",   # Twitter API "Wed May 15 16:00:19 +0000 2019"
+)
+
+
+def parse_datetime(value: object) -> datetime | None:
+    """Parse a real timestamp from a dataset cell into a tz-aware UTC datetime.
+
+    Returns ``None`` when the value is empty or unrecognized, so callers can
+    fall back rather than fabricate a time. Naive timestamps are treated as UTC
+    (the platform archives — Twitter/X Transparency, the TwitterData export —
+    are UTC). This is the helper that lets *real* tweet cadence reach the
+    temporal detector instead of the synthetic 1-hour spacing."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        dt = None
+    if dt is None:
+        for fmt in _DT_FORMATS:
+            try:
+                dt = datetime.strptime(s, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+def days_since(value: object) -> int | None:
+    """Days between a creation timestamp and now (UTC), or ``None`` if
+    unparseable. Lets an adapter turn an ``account_creation_date`` column into a
+    real ``account_age_days`` instead of leaving the profile detector blind."""
+    dt = parse_datetime(value)
+    if dt is None:
+        return None
+    return max(0, (datetime.now(timezone.utc) - dt).days)
 
 
 def to_count(value: object, *, allow_negative: bool = False) -> int | None:

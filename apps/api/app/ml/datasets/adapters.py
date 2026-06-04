@@ -14,8 +14,10 @@ with no code at all.
 from __future__ import annotations
 
 from app.ml.datasets.normalize import (
+    days_since,
     label_hint_from_filename,
     parse_bool_label,
+    parse_datetime,
     to_count,
 )
 from app.ml.datasets.records import PublicRecord, TextRecord
@@ -167,12 +169,19 @@ def _parse_io_disclosure(row: dict, filename: str, row_id: str) -> PublicRecord 
     text = str(row.get("tweet_text") or row.get("text") or "").strip()
     handle = str(row.get("user_screen_name") or row.get("user_display_name") or user_id).strip()
     campaign = filename.rsplit(".", 1)[0]
+    # Real per-tweet time (kept aligned with texts) + real account age, so the
+    # temporal and profile detectors see genuine cadence/age instead of the
+    # synthetic 1-hour spread. The richer coordination columns (retweet/mention/
+    # hashtag graphs) are deliberately left for the Phase-2 coordination path.
+    when = parse_datetime(row.get("tweet_time"))
     return PublicRecord(
         external_id=user_id,                     # collapses a user's tweets to one account
         texts=[text] if text else [],
+        post_times=[when] if text else [],
         is_bot=True,
         follower_count=to_count(row.get("follower_count")),
         following_count=to_count(row.get("following_count")),
+        account_age_days=days_since(row.get("account_creation_date")),
         handle=handle or user_id,
         label="political_coord",
         expected_tier="high",
@@ -316,6 +325,52 @@ def _parse_labeled_tweets(row: dict, filename: str, row_id: str) -> PublicRecord
     )
 
 
+def _strip_bytes_repr(s: str) -> str:
+    """Unwrap a Python ``str(bytes)`` artifact: ``b'text'`` / ``b"text"`` → ``text``.
+    Twitter_Data.csv was written this way; the FE/Joined variants are clean."""
+    if len(s) >= 3 and s[:2] in ("b'", 'b"') and s[-1] == s[1]:
+        return s[2:-1]
+    return s
+
+
+def _parse_twitterdata(row: dict, filename: str, row_id: str) -> PublicRecord | None:
+    """TwitterData_* — per-tweet rows for 96 deep-timeline accounts.
+
+    Two corrections the audit identified are applied here:
+    * **Inverted polarity** — ``Label 1 = human``, ``0 = bot`` (verified:
+      @MuseumBot=0, @SadiqKhan=1). The generic account adapter would read ``1``
+      as inauthentic and mislabel every account, so this dedicated adapter owns
+      the mapping.
+    * **Corrupted text** — strip the ``b'...'`` bytes-repr wrapper.
+
+    Account identity (``Twitter_Account``) and the real per-tweet timestamp are
+    preserved, so the rows collapse to one account scored on its genuine
+    timeline. Verified legitimate accounts are tagged as a Known-Mixed cohort.
+    """
+    acct = str(row.get("twitter_account") or row.get("twitter_user_name") or "").strip()
+    text = _strip_bytes_repr(str(row.get("tweet_text") or "").strip())
+    raw = str(row.get("label") or "").strip()
+    if not acct or not text or raw not in ("0", "1"):
+        return None
+    is_human = raw == "1"
+    verified = str(row.get("verified") or "").strip().lower() in ("1", "true")
+    when = parse_datetime(row.get("tweet_created_at"))
+    return PublicRecord(
+        external_id=acct,                # collapses a user's tweets to one account
+        texts=[text],
+        post_times=[when],
+        is_bot=not is_human,
+        follower_count=to_count(row.get("followers")),
+        following_count=to_count(row.get("following")),
+        handle=acct,
+        label=("human" if is_human else "bot"),
+        expected_tier=("low" if is_human else "high"),
+        # High-profile authentic accounts that may *look* coordinated → the
+        # Known-Mixed FPR cohort. Tagged only for verified humans.
+        campaign_id=("twitterdata_verified_mixed" if (is_human and verified) else None),
+    )
+
+
 def _parse_astroturf(row: dict, filename: str, row_id: str) -> PublicRecord | None:
     """OSoMe astroturf set — headerless `account_id<TAB>label` (label is
     'political_Bot'). Confirmed automated political accounts → bot ground truth.
@@ -382,6 +437,14 @@ register_adapter(DatasetAdapter(
     parse_row=_parse_labeled_tweets,
     description="Per-tweet timeline + filename label (Cresci-2017 genuine/bot, "
                 "Known-Mixed); collapses to accounts WITH text.",
+))
+
+register_adapter(DatasetAdapter(
+    name="twitterdata", kind="accounts",
+    match=lambda h, f: 15 if _subset(h, "twitter_account", "tweet_text", "label") else 0,
+    parse_row=_parse_twitterdata,
+    description="TwitterData human/bot timelines (Label 1=human/0=bot, inverted; "
+                "b''-text stripped); per-tweet text+time -> deep-timeline accounts.",
 ))
 
 register_adapter(DatasetAdapter(
