@@ -10,7 +10,7 @@ import {
   type ComprehensiveScanResult,
   type InvestigationDetailResponse,
 } from '@/lib/api';
-import { runLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
+import { runLinkScanJob, ScanCancelledError, type LinkScanJob } from '@/lib/scan-job';
 import { Button } from '@/components/ui/button';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { ScanInput } from './scan-input';
@@ -35,6 +35,9 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
   const [state, setState] = useState<State>({
     data: null, selectedId: null, pending: false, error: null, loadingMore: false,
   });
+  // Real backend job state ('queued' | 'running' | …) so the progress overlay
+  // reflects the actual scan, not a fabricated timeline.
+  const [jobStatus, setJobStatus] = useState<LinkScanJob['status'] | null>(null);
   // Monotonic token: a newer scan supersedes any in-flight poll so a slow first
   // scan can't clobber the result of a second one the user kicked off.
   const activeRun = useRef(0);
@@ -42,6 +45,7 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
   const runScan = async (url: string) => {
     const runId = ++activeRun.current;
     setScanUrl(url);
+    setJobStatus('queued');
     setState((s) => ({ ...s, pending: true, error: null, data: null, selectedId: null }));
     try {
       // Async job: the scan runs on the backend's background pool; we poll the
@@ -51,6 +55,7 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
       const job = await runLinkScanJob(
         { url, max_commenters: batchSize },
         () => activeRun.current === runId,
+        (j) => { if (activeRun.current === runId) setJobStatus(j.status); },
       );
       if (activeRun.current !== runId) return; // superseded
       if (job.status !== 'done' || !job.investigation_slug) {
@@ -166,7 +171,7 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
         </div>
       )}
 
-      <LoadingOverlay active={state.pending} />
+      <LoadingOverlay active={state.pending} status={jobStatus} />
 
       {state.data && (
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_360px] gap-3 min-h-[640px]">

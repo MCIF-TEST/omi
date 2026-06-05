@@ -44,12 +44,14 @@ const _sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 export async function runLinkScanJob(
   body: Record<string, unknown>,
   shouldContinue: () => boolean = () => true,
+  onStatus?: (job: LinkScanJob) => void,
 ): Promise<LinkScanJob> {
   const job = await apiClient<LinkScanJob>('/v1/scan/link/start', {
     method: 'POST',
     body: JSON.stringify(body),
   });
   if (!shouldContinue()) throw new ScanCancelledError();
+  onStatus?.(job); // real backend state ('queued') — drives an honest progress UI
 
   const deadline = Date.now() + 8 * 60 * 1000; // hard cap; backend caps too
   let delay = 1500;
@@ -60,6 +62,7 @@ export async function runLinkScanJob(
     try {
       const cur = await apiClient<LinkScanJob>(`/v1/scan/link/status/${job.job_id}`);
       pollErrors = 0;
+      onStatus?.(cur); // real poll state ('running' → 'done'/'failed')
       if (cur.status === 'done' || cur.status === 'failed') return cur;
     } catch (e) {
       // Session loss or a vanished job are terminal; a transient blip is not.
