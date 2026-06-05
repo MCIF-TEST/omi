@@ -577,6 +577,37 @@ def scan_video_full(
     coord_score = coord.score
     coord_tier = _tier_for(coord_score)
 
+    # --- Phase 5.5: persist detected campaigns (first-class, evolving) ------
+    # Materialize the coordinated clusters as durable Campaign records — the
+    # object the pipeline used to discard. Gated on the corroboration-aware
+    # verdict (>= 0.5) so clean scans never manufacture campaigns (Phase 3
+    # precision discipline). Best-effort: must never break a scan.
+    if coord_score >= 0.5 and clusters:
+        try:
+            from app.campaigns.service import CampaignService
+            texts_by_author: dict[str, list[str]] = {}
+            for c in all_comments_under_video:
+                aid = str(c.get("author_external_id") or "")
+                txt = c.get("text")
+                if aid and txt:
+                    texts_by_author.setdefault(aid, []).append(txt)
+            handles = {}
+            for m in commenters_meta:
+                aid = str(m.get("external_id") or m.get("channel_id") or m.get("author_external_id") or "")
+                if aid:
+                    handles[aid] = str(m.get("handle") or m.get("display_name") or "")
+            # SAVEPOINT-isolated: a failure here rolls back ONLY the campaign
+            # writes, never the scan's own transaction (best-effort persistence
+            # must not corrupt the shared session or the scan result).
+            with session.begin_nested():
+                CampaignService(session).record_clusters(
+                    platform=platform, context_id=video_id, clusters=clusters,
+                    coordination_score=coord_score, confidence=coord.weighted_mean,
+                    texts_by_account=texts_by_author, handles=handles,
+                )
+        except Exception:  # noqa: BLE001
+            pass
+
     return FullScanOutput(
         video_id=video_id,
         commenter_records=records,

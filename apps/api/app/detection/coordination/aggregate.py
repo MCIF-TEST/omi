@@ -58,10 +58,30 @@ DETECTOR_RELIABILITY: dict[str, float] = {
     "fingerprint_cluster": 1.0,
     "style_match": 1.0,
     "co_engagement": 0.9,
+    "co_tag": 1.0,
     "age_cohort": 0.5,
     "temporal_semantic_clique": 0.4,
 }
 _DEFAULT_RELIABILITY = 0.5
+
+# --- Corroboration gate (Phase 3) ------------------------------------------
+# Phase 2 proved the aggregate score could not separate a state campaign from
+# unrelated professionals: legitimate humans scored 1.0 because a SINGLE
+# non-discriminative detector (style_match) fired and the noisy-OR carried it to
+# maximal. The gate fixes that: a maximal verdict requires CORROBORATION —
+# either a discriminative lens (one that actually separated IO from humans on
+# real data), or two independent detectors agreeing. A lone supporting detector
+# can raise suspicion to MODERATE but never to a maximal coordination verdict.
+#
+# Discriminative (may stand closer to alone): the network + infrastructure lenses
+# that measured a real IO-vs-human gap. Supporting (need corroboration):
+# style_match (non-discriminative on real text), temporal_semantic (floored on
+# account history), age_cohort (sparse/suggestive).
+_DISCRIMINATIVE: frozenset[str] = frozenset({
+    "fingerprint_cluster", "co_engagement", "co_tag",
+})
+_EVIDENCE_EPS = 0.05          # a detector "fired" if its positive evidence exceeds this
+_SUPPORTING_CEILING = 0.49    # top of MODERATE — a lone supporting detector's max
 
 # A detector's score midpoint: 0.5 means "no signal either way". Only the
 # portion of a score *above* this counts as positive coordination evidence.
@@ -89,6 +109,10 @@ class CoordinationAggregate:
     weighted_mean: float
     corroboration: float
     contributions: list[DetectorContribution] = field(default_factory=list)
+    # Phase 3 corroboration gate: ``ungated_score`` is the pre-gate value;
+    # ``gated`` is True when the verdict was capped for lack of corroboration.
+    ungated_score: float = 0.0
+    gated: bool = False
 
 
 def aggregate_coordination(
@@ -129,9 +153,24 @@ def aggregate_coordination(
     weighted_mean = mean_acc / weight_sum if weight_sum > 0 else 0.0
     corroboration = 1.0 - not_or
     score = max(weighted_mean, corroboration)
+
+    # Corroboration gate: a maximal verdict needs either a discriminative lens or
+    # ≥2 independent detectors with positive evidence. A lone supporting detector
+    # (e.g. style_match on a set of professional writers) is capped at MODERATE.
+    fired = [c for c in contributions if c.evidence > _EVIDENCE_EPS]
+    has_discriminative = any(c.method in _DISCRIMINATIVE for c in fired)
+    corroborated = has_discriminative or len(fired) >= 2
+    ungated_score = score
+    gated = False
+    if not corroborated and score > _SUPPORTING_CEILING:
+        score = _SUPPORTING_CEILING
+        gated = True
+
     return CoordinationAggregate(
         score=score,
         weighted_mean=weighted_mean,
         corroboration=corroboration,
         contributions=contributions,
+        ungated_score=ungated_score,
+        gated=gated,
     )

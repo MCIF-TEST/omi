@@ -327,6 +327,80 @@ class CoordinationEdge(Base):
 
 
 # ---------------------------------------------------------------------------
+# Campaign intelligence — a detected coordination cluster materialized as a
+# first-class, EVOLVING asset. Principle: store OBSERVED EVIDENCE, never a
+# verdict-as-truth. Each re-detection appends a CampaignObservation and the
+# aggregate fields are recomputed, so later evidence can change the picture; no
+# boolean "this is a manipulation campaign" is ever stored. Recurrence is found
+# by member-set overlap. This is the cluster-shaped object the per-scan pipeline
+# used to discard (only pairwise CoordinationEdges + a scalar survived).
+# ---------------------------------------------------------------------------
+
+
+class Campaign(Base):
+    __tablename__ = "campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_key: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(280), default="")
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    # Observed coordination — the LATEST and the strongest ever seen. Not a
+    # verdict: these are measurements that future observations can move.
+    coordination_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
+    max_coordination_score: Mapped[float] = mapped_column(Float, default=0.0)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    member_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    # Recurrence: how many distinct detections have rolled into this campaign.
+    observation_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    methods_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    hashtags_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    mentions_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Representative evidence strings from the detectors (capped) + a theme.
+    evidence_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    theme: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    # Descriptive observation state ("observed" / "recurring"), NOT a verdict.
+    status: Mapped[str] = mapped_column(String(24), default="observed")
+    first_detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class CampaignMember(Base):
+    __tablename__ = "campaign_members"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "account_external_id", name="uq_campaign_member"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), index=True)
+    platform: Mapped[str] = mapped_column(String(32))
+    account_external_id: Mapped[str] = mapped_column(String(128), index=True)
+    handle: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Per-member recurrence: how many detections this account appeared in.
+    times_observed: Mapped[int] = mapped_column(Integer, default=1)
+    methods_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class CampaignObservation(Base):
+    """One detection event — the raw evidence, retained so the campaign's
+    aggregates can be recomputed and history never overwritten."""
+
+    __tablename__ = "campaign_observations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    platform: Mapped[str] = mapped_column(String(32))
+    context_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    coordination_score: Mapped[float] = mapped_column(Float, default=0.0)
+    member_count: Mapped[int] = mapped_column(Integer, default=0)
+    methods_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    evidence_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    member_ids_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+# ---------------------------------------------------------------------------
 # User-curated named graphs — operators manually collect profiles into
 # named graphs; Omi draws coordination edges between members automatically.
 # ---------------------------------------------------------------------------
