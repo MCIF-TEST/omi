@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Activity, Calendar,
-  Brain, BarChart2, Video, ArrowRight,
+  Brain, BarChart2, Video, ArrowRight, ShieldCheck, AlertTriangle,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -199,6 +199,35 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
             </span>
           </div>
           <p className="mt-3 text-sm text-fg-dim">{latest.summary}</p>
+
+          {/* Confidence band — verdict is a number AND an uncertainty, never */}
+          {/* just a number on its own. The data already lives on the scan. */}
+          <div className="mt-4">
+            <ConfidenceBand
+              probability={latest.overall_probability}
+              confidence={latest.confidence}
+            />
+          </div>
+
+          {/* Why this verdict — evidence for / evidence weakening. Both lists */}
+          {/* are already on the HistoricalScan payload (reasons, weak_signals); */}
+          {/* the engine computes them, Phase 6 just surfaces them. */}
+          {(latest.reasons.length > 0 || latest.weak_signals.length > 0) && (
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <TrustList
+                tone="for"
+                title="Evidence for"
+                items={latest.reasons}
+                empty="No specific suspicion reasons recorded."
+              />
+              <TrustList
+                tone="weakening"
+                title="Evidence weakening / uncertainty"
+                items={latest.weak_signals}
+                empty="No data-quality caveats — confidence is well-supported."
+              />
+            </div>
+          )}
 
           {latestSignals.length > 0 && (
             <div className="mt-5">
@@ -406,4 +435,91 @@ function TrendIcon({ dir }: { dir: AccountHistoryResponse['trend']['direction'] 
     case 'stable':   return <Minus size={20} className={`${cls} text-fg-dim`} />;
     default:         return <Calendar size={20} className={`${cls} text-fg-mute`} />;
   }
+}
+
+// --- Trust panel (Phase 4 — surface evidence-for/against + confidence band) ---
+// The probability is plotted on a 0..1 track; confidence widens an uncertainty
+// halo around it (high confidence -> tight halo; low confidence -> the band
+// is wide enough that the operator can SEE the verdict is not pin-precise).
+// Width as a fraction of the track: (1 - confidence) * 0.4, capped at 0.4.
+// This keeps a 90%-confidence score a single tick and a 30%-confidence score
+// almost a quarter of the track.
+
+function ConfidenceBand({
+  probability, confidence,
+}: { probability: number; confidence: number }) {
+  const pCl = Math.min(1, Math.max(0, probability));
+  const cCl = Math.min(1, Math.max(0, confidence));
+  const halfWidth = Math.min(0.40, (1 - cCl) * 0.40);
+  const left = Math.max(0, pCl - halfWidth);
+  const right = Math.min(1, pCl + halfWidth);
+  const bandPct = (right - left) * 100;
+  const leftPct = left * 100;
+  const tickPct = pCl * 100;
+  const confLabel =
+    cCl >= 0.7 ? 'high'
+      : cCl >= 0.4 ? 'moderate'
+      : 'low — thin evidence';
+
+  return (
+    <div>
+      <div className="flex items-center justify-between font-mono text-2xs uppercase tracking-wider text-fg-mute mb-1.5">
+        <span>Score with uncertainty band</span>
+        <span>confidence: {Math.round(cCl * 100)}% ({confLabel})</span>
+      </div>
+      <div
+        className="relative h-3 bg-bg-elev-2 border border-border-1 rounded-sm overflow-hidden"
+        role="img"
+        aria-label={`Probability ${Math.round(pCl * 100)}%, confidence ${Math.round(cCl * 100)}%`}
+      >
+        {/* uncertainty band */}
+        <div
+          className="absolute top-0 bottom-0 bg-accent/25"
+          style={{ left: `${leftPct}%`, width: `${bandPct}%` }}
+        />
+        {/* point estimate */}
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-accent"
+          style={{ left: `calc(${tickPct}% - 1px)` }}
+        />
+      </div>
+      <div className="mt-1 flex justify-between font-mono text-[0.55rem] uppercase tracking-wider text-fg-faint">
+        <span>0% low</span>
+        <span>50% moderate</span>
+        <span>100% high</span>
+      </div>
+    </div>
+  );
+}
+
+function TrustList({
+  tone, title, items, empty,
+}: {
+  tone: 'for' | 'weakening';
+  title: string;
+  items: readonly string[];
+  empty: string;
+}) {
+  const headCls = tone === 'for' ? 'text-accent' : 'text-tier-moderate';
+  const Icon = tone === 'for' ? ShieldCheck : AlertTriangle;
+  return (
+    <div className="bg-bg/40 border border-border-1/70 rounded-md p-4">
+      <div className={`flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider ${headCls} mb-2.5`}>
+        <Icon size={12} />
+        {title}
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-fg-mute italic">{empty}</p>
+      ) : (
+        <ul className="space-y-1.5 text-sm text-fg-dim">
+          {items.map((it, i) => (
+            <li key={i} className="leading-snug">
+              <span className="text-fg-faint mr-1">·</span>
+              {it}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }

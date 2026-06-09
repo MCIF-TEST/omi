@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 export const metadata = { title: 'Pricing — OMISPHERE' };
 
 const FEATURES = [
-  'Full YouTube video scans — every commenter analysed across 8 detectors',
-  'YouTube channel scans — single account drilldown with trend over time',
-  'Cross-account coordination clusters (3 dedicated detectors)',
+  'YouTube + X (Twitter) coordination intelligence — videos, channels, accounts',
+  'Six cross-account coordination detectors (fingerprint, co-engagement, co-tag, style, temporal-semantic, age-cohort)',
+  'Corroboration-gated Campaign records — durable, evolving, evidence-bearing',
   'Per-commenter activity drilldown — see what flagged accounts actually wrote',
   'Saved investigations — shareable, exportable as Markdown / JSON / PDF',
-  'Watchlist alerts — get notified when a channel\'s tier changes',
-  'Self-improving fingerprint database — every scan trains the engine',
+  'Watchlist alerts — get notified when a tracked channel\'s tier changes',
+  'Cross-scan fingerprint memory — every scan adds priors for the next',
   'Cancel from your account at any time',
 ];
 
@@ -22,8 +22,8 @@ const FAQ = [
     a: 'Each YouTube video or channel URL you submit is one scan, regardless of how many commenters it covers. Re-scanning the same URL later costs an additional scan (it pulls fresh comments). Pulling additional batches of commenters on an existing investigation also costs one scan per batch.',
   },
   {
-    q: 'What about X / Twitter / Reddit / TikTok?',
-    a: 'Not yet. The detection engine is platform-agnostic; the missing piece is ingestion. X / Twitter is the next planned platform — pricing for X scans will reflect the higher API cost when it ships. We\'d rather give you one platform that works than four with stubs.',
+    q: 'What about Reddit / TikTok / Instagram?',
+    a: 'YouTube and X (Twitter) are live today. Reddit and TikTok are on the roadmap and require their own API access. The detection engine is platform-agnostic; the missing piece is ingestion. We\'d rather ship two platforms with depth than four with stubs.',
   },
   {
     q: 'What if YouTube\'s quota is exhausted?',
