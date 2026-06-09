@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.detection.coordination import (
     detect_age_cohorts,
     detect_co_engagement,
+    detect_co_tag,
     detect_fingerprint_clusters,
     detect_style_matches,
     detect_temporal_semantic_cliques,
@@ -37,6 +38,7 @@ from app.detection.coordination.elevate import (
 )
 from app.detection.coordination.cohort import CohortEntry
 from app.detection.coordination.co_engagement import EngagementEntry
+from app.detection.coordination.co_tag import CoTagEntry, extract_tags
 from app.detection.coordination.fingerprint_cluster import FingerprintEntry
 from app.detection.coordination.style_match import StyleEntry
 from app.detection.coordination.temporal_semantic import CommentEntry
@@ -533,6 +535,27 @@ def scan_video_full(
     co_finding = detect_co_engagement(co_entries)
     clusters.extend(co_finding.clusters)
 
+    # Co-tag — shared hashtags / amplified handles across commenters' history.
+    # The cleanest IO-vs-human separation measured to date (Phase 3, real
+    # disclosure data: Iran 75% / Xinjiang 51% / GRU 21% vs legitimate humans
+    # 0%). Discriminative in DETECTOR_RELIABILITY / DISCRIMINATIVE_DETECTORS.
+    # I/O-free — text comes from the same per-account history style_match uses,
+    # so no extra fetch. Returns a silent finding (confidence 0) on YouTube
+    # commenters who don't use hashtags/mentions; the aggregator handles that
+    # cleanly (a zero-confidence detector contributes no positive evidence and
+    # cannot drag the score).
+    co_tag_entries = [
+        CoTagEntry(
+            external_id=r.external_id,
+            handle=r.handle,
+            tags=extract_tags([p.text for p in r.posts if p.text]),
+        )
+        for r in records if r.posts
+    ]
+    co_tag_finding = detect_co_tag(co_tag_entries) if co_tag_entries else None
+    if co_tag_finding is not None:
+        clusters.extend(co_tag_finding.clusters)
+
     # --- Phase 4: cross-inject coordination evidence into each commenter --
     # Shared, pure elevation logic (app.detection.coordination.elevate) so the
     # rescue benchmark measures exactly what production runs here.
@@ -572,7 +595,7 @@ def scan_video_full(
     # (e.g. fingerprint + style) are no longer diluted by detectors that
     # abstain on this data shape. See app.detection.coordination.aggregate.
     findings = [f for f in [ts_finding, fp_finding, cohort_finding,
-                            style_finding, co_finding] if f is not None]
+                            style_finding, co_finding, co_tag_finding] if f is not None]
     coord = aggregate_coordination(findings)
     coord_score = coord.score
     coord_tier = _tier_for(coord_score)
