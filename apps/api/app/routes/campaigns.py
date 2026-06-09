@@ -9,8 +9,9 @@ mentions, raw observation history).
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 
@@ -106,6 +107,37 @@ def list_campaigns(
         return CampaignsResponse(campaigns=[_summary(c) for c in rows], total=total)
 
 
+def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
+    """Assemble the full CampaignDetail for a key, or None if absent. Shared by
+    the detail endpoint and the evidence-pack export so both read identically."""
+    c = session.execute(
+        select(Campaign).where(Campaign.campaign_key == campaign_key)
+    ).scalar_one_or_none()
+    if c is None:
+        return None
+    members = session.execute(
+        select(CampaignMember).where(CampaignMember.campaign_id == c.id)
+        .order_by(desc(CampaignMember.times_observed))
+    ).scalars().all()
+    obs = session.execute(
+        select(CampaignObservation).where(CampaignObservation.campaign_id == c.id)
+        .order_by(desc(CampaignObservation.observed_at)).limit(50)
+    ).scalars().all()
+    return CampaignDetail(
+        **_summary(c).model_dump(),
+        evidence=c.evidence_json or [], theme=c.theme,
+        members=[CampaignMemberOut(
+            account_external_id=m.account_external_id, handle=m.handle,
+            times_observed=m.times_observed, methods=m.methods_json or [],
+        ) for m in members],
+        observations=[CampaignObservationOut(
+            observed_at=o.observed_at, context_id=o.context_id,
+            coordination_score=o.coordination_score, member_count=o.member_count,
+            methods=o.methods_json or [], evidence=o.evidence_json or [],
+        ) for o in obs],
+    )
+
+
 @router.get("/{campaign_key}", response_model=CampaignDetail)
 def get_campaign(
     campaign_key: str,
@@ -113,29 +145,46 @@ def get_campaign(
 ) -> CampaignDetail:
     """A single campaign with members, evidence, and its full observation history."""
     with get_session() as session:
-        c = session.execute(
-            select(Campaign).where(Campaign.campaign_key == campaign_key)
-        ).scalar_one_or_none()
-        if c is None:
+        detail = _campaign_detail(session, campaign_key)
+        if detail is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
-        members = session.execute(
-            select(CampaignMember).where(CampaignMember.campaign_id == c.id)
-            .order_by(desc(CampaignMember.times_observed))
-        ).scalars().all()
-        obs = session.execute(
-            select(CampaignObservation).where(CampaignObservation.campaign_id == c.id)
-            .order_by(desc(CampaignObservation.observed_at)).limit(50)
-        ).scalars().all()
-        return CampaignDetail(
-            **_summary(c).model_dump(),
-            evidence=c.evidence_json or [], theme=c.theme,
-            members=[CampaignMemberOut(
-                account_external_id=m.account_external_id, handle=m.handle,
-                times_observed=m.times_observed, methods=m.methods_json or [],
-            ) for m in members],
-            observations=[CampaignObservationOut(
-                observed_at=o.observed_at, context_id=o.context_id,
-                coordination_score=o.coordination_score, member_count=o.member_count,
-                methods=o.methods_json or [], evidence=o.evidence_json or [],
-            ) for o in obs],
+        return detail
+
+
+@router.get("/{campaign_key}/export")
+def export_campaign(
+    campaign_key: str,
+    format: Literal["markdown", "json"] = Query("markdown"),
+    current: CurrentUser = Depends(require_user),
+) -> Response:
+    """Download a portable evidence pack for one campaign.
+
+    The artifact an investigator cites: members, methods, evidence-for and
+    evidence-weakening, recurrence, and the corroboration status + methodology
+    + "observation, not verdict" disclaimer — so the trust contract travels
+    with the file. Markdown for a report/editor; JSON for archival or tooling.
+    Reuses the same detail assembly the campaign page renders.
+    """
+    from app.reports.campaign_pack import render_campaign_json, render_campaign_markdown
+
+    with get_session() as session:
+        detail = _campaign_detail(session, campaign_key)
+        if detail is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        d = detail.model_dump()
+
+    if format == "json":
+        return Response(
+            content=render_campaign_json(d),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="campaign-{campaign_key}.json"',
+            },
         )
+    return Response(
+        content=render_campaign_markdown(d),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="campaign-{campaign_key}.md"',
+        },
+    )

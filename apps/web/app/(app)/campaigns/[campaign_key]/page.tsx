@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   Megaphone, Network, ShieldCheck, AlertTriangle, Clock, Activity,
-  Crosshair, ArrowRight, Hash, AtSign, ChevronLeft,
+  Crosshair, ArrowRight, Hash, AtSign, ChevronLeft, FileText, Download,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import {
@@ -165,6 +165,11 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         </Card>
       )}
 
+      {/* Evidence pack — the citable, portable artifact (carries the trust */}
+      {/* contract: corroboration status, evidence-for/against, methodology, */}
+      {/* and the observation-not-verdict disclaimer travel with the file). */}
+      <ExportBlock campaignKey={detail.campaign_key} corroborated={corroborated} />
+
       {/* Evidence for / against — side by side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <EvidenceForPanel detail={detail} />
@@ -292,6 +297,48 @@ export default async function CampaignDetailPage({ params }: PageProps) {
 // ---------------------------------------------------------------------------
 // Sub-panels — inline (matches narrative idiom).
 // ---------------------------------------------------------------------------
+
+function ExportBlock({
+  campaignKey, corroborated,
+}: { campaignKey: string; corroborated: boolean }) {
+  // Plain download anchors hit the same-origin /api rewrite, which carries the
+  // auth cookie; the endpoint's Content-Disposition triggers the download.
+  // No client state needed — mirrors the investigation share/export idiom.
+  const base = `/api/v1/campaigns/${encodeURIComponent(campaignKey)}/export`;
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <div className="font-mono text-2xs uppercase tracking-wider text-fg-mute mb-1 flex items-center gap-1.5">
+            <FileText size={12} />
+            Evidence pack
+          </div>
+          <p className="text-sm text-fg-dim max-w-xl">
+            Download a citable record of this campaign — members, methods,
+            evidence for and against, recurrence, and the corroboration status —
+            with the methodology and the &ldquo;observation, not verdict&rdquo;
+            framing included{corroborated ? '' : ' (this campaign is flagged supporting-only)'}.
+            Markdown for a report; JSON for archival or tooling.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <a
+            href={`${base}?format=markdown`}
+            className="inline-flex items-center gap-1.5 px-3 h-9 border border-accent-dim bg-accent/10 text-accent rounded-sm font-mono text-xs tracking-wider uppercase hover:bg-accent/20"
+          >
+            <FileText size={12} /> Markdown
+          </a>
+          <a
+            href={`${base}?format=json`}
+            className="inline-flex items-center gap-1.5 px-3 h-9 border border-border-2 text-fg-dim rounded-sm font-mono text-xs tracking-wider uppercase hover:text-fg hover:border-border-hot"
+          >
+            <Download size={12} /> JSON
+          </a>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function EvidenceForPanel({ detail }: { detail: CampaignDetail }) {
   return (
