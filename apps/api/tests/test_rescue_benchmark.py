@@ -9,17 +9,31 @@ signal lift it into the correct tier?
 It drives the real production code end-to-end:
   analyze_account (standalone) -> coordination detectors -> apply_coordination
 
-Baseline (coordination_rescue_v1):
-  * standalone_bot_recall  0.000  (the engine alone catches NONE of the bots)
-  * adjusted_bot_recall    0.952  (coordination catches 95% of them)
-  * recall_lift           +0.952  (the headline: miss -> catch)
-  * rescue_rate            1.000  (every under-flagged in-cluster bot lifted)
-  * mean_prob_lift        +0.488
-  * organic_false_lift     0.000  (zero clean accounts wrongly escalated)
+**Phase-4 recalibration (member-level corroboration gate).** The benchmark
+contains three scenarios — one per detector path: ``temporal_semantic`` (1),
+``fingerprint_cluster`` (2), ``age_cohort`` (3). After the Phase-4 fix to
+``elevate.build_coordination_signal`` (which mirrors the video-level
+corroboration gate at the per-member elevation site), a member is only
+lifted to HIGH when its clusters include a *discriminative* detector or
+≥2 distinct detectors. Scenarios 1 and 3 are single supporting-detector
+constructions — by the new contract their members are intentionally capped
+at MODERATE (the same property that drops the ~0.73 member-FPR on
+legitimate Known-Mixed coordination controls to ≤0.15). Scenario 2 uses a
+discriminative detector and still rescues fully. The aggregate-level gates
+below were tightened against the old all-rescue baseline; they are reset
+here to the new floor (the discriminative scenario alone), with a new
+focused test pinning the supporting-only-capping property explicitly.
 
-Gates are a ratchet: tighten as the bridge improves. They encode the claim
-that coordination *strictly and substantially* rescues recall without
-escalating clean accounts.
+Baseline (coordination_rescue_v1, post Phase-4 gate):
+  * standalone_bot_recall  0.000  (the engine alone catches NONE of the bots)
+  * adjusted_bot_recall    0.238  (fingerprint scenario fully rescued; the
+                                   two supporting-only scenarios capped at MODERATE)
+  * recall_lift           +0.238
+  * rescue_rate            0.250  (5/20 — exactly the fingerprint scenario's bots)
+  * mean_prob_lift        +0.230
+  * organic_false_lift     0.000  (zero clean accounts wrongly escalated — unchanged)
+
+Gates are a ratchet: tighten as the bridge improves.
 """
 
 from __future__ import annotations
@@ -33,10 +47,15 @@ from app.evaluation.rescue_benchmark import (
 )
 
 # --- Calibration ratchet (tighten as the bridge improves) ------------------
-GATE_MIN_RECALL_LIFT = 0.50        # current +0.952
-GATE_MIN_RESCUE_RATE = 0.85        # current 1.000
-GATE_MIN_MEAN_PROB_LIFT = 0.15     # current +0.488
-GATE_MAX_ORGANIC_FALSE_LIFT = 0.05 # current 0.000
+# These reflect the Phase-4 member-level corroboration gate: only the
+# discriminative-detector scenario (fingerprint_family_rescue) rescues
+# uncorroborated bots; the supporting-only scenarios are intentionally capped
+# at MODERATE — that capping is the precision fix and is asserted explicitly
+# in ``test_supporting_only_scenarios_are_capped_at_moderate`` below.
+GATE_MIN_RECALL_LIFT = 0.15        # current +0.238
+GATE_MIN_RESCUE_RATE = 0.20        # current 0.250 (fingerprint scenario alone)
+GATE_MIN_MEAN_PROB_LIFT = 0.10     # current +0.230
+GATE_MAX_ORGANIC_FALSE_LIFT = 0.05 # current 0.000 (unchanged — the trust gate)
 # The premise: the single-account engine genuinely under-flags these bots.
 # If this ever rises, the benchmark stopped exercising the gap it exists for.
 GATE_MAX_STANDALONE_BOT_RECALL = 0.25  # current 0.000
@@ -113,3 +132,69 @@ def test_accounts_outside_clusters_are_unchanged():
                     f"{r.standalone_p} -> {r.adjusted_p}"
                 )
                 assert r.adjusted_tier == r.standalone_tier
+
+
+# --- Phase-4 corroboration-gate trust properties ----------------------------
+# These tests pin the per-member corroboration contract directly, so the
+# benchmark measures the right thing (precision via gate) instead of inferring
+# it from a lowered global rescue rate.
+
+_DISCRIMINATIVE_SCENARIO = "fingerprint_family_rescue"
+_SUPPORTING_ONLY_SCENARIOS = {"temporal_burst_rescue", "age_cohort_rescue"}
+# Top of the MODERATE band — must stay in sync with
+# app.detection.coordination.aggregate.SUPPORTING_CEILING and
+# app.detection.coordination.elevate._SUPPORTING_CONFIDENCE_CEILING.
+_MODERATE_CAP = 0.50
+
+
+def test_discriminative_scenario_still_rescues_fully():
+    """The fingerprint_family scenario fires the *discriminative*
+    fingerprint_cluster detector. Under the Phase-4 gate this is exactly the
+    case that should still lift its members to ELEVATED/HIGH — it is the
+    'real-IO-like' construction (one strong discriminator, sparse history).
+    If this rescue rate regresses, the gate has become too strict."""
+    for scenario in load_rescue_benchmark():
+        if scenario.label != _DISCRIMINATIVE_SCENARIO:
+            continue
+        results = run_rescue_scenario(scenario)
+        bots_in_cluster = [r for r in results if r.role == "bot" and r.in_cluster]
+        assert bots_in_cluster, "fingerprint_family_rescue should have in-cluster bots"
+        rescued = [r for r in bots_in_cluster if r.adjusted_p > r.standalone_p]
+        assert len(rescued) == len(bots_in_cluster), (
+            f"Discriminative scenario regressed: only "
+            f"{len(rescued)}/{len(bots_in_cluster)} fingerprint bots rescued."
+        )
+        # Each rescued bot should land at the new ELEVATED+ shape, not MODERATE.
+        for r in rescued:
+            assert r.adjusted_p > _MODERATE_CAP, (
+                f"{r.external_id}: discriminative rescue should clear MODERATE, "
+                f"got adjusted_p={r.adjusted_p:.3f}"
+            )
+        return
+    pytest.fail(f"benchmark missing the discriminative scenario "
+                f"{_DISCRIMINATIVE_SCENARIO!r}")
+
+
+def test_supporting_only_scenarios_are_capped_at_moderate():
+    """The temporal_burst and age_cohort scenarios each fire a single
+    *supporting* detector. Under the Phase-4 gate, members in such scenarios
+    must be capped at MODERATE — this is the precision fix that takes
+    legitimate professional writers / journalists out of the ELEVATED tier
+    in the same code path (the original ~0.73 member-FPR on Known-Mixed
+    controls is the production symptom this test rules out synthetically)."""
+    saw = set()
+    for scenario in load_rescue_benchmark():
+        if scenario.label not in _SUPPORTING_ONLY_SCENARIOS:
+            continue
+        saw.add(scenario.label)
+        for r in run_rescue_scenario(scenario):
+            if not r.in_cluster:
+                continue
+            assert r.adjusted_p <= _MODERATE_CAP, (
+                f"{scenario.label}/{r.external_id}: a lone supporting detector "
+                f"must not lift a member above MODERATE, got "
+                f"adjusted_p={r.adjusted_p:.3f}. This would re-open the "
+                f"member-level FPR Phase-4 closed."
+            )
+    missing = _SUPPORTING_ONLY_SCENARIOS - saw
+    assert not missing, f"benchmark missing supporting-only scenarios: {missing}"
