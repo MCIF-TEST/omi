@@ -134,6 +134,85 @@ export type CoordinationLabel =
   | 'manipulation_network'
   | 'unscored';
 
+// ---------------------------------------------------------------------------
+// Campaigns — mirrors apps/api/app/routes/campaigns.py (CampaignSummary /
+// CampaignDetail / CampaignMemberOut / CampaignObservationOut).
+//
+// The Campaign is the durable, evolving record of a coordinated account
+// group: observations and evidence, never a verdict. ``status`` is
+// 'observed' on first detection and 'recurring' once observation_count > 1.
+// Discriminative methods (fingerprint_cluster / co_engagement / co_tag) carry
+// a maximal verdict on their own; supporting-only campaigns (style_match /
+// temporal_semantic / age_cohort) are corroboration-gated and surface as
+// "supporting evidence only" in the UI.
+// ---------------------------------------------------------------------------
+
+export type CampaignStatus = 'observed' | 'recurring';
+
+export interface CampaignSummary {
+  campaign_key: string;
+  name: string;
+  platform: string;
+  coordination_score: number;
+  max_coordination_score: number;
+  confidence: number;
+  member_count: number;
+  observation_count: number;
+  methods: string[];
+  hashtags: string[];
+  mentions: string[];
+  status: CampaignStatus;
+  first_detected_at: string;
+  last_seen_at: string;
+}
+
+export interface CampaignMemberOut {
+  account_external_id: string;
+  handle: string | null;
+  times_observed: number;
+  methods: string[];
+}
+
+export interface CampaignObservationOut {
+  observed_at: string;
+  context_id: string | null;
+  coordination_score: number;
+  member_count: number;
+  methods: string[];
+  evidence: string[];
+}
+
+export interface CampaignDetail extends CampaignSummary {
+  evidence: string[];
+  theme: string | null;
+  members: CampaignMemberOut[];
+  observations: CampaignObservationOut[];
+}
+
+export interface CampaignsResponse {
+  campaigns: CampaignSummary[];
+  total: number;
+}
+
+export type CampaignSort = 'recent' | 'score' | 'size' | 'recurrence';
+
+/** Detector taxonomy — mirrors aggregate.DISCRIMINATIVE_DETECTORS exactly.
+ *  Discriminative detectors can carry a maximal verdict alone; supporting
+ *  detectors need corroboration (≥1 discriminative OR ≥2 distinct supporting).
+ *  Used to render the "supporting evidence only" trust badge. */
+export const DISCRIMINATIVE_DETECTORS: ReadonlySet<string> = new Set([
+  'fingerprint_cluster',
+  'co_engagement',
+  'co_tag',
+]);
+
+export function isCorroborated(methods: readonly string[]): boolean {
+  const distinct = new Set(methods);
+  if (distinct.size >= 2) return true;
+  for (const m of distinct) if (DISCRIMINATIVE_DETECTORS.has(m)) return true;
+  return false;
+}
+
 export interface NarrativeOut {
   id: number;
   label: string;

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Search, Network, Bell, Menu,
+  LayoutDashboard, Search, Network, Bell, Menu, Megaphone,
   Folder, MessageSquareText, Database, Settings, LogOut, X,
   type LucideIcon,
 } from 'lucide-react';
@@ -35,8 +35,9 @@ const TABS: Tab[] = [
 ];
 
 const MORE_LINKS: { href: string; label: string; icon: LucideIcon; desc: string }[] = [
+  { href: '/campaigns',  label: 'Campaigns',  icon: Megaphone,         desc: 'Durable coordinated-account groups' },
+  { href: '/narratives', label: 'Narratives', icon: MessageSquareText, desc: 'Cross-scan message clusters' },
   { href: '/graph',      label: 'Graph',      icon: Network,           desc: 'Coordination network graphs' },
-  { href: '/narratives', label: 'Narratives', icon: MessageSquareText, desc: 'Cross-scan narrative clusters' },
   { href: '/content',    label: 'Content DB', icon: Database,          desc: 'Every scanned video' },
   { href: '/search',     label: 'Search',     icon: Search,            desc: 'Find any account or channel' },
   { href: '/settings',   label: 'Settings',   icon: Settings,          desc: 'Account, billing & alerts' },
