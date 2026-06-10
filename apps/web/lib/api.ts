@@ -164,6 +164,9 @@ export interface CampaignSummary {
   status: CampaignStatus;
   first_detected_at: string;
   last_seen_at: string;
+  // Opt-in public sharing (null / false until shared).
+  share_token: string | null;
+  is_public: boolean;
 }
 
 export interface CampaignMemberOut {
@@ -211,6 +214,50 @@ export function isCorroborated(methods: readonly string[]): boolean {
   if (distinct.size >= 2) return true;
   for (const m of distinct) if (DISCRIMINATIVE_DETECTORS.has(m)) return true;
   return false;
+}
+
+// Public campaign sharing — mirrors apps/api/app/routes/campaigns.py.
+export interface CampaignShareResponse {
+  campaign_key: string;
+  share_token: string;
+  is_public: boolean;
+  published_at: string | null;
+  public_url: string;
+}
+
+export interface CampaignReportView {
+  meta: {
+    campaign_key: string;
+    name: string;
+    platform: string;
+    status: string;
+    generator: string;
+    published_at: string | null;
+    first_detected_at: string | null;
+    last_seen_at: string | null;
+  };
+  verdict: {
+    max_coordination_score: number;
+    coordination_score: number;
+    confidence: number;
+    member_count: number;
+    observation_count: number;
+    corroborated: boolean;
+    discriminative_methods: string[];
+    methods: string[];
+  };
+  evidence_for: string[];
+  evidence_against: string[];
+  hashtags: string[];
+  mentions: string[];
+  members: CampaignMemberOut[];
+  observations: CampaignObservationOut[];
+  methodology: string;
+  disclaimer: string;
+}
+
+export interface CampaignReportResponse {
+  view: CampaignReportView;
 }
 
 export interface NarrativeOut {

@@ -14,6 +14,7 @@ import {
 import { apiServer } from '@/lib/api-server';
 import { ApiError } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
+import { CampaignShareBlock } from './share-block';
 
 export const metadata = { title: 'Campaign — OMISPHERE' };
 export const dynamic = 'force-dynamic';
@@ -169,6 +170,9 @@ export default async function CampaignDetailPage({ params }: PageProps) {
       {/* contract: corroboration status, evidence-for/against, methodology, */}
       {/* and the observation-not-verdict disclaimer travel with the file). */}
       <ExportBlock campaignKey={detail.campaign_key} corroborated={corroborated} />
+
+      {/* Public report — revocable, token-gated, read-only link for distribution. */}
+      <CampaignShareBlock campaignKey={detail.campaign_key} initialToken={detail.share_token} />
 
       {/* Evidence for / against — side by side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -253,3 +253,86 @@ def campaign_pack_dict(d: dict) -> dict:
 
 def render_campaign_json(d: dict) -> str:
     return json.dumps(campaign_pack_dict(d), default=str, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Public report view — the JSON view model the Next.js public page renders.
+# Same data + same trust computation as the export pack, shaped for the web.
+# ---------------------------------------------------------------------------
+
+
+def _iso(v: Any) -> str | None:
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.isoformat()
+    return str(v)
+
+
+def evidence_for_list(d: dict) -> list[str]:
+    """Detectors that fired (labeled, discriminative-tagged) + evidence strings."""
+    methods = d.get("methods") or []
+    out: list[str] = []
+    for m in methods:
+        tag = " (discriminative)" if m in DISCRIMINATIVE_DETECTORS else ""
+        out.append(f"{METHOD_LABEL.get(m, m)}{tag} fired across this group")
+    out.extend((d.get("evidence") or [])[:6])
+    return out
+
+
+def evidence_against_list(d: dict) -> list[str]:
+    """Detectors that did NOT fire (with rationale) + weakening trend + the
+    supporting-only caveat. The counter-evidence the trust contract requires."""
+    methods = d.get("methods") or []
+    out: list[str] = [
+        f"{METHOD_LABEL.get(m, m)}: {METHOD_RATIONALE_WHEN_SILENT.get(m, 'did not fire')}"
+        for m in _silent_methods(methods)
+    ]
+    obs = d.get("observations") or []
+    if len(obs) >= 2 and (d.get("coordination_score") or 0) < (d.get("max_coordination_score") or 0) - 0.05:
+        out.append(
+            "Trend weakening — the latest score is below the campaign max; recent "
+            "observations were less coordinated than earlier ones."
+        )
+    if not is_corroborated(methods):
+        out.append(
+            "Supporting evidence only — a single non-discriminative detector fired, "
+            "so the score is capped at MODERATE under the corroboration gate. The "
+            "cluster is real; the interpretation is not yet confirmed."
+        )
+    return out
+
+
+def build_campaign_report_view(d: dict, *, published_at: Any = None) -> dict:
+    """JSON-serializable view for the public campaign report page."""
+    methods = d.get("methods") or []
+    return {
+        "meta": {
+            "campaign_key": d.get("campaign_key"),
+            "name": d.get("name"),
+            "platform": d.get("platform"),
+            "status": d.get("status"),
+            "generator": "OMISPHERE Campaign Intelligence",
+            "published_at": _iso(published_at),
+            "first_detected_at": _iso(d.get("first_detected_at")),
+            "last_seen_at": _iso(d.get("last_seen_at")),
+        },
+        "verdict": {
+            "max_coordination_score": d.get("max_coordination_score") or 0.0,
+            "coordination_score": d.get("coordination_score") or 0.0,
+            "confidence": d.get("confidence") or 0.0,
+            "member_count": d.get("member_count") or 0,
+            "observation_count": d.get("observation_count") or 0,
+            "corroborated": is_corroborated(methods),
+            "discriminative_methods": [m for m in methods if m in DISCRIMINATIVE_DETECTORS],
+            "methods": methods,
+        },
+        "evidence_for": evidence_for_list(d),
+        "evidence_against": evidence_against_list(d),
+        "hashtags": d.get("hashtags") or [],
+        "mentions": d.get("mentions") or [],
+        "members": d.get("members") or [],
+        "observations": d.get("observations") or [],
+        "methodology": _methodology_note(),
+        "disclaimer": _DISCLAIMER,
+    }

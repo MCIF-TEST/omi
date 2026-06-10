@@ -8,10 +8,11 @@ mentions, raw observation history).
 
 from __future__ import annotations
 
-from datetime import datetime
+import secrets
+from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 
@@ -37,6 +38,9 @@ class CampaignSummary(BaseModel):
     status: str
     first_detected_at: datetime
     last_seen_at: datetime
+    # Opt-in public sharing (None/false until shared).
+    share_token: str | None = None
+    is_public: bool = False
 
 
 class CampaignMemberOut(BaseModel):
@@ -76,6 +80,7 @@ def _summary(c: Campaign) -> CampaignSummary:
         methods=c.methods_json or [], hashtags=c.hashtags_json or [],
         mentions=c.mentions_json or [], status=c.status,
         first_detected_at=c.first_detected_at, last_seen_at=c.last_seen_at,
+        share_token=c.share_token, is_public=bool(c.is_public),
     )
 
 
@@ -187,4 +192,128 @@ def export_campaign(
         headers={
             "Content-Disposition": f'attachment; filename="campaign-{campaign_key}.md"',
         },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public sharing — mint/revoke a token (auth), then a read-only token-gated
+# public report (no auth). Mirrors the investigation sharing system exactly;
+# reuses the same campaign data + the evidence-pack renderers.
+# ---------------------------------------------------------------------------
+
+
+class CampaignShareResponse(BaseModel):
+    campaign_key: str
+    share_token: str
+    is_public: bool
+    published_at: datetime | None
+    public_url: str
+
+
+@router.post("/{campaign_key}/share", response_model=CampaignShareResponse)
+def share_campaign(
+    campaign_key: str,
+    current: CurrentUser = Depends(require_user),
+) -> CampaignShareResponse:
+    """Mint (or reuse) a public share token for this campaign. Idempotent —
+    calling twice returns the existing token rather than rotating. The campaign
+    becomes readable at /rc/{token} with no login."""
+    with get_session() as session:
+        c = session.execute(
+            select(Campaign).where(Campaign.campaign_key == campaign_key)
+        ).scalar_one_or_none()
+        if c is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        if not c.share_token:
+            c.share_token = "cmp_" + secrets.token_urlsafe(16)
+        c.is_public = 1
+        c.published_at = c.published_at or datetime.now(timezone.utc)
+        return CampaignShareResponse(
+            campaign_key=c.campaign_key,
+            share_token=c.share_token,
+            is_public=True,
+            published_at=c.published_at,
+            public_url=f"/rc/{c.share_token}",
+        )
+
+
+@router.delete("/{campaign_key}/share")
+def unshare_campaign(
+    campaign_key: str,
+    current: CurrentUser = Depends(require_user),
+) -> dict:
+    """Revoke the share token. The public URL 404s immediately afterward."""
+    with get_session() as session:
+        c = session.execute(
+            select(Campaign).where(Campaign.campaign_key == campaign_key)
+        ).scalar_one_or_none()
+        if c is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        c.share_token = None
+        c.is_public = 0
+        return {"ok": True}
+
+
+# --- public (no auth) -------------------------------------------------------
+
+campaign_public_router = APIRouter(prefix="/rc", tags=["public-campaign-reports"])
+
+
+class CampaignReportResponse(BaseModel):
+    view: dict
+
+
+def _resolve_public_campaign(token: str):
+    """Resolve a public campaign by token (+ is_public), returning
+    (CampaignDetail, published_at). 404 if missing or unshared."""
+    with get_session() as session:
+        c = session.execute(
+            select(Campaign).where(
+                Campaign.share_token == token, Campaign.is_public == 1
+            )
+        ).scalar_one_or_none()
+        if c is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "Report not found or no longer public."
+            )
+        detail = _campaign_detail(session, c.campaign_key)
+        if detail is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
+        return detail, c.published_at
+
+
+@campaign_public_router.get("/{token}", response_model=CampaignReportResponse)
+def public_campaign_report(token: str = Path(min_length=8)) -> CampaignReportResponse:
+    """Read-only campaign report view for the Next.js public page."""
+    from app.reports.campaign_pack import build_campaign_report_view
+
+    detail, published_at = _resolve_public_campaign(token)
+    return CampaignReportResponse(
+        view=build_campaign_report_view(detail.model_dump(), published_at=published_at)
+    )
+
+
+@campaign_public_router.get("/{token}/markdown")
+def public_campaign_markdown(token: str = Path(min_length=8)) -> Response:
+    """Download the public campaign report as Markdown."""
+    from app.reports.campaign_pack import render_campaign_markdown
+
+    detail, _ = _resolve_public_campaign(token)
+    return Response(
+        content=render_campaign_markdown(detail.model_dump()),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="campaign-{token}.md"'},
+    )
+
+
+@campaign_public_router.get("/{token}/json")
+def public_campaign_json(token: str = Path(min_length=8)) -> Response:
+    """Download the public campaign report as JSON."""
+    from app.reports.campaign_pack import render_campaign_json
+
+    detail, _ = _resolve_public_campaign(token)
+    return Response(
+        content=render_campaign_json(detail.model_dump()),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="campaign-{token}.json"'},
     )
