@@ -118,12 +118,14 @@ raises a score. Aggregation remains `max(weighted_mean, corroboration)` — then
 
 ## 6. Remaining risks (→ Trust Boundary Tier 3B)
 
-1. **Per-account elevation residual (highest priority next).** The gate caps the batch
-   *verdict*, but per-account elevation (`elevate.py` / orchestrator) uses each
-   *cluster's* score, not the gated aggregate. So an account in a `style_match`-only
-   cluster (humans: member-level FPR still 0.73) could still be elevated individually.
-   **Immediate next step:** propagate the corroboration rule into elevation — only
-   elevate a member whose cluster is discriminative or corroborated.
+1. **Per-account elevation residual — ✅ CLOSED & MEASURED in Phase 4.** The
+   corroboration rule now ships inside `elevate.build_coordination_signal`
+   (lone supporting cluster ⇒ signal capped at 0.49/0.50), and the real-data
+   member-level numbers are published in `PHASE4_REPORT.md`: induced elevation
+   on the legit-human control 0.500 (pre-fix) → 0.324 (production), the
+   low-standalone failure mode eliminated, GRU rescue cost zero. A precisely
+   named boundary residual remains (capped signal can still tip 0.39–0.49
+   borderline accounts just over ELEVATED; none reach HIGH) — see Phase 4 §4.
 2. **`co_tag` generic-tag risk.** Ubiquitous hashtags/handles could link unrelated
    accounts; the human control shows 0 clusters so it isn't biting now, but **IDF
    down-weighting** of common tags is sensible hardening before broad deployment.
@@ -141,7 +143,7 @@ raises a score. Aggregation remains `max(weighted_mean, corroboration)` — then
 |---|---|
 | Phase 0 / 1 / 2 | ✅ merged |
 | **Phase 3 — corroboration gate + `co_tag` + re-weighting** | ✅ **this report** |
-| Propagate gate into per-account elevation | ⏭ recommended next (residual #1) |
+| Propagate gate into per-account elevation | ✅ shipped + measured — `PHASE4_REPORT.md` |
 | `co_tag` IDF hardening | ⏭ future |
 | Tier 3B — automation/coordination vs manipulation | 📌 updated, tracked |
 
@@ -152,10 +154,12 @@ raises a score. Aggregation remains `max(weighted_mean, corroboration)` — then
 `datasets/TRUST_BOUNDARY_TRACKING.md`.
 
 ## Recommendation for next action
-**Propagate the corroboration gate into per-account elevation** (residual #1) — it is
-the smallest change that closes the remaining member-level FPR, and it directly serves
-the trustworthiness objective. Then revisit IRA-style recall and `co_tag` IDF. The
-manipulation-intent layer (Tier 3B) remains the longer-horizon precision frontier.
+~~Propagate the corroboration gate into per-account elevation (residual #1)~~ —
+**done and measured; see `PHASE4_REPORT.md`** (humans induced elevation
+0.500 → 0.324; low-standalone failure mode eliminated; GRU cost zero). The
+remaining boundary residual + candidate fix are recorded in Phase 4 §4. Then
+revisit IRA-style recall and `co_tag` IDF. The manipulation-intent layer
+(Tier 3B) remains the longer-horizon precision frontier.
 
 > Phase 3 met its objective: trustworthy detection. The aggregate coordination score
 > can now tell a state campaign from a newsroom — IO 1.00, legitimate humans 0.49 —

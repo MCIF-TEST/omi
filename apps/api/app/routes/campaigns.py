@@ -8,9 +8,11 @@ mentions, raw observation history).
 
 from __future__ import annotations
 
-from datetime import datetime
+import secrets
+from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 
@@ -36,6 +38,9 @@ class CampaignSummary(BaseModel):
     status: str
     first_detected_at: datetime
     last_seen_at: datetime
+    # Opt-in public sharing (None/false until shared).
+    share_token: str | None = None
+    is_public: bool = False
 
 
 class CampaignMemberOut(BaseModel):
@@ -75,6 +80,7 @@ def _summary(c: Campaign) -> CampaignSummary:
         methods=c.methods_json or [], hashtags=c.hashtags_json or [],
         mentions=c.mentions_json or [], status=c.status,
         first_detected_at=c.first_detected_at, last_seen_at=c.last_seen_at,
+        share_token=c.share_token, is_public=bool(c.is_public),
     )
 
 
@@ -106,6 +112,74 @@ def list_campaigns(
         return CampaignsResponse(campaigns=[_summary(c) for c in rows], total=total)
 
 
+class FeaturedCampaign(CampaignSummary):
+    blurb: str | None = None
+
+
+class FeaturedCampaignsResponse(BaseModel):
+    campaigns: list[FeaturedCampaign]
+
+
+# NOTE: declared BEFORE the /{campaign_key} route so "featured" isn't captured
+# as a campaign key.
+@router.get("/featured", response_model=FeaturedCampaignsResponse)
+def list_featured_campaigns(
+    current: CurrentUser = Depends(require_user),
+) -> FeaturedCampaignsResponse:
+    """Real, validated example campaigns (seeded from state-actor disclosure
+    archives, scored by the engine) so a new user can explore a genuine
+    coordinated operation on first visit. Fixture order; each carries a short
+    editorial blurb. Empty if the fixture/seed is absent."""
+    from app.content.featured import featured_blurbs, featured_keys
+
+    keys = featured_keys()
+    if not keys:
+        return FeaturedCampaignsResponse(campaigns=[])
+    blurbs = featured_blurbs()
+    with get_session() as session:
+        rows = session.execute(
+            select(Campaign).where(Campaign.campaign_key.in_(keys))
+        ).scalars().all()
+    by_key = {c.campaign_key: c for c in rows}
+    out: list[FeaturedCampaign] = []
+    for k in keys:  # preserve fixture order
+        c = by_key.get(k)
+        if c is not None:
+            out.append(FeaturedCampaign(**_summary(c).model_dump(), blurb=blurbs.get(k)))
+    return FeaturedCampaignsResponse(campaigns=out)
+
+
+def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
+    """Assemble the full CampaignDetail for a key, or None if absent. Shared by
+    the detail endpoint and the evidence-pack export so both read identically."""
+    c = session.execute(
+        select(Campaign).where(Campaign.campaign_key == campaign_key)
+    ).scalar_one_or_none()
+    if c is None:
+        return None
+    members = session.execute(
+        select(CampaignMember).where(CampaignMember.campaign_id == c.id)
+        .order_by(desc(CampaignMember.times_observed))
+    ).scalars().all()
+    obs = session.execute(
+        select(CampaignObservation).where(CampaignObservation.campaign_id == c.id)
+        .order_by(desc(CampaignObservation.observed_at)).limit(50)
+    ).scalars().all()
+    return CampaignDetail(
+        **_summary(c).model_dump(),
+        evidence=c.evidence_json or [], theme=c.theme,
+        members=[CampaignMemberOut(
+            account_external_id=m.account_external_id, handle=m.handle,
+            times_observed=m.times_observed, methods=m.methods_json or [],
+        ) for m in members],
+        observations=[CampaignObservationOut(
+            observed_at=o.observed_at, context_id=o.context_id,
+            coordination_score=o.coordination_score, member_count=o.member_count,
+            methods=o.methods_json or [], evidence=o.evidence_json or [],
+        ) for o in obs],
+    )
+
+
 @router.get("/{campaign_key}", response_model=CampaignDetail)
 def get_campaign(
     campaign_key: str,
@@ -113,29 +187,170 @@ def get_campaign(
 ) -> CampaignDetail:
     """A single campaign with members, evidence, and its full observation history."""
     with get_session() as session:
+        detail = _campaign_detail(session, campaign_key)
+        if detail is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        return detail
+
+
+@router.get("/{campaign_key}/export")
+def export_campaign(
+    campaign_key: str,
+    format: Literal["markdown", "json"] = Query("markdown"),
+    current: CurrentUser = Depends(require_user),
+) -> Response:
+    """Download a portable evidence pack for one campaign.
+
+    The artifact an investigator cites: members, methods, evidence-for and
+    evidence-weakening, recurrence, and the corroboration status + methodology
+    + "observation, not verdict" disclaimer — so the trust contract travels
+    with the file. Markdown for a report/editor; JSON for archival or tooling.
+    Reuses the same detail assembly the campaign page renders.
+    """
+    from app.reports.campaign_pack import render_campaign_json, render_campaign_markdown
+
+    with get_session() as session:
+        detail = _campaign_detail(session, campaign_key)
+        if detail is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        d = detail.model_dump()
+
+    if format == "json":
+        return Response(
+            content=render_campaign_json(d),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="campaign-{campaign_key}.json"',
+            },
+        )
+    return Response(
+        content=render_campaign_markdown(d),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="campaign-{campaign_key}.md"',
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public sharing — mint/revoke a token (auth), then a read-only token-gated
+# public report (no auth). Mirrors the investigation sharing system exactly;
+# reuses the same campaign data + the evidence-pack renderers.
+# ---------------------------------------------------------------------------
+
+
+class CampaignShareResponse(BaseModel):
+    campaign_key: str
+    share_token: str
+    is_public: bool
+    published_at: datetime | None
+    public_url: str
+
+
+@router.post("/{campaign_key}/share", response_model=CampaignShareResponse)
+def share_campaign(
+    campaign_key: str,
+    current: CurrentUser = Depends(require_user),
+) -> CampaignShareResponse:
+    """Mint (or reuse) a public share token for this campaign. Idempotent —
+    calling twice returns the existing token rather than rotating. The campaign
+    becomes readable at /rc/{token} with no login."""
+    with get_session() as session:
         c = session.execute(
             select(Campaign).where(Campaign.campaign_key == campaign_key)
         ).scalar_one_or_none()
         if c is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
-        members = session.execute(
-            select(CampaignMember).where(CampaignMember.campaign_id == c.id)
-            .order_by(desc(CampaignMember.times_observed))
-        ).scalars().all()
-        obs = session.execute(
-            select(CampaignObservation).where(CampaignObservation.campaign_id == c.id)
-            .order_by(desc(CampaignObservation.observed_at)).limit(50)
-        ).scalars().all()
-        return CampaignDetail(
-            **_summary(c).model_dump(),
-            evidence=c.evidence_json or [], theme=c.theme,
-            members=[CampaignMemberOut(
-                account_external_id=m.account_external_id, handle=m.handle,
-                times_observed=m.times_observed, methods=m.methods_json or [],
-            ) for m in members],
-            observations=[CampaignObservationOut(
-                observed_at=o.observed_at, context_id=o.context_id,
-                coordination_score=o.coordination_score, member_count=o.member_count,
-                methods=o.methods_json or [], evidence=o.evidence_json or [],
-            ) for o in obs],
+        if not c.share_token:
+            c.share_token = "cmp_" + secrets.token_urlsafe(16)
+        c.is_public = 1
+        c.published_at = c.published_at or datetime.now(timezone.utc)
+        return CampaignShareResponse(
+            campaign_key=c.campaign_key,
+            share_token=c.share_token,
+            is_public=True,
+            published_at=c.published_at,
+            public_url=f"/rc/{c.share_token}",
         )
+
+
+@router.delete("/{campaign_key}/share")
+def unshare_campaign(
+    campaign_key: str,
+    current: CurrentUser = Depends(require_user),
+) -> dict:
+    """Revoke the share token. The public URL 404s immediately afterward."""
+    with get_session() as session:
+        c = session.execute(
+            select(Campaign).where(Campaign.campaign_key == campaign_key)
+        ).scalar_one_or_none()
+        if c is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        c.share_token = None
+        c.is_public = 0
+        return {"ok": True}
+
+
+# --- public (no auth) -------------------------------------------------------
+
+campaign_public_router = APIRouter(prefix="/rc", tags=["public-campaign-reports"])
+
+
+class CampaignReportResponse(BaseModel):
+    view: dict
+
+
+def _resolve_public_campaign(token: str):
+    """Resolve a public campaign by token (+ is_public), returning
+    (CampaignDetail, published_at). 404 if missing or unshared."""
+    with get_session() as session:
+        c = session.execute(
+            select(Campaign).where(
+                Campaign.share_token == token, Campaign.is_public == 1
+            )
+        ).scalar_one_or_none()
+        if c is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "Report not found or no longer public."
+            )
+        detail = _campaign_detail(session, c.campaign_key)
+        if detail is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found.")
+        return detail, c.published_at
+
+
+@campaign_public_router.get("/{token}", response_model=CampaignReportResponse)
+def public_campaign_report(token: str = Path(min_length=8)) -> CampaignReportResponse:
+    """Read-only campaign report view for the Next.js public page."""
+    from app.reports.campaign_pack import build_campaign_report_view
+
+    detail, published_at = _resolve_public_campaign(token)
+    return CampaignReportResponse(
+        view=build_campaign_report_view(detail.model_dump(), published_at=published_at)
+    )
+
+
+@campaign_public_router.get("/{token}/markdown")
+def public_campaign_markdown(token: str = Path(min_length=8)) -> Response:
+    """Download the public campaign report as Markdown."""
+    from app.reports.campaign_pack import render_campaign_markdown
+
+    detail, _ = _resolve_public_campaign(token)
+    return Response(
+        content=render_campaign_markdown(detail.model_dump()),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="campaign-{token}.md"'},
+    )
+
+
+@campaign_public_router.get("/{token}/json")
+def public_campaign_json(token: str = Path(min_length=8)) -> Response:
+    """Download the public campaign report as JSON."""
+    from app.reports.campaign_pack import render_campaign_json
+
+    detail, _ = _resolve_public_campaign(token)
+    return Response(
+        content=render_campaign_json(detail.model_dump()),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="campaign-{token}.json"'},
+    )

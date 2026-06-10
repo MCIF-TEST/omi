@@ -68,9 +68,11 @@ export function LandingPage() {
               className="text-base text-fg-dim leading-relaxed max-w-[480px] mb-9"
               style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '100ms' }}
             >
-              Probabilistic intelligence on YouTube comment sections. Score every
-              commenter across 8 independent signals, surface coordination networks,
-              and track narrative campaigns — with full evidence chains.
+              Evidence-based Campaign Intelligence for investigators, researchers,
+              journalists, and trust-&amp;-safety teams. Identify coordinated account
+              groups on YouTube and X — corroboration-gated, evidence-bearing,
+              evolving Campaign records. Probability with its uncertainty, not a
+              verdict.
             </p>
 
             <div
@@ -230,9 +232,10 @@ export function LandingPage() {
           <div className="border border-border-1 rounded-sm p-6">
             <p className="font-mono text-2xs tracking-[0.18em] uppercase text-fg-mute mb-3">Scope, plainly</p>
             <p className="text-sm text-fg-dim leading-relaxed">
-              Today OMISPHERE scans <span className="text-fg font-medium">YouTube</span> only — videos and channels.
-              The detection engine is platform-agnostic; ingestion for X&nbsp;/&nbsp;Twitter, Reddit, and TikTok
-              is on the roadmap. We&apos;d rather ship one platform with depth than four with stubs.
+              Today OMISPHERE scans <span className="text-fg font-medium">YouTube</span> and
+              <span className="text-fg font-medium"> X (Twitter)</span> — videos, channels, and
+              accounts. The detection engine is platform-agnostic; Reddit and TikTok are on the
+              roadmap. We&apos;d rather ship two platforms with depth than four with stubs.
             </p>
           </div>
         </Reveal>

@@ -266,6 +266,7 @@ def create_app() -> FastAPI:
     app.include_router(channels.router)
     app.include_router(narratives.router)
     app.include_router(campaigns.router)
+    app.include_router(campaigns.campaign_public_router)
     app.include_router(content.router)
     app.include_router(graph.router)
     app.include_router(investigations.router)

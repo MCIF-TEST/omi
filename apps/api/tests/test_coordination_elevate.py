@@ -41,27 +41,69 @@ def test_build_signal_none_when_no_clusters():
     assert build_coordination_signal([]) is None
 
 
-def test_build_signal_uses_max_score_and_scales_confidence_by_method_count():
-    one = build_coordination_signal([_cluster("age_cohort", ["a"], 0.6)])
-    assert one is not None
-    assert one.name == COORDINATION_SIGNAL_NAME
-    assert one.probability == 0.6
-    assert one.confidence == pytest.approx(0.75)  # 0.55 + 0.20 * 1
+def test_build_signal_one_discriminative_runs_at_full_strength():
+    """A single discriminative detector (fingerprint / co_engagement / co_tag)
+    can carry a maximal member signal alone — these are the lenses that
+    measured a real IO-vs-human gap. Mirrors the video-level gate."""
+    sig = build_coordination_signal([_cluster("fingerprint_cluster", ["a"], 0.9)])
+    assert sig is not None
+    assert sig.name == COORDINATION_SIGNAL_NAME
+    assert sig.probability == 0.9                             # uncapped
+    assert sig.confidence == pytest.approx(0.75)              # 0.55 + 0.20 * 1
+    assert sig.sub_signals["corroborated"] == 1.0
+    assert sig.sub_signals["discriminative_count"] == 1.0
 
-    # Two distinct methods, take the strongest probability, higher confidence.
-    two = build_coordination_signal([
+
+def test_build_signal_two_distinct_methods_run_at_full_strength():
+    """A discriminative + supporting cluster on the same member: take the
+    strongest probability and lift confidence with the extra method."""
+    sig = build_coordination_signal([
         _cluster("age_cohort", ["a"], 0.6),
         _cluster("fingerprint_cluster", ["a"], 0.9),
     ])
-    assert two.probability == 0.9
-    assert two.confidence == pytest.approx(0.95)  # 0.55 + 0.20 * 2
-    assert two.sub_signals["detector_count"] == 2.0
+    assert sig.probability == 0.9
+    assert sig.confidence == pytest.approx(0.95)              # 0.55 + 0.20 * 2
+    assert sig.sub_signals["detector_count"] == 2.0
+    assert sig.sub_signals["corroborated"] == 1.0
+
+
+def test_build_signal_lone_supporting_is_capped_at_moderate():
+    """The Phase-4 member-level gate: a lone non-discriminative detector
+    (style_match / temporal_semantic / age_cohort) cannot push a member to
+    HIGH. This is the fix for the ~0.73 member-FPR on Known-Mixed controls
+    where style_match-only clusters were elevating legitimate professional
+    writers via a 0.80+ coordination signal injected into the per-account
+    re-aggregate. Mirrors aggregate.aggregate_coordination's gate exactly."""
+    sig = build_coordination_signal([_cluster("style_match", ["a"], 0.85)])
+    assert sig is not None
+    assert sig.probability == pytest.approx(0.49)             # capped at SUPPORTING_CEILING
+    assert sig.confidence == pytest.approx(0.50)              # capped at supporting confidence ceiling
+    assert sig.sub_signals["corroborated"] == 0.0
+    assert sig.sub_signals["discriminative_count"] == 0.0
+
+
+def test_build_signal_two_supporting_methods_corroborate():
+    """Two independent supporting detectors agreeing IS corroboration —
+    matches the aggregator's ``len(fired) >= 2`` rule. The composed signal
+    runs at full strength even without a discriminative lens."""
+    sig = build_coordination_signal([
+        _cluster("style_match", ["a"], 0.85),
+        _cluster("age_cohort", ["a"], 0.70),
+    ])
+    assert sig.probability == 0.85                            # uncapped
+    assert sig.confidence == pytest.approx(0.95)              # 0.55 + 0.20 * 2
+    assert sig.sub_signals["corroborated"] == 1.0
 
 
 def test_confidence_is_capped_at_one():
+    # Five unknown methods — treated as supporting (not in DISCRIMINATIVE_DETECTORS)
+    # but corroborated by count (>=2 distinct), so the signal runs at full
+    # strength and confidence saturates at 1.0.
     clusters = [_cluster(f"m{i}", ["a"], 0.7) for i in range(5)]
     sig = build_coordination_signal(clusters)
-    assert sig.confidence == 1.0  # 0.55 + 0.20*5 = 1.55 -> capped
+    assert sig.probability == 0.7
+    assert sig.confidence == 1.0                              # 0.55 + 0.20*5 = 1.55 -> capped
+    assert sig.sub_signals["corroborated"] == 1.0
 
 
 def test_apply_coordination_is_noop_without_clusters():

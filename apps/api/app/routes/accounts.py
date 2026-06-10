@@ -201,3 +201,90 @@ def account_analysis(
         analysis=result.text,
         provider=result.provider,
     )
+
+
+# ---------------------------------------------------------------------------
+# Reverse link: which campaigns does this account appear in?
+#
+# The Campaign layer (Phase 5.5 capture) records every coordinated cluster as
+# a durable record; the UI's "this account appears in N campaigns" affordance
+# closes the cross-investigation gap without a new table — it's one query on
+# the existing CampaignMember -> Campaign join.
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel  # noqa: E402 (module-style local import)
+from sqlalchemy import desc, select  # noqa: E402
+
+
+class AccountCampaignSummary(BaseModel):
+    campaign_key: str
+    name: str
+    platform: str
+    coordination_score: float
+    max_coordination_score: float
+    confidence: float
+    member_count: int
+    observation_count: int
+    methods: list[str]
+    status: str
+    last_seen_at: str            # ISO timestamp
+    times_observed_here: int     # how many times THIS account was observed in the campaign
+
+
+class AccountCampaignsResponse(BaseModel):
+    platform: str
+    external_id: str
+    total: int
+    campaigns: list[AccountCampaignSummary]
+
+
+@router.get("/{platform}/{external_id}/campaigns", response_model=AccountCampaignsResponse)
+def account_campaigns(
+    platform: str,
+    external_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    current: CurrentUser = Depends(require_user),
+) -> AccountCampaignsResponse:
+    """Every Campaign this account is a member of, newest first.
+
+    Returns the campaign summary plus this account's per-campaign
+    ``times_observed`` so the UI can show recurrence on a per-account basis.
+    Empty list for unscanned / never-coordinated accounts.
+    """
+    from app.storage.models import Campaign, CampaignMember
+
+    with get_session() as session:
+        rows = session.execute(
+            select(Campaign, CampaignMember.times_observed)
+            .join(CampaignMember, CampaignMember.campaign_id == Campaign.id)
+            .where(
+                CampaignMember.platform == platform,
+                CampaignMember.account_external_id == external_id,
+            )
+            .order_by(desc(Campaign.last_seen_at))
+            .limit(limit)
+        ).all()
+
+        items = [
+            AccountCampaignSummary(
+                campaign_key=camp.campaign_key,
+                name=camp.name,
+                platform=camp.platform,
+                coordination_score=camp.coordination_score,
+                max_coordination_score=camp.max_coordination_score,
+                confidence=camp.confidence,
+                member_count=camp.member_count,
+                observation_count=camp.observation_count,
+                methods=camp.methods_json or [],
+                status=camp.status,
+                last_seen_at=camp.last_seen_at.isoformat(),
+                times_observed_here=int(times),
+            )
+            for camp, times in rows
+        ]
+        return AccountCampaignsResponse(
+            platform=platform,
+            external_id=external_id,
+            total=len(items),
+            campaigns=items,
+        )

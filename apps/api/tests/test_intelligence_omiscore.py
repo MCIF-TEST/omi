@@ -125,10 +125,33 @@ def test_spam_bot_scores_high_with_threat_dimensions():
     assert score.coordination_probability > 50.0
     # Authenticity is the inverse — should be low for a bot.
     assert score.authenticity_score < 40.0
-    assert score.primary_threat in {
-        "spam_probability", "ai_generation_probability",
-        "amplification_probability", "coordination_probability",
-    }
+    # Contextual dimensions (ai_generation per GAP-03, amplification per the
+    # Phase-2/H2 demotion) can never be the primary threat.
+    assert score.primary_threat in {"spam_probability", "coordination_probability"}
+
+
+def test_amplification_is_contextual_not_scored():
+    """H2 (master-plan Phase 2): amplification is a behavioral proxy with no
+    reach data — it stays visible/explainable but is excluded from the
+    composite omi_score and primary-threat selection, exactly like
+    ai_generation (GAP-03). Pins the demotion so a refactor can't silently
+    re-promote it."""
+    from app.intelligence.signals import (
+        CONTEXTUAL_DIMENSIONS,
+        INTELLIGENCE_DIMENSIONS,
+        THREAT_DIMENSIONS,
+    )
+
+    assert INTELLIGENCE_DIMENSIONS["amplification_probability"].is_contextual
+    assert "amplification_probability" not in THREAT_DIMENSIONS
+    assert "amplification_probability" in CONTEXTUAL_DIMENSIONS
+
+    # Still computed, still visible, still explainable on the output.
+    score = compute_omiscore(_spam_bot_scan())
+    dim = next(d for d in score.dimensions if d.key == "amplification_probability")
+    assert dim.is_contextual is True
+    assert score.amplification_probability >= 0.0  # flat field still populated
+    assert score.primary_threat != "amplification_probability"
 
 
 # ---------------------------------------------------------------------------

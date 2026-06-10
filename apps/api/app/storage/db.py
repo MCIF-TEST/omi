@@ -133,6 +133,10 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("investigations", "verdict", "VARCHAR(32)"),
     ("investigations", "concluded_at", "TIMESTAMP WITH TIME ZONE"),
     ("investigations", "notes", "TEXT"),
+    # Public campaign sharing (opt-in, revocable) — distribution phase
+    ("campaigns", "share_token", "VARCHAR(64)"),
+    ("campaigns", "is_public", "INTEGER DEFAULT 0"),
+    ("campaigns", "published_at", "TIMESTAMP WITH TIME ZONE"),
 ]
 
 

@@ -1,38 +1,59 @@
 # OMISPHERE
 
-YouTube comment-section intelligence. Detects bots, AI-generated engagement,
-and coordinated influence campaigns on YouTube videos and channels. Powered
-by the **omi** detection engine.
+**Evidence-based Campaign Intelligence** for investigators, researchers,
+journalists, and trust-&-safety teams. OMISPHERE detects coordinated
+account groups on YouTube and X (Twitter) — durable, evolving
+**Campaign** records carrying their own evidence, confidence, and
+corroboration. Powered by the **omi** detection engine.
 
-> Beta. All output is probabilistic — never a definitive judgement about
-> any account or the person behind it.
+> Beta. All output is probabilistic. We record observations, evidence,
+> and confidence — never a verdict-as-truth about any account or the
+> person behind it.
 
 ---
 
 ## What this does today
 
-Paste a YouTube video URL → OMISPHERE scans every commenter, fingerprints
-their behavior across eight independent detectors, finds coordination
-clusters between accounts, and saves the whole thing as an investigation
-you can share, export, or rescan later.
+Paste a YouTube video or an X (Twitter) account URL → OMISPHERE scans
+every commenter / poster, fingerprints their behavior, runs six
+cross-account coordination detectors (`fingerprint_cluster`,
+`co_engagement`, `co_tag`, `style_match`, `temporal_semantic`,
+`age_cohort`), and surfaces the coordinated groups as a durable
+**Campaign** with members, methods, hashtags/mentions, recurrence
+across scans, and an observation timeline. Saved investigations are
+shareable, exportable, and re-scannable.
 
-Paste a YouTube channel → it does the same for that channel's account
-profile and recent activity.
+**The trust contract** (validated on real state-IO disclosure
+archives — Russia GRU/IRA, Iran, China Xinjiang/Changyu — alongside
+legitimate-coordination controls: journalists, newsrooms, politicians,
+brands):
+
+* **Corroboration gate** — a campaign verdict requires either a
+  discriminative detector (fingerprint / co-engagement / co-tag, the
+  ones with measured IO-vs-human separation) or two distinct supporting
+  detectors agreeing. A lone supporting signal is capped at MODERATE
+  at both the campaign and per-member level. Campaign-level false-
+  positive rate on legitimate-coordination controls: **0%**.
+* **Evidence, not verdicts** — every campaign record stores observed
+  scores + methods + evidence strings + observation history. Nothing is
+  persisted as "this IS a manipulation campaign."
+* **Visible uncertainty** — confidence band, evidence-for, evidence-
+  weakening, and corroboration status are surfaced everywhere a verdict
+  is shown.
 
 **What it does NOT do today** (be aware, then decide if it fits):
 
-* No X / Twitter, Reddit, TikTok, or Instagram ingestion. The detection
-  engine is platform-agnostic; only the YouTube ingestion adapter is
-  shipped. Other platforms are on the roadmap and require their own API
-  access.
+* No Reddit, TikTok, or Instagram ingestion. The detection engine is
+  platform-agnostic; YouTube and X ingestion adapters ship. Other
+  platforms require their own API access.
 * No real-time push. Watchlists are rescanned on a schedule, not by a
   firehose subscription.
 * No team / multi-seat features. One account per workspace today.
 
-Everything in the YouTube path — per-commenter scoring, the eight
-detectors, coordination clusters, saved investigations, sharable reports,
-watchlist alerts on a polling schedule, narrative tracking across all
-scans — is live and tested.
+Everything described above — per-account scoring, the six cross-account
+coordination detectors, the Campaign Library, saved investigations,
+narrative observatory, shareable evidence reports, watchlist alerts on a
+polling schedule — is live and tested.
 
 ---
 
@@ -125,7 +146,7 @@ emergency recovery.
 ## Running the tests
 
 ```bash
-# Backend — 370+ tests
+# Backend — 660+ tests, including coordination + IO-eval ratchets
 cd apps/api
 pytest -q
 

@@ -77,11 +77,15 @@ _DEFAULT_RELIABILITY = 0.5
 # that measured a real IO-vs-human gap. Supporting (need corroboration):
 # style_match (non-discriminative on real text), temporal_semantic (floored on
 # account history), age_cohort (sparse/suggestive).
-_DISCRIMINATIVE: frozenset[str] = frozenset({
+#
+# Exported (no leading underscore) because elevate.py applies the SAME
+# corroboration rule at the per-member elevation site — these constants must not
+# drift between the video verdict and the member verdict.
+DISCRIMINATIVE_DETECTORS: frozenset[str] = frozenset({
     "fingerprint_cluster", "co_engagement", "co_tag",
 })
-_EVIDENCE_EPS = 0.05          # a detector "fired" if its positive evidence exceeds this
-_SUPPORTING_CEILING = 0.49    # top of MODERATE — a lone supporting detector's max
+EVIDENCE_EPS = 0.05          # a detector "fired" if its positive evidence exceeds this
+SUPPORTING_CEILING = 0.49    # top of MODERATE — a lone supporting detector's max
 
 # A detector's score midpoint: 0.5 means "no signal either way". Only the
 # portion of a score *above* this counts as positive coordination evidence.
@@ -157,13 +161,13 @@ def aggregate_coordination(
     # Corroboration gate: a maximal verdict needs either a discriminative lens or
     # ≥2 independent detectors with positive evidence. A lone supporting detector
     # (e.g. style_match on a set of professional writers) is capped at MODERATE.
-    fired = [c for c in contributions if c.evidence > _EVIDENCE_EPS]
-    has_discriminative = any(c.method in _DISCRIMINATIVE for c in fired)
+    fired = [c for c in contributions if c.evidence > EVIDENCE_EPS]
+    has_discriminative = any(c.method in DISCRIMINATIVE_DETECTORS for c in fired)
     corroborated = has_discriminative or len(fired) >= 2
     ungated_score = score
     gated = False
-    if not corroborated and score > _SUPPORTING_CEILING:
-        score = _SUPPORTING_CEILING
+    if not corroborated and score > SUPPORTING_CEILING:
+        score = SUPPORTING_CEILING
         gated = True
 
     return CoordinationAggregate(

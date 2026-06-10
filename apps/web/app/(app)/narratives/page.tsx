@@ -114,9 +114,12 @@ export default async function NarrativesPage({
             Coordination & propagation clusters
           </h1>
           <p className="mt-1 text-sm text-fg-dim max-w-2xl">
-            Semantic clusters scored across eight independent coordination
-            signals. Only moderate-and-above accounts contribute to cluster
-            membership — organic discussion is excluded by default.
+            Semantic clusters of comment text, scored across multiple
+            coordination signals. Narratives track <em>what is being said</em>;
+            the <a href="/campaigns" className="text-accent hover:underline">Campaign Library</a>
+            {' '}tracks <em>who is acting together</em>. Only moderate-and-above
+            accounts contribute to cluster membership — organic discussion is
+            excluded by default.
           </p>
         </div>
         <div className="flex items-center gap-2">

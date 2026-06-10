@@ -362,6 +362,13 @@ class Campaign(Base):
     status: Mapped[str] = mapped_column(String(24), default="observed")
     first_detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    # Opt-in public sharing (mirrors Investigation): read-only, revocable,
+    # token-gated. share_token is the public handle; is_public gates the public
+    # report; published_at stamps the first share. Nullable + default-off so
+    # existing campaigns are private until explicitly shared.
+    share_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_public: Mapped[int] = mapped_column(Integer, default=0)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class CampaignMember(Base):

@@ -34,6 +34,7 @@ import {
 } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
+import { NarrativeMembers } from './narrative-members';
 
 export const dynamic = 'force-dynamic';
 
@@ -477,6 +478,9 @@ export default async function NarrativeDetailPage({
           </div>
         </div>
       )}
+
+      {/* Drill-in: the actual comments + commenters that make up this narrative */}
+      <NarrativeMembers narrativeId={detail.id} />
 
       {/* Footer metadata */}
       <Card className="p-5">

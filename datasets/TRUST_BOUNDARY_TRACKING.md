@@ -68,11 +68,16 @@ The two mechanism fixes shipped (corroboration gate + `co_tag`; see
 - **Automation vs manipulation held up:** lone novelty automation still does not
   cluster as a campaign (0.30), confirming the engine isn't conflating the two.
 
-### Remaining risks (post-Phase-3)
-1. **Member-level elevation still uncorroborated** — the gate caps the batch verdict,
-   but per-account elevation reads each cluster's own score, so a human in a
-   `style_match`-only cluster (member FPR ~0.73) could still be elevated individually.
-   This is the **highest-priority remaining precision gap**.
+### Remaining risks (post-Phase-4)
+1. **Member-level elevation — ✅ gated + measured (`PHASE4_REPORT.md`).** The
+   corroboration rule now runs inside per-member elevation; measured on the
+   real controls: induced elevation on legit humans 0.500 (pre-fix) → **0.324**
+   (production), the low-standalone failure mode eliminated (gate-saved humans
+   were 0.15–0.33 standalone), GRU rescue cost zero, no human reaches HIGH.
+   **Residual (now the precision gap):** a capped supporting-only signal can
+   still tip *borderline* humans (standalone 0.39–0.49) just across the
+   ELEVATED boundary. Candidate boundary-cap fix recorded in Phase 4 §4 —
+   detection-logic change, awaiting authorization.
 2. **No manipulation-intent signal yet** — corroboration separates *coordinated* from
    *not*, but a legitimately coordinated cohort (a campaign team, a newsroom on a live
    story) that *also* trips a discriminative lens would not be distinguished from a
@@ -80,8 +85,9 @@ The two mechanism fixes shipped (corroboration gate + `co_tag`; see
 3. **`expected_tier` taxonomy** for benign automation remains unrevised (Phase 1).
 
 ### Future work
-- **Propagate the corroboration gate into per-account elevation** (closes risk #1; the
-  immediate next step recommended in `PHASE3_REPORT.md`).
+- **Boundary-cap at elevation** (closes the residual in risk #1; see
+  `PHASE4_REPORT.md` §4 — an uncorroborated signal may move a score within
+  MODERATE but not across the ELEVATED boundary).
 - **Manipulation-intent layer** (risk #2) — the conceptual core of Tier 3B: separate
   coordinated-and-legitimate from coordinated-and-manipulative using the `narrative` /
   astroturf-language / amplification-asymmetry signals, plus the

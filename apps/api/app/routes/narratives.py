@@ -24,6 +24,13 @@ from app.schemas import (
 )
 from app.storage.db import get_session
 
+from datetime import datetime
+
+from pydantic import BaseModel
+from sqlalchemy import desc, select
+
+from app.storage.models import Account, Narrative, NarrativeMembership
+
 
 router = APIRouter(prefix="/v1/narratives", tags=["narratives"])
 
@@ -207,3 +214,108 @@ def get_narrative(
             ],
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Drill-in: the actual comments + commenters that make up a narrative. The
+# detail endpoint above returns aggregates (top accounts, a few samples); this
+# returns the full, paginated membership so an investigator can read what was
+# said and by whom — each commenter carries their own scan tier/score and a flag
+# for whether they're scanned (so the UI can deep-link to the account page).
+# Evidence, surfaced — not a re-derived verdict.
+# ---------------------------------------------------------------------------
+
+
+class NarrativeMemberOut(BaseModel):
+    account_external_id: str
+    handle: str | None
+    platform: str
+    comment_text: str
+    parent_id: str | None
+    observed_at: datetime
+    # The commenter's OWN account verdict (from their latest scan), if scanned.
+    tier: str | None
+    score: float | None
+    scanned: bool  # True → an Account row exists → UI can link to /accounts/{id}
+
+
+class NarrativeMembersResponse(BaseModel):
+    narrative_id: int
+    label: str
+    total: int          # total comments in the narrative
+    distinct_authors: int
+    members: list[NarrativeMemberOut]
+
+
+@router.get("/{narrative_id}/members", response_model=NarrativeMembersResponse)
+def get_narrative_members(
+    narrative_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    account_external_id: str | None = Query(
+        None, description="Filter to a single commenter's contributions to this narrative."
+    ),
+    current: CurrentUser = Depends(require_user),
+) -> NarrativeMembersResponse:
+    """The comments + commenters that constitute a narrative, paginated, newest
+    first. Each row links the comment to its author and the author's own scan
+    verdict so the narrative is investigable down to the individual evidence."""
+    with get_session() as session:
+        narrative = session.get(Narrative, narrative_id)
+        if narrative is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Narrative {narrative_id} not found.",
+            )
+
+        base = select(NarrativeMembership).where(
+            NarrativeMembership.narrative_id == narrative_id
+        )
+        if account_external_id:
+            base = base.where(NarrativeMembership.account_external_id == account_external_id)
+
+        total = session.query(NarrativeMembership.id).filter(
+            NarrativeMembership.narrative_id == narrative_id,
+            *( [NarrativeMembership.account_external_id == account_external_id]
+               if account_external_id else [] ),
+        ).count()
+        distinct_authors = session.query(
+            NarrativeMembership.account_external_id
+        ).filter(NarrativeMembership.narrative_id == narrative_id).distinct().count()
+
+        rows = session.execute(
+            base.order_by(desc(NarrativeMembership.observed_at)).offset(offset).limit(limit)
+        ).scalars().all()
+
+        # Bulk-join the page's authors to their Account record (tier/score/handle)
+        # — one query, no N+1.
+        ids = {r.account_external_id for r in rows}
+        accounts: dict[tuple[str, str], Account] = {}
+        if ids:
+            for acc in session.execute(
+                select(Account).where(Account.external_id.in_(ids))
+            ).scalars():
+                accounts[(acc.platform, acc.external_id)] = acc
+
+        members: list[NarrativeMemberOut] = []
+        for r in rows:
+            acc = accounts.get((r.platform, r.account_external_id))
+            members.append(NarrativeMemberOut(
+                account_external_id=r.account_external_id,
+                handle=(acc.handle if acc else None),
+                platform=r.platform,
+                comment_text=r.comment_text,
+                parent_id=r.parent_id,
+                observed_at=r.observed_at,
+                tier=(acc.last_tier if acc else None),
+                score=(acc.last_score if acc else None),
+                scanned=acc is not None,
+            ))
+
+        return NarrativeMembersResponse(
+            narrative_id=narrative_id,
+            label=narrative.label,
+            total=total,
+            distinct_authors=distinct_authors,
+            members=members,
+        )

@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkline } from '@/components/shared/sparkline';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
+import { ConfidenceBand } from '@/components/shared/confidence-band';
+import { TrustList } from '@/components/shared/trust-lists';
 import { ApiError, type AccountHistoryResponse, type AccountAnalysisResponse, type ChannelIntelligenceResponse, type OmiScore, type SignalResult } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { pct, timeAgo, tierBg } from '@/lib/format';
@@ -199,6 +201,35 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
             </span>
           </div>
           <p className="mt-3 text-sm text-fg-dim">{latest.summary}</p>
+
+          {/* Confidence band — verdict is a number AND an uncertainty, never */}
+          {/* just a number on its own. The data already lives on the scan. */}
+          <div className="mt-4">
+            <ConfidenceBand
+              probability={latest.overall_probability}
+              confidence={latest.confidence}
+            />
+          </div>
+
+          {/* Why this verdict — evidence for / evidence weakening. Both lists */}
+          {/* are already on the HistoricalScan payload (reasons, weak_signals); */}
+          {/* the engine computes them, Phase 6 just surfaces them. */}
+          {(latest.reasons.length > 0 || latest.weak_signals.length > 0) && (
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <TrustList
+                tone="for"
+                title="Evidence for"
+                items={latest.reasons}
+                empty="No specific suspicion reasons recorded."
+              />
+              <TrustList
+                tone="weakening"
+                title="Evidence weakening / uncertainty"
+                items={latest.weak_signals}
+                empty="No data-quality caveats — confidence is well-supported."
+              />
+            </div>
+          )}
 
           {latestSignals.length > 0 && (
             <div className="mt-5">
@@ -407,3 +438,5 @@ function TrendIcon({ dir }: { dir: AccountHistoryResponse['trend']['direction'] 
     default:         return <Calendar size={20} className={`${cls} text-fg-mute`} />;
   }
 }
+// ConfidenceBand + TrustList now live in @/components/shared (reused by the
+// scan-result Synthesis hero too) — imported at the top of this file.

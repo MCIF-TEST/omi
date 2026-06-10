@@ -81,6 +81,7 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
               key={key}
               icon={THREAT_ICON[key]}
               label={THREAT_META[key].short}
+              caveat={THREAT_META[key].caveat}
               value={value}
               isPrimary={isPrimary}
               dimension={dim}
@@ -136,7 +137,7 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
 }
 
 function ThreatBar({
-  icon, label, value, isPrimary, dimension, contextual = false,
+  icon, label, value, isPrimary, dimension, contextual = false, caveat,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -144,6 +145,7 @@ function ThreatBar({
   isPrimary: boolean;
   dimension?: IntelligenceDimension;
   contextual?: boolean;
+  caveat?: string;
 }) {
   const [open, setOpen] = useState(false);
   // Contextual signals are never colored as risk — they read as neutral
@@ -195,6 +197,9 @@ function ThreatBar({
             style={{ width: `${value}%` }}
           />
         </div>
+        {caveat && (
+          <p className="mt-1.5 text-[0.6rem] leading-snug text-fg-mute italic">{caveat}</p>
+        )}
       </button>
 
       {open && dimension && (

@@ -134,6 +134,142 @@ export type CoordinationLabel =
   | 'manipulation_network'
   | 'unscored';
 
+// ---------------------------------------------------------------------------
+// Campaigns — mirrors apps/api/app/routes/campaigns.py (CampaignSummary /
+// CampaignDetail / CampaignMemberOut / CampaignObservationOut).
+//
+// The Campaign is the durable, evolving record of a coordinated account
+// group: observations and evidence, never a verdict. ``status`` is
+// 'observed' on first detection and 'recurring' once observation_count > 1.
+// Discriminative methods (fingerprint_cluster / co_engagement / co_tag) carry
+// a maximal verdict on their own; supporting-only campaigns (style_match /
+// temporal_semantic / age_cohort) are corroboration-gated and surface as
+// "supporting evidence only" in the UI.
+// ---------------------------------------------------------------------------
+
+export type CampaignStatus = 'observed' | 'recurring';
+
+export interface CampaignSummary {
+  campaign_key: string;
+  name: string;
+  platform: string;
+  coordination_score: number;
+  max_coordination_score: number;
+  confidence: number;
+  member_count: number;
+  observation_count: number;
+  methods: string[];
+  hashtags: string[];
+  mentions: string[];
+  status: CampaignStatus;
+  first_detected_at: string;
+  last_seen_at: string;
+  // Opt-in public sharing (null / false until shared).
+  share_token: string | null;
+  is_public: boolean;
+}
+
+export interface CampaignMemberOut {
+  account_external_id: string;
+  handle: string | null;
+  times_observed: number;
+  methods: string[];
+}
+
+export interface CampaignObservationOut {
+  observed_at: string;
+  context_id: string | null;
+  coordination_score: number;
+  member_count: number;
+  methods: string[];
+  evidence: string[];
+}
+
+export interface CampaignDetail extends CampaignSummary {
+  evidence: string[];
+  theme: string | null;
+  members: CampaignMemberOut[];
+  observations: CampaignObservationOut[];
+}
+
+export interface CampaignsResponse {
+  campaigns: CampaignSummary[];
+  total: number;
+}
+
+export type CampaignSort = 'recent' | 'score' | 'size' | 'recurrence';
+
+/** Detector taxonomy — mirrors aggregate.DISCRIMINATIVE_DETECTORS exactly.
+ *  Discriminative detectors can carry a maximal verdict alone; supporting
+ *  detectors need corroboration (≥1 discriminative OR ≥2 distinct supporting).
+ *  Used to render the "supporting evidence only" trust badge. */
+export const DISCRIMINATIVE_DETECTORS: ReadonlySet<string> = new Set([
+  'fingerprint_cluster',
+  'co_engagement',
+  'co_tag',
+]);
+
+export function isCorroborated(methods: readonly string[]): boolean {
+  const distinct = new Set(methods);
+  if (distinct.size >= 2) return true;
+  for (const m of distinct) if (DISCRIMINATIVE_DETECTORS.has(m)) return true;
+  return false;
+}
+
+// Public campaign sharing — mirrors apps/api/app/routes/campaigns.py.
+export interface CampaignShareResponse {
+  campaign_key: string;
+  share_token: string;
+  is_public: boolean;
+  published_at: string | null;
+  public_url: string;
+}
+
+export interface CampaignReportView {
+  meta: {
+    campaign_key: string;
+    name: string;
+    platform: string;
+    status: string;
+    generator: string;
+    published_at: string | null;
+    first_detected_at: string | null;
+    last_seen_at: string | null;
+  };
+  verdict: {
+    max_coordination_score: number;
+    coordination_score: number;
+    confidence: number;
+    member_count: number;
+    observation_count: number;
+    corroborated: boolean;
+    discriminative_methods: string[];
+    methods: string[];
+  };
+  evidence_for: string[];
+  evidence_against: string[];
+  hashtags: string[];
+  mentions: string[];
+  members: CampaignMemberOut[];
+  observations: CampaignObservationOut[];
+  methodology: string;
+  disclaimer: string;
+}
+
+export interface CampaignReportResponse {
+  view: CampaignReportView;
+}
+
+// Featured campaigns — real, disclosed influence operations seeded for first-run
+// value (mirrors apps/api/app/routes/campaigns.py FeaturedCampaign).
+export interface FeaturedCampaign extends CampaignSummary {
+  blurb: string | null;
+}
+
+export interface FeaturedCampaignsResponse {
+  campaigns: FeaturedCampaign[];
+}
+
 export interface NarrativeOut {
   id: number;
   label: string;
@@ -1207,26 +1343,36 @@ export interface OmiScore {
 
 /**
  * The threat dimension keys that actually contribute to the composite risk
- * score, in canonical display order. AI generation is deliberately NOT here —
- * it is a contextual signal (see CONTEXT_KEYS): AI-assisted writing is not
- * evidence of inauthenticity, so it informs without raising risk.
+ * score, in canonical display order. Two dimensions are deliberately NOT here
+ * (see CONTEXT_KEYS): AI generation (AI-assisted writing is not evidence of
+ * inauthenticity) and amplification (a behavioral proxy with no reach data —
+ * counting it would overclaim and double-count coordination). Both inform
+ * without raising risk. Mirrors the backend's is_contextual classification.
  */
 export const THREAT_KEYS = [
   'coordination_probability',
-  'amplification_probability',
   'spam_probability',
 ] as const;
 export type ThreatKey = (typeof THREAT_KEYS)[number];
 
 /** Contextual dimensions: reported for information, excluded from the risk score. */
 export const CONTEXT_KEYS = [
+  'amplification_probability',
   'ai_generation_probability',
 ] as const;
 export type ContextKey = (typeof CONTEXT_KEYS)[number];
 
-export const THREAT_META: Record<ThreatKey | ContextKey, { label: string; short: string }> = {
+export const THREAT_META: Record<ThreatKey | ContextKey, { label: string; short: string; caveat?: string }> = {
   coordination_probability:  { label: 'Coordinated activity',   short: 'Coordination' },
-  amplification_probability: { label: 'Artificial amplification', short: 'Amplification' },
+  // Honesty: amplification is a BEHAVIORAL proxy (re-weighted coordination /
+  // engagement / timing), not measured reach — like/view/follower-velocity data
+  // is not yet ingested. Surface that plainly rather than overclaiming
+  // "artificial amplification" the engine cannot actually evidence.
+  amplification_probability: {
+    label: 'Amplification (behavioral proxy)',
+    short: 'Amplification',
+    caveat: 'Behavioral proxy — inferred from coordination, engagement and timing, not measured reach (likes / views / follower velocity are not yet ingested). Read as a behavioral signal, not confirmed reach inflation.',
+  },
   spam_probability:          { label: 'Spam behavior',          short: 'Spam' },
   ai_generation_probability: { label: 'AI-generated content',   short: 'AI generation' },
 };

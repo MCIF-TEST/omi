@@ -2,11 +2,15 @@ import Link from 'next/link';
 import {
   Search, Activity, Database, Zap, ArrowRight, CheckCircle2, Gift,
   Network, MessageSquareText, FileSearch, Radio, LayoutGrid,
+  Megaphone, ShieldCheck, AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
-import { type EngineStatus, type InvestigationsListResponse, VERDICT_LABELS } from '@/lib/api';
+import {
+  type EngineStatus, type InvestigationsListResponse, type FeaturedCampaignsResponse,
+  type FeaturedCampaign, isCorroborated, VERDICT_LABELS,
+} from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { getCurrentUser } from '@/lib/auth';
 import { timeAgo } from '@/lib/format';
@@ -16,14 +20,18 @@ import { AnimatedNumber } from '@/components/shared/animated-number';
 export const metadata = { title: 'Dashboard — OMISPHERE' };
 
 export default async function DashboardPage() {
-  const [user, status, invList] = await Promise.all([
+  const [user, status, invList, featured] = await Promise.all([
     getCurrentUser(),
     apiServer<EngineStatus>('/v1/status').catch(() => null),
     apiServer<InvestigationsListResponse>('/v1/investigations?limit=10').catch(
       () => ({ investigations: [] } as InvestigationsListResponse),
     ),
+    apiServer<FeaturedCampaignsResponse>('/v1/campaigns/featured').catch(
+      () => ({ campaigns: [] } as FeaturedCampaignsResponse),
+    ),
   ]);
   const investigations = invList.investigations || [];
+  const featuredCampaigns = featured.campaigns || [];
 
   return (
     <div className="space-y-7 animate-fade-up">
@@ -48,6 +56,11 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      {/* First-run value — a REAL disclosed campaign to explore immediately */}
+      {featuredCampaigns.length > 0 && (
+        <FeaturedSection campaigns={featuredCampaigns} isNew={investigations.length === 0} />
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger">
@@ -92,16 +105,24 @@ export default async function DashboardPage() {
 
         {investigations.length === 0 ? (
           <div className="py-4">
-            <h3 className="text-base font-semibold text-fg mb-2">Nothing here yet</h3>
+            <h3 className="text-base font-semibold text-fg mb-2">No investigations yet</h3>
             <p className="text-sm text-fg-dim mb-5">
-              Start an investigation to scan a YouTube video or channel.
-              Every scan trains the OMISPHERE database — the engine sharpens with every use.
+              Scan a YouTube video / channel or an X account to start your own
+              investigation — or explore one of the real disclosed campaigns above
+              first to see how Omi reads coordination.
             </p>
-            <Link href="/investigate">
-              <Button>
-                <Search size={13} /> Run your first scan
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/investigate">
+                <Button>
+                  <Search size={13} /> Run your first scan
+                </Button>
+              </Link>
+              <Link href="/campaigns">
+                <Button variant="secondary">
+                  <Megaphone size={13} /> Browse campaigns
+                </Button>
+              </Link>
+            </div>
           </div>
         ) : (
           <ul className="divide-y divide-border-1 -mx-2">
@@ -197,15 +218,115 @@ export default async function DashboardPage() {
       <Card>
         <CardLabel className="mb-1">Platform roadmap</CardLabel>
         <p className="text-sm text-fg-dim mb-4">
-          YouTube-first by design — deep intelligence on one platform beats surface-level coverage of many.
+          Depth over breadth — deep coordination intelligence on the platforms that matter most.
         </p>
         <div className="divide-y divide-border-1">
           <RoadmapRow platform="YouTube"    status="live"          description="Full comment analysis, channel intelligence, bulk scanning, coordination detection" />
-          <RoadmapRow platform="X / Twitter" status="at 1,000 users" description="Thread analysis, account fingerprinting, bot-network detection" />
+          <RoadmapRow platform="X / Twitter" status="live"          description="Account fingerprinting, hashtag/amplification networks, coordinated-campaign detection" />
           <RoadmapRow platform="Reddit"     status="at 2,500 users" description="Subreddit coordination detection, post + comment analysis" />
           <RoadmapRow platform="TikTok"     status="at 5,000 users" description="Comment section analysis, creator audience intelligence" />
         </div>
       </Card>
+    </div>
+  );
+}
+
+function FeaturedSection({ campaigns, isNew }: { campaigns: FeaturedCampaign[]; isNew: boolean }) {
+  return (
+    <section className="border border-accent/25 bg-accent/[0.04] rounded-lg p-5 md:p-6">
+      <div className="flex items-start gap-2 mb-1.5">
+        <Megaphone size={15} className="text-accent mt-0.5 shrink-0" />
+        <div>
+          <p className="font-mono text-2xs tracking-[0.18em] text-accent uppercase">
+            {isNew ? 'Start here · see a real campaign' : 'Featured campaigns'}
+          </p>
+          <h2 className="text-lg font-semibold text-fg tracking-tight mt-0.5">
+            Real, disclosed influence operations Omi detects
+          </h2>
+        </div>
+      </div>
+      <p className="text-sm text-fg-dim max-w-2xl mb-4">
+        These are genuine state-actor networks from the platform&apos;s own transparency
+        disclosures. Omi re-derives the coordination from <span className="text-fg">behaviour
+        alone</span> — shared fingerprints, hashtag/amplification networks, account-age cohorts —
+        not from the label. This is the difference from a bot detector: it scores the{' '}
+        <span className="text-fg">group acting together</span>, with evidence for and against,
+        and never overclaims. Open one to see how.
+      </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {campaigns.map((c) => (
+          <FeaturedCard key={c.campaign_key} c={c} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FeaturedCard({ c }: { c: FeaturedCampaign }) {
+  const scorePct = Math.round(c.max_coordination_score * 100);
+  const confPct = Math.round(c.confidence * 100);
+  const corroborated = isCorroborated(c.methods);
+  return (
+    <div className="bg-bg-elev border border-border-1 rounded-md p-4 flex flex-col">
+      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+        <span className="text-sm font-semibold text-fg">{c.name}</span>
+        <span
+          title={corroborated
+            ? 'Corroborated: a discriminative detector or ≥2 independent methods agree.'
+            : 'Supporting evidence only — capped at MODERATE under the corroboration gate.'}
+          className={cn(
+            'inline-flex items-center gap-1 font-mono text-2xs uppercase tracking-wider px-1.5 py-0.5 rounded-sm border',
+            corroborated
+              ? 'text-accent border-accent/40 bg-accent/10'
+              : 'text-tier-moderate border-tier-moderate/40 bg-tier-moderate/10',
+          )}
+        >
+          {corroborated ? <ShieldCheck size={10} /> : <AlertTriangle size={10} />}
+          {corroborated ? 'corroborated' : 'supporting only'}
+        </span>
+      </div>
+      {c.blurb && <p className="text-xs text-fg-dim leading-relaxed mb-3">{c.blurb}</p>}
+      <div className="grid grid-cols-3 gap-2 mb-3 mt-auto">
+        <MiniMetric label="Coordination" value={`${scorePct}%`} tone="accent" />
+        <MiniMetric label="Confidence" value={`${confPct}%`} />
+        <MiniMetric label="Accounts" value={c.member_count} />
+      </div>
+      <div className="flex flex-wrap gap-1 mb-3">
+        {c.methods.slice(0, 4).map((m) => (
+          <span key={m} className="font-mono text-[0.55rem] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-border-2 text-fg-mute">
+            {m.replace(/_/g, ' ')}
+          </span>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/campaigns/${c.campaign_key}`}
+          className="inline-flex items-center gap-1.5 px-3 h-8 border border-accent-dim bg-accent/10 text-accent rounded-sm font-mono text-2xs tracking-wider uppercase hover:bg-accent/20"
+        >
+          Explore campaign <ArrowRight size={11} />
+        </Link>
+        {c.share_token && (
+          <a
+            href={`/rc/${c.share_token}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-1.5 px-3 h-8 border border-border-2 text-fg-dim rounded-sm font-mono text-2xs tracking-wider uppercase hover:text-fg hover:border-border-hot"
+          >
+            <ExternalLink size={11} /> Public report
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value, tone }: { label: string; value: string | number; tone?: 'accent' }) {
+  return (
+    <div className="bg-bg/40 border border-border-1/60 rounded-sm px-2 py-1.5">
+      <div className="font-mono text-[0.55rem] uppercase tracking-wider text-fg-faint">{label}</div>
+      <div className={cn('mt-0.5 text-sm font-semibold tabular-nums', tone === 'accent' ? 'text-accent' : 'text-fg')}>
+        {value}
+      </div>
     </div>
   );
 }

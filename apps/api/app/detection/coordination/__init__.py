@@ -17,8 +17,9 @@ pre-loaded ``{commenter_id: set[video_id]}`` dict from the caller, who
 fetches it from the DB.
 """
 
-from app.detection.coordination.cohort import detect_age_cohorts
 from app.detection.coordination.co_engagement import detect_co_engagement
+from app.detection.coordination.co_tag import detect_co_tag
+from app.detection.coordination.cohort import detect_age_cohorts
 from app.detection.coordination.fingerprint_cluster import detect_fingerprint_clusters
 from app.detection.coordination.style_match import detect_style_matches
 from app.detection.coordination.temporal_semantic import detect_temporal_semantic_cliques
@@ -26,6 +27,7 @@ from app.detection.coordination.temporal_semantic import detect_temporal_semanti
 __all__ = [
     "detect_age_cohorts",
     "detect_co_engagement",
+    "detect_co_tag",
     "detect_fingerprint_clusters",
     "detect_style_matches",
     "detect_temporal_semantic_cliques",

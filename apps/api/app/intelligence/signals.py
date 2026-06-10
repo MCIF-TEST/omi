@@ -107,9 +107,14 @@ INTELLIGENCE_DIMENSIONS: dict[str, DimensionSpec] = {
             _c("memory", 0.30),
         ),
     ),
-    # Amplification: artificial boosting of reach/engagement. Coordination
-    # clusters do the amplifying; engagement-farming patterns and mechanical
-    # posting bursts are the mechanism.
+    # Amplification: CONTEXTUAL (same treatment as ai_generation / GAP-03).
+    # This dimension is a re-weight of three detectors already scored elsewhere
+    # (coordination / engagement / temporal) and uses NO reach data — views,
+    # likes, shares, and engagement velocity are not ingested. Counting it
+    # toward the composite both overclaims ("artificial amplification" the
+    # engine cannot evidence) and double-counts coordination. It stays visible
+    # and fully explainable, but informs rather than scores, until real reach
+    # signals exist to make it a genuine measurement.
     "amplification_probability": DimensionSpec(
         key="amplification_probability",
         label="Amplification behavior",
@@ -118,13 +123,15 @@ INTELLIGENCE_DIMENSIONS: dict[str, DimensionSpec] = {
             "coordination, engagement-farming, and burst-timed posting. NOTE: this "
             "is INFERRED from behaviour; it is NOT a measurement of actual reach "
             "(views, likes, shares, and engagement velocity are not yet ingested), "
-            "so read it as a behavioural signal, not confirmed reach inflation."
+            "so read it as a behavioural signal, not confirmed reach inflation. "
+            "Contextual only: it does not contribute to the risk score."
         ),
         contributions=(
             _c("coordination", 0.45),
             _c("engagement", 0.35),
             _c("temporal", 0.20),
         ),
+        is_contextual=True,
     ),
     # Spam: promotional / repetitive behavior. Engagement detector catches the
     # URL/promo patterns; semantic catches the templated repetition.
