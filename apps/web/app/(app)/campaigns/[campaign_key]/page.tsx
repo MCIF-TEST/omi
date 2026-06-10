@@ -79,6 +79,21 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         </Link>
       </div>
 
+      {/* Featured-example context — a worked example is framed as such so it
+          can never be mistaken for the user's own scan output. */}
+      {detail.campaign_key.startsWith('feat_') && (
+        <div className="flex items-start gap-2.5 border border-accent/25 bg-accent/[0.05] rounded-md px-4 py-3">
+          <Megaphone size={14} className="text-accent mt-0.5 shrink-0" />
+          <p className="text-sm text-fg-dim leading-relaxed">
+            <span className="text-accent font-mono text-2xs uppercase tracking-wider mr-2">Featured example</span>
+            A real influence operation from the platform&apos;s own disclosure
+            archives, seeded so you can explore how Omi reads coordination.
+            Your own scans appear alongside —{' '}
+            <Link href="/investigate" className="text-accent hover:underline">run one now</Link>.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 flex-wrap mb-2">

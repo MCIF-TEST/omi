@@ -83,6 +83,49 @@ def test_featured_path_not_captured_as_campaign_key():
         assert "campaigns" in r.json()
 
 
+def test_stable_tokens_match_the_landing_page_contract():
+    """The marketing landing page hardcodes the Xinjiang featured token
+    (`/rc/cmp_feat_cn_xinjiang`) as its primary no-signup CTA — the shortest
+    path to the value moment. The token scheme is stable BY DESIGN
+    (featured.py: ``cmp_`` + campaign_key); this pins it so any change to the
+    scheme or the fixture keys breaks loudly instead of dead-linking the
+    front door."""
+    keys = featured_keys()
+    assert "feat_cn_xinjiang" in keys and "feat_ru_gru_202012" in keys
+    with get_session() as s:
+        seed_featured_campaigns(s)
+        camp = s.query(Campaign).filter_by(campaign_key="feat_cn_xinjiang").one()
+        assert camp.share_token == "cmp_feat_cn_xinjiang"
+        assert bool(camp.is_public)
+
+
+def test_public_featured_report_offers_the_other_featured_campaign():
+    """First-run cross-navigation: an anonymous visitor on one featured report
+    can hop to the other featured example without an account."""
+    with get_session() as s:
+        seed_featured_campaigns(s)
+    with TestClient(app) as tc:
+        view = tc.get("/rc/cmp_feat_cn_xinjiang").json()["view"]
+        others = view.get("other_featured")
+        assert others and any(
+            o["share_token"] == "cmp_feat_ru_gru_202012" for o in others
+        )
+        # A non-featured public campaign exposes nothing extra.
+        from app.campaigns.service import CampaignService
+        from app.detection.coordination._types import CoordinationCluster
+        with get_session() as s:
+            CampaignService(s).record_clusters(
+                platform="x", context_id="vidz",
+                clusters=[CoordinationCluster(
+                    method="fingerprint_cluster", members=["a", "b", "c"],
+                    score=0.9, evidence=["e"])],
+                coordination_score=0.9)
+        key = [c["campaign_key"] for c in tc.get("/v1/campaigns?min_score=0").json()["campaigns"]
+               if not c["campaign_key"].startswith("feat_")][0]
+        token = tc.post(f"/v1/campaigns/{key}/share").json()["share_token"]
+        assert "other_featured" not in tc.get(f"/rc/{token}").json()["view"]
+
+
 def test_seeded_campaign_has_working_public_report():
     with get_session() as s:
         seed_featured_campaigns(s)

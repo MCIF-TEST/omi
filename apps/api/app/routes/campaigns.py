@@ -322,12 +322,31 @@ def _resolve_public_campaign(token: str):
 @campaign_public_router.get("/{token}", response_model=CampaignReportResponse)
 def public_campaign_report(token: str = Path(min_length=8)) -> CampaignReportResponse:
     """Read-only campaign report view for the Next.js public page."""
+    from app.content.featured import featured_keys
     from app.reports.campaign_pack import build_campaign_report_view
 
     detail, published_at = _resolve_public_campaign(token)
-    return CampaignReportResponse(
-        view=build_campaign_report_view(detail.model_dump(), published_at=published_at)
-    )
+    view = build_campaign_report_view(detail.model_dump(), published_at=published_at)
+
+    # First-run cross-navigation: when an anonymous visitor lands on a featured
+    # example, offer the other featured campaign(s) so they can compare without
+    # an account. Only public featured campaigns are listed; non-featured
+    # reports expose nothing extra.
+    if detail.campaign_key in featured_keys():
+        with get_session() as session:
+            others = session.execute(
+                select(Campaign).where(
+                    Campaign.campaign_key.in_(
+                        [k for k in featured_keys() if k != detail.campaign_key]
+                    ),
+                    Campaign.is_public == 1,
+                    Campaign.share_token.is_not(None),
+                )
+            ).scalars().all()
+        view["other_featured"] = [
+            {"name": c.name, "share_token": c.share_token} for c in others
+        ]
+    return CampaignReportResponse(view=view)
 
 
 @campaign_public_router.get("/{token}/markdown")

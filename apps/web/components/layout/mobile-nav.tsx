@@ -43,10 +43,18 @@ const MORE_LINKS: { href: string; label: string; icon: LucideIcon; desc: string 
   { href: '/settings',   label: 'Settings',   icon: Settings,          desc: 'Account, billing & alerts' },
 ];
 
-export function MobileNav({ email }: { email: string }) {
+// Pre-activation, the More sheet narrows to the value-moment path (Campaigns +
+// Settings) — mirrors the desktop sidebar's gating so a new user can't wander
+// into empty analysis surfaces before their first investigation.
+const NEW_USER_MORE = new Set(['/campaigns', '/settings']);
+
+export function MobileNav({ email, isNewUser = false }: { email: string; isNewUser?: boolean }) {
   const pathname = usePathname() || '';
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const moreLinks = isNewUser
+    ? MORE_LINKS.filter((l) => NEW_USER_MORE.has(l.href))
+    : MORE_LINKS;
 
   // Unread alert count for the Alerts tab badge — same source as the topbar.
   const alerts = usePolling<AlertsResponse>(
@@ -65,7 +73,7 @@ export function MobileNav({ email }: { email: string }) {
   }, [sheetOpen]);
 
   const isActive = (t: Tab) => routeActive(pathname, t.href);
-  const moreActive = MORE_LINKS.some((l) => routeActive(pathname, l.href));
+  const moreActive = moreLinks.some((l) => routeActive(pathname, l.href));
 
   const onLogout = async () => {
     try { await apiClient('/v1/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
@@ -141,7 +149,7 @@ export function MobileNav({ email }: { email: string }) {
             </div>
 
             <div className="px-3 pb-2">
-              {MORE_LINKS.map((l) => {
+              {moreLinks.map((l) => {
                 const Icon = l.icon;
                 const active = routeActive(pathname, l.href);
                 return (

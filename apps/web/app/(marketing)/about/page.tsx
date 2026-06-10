@@ -73,16 +73,18 @@ export default function AboutPage() {
       <header>
         <p className="font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-3">About</p>
         <h1 className="text-3xl md:text-4xl font-semibold tracking-tight leading-tight">
-          A trust layer for{' '}
-          <span className="text-brand">YouTube comment sections</span>
+          Evidence-based{' '}
+          <span className="text-brand">Campaign Intelligence</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
-          OMISPHERE is a probabilistic intelligence platform for YouTube comments. It
-          detects bot accounts, AI-generated engagement, coordinated influence
-          campaigns, engagement farms, and synthetic virality — using eight
-          independent detectors and a self-improving fingerprint database. The
-          detection engine is platform-agnostic by design; today the only
-          ingestion adapter shipped is YouTube. Other platforms are on the roadmap.
+          OMISPHERE detects coordinated account groups — influence operations,
+          engagement farms, artificial amplification networks — on YouTube and
+          X (Twitter). Every finding is a probability with its confidence,
+          evidence for, evidence against, and corroboration status; a maximal
+          verdict requires either a discriminative signal (shared fingerprints,
+          co-engagement, co-tag networks) or multiple independent methods
+          agreeing. Built for OSINT researchers, investigative journalists, and
+          trust-&amp;-safety teams.
         </p>
       </header>
 
@@ -101,6 +103,22 @@ export default function AboutPage() {
           </Card>
         ))}
       </div>
+
+      {/* Platform roadmap — relocated from the dashboard: "what's coming" is
+          marketing context, not workspace content. */}
+      <Card>
+        <h2 className="text-base font-semibold text-fg mb-1.5">Platform roadmap</h2>
+        <p className="text-sm text-fg-dim mb-4">
+          Depth over breadth — deep coordination intelligence on the platforms
+          that matter most.
+        </p>
+        <ul className="space-y-2 text-sm">
+          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">YouTube</span> <span className="text-fg-dim">— live: full comment analysis, channel intelligence, coordination detection</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">X / Twitter</span> <span className="text-fg-dim">— live: account fingerprinting, hashtag/amplification networks, campaign detection</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">— planned: subreddit coordination, post + comment analysis</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">TikTok</span> <span className="text-fg-dim">— planned: comment-section analysis, creator audience intelligence</span></span></li>
+        </ul>
+      </Card>
     </article>
   );
 }

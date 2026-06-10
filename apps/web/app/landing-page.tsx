@@ -20,10 +20,10 @@ export function LandingPage() {
         <Link href="/" aria-label="omisphere home">
           <Logo />
         </Link>
+        {/* Deliberately minimal top nav: a cold visitor's only jobs here are
+            "see the value" or "log back in". Pricing/About live in the footer —
+            a buying decision before the value moment is a detour. */}
         <nav className="flex items-center gap-5 font-mono text-2xs tracking-[0.14em] text-fg-mute">
-          <Link href="/pricing" className="hidden sm:block hover:text-fg transition-colors">Pricing</Link>
-          <Link href="/about"   className="hidden sm:block hover:text-fg transition-colors">About</Link>
-          <span className="hidden sm:block w-px h-3.5 bg-border-2" aria-hidden />
           <Link href="/login"   className="hover:text-fg transition-colors">Log in</Link>
           <Link
             href="/signup"
@@ -75,22 +75,28 @@ export function LandingPage() {
               verdict.
             </p>
 
+            {/* Primary CTA: the shortest path to the value moment — a REAL,
+                disclosed influence operation already assembled with its
+                evidence, ~10 seconds away, no account. The token is the
+                stable featured-campaign token (cmp_ + campaign_key, seeded at
+                boot; pinned by test_stable_tokens_match_the_landing_page_contract
+                so a scheme change breaks loudly instead of dead-linking). */}
             <div
               className="flex items-center gap-3 flex-wrap mb-9"
               style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '150ms' }}
             >
-              <Link
-                href="/signup"
+              <a
+                href="/rc/cmp_feat_cn_xinjiang"
                 className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-6 py-2.5 rounded-sm hover:bg-accent-2 transition-colors text-sm btn-glow"
               >
-                Begin investigating
+                See a real campaign — no sign-up
                 <ArrowRight size={14} />
-              </Link>
+              </a>
               <Link
-                href="/pricing"
-                className="font-mono text-2xs tracking-wider text-fg-mute hover:text-fg-dim transition-colors"
+                href="/signup"
+                className="inline-flex items-center gap-2 border border-border-2 text-fg-dim font-medium px-5 py-2.5 rounded-sm hover:text-fg hover:border-border-hot transition-colors text-sm"
               >
-                View pricing →
+                Scan your own — sign up free
               </Link>
             </div>
 
@@ -98,7 +104,7 @@ export function LandingPage() {
               className="flex items-center gap-6 flex-wrap font-mono text-2xs text-fg-faint tracking-wider"
               style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '200ms' }}
             >
-              {['3 free scans', 'No credit card', 'Always probabilistic'].map((t) => (
+              {['A real disclosed operation, 10 seconds away', '3 free scans · no credit card', 'Always probabilistic'].map((t) => (
                 <span key={t} className="flex items-center gap-1.5">
                   <CheckCircle2 size={10} className="text-tier-low shrink-0" />
                   {t}
@@ -150,7 +156,7 @@ export function LandingPage() {
                   <span className="w-2 h-2 rounded-full bg-tier-low/55" />
                 </span>
                 <span className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">
-                  Live console · no account required
+                  Or scan your own target · no account required
                 </span>
               </div>
               <span className="font-mono text-2xs text-fg-faint tracking-wider">
