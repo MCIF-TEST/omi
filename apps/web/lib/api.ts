@@ -1343,19 +1343,21 @@ export interface OmiScore {
 
 /**
  * The threat dimension keys that actually contribute to the composite risk
- * score, in canonical display order. AI generation is deliberately NOT here —
- * it is a contextual signal (see CONTEXT_KEYS): AI-assisted writing is not
- * evidence of inauthenticity, so it informs without raising risk.
+ * score, in canonical display order. Two dimensions are deliberately NOT here
+ * (see CONTEXT_KEYS): AI generation (AI-assisted writing is not evidence of
+ * inauthenticity) and amplification (a behavioral proxy with no reach data —
+ * counting it would overclaim and double-count coordination). Both inform
+ * without raising risk. Mirrors the backend's is_contextual classification.
  */
 export const THREAT_KEYS = [
   'coordination_probability',
-  'amplification_probability',
   'spam_probability',
 ] as const;
 export type ThreatKey = (typeof THREAT_KEYS)[number];
 
 /** Contextual dimensions: reported for information, excluded from the risk score. */
 export const CONTEXT_KEYS = [
+  'amplification_probability',
   'ai_generation_probability',
 ] as const;
 export type ContextKey = (typeof CONTEXT_KEYS)[number];

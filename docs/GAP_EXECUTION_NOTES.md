@@ -261,6 +261,40 @@ The engine's Brier was already excellent (0.0345) — probabilities *rank* corre
 
 ---
 
+## GAP-08 — Amplification overclaim (demoted to contextual)  ✅ done
+
+**Problem.** `amplification_probability` was a counted threat dimension feeding
+the composite `omi_score` and primary-threat selection, yet it measures no
+reach: it is a re-weight of three detectors already scored elsewhere
+(`coordination·0.45 + engagement·0.35 + temporal·0.20`) — views, likes, shares,
+and engagement velocity are ingested nowhere in the pipeline. Counting it both
+**overclaims** ("artificial amplification" the engine cannot evidence — the
+single most attackable claim a sharp analyst could catch) and **double-counts
+coordination** in the composite.
+
+**Fix (Phase 2 / H2 of the execution master plan).** Reclassified
+`is_contextual=True` — the identical mechanism GAP-03 used for
+`ai_generation_probability`. `THREAT_DIMENSIONS` is derived as
+`is_risk and not is_contextual`, so amplification automatically drops out of
+the composite `omi_score`, primary-threat selection, and top-evidence roll-up
+while remaining computed, returned (flat field unchanged — API contract
+stable), explainable (full contribution trace), and rendered in the UI's
+"Context · not counted toward risk" block with its behavioral-proxy caveat.
+Frontend mirror: `amplification_probability` moved `THREAT_KEYS` →
+`CONTEXT_KEYS` in `apps/web/lib/api.ts`.
+
+**Not removed, not hidden** — per the trust principle, computed evidence stays
+visible; it just no longer scores. **Path back to "counted":** ingest real
+reach signals (like/view velocity, reply ratios — the YouTube client already
+fetches then discards `likeCount`/`replyCount`/`subscriberCount`) and rebuild
+the dimension as a measurement; until then it informs.
+
+**Pinned by** `test_amplification_is_contextual_not_scored` (+ the primary-
+threat set in `test_spam_bot_scores_high_with_threat_dimensions` tightened to
+the two dimensions that can actually be primary).
+
+---
+
 ## Cross-cutting things to remember
 
 - **Push flow:** pushes go to `claude/ecstatic-babbage-wu1f4`. (The sandbox proxy blocks push; a PAT is used transiently and the proxy remote restored immediately — never committed.)
