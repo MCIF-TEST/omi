@@ -121,6 +121,10 @@ This is a **detection-logic change and is explicitly out of Phase-2/H1 scope**
 ("do not optimize or modify detection logic") — recorded here for
 authorization, not done.
 
+> **Update:** authorized and executed — see `PHASE5_REPORT.md`. Measured:
+> humans induced elevation 0.324 → **0.000** with zero IO recall cost
+> (GRU 0.867 → 0.867, Xinjiang 0.889 → 0.889).
+
 Also carried forward from Phase 3: `co_tag` IDF hardening (still not biting on
 controls — 0 human co_tag clusters); IRA-class sparse-op recall; Tier-3B
 intent taxonomy.

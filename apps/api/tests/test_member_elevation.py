@@ -92,3 +92,20 @@ def test_summarize_reports_induced_elevation_separately_from_membership():
 
 def test_summarize_handles_empty():
     assert summarize([]) == {"n": 0}
+
+
+def test_borderline_base_is_held_at_moderate_by_the_boundary_hold():
+    """Phase 5: the exact Phase-4 residual population — borderline-MODERATE
+    standalone + style_match-only cluster. Pre-fix (ungated arm) crosses to
+    ELEVATED; production now holds at MODERATE via the boundary hold, so the
+    measured induced-elevation FPR on this population is the hold's effect."""
+    borderline = aggregate([
+        SignalResult(name="temporal", probability=0.5, confidence=0.4),
+        SignalResult(name="semantic", probability=0.45, confidence=0.35),
+    ])
+    assert borderline.tier is Tier.MODERATE
+    rows = measure_rows({"a": borderline}, [_cluster("style_match")], {"a": "organic"})
+    r = rows[0]
+    assert r.ungated_tier in (Tier.ELEVATED, Tier.HIGH)   # the old harm
+    assert r.gated_tier is Tier.MODERATE                  # held in production
+    assert r.gated_p <= 0.49

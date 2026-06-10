@@ -35,7 +35,7 @@ from app.detection.coordination.aggregate import (
     SUPPORTING_CEILING,
 )
 from app.detection.scoring import aggregate
-from app.schemas import ScanResult, SignalResult
+from app.schemas import ScanResult, SignalResult, Tier
 
 # The detector name the aggregator looks up ``weight_coordination`` under.
 COORDINATION_SIGNAL_NAME = "coordination"
@@ -52,6 +52,28 @@ _MAX_EVIDENCE = 5
 # detector flagged the member, the composed signal should not push the
 # member's per-account re-aggregate to HIGH.
 _SUPPORTING_CONFIDENCE_CEILING = 0.50
+
+# Boundary hold (Phase 5 / PHASE5_REPORT.md). Phase 4 measured the residual of
+# the signal-level gate: a capped (<=0.49/0.50) uncorroborated signal still
+# adds enough weight at re-aggregation to tip accounts whose STANDALONE score
+# was already borderline (0.39-0.49) just across the ELEVATED boundary
+# (humans: induced elevation 0.324). The hold completes the corroboration
+# principle at the verdict boundary: uncorroborated coordination may raise a
+# score WITHIN its tier band but may not cross a tier boundary upward. Mirrors
+# the single-axis HIGH cap idiom in app.detection.scoring (clamp at the tier
+# ceiling + plain-language score_adjustment).
+#   * base below ELEVATED -> adjusted capped at SUPPORTING_CEILING (0.49,
+#     top of MODERATE — the shared gate constant);
+#   * base ELEVATED       -> adjusted capped at 0.74 (the ELEVATED ceiling the
+#     single-axis cap already uses: no uncorroborated path to HIGH).
+_ELEVATED_TIER_CEILING = 0.74
+
+_TIER_PHRASE = {
+    Tier.LOW: "low suspicion of synthetic or coordinated behavior",
+    Tier.MODERATE: "moderate signs of patterns that warrant a closer look",
+    Tier.ELEVATED: "elevated indicators consistent with synthetic or coordinated activity",
+    Tier.HIGH: "strong indicators consistent with synthetic or coordinated activity",
+}
 
 
 def coordination_membership(
@@ -127,8 +149,53 @@ def apply_coordination(
     Pure and non-mutating: returns the original ``scan`` unchanged when the
     account is in no cluster, otherwise returns a fresh re-aggregated result
     that adds the ``coordination`` signal to the existing detector signals.
+
+    **Boundary hold (Phase 5).** When the member's clusters are uncorroborated
+    (no discriminative detector, <2 distinct methods), the re-aggregated
+    verdict may not cross a tier boundary upward: it is clamped at the base
+    tier band's ceiling (0.49 below ELEVATED; 0.74 below HIGH) with an
+    explicit ``score_adjustments`` narration — never silently. Corroborated
+    members are untouched, so coordination rescue is preserved.
     """
     signal = build_coordination_signal(clusters)
     if signal is None:
         return scan
-    return aggregate(list(scan.signals) + [signal])
+    adjusted = aggregate(list(scan.signals) + [signal])
+
+    corroborated = bool(signal.sub_signals.get("corroborated", 0.0) >= 1.0)
+    if corroborated:
+        return adjusted
+
+    # Uncorroborated: allow movement within the base tier band, hold the boundary.
+    base_elevated = scan.tier in (Tier.ELEVATED, Tier.HIGH)
+    if not base_elevated and adjusted.tier in (Tier.ELEVATED, Tier.HIGH):
+        ceiling, held_tier = SUPPORTING_CEILING, Tier.MODERATE
+    elif scan.tier == Tier.ELEVATED and adjusted.tier == Tier.HIGH:
+        ceiling, held_tier = _ELEVATED_TIER_CEILING, Tier.ELEVATED
+    else:
+        return adjusted
+
+    methods = ", ".join(sorted({c.method for c in clusters}))
+    capped_pct = int(round(ceiling * 100))
+    raw_pct = int(round(adjusted.overall_probability * 100))
+    conf_pct = int(round(adjusted.confidence * 100))
+    note = (
+        f"Coordination boundary hold: the only coordination evidence is a single "
+        f"non-discriminative method ({methods}), which may raise suspicion within "
+        f"the current tier but cannot cross into {('HIGH' if held_tier is Tier.ELEVATED else 'ELEVATED')} "
+        f"without a second independent method or a discriminative signal "
+        f"(fingerprint / co-engagement / co-tag). Held at {capped_pct}% "
+        f"(uncapped re-aggregate: {raw_pct}%)."
+    )
+    summary = (
+        f"Overall estimate: {capped_pct}% probability of {_TIER_PHRASE[held_tier]} "
+        f"(scan confidence ~{conf_pct}%). Coordination evidence present but "
+        f"uncorroborated — held below {('HIGH' if held_tier is Tier.ELEVATED else 'ELEVATED')} "
+        f"pending a second independent method."
+    )
+    return adjusted.model_copy(update={
+        "overall_probability": ceiling,
+        "tier": held_tier,
+        "summary": summary,
+        "score_adjustments": [*adjusted.score_adjustments, note],
+    })
