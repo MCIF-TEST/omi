@@ -1,0 +1,293 @@
+[
+  {
+    "campaign_key": "feat_ru_gru_202012",
+    "display_name": "Russia \u00b7 GRU (Dec 2020 disclosure)",
+    "blurb": "A Russian military-intelligence (GRU) network from Twitter's official state-actor disclosure. Omi re-derives the coordination from behaviour alone \u2014 shared posting fingerprints and a common hashtag / amplification network \u2014 never from the disclosure label.",
+    "platform": "x",
+    "coordination_score": 1.0,
+    "confidence": 0.7721,
+    "member_count": 16,
+    "methods": [
+      "co_tag",
+      "style_match"
+    ],
+    "hashtags": [
+      "#abu_hammam",
+      "#abuabdialashd",
+      "#abualduhur",
+      "#abudali",
+      "#abuhashab",
+      "#abuses",
+      "#achan",
+      "#activists",
+      "#afrin",
+      "#against",
+      "#aggression",
+      "#ahrar"
+    ],
+    "mentions": [
+      "@dannymakkisyria",
+      "@realdonaldtrump",
+      "@smmidani"
+    ],
+    "evidence": [
+      "3 accounts share an implausibly similar writing-style fingerprint (mean style-distance 0.106); patterns consistent with a single author behind multiple accounts.",
+      "15 accounts push the same hashtags / amplify the same handles (max shared tags in a pair: 39, mean Jaccard 0.17) \u2014 shared-target coordination.",
+      "12 accounts share an implausibly similar writing-style fingerprint (mean style-distance 0.120); patterns consistent with a single author behind multiple accounts."
+    ],
+    "members": [
+      {
+        "account_external_id": "135AEY00MOP1tH7YCuKyQx2xM0hG1vsl7l+0QPTliyM=",
+        "handle": "135AEY00MOP1tH7YCuKyQx2xM0hG1vsl7l+0QPTliyM=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "6nDcSemH7EpMzxlBrA8G5QRpuoEj4Bl2drKLTQnWE=",
+        "handle": "6nDcSemH7EpMzxlBrA8G5QRpuoEj4Bl2drKLTQnWE=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "7WTYPcAGruW7ZtKtLorAsQoBkPdRwCt0vtm6931MVE=",
+        "handle": "7WTYPcAGruW7ZtKtLorAsQoBkPdRwCt0vtm6931MVE=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "8K26YsyMwaxAbofr9cYRDbjIDwf5kYJkp1FqGZB+A=",
+        "handle": "8K26YsyMwaxAbofr9cYRDbjIDwf5kYJkp1FqGZB+A=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "XY8GkjD7wdwBUNuKQguI7S9m6N4ynAjrOoBdReCxvI=",
+        "handle": "XY8GkjD7wdwBUNuKQguI7S9m6N4ynAjrOoBdReCxvI=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "D4cAip8nhfxLE+z0BCnXrncE042+9A7rH5PCM0B1do8=",
+        "handle": "D4cAip8nhfxLE+z0BCnXrncE042+9A7rH5PCM0B1do8=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "qBf+h+wuixptxkrp9LXpR7KQSoNGxJsvvPlkpciS4=",
+        "handle": "qBf+h+wuixptxkrp9LXpR7KQSoNGxJsvvPlkpciS4=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "883565926473486336",
+        "handle": "PamSpenser",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "oX70apRWUW16BANgrVbdK+UVxH0NdxvC9b4HHO+aA9Y=",
+        "handle": "oX70apRWUW16BANgrVbdK+UVxH0NdxvC9b4HHO+aA9Y=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "849852472915046400",
+        "handle": "Syria_FreeNews",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "yCE6QGGRX4Lvm3hKCwS5Y4WlwhS4t5FhtV44LeUM=",
+        "handle": "yCE6QGGRX4Lvm3hKCwS5Y4WlwhS4t5FhtV44LeUM=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      },
+      {
+        "account_external_id": "9zxsi+qIsPp4ZaNFZCxaLJIePPypzDuzVZg97pJfU=",
+        "handle": "9zxsi+qIsPp4ZaNFZCxaLJIePPypzDuzVZg97pJfU=",
+        "methods": [
+          "co_tag",
+          "style_match"
+        ]
+      }
+    ]
+  },
+  {
+    "campaign_key": "feat_cn_xinjiang",
+    "display_name": "China \u00b7 Xinjiang (CNHU disclosure)",
+    "blurb": "A People's-Republic-of-China information operation amplifying Xinjiang narratives, from Twitter's state-actor disclosure. Three independent methods agree it is one coordinated account cluster \u2014 corroborated, not a lone-bot guess.",
+    "platform": "x",
+    "coordination_score": 0.9991,
+    "confidence": 0.7944,
+    "member_count": 41,
+    "methods": [
+      "age_cohort",
+      "co_tag",
+      "fingerprint_cluster"
+    ],
+    "hashtags": [
+      "#covid\u30fc19",
+      "#stopxinjiangrumors",
+      "#xinjiang",
+      "#xinjiangonline",
+      "#\u65b0\u51a0",
+      "#\u65b0\u51a0\u75ab\u60c5",
+      "#\u75ab\u60c5",
+      "#\u90ed\u6587\u8d35",
+      "#\u9999\u6e2f"
+    ],
+    "mentions": [
+      "@2a2wrty8tjzom4t",
+      "@bernard27471",
+      "@brittanyparham5",
+      "@faustorosenow8",
+      "@gordon2035",
+      "@isagsudgn",
+      "@jilljon57914437",
+      "@josephine3021",
+      "@n6re4ncdbonadsu",
+      "@ntry7whhrm6byyu",
+      "@o7l1na4qijok6ctzey0wo6q86snsly1javczldgzoka",
+      "@pavcj4l0imjerf2"
+    ],
+    "evidence": [
+      "30 of 45 commenters (67%) created their accounts between 2019-12-09 and 2020-01-06 \u2014 an unusually narrow window for an organic audience.",
+      "13 accounts share an unusually similar behavioral fingerprint (mean intra-cluster distance 0.24) and individually scored a mean probability of 0.77 \u2014 patterns consistent with a bot family produced from the same template.",
+      "18 accounts share an unusually similar behavioral fingerprint (mean intra-cluster distance 0.25) and individually scored a mean probability of 0.77 \u2014 patterns consistent with a bot family produced from the same template.",
+      "3 accounts share an unusually similar behavioral fingerprint (mean intra-cluster distance 0.14) and individually scored a mean probability of 0.72 \u2014 patterns consistent with a bot family produced from the same template.",
+      "2 accounts push the same hashtags / amplify the same handles (max shared tags in a pair: 2, mean Jaccard 0.50) \u2014 shared-target coordination."
+    ],
+    "members": [
+      {
+        "account_external_id": "lPTsj5EMWUwWRifiYQg9oE6U5JcC9Ov7SchwExd60w=",
+        "handle": "lPTsj5EMWUwWRifiYQg9oE6U5JcC9Ov7SchwExd60w=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "VRNTYEcK2crZwLoRiKuc7U19fAyS+9rcj0tNvSGNIkM=",
+        "handle": "VRNTYEcK2crZwLoRiKuc7U19fAyS+9rcj0tNvSGNIkM=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "+IaoLY8BeREh4POcAjxbxX3wwFM0OcLcm8Ufu6fgEc=",
+        "handle": "+IaoLY8BeREh4POcAjxbxX3wwFM0OcLcm8Ufu6fgEc=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "LuzKSBEWHdEkwhxvIfeO8NoqvY0zPKkR7pCStzCKO20=",
+        "handle": "LuzKSBEWHdEkwhxvIfeO8NoqvY0zPKkR7pCStzCKO20=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "TMzET2NlvyuU8ImRG70vLuv6Np1nYHrZlEUk7gwfXos=",
+        "handle": "TMzET2NlvyuU8ImRG70vLuv6Np1nYHrZlEUk7gwfXos=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "Nb2ffdKj1Out79qi1VGvrUPH8ciQWehkASd+fPT5KEc=",
+        "handle": "Nb2ffdKj1Out79qi1VGvrUPH8ciQWehkASd+fPT5KEc=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "tB7VzTaHn1+D096M2ZugHbpveS+spgyYmYqwZ5jR4A=",
+        "handle": "tB7VzTaHn1+D096M2ZugHbpveS+spgyYmYqwZ5jR4A=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "BCrZ4gchSRZ2Lbb8EU55wZ4rkQcsesHB7g5Eu07RY=",
+        "handle": "BCrZ4gchSRZ2Lbb8EU55wZ4rkQcsesHB7g5Eu07RY=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "HJVt9uammULEw0aS82bK9z5pQWWAcFCjKxIF25qtYHk=",
+        "handle": "HJVt9uammULEw0aS82bK9z5pQWWAcFCjKxIF25qtYHk=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "FIee5C4QpUE+qUAH0PGWYldQXfXF2eg5m43suCLJ8=",
+        "handle": "FIee5C4QpUE+qUAH0PGWYldQXfXF2eg5m43suCLJ8=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "bGQjM8fXcU3pfeZ+17AruB1cpDty5XSxpf5pICR0HE=",
+        "handle": "bGQjM8fXcU3pfeZ+17AruB1cpDty5XSxpf5pICR0HE=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      },
+      {
+        "account_external_id": "he6dW1MHnw9DAACKsIP34dnR3QLpZYvI7nP992pgqk=",
+        "handle": "he6dW1MHnw9DAACKsIP34dnR3QLpZYvI7nP992pgqk=",
+        "methods": [
+          "age_cohort",
+          "co_tag",
+          "fingerprint_cluster"
+        ]
+      }
+    ]
+  }
+]

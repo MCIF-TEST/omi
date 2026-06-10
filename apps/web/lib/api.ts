@@ -260,6 +260,16 @@ export interface CampaignReportResponse {
   view: CampaignReportView;
 }
 
+// Featured campaigns — real, disclosed influence operations seeded for first-run
+// value (mirrors apps/api/app/routes/campaigns.py FeaturedCampaign).
+export interface FeaturedCampaign extends CampaignSummary {
+  blurb: string | null;
+}
+
+export interface FeaturedCampaignsResponse {
+  campaigns: FeaturedCampaign[];
+}
+
 export interface NarrativeOut {
   id: number;
   label: string;

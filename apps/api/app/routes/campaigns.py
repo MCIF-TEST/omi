@@ -112,6 +112,43 @@ def list_campaigns(
         return CampaignsResponse(campaigns=[_summary(c) for c in rows], total=total)
 
 
+class FeaturedCampaign(CampaignSummary):
+    blurb: str | None = None
+
+
+class FeaturedCampaignsResponse(BaseModel):
+    campaigns: list[FeaturedCampaign]
+
+
+# NOTE: declared BEFORE the /{campaign_key} route so "featured" isn't captured
+# as a campaign key.
+@router.get("/featured", response_model=FeaturedCampaignsResponse)
+def list_featured_campaigns(
+    current: CurrentUser = Depends(require_user),
+) -> FeaturedCampaignsResponse:
+    """Real, validated example campaigns (seeded from state-actor disclosure
+    archives, scored by the engine) so a new user can explore a genuine
+    coordinated operation on first visit. Fixture order; each carries a short
+    editorial blurb. Empty if the fixture/seed is absent."""
+    from app.content.featured import featured_blurbs, featured_keys
+
+    keys = featured_keys()
+    if not keys:
+        return FeaturedCampaignsResponse(campaigns=[])
+    blurbs = featured_blurbs()
+    with get_session() as session:
+        rows = session.execute(
+            select(Campaign).where(Campaign.campaign_key.in_(keys))
+        ).scalars().all()
+    by_key = {c.campaign_key: c for c in rows}
+    out: list[FeaturedCampaign] = []
+    for k in keys:  # preserve fixture order
+        c = by_key.get(k)
+        if c is not None:
+            out.append(FeaturedCampaign(**_summary(c).model_dump(), blurb=blurbs.get(k)))
+    return FeaturedCampaignsResponse(campaigns=out)
+
+
 def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
     """Assemble the full CampaignDetail for a key, or None if absent. Shared by
     the detail endpoint and the evidence-pack export so both read identically."""
