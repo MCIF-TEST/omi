@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Activity, Search, Zap, Network as NetworkIcon, ChevronDown, ChevronRight, Users, AlertTriangle } from 'lucide-react';
+import { Activity, Search, Zap, Network as NetworkIcon, ChevronDown, ChevronRight, Users, AlertTriangle, ShieldCheck, ShieldAlert, Info } from 'lucide-react';
 import Link from 'next/link';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
-import { type ComprehensiveScanResult, type CoordinationCluster } from '@/lib/api';
+import { ConfidenceBand } from '@/components/shared/confidence-band';
+import { EvidenceForAgainst } from '@/components/shared/trust-lists';
+import { type ComprehensiveScanResult, type CoordinationCluster, isCorroborated } from '@/lib/api';
 
 export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
   const prob = data.overall_probability;
@@ -27,6 +29,12 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
           </div>
         </div>
       </header>
+
+      {/* Why this verdict — the trust contract on the headline the user actually
+          sees. Confidence + evidence-for + evidence-weakening + corroboration +
+          an honest result-state, all derived from data already on the payload.
+          No new score: confidence is the mean of the detectors' own confidence. */}
+      <VerdictTrustBlock data={data} />
 
       {/* Stat strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -135,6 +143,168 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
         </section>
       )}
     </article>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Verdict trust block — "Why does Omi believe this, and what would weaken it?"
+// Everything here is derived from fields already on the payload (per-commenter
+// reasons / weak_signals / confidence, cluster evidence + methods, cross-links).
+// The displayed confidence is the mean of the detectors' own confidence — a
+// surfacing of existing values, NOT a new scoring system.
+// ---------------------------------------------------------------------------
+
+type ResultState = 'coordination_found' | 'organic' | 'insufficient_data';
+
+const RESULT_STATE_META: Record<
+  ResultState,
+  { label: string; tone: string; icon: React.ReactNode; body: string }
+> = {
+  coordination_found: {
+    label: 'Coordination found',
+    tone: 'text-tier-elevated border-tier-elevated/40 bg-tier-elevated/[0.07]',
+    icon: <ShieldAlert size={14} />,
+    body: 'At least one coordinated cluster was detected on this scan. Review the corroboration status and the rings below before treating it as a campaign — coordination is a lead to verify, not a verdict of intent.',
+  },
+  organic: {
+    label: 'Organic — no coordination corroborated',
+    tone: 'text-tier-low border-tier-low/40 bg-tier-low/[0.07]',
+    icon: <ShieldCheck size={14} />,
+    body: 'Omi scanned enough activity and did not find corroborated coordination. This is a substantive "looks organic" result, not a failure — most authentic content lands here.',
+  },
+  insufficient_data: {
+    label: 'Not enough data for a confident read',
+    tone: 'text-fg-mute border-border-2 bg-bg-elev/30',
+    icon: <Info size={14} />,
+    body: 'Too little history/volume to score confidently — detectors mostly abstained. This is not "clean": widen the scan (more commenters) or add account history before relying on the result.',
+  },
+};
+
+function _dedupe(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of items) {
+    const k = (s || '').trim();
+    if (k && !seen.has(k)) { seen.add(k); out.push(k); }
+  }
+  return out;
+}
+
+/** Mean of the detectors' OWN confidence, weighted like the verdict's parts.
+ *  Surfacing of existing values — not a new score. */
+function _overallConfidence(data: ComprehensiveScanResult): number {
+  const parts: { value: number; weight: number }[] = [];
+  if (data.focus_account) parts.push({ value: data.focus_account.confidence ?? 0, weight: 1 });
+  const commenters = data.video?.commenters ?? [];
+  if (commenters.length) {
+    const mean = commenters.reduce((s, c) => s + (c.confidence ?? 0), 0) / commenters.length;
+    parts.push({ value: mean, weight: 0.8 });
+  }
+  const cs: any = data.comments_scan;
+  if (cs && typeof cs.confidence === 'number') parts.push({ value: cs.confidence, weight: 0.7 });
+  const wsum = parts.reduce((s, p) => s + p.weight, 0);
+  if (!wsum) return 0;
+  return parts.reduce((s, p) => s + p.value * p.weight, 0) / wsum;
+}
+
+function _resultState(data: ComprehensiveScanResult, conf: number): ResultState {
+  const v = data.video;
+  const clusters = v?.clusters ?? [];
+  const coordFound =
+    clusters.some((c) => c.score >= 0.5) ||
+    (v ? v.coordination_tier === 'elevated' || v.coordination_tier === 'high' : false) ||
+    data.overall_tier === 'elevated' || data.overall_tier === 'high';
+  if (coordFound) return 'coordination_found';
+  const commenters = v?.commenters?.length ?? 0;
+  const focusDepth = data.focus_account?.history_size ?? 0;
+  const scannedEnough = conf >= 0.3 && (commenters >= 5 || focusDepth >= 8);
+  return scannedEnough ? 'organic' : 'insufficient_data';
+}
+
+function _evidenceFor(data: ComprehensiveScanResult): string[] {
+  const out: string[] = [];
+  const v = data.video;
+  for (const c of [...(v?.clusters ?? [])].sort((a, b) => b.score - a.score).slice(0, 3)) {
+    if (c.evidence?.[0]) out.push(c.evidence[0]);
+  }
+  for (const l of (data.cross_links ?? []).filter((x) => x.severity === 'high' || x.severity === 'elevated').slice(0, 2)) {
+    if (l.summary) out.push(l.summary);
+  }
+  for (const r of (data.focus_account?.reasons ?? []).slice(0, 2)) out.push(r);
+  for (const c of (v?.commenters ?? []).filter((x) => x.tier === 'moderate' || x.tier === 'elevated' || x.tier === 'high')) {
+    for (const r of c.reasons ?? []) out.push(r);
+  }
+  return _dedupe(out).slice(0, 5);
+}
+
+function _evidenceAgainst(data: ComprehensiveScanResult, conf: number, state: ResultState): string[] {
+  const out: string[] = [];
+  const commenters = data.video?.commenters ?? [];
+  for (const c of commenters) for (const w of c.weak_signals ?? []) out.push(w);
+  const lowConf = commenters.filter((c) => (c.confidence ?? 0) < 0.4).length;
+  if (commenters.length && lowConf > 0) {
+    out.push(`${lowConf} of ${commenters.length} commenters had too little history for a confident read — their scores are tentative.`);
+  }
+  if (state === 'coordination_found') {
+    out.push('Even corroborated coordination is not proof of intent: legitimate on-message groups (newsrooms, campaigns, fandoms) can share methods. Verify before concluding.');
+  } else {
+    out.push('Shared phrasing or timing can reflect a common reaction to the same content rather than coordination — Omi requires corroboration across independent methods before treating it as a campaign.');
+  }
+  if (conf < 0.3) {
+    out.push('Overall confidence is low — limited data backed this scan. Widen the scan or add account history before relying on it.');
+  }
+  return _dedupe(out).slice(0, 5);
+}
+
+function VerdictTrustBlock({ data }: { data: ComprehensiveScanResult }) {
+  const conf = _overallConfidence(data);
+  const state = _resultState(data, conf);
+  const meta = RESULT_STATE_META[state];
+  const forItems = _evidenceFor(data);
+  const againstItems = _evidenceAgainst(data, conf, state);
+  const clusters = data.video?.clusters ?? [];
+  const methods = clusters.map((c) => c.method);
+  const corroborated = clusters.length > 0 ? isCorroborated(methods) : null;
+
+  return (
+    <section className="space-y-4">
+      {/* Honest result-state banner */}
+      <div className={`flex items-start gap-3 rounded-xl border p-4 ${meta.tone}`}>
+        <span className="shrink-0 mt-0.5">{meta.icon}</span>
+        <div className="min-w-0">
+          <div className="font-mono text-2xs uppercase tracking-wider mb-1">{meta.label}</div>
+          <p className="text-sm text-fg-dim leading-relaxed">{meta.body}</p>
+        </div>
+        {corroborated !== null && (
+          <span
+            title={corroborated
+              ? 'A discriminative detector (fingerprint / co-engagement / co-tag) or ≥2 independent methods agree.'
+              : 'Only a single non-discriminative detector fired — capped at MODERATE under the corroboration gate.'}
+            className={`shrink-0 inline-flex items-center gap-1 font-mono text-2xs uppercase tracking-wider px-2 py-1 rounded-sm border ${
+              corroborated
+                ? 'border-accent/40 bg-accent/10 text-accent'
+                : 'border-tier-moderate/40 bg-tier-moderate/10 text-tier-moderate'
+            }`}
+          >
+            {corroborated ? <ShieldCheck size={11} /> : <AlertTriangle size={11} />}
+            {corroborated ? 'corroborated' : 'supporting only'}
+          </span>
+        )}
+      </div>
+
+      {/* Confidence band — the verdict is a number AND its uncertainty */}
+      <div className="bg-bg border border-border-1 rounded-xl p-4">
+        <ConfidenceBand probability={data.overall_probability} confidence={conf} />
+      </div>
+
+      {/* Why this verdict / what would weaken it */}
+      <EvidenceForAgainst
+        forItems={forItems}
+        againstItems={againstItems}
+        forEmpty="No specific suspicion signals fired on this scan."
+        againstEmpty="No data-quality caveats surfaced."
+      />
+    </section>
   );
 }
 

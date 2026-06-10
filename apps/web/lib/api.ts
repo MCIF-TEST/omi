@@ -1303,9 +1303,17 @@ export const CONTEXT_KEYS = [
 ] as const;
 export type ContextKey = (typeof CONTEXT_KEYS)[number];
 
-export const THREAT_META: Record<ThreatKey | ContextKey, { label: string; short: string }> = {
+export const THREAT_META: Record<ThreatKey | ContextKey, { label: string; short: string; caveat?: string }> = {
   coordination_probability:  { label: 'Coordinated activity',   short: 'Coordination' },
-  amplification_probability: { label: 'Artificial amplification', short: 'Amplification' },
+  // Honesty: amplification is a BEHAVIORAL proxy (re-weighted coordination /
+  // engagement / timing), not measured reach — like/view/follower-velocity data
+  // is not yet ingested. Surface that plainly rather than overclaiming
+  // "artificial amplification" the engine cannot actually evidence.
+  amplification_probability: {
+    label: 'Amplification (behavioral proxy)',
+    short: 'Amplification',
+    caveat: 'Behavioral proxy — inferred from coordination, engagement and timing, not measured reach (likes / views / follower velocity are not yet ingested). Read as a behavioral signal, not confirmed reach inflation.',
+  },
   spam_probability:          { label: 'Spam behavior',          short: 'Spam' },
   ai_generation_probability: { label: 'AI-generated content',   short: 'AI generation' },
 };
