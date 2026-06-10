@@ -74,10 +74,14 @@ The two mechanism fixes shipped (corroboration gate + `co_tag`; see
    real controls: induced elevation on legit humans 0.500 (pre-fix) → **0.324**
    (production), the low-standalone failure mode eliminated (gate-saved humans
    were 0.15–0.33 standalone), GRU rescue cost zero, no human reaches HIGH.
-   **Residual (now the precision gap):** a capped supporting-only signal can
-   still tip *borderline* humans (standalone 0.39–0.49) just across the
-   ELEVATED boundary. Candidate boundary-cap fix recorded in Phase 4 §4 —
-   detection-logic change, awaiting authorization.
+   **Residual — ✅ closed in Phase 5 (`PHASE5_REPORT.md`):** the boundary hold
+   now prevents any uncorroborated signal from crossing a tier boundary
+   upward (within-band raises still allowed, always narrated). Measured:
+   humans induced elevation 0.324 → **0.000**, IO recall cost zero
+   (GRU 0.867 → 0.867, Xinjiang 0.889 → 0.889). The coordination trust
+   boundary's precision arm is considered **closed**; what remains on humans
+   is the standalone engine's own 0.244 broadcast-account rate (a
+   single-account issue, tracked separately).
 2. **No manipulation-intent signal yet** — corroboration separates *coordinated* from
    *not*, but a legitimately coordinated cohort (a campaign team, a newsroom on a live
    story) that *also* trips a discriminative lens would not be distinguished from a
@@ -85,9 +89,7 @@ The two mechanism fixes shipped (corroboration gate + `co_tag`; see
 3. **`expected_tier` taxonomy** for benign automation remains unrevised (Phase 1).
 
 ### Future work
-- **Boundary-cap at elevation** (closes the residual in risk #1; see
-  `PHASE4_REPORT.md` §4 — an uncorroborated signal may move a score within
-  MODERATE but not across the ELEVATED boundary).
+- ~~Boundary-cap at elevation~~ — ✅ done & measured (`PHASE5_REPORT.md`).
 - **Manipulation-intent layer** (risk #2) — the conceptual core of Tier 3B: separate
   coordinated-and-legitimate from coordinated-and-manipulative using the `narrative` /
   astroturf-language / amplification-asymmetry signals, plus the

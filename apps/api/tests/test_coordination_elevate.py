@@ -18,7 +18,7 @@ from app.detection.coordination.elevate import (
 import pytest
 
 from app.detection.scoring import aggregate
-from app.schemas import SignalResult
+from app.schemas import SignalResult, Tier
 
 
 def _cluster(method: str, members: list[str], score: float, evidence=None) -> CoordinationCluster:
@@ -126,3 +126,73 @@ def test_evidence_is_truncated_to_five():
     clusters = [_cluster("m", ["a"], 0.7, evidence=[f"e{i}" for i in range(10)])]
     sig = build_coordination_signal(clusters)
     assert len(sig.evidence) == 5
+
+
+# --- Phase-5 boundary hold --------------------------------------------------
+# Phase 4 measured the signal-cap's residual: a capped uncorroborated signal
+# still tips BORDERLINE-standalone accounts (0.39-0.49) just across the
+# ELEVATED boundary (humans induced elevation 0.324). The hold completes the
+# corroboration principle at the verdict boundary: uncorroborated coordination
+# may move a score within its tier band but may not cross a boundary upward —
+# clamped at the band ceiling with explicit score_adjustments narration,
+# mirroring the single-axis HIGH cap idiom in app.detection.scoring.
+
+def _borderline_moderate_base():
+    """A borderline-MODERATE standalone scan (~0.40) — the Phase-4 residual
+    population (humans at 0.39-0.49 standalone)."""
+    return aggregate([
+        SignalResult(name="temporal", probability=0.5, confidence=0.4),
+        SignalResult(name="semantic", probability=0.45, confidence=0.35),
+    ])
+
+
+def test_boundary_hold_keeps_uncorroborated_borderline_below_elevated():
+    base = _borderline_moderate_base()
+    assert base.tier is Tier.MODERATE  # precondition: the residual population
+    clusters = [_cluster("style_match", ["a"], 0.85)]
+    # The capped signal alone would still cross the boundary (the residual).
+    raw = aggregate(list(base.signals) + [build_coordination_signal(clusters)])
+    assert raw.tier in (Tier.ELEVATED, Tier.HIGH)
+    # Production: held at the MODERATE ceiling, never silently.
+    out = apply_coordination(base, clusters)
+    assert out.tier is Tier.MODERATE
+    assert out.overall_probability == pytest.approx(0.49)
+    assert any("boundary hold" in a.lower() for a in out.score_adjustments)
+    assert "uncorroborated" in out.summary
+
+
+def test_boundary_hold_allows_movement_within_the_band():
+    """An uncorroborated lift that does NOT cross a boundary is untouched —
+    the hold is a boundary rule, not a suppression of evidence."""
+    low = aggregate([
+        SignalResult(name="temporal", probability=0.2, confidence=0.4),
+        SignalResult(name="semantic", probability=0.3, confidence=0.3),
+        SignalResult(name="profile", probability=0.25, confidence=0.5),
+    ])
+    out = apply_coordination(low, [_cluster("style_match", ["a"], 0.85)])
+    assert out.overall_probability > low.overall_probability  # raise allowed
+    assert out.tier is Tier.MODERATE                          # no crossing
+    assert not any("boundary hold" in a.lower() for a in out.score_adjustments)
+
+
+def test_boundary_hold_blocks_uncorroborated_high_from_elevated_base():
+    """The same principle one tier up: no uncorroborated path to HIGH —
+    consistent with the single-axis HIGH cap (clamped at 0.74/ELEVATED)."""
+    base = aggregate([
+        SignalResult(name="temporal", probability=0.8, confidence=0.6),
+        SignalResult(name="voice", probability=0.75, confidence=0.55),
+    ])
+    assert base.tier is Tier.ELEVATED
+    out = apply_coordination(base, [_cluster("style_match", ["a"], 0.95)])
+    assert out.tier is Tier.ELEVATED
+    assert out.overall_probability == pytest.approx(0.74)
+    assert any("boundary hold" in a.lower() for a in out.score_adjustments)
+
+
+def test_boundary_hold_never_touches_corroborated_members():
+    """Rescue preserved: a discriminative cluster crosses boundaries freely —
+    the hold applies only to uncorroborated evidence."""
+    base = _borderline_moderate_base()
+    out = apply_coordination(base, [_cluster("fingerprint_cluster", ["a"], 0.9)])
+    assert out.tier in (Tier.ELEVATED, Tier.HIGH)
+    assert not any("boundary hold" in a.lower() for a in out.score_adjustments)
