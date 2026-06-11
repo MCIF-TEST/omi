@@ -16,7 +16,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from pydantic import BaseModel
 
 from app.core.auth import CurrentUser, require_user
@@ -95,7 +95,12 @@ def revoke_share_token(
 # Public: report data + markdown / json exports
 # ---------------------------------------------------------------------------
 
-public_router = APIRouter(prefix="/r", tags=["public-reports"])
+from app.core.rate_limit import public_report_rate_limit  # noqa: E402
+
+public_router = APIRouter(
+    prefix="/r", tags=["public-reports"],
+    dependencies=[Depends(public_report_rate_limit)],
+)
 
 
 class PublicReportResponse(BaseModel):
@@ -136,6 +141,7 @@ def _investigation_to_dict(inv: Investigation) -> dict:
 
 @public_router.get("/{token}", response_model=PublicReportResponse)
 def public_report_view(
+    request: Request,
     token: str = Path(min_length=8),
     template: Literal["executive", "evidence"] = Query("executive"),
 ) -> PublicReportResponse:
@@ -146,6 +152,11 @@ def public_report_view(
         investigation=_investigation_to_dict(inv),
         payload=inv.payload_json or {},
     )
+    # Q3 (founder learning): was the shared link actually read? Deduped per
+    # (token, ip-hash) per 10 min; token only, user_id NULL, IP never stored.
+    from app.analytics.event_log import record_public_view
+    from app.core.ip import client_ip
+    record_public_view(token, "investigation", ip=client_ip(request))
     return PublicReportResponse(view=view)
 
 

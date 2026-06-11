@@ -53,7 +53,23 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-export function Sidebar() {
+// Pre-activation (no investigations yet) the nav narrows to the value-moment
+// path: Dashboard / Investigate / Investigations / Campaigns / Settings.
+// Narratives, Graph, Content DB, and Monitoring reappear after the first
+// investigation — they're analysis surfaces for work that doesn't exist yet,
+// and each is a way to get lost before experiencing the product's value.
+const NEW_USER_VISIBLE = new Set([
+  '/dashboard', '/investigate', '/investigations', '/campaigns', '/settings',
+]);
+
+function visibleGroups(isNewUser: boolean) {
+  if (!isNewUser) return NAV_GROUPS;
+  return NAV_GROUPS
+    .map((g) => ({ ...g, items: g.items.filter((i) => NEW_USER_VISIBLE.has(i.href)) }))
+    .filter((g) => g.items.length > 0);
+}
+
+export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -65,7 +81,7 @@ export function Sidebar() {
 
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
-        {NAV_GROUPS.map((group) => (
+        {visibleGroups(isNewUser).map((group) => (
           <div key={group.label}>
             <div className="px-3 mb-1.5 font-mono text-[0.6rem] tracking-[0.2em] text-fg-faint uppercase select-none">
               {group.label}

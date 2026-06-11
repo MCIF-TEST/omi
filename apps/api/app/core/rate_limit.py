@@ -14,6 +14,8 @@ import threading
 import time
 from collections import deque
 
+from fastapi import HTTPException, Request, status
+
 
 class SlidingWindowLimiter:
     """One limiter per key. ``hit()`` returns False if over budget."""
@@ -55,3 +57,24 @@ LOGIN_LIMITER = SlidingWindowLimiter(max_hits=10, per_seconds=60)
 SIGNUP_LIMITER = SlidingWindowLimiter(max_hits=5, per_seconds=3600)
 # Password reset requests — tight, to slow token-mining + email bombing.
 RESET_LIMITER = SlidingWindowLimiter(max_hits=5, per_seconds=3600)
+# Public report routes (/r/*, /rc/*) — unauthenticated and uncached. Generous
+# so a genuinely viral report from many viewers is never throttled, but a
+# single scraper hammering one IP is capped (and can't flood the EventLog).
+PUBLIC_REPORT_LIMITER = SlidingWindowLimiter(max_hits=60, per_seconds=60)
+
+
+def public_report_rate_limit(request: Request) -> None:
+    """FastAPI dependency: per-IP throttle for the public report routers.
+
+    Applied at the router level so it covers the view + markdown + json
+    sub-routes in one place. Keyed on the client IP (never stored).
+    """
+    from app.core.ip import client_ip
+
+    ip = client_ip(request)
+    if not PUBLIC_REPORT_LIMITER.hit(ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests — please try again shortly.",
+            headers={"Retry-After": str(int(PUBLIC_REPORT_LIMITER.retry_after(ip)) + 1)},
+        )

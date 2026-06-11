@@ -37,6 +37,14 @@ export default function PrivacyPage() {
             Payment details are handled exclusively by Stripe. We never receive
             or store your card number.
           </li>
+          <li>
+            A small first-party log of product actions (viewing a featured
+            example, exporting or sharing a report, a public report being
+            opened, and your optional answer to one feedback question) — used
+            only to learn what users find useful. No IP addresses, no device
+            fingerprinting, no session recording, and no third-party analytics
+            of any kind.
+          </li>
         </ul>
       </Section>
 

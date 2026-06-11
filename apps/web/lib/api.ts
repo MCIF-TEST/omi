@@ -254,10 +254,18 @@ export interface CampaignReportView {
   observations: CampaignObservationOut[];
   methodology: string;
   disclaimer: string;
+  /** Present only on featured example reports: the other featured campaign(s)
+   *  an anonymous visitor can hop to without an account. */
+  other_featured?: { name: string; share_token: string }[];
 }
 
 export interface CampaignReportResponse {
   view: CampaignReportView;
+}
+
+// Founder learning (master-plan Phase 4) — mirrors apps/api/app/routes/learning.py.
+export interface WtpPromptStatus {
+  show_wtp: boolean;
 }
 
 // Featured campaigns — real, disclosed influence operations seeded for first-run

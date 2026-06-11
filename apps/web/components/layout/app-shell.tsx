@@ -3,7 +3,7 @@ import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { MobileNav } from './mobile-nav';
 import { ServiceDegradedBanner } from './service-health';
-import { type User, type EngineStatus } from '@/lib/api';
+import { type User, type EngineStatus, type InvestigationsListResponse } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 
 interface AppShellProps {
@@ -13,8 +13,20 @@ interface AppShellProps {
 
 export async function AppShell({ user, children }: AppShellProps) {
   let engineStatus: EngineStatus | undefined;
+  // Pre-activation focus: until the user has run a first investigation, the
+  // nav hides the secondary analysis/ops surfaces so the path to the value
+  // moment (featured campaign → first scan) has no detours. Fails open: if
+  // the probe errors, show the full nav rather than over-hiding.
+  let isNewUser = false;
   try {
-    engineStatus = await apiServer<EngineStatus>('/v1/status');
+    const [status, inv] = await Promise.all([
+      apiServer<EngineStatus>('/v1/status'),
+      apiServer<InvestigationsListResponse>('/v1/investigations?limit=1').catch(
+        () => ({ investigations: [{}] } as unknown as InvestigationsListResponse),
+      ),
+    ]);
+    engineStatus = status;
+    isNewUser = (inv.investigations ?? []).length === 0;
   } catch {
     /* status is decorative; if it's down, the topbar just hides counters */
   }
@@ -42,7 +54,7 @@ export async function AppShell({ user, children }: AppShellProps) {
         </div>
       )}
       <div className="flex-1 flex relative z-10">
-        <Sidebar />
+        <Sidebar isNewUser={isNewUser} />
         <main className="flex-1 min-w-0">
           {/* Bottom padding clears the mobile tab bar (+ home-indicator inset). */}
           <div className="max-w-[1440px] mx-auto px-4 py-5 md:px-6 md:py-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 animate-fade-up">
@@ -52,7 +64,7 @@ export async function AppShell({ user, children }: AppShellProps) {
       </div>
 
       {/* Thumb-reachable primary navigation — phones only. */}
-      <MobileNav email={user.email} />
+      <MobileNav email={user.email} isNewUser={isNewUser} />
     </div>
   );
 }

@@ -210,6 +210,14 @@ function CampaignCard({ campaign: c, rank }: { campaign: CampaignSummary; rank: 
         <div className="flex items-center justify-between mb-3 gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-2xs text-fg-faint">#{rank}</span>
+            {c.campaign_key.startsWith('feat_') && (
+              <span
+                title="A real, disclosed influence operation seeded as a worked example — not one of your scans."
+                className="inline-flex items-center font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-sm border border-accent/40 bg-accent/10 text-accent"
+              >
+                example
+              </span>
+            )}
             <StatusPill status={c.status} />
             {!corroborated && (
               <span

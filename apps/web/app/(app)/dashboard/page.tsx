@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
 import {
   type EngineStatus, type InvestigationsListResponse, type FeaturedCampaignsResponse,
-  type FeaturedCampaign, isCorroborated, VERDICT_LABELS,
+  type FeaturedCampaign, type WtpPromptStatus, isCorroborated, VERDICT_LABELS,
 } from '@/lib/api';
+import { WtpPrompt } from './wtp-prompt';
 import { apiServer } from '@/lib/api-server';
 import { getCurrentUser } from '@/lib/auth';
 import { timeAgo } from '@/lib/format';
@@ -20,7 +21,7 @@ import { AnimatedNumber } from '@/components/shared/animated-number';
 export const metadata = { title: 'Dashboard — OMISPHERE' };
 
 export default async function DashboardPage() {
-  const [user, status, invList, featured] = await Promise.all([
+  const [user, status, invList, featured, wtp] = await Promise.all([
     getCurrentUser(),
     apiServer<EngineStatus>('/v1/status').catch(() => null),
     apiServer<InvestigationsListResponse>('/v1/investigations?limit=10').catch(
@@ -28,6 +29,9 @@ export default async function DashboardPage() {
     ),
     apiServer<FeaturedCampaignsResponse>('/v1/campaigns/featured').catch(
       () => ({ campaigns: [] } as FeaturedCampaignsResponse),
+    ),
+    apiServer<WtpPromptStatus>('/v1/learning/prompt').catch(
+      () => ({ show_wtp: false } as WtpPromptStatus),
     ),
   ]);
   const investigations = invList.investigations || [];
@@ -57,6 +61,10 @@ export default async function DashboardPage() {
         </div>
       </header>
 
+      {/* Founder-learning Q5: one willingness-to-pay question, returners only,
+          server-gated to show exactly once ever. */}
+      {wtp.show_wtp && <WtpPrompt />}
+
       {/* First-run value — a REAL disclosed campaign to explore immediately */}
       {featuredCampaigns.length > 0 && (
         <FeaturedSection campaigns={featuredCampaigns} isNew={investigations.length === 0} />
@@ -81,7 +89,7 @@ export default async function DashboardPage() {
           icon={<Activity size={13} />}
           label="Total scans"
           value={status?.total_scans ?? 0}
-          sub="self-improving database"
+          sub="completed to date"
         />
         <StatCard
           icon={<Search size={13} />}
@@ -214,19 +222,9 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* Platform roadmap */}
-      <Card>
-        <CardLabel className="mb-1">Platform roadmap</CardLabel>
-        <p className="text-sm text-fg-dim mb-4">
-          Depth over breadth — deep coordination intelligence on the platforms that matter most.
-        </p>
-        <div className="divide-y divide-border-1">
-          <RoadmapRow platform="YouTube"    status="live"          description="Full comment analysis, channel intelligence, bulk scanning, coordination detection" />
-          <RoadmapRow platform="X / Twitter" status="live"          description="Account fingerprinting, hashtag/amplification networks, coordinated-campaign detection" />
-          <RoadmapRow platform="Reddit"     status="at 2,500 users" description="Subreddit coordination detection, post + comment analysis" />
-          <RoadmapRow platform="TikTok"     status="at 5,000 users" description="Comment section analysis, creator audience intelligence" />
-        </div>
-      </Card>
+      {/* Platform roadmap deliberately removed from the dashboard (it lives on
+          /about): "what's coming" is the wrong message before a user has
+          experienced what's here. */}
     </div>
   );
 }
@@ -300,7 +298,9 @@ function FeaturedCard({ c }: { c: FeaturedCampaign }) {
       </div>
       <div className="flex flex-wrap gap-2">
         <Link
-          href={`/campaigns/${c.campaign_key}`}
+          // ?ref=featured: the activation marker (Phase-4 telemetry attributes
+          // featured-driven value moments through it; harmless until then).
+          href={`/campaigns/${c.campaign_key}?ref=featured`}
           className="inline-flex items-center gap-1.5 px-3 h-8 border border-accent-dim bg-accent/10 text-accent rounded-sm font-mono text-2xs tracking-wider uppercase hover:bg-accent/20"
         >
           Explore campaign <ArrowRight size={11} />
@@ -326,29 +326,6 @@ function MiniMetric({ label, value, tone }: { label: string; value: string | num
       <div className="font-mono text-[0.55rem] uppercase tracking-wider text-fg-faint">{label}</div>
       <div className={cn('mt-0.5 text-sm font-semibold tabular-nums', tone === 'accent' ? 'text-accent' : 'text-fg')}>
         {value}
-      </div>
-    </div>
-  );
-}
-
-function RoadmapRow({ platform, status, description }: { platform: string; status: string; description: string }) {
-  const isLive = status === 'live';
-  return (
-    <div className={`flex items-start gap-3 py-3 first:pt-0 last:pb-0`}>
-      <span className={`shrink-0 font-mono text-xs mt-0.5 ${isLive ? 'text-accent' : 'text-fg-faint'}`}>
-        {isLive ? '✓' : '○'}
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap mb-0.5">
-          <span className="text-sm font-medium text-fg">{platform}</span>
-          <span className={cn(
-            'font-mono text-2xs uppercase tracking-wider px-1.5 py-0.5 rounded-sm border',
-            isLive ? 'text-accent border-accent/25 bg-accent/[0.08]' : 'text-fg-faint border-border-1',
-          )}>
-            {status}
-          </span>
-        </div>
-        <p className="text-xs text-fg-dim">{description}</p>
       </div>
     </div>
   );
