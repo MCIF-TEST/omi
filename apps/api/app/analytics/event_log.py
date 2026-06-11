@@ -70,3 +70,28 @@ def record(
             ))
     except Exception as e:  # noqa: BLE001 — learning must never break a request
         log.debug("event_log: dropped %s (%s)", kind, e)
+
+
+def record_public_view(token: str, report_kind: str, *, ip: str) -> None:
+    """Dedup-and-record a public report view (Q3: were shared links read).
+
+    One view per (report_kind, token, ip) per 10 minutes so refreshes and
+    scrapers don't inflate the share-read metric while distinct viewers still
+    count. The dedup key lives in the in-memory TTL cache and the IP is HASHED
+    for it — no IP is ever persisted, consistent with the privacy contract.
+    Best-effort: never raises into the request path.
+    """
+    try:
+        from app.core.cache import get_cache
+        from app.core.ip import hash_ip
+        from app.storage.db import get_session
+
+        cache = get_cache()
+        key = f"prv:{report_kind}:{token}:{hash_ip(ip)}"
+        if cache.get(key) is not None:
+            return
+        cache.set(key, 1, ttl_seconds=600)
+        with get_session() as session:
+            record(session, "public_report_view", token=token, report_kind=report_kind)
+    except Exception as e:  # noqa: BLE001
+        log.debug("event_log: public view dropped (%s)", e)

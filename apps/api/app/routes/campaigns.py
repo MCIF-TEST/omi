@@ -312,7 +312,13 @@ def unshare_campaign(
 
 # --- public (no auth) -------------------------------------------------------
 
-campaign_public_router = APIRouter(prefix="/rc", tags=["public-campaign-reports"])
+from fastapi import Request  # noqa: E402
+from app.core.rate_limit import public_report_rate_limit  # noqa: E402
+
+campaign_public_router = APIRouter(
+    prefix="/rc", tags=["public-campaign-reports"],
+    dependencies=[Depends(public_report_rate_limit)],
+)
 
 
 class CampaignReportResponse(BaseModel):
@@ -339,19 +345,19 @@ def _resolve_public_campaign(token: str):
 
 
 @campaign_public_router.get("/{token}", response_model=CampaignReportResponse)
-def public_campaign_report(token: str = Path(min_length=8)) -> CampaignReportResponse:
+def public_campaign_report(request: Request, token: str = Path(min_length=8)) -> CampaignReportResponse:
     """Read-only campaign report view for the Next.js public page."""
-    from app.analytics.event_log import record
+    from app.analytics.event_log import record_public_view
     from app.content.featured import featured_keys
+    from app.core.ip import client_ip
     from app.reports.campaign_pack import build_campaign_report_view
 
     detail, published_at = _resolve_public_campaign(token)
     view = build_campaign_report_view(detail.model_dump(), published_at=published_at)
 
-    # Q3 (founder learning): was the shared link actually read? Anonymous —
-    # token only; no user, no IP, no user agent.
-    with get_session() as session:
-        record(session, "public_report_view", token=token, report_kind="campaign")
+    # Q3 (founder learning): was the shared link actually read? Deduped per
+    # (token, ip-hash) per 10 min; token only, user_id NULL, IP never stored.
+    record_public_view(token, "campaign", ip=client_ip(request))
 
     # First-run cross-navigation: when an anonymous visitor lands on a featured
     # example, offer the other featured campaign(s) so they can compare without
