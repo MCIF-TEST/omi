@@ -15,6 +15,7 @@ import { apiServer } from '@/lib/api-server';
 import { ApiError } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { CampaignShareBlock } from './share-block';
+import { HowToRead } from '@/components/shared/how-to-read';
 
 export const metadata = { title: 'Campaign — OMISPHERE' };
 export const dynamic = 'force-dynamic';
@@ -82,6 +83,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           All campaigns
         </Link>
       </div>
+
+      {/* First-view comprehension aid (dismissible, once). */}
+      <HowToRead storageKey="campaign-detail" />
 
       {/* Featured-example context — a worked example is framed as such so it
           can never be mistaken for the user's own scan output. */}

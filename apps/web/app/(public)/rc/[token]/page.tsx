@@ -6,6 +6,7 @@ import {
 import { ApiError, type CampaignReportResponse } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { Logo } from '@/components/shared/logo';
+import { HowToRead } from '@/components/shared/how-to-read';
 import { PrintButton, CopyLinkButton } from './print-button';
 
 interface PageProps {
@@ -96,6 +97,10 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
             last seen {v.meta.last_seen_at?.slice(0, 10) || '—'}
           </p>
         </header>
+
+        {/* First-view comprehension aid (dismissible, once) — the public
+            report is many visitors' very first contact with Omi. */}
+        <HowToRead storageKey="public-report" />
 
         {/* Verdict — score + confidence + corroboration, never a bare number */}
         <section className="report-card bg-bg-elev border border-border-1 rounded-md p-8">
