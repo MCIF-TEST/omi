@@ -812,3 +812,36 @@ class ScanJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+
+
+# ---------------------------------------------------------------------------
+# Founder-learning event log (master-plan Phase 4).
+#
+# The SMALLEST first-party record of real user behaviour, scoped to five
+# questions only: did the user experience value / come back / share something /
+# trust the result / would they pay. Five event kinds total (featured_viewed,
+# campaign_export, campaign_share_minted, public_report_view, wtp_answer/
+# wtp_dismissed); everything else those questions need is DERIVED from the
+# existing ledgers (ScanLog, Investigation, BillingEvent) at read time.
+#
+# Privacy is structural: no IP, no user agent, no fingerprint, no session ids,
+# no third parties. ``user_id`` is nullable because anonymous public-report
+# views are logged tokens-only. Payloads pass a per-kind whitelist in
+# app.analytics.event_log before they are ever written.
+# ---------------------------------------------------------------------------
+
+
+class EventLog(Base):
+    """One row per learning-relevant user action. Append-only."""
+
+    __tablename__ = "event_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )

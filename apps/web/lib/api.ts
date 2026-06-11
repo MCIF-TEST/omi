@@ -263,6 +263,11 @@ export interface CampaignReportResponse {
   view: CampaignReportView;
 }
 
+// Founder learning (master-plan Phase 4) — mirrors apps/api/app/routes/learning.py.
+export interface WtpPromptStatus {
+  show_wtp: boolean;
+}
+
 // Featured campaigns — real, disclosed influence operations seeded for first-run
 // value (mirrors apps/api/app/routes/campaigns.py FeaturedCampaign).
 export interface FeaturedCampaign extends CampaignSummary {

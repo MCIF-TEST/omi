@@ -183,13 +183,22 @@ def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
 @router.get("/{campaign_key}", response_model=CampaignDetail)
 def get_campaign(
     campaign_key: str,
+    ref: str | None = Query(None, description="Navigation source marker (e.g. 'featured')."),
     current: CurrentUser = Depends(require_user),
 ) -> CampaignDetail:
     """A single campaign with members, evidence, and its full observation history."""
+    from app.analytics.event_log import record
+
     with get_session() as session:
         detail = _campaign_detail(session, campaign_key)
         if detail is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        # Q1 diagnostic (founder learning): did the new user reach the featured
+        # value surface? Only the seeded examples are logged — deliberately NOT
+        # a pageview log of every campaign view.
+        if campaign_key.startswith("feat_"):
+            record(session, "featured_viewed", user_id=current.id,
+                   campaign_key=campaign_key, ref=ref)
         return detail
 
 
@@ -207,6 +216,7 @@ def export_campaign(
     with the file. Markdown for a report/editor; JSON for archival or tooling.
     Reuses the same detail assembly the campaign page renders.
     """
+    from app.analytics.event_log import record
     from app.reports.campaign_pack import render_campaign_json, render_campaign_markdown
 
     with get_session() as session:
@@ -214,6 +224,9 @@ def export_campaign(
         if detail is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
         d = detail.model_dump()
+        # Q1 (founder learning): the artifact left the app — a value moment.
+        record(session, "campaign_export", user_id=current.id,
+               campaign_key=campaign_key, format=format)
 
     if format == "json":
         return Response(
@@ -255,6 +268,8 @@ def share_campaign(
     """Mint (or reuse) a public share token for this campaign. Idempotent —
     calling twice returns the existing token rather than rotating. The campaign
     becomes readable at /rc/{token} with no login."""
+    from app.analytics.event_log import record
+
     with get_session() as session:
         c = session.execute(
             select(Campaign).where(Campaign.campaign_key == campaign_key)
@@ -265,6 +280,10 @@ def share_campaign(
             c.share_token = "cmp_" + secrets.token_urlsafe(16)
         c.is_public = 1
         c.published_at = c.published_at or datetime.now(timezone.utc)
+        # Q3 (founder learning): Campaign rows are global (no user_id), so this
+        # event is the only per-user record of WHO shared.
+        record(session, "campaign_share_minted", user_id=current.id,
+               campaign_key=campaign_key)
         return CampaignShareResponse(
             campaign_key=c.campaign_key,
             share_token=c.share_token,
@@ -322,11 +341,17 @@ def _resolve_public_campaign(token: str):
 @campaign_public_router.get("/{token}", response_model=CampaignReportResponse)
 def public_campaign_report(token: str = Path(min_length=8)) -> CampaignReportResponse:
     """Read-only campaign report view for the Next.js public page."""
+    from app.analytics.event_log import record
     from app.content.featured import featured_keys
     from app.reports.campaign_pack import build_campaign_report_view
 
     detail, published_at = _resolve_public_campaign(token)
     view = build_campaign_report_view(detail.model_dump(), published_at=published_at)
+
+    # Q3 (founder learning): was the shared link actually read? Anonymous —
+    # token only; no user, no IP, no user agent.
+    with get_session() as session:
+        record(session, "public_report_view", token=token, report_kind="campaign")
 
     # First-run cross-navigation: when an anonymous visitor lands on a featured
     # example, offer the other featured campaign(s) so they can compare without

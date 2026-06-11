@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
 import {
   type EngineStatus, type InvestigationsListResponse, type FeaturedCampaignsResponse,
-  type FeaturedCampaign, isCorroborated, VERDICT_LABELS,
+  type FeaturedCampaign, type WtpPromptStatus, isCorroborated, VERDICT_LABELS,
 } from '@/lib/api';
+import { WtpPrompt } from './wtp-prompt';
 import { apiServer } from '@/lib/api-server';
 import { getCurrentUser } from '@/lib/auth';
 import { timeAgo } from '@/lib/format';
@@ -20,7 +21,7 @@ import { AnimatedNumber } from '@/components/shared/animated-number';
 export const metadata = { title: 'Dashboard — OMISPHERE' };
 
 export default async function DashboardPage() {
-  const [user, status, invList, featured] = await Promise.all([
+  const [user, status, invList, featured, wtp] = await Promise.all([
     getCurrentUser(),
     apiServer<EngineStatus>('/v1/status').catch(() => null),
     apiServer<InvestigationsListResponse>('/v1/investigations?limit=10').catch(
@@ -28,6 +29,9 @@ export default async function DashboardPage() {
     ),
     apiServer<FeaturedCampaignsResponse>('/v1/campaigns/featured').catch(
       () => ({ campaigns: [] } as FeaturedCampaignsResponse),
+    ),
+    apiServer<WtpPromptStatus>('/v1/learning/prompt').catch(
+      () => ({ show_wtp: false } as WtpPromptStatus),
     ),
   ]);
   const investigations = invList.investigations || [];
@@ -56,6 +60,10 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      {/* Founder-learning Q5: one willingness-to-pay question, returners only,
+          server-gated to show exactly once ever. */}
+      {wtp.show_wtp && <WtpPrompt />}
 
       {/* First-run value — a REAL disclosed campaign to explore immediately */}
       {featuredCampaigns.length > 0 && (

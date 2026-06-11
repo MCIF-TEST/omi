@@ -48,12 +48,16 @@ const METHOD_RATIONALE_WHEN_SILENT: Record<string, string> = {
 
 interface PageProps {
   params: { campaign_key: string };
+  searchParams?: { ref?: string };
 }
 
-export default async function CampaignDetailPage({ params }: PageProps) {
+export default async function CampaignDetailPage({ params, searchParams }: PageProps) {
+  // Forward the navigation-source marker so the backend can log
+  // featured_viewed with its origin (founder-learning Q1 diagnostic).
+  const ref = searchParams?.ref === 'featured' ? '?ref=featured' : '';
   let detail: CampaignDetail;
   try {
-    detail = await apiServer<CampaignDetail>(`/v1/campaigns/${params.campaign_key}`);
+    detail = await apiServer<CampaignDetail>(`/v1/campaigns/${params.campaign_key}${ref}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;

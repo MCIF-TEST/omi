@@ -146,6 +146,11 @@ def public_report_view(
         investigation=_investigation_to_dict(inv),
         payload=inv.payload_json or {},
     )
+    # Q3 (founder learning): was the shared link actually read? Anonymous —
+    # token only; no user, no IP, no user agent.
+    from app.analytics.event_log import record
+    with get_session() as session:
+        record(session, "public_report_view", token=token, report_kind="investigation")
     return PublicReportResponse(view=view)
 
 
