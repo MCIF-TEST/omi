@@ -154,7 +154,7 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
 // surfacing of existing values, NOT a new scoring system.
 // ---------------------------------------------------------------------------
 
-type ResultState = 'coordination_found' | 'organic' | 'insufficient_data';
+type ResultState = 'coordination_found' | 'organic' | 'insufficient_data' | 'scan_incomplete';
 
 const RESULT_STATE_META: Record<
   ResultState,
@@ -172,11 +172,20 @@ const RESULT_STATE_META: Record<
     icon: <ShieldCheck size={14} />,
     body: 'Omi scanned enough activity and did not find corroborated coordination. This is a substantive "looks organic" result, not a failure — most authentic content lands here.',
   },
+  // Distinct from "organic" and from "insufficient data": the scan tried to
+  // fetch accounts and a meaningful share FAILED (often a temporary API or
+  // quota limit), so coverage is incomplete. Not "clean" — re-run shortly.
+  scan_incomplete: {
+    label: 'Scan incomplete — some accounts could not be fetched',
+    tone: 'text-tier-moderate border-tier-moderate/40 bg-tier-moderate/[0.07]',
+    icon: <AlertTriangle size={14} />,
+    body: 'Part of this scan could not be completed — a share of the accounts failed to fetch, usually a temporary API or quota limit (when the daily quota is fully spent, scans are refunded and return an error instead). This is NOT a "clean" result: re-run shortly, and check the service-status pill before relying on it.',
+  },
   insufficient_data: {
     label: 'Not enough data for a confident read',
     tone: 'text-fg-mute border-border-2 bg-bg-elev/30',
     icon: <Info size={14} />,
-    body: 'Too little history/volume to score confidently — detectors mostly abstained. This is not "clean": widen the scan (more commenters) or add account history before relying on the result.',
+    body: 'The accounts scanned cleanly but carry too little history/volume to score confidently — detectors mostly abstained. This is not "clean": widen the scan (more commenters) or add account history before relying on the result.',
   },
 };
 
@@ -215,9 +224,19 @@ function _resultState(data: ComprehensiveScanResult, conf: number): ResultState 
     (v ? v.coordination_tier === 'elevated' || v.coordination_tier === 'high' : false) ||
     data.overall_tier === 'elevated' || data.overall_tier === 'high';
   if (coordFound) return 'coordination_found';
-  const commenters = v?.commenters?.length ?? 0;
+
+  // Quota-vs-clean: a non-trivial share of fetch FAILURES means the scan was
+  // incomplete (likely a transient/quota limit) — not a clean read. Distinct
+  // from genuinely-thin data. Uses the per-commenter `error` already on the
+  // payload; no new data.
+  const commenters = v?.commenters ?? [];
+  if (commenters.length >= 3) {
+    const errored = commenters.filter((c) => c.error).length;
+    if (errored / commenters.length >= 0.3) return 'scan_incomplete';
+  }
+
   const focusDepth = data.focus_account?.history_size ?? 0;
-  const scannedEnough = conf >= 0.3 && (commenters >= 5 || focusDepth >= 8);
+  const scannedEnough = conf >= 0.3 && (commenters.length >= 5 || focusDepth >= 8);
   return scannedEnough ? 'organic' : 'insufficient_data';
 }
 
