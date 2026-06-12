@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { apiClient } from '@/lib/api';
 
 const VIDEO_RE = /(?:v=|\/shorts\/|youtu\.be\/|\/embed\/|\/v\/)([A-Za-z0-9_-]{11})|^([A-Za-z0-9_-]{11})$/;
 const CHANNEL_RE = /^(UC[A-Za-z0-9_-]{22})$|youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})|youtube\.com\/@([A-Za-z0-9_.\-]+)|^@([A-Za-z0-9_.\-]+)$|youtube\.com\/(?:c|user)\/([A-Za-z0-9_.\-]+)/;
@@ -23,6 +24,22 @@ function classify(raw: string): { kind: 'video' | 'channel' | 'unknown' | 'idle'
   return { kind: 'unknown', label: 'Unrecognized link. Paste a YouTube or X (Twitter) URL.' };
 }
 
+// Authoritative cost + commenter cap from the backend — the SAME helpers the
+// scan charges on, so the preview can't drift from the real deduction.
+interface ScanEstimate {
+  platform: string;
+  kind: string;
+  recognized: boolean;
+  requested_max_commenters: number;
+  effective_max_commenters: number;
+  max_commenters_cap: number;
+  credits: number | null;
+}
+
+// Fallback slider ceiling until the backend cap arrives (matches the prod
+// OMI_SCAN_MAX_COMMENTERS); the estimate corrects it on the first response.
+const DEFAULT_MAX_COMMENTERS = 150;
+
 interface Props {
   initialUrl?: string;
   pending: boolean;
@@ -34,8 +51,30 @@ interface Props {
 export function ScanInput({ initialUrl = '', pending, batchSize, onBatchSizeChange, onScan }: Props) {
   const [url, setUrl] = useState(initialUrl);
   const [c, setC] = useState(() => classify(initialUrl));
+  const [estimate, setEstimate] = useState<ScanEstimate | null>(null);
 
   useEffect(() => setC(classify(url)), [url]);
+
+  // Fetch the backend's authoritative cost + cap (debounced). Runs even with an
+  // empty URL so the slider can be bounded by the real cap from first paint.
+  useEffect(() => {
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      apiClient<ScanEstimate>('/v1/scan/estimate', {
+        method: 'POST',
+        body: JSON.stringify({ url: url.trim(), max_commenters: batchSize }),
+      })
+        .then((est) => { if (!cancelled) setEstimate(est); })
+        .catch(() => { if (!cancelled) setEstimate(null); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [url, batchSize]);
+
+  const cap = estimate?.max_commenters_cap ?? DEFAULT_MAX_COMMENTERS;
+  // Keep the selected batch within the real cap (F2: never promise > backend).
+  useEffect(() => {
+    if (batchSize > cap) onBatchSizeChange(cap);
+  }, [cap, batchSize, onBatchSizeChange]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -88,16 +127,29 @@ export function ScanInput({ initialUrl = '', pending, batchSize, onBatchSizeChan
         }`}>
           ▸ {c.label}
         </span>
-        <label className="flex items-center gap-2 font-mono text-2xs tracking-wider text-fg-mute uppercase">
-          <span>Batch:</span>
-          <input
-            type="range"
-            min={25} max={500} step={25} value={batchSize}
-            onChange={(e) => onBatchSizeChange(parseInt(e.target.value, 10))}
-            className="accent-accent w-24"
-          />
-          <span className="text-fg mono w-10 text-right">{batchSize}</span>
-        </label>
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* F1: authoritative cost preview — exactly what the scan will charge. */}
+          {estimate?.recognized && estimate.credits != null && (
+            <span
+              className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider text-accent uppercase"
+              title="Estimated credit cost for this investigation. Matches what you'll be charged."
+            >
+              <Coins size={11} />
+              ≈ {estimate.credits} credit{estimate.credits === 1 ? '' : 's'}
+            </span>
+          )}
+          <label className="flex items-center gap-2 font-mono text-2xs tracking-wider text-fg-mute uppercase">
+            <span>Batch:</span>
+            <input
+              type="range"
+              min={25} max={cap} step={25} value={Math.min(batchSize, cap)}
+              onChange={(e) => onBatchSizeChange(parseInt(e.target.value, 10))}
+              className="accent-accent w-24"
+              aria-label={`Commenters to scan (max ${cap})`}
+            />
+            <span className="text-fg mono w-10 text-right">{Math.min(batchSize, cap)}</span>
+          </label>
+        </div>
       </div>
     </form>
   );

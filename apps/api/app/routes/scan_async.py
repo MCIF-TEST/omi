@@ -70,6 +70,57 @@ class LinkScanJobOut(BaseModel):
     error: str | None = None
 
 
+class ScanEstimateOut(BaseModel):
+    """Pre-scan cost preview. Mirrors what ``/link/start`` will actually charge
+    and process, computed from the SAME helpers (classify_link → cap →
+    compute_scan_credits) so the displayed estimate can never drift from the
+    real charge."""
+
+    platform: str  # "youtube" | "x" | "unknown"
+    kind: str
+    recognized: bool
+    requested_max_commenters: int
+    effective_max_commenters: int  # after the server-side cap
+    max_commenters_cap: int
+    credits: int | None  # None when the link isn't a recognizable target
+
+
+@router.post("/estimate", response_model=ScanEstimateOut)
+def estimate_scan(
+    payload: dict,
+    settings: Settings = Depends(get_settings),
+    current: CurrentUser = Depends(require_user),
+) -> ScanEstimateOut:
+    """Preview a link scan's credit cost and the number of commenters it will
+    actually process. Pure URL classification — no external calls, no charge.
+
+    Deliberately recomputes via the exact path ``/link/start`` charges on
+    (``classify_link`` → clamp to ``scan_max_commenters`` → ``compute_scan_credits``),
+    so the UI's "≈ N credits" can never disagree with the real deduction.
+    """
+    url = (payload.get("url") or "").strip()
+    try:
+        requested = int(payload.get("max_commenters", 25) or 25)
+    except (TypeError, ValueError):
+        requested = 25
+    cap = settings.scan_max_commenters
+    effective = max(1, min(requested, cap))
+    classification = classify_link(url) if url else {"platform": "unknown", "kind": "unknown"}
+    platform = classification.get("platform", "unknown")
+    kind = classification.get("kind", "unknown")
+    recognized = platform != "unknown" and kind != "unknown"
+    credits = compute_scan_credits(platform, effective, settings) if recognized else None
+    return ScanEstimateOut(
+        platform=platform,
+        kind=kind,
+        recognized=recognized,
+        requested_max_commenters=requested,
+        effective_max_commenters=effective,
+        max_commenters_cap=cap,
+        credits=credits,
+    )
+
+
 def _link_job_result(
     *, url: str, platform: str, status: str, slug: str | None,
     tier: str | None = None, probability: float | None = None,

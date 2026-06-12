@@ -19,8 +19,8 @@ const FEATURES = [
 
 const FAQ = [
   {
-    q: 'What counts as a scan?',
-    a: 'Each YouTube video or channel URL you submit is one scan, regardless of how many commenters it covers. Re-scanning the same URL later costs an additional scan (it pulls fresh comments). Pulling additional batches of commenters on an existing investigation also costs one scan per batch.',
+    q: 'What does an investigation cost?',
+    a: 'One credit per 50 commenters (on YouTube) or repliers (on X/Twitter) scanned — so a 50-account scan is 1 credit and a 150-account scan is 3. YouTube and X are priced the same. The exact cost is shown next to the Scan button before you run anything, and you are never charged if a scan fails. Re-scanning the same URL later, or pulling additional batches, costs the same per-50 rate again.',
   },
   {
     q: 'What about Reddit / TikTok / Instagram?',
