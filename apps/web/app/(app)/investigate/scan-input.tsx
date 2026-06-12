@@ -138,14 +138,17 @@ export function ScanInput({ initialUrl = '', pending, batchSize, onBatchSizeChan
               ≈ {estimate.credits} credit{estimate.credits === 1 ? '' : 's'}
             </span>
           )}
-          <label className="flex items-center gap-2 font-mono text-2xs tracking-wider text-fg-mute uppercase">
-            <span>Batch:</span>
+          <label
+            className="flex items-center gap-2 font-mono text-2xs tracking-wider text-fg-mute uppercase"
+            title={`How many commenters / repliers to analyze (up to ${cap}). Cost: 1 credit per 50.`}
+          >
+            <span>Accounts to scan:</span>
             <input
               type="range"
               min={25} max={cap} step={25} value={Math.min(batchSize, cap)}
               onChange={(e) => onBatchSizeChange(parseInt(e.target.value, 10))}
               className="accent-accent w-24"
-              aria-label={`Commenters to scan (max ${cap})`}
+              aria-label={`Accounts to scan (max ${cap})`}
             />
             <span className="text-fg mono w-10 text-right">{Math.min(batchSize, cap)}</span>
           </label>
