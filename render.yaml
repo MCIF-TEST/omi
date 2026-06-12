@@ -48,8 +48,15 @@ services:
         value: '3.11.9'
       - key: OMI_MONTHLY_CREDIT_GRANT
         value: '20'
+      # Validation-window trial: 25 credits = two X batch investigations (10
+      # each) + change, so a first real user can run their own case AND return
+      # for a second one. Abuse stays bounded: repeat signups from an IP that
+      # already created an account get NO trial credits (referral/IP-fraud
+      # guard), signups are rate-limited to 5/hour/IP, and 25 credits is at
+      # most ~$7 of X API spend. Keep NEXT_PUBLIC_TRIAL_CREDITS (web service,
+      # below) in sync so displayed copy never lies.
       - key: OMI_FREE_TRIAL_CREDITS
-        value: '3'
+        value: '25'
       - key: OMI_SUPER_ADMIN_EMAILS
         value: 'andrewexiga@gmail.com,landonnorris116@gmail.com'
       - key: OMI_SCAN_MAX_COMMENTERS
@@ -98,6 +105,13 @@ services:
           name: omisphere-api
           type: web
           property: hostport
+      # Display-only mirrors of the API's credit grants (inlined at build
+      # time into marketing/UI copy). MUST match OMI_FREE_TRIAL_CREDITS and
+      # OMI_MONTHLY_CREDIT_GRANT on omisphere-api, or the site lies.
+      - key: NEXT_PUBLIC_TRIAL_CREDITS
+        value: '25'
+      - key: NEXT_PUBLIC_MONTHLY_CREDITS
+        value: '20'
       - key: OMI_PUBLIC_BASE_URL
         sync: false
 

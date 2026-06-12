@@ -7,6 +7,7 @@ import {
 import { Card, CardLabel } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
+import { TRIAL_CREDITS } from '@/lib/plan';
 import {
   type EngineStatus, type InvestigationsListResponse, type FeaturedCampaignsResponse,
   type FeaturedCampaign, type WtpPromptStatus, isCorroborated, VERDICT_LABELS,
@@ -76,7 +77,7 @@ export default async function DashboardPage() {
           icon={<Zap size={13} />}
           label="Credits"
           value={user?.credits_remaining ?? 0}
-          sub={user?.subscription_status === 'active' ? 'subscription active' : '3 free trial credits'}
+          sub={user?.subscription_status === 'active' ? 'subscription active' : `${TRIAL_CREDITS} free trial credits`}
           tone={user && user.credits_remaining === 0 ? 'danger' : 'accent'}
         />
         <StatCard
