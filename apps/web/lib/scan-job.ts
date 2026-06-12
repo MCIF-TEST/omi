@@ -53,6 +53,29 @@ export async function runLinkScanJob(
   if (!shouldContinue()) throw new ScanCancelledError();
   onStatus?.(job); // real backend state ('queued') — drives an honest progress UI
 
+  return pollLinkScanJob(job.job_id, shouldContinue, onStatus);
+}
+
+/**
+ * Re-attach to an already-started link scan and poll it to a terminal state,
+ * WITHOUT starting a new one. The job runs on the backend's pool and saves its
+ * investigation regardless of the UI, so a scan the user navigated away from is
+ * still finishing server-side; resuming it makes the result reappear instead of
+ * looking cancelled. Polling-only — never consumes a credit.
+ */
+export async function resumeLinkScanJob(
+  jobId: string,
+  shouldContinue: () => boolean = () => true,
+  onStatus?: (job: LinkScanJob) => void,
+): Promise<LinkScanJob> {
+  return pollLinkScanJob(jobId, shouldContinue, onStatus);
+}
+
+async function pollLinkScanJob(
+  jobId: string,
+  shouldContinue: () => boolean,
+  onStatus?: (job: LinkScanJob) => void,
+): Promise<LinkScanJob> {
   const deadline = Date.now() + 8 * 60 * 1000; // hard cap; backend caps too
   let delay = 1500;
   let pollErrors = 0;
@@ -60,7 +83,7 @@ export async function runLinkScanJob(
     await _sleep(delay);
     if (!shouldContinue()) throw new ScanCancelledError();
     try {
-      const cur = await apiClient<LinkScanJob>(`/v1/scan/link/status/${job.job_id}`);
+      const cur = await apiClient<LinkScanJob>(`/v1/scan/link/status/${jobId}`);
       pollErrors = 0;
       onStatus?.(cur); // real poll state ('running' → 'done'/'failed')
       if (cur.status === 'done' || cur.status === 'failed') return cur;

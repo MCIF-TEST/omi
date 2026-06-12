@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Plus, Sparkles } from 'lucide-react';
 import {
@@ -10,7 +10,27 @@ import {
   type ComprehensiveScanResult,
   type InvestigationDetailResponse,
 } from '@/lib/api';
-import { runLinkScanJob, ScanCancelledError, type LinkScanJob } from '@/lib/scan-job';
+import { runLinkScanJob, resumeLinkScanJob, ScanCancelledError, type LinkScanJob } from '@/lib/scan-job';
+
+// A scan runs on the backend's pool and saves its investigation regardless of
+// the UI. Persisting the in-flight job (per tab) lets the workspace re-attach
+// after the user navigates away and back, so the result reappears instead of an
+// empty page that reads as "cancelled".
+const ACTIVE_SCAN_KEY = 'omi.investigate.activeScan';
+type ActiveScan = { url: string; batchSize: number; jobId: string | null; ts: number };
+
+function persistScan(v: ActiveScan): void {
+  try { sessionStorage.setItem(ACTIVE_SCAN_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+}
+function clearScan(): void {
+  try { sessionStorage.removeItem(ACTIVE_SCAN_KEY); } catch { /* ignore */ }
+}
+function readScan(): ActiveScan | null {
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_SCAN_KEY);
+    return raw ? (JSON.parse(raw) as ActiveScan) : null;
+  } catch { return null; }
+}
 import { Button } from '@/components/ui/button';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { ScanInput } from './scan-input';
@@ -42,21 +62,13 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
   // scan can't clobber the result of a second one the user kicked off.
   const activeRun = useRef(0);
 
-  const runScan = async (url: string) => {
-    const runId = ++activeRun.current;
-    setScanUrl(url);
-    setJobStatus('queued');
-    setState((s) => ({ ...s, pending: true, error: null, data: null, selectedId: null }));
+  // Poll a (new or resumed) job to completion, load the finished investigation,
+  // and render it. Shared by a fresh scan and by re-attachment on mount. Nothing
+  // here holds an HTTP connection open for the scan's duration, so it can't trip
+  // a proxy timeout — the "reaches the last step then shows no result" failure.
+  const completeRun = async (runId: number, jobPromise: Promise<LinkScanJob>) => {
     try {
-      // Async job: the scan runs on the backend's background pool; we poll the
-      // job, then load the finished investigation. Nothing here holds an HTTP
-      // connection open for the scan's duration, so it can't trip a proxy
-      // timeout — the "reaches the last step then shows no result" failure.
-      const job = await runLinkScanJob(
-        { url, max_commenters: batchSize },
-        () => activeRun.current === runId,
-        (j) => { if (activeRun.current === runId) setJobStatus(j.status); },
-      );
+      const job = await jobPromise;
       if (activeRun.current !== runId) return; // superseded
       if (job.status !== 'done' || !job.investigation_slug) {
         throw new Error(
@@ -73,10 +85,12 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
       if (!data || typeof data !== 'object' || !('overall_tier' in data)) {
         throw new Error('The scan finished but returned no result. Please try again.');
       }
+      clearScan();
       setState({ data, selectedId: null, pending: false, error: null, loadingMore: false });
       router.refresh();   // refresh credits chip + recent investigations
     } catch (e) {
       if (e instanceof ScanCancelledError || activeRun.current !== runId) return;
+      clearScan();
       const msg =
         e instanceof ApiError
           ? e.status === 401 ? 'Please log in to scan.'
@@ -88,6 +102,51 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
       setState((s) => ({ ...s, pending: false, error: msg }));
     }
   };
+
+  const runScan = async (url: string) => {
+    const runId = ++activeRun.current;
+    setScanUrl(url);
+    setJobStatus('queued');
+    setState((s) => ({ ...s, pending: true, error: null, data: null, selectedId: null }));
+    persistScan({ url, batchSize, jobId: null, ts: Date.now() });
+    await completeRun(
+      runId,
+      runLinkScanJob(
+        { url, max_commenters: batchSize },
+        () => activeRun.current === runId,
+        (j) => {
+          if (activeRun.current !== runId) return;
+          setJobStatus(j.status);
+          // Persist the job id once known so a navigation-interrupted scan can
+          // be re-attached on return (it keeps running + saving server-side).
+          if (j.job_id) persistScan({ url, batchSize, jobId: j.job_id, ts: Date.now() });
+        },
+      ),
+    );
+  };
+
+  // On mount, re-attach to an in-flight scan the user navigated away from. The
+  // backend job kept running and saved its investigation; resuming the poll
+  // restores the result instead of showing an empty (apparently cancelled) page.
+  useEffect(() => {
+    const saved = readScan();
+    if (!saved || !saved.jobId) { if (saved) clearScan(); return; }
+    if (Date.now() - (saved.ts || 0) > 9 * 60 * 1000) { clearScan(); return; } // stale
+    const runId = ++activeRun.current;
+    setScanUrl(saved.url || '');
+    setJobStatus('running');
+    setState((s) => ({ ...s, pending: true, error: null }));
+    void completeRun(
+      runId,
+      resumeLinkScanJob(
+        saved.jobId,
+        () => activeRun.current === runId,
+        (j) => { if (activeRun.current === runId) setJobStatus(j.status); },
+      ),
+    );
+    // Mount-only: re-attach a single in-flight scan if one exists.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadMore = async () => {
     const d = state.data;
@@ -172,6 +231,12 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
       )}
 
       <LoadingOverlay active={state.pending} status={jobStatus} />
+
+      {state.pending && (
+        <p className="text-center font-mono text-2xs tracking-wider uppercase text-fg-mute">
+          This scan keeps running if you leave the page — the result is saved to your Investigations.
+        </p>
+      )}
 
       {state.data && (
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_360px] gap-3 min-h-[640px]">

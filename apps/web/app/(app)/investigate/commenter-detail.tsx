@@ -117,12 +117,20 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
     }
   };
 
+  const platform = (c.platform || 'youtube').toLowerCase();
+  const isX = platform === 'x' || platform === 'twitter';
+
   const runDeepScan = async () => {
     setDeep((d) => ({ ...d, loading: true, error: null }));
     try {
-      const res = await apiClient<AccountScanOut>('/v1/scan/youtube/account', {
+      // Route by the commenter's platform — an X investigation must deep-scan
+      // through the Twitter endpoint, not YouTube. X resolves by @handle;
+      // YouTube by channel id.
+      const endpoint = isX ? '/v1/scan/twitter/account' : '/v1/scan/youtube/account';
+      const account = isX ? (c.handle || c.external_id) : c.external_id;
+      const res = await apiClient<AccountScanOut>(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ account_url_or_handle: c.external_id, force_refresh: true }),
+        body: JSON.stringify({ account_url_or_handle: account, force_refresh: true }),
       });
       setDeep({
         loading: false,
@@ -180,9 +188,9 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
               )}
             </div>
             <h2 className="display text-xl font-semibold text-fg tracking-tight mb-0.5 break-words">
-              {c.handle || c.external_id}
+              {c.handle || c.display_name || c.external_id}
             </h2>
-            {c.display_name && <p className="text-sm text-fg-dim">{c.display_name}</p>}
+            {c.display_name && c.handle && <p className="text-sm text-fg-dim">{c.display_name}</p>}
             <p className="font-mono text-2xs text-fg-faint mt-1 break-all">{c.external_id}</p>
           </div>
         </div>
@@ -380,7 +388,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
             onClick={runDeepScan}
             disabled={deep.loading}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 font-mono text-2xs uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
-            title="Pull this account's recent comments from YouTube (uses 1 credit)"
+            title="Pull this account's recent activity (uses 1 credit)"
           >
             {deep.loading ? (
               <><Loader2 size={11} className="animate-spin" /> Scanning…</>
@@ -403,7 +411,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
                 <p className="text-sm text-fg leading-relaxed break-words">{a.text}</p>
                 <div className="mt-2 flex items-center justify-between gap-2 font-mono text-2xs tracking-wider uppercase text-fg-mute">
                   <span>{a.created_at ? timeAgo(a.created_at) : '—'}</span>
-                  {a.parent_id && (
+                  {a.parent_id && !isX && (
                     <a
                       href={`https://youtube.com/watch?v=${a.parent_id}`}
                       target="_blank"
@@ -421,7 +429,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
           !deep.loading && (
             <p className="text-xs text-fg-mute leading-relaxed">
               No comments pulled yet. Scan to fetch this account&apos;s recent
-              comment history from YouTube.
+              activity.
             </p>
           )
         )}

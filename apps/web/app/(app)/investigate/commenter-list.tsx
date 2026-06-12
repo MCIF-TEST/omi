@@ -30,7 +30,9 @@ export function CommenterList({ commenters, selectedId, onSelect }: Props) {
     if (filter !== 'all') list = list.filter((c) => c.tier === filter);
     if (q.trim()) {
       const needle = q.trim().toLowerCase();
-      list = list.filter((c) => (c.handle || '').toLowerCase().includes(needle));
+      list = list.filter((c) =>
+        `${c.handle || ''} ${c.display_name || ''}`.toLowerCase().includes(needle),
+      );
     }
     list.sort((a, b) => {
       if (!!a.error !== !!b.error) return a.error ? 1 : -1;
@@ -102,7 +104,7 @@ export function CommenterList({ commenters, selectedId, onSelect }: Props) {
             >
               <div className="flex items-center justify-between gap-2 mb-1">
                 <span className="font-medium text-sm text-fg truncate">
-                  {c.handle || c.external_id}
+                  {c.handle || c.display_name || c.external_id}
                 </span>
                 <TierBadge tier={c.tier} size="sm" />
               </div>
