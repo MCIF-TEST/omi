@@ -70,6 +70,19 @@ export default async function InvestigationPage({ params }: { params: { slug: st
           <Row label="YT quota"    value={`${inv.quota_used} units`} />
           <Row label="Created"     value={new Date(inv.created_at).toLocaleString()} />
         </div>
+
+        {/* E2 — reproducibility note. Scores can legitimately move between runs
+            as cross-scan memory accumulates; frame it as evidence sharpening,
+            not unreliability, and point at the indicators that show what changed. */}
+        <p className="relative mt-4 text-2xs leading-relaxed text-fg-faint border-t border-border-1/60 pt-4">
+          Scores can shift if you re-run this investigation: Omi&apos;s cross-scan
+          memory accumulates evidence over time, so a network that keeps acting
+          together scores more confidently on a later pass. The per-account{' '}
+          <span className="text-fg-mute">cached</span> and{' '}
+          <span className="text-fg-mute">prior neighbors</span> indicators show
+          which inputs changed — this is evidence evolving, not a different answer
+          to the same question.
+        </p>
       </header>
 
       {/* Analyst verdict + notes */}
