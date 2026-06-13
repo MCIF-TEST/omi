@@ -315,6 +315,18 @@ function VerdictTrustBlock({ data }: { data: ComprehensiveScanResult }) {
         )}
       </div>
 
+      {/* M1 — sampling disclosure. The scanned accounts are whatever the
+          platform returned (recency/relevance order), not a random draw, so
+          findings shouldn't be generalized to the whole audience. */}
+      {(data.video?.commenters?.length ?? 0) > 0 && (
+        <p className="text-2xs text-fg-faint leading-relaxed">
+          Based on the {data.video!.commenters.length} accounts the platform returned for
+          this scan{data.next_page_token ? ' (more are available)' : ''}. This is not a
+          random sample and may not represent all participants — read it as a close look at
+          these accounts, not a measure of the whole audience.
+        </p>
+      )}
+
       {/* Confidence band — the verdict is a number AND its uncertainty */}
       <div className="bg-bg border border-border-1 rounded-xl p-4">
         <ConfidenceBand probability={data.overall_probability} confidence={conf} />

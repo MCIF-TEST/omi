@@ -106,7 +106,19 @@ export function CommenterList({ commenters, selectedId, onSelect }: Props) {
                 <span className="font-medium text-sm text-fg truncate">
                   {c.handle || c.display_name || c.external_id}
                 </span>
-                <TierBadge tier={c.tier} size="sm" />
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* M2: flag thin-data scores so a low-confidence HIGH doesn't
+                      look like a well-supported one during triage. */}
+                  {c.confidence < 0.4 && (
+                    <span
+                      title={`Low confidence (${Math.round(c.confidence * 100)}%) — limited data backed this score; treat cautiously.`}
+                      className="font-mono text-[0.55rem] tracking-wider uppercase text-tier-elevated border border-tier-elevated/40 rounded-sm px-1 py-px"
+                    >
+                      low&nbsp;conf
+                    </span>
+                  )}
+                  <TierBadge tier={c.tier} size="sm" />
+                </div>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <ProbabilityBar
@@ -116,7 +128,10 @@ export function CommenterList({ commenters, selectedId, onSelect }: Props) {
                   showLabel={false}
                   className="flex-1"
                 />
-                <span className="font-mono text-2xs text-fg-dim w-9 text-right">
+                <span
+                  className="font-mono text-2xs text-fg-dim w-9 text-right"
+                  title={`${Math.round(displayProb * 100)}% probability · ${Math.round(c.confidence * 100)}% confidence (how much data backed it)`}
+                >
                   {Math.round(displayProb * 100)}%
                 </span>
               </div>

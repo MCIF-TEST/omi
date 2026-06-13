@@ -179,7 +179,10 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <TierBadge tier={c.tier} size="lg" />
               {c.from_cache && (
-                <span className="font-mono text-2xs tracking-wider text-fg-mute uppercase border border-border-2 rounded-full px-2 py-0.5">cached</span>
+                <span
+                  title="Reused from a recent scan of this account — cached results may be up to 7 days old. Use “Rescan history” for a fresh pull."
+                  className="font-mono text-2xs tracking-wider text-fg-mute uppercase border border-border-2 rounded-full px-2 py-0.5 cursor-help"
+                >cached</span>
               )}
               {c.matched_prior_neighbors > 0 && (
                 <span className="font-mono text-2xs tracking-wider text-accent uppercase border border-accent/30 bg-accent/10 rounded-full px-2 py-0.5">
