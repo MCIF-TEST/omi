@@ -185,7 +185,10 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
                 >cached</span>
               )}
               {c.matched_prior_neighbors > 0 && (
-                <span className="font-mono text-2xs tracking-wider text-accent uppercase border border-accent/30 bg-accent/10 rounded-full px-2 py-0.5">
+                <span
+                  title="Behavioral-fingerprint similarity: this many previously-seen accounts have a comparable posting/profile signature (nearest-neighbor match). It is a similarity signal only — NOT confirmed shared identity, NOT confirmed coordination, NOT a known-bad link, and NOT proof of a shared network. Treat it as a lead to investigate."
+                  className="font-mono text-2xs tracking-wider text-accent uppercase border border-accent/30 bg-accent/10 rounded-full px-2 py-0.5 cursor-help"
+                >
                   {c.matched_prior_neighbors} prior neighbor{c.matched_prior_neighbors === 1 ? '' : 's'}
                 </span>
               )}
