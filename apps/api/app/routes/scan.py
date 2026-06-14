@@ -631,6 +631,7 @@ def scan_youtube_video_full(
 
         return FullVideoScanResult(
             video_id=video_id,
+            platform="youtube",
             commenter_count=len(commenter_results),
             fresh_count=full.fresh_count,
             cached_count=full.cached_count,
@@ -1416,6 +1417,7 @@ def _run_comprehensive(
         )
         video_result_out = FullVideoScanResult(
             video_id=out.video_output.video_id,
+            platform=source.platform,
             commenter_count=len(commenter_results),
             fresh_count=out.video_output.fresh_count,
             cached_count=out.video_output.cached_count,

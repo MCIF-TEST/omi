@@ -280,7 +280,10 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
             </div>
             <div className="flex-1 overflow-y-auto">
               {selectedCommenter ? (
-                <CommenterDetail c={selectedCommenter} />
+                <CommenterDetail
+                  c={selectedCommenter}
+                  investigationPlatform={state.data?.video?.platform}
+                />
               ) : (
                 <Synthesis data={state.data} />
               )}

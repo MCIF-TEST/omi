@@ -7,6 +7,7 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
 import { CommenterThreatPanel } from '@/components/shared/commenter-threat-panel';
 import { apiClient, ApiError, type AccountScanOut, type CommenterScanResult, type SignalResult, type UserGraphOut } from '@/lib/api';
+import { resolveScanPlatform, accountScanEndpoint } from '@/lib/scan-platform';
 import { timeAgo } from '@/lib/format';
 
 type ActivitySample = CommenterScanResult['recent_activity'][number];
@@ -22,12 +23,25 @@ const SIGNAL_LABELS: Record<string, string> = {
   coordination:'Coordination cluster',
 };
 
-export function CommenterDetail({ c }: { c: CommenterScanResult }) {
+export function CommenterDetail({
+  c,
+  investigationPlatform,
+}: {
+  c: CommenterScanResult;
+  /** Authoritative platform of the parent investigation — never overridden by
+   *  the comment-level platform, never assumed to be YouTube. */
+  investigationPlatform?: string | null;
+}) {
   const adjusted = c.coordination_adjusted_probability;
   const displayProb = adjusted ?? c.overall_probability ?? 0;
   const showAdjusted = adjusted != null && Math.abs(adjusted - c.overall_probability) > 0.005;
   const isFlagged = c.tier !== 'low';
   const signals = (c.signals ?? []).filter((s) => s.confidence > 0);
+
+  // Investigation platform is authoritative; the commenter platform is only a
+  // fallback when the investigation's is unavailable. Never assume YouTube.
+  const scanPlatform = resolveScanPlatform(investigationPlatform, c.platform);
+  const isX = scanPlatform === 'x';
 
   // On-demand deep scan of THIS commenter: pulls their recent comment history
   // (and a fresh score) via the single-account scan, so the operator can see
@@ -94,7 +108,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       if (graph.addNew && graph.newName.trim()) {
         const created = await apiClient<UserGraphOut>('/v1/graphs', {
           method: 'POST',
-          body: JSON.stringify({ name: graph.newName.trim(), platform: c.platform || 'youtube' }),
+          body: JSON.stringify({ name: graph.newName.trim(), platform: scanPlatform }),
         });
         newGraphId = created.id;
       }
@@ -117,16 +131,24 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
     }
   };
 
-  const platform = (c.platform || 'youtube').toLowerCase();
-  const isX = platform === 'x' || platform === 'twitter';
-
   const runDeepScan = async () => {
+    // Defensive: if we can't determine the platform, do NOT scan — no credit is
+    // consumed, no fall-through to YouTube; surface a clear error instead.
+    const endpoint = accountScanEndpoint(scanPlatform);
+    if (!endpoint) {
+      setDeep((d) => ({
+        ...d,
+        loading: false,
+        error:
+          "Couldn't determine this account's platform, so the scan was not run — " +
+          'you have not been charged. Open this account from a completed ' +
+          'investigation and try again.',
+      }));
+      return;
+    }
     setDeep((d) => ({ ...d, loading: true, error: null }));
     try {
-      // Route by the commenter's platform — an X investigation must deep-scan
-      // through the Twitter endpoint, not YouTube. X resolves by @handle;
-      // YouTube by channel id.
-      const endpoint = isX ? '/v1/scan/twitter/account' : '/v1/scan/youtube/account';
+      // X resolves by @handle; YouTube by channel id.
       const account = isX ? (c.handle || c.external_id) : c.external_id;
       const res = await apiClient<AccountScanOut>(endpoint, {
         method: 'POST',
@@ -302,7 +324,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       </header>
 
       {/* OmiScore intelligence — composed, explainable threat verdict */}
-      <CommenterThreatPanel platform={c.platform || 'youtube'} externalId={c.external_id} />
+      <CommenterThreatPanel platform={scanPlatform} externalId={c.external_id} />
 
       {/* Per-detector signal breakdown */}
       {signals.length > 0 && (
@@ -417,7 +439,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
                 <p className="text-sm text-fg leading-relaxed break-words">{a.text}</p>
                 <div className="mt-2 flex items-center justify-between gap-2 font-mono text-2xs tracking-wider uppercase text-fg-mute">
                   <span>{a.created_at ? timeAgo(a.created_at) : '—'}</span>
-                  {a.parent_id && !isX && (
+                  {a.parent_id && scanPlatform === 'youtube' && (
                     <a
                       href={`https://youtube.com/watch?v=${a.parent_id}`}
                       target="_blank"
@@ -488,7 +510,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       {/* Account profile link */}
       <div className="pt-1 border-t border-border-1">
         <Link
-          href={`/accounts/${encodeURIComponent(c.external_id)}?platform=${c.platform || 'youtube'}`}
+          href={`/accounts/${encodeURIComponent(c.external_id)}?platform=${scanPlatform}`}
           className="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-bg border border-border-1 hover:border-accent/40 hover:bg-accent/[0.04] transition-all"
         >
           <div>
