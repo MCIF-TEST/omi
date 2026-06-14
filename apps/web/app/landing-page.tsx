@@ -9,6 +9,7 @@ import { AnimatedNumber } from '@/components/shared/animated-number';
 import { ScrollProgress } from '@/components/shared/scroll-progress';
 import { HeroVisual } from '@/components/shared/hero-visual';
 import { DemoScanForm } from './demo-scan-form';
+import { TRIAL_CREDITS, MONTHLY_CREDITS } from '@/lib/plan';
 
 export function LandingPage() {
   return (
@@ -104,7 +105,7 @@ export function LandingPage() {
               className="flex items-center gap-6 flex-wrap font-mono text-2xs text-fg-faint tracking-wider"
               style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '200ms' }}
             >
-              {['A real disclosed operation, 10 seconds away', '3 free scans · no credit card', 'Always probabilistic'].map((t) => (
+              {['A real disclosed operation, 10 seconds away', `${TRIAL_CREDITS} free credits · no credit card`, 'Always probabilistic'].map((t) => (
                 <span key={t} className="flex items-center gap-1.5">
                   <CheckCircle2 size={10} className="text-tier-low shrink-0" />
                   {t}
@@ -258,7 +259,7 @@ export function LandingPage() {
               See what&apos;s real.
             </h2>
             <p className="text-sm text-fg-dim max-w-md mx-auto mb-8">
-              $9.99/month · 20 scans · 3 free on signup. Cancel anytime.
+              $9.99/month · {MONTHLY_CREDITS} credits monthly · {TRIAL_CREDITS} free on signup. Cancel anytime.
               Built for journalists, researchers, and platform integrity teams.
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">

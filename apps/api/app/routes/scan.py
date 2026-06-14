@@ -229,21 +229,34 @@ def _activity_payload(
 
 # Tests inject a fake client through this hook; production builds the real one.
 def _resolve_client(settings: Settings) -> YouTubeClient:
+    """Build the live YouTube client, or raise a clean, user-facing 503.
+
+    Mirrors ``_resolve_twitter_client``: the admin-actionable cause (missing
+    key / missing client library) goes to the logs, never to the user — an
+    env-var name in an error message reads as an unfinished product.
+    """
+    import logging
+    log = logging.getLogger("omi.scan.youtube")
     key = (settings.youtube_api_key or "").strip()
     if not key:
+        log.error("YouTube scan requested but OMI_YOUTUBE_API_KEY is not set.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "YouTube API key is not configured. Set OMI_YOUTUBE_API_KEY "
-                "or use POST /v1/analyze/account with pre-fetched data."
+                "YouTube scanning isn't configured on this server yet. "
+                "Please try again later."
             ),
         )
     try:
         return build_default_client(key)
     except RuntimeError as e:
+        log.error("YouTube client unavailable: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e),
+            detail=(
+                "YouTube scanning is temporarily unavailable on this server. "
+                "Please try again later."
+            ),
         )
 
 
@@ -618,6 +631,7 @@ def scan_youtube_video_full(
 
         return FullVideoScanResult(
             video_id=video_id,
+            platform="youtube",
             commenter_count=len(commenter_results),
             fresh_count=full.fresh_count,
             cached_count=full.cached_count,
@@ -1403,6 +1417,7 @@ def _run_comprehensive(
         )
         video_result_out = FullVideoScanResult(
             video_id=out.video_output.video_id,
+            platform=source.platform,
             commenter_count=len(commenter_results),
             fresh_count=out.video_output.fresh_count,
             cached_count=out.video_output.cached_count,

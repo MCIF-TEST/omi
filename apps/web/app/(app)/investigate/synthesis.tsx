@@ -7,6 +7,7 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
 import { ConfidenceBand } from '@/components/shared/confidence-band';
 import { EvidenceForAgainst } from '@/components/shared/trust-lists';
+import { HowToRead } from '@/components/shared/how-to-read';
 import { type ComprehensiveScanResult, type CoordinationCluster, isCorroborated } from '@/lib/api';
 
 export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
@@ -14,6 +15,9 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
   const v = data.video;
   return (
     <article className="p-6 space-y-6">
+      {/* First-view comprehension aid — the same reading-order guidance the
+          public/campaign reports carry, on the user's OWN first result. */}
+      <HowToRead storageKey="investigate-synthesis" />
       {/* Verdict hero */}
       <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/30 p-5 md:p-6">
         <div className="relative flex items-center gap-5 flex-wrap">
@@ -310,6 +314,18 @@ function VerdictTrustBlock({ data }: { data: ComprehensiveScanResult }) {
           </span>
         )}
       </div>
+
+      {/* M1 — sampling disclosure. The scanned accounts are whatever the
+          platform returned (recency/relevance order), not a random draw, so
+          findings shouldn't be generalized to the whole audience. */}
+      {(data.video?.commenters?.length ?? 0) > 0 && (
+        <p className="text-2xs text-fg-faint leading-relaxed">
+          Based on the {data.video!.commenters.length} accounts the platform returned for
+          this scan{data.next_page_token ? ' (more are available)' : ''}. This is not a
+          random sample and may not represent all participants — read it as a close look at
+          these accounts, not a measure of the whole audience.
+        </p>
+      )}
 
       {/* Confidence band — the verdict is a number AND its uncertainty */}
       <div className="bg-bg border border-border-1 rounded-xl p-4">

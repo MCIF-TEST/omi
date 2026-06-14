@@ -191,7 +191,10 @@ class VideoScanRequest(BaseModel):
 
 
 class CommenterScanResult(BaseModel):
-    platform: Platform = "youtube"
+    # Never default to a platform: an unset platform is genuinely unknown, not
+    # YouTube. Routing decisions must treat "unknown" as unknown (see the deep-
+    # scan routing in the web commenter view), never silently assume YouTube.
+    platform: Platform = "unknown"
     external_id: str
     handle: str
     display_name: str | None = None
@@ -242,7 +245,9 @@ class FullVideoScanResult(BaseModel):
     """The unified per-video output: per-commenter + thread-level + coordination."""
 
     video_id: str
-    platform: Platform = "youtube"
+    # Authoritative investigation platform; set explicitly at every build site.
+    # Defaults to "unknown" so a missing value never reads as YouTube.
+    platform: Platform = "unknown"
 
     # Per-commenter rollup
     commenter_count: int
@@ -588,6 +593,9 @@ class InvestigationSummary(BaseModel):
     kind: str
     overall_probability: float = Field(ge=0.0, le=1.0)
     overall_tier: Tier
+    # Overall confidence (0..1). None for investigations saved before it was
+    # tracked — the UI must not show those as low-confidence.
+    confidence: float | None = None
     summary: str
     quota_used: int
     batch_count: int

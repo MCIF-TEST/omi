@@ -593,6 +593,8 @@ export interface InvestigationSummary {
   kind: string;
   overall_probability: number;
   overall_tier: Tier;
+  /** Overall confidence 0..1; null for investigations saved before it was tracked. */
+  confidence: number | null;
   summary: string;
   quota_used: number;
   batch_count: number;

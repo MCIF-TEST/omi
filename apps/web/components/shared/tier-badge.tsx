@@ -29,10 +29,26 @@ const SIZE: Record<NonNullable<TierBadgeProps['size']>, string> = {
   lg: 'text-xs px-3 py-1',
 };
 
+// Numeric meaning of each tier — must mirror the backend `_tier_for` bands
+// (LOW <0.25, MODERATE <0.50, ELEVATED <0.75, HIGH ≥0.75). Surfaced as a
+// title so the scale travels with the badge everywhere it appears, letting a
+// journalist or analyst interpret (and cite) the label without reading code.
+const TIER_TITLE: Record<Tier | 'unknown', string> = {
+  low: 'LOW — under 25% modeled probability of inauthentic / coordinated behavior.',
+  moderate: 'MODERATE — 25–50% modeled probability of inauthentic / coordinated behavior.',
+  elevated: 'ELEVATED — 50–75% modeled probability of inauthentic / coordinated behavior.',
+  high: 'HIGH — 75% or higher modeled probability of inauthentic / coordinated behavior.',
+  unknown: 'Not enough data to assign a tier.',
+};
+const TIER_SCALE =
+  ' Scale: LOW <25 · MODERATE 25–50 · ELEVATED 50–75 · HIGH ≥75 (percent). ' +
+  'A probability with uncertainty — not a verdict.';
+
 export function TierBadge({ tier, className, size = 'md' }: TierBadgeProps) {
   const key = (tier || 'unknown') as Tier | 'unknown';
   return (
     <span
+      title={TIER_TITLE[key] + (key === 'unknown' ? '' : TIER_SCALE)}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-sm border font-mono uppercase tracking-wider',
         BG[key],

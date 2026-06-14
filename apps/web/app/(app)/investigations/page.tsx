@@ -94,6 +94,17 @@ function InvList({ investigations }: { investigations: InvestigationsListRespons
               <div className="flex items-center gap-3 mb-1 flex-wrap">
                 <span className="font-medium text-fg truncate">{inv.label}</span>
                 <TierBadge tier={inv.overall_tier} size="sm" />
+                {/* D1: flag thin-confidence investigations so they aren't ranked
+                    above better-supported ones when comparing. Clean (no chip)
+                    for confident ones; null = saved before confidence tracking. */}
+                {inv.confidence != null && inv.confidence < 0.4 && (
+                  <span
+                    title={`Low confidence (${Math.round(inv.confidence * 100)}%) — limited data backed this verdict; treat cautiously when comparing investigations.`}
+                    className="font-mono text-[0.55rem] tracking-wider uppercase text-tier-elevated border border-tier-elevated/40 rounded-sm px-1 py-px"
+                  >
+                    low&nbsp;conf
+                  </span>
+                )}
                 {inv.verdict && inv.verdict !== 'pending' && (
                   <span className="inline-flex items-center gap-1 font-mono text-2xs text-fg-mute uppercase tracking-wider">
                     <CheckCircle2 size={10} />
@@ -105,7 +116,12 @@ function InvList({ investigations }: { investigations: InvestigationsListRespons
               <div className="mt-1 flex items-center gap-3 font-mono text-2xs text-fg-mute uppercase tracking-wider">
                 <span>{timeAgo(inv.created_at)}</span>
                 <span>·</span>
-                <span className="text-fg-dim">{Math.round(inv.overall_probability * 100)}%</span>
+                <span
+                  className="text-fg-dim"
+                  title={inv.confidence != null
+                    ? `${Math.round(inv.overall_probability * 100)}% probability · ${Math.round(inv.confidence * 100)}% confidence (how much data backed it)`
+                    : undefined}
+                >{Math.round(inv.overall_probability * 100)}%</span>
                 <span>·</span>
                 <span>{inv.batch_count} batch{inv.batch_count === 1 ? '' : 'es'}</span>
               </div>

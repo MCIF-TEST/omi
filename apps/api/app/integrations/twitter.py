@@ -367,10 +367,59 @@ def _extract_tweets(data: dict) -> list[dict]:
     return []
 
 
+# X wraps EVERY outbound link in a t.co short URL, so a bare t.co in tweet text
+# is a platform artifact, not a promotional signal — yet the engagement detector
+# (correctly) treats t.co as a link shortener. Leaving raw t.co in the text makes
+# a legitimate link-sharer read as spam-like (measured ~0.72 engagement prob).
+# We restore the real destination from the tweet's URL entities so the detector
+# judges the ACTUAL domain (reuters.com vs bit.ly) — which preserves affiliate
+# detection (a spammer's t.co expands back to its bit.ly/linktr.ee target) while
+# clearing the false positive. A t.co with no expansion data carries no signal,
+# so it is dropped rather than left to read as a shortener.
+_TCO_TOKEN_RE = re.compile(r"https?://t\.co/\w+", re.I)
+
+
+def _tco_expansions(tw: dict) -> dict[str, str]:
+    """Map each t.co short URL to its expanded destination, reading whatever
+    entity shape twitterapi.io returns (defensive across known variants)."""
+    out: dict[str, str] = {}
+
+    def _collect(items: Any) -> None:
+        if not isinstance(items, list):
+            return
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            short = it.get("url")
+            full = (
+                it.get("expanded_url") or it.get("expandedUrl")
+                or it.get("unwound_url") or it.get("display_url") or it.get("displayUrl")
+            )
+            if isinstance(short, str) and "t.co/" in short and isinstance(full, str) and full:
+                out[short] = full
+
+    for container in (tw.get("entities"), tw.get("extendedEntities"), tw.get("extended_entities")):
+        if isinstance(container, dict):
+            _collect(container.get("urls"))
+            _collect(container.get("media"))
+    _collect(tw.get("urls"))  # some shapes expose a flat list on the tweet
+    return out
+
+
+def _expand_tco(text: str, tw: dict) -> str:
+    """Replace t.co-wrapped URLs in tweet text with their real destination; drop
+    any that have no expansion data (a bare t.co carries no promotional signal)."""
+    if "t.co/" not in text:
+        return text
+    for short, full in _tco_expansions(tw).items():
+        text = text.replace(short, full)
+    return _TCO_TOKEN_RE.sub("", text).strip()
+
+
 def _map_tweet(tw: dict, handle: str) -> Post | None:
     if not isinstance(tw, dict):
         return None
-    text = tw.get("text") or tw.get("full_text") or ""
+    text = _expand_tco(tw.get("text") or tw.get("full_text") or "", tw)
     ts = _parse_twitter_date(tw.get("createdAt") or tw.get("created_at"))
     if not ts:
         return None

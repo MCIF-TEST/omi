@@ -7,6 +7,7 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
 import { CommenterThreatPanel } from '@/components/shared/commenter-threat-panel';
 import { apiClient, ApiError, type AccountScanOut, type CommenterScanResult, type SignalResult, type UserGraphOut } from '@/lib/api';
+import { resolveScanPlatform, accountScanEndpoint } from '@/lib/scan-platform';
 import { timeAgo } from '@/lib/format';
 
 type ActivitySample = CommenterScanResult['recent_activity'][number];
@@ -22,12 +23,25 @@ const SIGNAL_LABELS: Record<string, string> = {
   coordination:'Coordination cluster',
 };
 
-export function CommenterDetail({ c }: { c: CommenterScanResult }) {
+export function CommenterDetail({
+  c,
+  investigationPlatform,
+}: {
+  c: CommenterScanResult;
+  /** Authoritative platform of the parent investigation — never overridden by
+   *  the comment-level platform, never assumed to be YouTube. */
+  investigationPlatform?: string | null;
+}) {
   const adjusted = c.coordination_adjusted_probability;
   const displayProb = adjusted ?? c.overall_probability ?? 0;
   const showAdjusted = adjusted != null && Math.abs(adjusted - c.overall_probability) > 0.005;
   const isFlagged = c.tier !== 'low';
   const signals = (c.signals ?? []).filter((s) => s.confidence > 0);
+
+  // Investigation platform is authoritative; the commenter platform is only a
+  // fallback when the investigation's is unavailable. Never assume YouTube.
+  const scanPlatform = resolveScanPlatform(investigationPlatform, c.platform);
+  const isX = scanPlatform === 'x';
 
   // On-demand deep scan of THIS commenter: pulls their recent comment history
   // (and a fresh score) via the single-account scan, so the operator can see
@@ -94,7 +108,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       if (graph.addNew && graph.newName.trim()) {
         const created = await apiClient<UserGraphOut>('/v1/graphs', {
           method: 'POST',
-          body: JSON.stringify({ name: graph.newName.trim(), platform: c.platform || 'youtube' }),
+          body: JSON.stringify({ name: graph.newName.trim(), platform: scanPlatform }),
         });
         newGraphId = created.id;
       }
@@ -118,11 +132,27 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
   };
 
   const runDeepScan = async () => {
+    // Defensive: if we can't determine the platform, do NOT scan — no credit is
+    // consumed, no fall-through to YouTube; surface a clear error instead.
+    const endpoint = accountScanEndpoint(scanPlatform);
+    if (!endpoint) {
+      setDeep((d) => ({
+        ...d,
+        loading: false,
+        error:
+          "Couldn't determine this account's platform, so the scan was not run — " +
+          'you have not been charged. Open this account from a completed ' +
+          'investigation and try again.',
+      }));
+      return;
+    }
     setDeep((d) => ({ ...d, loading: true, error: null }));
     try {
-      const res = await apiClient<AccountScanOut>('/v1/scan/youtube/account', {
+      // X resolves by @handle; YouTube by channel id.
+      const account = isX ? (c.handle || c.external_id) : c.external_id;
+      const res = await apiClient<AccountScanOut>(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ account_url_or_handle: c.external_id, force_refresh: true }),
+        body: JSON.stringify({ account_url_or_handle: account, force_refresh: true }),
       });
       setDeep({
         loading: false,
@@ -171,18 +201,24 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <TierBadge tier={c.tier} size="lg" />
               {c.from_cache && (
-                <span className="font-mono text-2xs tracking-wider text-fg-mute uppercase border border-border-2 rounded-full px-2 py-0.5">cached</span>
+                <span
+                  title="Reused from a recent scan of this account — cached results may be up to 7 days old. Use “Rescan history” for a fresh pull."
+                  className="font-mono text-2xs tracking-wider text-fg-mute uppercase border border-border-2 rounded-full px-2 py-0.5 cursor-help"
+                >cached</span>
               )}
               {c.matched_prior_neighbors > 0 && (
-                <span className="font-mono text-2xs tracking-wider text-accent uppercase border border-accent/30 bg-accent/10 rounded-full px-2 py-0.5">
+                <span
+                  title="Behavioral-fingerprint similarity: this many previously-seen accounts have a comparable posting/profile signature (nearest-neighbor match). It is a similarity signal only — NOT confirmed shared identity, NOT confirmed coordination, NOT a known-bad link, and NOT proof of a shared network. Treat it as a lead to investigate."
+                  className="font-mono text-2xs tracking-wider text-accent uppercase border border-accent/30 bg-accent/10 rounded-full px-2 py-0.5 cursor-help"
+                >
                   {c.matched_prior_neighbors} prior neighbor{c.matched_prior_neighbors === 1 ? '' : 's'}
                 </span>
               )}
             </div>
             <h2 className="display text-xl font-semibold text-fg tracking-tight mb-0.5 break-words">
-              {c.handle || c.external_id}
+              {c.handle || c.display_name || c.external_id}
             </h2>
-            {c.display_name && <p className="text-sm text-fg-dim">{c.display_name}</p>}
+            {c.display_name && c.handle && <p className="text-sm text-fg-dim">{c.display_name}</p>}
             <p className="font-mono text-2xs text-fg-faint mt-1 break-all">{c.external_id}</p>
           </div>
         </div>
@@ -288,7 +324,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       </header>
 
       {/* OmiScore intelligence — composed, explainable threat verdict */}
-      <CommenterThreatPanel platform={c.platform || 'youtube'} externalId={c.external_id} />
+      <CommenterThreatPanel platform={scanPlatform} externalId={c.external_id} />
 
       {/* Per-detector signal breakdown */}
       {signals.length > 0 && (
@@ -380,7 +416,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
             onClick={runDeepScan}
             disabled={deep.loading}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 font-mono text-2xs uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
-            title="Pull this account's recent comments from YouTube (uses 1 credit)"
+            title="Pull this account's recent activity (uses 1 credit)"
           >
             {deep.loading ? (
               <><Loader2 size={11} className="animate-spin" /> Scanning…</>
@@ -403,7 +439,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
                 <p className="text-sm text-fg leading-relaxed break-words">{a.text}</p>
                 <div className="mt-2 flex items-center justify-between gap-2 font-mono text-2xs tracking-wider uppercase text-fg-mute">
                   <span>{a.created_at ? timeAgo(a.created_at) : '—'}</span>
-                  {a.parent_id && (
+                  {a.parent_id && scanPlatform === 'youtube' && (
                     <a
                       href={`https://youtube.com/watch?v=${a.parent_id}`}
                       target="_blank"
@@ -421,7 +457,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
           !deep.loading && (
             <p className="text-xs text-fg-mute leading-relaxed">
               No comments pulled yet. Scan to fetch this account&apos;s recent
-              comment history from YouTube.
+              activity.
             </p>
           )
         )}
@@ -474,7 +510,7 @@ export function CommenterDetail({ c }: { c: CommenterScanResult }) {
       {/* Account profile link */}
       <div className="pt-1 border-t border-border-1">
         <Link
-          href={`/accounts/${encodeURIComponent(c.external_id)}?platform=${c.platform || 'youtube'}`}
+          href={`/accounts/${encodeURIComponent(c.external_id)}?platform=${scanPlatform}`}
           className="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-bg border border-border-1 hover:border-accent/40 hover:bg-accent/[0.04] transition-all"
         >
           <div>

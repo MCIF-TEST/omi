@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Sparkles, Zap, Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { SignupForm } from './signup-form';
+import { TRIAL_CREDITS } from '@/lib/plan';
 
 export const metadata = { title: 'Sign up — OMISPHERE' };
 
@@ -40,7 +41,7 @@ export default function SignupPage() {
           </ul>
           <p className="mt-3 font-mono text-2xs tracking-wider text-tier-low flex items-center gap-1.5">
             <Sparkles size={10} />
-            3 free trial scans. No card required.
+            {TRIAL_CREDITS} free trial credits. No card required.
           </p>
         </div>
 
