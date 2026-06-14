@@ -141,6 +141,7 @@ def _to_summary(inv) -> InvestigationSummary:
         kind=inv.kind,
         overall_probability=inv.overall_probability,
         overall_tier=Tier(inv.overall_tier),
+        confidence=inv.confidence,
         summary=inv.summary,
         quota_used=inv.quota_used,
         batch_count=inv.batch_count,

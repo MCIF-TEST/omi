@@ -593,6 +593,9 @@ class InvestigationSummary(BaseModel):
     kind: str
     overall_probability: float = Field(ge=0.0, le=1.0)
     overall_tier: Tier
+    # Overall confidence (0..1). None for investigations saved before it was
+    # tracked — the UI must not show those as low-confidence.
+    confidence: float | None = None
     summary: str
     quota_used: int
     batch_count: int

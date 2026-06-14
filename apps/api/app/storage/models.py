@@ -474,6 +474,10 @@ class Investigation(Base):
     kind: Mapped[str] = mapped_column(String(32))   # "video" | "channel" | "comprehensive"
     overall_probability: Mapped[float] = mapped_column(Float, default=0.0)
     overall_tier: Mapped[str] = mapped_column(String(16), default="low")
+    # Overall confidence (how much data backed the verdict), derived from the
+    # payload at save time. Nullable: investigations saved before this shipped
+    # have no value and must not be shown as low-confidence.
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     summary: Mapped[str] = mapped_column(Text, default="")
     quota_used: Mapped[int] = mapped_column(Integer, default=0)
     batch_count: Mapped[int] = mapped_column(Integer, default=1)

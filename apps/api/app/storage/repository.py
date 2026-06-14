@@ -25,6 +25,45 @@ from app.storage.models import Account, CommenterEngagement, Scan, ScanLog, Vide
 LOCAL_USER_EMAIL = "local@omi.local"
 
 
+def overall_confidence_from_payload(payload: dict | None) -> float | None:
+    """Derive an investigation's overall confidence from its saved payload.
+
+    Mirrors the synthesis view's ``_overallConfidence``: a weighted mean of the
+    parts that carry confidence (focus account, mean of commenter confidences,
+    coordination/thread-scan). Returns ``None`` when the payload carries no
+    confidence data, so older investigations are never shown as low-confidence.
+    Pure read of the payload — it does not change any score, tier, or ranking.
+    """
+    if not isinstance(payload, dict):
+        return None
+    parts: list[tuple[float, float]] = []  # (value, weight)
+
+    focus = payload.get("focus_account")
+    if isinstance(focus, dict) and isinstance(focus.get("confidence"), (int, float)):
+        parts.append((float(focus["confidence"]), 1.0))
+
+    video = payload.get("video") or {}
+    commenters = video.get("commenters") or []
+    confs = [
+        float(c["confidence"])
+        for c in commenters
+        if isinstance(c, dict) and isinstance(c.get("confidence"), (int, float))
+    ]
+    if confs:
+        parts.append((sum(confs) / len(confs), 1.0))
+
+    thread = video.get("thread_scan") or {}
+    if isinstance(thread, dict) and isinstance(thread.get("confidence"), (int, float)):
+        parts.append((float(thread["confidence"]), 0.7))
+
+    if not parts:
+        return None
+    total_w = sum(w for _, w in parts)
+    if total_w <= 0:
+        return None
+    return round(sum(v * w for v, w in parts) / total_w, 4)
+
+
 class AccountRepository:
     def __init__(self, session: Session):
         self.session = session
@@ -110,6 +149,7 @@ class AccountRepository:
             kind=kind,
             overall_probability=overall_probability,
             overall_tier=overall_tier,
+            confidence=overall_confidence_from_payload(payload_json),
             summary=summary,
             quota_used=quota_used,
             payload_json=payload_json,
@@ -144,6 +184,7 @@ class AccountRepository:
     ):
         from datetime import datetime, timezone
         inv.payload_json = payload_json
+        inv.confidence = overall_confidence_from_payload(payload_json)
         inv.quota_used = (inv.quota_used or 0) + quota_used_delta
         inv.batch_count = (inv.batch_count or 1) + 1
         if overall_probability is not None:
