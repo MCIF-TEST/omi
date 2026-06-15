@@ -4,6 +4,7 @@ import {
   Download, ShieldCheck, AlertTriangle, Network, Clock, Hash, AtSign, Megaphone,
 } from 'lucide-react';
 import { ApiError, type CampaignReportResponse } from '@/lib/api';
+import { isAnonymizedMember, hasAnonymizedMembers, ANONYMIZED_PROVENANCE_NOTE } from '@/lib/campaign-identity';
 import { apiServer } from '@/lib/api-server';
 import { Logo } from '@/components/shared/logo';
 import { HowToRead } from '@/components/shared/how-to-read';
@@ -212,7 +213,18 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
                 <tbody>
                   {v.members.map((m) => (
                     <tr key={m.account_external_id} className="border-t border-border-1">
-                      <td className="px-4 py-3 font-medium text-fg align-top break-all">{m.handle || m.account_external_id}</td>
+                      <td className="px-4 py-3 font-medium text-fg align-top break-all">
+                        {isAnonymizedMember(m.handle, m.account_external_id) ? (
+                          <>
+                            <span className="text-fg-dim italic">Anonymized account</span>
+                            <span className="block font-mono text-2xs text-fg-mute report-muted break-all">
+                              {m.account_external_id}
+                            </span>
+                          </>
+                        ) : (
+                          m.handle || m.account_external_id
+                        )}
+                      </td>
                       <td className="px-4 py-3 mono text-right text-fg-dim align-top">{m.times_observed}×</td>
                       <td className="px-4 py-3 text-fg-dim align-top">
                         {(m.methods || []).map((x) => METHOD_LABEL[x] || x).join(', ') || '—'}
@@ -222,6 +234,11 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
                 </tbody>
               </table>
             </div>
+            {hasAnonymizedMembers(v.members) && (
+              <p className="mt-3 text-2xs text-fg-mute report-muted leading-relaxed">
+                {ANONYMIZED_PROVENANCE_NOTE}
+              </p>
+            )}
           </section>
         )}
 

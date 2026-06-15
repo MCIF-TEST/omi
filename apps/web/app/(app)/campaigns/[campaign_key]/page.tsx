@@ -16,6 +16,7 @@ import { ApiError } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { CampaignShareBlock } from './share-block';
 import { HowToRead } from '@/components/shared/how-to-read';
+import { isAnonymizedMember, hasAnonymizedMembers, ANONYMIZED_PROVENANCE_NOTE } from '@/lib/campaign-identity';
 
 export const metadata = { title: 'Campaign — OMISPHERE' };
 export const dynamic = 'force-dynamic';
@@ -252,6 +253,11 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           <p className="text-sm text-fg-mute">No member rows captured yet.</p>
         ) : (
           <div className="overflow-x-auto -mx-4 px-4">
+            {hasAnonymizedMembers(detail.members) && (
+              <p className="mb-3 text-2xs text-fg-faint leading-relaxed">
+                {ANONYMIZED_PROVENANCE_NOTE}
+              </p>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left font-mono text-2xs uppercase tracking-wider text-fg-faint border-b border-border-1">
@@ -265,12 +271,21 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                 {detail.members.map((m) => (
                   <tr key={m.account_external_id} className="border-b border-border-1/60 last:border-0">
                     <td className="py-2 pr-3">
-                      <Link
-                        href={`/accounts/${encodeURIComponent(m.account_external_id)}`}
-                        className="text-fg hover:text-accent"
-                      >
-                        {m.handle || m.account_external_id}
-                      </Link>
+                      {isAnonymizedMember(m.handle, m.account_external_id) ? (
+                        <div>
+                          <span className="text-fg-dim italic">Anonymized account</span>
+                          <span className="block font-mono text-2xs text-fg-faint break-all">
+                            {m.account_external_id}
+                          </span>
+                        </div>
+                      ) : (
+                        <Link
+                          href={`/accounts/${encodeURIComponent(m.account_external_id)}`}
+                          className="text-fg hover:text-accent"
+                        >
+                          {m.handle || m.account_external_id}
+                        </Link>
+                      )}
                     </td>
                     <td className="py-2 pr-3 text-right font-mono tabular-nums text-fg-dim">
                       {m.times_observed}×
