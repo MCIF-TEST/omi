@@ -19,6 +19,7 @@ def _to_out(w: Watchlist) -> WatchlistOut:
         id=w.id,
         kind=w.kind,
         target_id=w.target_id,
+        platform=w.platform or "youtube",
         label=w.label,
         alert_threshold_tier=w.alert_threshold_tier,
         last_seen_tier=w.last_seen_tier,
@@ -64,6 +65,7 @@ def add_watchlist(
             user_id=current.id,
             kind=payload.kind,
             target_id=target,
+            platform=(payload.platform or "youtube").strip().lower(),
             label=(payload.label or target).strip(),
             alert_threshold_tier=payload.alert_threshold_tier,
         )

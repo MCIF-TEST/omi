@@ -19,6 +19,7 @@ const TIERS = [
 export function WatchlistForm({ onAdded }: Props) {
   const [targetId, setTargetId] = useState('');
   const [label, setLabel] = useState('');
+  const [platform, setPlatform] = useState('youtube');
   const [threshold, setThreshold] = useState('moderate');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export function WatchlistForm({ onAdded }: Props) {
         body: JSON.stringify({
           kind: 'channel',
           target_id: targetId.trim(),
+          platform,
           label: label.trim() || targetId.trim(),
           alert_threshold_tier: threshold,
         }),
@@ -49,14 +51,26 @@ export function WatchlistForm({ onAdded }: Props) {
   };
 
   return (
-    <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
+    <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr_auto_auto] gap-3 items-end">
       <div>
-        <Label htmlFor="wl-target">Channel ID</Label>
+        <Label htmlFor="wl-platform">Platform</Label>
+        <select
+          id="wl-platform"
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+          className="w-full h-10 px-3 bg-bg-elev border border-border-2 rounded-sm font-mono text-sm text-fg focus:border-accent-dim focus:outline-none"
+        >
+          <option value="youtube">YouTube</option>
+          <option value="x">X</option>
+        </select>
+      </div>
+      <div>
+        <Label htmlFor="wl-target">{platform === 'x' ? 'Handle / ID' : 'Channel ID'}</Label>
         <Input
           id="wl-target"
           value={targetId}
           onChange={(e) => setTargetId(e.target.value)}
-          placeholder="UC… or @handle"
+          placeholder={platform === 'x' ? '@handle' : 'UC… or @handle'}
         />
       </div>
       <div>
@@ -83,7 +97,7 @@ export function WatchlistForm({ onAdded }: Props) {
         {pending ? <><Loader2 size={14} className="animate-spin" /> Adding…</> : <><Plus size={14} /> Add</>}
       </Button>
       {error && (
-        <p className="sm:col-span-4 text-xs text-danger bg-danger/10 border border-danger/40 rounded-sm px-3 py-2 font-mono">
+        <p className="sm:col-span-5 text-xs text-danger bg-danger/10 border border-danger/40 rounded-sm px-3 py-2 font-mono">
           {error}
         </p>
       )}

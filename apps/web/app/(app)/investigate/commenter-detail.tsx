@@ -120,6 +120,7 @@ export function CommenterDetail({
           body: JSON.stringify({
             kind: 'channel',
             target_id: c.external_id,
+            platform: scanPlatform,
             label: c.handle || c.external_id,
             alert_threshold_tier: 'elevated',
           }),

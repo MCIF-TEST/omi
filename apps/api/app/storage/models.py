@@ -521,6 +521,12 @@ class Watchlist(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     kind: Mapped[str] = mapped_column(String(32))   # "channel" | "narrative"
+    # Platform the target belongs to, so History links and re-scans route to the
+    # right place. Defaults to "youtube" for rows created before this column
+    # existed (the only platform watchlists supported at the time).
+    platform: Mapped[str] = mapped_column(
+        String(32), default="youtube", server_default="youtube"
+    )
     target_id: Mapped[str] = mapped_column(String(128), index=True)
     label: Mapped[str] = mapped_column(String(280), default="")
     # Tier threshold at which an alert fires — alerts only when current tier

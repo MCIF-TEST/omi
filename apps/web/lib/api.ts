@@ -672,6 +672,7 @@ export interface WatchlistOut {
   id: number;
   kind: string;
   target_id: string;
+  platform: string;
   label: string;
   alert_threshold_tier: string;
   last_seen_tier: string | null;

@@ -159,8 +159,8 @@ export function MonitoringClient() {
         <div className="mt-6">
           {(watchlists.data?.watchlists?.length ?? 0) === 0 ? (
             <p className="text-sm text-fg-dim">
-              No watchlists yet. Add a YouTube channel ID above; OMISPHERE
-              tracks its tier and pings you when it changes.
+              No watchlists yet. Add a YouTube channel or X account above —
+              OMISPHERE tracks its tier and pings you when it changes.
             </p>
           ) : (
             <ul className="divide-y divide-border-1 -mx-2">

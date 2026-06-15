@@ -118,9 +118,12 @@ class MonitoringService:
 
     def add_watchlist(
         self, *, user_id: int, kind: str, target_id: str,
+        platform: str = "youtube",
         label: str = "", alert_threshold_tier: str = "moderate",
     ) -> Watchlist:
-        # Idempotent: same (user_id, kind, target_id) returns existing.
+        # Idempotent: same (user_id, kind, target_id) returns existing. If that
+        # row predates platform-awareness (backfilled to "youtube") and we now
+        # know the real platform, heal it so History links route correctly.
         existing = self.session.execute(
             select(Watchlist).where(
                 Watchlist.user_id == user_id,
@@ -129,11 +132,14 @@ class MonitoringService:
             )
         ).scalar_one_or_none()
         if existing is not None:
+            if platform and existing.platform != platform:
+                existing.platform = platform
             return existing
         w = Watchlist(
             user_id=user_id,
             kind=kind,
             target_id=target_id,
+            platform=platform or "youtube",
             label=label or target_id,
             alert_threshold_tier=alert_threshold_tier,
         )

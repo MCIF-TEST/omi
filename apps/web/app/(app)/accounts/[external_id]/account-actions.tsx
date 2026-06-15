@@ -45,6 +45,7 @@ export function AccountActions({ externalId, platform, handle, csvRows }: Props)
           body: JSON.stringify({
             kind: 'channel',
             target_id: externalId,
+            platform,
             label: handle || externalId,
             alert_threshold_tier: 'elevated',
           }),
