@@ -75,7 +75,7 @@ const RISK_CONFIG: Record<
     cls: 'text-tier-moderate border-tier-moderate/40 bg-tier-moderate/10',
     barCls: 'bg-tier-moderate',
     glowCls: '',
-    desc: 'Repeated suspicious synchronization. Moderate semantic similarity with timing overlap.',
+    desc: 'Repeated synchronization or amplification corroborated by multiple independent narrative signals.',
   },
   low: {
     label: 'Low',
@@ -117,8 +117,8 @@ const SIGNAL_LABELS: Record<string, { label: string; desc: string }> = {
     desc: 'How long the cluster has remained active',
   },
   semantic_cohesion: {
-    label: 'Semantic cohesion',
-    desc: 'Comments-per-author tightness',
+    label: 'Posts per author',
+    desc: 'Average comments per author in this cluster (a volume ratio — not topical similarity)',
   },
 };
 
@@ -265,7 +265,7 @@ export default async function NarrativeDetailPage({
           tone={sync_pct >= 60 ? 'extreme' : sync_pct >= 35 ? 'high' : 'moderate'}
         />
         <BigStat
-          label="Semantic cohesion"
+          label="Posts per author"
           value={`${cohesion_pct}%`}
           icon={<GitBranch size={14} />}
           barPct={cohesion_pct}
