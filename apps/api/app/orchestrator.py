@@ -707,6 +707,11 @@ class ComprehensiveOutput:
     quota_used: int
     next_page_token: str | None = None
     video_id: str | None = None
+    # Raw interaction items fetched for the scanned video/content, in the shape
+    # ContentIntelligenceService.record_batch consumes. Surfaced so the route
+    # layer can persist content intelligence (the Content DB) the same way the
+    # /youtube/full path does. Empty when no content was scanned.
+    all_comments: list[dict] = field(default_factory=list)
 
 
 def _parse_pasted_comments(text: str) -> list[Post]:
@@ -829,6 +834,7 @@ def scan_comprehensive(
     video_output: FullScanOutput | None = None
     next_page_token: str | None = None
     resolved_video_id: str | None = None
+    all_comments: list[dict] = []
     if video_url_or_id and video_url_or_id.strip():
         video_id = source.parse_content_id(video_url_or_id)
         if video_id:
@@ -899,6 +905,7 @@ def scan_comprehensive(
         quota_used=source.quota_used,
         next_page_token=next_page_token,
         video_id=resolved_video_id,
+        all_comments=all_comments,
     )
 
 

@@ -1447,6 +1447,29 @@ def _run_comprehensive(
             if c.tier in (Tier.HIGH, Tier.ELEVATED)
             or (c.coordination_adjusted_probability or 0) >= 0.5
         )
+
+        # Phase 10 — persist content intelligence (the Content DB) for the
+        # comprehensive scan path the product actually uses, mirroring the
+        # /youtube/full handler. Fire-and-forget background write; only YouTube
+        # video scans populate the YouTube content database (X and other sources
+        # have no ContentEntity surface).
+        if source.platform == "youtube":
+            from app.core import background as _bg
+            _bg.submit(
+                _record_content_intelligence_async,
+                "youtube",
+                out.video_output.video_id,
+                out.all_comments,
+                {r.external_id: r.handle for r in out.video_output.commenter_records},
+                dict(tier_counts),
+                out.video_output.coordination_score,
+                out.video_output.coordination_tier.value,
+                current.id,
+                getattr(source, "_client", None),
+                source.stats,
+                out.next_page_token,
+            )
+
         video_result_out = FullVideoScanResult(
             video_id=out.video_output.video_id,
             platform=source.platform,
