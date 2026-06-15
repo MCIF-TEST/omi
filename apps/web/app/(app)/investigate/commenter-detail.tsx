@@ -444,9 +444,13 @@ export function CommenterDetail({
                       href={`https://youtube.com/watch?v=${a.parent_id}`}
                       target="_blank"
                       rel="noopener"
-                      className="text-accent hover:text-accent-2 inline-flex items-center gap-1"
+                      title={a.parent_title || undefined}
+                      className="text-accent hover:text-accent-2 inline-flex items-center gap-1 max-w-[220px] truncate"
                     >
-                      on video <ArrowRight size={10} />
+                      {a.parent_title
+                        ? `on “${a.parent_title.length > 50 ? a.parent_title.slice(0, 50) + '…' : a.parent_title}”`
+                        : 'on video'}{' '}
+                      <ArrowRight size={10} className="shrink-0" />
                     </a>
                   )}
                 </div>

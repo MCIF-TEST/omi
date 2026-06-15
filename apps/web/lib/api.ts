@@ -451,6 +451,8 @@ export interface CommenterScanResult {
     text: string;
     created_at: string | null;
     parent_id: string | null;
+    /** Human-readable title of the parent content, when on file. */
+    parent_title?: string | null;
     like_count: number | null;
   }>;
   activity_total: number;
@@ -542,6 +544,8 @@ export interface AccountScanOut {
     text: string;
     created_at: string | null;
     parent_id: string | null;
+    /** Human-readable title of the parent content, when on file. */
+    parent_title?: string | null;
     like_count: number | null;
   }>;
   activity_total: number;
@@ -724,6 +728,8 @@ export interface ReportCommenter {
     text: string;
     created_at: string | null;
     parent_id: string | null;
+    /** Human-readable title of the parent content, when on file. */
+    parent_title?: string | null;
     like_count: number | null;
   }>;
 }
