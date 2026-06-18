@@ -1,0 +1,5 @@
+# Regenerable, seeded artifacts (and a bundled data split) — rebuild with:
+#   python ml/training/behavioral_v1/train.py
+# The committed deliverables are the code, metrics.json, train_summary.json,
+# and the docs. Binary pickles are intentionally not version-controlled.
+*.joblib
