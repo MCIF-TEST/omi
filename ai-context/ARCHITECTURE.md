@@ -14,6 +14,12 @@
 - `docs/` — long-form design, audit, and roadmap docs.
 - `infrastructure/` — `docker-compose.yml`, `render.yaml`.
 - `scripts/`, `apps/api/ml_training/` — model training / ops scripts.
+- `ml/` — **Omi Intelligence Foundation**: a decoupled, offline ML scaffold
+  (`datasets/`, `features/`, `models/`, `training/`, `evaluation/`,
+  `inference/`, `schemas/`). Infrastructure only — **not imported by `apps/*`**,
+  does not touch detection/scoring/APIs; promotion to production is a deliberate,
+  flag-gated change into the dormant `apps/api/app/ml/scorer.py` seam. See
+  `ml/README.md`.
 
 ## Frontend (`apps/web`)
 

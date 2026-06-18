@@ -21,7 +21,8 @@ Newest first. (Branch auto-merges into `main` in the remote env.)
 
 | Date | Commit | What | Files (area) | User impact |
 |------|--------|------|--------------|-------------|
-| 2026-06-18 | _(this change)_ | Create `ai-context/` project-memory system | `ai-context/VISION.md`, `ARCHITECTURE.md`, `HANDOFF.md` | Context persists across sessions; less re-derivation |
+| 2026-06-18 | _(this change)_ | **Omi Intelligence Foundation** — create decoupled top-level `ml/` ML scaffold (datasets/features/models/training/evaluation/inference/schemas), docs-only, no production wiring | `ml/**` (13 READMEs) + `ai-context/ARCHITECTURE.md` | Forward-looking ML R&D has a structured, governed home; engine untouched |
+| 2026-06-18 | `61100f1` | Create `ai-context/` project-memory system | `ai-context/VISION.md`, `ARCHITECTURE.md`, `HANDOFF.md` | Context persists across sessions; less re-derivation |
 | 2026-06-15 | `eb9dafa` | Monitoring **platform awareness** — watchlists store `platform`; History links route by it; safe backfill→youtube + heal-on-rewatch; scheduler restricted to youtube | api: models/db/schemas/service/scheduler/routes + tests; web: monitoring + account-actions + commenter-detail + api.ts | X watchlists link to the correct history view |
 | 2026-06-15 | `08440f4` | Monitoring **workflow** — one-click "Add to Monitoring" on commenter-detail (reuses watchlist infra) | web: `investigate/commenter-detail.tsx` | Monitor an account from inside the investigation flow |
 | 2026-06-15 | `46be015` | **Content DB ingestion fix** — comprehensive scan path now records ContentEntity/CommentBatch/ContentComment (was only `/youtube/full`) | api: orchestrator/scan + tests + conftest | Content DB actually populates from normal scans |
