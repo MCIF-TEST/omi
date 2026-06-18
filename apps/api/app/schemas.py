@@ -679,6 +679,7 @@ class FeedResponse(BaseModel):
 class WatchlistIn(BaseModel):
     kind: Literal["channel", "narrative"] = "channel"
     target_id: str
+    platform: str = "youtube"
     label: str | None = None
     alert_threshold_tier: Literal["low", "moderate", "elevated", "high"] = "moderate"
 
@@ -687,6 +688,7 @@ class WatchlistOut(BaseModel):
     id: int
     kind: str
     target_id: str
+    platform: str
     label: str
     alert_threshold_tier: str
     last_seen_tier: str | None

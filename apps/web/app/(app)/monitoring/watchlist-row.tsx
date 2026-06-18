@@ -37,7 +37,8 @@ export function WatchlistRow({ w, onChange }: Props) {
           </span>
         </div>
         <div className="font-mono text-2xs text-fg-faint">
-          {w.target_id} ·{' '}
+          <span className="uppercase tracking-wider text-fg-mute">{w.platform || 'youtube'}</span>
+          {' · '}{w.target_id} ·{' '}
           {w.last_checked_at
             ? `checked ${timeAgo(w.last_checked_at)}`
             : 'never checked'}
@@ -48,7 +49,7 @@ export function WatchlistRow({ w, onChange }: Props) {
       </div>
       <div className="flex items-center gap-2">
         <Link
-          href={`/accounts/${encodeURIComponent(w.target_id)}?platform=youtube`}
+          href={`/accounts/${encodeURIComponent(w.target_id)}?platform=${encodeURIComponent(w.platform || 'youtube')}`}
           className="inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase text-fg-dim hover:text-fg"
         >
           History <ExternalLink size={10} />

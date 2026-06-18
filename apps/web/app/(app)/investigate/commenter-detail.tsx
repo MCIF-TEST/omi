@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { TrendingUp, AlertTriangle, MessageSquareText, ArrowRight, BarChart2, ShieldAlert, Radar, Loader2, GitFork, Check, Plus, ChevronDown } from 'lucide-react';
+import { TrendingUp, AlertTriangle, MessageSquareText, ArrowRight, BarChart2, ShieldAlert, Radar, Loader2, GitFork, Check, Plus, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
 import { CommenterThreatPanel } from '@/components/shared/commenter-threat-panel';
-import { apiClient, ApiError, type AccountScanOut, type CommenterScanResult, type SignalResult, type UserGraphOut } from '@/lib/api';
+import { apiClient, ApiError, type AccountScanOut, type CommenterScanResult, type SignalResult, type UserGraphOut, type WatchlistOut, type WatchlistsResponse } from '@/lib/api';
 import { resolveScanPlatform, accountScanEndpoint } from '@/lib/scan-platform';
 import { timeAgo } from '@/lib/format';
 
@@ -82,6 +82,55 @@ export function CommenterDetail({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [graph.open]);
+
+  // "Add to Monitoring" — the exact watchlist the account page uses, so a
+  // researcher can monitor an account from inside the investigation flow. Keyed
+  // on kind "channel" + external_id so the Watching state is shared with the
+  // account page and the post-scan tier-change alerts (note_observation).
+  const [watch, setWatch] = useState<{ loading: boolean; existing: WatchlistOut | null }>({
+    loading: true,
+    existing: null,
+  });
+
+  useEffect(() => {
+    let active = true;
+    setWatch({ loading: true, existing: null });
+    apiClient<WatchlistsResponse>('/v1/watchlists')
+      .then((r) => {
+        if (!active) return;
+        const existing = r.watchlists.find(
+          (w) => w.kind === 'channel' && w.target_id === c.external_id,
+        );
+        setWatch({ loading: false, existing: existing ?? null });
+      })
+      .catch(() => { if (active) setWatch({ loading: false, existing: null }); });
+    return () => { active = false; };
+  }, [c.external_id]);
+
+  const toggleWatch = async () => {
+    if (watch.loading) return;
+    setWatch((w) => ({ ...w, loading: true }));
+    try {
+      if (watch.existing) {
+        await apiClient(`/v1/watchlists/${watch.existing.id}`, { method: 'DELETE' });
+        setWatch({ loading: false, existing: null });
+      } else {
+        const created = await apiClient<WatchlistOut>('/v1/watchlists', {
+          method: 'POST',
+          body: JSON.stringify({
+            kind: 'channel',
+            target_id: c.external_id,
+            platform: scanPlatform,
+            label: c.handle || c.external_id,
+            alert_threshold_tier: 'elevated',
+          }),
+        });
+        setWatch({ loading: false, existing: created });
+      }
+    } catch {
+      setWatch((w) => ({ ...w, loading: false }));
+    }
+  };
 
   const openGraphPanel = async () => {
     setGraph((g) => ({ ...g, open: true, loading: true, error: null, saved: false }));
@@ -230,8 +279,30 @@ export function CommenterDetail({
         )}
         <p className="relative mt-3 text-sm text-fg-dim leading-relaxed">{c.summary}</p>
 
-        {/* Add to graph */}
-        <div className="relative mt-3" ref={graphPanelRef}>
+        {/* Investigation actions — monitor + graph */}
+        <div className="relative mt-3 flex items-center gap-2 flex-wrap">
+          {/* Add to Monitoring (watchlist) — same one-click action as the account page */}
+          <button
+            type="button"
+            onClick={toggleWatch}
+            disabled={watch.loading}
+            className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border font-mono text-2xs uppercase tracking-wider transition-colors disabled:opacity-50 ${
+              watch.existing
+                ? 'border-accent bg-accent/10 text-accent hover:bg-accent/20'
+                : 'border-border-2 text-fg-dim hover:text-fg hover:border-border-hot'
+            }`}
+            title={watch.existing
+              ? 'Stop monitoring this account'
+              : 'Add to Monitoring — get alerts when this account’s tier changes'}
+          >
+            {watch.loading
+              ? <Loader2 size={11} className="animate-spin" />
+              : watch.existing ? <Eye size={11} /> : <EyeOff size={11} />}
+            {watch.existing ? 'Monitoring' : 'Add to Monitoring'}
+          </button>
+
+          {/* Add to graph */}
+          <div className="relative" ref={graphPanelRef}>
           <button
             type="button"
             onClick={graph.open ? () => setGraph((g) => ({ ...g, open: false })) : openGraphPanel}
@@ -320,6 +391,7 @@ export function CommenterDetail({
               )}
             </div>
           )}
+          </div>
         </div>
       </header>
 
@@ -444,9 +516,13 @@ export function CommenterDetail({
                       href={`https://youtube.com/watch?v=${a.parent_id}`}
                       target="_blank"
                       rel="noopener"
-                      className="text-accent hover:text-accent-2 inline-flex items-center gap-1"
+                      title={a.parent_title || undefined}
+                      className="text-accent hover:text-accent-2 inline-flex items-center gap-1 max-w-[220px] truncate"
                     >
-                      on video <ArrowRight size={10} />
+                      {a.parent_title
+                        ? `on “${a.parent_title.length > 50 ? a.parent_title.slice(0, 50) + '…' : a.parent_title}”`
+                        : 'on video'}{' '}
+                      <ArrowRight size={10} className="shrink-0" />
                     </a>
                   )}
                 </div>

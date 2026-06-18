@@ -11,7 +11,9 @@ scores:
 * ``coordination_score``     — aggregate coordination likelihood
 * ``manipulation_probability`` — weighted lift from inauth+burst+sync
 * ``synchronization_intensity`` — timing entropy + burst score
-* ``semantic_cohesion``      — how tight (vs. diffuse) the cluster is
+* ``semantic_cohesion``      — posts-per-author volume ratio (NOT topical
+  similarity; the legacy field name is retained for API stability — see the
+  computation below and the honest user-facing label "Posts per author")
 * ``cluster_confidence``     — number of independent signals firing
 
 The "MOST IMPORTANT RULE" enforced here: only accounts at the MODERATE
@@ -105,6 +107,10 @@ class CoordinationScores:
     synchronization_intensity: float = 0.0
     semantic_cohesion: float = 0.0
     cluster_confidence: int = 0
+    # Count of NARRATIVE-level signals firing (>=0.4), EXCLUDING account-level
+    # inauthenticity. A "suspicious"+ label/risk requires >=2 of these so that
+    # account suspicion alone can never produce a coordination verdict.
+    narrative_corroboration: int = 0
 
     # Individual signal components (all 0-1)
     inauthenticity_fraction: float = 0.0    # share of scanned authors at moderate+
@@ -205,9 +211,12 @@ def score_narrative(
     # days is more characteristic of a campaign.
     scores.persistence_score = _persistence_score(first_seen_at, last_seen_at)
 
-    # --- Signal 8: semantic cohesion ----------------------------------------
-    # Proxy: ratio of qualifying members to qualifying authors. High value =
-    # individual authors making many cluster contributions = tighter cell.
+    # --- Signal 8: posts-per-author ratio (field name: semantic_cohesion) ---
+    # NOTE: despite the legacy field name, this is NOT topical/semantic
+    # similarity. It is the ratio of qualifying members to qualifying authors —
+    # i.e. how many cluster comments each suspicious author contributed. High
+    # value = a few accounts posting repeatedly (a tighter cell). Surfaced to
+    # users as "Posts per author".
     if scores.qualifying_author_count > 0:
         ratio = scores.qualifying_member_count / scores.qualifying_author_count
         scores.semantic_cohesion = min(1.0, (ratio - 1.0) / 4.0) if ratio >= 1.0 else 0.0
@@ -236,6 +245,15 @@ def score_narrative(
         raw = raw * 0.7
     scores.coordination_score = round(raw, 4)
     scores.cluster_confidence = firing
+    # Narrative-level corroboration: firing signals that are evidence of
+    # NARRATIVE COORDINATION, excluding the account-level inauthenticity signal.
+    # The label/risk gate below requires >=2 of these, so a cluster that is only
+    # "some members are independently suspicious" (high inauthenticity, no
+    # coordination behaviour) can never be labeled suspicious/coordinated.
+    scores.narrative_corroboration = sum(
+        1 for name, value, _ in coord_components
+        if name != "inauthenticity" and value >= 0.4
+    )
 
     # Manipulation probability: weighted toward inauthenticity + burst + repost
     # (the three signals most diagnostic of artificial amplification).
@@ -395,31 +413,48 @@ def _persistence_score(first: datetime, last: datetime) -> float:
 
 
 def _coordination_label(s: CoordinationScores) -> str:
-    """Map aggregate scores to a one-word verdict."""
+    """Map aggregate scores to a one-word verdict.
+
+    Corroboration gate: a "suspicious" or stronger verdict requires
+    ``narrative_corroboration >= 2`` — at least two independent NARRATIVE-level
+    signals (timing, repost, cross-target, concentration, persistence, …)
+    firing. Account-level suspicion (``inauthenticity_fraction``) alone — even
+    when high — can never produce a coordination verdict; it caps at "mixed".
+    This kills the verified false positive: an organic reply cluster that merely
+    contains independently-flagged accounts is no longer labeled suspicious.
+    """
     if s.qualifying_member_count == 0:
         return "organic"
     score = s.coordination_score
     manip = s.manipulation_probability
-    if score >= 0.65 or manip >= 0.7:
-        return "manipulation_network"
-    if score >= 0.45:
-        return "coordinated"
-    if score >= 0.25 or s.inauthenticity_fraction >= 0.35:
-        return "suspicious"
+    if s.narrative_corroboration >= 2:
+        if score >= 0.65 or manip >= 0.7:
+            return "manipulation_network"
+        if score >= 0.45:
+            return "coordinated"
+        if score >= 0.25:
+            return "suspicious"
+    # Account-level suspicion without corroborating narrative coordination is
+    # surfaced honestly as "mixed" (flagged accounts present), never higher.
     if s.inauthenticity_fraction >= 0.15:
         return "mixed"
     return "organic"
 
 
 def _risk_tier(s: CoordinationScores) -> str:
-    """Map aggregate to the user-facing 4-band risk vocabulary."""
+    """Map aggregate to the user-facing 4-band risk vocabulary.
+
+    Same corroboration gate as the label: moderate+ risk requires >=2
+    narrative-level signals firing, so account suspicion alone stays "low".
+    """
     score = s.coordination_score
-    if score >= 0.65 or s.manipulation_probability >= 0.7:
-        return "extreme"
-    if score >= 0.45:
-        return "high"
-    if score >= 0.22 or s.inauthenticity_fraction >= 0.20:
-        return "moderate"
+    if s.narrative_corroboration >= 2:
+        if score >= 0.65 or s.manipulation_probability >= 0.7:
+            return "extreme"
+        if score >= 0.45:
+            return "high"
+        if score >= 0.22:
+            return "moderate"
     return "low"
 
 

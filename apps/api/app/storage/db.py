@@ -139,6 +139,9 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("campaigns", "share_token", "VARCHAR(64)"),
     ("campaigns", "is_public", "INTEGER DEFAULT 0"),
     ("campaigns", "published_at", "TIMESTAMP WITH TIME ZONE"),
+    # Watchlist platform-awareness — route History links + re-scans correctly.
+    # Existing rows backfill to "youtube" (the only platform they could be).
+    ("watchlists", "platform", "VARCHAR(32) DEFAULT 'youtube'"),
 ]
 
 

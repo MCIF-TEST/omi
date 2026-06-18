@@ -84,6 +84,10 @@ def _auto_rescan_due_watchlists() -> int:
         due = list(session.execute(
             select(Watchlist)
             .where(Watchlist.kind == "channel")
+            # This re-scan loop uses the YouTube client only; X (and any future
+            # platform) watchlists are routed/displayed correctly but re-scanned
+            # via their own scan flow, not here. Backfilled rows are "youtube".
+            .where(Watchlist.platform == "youtube")
             .where(
                 (Watchlist.last_checked_at.is_(None))
                 | (Watchlist.last_checked_at < cutoff)
@@ -139,6 +143,7 @@ def _auto_rescan_due_watchlists() -> int:
                     target_id=w.target_id,
                     current_tier=orch.result.tier.value,
                     current_probability=orch.result.overall_probability,
+                    platform=w.platform or "youtube",
                 )
             rescans += 1
         except Exception:  # noqa: BLE001 — per-watchlist failures don't abort the loop

@@ -167,6 +167,59 @@ def test_watchlist_add_is_idempotent():
         assert w1.id == w2.id
 
 
+def test_watchlist_captures_platform():
+    uid = _user()
+    with get_session() as session:
+        svc = MonitoringService(session)
+        yt = svc.add_watchlist(user_id=uid, kind="channel", target_id="UCyt", label="@yt")
+        x = svc.add_watchlist(user_id=uid, kind="channel", target_id="bot_handle",
+                              platform="x", label="@bot")
+        assert yt.platform == "youtube"   # sensible default for the YouTube path
+        assert x.platform == "x"          # X account captured correctly
+
+
+def test_watchlist_platform_heals_on_rewatch():
+    # A row created before platform-awareness (backfilled to "youtube") is healed
+    # when re-watched from the correct-platform surface — no duplicate row.
+    uid = _user()
+    with get_session() as session:
+        svc = MonitoringService(session)
+        first = svc.add_watchlist(user_id=uid, kind="channel", target_id="acct1")
+        assert first.platform == "youtube"
+        healed = svc.add_watchlist(user_id=uid, kind="channel", target_id="acct1",
+                                   platform="x")
+        assert healed.id == first.id      # still idempotent
+        assert healed.platform == "x"     # platform corrected
+
+
+def test_watchlist_api_round_trips_platform(monkeypatch):
+    """The HTTP contract the History link depends on: platform is captured on
+    create, defaults to youtube when omitted, and is returned on list."""
+    from app.core.config import get_settings
+    from app.core.rate_limit import LOGIN_LIMITER, SIGNUP_LIMITER
+
+    monkeypatch.setenv("OMI_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("OMI_SESSION_SECRET", "x" * 64)
+    get_settings.cache_clear()
+    reset_db_for_tests()
+    SIGNUP_LIMITER._windows.clear()
+    LOGIN_LIMITER._windows.clear()
+    try:
+        with TestClient(app) as tc:
+            tc.post("/v1/auth/signup", json={"email": "wl@x.com", "password": "password12345"})
+            x = tc.post("/v1/watchlists", json={
+                "kind": "channel", "target_id": "bot_x", "platform": "x", "label": "@botx",
+            })
+            assert x.status_code == 200, x.text
+            assert x.json()["platform"] == "x"
+            yt = tc.post("/v1/watchlists", json={"kind": "channel", "target_id": "UCyt"})
+            assert yt.json()["platform"] == "youtube"   # default when omitted
+            rows = {w["target_id"]: w["platform"] for w in tc.get("/v1/watchlists").json()["watchlists"]}
+            assert rows == {"bot_x": "x", "UCyt": "youtube"}
+    finally:
+        get_settings.cache_clear()
+
+
 def test_note_observation_fires_alert_on_tier_change():
     uid = _user()
     with get_session() as session:

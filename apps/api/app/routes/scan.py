@@ -227,6 +227,36 @@ def _activity_payload(
     return samples, len(posts)
 
 
+def _attach_content_titles(platform: str, samples: list[dict]) -> None:
+    """Annotate recent-activity samples with the human-readable title of their
+    parent content, when that content is already in our store.
+
+    Readability only: it adds ``parent_title`` from the existing ContentEntity
+    rows (no external fetch, no new persistence). Read-only and best-effort —
+    it never raises into a scan, and samples whose parent isn't on file keep
+    just their id/link, exactly as before.
+    """
+    ids = {s.get("parent_id") for s in samples if s.get("parent_id")}
+    if not ids:
+        return
+    try:
+        from app.storage.models import ContentEntity
+        with get_session() as session:
+            rows = session.execute(
+                select(ContentEntity.content_id, ContentEntity.title).where(
+                    ContentEntity.platform == platform,
+                    ContentEntity.content_id.in_(ids),
+                )
+            ).all()
+        titles = {cid: t for cid, t in rows if t}
+        for s in samples:
+            pid = s.get("parent_id")
+            if pid and titles.get(pid):
+                s["parent_title"] = titles[pid]
+    except Exception:  # noqa: BLE001 — readability enrichment must never break a scan
+        return
+
+
 # Tests inject a fake client through this hook; production builds the real one.
 def _resolve_client(settings: Settings) -> YouTubeClient:
     """Build the live YouTube client, or raise a clean, user-facing 503.
@@ -717,6 +747,7 @@ def scan_youtube_account(
     activity_samples, activity_total = _activity_payload(
         history, orch.result.tier, limit=30, include_low=True
     )
+    _attach_content_titles("youtube", activity_samples)
     return AccountScanOut(
         external_id=channel_id,
         handle=profile.handle,
@@ -914,6 +945,7 @@ def scan_twitter_account(
     activity_samples, activity_total = _activity_payload(
         posts, orch.result.tier, limit=30, include_low=True
     )
+    _attach_content_titles("x", activity_samples)
     return AccountScanOut(
         external_id=handle,
         handle=profile.handle,
@@ -1415,6 +1447,29 @@ def _run_comprehensive(
             if c.tier in (Tier.HIGH, Tier.ELEVATED)
             or (c.coordination_adjusted_probability or 0) >= 0.5
         )
+
+        # Phase 10 — persist content intelligence (the Content DB) for the
+        # comprehensive scan path the product actually uses, mirroring the
+        # /youtube/full handler. Fire-and-forget background write; only YouTube
+        # video scans populate the YouTube content database (X and other sources
+        # have no ContentEntity surface).
+        if source.platform == "youtube":
+            from app.core import background as _bg
+            _bg.submit(
+                _record_content_intelligence_async,
+                "youtube",
+                out.video_output.video_id,
+                out.all_comments,
+                {r.external_id: r.handle for r in out.video_output.commenter_records},
+                dict(tier_counts),
+                out.video_output.coordination_score,
+                out.video_output.coordination_tier.value,
+                current.id,
+                getattr(source, "_client", None),
+                source.stats,
+                out.next_page_token,
+            )
+
         video_result_out = FullVideoScanResult(
             video_id=out.video_output.video_id,
             platform=source.platform,
