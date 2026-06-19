@@ -1,0 +1,14 @@
+{
+  "trained_at": "2026-06-18T16:52:11.223314+00:00",
+  "train_seconds": 1.29,
+  "train_rows": 2250,
+  "test_rows": 750,
+  "scale_pos_weight": 1.8338,
+  "rows": 3000,
+  "positives_inauthentic": 1059,
+  "negatives_authentic": 1941,
+  "feature_schema": "dataset_native_v0",
+  "n_features": 25,
+  "source_csv": "/home/user/omi/datasets/Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0.csv",
+  "label_source": "dataset_label"
+}

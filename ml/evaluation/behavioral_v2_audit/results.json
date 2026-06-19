@@ -1,0 +1,124 @@
+{
+  "dataset": {
+    "rows": 3000,
+    "positives_inauthentic": 1059,
+    "negatives_authentic": 1941,
+    "feature_schema": "dataset_native_v0",
+    "n_features": 25,
+    "source_csv": "/home/user/omi/datasets/Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0.csv",
+    "label_source": "dataset_label"
+  },
+  "category_gain_v1_full": {
+    "username": 0.7089,
+    "temporal": 0.0312,
+    "engagement": 0.0463,
+    "coordination": 0.0,
+    "content_semantic": 0.0311,
+    "profile_shape": 0.1237,
+    "platform_context": 0.0588
+  },
+  "models": {
+    "v1_full": {
+      "n_features": 25,
+      "test": {
+        "accuracy": 0.916,
+        "precision_inauthentic": 0.9139,
+        "recall_inauthentic": 0.8415,
+        "f1_inauthentic": 0.8762,
+        "roc_auc": 0.9822,
+        "pr_auc": 0.9688,
+        "brier": 0.0509,
+        "ece": 0.0187,
+        "false_positive_rate": 0.0433
+      },
+      "cv": {
+        "accuracy": 0.9057,
+        "precision_inauthentic": 0.8579,
+        "recall_inauthentic": 0.8782,
+        "f1_inauthentic": 0.8679,
+        "roc_auc": 0.9744,
+        "pr_auc": 0.9562,
+        "brier": 0.0594,
+        "ece": 0.0094,
+        "false_positive_rate": 0.0793
+      }
+    },
+    "no_username": {
+      "n_features": 19,
+      "test": {
+        "accuracy": 0.6467,
+        "precision_inauthentic": 0.0,
+        "recall_inauthentic": 0.0,
+        "f1_inauthentic": 0.0,
+        "roc_auc": 0.546,
+        "pr_auc": 0.3867,
+        "brier": 0.2266,
+        "ece": 0.003,
+        "false_positive_rate": 0.0
+      },
+      "cv": {
+        "accuracy": 0.6447,
+        "precision_inauthentic": 0.3333,
+        "recall_inauthentic": 0.0066,
+        "f1_inauthentic": 0.013,
+        "roc_auc": 0.5123,
+        "pr_auc": 0.3576,
+        "brier": 0.229,
+        "ece": 0.0117,
+        "false_positive_rate": 0.0072
+      }
+    },
+    "username_only": {
+      "n_features": 6,
+      "test": {
+        "accuracy": 0.9253,
+        "precision_inauthentic": 0.8641,
+        "recall_inauthentic": 0.9358,
+        "f1_inauthentic": 0.8986,
+        "roc_auc": 0.9854,
+        "pr_auc": 0.9693,
+        "brier": 0.045,
+        "ece": 0.0208,
+        "false_positive_rate": 0.0804
+      },
+      "cv": {
+        "accuracy": 0.9163,
+        "precision_inauthentic": 0.8501,
+        "recall_inauthentic": 0.9263,
+        "f1_inauthentic": 0.8866,
+        "roc_auc": 0.9783,
+        "pr_auc": 0.9621,
+        "brier": 0.0523,
+        "ece": 0.0084,
+        "false_positive_rate": 0.0891
+      }
+    }
+  },
+  "v1_feature_gain": {
+    "username_length": 0.2286,
+    "digits_count": 0.1662,
+    "special_char_count": 0.1384,
+    "digit_ratio": 0.1229,
+    "repeat_char_count": 0.0388,
+    "verified": 0.017,
+    "account_age_days": 0.0164,
+    "followers": 0.0163,
+    "spam_comments_rate": 0.0163,
+    "platform_unknown": 0.0161,
+    "follower_following_ratio": 0.016,
+    "posts": 0.016,
+    "bio_length": 0.0157,
+    "content_similarity_score": 0.0156,
+    "follow_unfollow_rate": 0.0156,
+    "caption_similarity_score": 0.0155,
+    "following": 0.0152,
+    "platform_X": 0.0152,
+    "suspicious_links_in_bio": 0.0151,
+    "posts_per_day": 0.0148,
+    "platform_Instagram": 0.0145,
+    "generic_comment_rate": 0.0144,
+    "username_randomness": 0.0139,
+    "platform_Facebook": 0.013,
+    "has_profile_pic": 0.0124
+  }
+}

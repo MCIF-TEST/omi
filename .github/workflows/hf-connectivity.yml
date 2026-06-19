@@ -1,0 +1,33 @@
+name: hf-connectivity
+
+# Read-only Hugging Face connectivity check. Manual trigger only.
+# It does NOT train a model, upload datasets, modify production code, or touch
+# scoring -- it only authenticates with HF_TOKEN and reads model-repo metadata.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hf-connectivity:
+    name: HF · connectivity (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install huggingface_hub
+        run: pip install --upgrade "huggingface_hub>=0.23"
+      - name: Verify Hugging Face connectivity (read-only)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_REPO_ID: Andrewexiga/omi-behavioral-model-v1
+          HF_REPO_TYPE: model
+        run: python ml/inference/hf_connectivity_check.py
