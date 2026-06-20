@@ -70,3 +70,50 @@ FAIL: repo '...' is gated and the token lacks access.
 ```
 The job (and the `hf-connectivity` check) is **red** on any FAIL, so a failed
 connectivity check is visible without reading logs.
+
+---
+
+# Dataset connectivity — read + write probe (OMI_DATASET_CONNECTIVITY_V1)
+
+Verifies GitHub Actions can authenticate to, **read**, and **write** the dataset
+repo `Andrewexiga/omi-authenticity-dataset` — the upload side of
+`ml/HUGGING_FACE_INTEGRATION_PLAN.md` §B (curation → HF sync), before any real
+dataset push.
+
+| File | Role |
+|---|---|
+| `.github/workflows/hf-dataset-connectivity.yml` | GitHub Action (manual trigger) |
+| `ml/inference/hf_dataset_connectivity_check.py` | read + write-probe check (exit 0 = PASS) |
+
+**Scope:** ❌ no real dataset upload · ❌ no training · ❌ no production-code /
+scoring change. ✅ `whoami` → `repo_info` (read) → upload a tiny temporary probe
+→ delete it (write + delete proven, repo left clean). It needs a **write-capable**
+`HF_TOKEN`; a read-only token passes read but fails the upload step (by design).
+
+**Write probe:** a few-byte file at `.omi_connectivity_probe/probe-<ts>-<run>-<rand>.txt`
+is uploaded then deleted — two small commits appear in the dataset repo history
+(an add and its removal); no dataset content is left behind. If cleanup ever
+fails, the check FAILS loudly with the exact path to remove manually.
+
+### Run
+- **CI:** **Actions → hf-dataset-connectivity → Run workflow** (manual). ✅/❌ in
+  the run **Summary**.
+- **Local:** `export HF_TOKEN=hf_…` (write token) then
+  `python ml/inference/hf_dataset_connectivity_check.py` (`exit 0` = PASS).
+
+### Pass / fail output
+**PASS** (exit 0):
+```
+Authenticated as: <account>
+Read OK: reached 'Andrewexiga/omi-authenticity-dataset' (dataset, private)
+Upload OK: wrote temporary probe '.omi_connectivity_probe/probe-...txt'
+Cleanup OK: removed temporary probe '.omi_connectivity_probe/probe-...txt'
+PASS: read + write verified on 'Andrewexiga/omi-authenticity-dataset' (dataset, private); probe removed, no real data uploaded
+```
+**FAIL** (exit 1) — one clear reason, e.g.:
+```
+FAIL: HF_TOKEN is not set (configure it as a GitHub Actions secret).
+FAIL: repo 'Andrewexiga/omi-authenticity-dataset' (dataset) not found or token lacks read access -- ...
+FAIL: upload permission denied for '...' -- the token lacks write access (use a write-capable token): ...
+FAIL: probe uploaded but cleanup FAILED -- manually remove '...' from '...': ...
+```

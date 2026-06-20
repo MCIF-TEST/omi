@@ -1,0 +1,35 @@
+name: hf-dataset-connectivity
+
+# Hugging Face DATASET connectivity check. Manual trigger only.
+# Authenticates with HF_TOKEN, reads the dataset repo, and verifies UPLOAD
+# permission by writing a tiny temporary probe file and deleting it. It uploads
+# NO real dataset, leaves the repo clean, and does NOT train, modify production
+# code, or touch scoring.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hf-dataset-connectivity:
+    name: HF · dataset connectivity (read + write probe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install huggingface_hub
+        run: pip install --upgrade "huggingface_hub>=0.23"
+      - name: Verify Hugging Face dataset connectivity (read + write probe)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_REPO_ID: Andrewexiga/omi-authenticity-dataset
+          HF_REPO_TYPE: dataset
+        run: python ml/inference/hf_dataset_connectivity_check.py
