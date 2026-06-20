@@ -1,0 +1,65 @@
+name: hf-sync-datasets
+
+# OmiSphere dataset sync: GitHub -> Hugging Face (OMI_DATASET_AUTOMATION_V1).
+# Manual trigger, SAFE BY DEFAULT: mode=dry-run discovers/classifies/validates and
+# makes no network calls. mode=sync incrementally uploads only the datasets
+# classified "uploadable" (train/eval authenticity); archive/quarantine are never
+# uploaded (governance veto) and unchanged files are skipped (no duplication).
+# Does NOT train, modify production code/scoring, or deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run (no upload) or sync"
+        type: choice
+        options: [dry-run, sync]
+        default: dry-run
+      only:
+        description: "optional single dataset name"
+        required: false
+        default: ""
+      create_repo:
+        description: "create the HF dataset repo (private) if missing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: HF · dataset sync (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install --upgrade "huggingface_hub>=0.23" "pyarrow>=14"
+      - name: Self-test the pipeline
+        run: |
+          python ml/datasets/test_hf_upload.py
+          python ml/datasets/test_hf_sync.py
+      - name: Run dataset sync
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODE: ${{ inputs.mode }}
+          ONLY: ${{ inputs.only }}
+          CREATE_REPO: ${{ inputs.create_repo }}
+        run: |
+          set -euo pipefail
+          ARGS=()
+          if [ -n "${ONLY}" ]; then ARGS+=(--only "${ONLY}"); fi
+          if [ "${MODE}" = "sync" ]; then
+            ARGS+=(--sync)
+            if [ "${CREATE_REPO}" = "true" ]; then ARGS+=(--create-repo); fi
+          else
+            ARGS+=(--dry-run)
+          fi
+          python ml/datasets/hf_sync.py "${ARGS[@]}"
