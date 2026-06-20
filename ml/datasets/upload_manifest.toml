@@ -1,0 +1,104 @@
+# OmiSphere — Hugging Face Dataset Upload Manifest (OMI_DATASET_UPLOAD_V1)
+#
+# Declares which datasets the upload pipeline (ml/datasets/hf_upload.py) may push
+# to the target Hugging Face dataset repo, and how to validate/card them.
+#
+#   status = "train" | "eval"        -> ELIGIBLE for upload.
+#   status = "archive" | "quarantine"-> NEVER uploaded (listed for transparency).
+#
+# datasets/manifest.toml is AUTHORITATIVE FOR EXCLUSION: any dataset governed
+# there as quarantine/archive is force-excluded even if declared train/eval here
+# (fail-closed on poison). source_path is relative to the repo root.
+
+schema_version = 1
+
+[target]
+repo_id = "Andrewexiga/omi-authenticity-dataset"
+repo_type = "dataset"
+private = true
+governance_manifest = "datasets/manifest.toml"
+pretty_name = "OMI Authenticity Dataset"
+
+# ---------------------------------------------------------------------------
+# TRAIN — eligible
+# ---------------------------------------------------------------------------
+[[dataset]]
+name = "fake_social_media_global_2.0"
+source_path = "datasets/Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0.csv"
+format = "csv"
+label_type = "binary_authenticity"
+label_column = "is_fake"
+intended_use = "Train the authenticity baseline (balanced human/fake account-feature set)."
+trust_level = "high"
+status = "train"
+target_path = "authenticity/mixed_quality/fake_social_media_global_2.0.csv"
+notes = "Balanced is_fake (1059 fake / 1941 real). Leakage caveat: ~71% of signal is username morphology (behavioral V2 audit) — document, do not over-rely."
+
+[[dataset]]
+name = "real_users"
+source_path = "datasets/Datasets/Fake Social Media Account Detection Dataset/real_users.csv"
+format = "csv"
+label_type = "account_authenticity"
+label_value = "real"
+intended_use = "Train negative (genuine) class — labeled real Twitter profiles."
+trust_level = "medium"
+status = "train"
+target_path = "authenticity/human_accounts/real_users.csv"
+notes = "Filename-labeled (no in-file class column); constant label_value=real."
+
+[[dataset]]
+name = "fake_users"
+source_path = "datasets/Datasets/Fake Social Media Account Detection Dataset/fake_users.csv"
+format = "csv"
+label_type = "account_authenticity"
+label_value = "fake"
+intended_use = "Train positive (fake) class — labeled fake Twitter profiles."
+trust_level = "medium"
+status = "train"
+target_path = "authenticity/bot_accounts/fake_users.csv"
+notes = "Filename-labeled (no in-file class column); constant label_value=fake."
+
+# ---------------------------------------------------------------------------
+# EVAL — eligible
+# ---------------------------------------------------------------------------
+[[dataset]]
+name = "reddit_dead_internet_analysis_2026"
+source_path = "datasets/Datasets/Fake Social Media Account Detection Dataset/reddit_dead_internet_analysis_2026.csv"
+format = "csv"
+label_type = "binary_bot"
+label_column = "is_bot_flag"
+intended_use = "Evaluation — small bot-taxonomy validation set."
+trust_level = "medium"
+status = "eval"
+target_path = "authenticity/mixed_quality/reddit_dead_internet_analysis_2026.csv"
+notes = "Also carries bot_type_label / bot_probability columns."
+
+# ---------------------------------------------------------------------------
+# ARCHIVE — listed for transparency, NEVER uploaded
+# ---------------------------------------------------------------------------
+[[dataset]]
+name = "fake_social_media"
+source_path = "datasets/Datasets/Fake Social Media Account Detection Dataset/fake_social_media.csv"
+format = "csv"
+label_type = "binary_authenticity"
+label_column = "is_fake"
+intended_use = "n/a — superseded, single-class."
+trust_level = "low"
+status = "archive"
+target_path = "archive/deprecated/fake_social_media.csv"
+notes = "99.8% single class — untrainable. Governance status: archive."
+
+# ---------------------------------------------------------------------------
+# QUARANTINE — poison, NEVER uploaded (belt-and-suspenders: governance also vetoes)
+# ---------------------------------------------------------------------------
+[[dataset]]
+name = "bot_detection_data"
+source_path = "datasets/Datasets/Fake Social Media Account Detection Dataset/bot_detection_data.csv"
+format = "csv"
+label_type = "binary_bot"
+label_column = "Bot Label"
+intended_use = "n/a — random-label noise (poison)."
+trust_level = "poison"
+status = "quarantine"
+target_path = "DO_NOT_UPLOAD/bot_detection_data.csv"
+notes = "50k rows, label ~uncorrelated with any feature. Governance status: quarantine. The pipeline refuses this even if mislabeled train/eval."

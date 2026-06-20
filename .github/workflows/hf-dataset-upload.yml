@@ -1,0 +1,62 @@
+name: hf-dataset-upload
+
+# OmiSphere -> Hugging Face dataset upload pipeline (OMI_DATASET_UPLOAD_V1).
+# Manual trigger only, SAFE BY DEFAULT: mode=validate does no upload. Choosing
+# mode=upload pushes only manifest datasets marked train/eval (archive/quarantine
+# are never uploaded; datasets/manifest.toml vetoes poison). It does NOT train,
+# modify production code/scoring, or deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "validate (no upload) or upload"
+        type: choice
+        options: [validate, upload]
+        default: validate
+      only:
+        description: "optional single dataset name from the manifest"
+        required: false
+        default: ""
+      create_repo:
+        description: "create the HF dataset repo (private) if missing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dataset-upload:
+    name: HF · dataset upload (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install --upgrade "huggingface_hub>=0.23" "pyarrow>=14"
+      - name: Self-test the pipeline
+        run: python ml/datasets/test_hf_upload.py
+      - name: Run dataset upload pipeline
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODE: ${{ inputs.mode }}
+          ONLY: ${{ inputs.only }}
+          CREATE_REPO: ${{ inputs.create_repo }}
+        run: |
+          set -euo pipefail
+          ARGS=(--manifest ml/datasets/upload_manifest.toml)
+          if [ -n "${ONLY}" ]; then ARGS+=(--only "${ONLY}"); fi
+          if [ "${MODE}" = "upload" ]; then
+            ARGS+=(--upload)
+            if [ "${CREATE_REPO}" = "true" ]; then ARGS+=(--create-repo); fi
+          else
+            ARGS+=(--validate)
+          fi
+          python ml/datasets/hf_upload.py "${ARGS[@]}"
