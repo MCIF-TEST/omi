@@ -75,8 +75,11 @@ const config: Config = {
         'card-lg':   '0 8px 40px rgba(0,0,0,0.55)',
         'inner-top': 'inset 0 1px 0 rgba(255,255,255,0.04)',
         'glow-danger': '0 0 8px rgba(251,59,107,0.25)',
-        'overlay':   '0 4px 32px rgba(0,0,0,0.6)',
+        'glow-violet': '0 0 16px rgba(139,92,246,0.16), 0 0 40px rgba(139,92,246,0.05)',
+        'glow-brand': '0 0 0 1px rgba(59,142,255,0.30), 0 8px 30px rgba(59,142,255,0.10), 0 8px 40px rgba(139,92,246,0.07)',
+        'overlay':   '0 16px 50px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
         'hairline':  'inset 0 0 0 1px var(--border)',
+        'pop':       '0 6px 24px -8px rgba(0,0,0,0.6), 0 0 0 1px var(--border)',
       },
       backgroundImage: {
         'brand-gradient': 'linear-gradient(118deg, #6ba9ff 0%, #3b8eff 44%, #8b5cf6 100%)',

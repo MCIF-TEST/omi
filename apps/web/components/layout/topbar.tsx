@@ -4,7 +4,6 @@ import { useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bell, LogOut, Search, Zap } from 'lucide-react';
-import { cn } from '@/lib/cn';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/logo';
@@ -45,29 +44,47 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
   const unread = alerts.data?.unread_count ?? 0;
 
   return (
-    <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 bg-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-bg/60 px-4 md:px-5 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 glass px-4 md:px-5 flex items-center gap-3">
 
       {/* Brand — phones have no sidebar, so the wordmark lives here. */}
       <Link href="/dashboard" className="md:hidden tap" aria-label="OMISPHERE home">
         <Logo size="sm" />
       </Link>
 
-      {/* Left: engine stats (desktop) */}
-      <div className="hidden lg:flex items-center gap-3 font-mono text-2xs text-fg-mute tracking-wider">
+      {/* Engine telemetry (desktop) */}
+      <div className="hidden lg:flex items-center gap-2.5 font-mono text-2xs text-fg-mute tracking-wider shrink-0">
         {engineStatus && (
           <>
-            <span className="flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-tier-low" />
-              <span>FP <span className="text-fg-dim">{engineStatus.fingerprints_stored.toLocaleString()}</span></span>
+            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-tier-low" />
+              <span>FP</span>
+              <span className="text-fg-dim tabular">{engineStatus.fingerprints_stored.toLocaleString()}</span>
             </span>
-            <span className="text-border-2">·</span>
-            <span>Scans <span className="text-fg-dim">{engineStatus.total_scans.toLocaleString()}</span></span>
+            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev/60">
+              <span>SCANS</span>
+              <span className="text-fg-dim tabular">{engineStatus.total_scans.toLocaleString()}</span>
+            </span>
           </>
         )}
       </div>
 
-      {/* Right: actions */}
-      <div className="flex items-center gap-2 ml-auto">
+      {/* Command bar — the primary verb (search + jump) */}
+      <Link
+        href="/search"
+        className="group hidden md:flex items-center gap-2.5 flex-1 max-w-xl mx-auto h-9 px-3
+                   rounded-lg border border-border-2 bg-bg-elev/70 hover:border-border-hot
+                   hover:bg-bg-elev transition-colors"
+        aria-label="Search and command"
+      >
+        <Search size={14} className="text-fg-mute group-hover:text-fg-dim transition-colors" />
+        <span className="flex-1 text-sm text-fg-mute truncate">
+          Search accounts, campaigns, narratives…
+        </span>
+        <span className="kbd">⌘K</span>
+      </Link>
+
+      {/* Right cluster */}
+      <div className="flex items-center gap-2 ml-auto md:ml-0 shrink-0">
         {engineStatus && (
           <ServiceHealthPill
             youtubeConfigured={engineStatus.youtube_configured}
@@ -78,39 +95,28 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
           />
         )}
 
-        {/* Search */}
-        <Link
-          href="/search"
-          className="hidden md:inline-flex items-center gap-2 h-8 px-3 border border-border-2 rounded-sm font-mono text-2xs tracking-wider text-fg-mute hover:text-fg-dim hover:border-border-hot transition-colors"
-          aria-label="Search accounts"
-        >
-          <Search size={11} />
-          <span>Search</span>
-          <span className="text-fg-faint hidden lg:block">⌘K</span>
-        </Link>
-
-        {/* Alerts bell */}
+        {/* Alerts */}
         <Link
           href="/monitoring"
-          className="relative inline-flex items-center justify-center w-8 h-8 rounded-sm border border-border-2 hover:border-border-hot text-fg-mute hover:text-fg-dim transition-colors"
+          className="relative inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border-2 bg-bg-elev/60 hover:border-border-hot hover:text-fg-dim text-fg-mute transition-colors"
           aria-label={`Alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
         >
-          <Bell size={14} />
+          <Bell size={15} />
           {unread > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] leading-4 text-center font-mono">
+            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] leading-4 text-center font-mono tabular">
               {unread > 99 ? '99+' : unread}
             </span>
           )}
         </Link>
 
-        {/* Credit badge */}
+        {/* Credits */}
         <Badge variant={creditTone}>
           <Zap size={10} />
           {credits}
         </Badge>
 
         {/* Email */}
-        <span className="hidden lg:block font-mono text-2xs text-fg-mute truncate max-w-[160px]">
+        <span className="hidden xl:block font-mono text-2xs text-fg-mute truncate max-w-[150px]">
           {user.email}
         </span>
 
