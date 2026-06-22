@@ -1,601 +1,667 @@
 {
-  "total_rows": 36925,
-  "authenticity_distribution": {
-    "authentic(0)": 3516,
-    "inauthentic(1)": 32239,
-    "unknown(null)": 1170
+  "total_rows_full_scan": 1368094,
+  "authenticity": {
+    "authentic": 151170,
+    "inauthentic": 1205564,
+    "unknown": 11360,
+    "authentic_pct": 11.05,
+    "inauthentic_pct": 88.12,
+    "unknown_pct": 0.83
   },
-  "semantic_distribution": {
-    "state_io": 27702,
-    "bot": 2547,
-    "human": 1845,
-    "authentic": 1671,
-    "fake": 1329,
-    "unknown": 1170,
-    "ai_generated": 661
-  },
-  "requested_buckets": {
-    "human": 1845,
-    "bot": 2547,
-    "fake": 1329,
-    "authentic": 1671,
-    "unknown": 1170
-  },
-  "additional_buckets": {
-    "ai_generated": 661,
-    "state_io": 27702
-  },
-  "dataset_contribution": [
-    {
-      "dataset": "russia_052020_tweets_csv_hashed_2_a",
-      "rows": 1000,
-      "pct": 2.71
+  "semantic_labels": {
+    "state_io": {
+      "count": 1063990,
+      "pct": 77.77
     },
-    {
-      "dataset": "russia_052020_tweets_csv_hashed_2_b",
-      "rows": 1000,
-      "pct": 2.71
+    "human": {
+      "count": 146729,
+      "pct": 10.73
     },
-    {
-      "dataset": "russia_052020_users_csv_hashed",
-      "rows": 1000,
-      "pct": 2.71
+    "bot": {
+      "count": 137014,
+      "pct": 10.01
     },
-    {
-      "dataset": "iran_092020_tweets_csv_hashed",
-      "rows": 1000,
-      "pct": 2.71
+    "unknown": {
+      "count": 11360,
+      "pct": 0.83
     },
-    {
-      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_a",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_b",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2014",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_c",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_d",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2012",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2013",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "fake_social_media_global_2.0",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2018",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2017",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "hashed_2020_12_IRA_202012_IRA_202012_tweets",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "hashed_2020_12_GRU_202012_GRU_202012_tweets",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "real_users",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2020",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "ira_092020_tweets_csv_hashed",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "fake_users",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "ai_vs_human_text_2026",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2020",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2019",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "TwitterData_Joined",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2020",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNHU_0621_tweets_csv_hashed_2020",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "hashed_2021_12_CNHU_0621_CNHU_0621_users",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "activity_botscore",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNHU_0621_tweets_csv_hashed_2021",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2019",
-      "rows": 1000,
-      "pct": 2.71
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2016",
-      "rows": 954,
-      "pct": 2.58
-    },
-    {
-      "dataset": "cresci-rtbust-2019",
-      "rows": 759,
-      "pct": 2.06
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2015",
-      "rows": 701,
-      "pct": 1.9
-    },
-    {
-      "dataset": "cresci-rtbust-2019_tweets",
-      "rows": 693,
-      "pct": 1.88
-    },
-    {
-      "dataset": "ai_human_detection_v1",
-      "rows": 686,
-      "pct": 1.86
-    },
-    {
-      "dataset": "astroturf",
-      "rows": 585,
-      "pct": 1.58
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2021",
-      "rows": 558,
-      "pct": 1.51
-    },
-    {
-      "dataset": "reddit_dead_internet_analysis_2026",
-      "rows": 500,
-      "pct": 1.35
-    },
-    {
-      "dataset": "CNHU_0621_tweets_csv_hashed_2019",
-      "rows": 439,
-      "pct": 1.19
-    },
-    {
-      "dataset": "hashed_2020_12_iran_202012_iran_202012_users",
-      "rows": 238,
-      "pct": 0.64
-    },
-    {
-      "dataset": "CNCC_0621_tweets_csv_hashed_2019",
-      "rows": 204,
-      "pct": 0.55
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2018",
-      "rows": 117,
+    "authentic": {
+      "count": 4441,
       "pct": 0.32
     },
-    {
-      "dataset": "hashed_2021_12_CNCC_0621_CNCC_0621_users",
-      "rows": 112,
-      "pct": 0.3
+    "fake": {
+      "count": 3559,
+      "pct": 0.26
     },
-    {
-      "dataset": "iran_092020_users_csv_hashed",
-      "rows": 104,
-      "pct": 0.28
-    },
-    {
-      "dataset": "hashed_2020_12_GRU_202012_GRU_202012_users",
-      "rows": 70,
-      "pct": 0.19
-    },
-    {
-      "dataset": "hashed_2021_12_RNA_0621_RNA_0621_users",
-      "rows": 50,
-      "pct": 0.14
-    },
-    {
-      "dataset": "hashed_2020_12_IRA_202012_IRA_202012_users",
-      "rows": 31,
-      "pct": 0.08
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2021",
-      "rows": 23,
-      "pct": 0.06
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2014",
-      "rows": 18,
-      "pct": 0.05
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2013",
-      "rows": 18,
-      "pct": 0.05
-    },
-    {
-      "dataset": "hashed_2021_12_REA_0621_REA_0621_users",
-      "rows": 16,
-      "pct": 0.04
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2018",
-      "rows": 13,
-      "pct": 0.04
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2014",
-      "rows": 8,
-      "pct": 0.02
-    },
-    {
-      "dataset": "ira_092020_users_csv_hashed",
-      "rows": 5,
-      "pct": 0.01
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2017",
-      "rows": 5,
-      "pct": 0.01
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2017",
-      "rows": 5,
-      "pct": 0.01
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2013",
-      "rows": 4,
-      "pct": 0.01
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2012",
-      "rows": 3,
-      "pct": 0.01
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2015",
-      "rows": 3,
-      "pct": 0.01
-    },
-    {
-      "dataset": "RNA_0621_tweets_csv_hashed_2015",
-      "rows": 1,
-      "pct": 0.0
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2016",
-      "rows": 1,
-      "pct": 0.0
-    },
-    {
-      "dataset": "REA_0621_tweets_csv_hashed_2012",
-      "rows": 1,
-      "pct": 0.0
+    "ai_generated": {
+      "count": 1001,
+      "pct": 0.07
     }
-  ],
-  "feature_availability_pct": {
+  },
+  "label_sources": {
+    "io_disclosure": 1063990,
+    "column:is_fake": 3000,
+    "filename": 5000,
+    "column:is_bot_flag": 500,
+    "column:Label(1=human)": 279691,
+    "none": 11190,
+    "column:human_or_ai": 686,
+    "column:label": 2000,
+    "tsv_label": 1344,
+    "join:cresci_tsv": 693
+  },
+  "by_domain": {
+    "coordination": 1063990,
+    "authenticity": 287691,
+    "bot": 2537,
+    "reference": 11190,
+    "ai_text": 2686
+  },
+  "by_grain": {
+    "tweet": 1340548,
+    "account": 24360,
+    "comment": 500,
+    "text": 2686
+  },
+  "imbalance": {
+    "labeled": 1356734,
+    "positive": 1205564,
+    "negative": 151170,
+    "positive_pct_of_labeled": 88.86,
+    "ratio_pos_to_neg": 7.97,
+    "majority_baseline_acc": 88.86,
+    "io_share_of_positives_pct": 88.26,
+    "excluding_io_positive": 141574,
+    "excluding_io_negative": 151170,
+    "excluding_io_positive_pct": 48.36
+  },
+  "feature_completeness_pct": {
     "record_id": 100.0,
     "dataset": 100.0,
     "source_path": 100.0,
     "domain": 100.0,
     "grain": 100.0,
-    "text": 82.3,
-    "author_id": 90.84,
-    "created_at": 83.11,
-    "lang": 69.77,
-    "authenticity_label": 96.83,
-    "label_raw": 97.29,
+    "text": 98.21,
+    "author_id": 98.86,
+    "created_at": 98.5,
+    "lang": 67.59,
+    "authenticity_label": 99.17,
+    "label_raw": 99.18,
     "label_source": 100.0,
-    "numeric_features_json": 87.21,
+    "numeric_features_json": 79.21,
     "governance_status": 100.0,
     "schema_version": 100.0
   },
-  "grain_completeness": {
-    "text_in_text_grains_pct": 95.88,
-    "numeric_in_account_grains_pct": 83.12,
-    "label_overall_pct": 96.83
-  },
-  "numeric_key_frequency": {
-    "follower_count": {
-      "rows": 27701,
-      "pct_of_corpus": 75.02
-    },
-    "following_count": {
-      "rows": 27701,
-      "pct_of_corpus": 75.02
-    },
-    "verified": {
-      "rows": 2903,
-      "pct_of_corpus": 7.86
-    },
-    "default_profile": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "default_profile_image": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "favourites_count": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "followers_count": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "friends_count": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "geo_enabled": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "listed_count": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "profile_background_tile": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "profile_use_background_image": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "protected": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "statuses_count": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
-    "utc_offset": {
-      "rows": 2000,
-      "pct_of_corpus": 5.42
-    },
+  "numeric_features": {
     "account_age_days": {
-      "rows": 1387,
-      "pct_of_corpus": 3.76
-    },
-    "profile_text_color": {
-      "rows": 1193,
-      "pct_of_corpus": 3.23
-    },
-    "digit_ratio": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
-    },
-    "digits_count": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
-    },
-    "repeat_char_count": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
-    },
-    "special_char_count": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
-    },
-    "username_length": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
+      "rows": 3157,
+      "pct_of_corpus": 0.23,
+      "min": 1.0,
+      "max": 4997.0,
+      "mean": 2279.6997,
+      "std": 1454.9156,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "activity": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 0.0003,
+      "max": 851.735,
+      "mean": 15.9193,
+      "std": 43.1027,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "age": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 3077.0,
+      "max": 4370.0,
+      "mean": 3326.4066,
+      "std": 257.7556,
+      "negatives": 0,
+      "nonfinite": 0
     },
-    "bot_score_english": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
-    },
-    "count": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
-    },
-    "user_id": {
-      "rows": 1000,
-      "pct_of_corpus": 2.71
-    },
-    "posts_per_day": {
-      "rows": 903,
-      "pct_of_corpus": 2.45
+    "avg_word_length": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 4.03,
+      "max": 7.49,
+      "mean": 5.6543,
+      "std": 0.8943,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "bio_length": {
-      "rows": 900,
-      "pct_of_corpus": 2.44
+      "rows": 2671,
+      "pct_of_corpus": 0.2,
+      "min": 0.0,
+      "max": 249.0,
+      "mean": 124.1812,
+      "std": 71.1865,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "bot_probability": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 0.081,
+      "max": 0.465,
+      "mean": 0.1565,
+      "std": 0.0745,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "bot_score_english": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 0.0021,
+      "max": 0.997,
+      "mean": 0.1835,
+      "std": 0.241,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "caption_similarity_score": {
-      "rows": 899,
-      "pct_of_corpus": 2.43
+      "rows": 2670,
+      "pct_of_corpus": 0.2,
+      "min": 0.0001,
+      "max": 0.9995,
+      "mean": 0.5035,
+      "std": 0.286,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "content_similarity_score": {
-      "rows": 897,
-      "pct_of_corpus": 2.43
+      "rows": 2672,
+      "pct_of_corpus": 0.2,
+      "min": 0.0006,
+      "max": 0.9999,
+      "mean": 0.4963,
+      "std": 0.2895,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "count": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 1.0,
+      "max": 2700672.0,
+      "mean": 53572.9749,
+      "std": 148378.8479,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "default_profile": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 7.0945,
+      "mean": 0.4929,
+      "std": 0.9606,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "default_profile_image": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 2.2445,
+      "mean": 0.0019,
+      "std": 0.0567,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "digit_ratio": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 0.8,
+      "mean": 0.3149,
+      "std": 0.1836,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "digits_count": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 8.0,
+      "mean": 3.0513,
+      "std": 1.7771,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "favourites_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 60892.1733,
+      "mean": 183.1129,
+      "std": 1765.2656,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "follow_unfollow_rate": {
-      "rows": 893,
-      "pct_of_corpus": 2.42
+      "rows": 2692,
+      "pct_of_corpus": 0.2,
+      "min": 0.0,
+      "max": 499.0,
+      "mean": 249.7277,
+      "std": 144.8177,
+      "negatives": 0,
+      "nonfinite": 0
     },
-    "followers": {
-      "rows": 891,
-      "pct_of_corpus": 2.41
-    },
-    "has_profile_pic": {
-      "rows": 889,
-      "pct_of_corpus": 2.41
+    "follower_count": {
+      "rows": 1063989,
+      "pct_of_corpus": 77.77,
+      "min": 0.0,
+      "max": 2883076.0,
+      "mean": 75235.7793,
+      "std": 144614.516,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "follower_following_ratio": {
-      "rows": 884,
-      "pct_of_corpus": 2.39
+      "rows": 2644,
+      "pct_of_corpus": 0.19,
+      "min": 0.4674,
+      "max": 0.6937,
+      "mean": 0.5707,
+      "std": 0.0351,
+      "negatives": 0,
+      "nonfinite": 0
     },
-    "posts": {
-      "rows": 883,
-      "pct_of_corpus": 2.39
+    "followers": {
+      "rows": 2662,
+      "pct_of_corpus": 0.19,
+      "min": 334.0,
+      "max": 472.0,
+      "mean": 399.9842,
+      "std": 20.0783,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "followers_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": -0.0,
+      "max": 796096.3842,
+      "mean": 321.9153,
+      "std": 11350.011,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "following": {
-      "rows": 881,
-      "pct_of_corpus": 2.39
+      "rows": 2667,
+      "pct_of_corpus": 0.19,
+      "min": 616.0,
+      "max": 789.0,
+      "mean": 700.8414,
+      "std": 25.8364,
+      "negatives": 0,
+      "nonfinite": 0
     },
-    "username_randomness": {
-      "rows": 881,
-      "pct_of_corpus": 2.39
+    "following_count": {
+      "rows": 1063989,
+      "pct_of_corpus": 77.77,
+      "min": 0.0,
+      "max": 99855.0,
+      "mean": 1724.7654,
+      "std": 6271.4764,
+      "negatives": 0,
+      "nonfinite": 0
     },
-    "spam_comments_rate": {
-      "rows": 880,
-      "pct_of_corpus": 2.38
+    "friends_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 16878.4745,
+      "mean": 315.3582,
+      "std": 668.0525,
+      "negatives": 0,
+      "nonfinite": 0
     },
     "generic_comment_rate": {
-      "rows": 871,
-      "pct_of_corpus": 2.36
+      "rows": 2633,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 149.0,
+      "mean": 74.5682,
+      "std": 43.6646,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "geo_enabled": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 6.4497,
+      "mean": 0.1792,
+      "std": 0.6173,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "has_profile_pic": {
+      "rows": 2655,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.4927,
+      "std": 0.4999,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "listed_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 915.6267,
+      "mean": 2.1248,
+      "std": 23.2397,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "posts": {
+      "rows": 2683,
+      "pct_of_corpus": 0.2,
+      "min": 151.0,
+      "max": 254.0,
+      "mean": 200.2959,
+      "std": 14.2313,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "posts_per_day": {
+      "rows": 2689,
+      "pct_of_corpus": 0.2,
+      "min": 0.035,
+      "max": 73.3333,
+      "mean": 0.2739,
+      "std": 1.693,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "profile_background_color": {
+      "rows": 300,
+      "pct_of_corpus": 0.02,
+      "min": 0.0,
+      "max": 3.42e+18,
+      "mean": 3.4545454545638044e+16,
+      "std": 3.4198255235565715e+17,
+      "negatives": 0,
+      "nonfinite": 3
+    },
+    "profile_background_tile": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 5.8691,
+      "mean": 0.1284,
+      "std": 0.5209,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "profile_link_color": {
+      "rows": 260,
+      "pct_of_corpus": 0.02,
+      "min": 0.0,
+      "max": 6.27e+93,
+      "mean": 4.8984375e+91,
+      "std": 5.520258710023104e+92,
+      "negatives": 0,
+      "nonfinite": 4
+    },
+    "profile_sidebar_border_color": {
+      "rows": 178,
+      "pct_of_corpus": 0.01,
+      "min": 0.0,
+      "max": 4.64e+54,
+      "mean": 5.333333333333334e+52,
+      "std": 4.945929864264376e+53,
+      "negatives": 0,
+      "nonfinite": 4
+    },
+    "profile_sidebar_fill_color": {
+      "rows": 117,
+      "pct_of_corpus": 0.01,
+      "min": 0.0,
+      "max": 9.92e+39,
+      "mean": 8.478632478632479e+37,
+      "std": 9.131766647311844e+38,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "profile_text_color": {
+      "rows": 2958,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 3.61e+75,
+      "mean": 1.2341880341880342e+72,
+      "std": 6.673751256463692e+73,
+      "negatives": 0,
+      "nonfinite": 33
+    },
+    "profile_use_background_image": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 6.2371,
+      "mean": 0.785,
+      "std": 1.1268,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "protected": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "std": 0.0,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "repeat_char_count": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 3.0,
+      "mean": 0.335,
+      "std": 0.5448,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "reply_delay_seconds": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 1.0,
+      "max": 3577.0,
+      "mean": 1030.7,
+      "std": 1183.2261,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "sentiment_score": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": -1.0,
+      "max": 1.0,
+      "mean": 0.015,
+      "std": 0.5805,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "spam_comments_rate": {
+      "rows": 2662,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 199.0,
+      "mean": 99.4403,
+      "std": 57.9593,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "special_char_count": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.54,
+      "std": 0.4984,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "statuses_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 139674.3121,
+      "mean": 1313.7991,
+      "std": 6462.4473,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "suspicious_links_in_bio": {
+      "rows": 2640,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.5034,
+      "std": 0.5,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "user_id": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 953.0,
+      "max": 4928654909.0,
+      "mean": 2051304803.4784,
+      "std": 1236324882.2888,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "user_karma": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 308.0,
+      "max": 49734.0,
+      "mean": 25248.198,
+      "std": 14108.8391,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "username_length": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 3.0,
+      "max": 14.0,
+      "mean": 9.0573,
+      "std": 2.2151,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "username_randomness": {
+      "rows": 2663,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.5032,
+      "std": 0.5,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "utc_offset": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 93605.2579,
+      "mean": 1137.5677,
+      "std": 4082.5459,
+      "negatives": 0,
+      "nonfinite": 0
+    },
+    "verified": {
+      "rows": 7663,
+      "pct_of_corpus": 0.56,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.172,
+      "std": 0.3774,
+      "negatives": 0,
+      "nonfinite": 0
     }
   },
   "duplicates": {
-    "record_id_duplicates": 0,
-    "exact_full_row_duplicates": 367,
-    "content_duplicates": 504,
-    "content_duplicate_pct": 1.36,
-    "authored_rows": 33544,
-    "distinct_authors": 6970,
-    "rows_per_author_mean": 4.81,
-    "max_rows_single_author": 3416,
-    "authors_in_multiple_datasets": 1757
-  },
-  "class_imbalance": {
-    "labeled_rows": 35755,
-    "positive_inauthentic": 32239,
-    "negative_authentic": 3516,
-    "positive_pct_of_labeled": 90.17,
-    "imbalance_ratio_pos_to_neg": 9.17,
-    "majority_baseline_accuracy_pct": 90.17,
-    "positives_from_io": 27702,
-    "io_share_of_positives_pct": 85.93,
-    "excluding_io": {
-      "labeled": 8053,
-      "positive": 4537,
-      "negative": 3516,
-      "positive_pct": 56.34
-    },
-    "by_grain": {
-      "tweet": {
-        "0": 340,
-        "1": 26429,
-        "null": 0
+    "exact_duplicates": 33690,
+    "exact_duplicate_pct": 2.46,
+    "near_dup_text_candidates": 1304900,
+    "near_duplicate_text": 230140,
+    "near_duplicate_text_pct_of_textrows": 17.64,
+    "distinct_authors": 10239,
+    "authored_rows": 1352448,
+    "rows_per_author_mean": 132.09,
+    "max_rows_single_author": 302649,
+    "top_authors": [
+      {
+        "rows": 302649
       },
-      "account": {
-        "0": 2039,
-        "1": 4931,
-        "null": 1000
+      {
+        "rows": 30118
       },
-      "comment": {
-        "0": 282,
-        "1": 218,
-        "null": 0
+      {
+        "rows": 29833
       },
-      "text": {
-        "0": 855,
-        "1": 661,
-        "null": 170
+      {
+        "rows": 29808
+      },
+      {
+        "rows": 28374
+      },
+      {
+        "rows": 23528
+      },
+      {
+        "rows": 22729
+      },
+      {
+        "rows": 18852
+      },
+      {
+        "rows": 18794
+      },
+      {
+        "rows": 14116
+      },
+      {
+        "rows": 14013
+      },
+      {
+        "rows": 13992
+      },
+      {
+        "rows": 13305
+      },
+      {
+        "rows": 12791
+      },
+      {
+        "rows": 12568
       }
-    },
-    "by_domain": {
-      "coordination": {
-        "0": 0,
-        "1": 27702,
-        "null": 0
-      },
-      "authenticity": {
-        "0": 1671,
-        "1": 2329,
-        "null": 0
-      },
-      "bot": {
-        "0": 990,
-        "1": 1547,
-        "null": 0
-      },
-      "reference": {
-        "0": 0,
-        "1": 0,
-        "null": 1000
-      },
-      "ai_text": {
-        "0": 855,
-        "1": 661,
-        "null": 170
-      }
-    }
+    ],
+    "authors_in_multiple_datasets": 600535
   },
-  "username_shortcut_rows": 1000
+  "quality": {
+    "label_invalid": 0,
+    "verified_field_invalid": 2113,
+    "created_at_present": 1347635,
+    "created_at_unparseable": 1,
+    "created_at_unparseable_pct": 0.0,
+    "text_expected_rows": 1343234,
+    "empty_text_expected": 693,
+    "author_expected_rows": 1365408,
+    "missing_author": 12960
+  }
 }
