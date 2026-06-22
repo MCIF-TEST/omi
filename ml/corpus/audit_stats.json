@@ -1,0 +1,1383 @@
+{
+  "total_rows_full_scan": 1368094,
+  "authenticity": {
+    "authentic": 151170,
+    "inauthentic": 1205564,
+    "unknown": 11360,
+    "authentic_pct": 11.05,
+    "inauthentic_pct": 88.12,
+    "unknown_pct": 0.83
+  },
+  "semantic_labels": {
+    "state_io": {
+      "count": 1063990,
+      "pct": 77.77
+    },
+    "human": {
+      "count": 146729,
+      "pct": 10.73
+    },
+    "bot": {
+      "count": 137014,
+      "pct": 10.01
+    },
+    "unknown": {
+      "count": 11360,
+      "pct": 0.83
+    },
+    "authentic": {
+      "count": 4441,
+      "pct": 0.32
+    },
+    "fake": {
+      "count": 3559,
+      "pct": 0.26
+    },
+    "ai_generated": {
+      "count": 1001,
+      "pct": 0.07
+    }
+  },
+  "label_sources": {
+    "io_disclosure": 1063990,
+    "column:is_fake": 3000,
+    "filename": 5000,
+    "column:is_bot_flag": 500,
+    "column:Label(1=human)": 279691,
+    "none": 11190,
+    "column:human_or_ai": 686,
+    "column:label": 2000,
+    "tsv_label": 1344,
+    "join:cresci_tsv": 693
+  },
+  "by_domain": {
+    "coordination": 1063990,
+    "authenticity": 287691,
+    "bot": 2537,
+    "reference": 11190,
+    "ai_text": 2686
+  },
+  "by_grain": {
+    "tweet": 1340548,
+    "account": 24360,
+    "comment": 500,
+    "text": 2686
+  },
+  "imbalance": {
+    "labeled": 1356734,
+    "positive": 1205564,
+    "negative": 151170,
+    "positive_pct_of_labeled": 88.86,
+    "ratio_pos_to_neg": 7.97,
+    "majority_baseline_acc": 88.86,
+    "io_share_of_positives_pct": 88.26,
+    "excluding_io_positive": 141574,
+    "excluding_io_negative": 151170,
+    "excluding_io_positive_pct": 48.36
+  },
+  "feature_completeness_pct": {
+    "record_id": 100.0,
+    "dataset": 100.0,
+    "source_path": 100.0,
+    "domain": 100.0,
+    "grain": 100.0,
+    "text": 98.21,
+    "author_id": 98.86,
+    "created_at": 98.5,
+    "lang": 67.59,
+    "authenticity_label": 99.17,
+    "label_raw": 99.18,
+    "label_source": 100.0,
+    "numeric_features_json": 79.21,
+    "governance_status": 100.0,
+    "schema_version": 100.0
+  },
+  "numeric_features": {
+    "account_age_days": {
+      "rows": 3157,
+      "pct_of_corpus": 0.23,
+      "min": 1.0,
+      "max": 4997.0,
+      "mean": 2279.6997,
+      "std": 1454.9156,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 7.56,
+      "p25": 1048.0,
+      "median": 2201.0,
+      "p75": 3519.0,
+      "p99": 4942.76,
+      "iqr_outlier_bounds": [
+        -6365.0,
+        10932.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 3157
+    },
+    "activity": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 0.0003,
+      "max": 851.735,
+      "mean": 15.9193,
+      "std": 43.1027,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0032,
+      "p25": 1.0746,
+      "median": 4.381,
+      "p75": 14.1786,
+      "p99": 220.1997,
+      "iqr_outlier_bounds": [
+        -38.2374,
+        53.4905
+      ],
+      "outlier_pct_of_sample": 5.87,
+      "sample_n": 11190
+    },
+    "age": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 3077.0,
+      "max": 4370.0,
+      "mean": 3326.4066,
+      "std": 257.7556,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 3079.0,
+      "p25": 3156.0,
+      "median": 3199.0,
+      "p75": 3399.0,
+      "p99": 4002.0,
+      "iqr_outlier_bounds": [
+        2427.0,
+        4128.0
+      ],
+      "outlier_pct_of_sample": 0.11,
+      "sample_n": 11190
+    },
+    "avg_word_length": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 4.03,
+      "max": 7.49,
+      "mean": 5.6543,
+      "std": 0.8943,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 4.0599,
+      "p25": 4.9675,
+      "median": 5.695,
+      "p75": 6.25,
+      "p99": 7.4005,
+      "iqr_outlier_bounds": [
+        1.12,
+        10.0975
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 500
+    },
+    "bio_length": {
+      "rows": 2671,
+      "pct_of_corpus": 0.2,
+      "min": 0.0,
+      "max": 249.0,
+      "mean": 124.1812,
+      "std": 71.1865,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 3.0,
+      "p25": 65.0,
+      "median": 124.0,
+      "p75": 184.5,
+      "p99": 247.0,
+      "iqr_outlier_bounds": [
+        -293.5,
+        543.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2671
+    },
+    "bot_probability": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 0.081,
+      "max": 0.465,
+      "mean": 0.1565,
+      "std": 0.0745,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.082,
+      "p25": 0.101,
+      "median": 0.117,
+      "p75": 0.2,
+      "p99": 0.3831,
+      "iqr_outlier_bounds": [
+        -0.196,
+        0.497
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 500
+    },
+    "bot_score_english": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 0.0021,
+      "max": 0.997,
+      "mean": 0.1835,
+      "std": 0.241,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0038,
+      "p25": 0.0259,
+      "median": 0.0731,
+      "p75": 0.2298,
+      "p99": 0.9744,
+      "iqr_outlier_bounds": [
+        -0.5858,
+        0.8415
+      ],
+      "outlier_pct_of_sample": 4.08,
+      "sample_n": 11190
+    },
+    "caption_similarity_score": {
+      "rows": 2670,
+      "pct_of_corpus": 0.2,
+      "min": 0.0001,
+      "max": 0.9995,
+      "mean": 0.5035,
+      "std": 0.286,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0104,
+      "p25": 0.2597,
+      "median": 0.5107,
+      "p75": 0.7488,
+      "p99": 0.9889,
+      "iqr_outlier_bounds": [
+        -1.2073,
+        2.2158
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2670
+    },
+    "content_similarity_score": {
+      "rows": 2672,
+      "pct_of_corpus": 0.2,
+      "min": 0.0006,
+      "max": 0.9999,
+      "mean": 0.4963,
+      "std": 0.2895,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0093,
+      "p25": 0.251,
+      "median": 0.4915,
+      "p75": 0.7512,
+      "p99": 0.9917,
+      "iqr_outlier_bounds": [
+        -1.2498,
+        2.2521
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2672
+    },
+    "count": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 1.0,
+      "max": 2700672.0,
+      "mean": 53572.9749,
+      "std": 148378.8479,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 10.0,
+      "p25": 3554.25,
+      "median": 14466.0,
+      "p75": 46686.5,
+      "p99": 726994.89,
+      "iqr_outlier_bounds": [
+        -125842.5,
+        176083.25
+      ],
+      "outlier_pct_of_sample": 5.93,
+      "sample_n": 11190
+    },
+    "default_profile": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 7.0945,
+      "mean": 0.4929,
+      "std": 0.9606,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": -0.0,
+      "median": 0.0,
+      "p75": 0.5408,
+      "p99": 3.9701,
+      "iqr_outlier_bounds": [
+        -1.6223,
+        2.1631
+      ],
+      "outlier_pct_of_sample": 8.82,
+      "sample_n": 5000
+    },
+    "default_profile_image": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 2.2445,
+      "mean": 0.0019,
+      "std": 0.0567,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 0.0,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 0.14,
+      "sample_n": 5000
+    },
+    "digit_ratio": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 0.8,
+      "mean": 0.3149,
+      "std": 0.1836,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.1667,
+      "median": 0.4,
+      "p75": 0.4444,
+      "p99": 0.5714,
+      "iqr_outlier_bounds": [
+        -0.6667,
+        1.2778
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 3000
+    },
+    "digits_count": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 8.0,
+      "mean": 3.0513,
+      "std": 1.7771,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 2.0,
+      "median": 4.0,
+      "p75": 4.0,
+      "p99": 6.0,
+      "iqr_outlier_bounds": [
+        -4.0,
+        10.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 3000
+    },
+    "favourites_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 60892.1733,
+      "mean": 183.1129,
+      "std": 1765.2656,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 3743.9591,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 22.18,
+      "sample_n": 5000
+    },
+    "follow_unfollow_rate": {
+      "rows": 2692,
+      "pct_of_corpus": 0.2,
+      "min": 0.0,
+      "max": 499.0,
+      "mean": 249.7277,
+      "std": 144.8177,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 4.0,
+      "p25": 123.0,
+      "median": 252.0,
+      "p75": 376.25,
+      "p99": 495.0,
+      "iqr_outlier_bounds": [
+        -636.75,
+        1136.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2692
+    },
+    "follower_count": {
+      "rows": 1063989,
+      "pct_of_corpus": 77.77,
+      "min": 0.0,
+      "max": 2883076.0,
+      "mean": 75235.7793,
+      "std": 144614.516,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 540.0,
+      "median": 5292.0,
+      "p75": 161512.0,
+      "p99": 834415.0,
+      "iqr_outlier_bounds": [
+        -482376.0,
+        644428.0
+      ],
+      "outlier_pct_of_sample": 2.66,
+      "sample_n": 50000
+    },
+    "follower_following_ratio": {
+      "rows": 2644,
+      "pct_of_corpus": 0.19,
+      "min": 0.4674,
+      "max": 0.6937,
+      "mean": 0.5707,
+      "std": 0.0351,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.4945,
+      "p25": 0.546,
+      "median": 0.5708,
+      "p75": 0.5939,
+      "p99": 0.6554,
+      "iqr_outlier_bounds": [
+        0.4023,
+        0.7375
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2644
+    },
+    "followers": {
+      "rows": 2662,
+      "pct_of_corpus": 0.19,
+      "min": 334.0,
+      "max": 472.0,
+      "mean": 399.9842,
+      "std": 20.0783,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 353.0,
+      "p25": 387.0,
+      "median": 400.0,
+      "p75": 413.0,
+      "p99": 447.0,
+      "iqr_outlier_bounds": [
+        309.0,
+        491.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2662
+    },
+    "followers_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": -0.0,
+      "max": 796096.3842,
+      "mean": 321.9153,
+      "std": 11350.011,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 39.7194,
+      "p99": 2445.4932,
+      "iqr_outlier_bounds": [
+        -119.1583,
+        158.8777
+      ],
+      "outlier_pct_of_sample": 11.38,
+      "sample_n": 5000
+    },
+    "following": {
+      "rows": 2667,
+      "pct_of_corpus": 0.19,
+      "min": 616.0,
+      "max": 789.0,
+      "mean": 700.8414,
+      "std": 25.8364,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 639.66,
+      "p25": 684.0,
+      "median": 701.0,
+      "p75": 718.0,
+      "p99": 761.34,
+      "iqr_outlier_bounds": [
+        582.0,
+        820.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2667
+    },
+    "following_count": {
+      "rows": 1063989,
+      "pct_of_corpus": 77.77,
+      "min": 0.0,
+      "max": 99855.0,
+      "mean": 1724.7654,
+      "std": 6271.4764,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 1.0,
+      "p25": 31.0,
+      "median": 126.0,
+      "p75": 826.0,
+      "p99": 26749.0,
+      "iqr_outlier_bounds": [
+        -2354.0,
+        3211.0
+      ],
+      "outlier_pct_of_sample": 8.46,
+      "sample_n": 50000
+    },
+    "friends_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 16878.4745,
+      "mean": 315.3582,
+      "std": 668.0525,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 394.4743,
+      "p99": 2918.838,
+      "iqr_outlier_bounds": [
+        -1183.423,
+        1577.8973
+      ],
+      "outlier_pct_of_sample": 4.4,
+      "sample_n": 5000
+    },
+    "generic_comment_rate": {
+      "rows": 2633,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 149.0,
+      "mean": 74.5682,
+      "std": 43.6646,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 1.0,
+      "p25": 36.0,
+      "median": 76.0,
+      "p75": 111.0,
+      "p99": 148.0,
+      "iqr_outlier_bounds": [
+        -189.0,
+        336.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2633
+    },
+    "geo_enabled": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 6.4497,
+      "mean": 0.1792,
+      "std": 0.6173,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 3.1345,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 11.32,
+      "sample_n": 5000
+    },
+    "has_profile_pic": {
+      "rows": 2655,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.4927,
+      "std": 0.4999,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 1.0,
+      "p99": 1.0,
+      "iqr_outlier_bounds": [
+        -3.0,
+        4.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2655
+    },
+    "listed_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 915.6267,
+      "mean": 2.1248,
+      "std": 23.2397,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 36.8752,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 12.8,
+      "sample_n": 5000
+    },
+    "posts": {
+      "rows": 2683,
+      "pct_of_corpus": 0.2,
+      "min": 151.0,
+      "max": 254.0,
+      "mean": 200.2959,
+      "std": 14.2313,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 168.0,
+      "p25": 190.0,
+      "median": 200.0,
+      "p75": 209.0,
+      "p99": 234.0,
+      "iqr_outlier_bounds": [
+        133.0,
+        266.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2683
+    },
+    "posts_per_day": {
+      "rows": 2689,
+      "pct_of_corpus": 0.2,
+      "min": 0.035,
+      "max": 73.3333,
+      "mean": 0.2739,
+      "std": 1.693,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0378,
+      "p25": 0.0535,
+      "median": 0.0808,
+      "p75": 0.1607,
+      "p99": 2.6639,
+      "iqr_outlier_bounds": [
+        -0.2682,
+        0.4825
+      ],
+      "outlier_pct_of_sample": 8.14,
+      "sample_n": 2689
+    },
+    "profile_background_color": {
+      "rows": 300,
+      "pct_of_corpus": 0.02,
+      "min": 0.0,
+      "max": 3.42e+18,
+      "mean": 3.4545454545638044e+16,
+      "std": 3.4198255235565715e+17,
+      "negatives": 0,
+      "nonfinite": 3,
+      "p1": 0.0,
+      "p25": 22330.0,
+      "median": 131516.0,
+      "p75": 292533.0,
+      "p99": 1.3680000000085534e+17,
+      "iqr_outlier_bounds": [
+        -788279.0,
+        1103142.0
+      ],
+      "outlier_pct_of_sample": 1.01,
+      "sample_n": 297
+    },
+    "profile_background_tile": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 5.8691,
+      "mean": 0.1284,
+      "std": 0.5209,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 2.7381,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 8.06,
+      "sample_n": 5000
+    },
+    "profile_link_color": {
+      "rows": 260,
+      "pct_of_corpus": 0.02,
+      "min": 0.0,
+      "max": 6.27e+93,
+      "mean": 4.8984375e+91,
+      "std": 5.520258710023104e+92,
+      "negatives": 0,
+      "nonfinite": 4,
+      "p1": 0.0,
+      "p25": 9999.0,
+      "median": 38543.0,
+      "p75": 91380.0,
+      "p99": 2.969999999999925e+60,
+      "iqr_outlier_bounds": [
+        -234144.0,
+        335523.0
+      ],
+      "outlier_pct_of_sample": 16.41,
+      "sample_n": 256
+    },
+    "profile_sidebar_border_color": {
+      "rows": 178,
+      "pct_of_corpus": 0.01,
+      "min": 0.0,
+      "max": 4.64e+54,
+      "mean": 5.333333333333334e+52,
+      "std": 4.945929864264376e+53,
+      "negatives": 0,
+      "nonfinite": 4,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 1.2528000000000475e+54,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 14.37,
+      "sample_n": 174
+    },
+    "profile_sidebar_fill_color": {
+      "rows": 117,
+      "pct_of_corpus": 0.01,
+      "min": 0.0,
+      "max": 9.92e+39,
+      "mean": 8.478632478632479e+37,
+      "std": 9.131766647311844e+38,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 252429.0,
+      "median": 252429.0,
+      "p75": 252429.0,
+      "p99": 977375.0,
+      "iqr_outlier_bounds": [
+        252429.0,
+        252429.0
+      ],
+      "outlier_pct_of_sample": 26.5,
+      "sample_n": 117
+    },
+    "profile_text_color": {
+      "rows": 2958,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 3.61e+75,
+      "mean": 1.2341880341880342e+72,
+      "std": 6.673751256463692e+73,
+      "negatives": 0,
+      "nonfinite": 33,
+      "p1": 0.0,
+      "p25": 333333.0,
+      "median": 333333.0,
+      "p75": 333333.0,
+      "p99": 666666.0,
+      "iqr_outlier_bounds": [
+        333333.0,
+        333333.0
+      ],
+      "outlier_pct_of_sample": 6.22,
+      "sample_n": 2925
+    },
+    "profile_use_background_image": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 6.2371,
+      "mean": 0.785,
+      "std": 1.1268,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 1.4353,
+      "p99": 4.2308,
+      "iqr_outlier_bounds": [
+        -4.306,
+        5.7414
+      ],
+      "outlier_pct_of_sample": 0.08,
+      "sample_n": 5000
+    },
+    "protected": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "std": 0.0,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 0.0,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 5000
+    },
+    "repeat_char_count": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 3.0,
+      "mean": 0.335,
+      "std": 0.5448,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 1.0,
+      "p99": 2.0,
+      "iqr_outlier_bounds": [
+        -3.0,
+        4.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 3000
+    },
+    "reply_delay_seconds": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 1.0,
+      "max": 3577.0,
+      "mean": 1030.7,
+      "std": 1183.2261,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 1.0,
+      "p25": 7.0,
+      "median": 459.0,
+      "p75": 1925.0,
+      "p99": 3525.07,
+      "iqr_outlier_bounds": [
+        -5747.0,
+        7679.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 500
+    },
+    "sentiment_score": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": -1.0,
+      "max": 1.0,
+      "mean": 0.015,
+      "std": 0.5805,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": -0.98,
+      "p25": -0.4725,
+      "median": 0.02,
+      "p75": 0.5025,
+      "p99": 0.98,
+      "iqr_outlier_bounds": [
+        -3.3975,
+        3.4275
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 500
+    },
+    "spam_comments_rate": {
+      "rows": 2662,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 199.0,
+      "mean": 99.4403,
+      "std": 57.9593,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 1.0,
+      "p25": 49.0,
+      "median": 100.0,
+      "p75": 149.0,
+      "p99": 197.0,
+      "iqr_outlier_bounds": [
+        -251.0,
+        449.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2662
+    },
+    "special_char_count": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.54,
+      "std": 0.4984,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 1.0,
+      "p75": 1.0,
+      "p99": 1.0,
+      "iqr_outlier_bounds": [
+        -3.0,
+        4.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 3000
+    },
+    "statuses_count": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 139674.3121,
+      "mean": 1313.7991,
+      "std": 6462.4473,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 117.3437,
+      "p99": 30092.0495,
+      "iqr_outlier_bounds": [
+        -352.031,
+        469.3746
+      ],
+      "outlier_pct_of_sample": 16.52,
+      "sample_n": 5000
+    },
+    "suspicious_links_in_bio": {
+      "rows": 2640,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.5034,
+      "std": 0.5,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 1.0,
+      "p75": 1.0,
+      "p99": 1.0,
+      "iqr_outlier_bounds": [
+        -3.0,
+        4.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2640
+    },
+    "user_id": {
+      "rows": 11190,
+      "pct_of_corpus": 0.82,
+      "min": 953.0,
+      "max": 4928654909.0,
+      "mean": 2051304803.4784,
+      "std": 1236324882.2888,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 20189066.7,
+      "p25": 1027518843.5,
+      "median": 2198556176.0,
+      "p75": 2900758811.5,
+      "p99": 4867621145.63,
+      "iqr_outlier_bounds": [
+        -4592201060.5,
+        8520478715.5
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 11190
+    },
+    "user_karma": {
+      "rows": 500,
+      "pct_of_corpus": 0.04,
+      "min": 308.0,
+      "max": 49734.0,
+      "mean": 25248.198,
+      "std": 14108.8391,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 1212.77,
+      "p25": 13427.25,
+      "median": 24778.5,
+      "p75": 37111.5,
+      "p99": 49046.99,
+      "iqr_outlier_bounds": [
+        -57625.5,
+        108164.25
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 500
+    },
+    "username_length": {
+      "rows": 3000,
+      "pct_of_corpus": 0.22,
+      "min": 3.0,
+      "max": 14.0,
+      "mean": 9.0573,
+      "std": 2.2151,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 3.0,
+      "p25": 8.0,
+      "median": 9.0,
+      "p75": 10.0,
+      "p99": 13.0,
+      "iqr_outlier_bounds": [
+        2.0,
+        16.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 3000
+    },
+    "username_randomness": {
+      "rows": 2663,
+      "pct_of_corpus": 0.19,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.5032,
+      "std": 0.5,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 1.0,
+      "p75": 1.0,
+      "p99": 1.0,
+      "iqr_outlier_bounds": [
+        -3.0,
+        4.0
+      ],
+      "outlier_pct_of_sample": 0.0,
+      "sample_n": 2663
+    },
+    "utc_offset": {
+      "rows": 5000,
+      "pct_of_corpus": 0.37,
+      "min": 0.0,
+      "max": 93605.2579,
+      "mean": 1137.5677,
+      "std": 4082.5459,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 16637.1638,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 14.82,
+      "sample_n": 5000
+    },
+    "verified": {
+      "rows": 7663,
+      "pct_of_corpus": 0.56,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.172,
+      "std": 0.3774,
+      "negatives": 0,
+      "nonfinite": 0,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "p99": 1.0,
+      "iqr_outlier_bounds": [
+        0.0,
+        0.0
+      ],
+      "outlier_pct_of_sample": 17.2,
+      "sample_n": 7663
+    }
+  },
+  "duplicates": {
+    "exact_duplicates": 36721,
+    "exact_duplicate_pct": 2.68,
+    "exact_cross_dataset": 4683,
+    "exact_cross_domain": 0,
+    "near_dup_text_candidates": 1304900,
+    "near_duplicate_text": 230140,
+    "near_duplicate_text_pct_of_textrows": 17.64,
+    "near_cross_dataset": 90179,
+    "distinct_authors": 10239,
+    "authored_rows": 1352448,
+    "rows_per_author_mean": 132.09,
+    "max_rows_single_author": 302649
+  },
+  "cross_dataset_leakage": {
+    "exact_content_shared_across_datasets": 4683,
+    "exact_content_shared_across_domains": 0,
+    "near_text_shared_across_datasets": 90179,
+    "authors_in_multiple_source_files": 600535,
+    "authors_in_multiple_domains": 0,
+    "top_cross_dataset_pairs": [
+      {
+        "datasets": [
+          "russia_052020_tweets_csv_hashed_2_a",
+          "russia_052020_tweets_csv_hashed_2_b"
+        ],
+        "exact_shared": 3670
+      },
+      {
+        "datasets": [
+          "hashed_2020_12_iran_202012_iran_202012_tweets_b",
+          "hashed_2020_12_iran_202012_iran_202012_tweets_c"
+        ],
+        "exact_shared": 329
+      },
+      {
+        "datasets": [
+          "hashed_2020_12_iran_202012_iran_202012_tweets_b",
+          "hashed_2020_12_iran_202012_iran_202012_tweets_d"
+        ],
+        "exact_shared": 186
+      },
+      {
+        "datasets": [
+          "hashed_2020_12_iran_202012_iran_202012_tweets_c",
+          "hashed_2020_12_iran_202012_iran_202012_tweets_d"
+        ],
+        "exact_shared": 157
+      },
+      {
+        "datasets": [
+          "hashed_2020_12_iran_202012_iran_202012_tweets_a",
+          "hashed_2020_12_iran_202012_iran_202012_tweets_b"
+        ],
+        "exact_shared": 133
+      },
+      {
+        "datasets": [
+          "hashed_2020_12_iran_202012_iran_202012_tweets_a",
+          "hashed_2020_12_iran_202012_iran_202012_tweets_c"
+        ],
+        "exact_shared": 81
+      },
+      {
+        "datasets": [
+          "CNCC_0621_tweets_csv_hashed_2012",
+          "CNCC_0621_tweets_csv_hashed_2013"
+        ],
+        "exact_shared": 80
+      },
+      {
+        "datasets": [
+          "CNCC_0621_tweets_csv_hashed_2015",
+          "CNCC_0621_tweets_csv_hashed_2017"
+        ],
+        "exact_shared": 13
+      },
+      {
+        "datasets": [
+          "hashed_2020_12_iran_202012_iran_202012_tweets_a",
+          "hashed_2020_12_iran_202012_iran_202012_tweets_d"
+        ],
+        "exact_shared": 9
+      },
+      {
+        "datasets": [
+          "CNCC_0621_tweets_csv_hashed_2012",
+          "CNCC_0621_tweets_csv_hashed_2014"
+        ],
+        "exact_shared": 7
+      },
+      {
+        "datasets": [
+          "RNA_0621_tweets_csv_hashed_2019",
+          "RNA_0621_tweets_csv_hashed_2020"
+        ],
+        "exact_shared": 5
+      },
+      {
+        "datasets": [
+          "CNCC_0621_tweets_csv_hashed_2013",
+          "CNCC_0621_tweets_csv_hashed_2014"
+        ],
+        "exact_shared": 3
+      }
+    ]
+  },
+  "quality": {
+    "label_invalid": 0,
+    "verified_field_invalid": 4871,
+    "created_at_present": 1347635,
+    "created_at_unparseable": 1,
+    "created_at_unparseable_pct": 0.0,
+    "text_expected_rows": 1343234,
+    "empty_text_expected": 693,
+    "author_expected_rows": 1365408,
+    "missing_author": 12960
+  },
+  "schema_inconsistencies": {
+    "family_variants": {
+      "unknown": {
+        "distinct_schemas": 2,
+        "base_example": "datasets/Changyu Culture/2021_12_CNCC_0621_CNCC_0621_users.csv",
+        "diffs": [
+          {
+            "files": 1,
+            "added": [
+              "date",
+              "id",
+              "label",
+              "model",
+              "prompt",
+              "text"
+            ],
+            "removed": [
+              "accountCreationDate",
+              "accountLanguage",
+              "followerCount",
+              "followingCount",
+              "userDisplayName",
+              "userProfileDescription",
+              "userProfileUrl",
+              "userReportedLocation"
+            ],
+            "example": "datasets/ai vs human text/ai_vs_human_text.csv"
+          }
+        ]
+      },
+      "fsm_profile": {
+        "distinct_schemas": 2,
+        "base_example": "datasets/Datasets/Fake Social Media Account Detection Dataset/fake_social_media.csv",
+        "diffs": [
+          {
+            "files": 1,
+            "added": [
+              "digit_ratio",
+              "digits_count",
+              "repeat_char_count",
+              "special_char_count",
+              "username",
+              "username_length"
+            ],
+            "removed": [],
+            "example": "datasets/Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0.csv"
+          }
+        ]
+      },
+      "twitterdata": {
+        "distinct_schemas": 3,
+        "base_example": "datasets/Datasets/TwitterData_FE.csv",
+        "diffs": [
+          {
+            "files": 1,
+            "added": [
+              "Followers",
+              "Following",
+              "Link",
+              "Location",
+              "Real_Location",
+              "Verified"
+            ],
+            "removed": [],
+            "example": "datasets/Datasets/TwitterData_Joined.csv"
+          },
+          {
+            "files": 1,
+            "added": [],
+            "removed": [
+              "Adverb_Count",
+              "Exclamations_Count",
+              "Hashtags_Count",
+              "Mentions_Count",
+              "Negative_Word_Ratio",
+              "Neutral_Word_Ratio",
+              "Nouns_Count",
+              "Original_User"
+            ],
+            "example": "datasets/Datasets/Twitter_Data.csv"
+          }
+        ]
+      },
+      "generic_account": {
+        "distinct_schemas": 2,
+        "base_example": "datasets/Datasets/Twitter_Users.csv",
+        "diffs": [
+          {
+            "files": 1,
+            "added": [
+              "Latitude",
+              "Longitude",
+              "Twitter Account",
+              "label"
+            ],
+            "removed": [
+              "Followers",
+              "Following",
+              "Link",
+              "Real_Location",
+              "Twitter_User_Name",
+              "Verified"
+            ],
+            "example": "datasets/Datasets/location_data.csv"
+          }
+        ]
+      }
+    },
+    "casing_variants": [
+      {
+        "normalized_columns": 10,
+        "raw_variants": [
+          "datasets/Changyu Culture/2021_12_CNCC_0621_CNCC_0621_users.csv",
+          "datasets/2020-05/russia_052020_users_csv_hashed.csv"
+        ]
+      }
+    ]
+  }
+}

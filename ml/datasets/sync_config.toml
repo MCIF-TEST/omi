@@ -1,0 +1,56 @@
+# OmiSphere — Dataset Sync Routing Config (OMI_DATASET_AUTOMATION_V1)
+#
+# Drives ml/datasets/hf_sync.py. Discovery + classification come from
+# datasets/manifest.toml (the governance source of truth); this file only adds
+# the routing thresholds and the minimal per-dataset upload specifics (label
+# mapping + target path) that cannot be inferred safely. Anything uploadable but
+# unmapped here, or over the size limit, or off-domain, is reported as
+# "manual review" — never silently uploaded.
+
+[routing]
+target_repo = "Andrewexiga/omi-authenticity-dataset"
+repo_type = "dataset"
+private = true
+# Account-authenticity datasets above this size need explicit human sign-off.
+max_upload_size_mb = 25.0
+# Provenances that need an adapter / different target before they can upload.
+manual_review_provenance = [
+  "twitter_io_disclosure",      # coordination IO archives -> a coordination repo
+  "osome_botometer_repository", # astroturf -> needs the headerless adapter
+  "cresci_botometer_repository",# cresci -> needs an adapter
+]
+
+# Per-dataset upload specifics (matched by datasets/-relative path or basename).
+# label_column = in-file label; label_value = constant (filename-labeled set).
+[[override]]
+match = "Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0.csv"
+label_column = "is_fake"
+label_type = "binary_authenticity"
+trust_level = "high"
+target_path = "authenticity/mixed_quality/fake_social_media_global_2.0.csv"
+intended_use = "Train the authenticity baseline (balanced human/fake account features)."
+notes = "Leakage caveat: ~71% of signal is username morphology (behavioral V2 audit)."
+
+[[override]]
+match = "Datasets/Fake Social Media Account Detection Dataset/real_users.csv"
+label_value = "real"
+label_type = "account_authenticity"
+trust_level = "medium"
+target_path = "authenticity/human_accounts/real_users.csv"
+intended_use = "Train negative (genuine) class — labeled real Twitter profiles."
+
+[[override]]
+match = "Datasets/Fake Social Media Account Detection Dataset/fake_users.csv"
+label_value = "fake"
+label_type = "account_authenticity"
+trust_level = "medium"
+target_path = "authenticity/bot_accounts/fake_users.csv"
+intended_use = "Train positive (fake) class — labeled fake Twitter profiles."
+
+[[override]]
+match = "Datasets/Fake Social Media Account Detection Dataset/reddit_dead_internet_analysis_2026.csv"
+label_column = "is_bot_flag"
+label_type = "binary_bot"
+trust_level = "medium"
+target_path = "authenticity/mixed_quality/reddit_dead_internet_analysis_2026.csv"
+intended_use = "Evaluation — small bot-taxonomy validation set."
