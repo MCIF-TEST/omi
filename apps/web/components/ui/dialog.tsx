@@ -45,7 +45,7 @@ export function Dialog({ open, onClose, children, className, label }: DialogProp
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[16vh] px-4 bg-bg-deep/70 backdrop-blur-sm animate-fade-up"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[16vh] px-4 bg-bg-deep/80 backdrop-blur-sm animate-fade-up"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -56,7 +56,7 @@ export function Dialog({ open, onClose, children, className, label }: DialogProp
       <div
         ref={ref}
         className={cn(
-          'w-full max-w-2xl bg-bg-elev border border-border-2 rounded-md shadow-2xl',
+          'w-full max-w-2xl bg-bg-elev border border-border-2 rounded-xl shadow-overlay',
           className,
         )}
       >

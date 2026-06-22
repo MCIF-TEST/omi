@@ -9,7 +9,7 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 export function Badge({ variant = 'neutral', tier, className, children, ...props }: BadgeProps) {
-  let classes = 'border border-border-2 bg-bg-elev text-fg-dim';
+  let classes = 'border border-border-2 bg-bg-elev-2 text-fg-dim';
   if (variant === 'tier' && tier) {
     classes = tierBg(tier);
   } else if (variant === 'accent') {
@@ -22,7 +22,7 @@ export function Badge({ variant = 'neutral', tier, className, children, ...props
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded-sm',
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full',
         'font-mono text-2xs tracking-wider uppercase',
         classes,
         className,
