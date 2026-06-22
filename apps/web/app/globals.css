@@ -46,8 +46,41 @@
   /* Type */
   --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
+  /* Surfaces — 5th level (inputs / active rows) + inset wells (code/evidence) */
+  --bg-elev-3: #1c2130;
+  --bg-inset:  #090b12;
+
+  /* Confidence / data-sufficiency ramp — SEPARATE from the action accent and the
+     probability tier ramp. Uncertainty reads as desaturation, not a loud hue. */
+  --confidence-strong: #22d3a8;
+  --confidence-medium: #f5b62f;
+  --confidence-weak:   #6e7890;
+
+  /* Cluster-identity palette — persistent per-cluster hue (narratives / campaigns /
+     accounts), desaturated for a dark canvas. Navigate by colour, not just label. */
+  --cluster-1: #c0734e;  /* terracotta */
+  --cluster-2: #4f8fd6;  /* sapphire   */
+  --cluster-3: #4a9e6f;  /* forest     */
+  --cluster-4: #b06ad0;  /* violet     */
+  --cluster-5: #d0a24a;  /* marigold   */
+  --cluster-6: #56b6c2;  /* teal       */
+  --cluster-7: #d06a86;  /* rose       */
+  --cluster-8: #8a8fd0;  /* periwinkle */
+
+  /* Evidence-syntax palette — rendering raw source data (JSON / logs / diffs). */
+  --ev-string:  #6bc47f;
+  --ev-key:     #6ba9ff;
+  --ev-number:  #d0a24a;
+  --ev-keyword: #b06ad0;
+  --ev-error:   #fb3b6b;
+  --ev-meta:    #6e7890;
+
   /* Motion */
-  --ease-omi: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-omi:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-mech: cubic-bezier(0.72, 0, 0.12, 1);  /* mechanical reveals (Retool) */
+  --dur-hover: 0.18s;
+  --dur-panel: 0.40s;
+  --dur-view:  0.60s;
 }
 
 @layer base {
@@ -55,7 +88,7 @@
     background: var(--bg-deep);
     color: var(--text);
     font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-    font-feature-settings: 'cv11', 'ss01';
+    font-feature-settings: 'cv11', 'ss01', 'tnum';
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     -webkit-tap-highlight-color: transparent;
@@ -149,12 +182,34 @@
     border: 1px solid rgba(59, 142, 255, 0.28);
   }
 
-  /* Interactive card — border brightening only, no lift transform */
+  /* Interactive card — consistent affordance: hairline brighten + faint surface lift */
   .card-interactive {
-    transition: border-color 0.18s ease;
+    transition: border-color var(--dur-hover) ease, background-color var(--dur-hover) ease;
   }
   .card-interactive:hover {
-    border-color: rgba(59, 142, 255, 0.24) !important;
+    border-color: var(--border-hot) !important;
+    background-color: var(--bg-elev-2);
+  }
+
+  /* Inset-hairline elevation — the canonical "raised slab" depth (no drop shadow) */
+  .inset-hairline { box-shadow: inset 0 0 0 1px var(--border); }
+
+  /* Inset well — for code/evidence/JSON blocks sunk into a card */
+  .surface-inset {
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  /* Tabular numerals — explicit opt-in for dense numeric columns */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Cluster-identity dot — colour set inline via --c (a --cluster-N value) */
+  .cluster-dot {
+    width: 8px; height: 8px; border-radius: 9999px;
+    background: var(--c, var(--text-mute));
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--c, var(--text-mute)) 18%, transparent);
+    flex: none;
   }
 
   /* Primary button */
