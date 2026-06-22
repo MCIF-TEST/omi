@@ -1,0 +1,601 @@
+{
+  "total_rows": 36925,
+  "authenticity_distribution": {
+    "authentic(0)": 3516,
+    "inauthentic(1)": 32239,
+    "unknown(null)": 1170
+  },
+  "semantic_distribution": {
+    "state_io": 27702,
+    "bot": 2547,
+    "human": 1845,
+    "authentic": 1671,
+    "fake": 1329,
+    "unknown": 1170,
+    "ai_generated": 661
+  },
+  "requested_buckets": {
+    "human": 1845,
+    "bot": 2547,
+    "fake": 1329,
+    "authentic": 1671,
+    "unknown": 1170
+  },
+  "additional_buckets": {
+    "ai_generated": 661,
+    "state_io": 27702
+  },
+  "dataset_contribution": [
+    {
+      "dataset": "russia_052020_tweets_csv_hashed_2_a",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "russia_052020_tweets_csv_hashed_2_b",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "russia_052020_users_csv_hashed",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "iran_092020_tweets_csv_hashed",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_a",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_b",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2014",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_c",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "hashed_2020_12_iran_202012_iran_202012_tweets_d",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2012",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2013",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "fake_social_media_global_2.0",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2018",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2017",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "hashed_2020_12_IRA_202012_IRA_202012_tweets",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "hashed_2020_12_GRU_202012_GRU_202012_tweets",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "real_users",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2020",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "ira_092020_tweets_csv_hashed",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "fake_users",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "ai_vs_human_text_2026",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2020",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2019",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "TwitterData_Joined",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2020",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNHU_0621_tweets_csv_hashed_2020",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "hashed_2021_12_CNHU_0621_CNHU_0621_users",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "activity_botscore",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNHU_0621_tweets_csv_hashed_2021",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2019",
+      "rows": 1000,
+      "pct": 2.71
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2016",
+      "rows": 954,
+      "pct": 2.58
+    },
+    {
+      "dataset": "cresci-rtbust-2019",
+      "rows": 759,
+      "pct": 2.06
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2015",
+      "rows": 701,
+      "pct": 1.9
+    },
+    {
+      "dataset": "cresci-rtbust-2019_tweets",
+      "rows": 693,
+      "pct": 1.88
+    },
+    {
+      "dataset": "ai_human_detection_v1",
+      "rows": 686,
+      "pct": 1.86
+    },
+    {
+      "dataset": "astroturf",
+      "rows": 585,
+      "pct": 1.58
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2021",
+      "rows": 558,
+      "pct": 1.51
+    },
+    {
+      "dataset": "reddit_dead_internet_analysis_2026",
+      "rows": 500,
+      "pct": 1.35
+    },
+    {
+      "dataset": "CNHU_0621_tweets_csv_hashed_2019",
+      "rows": 439,
+      "pct": 1.19
+    },
+    {
+      "dataset": "hashed_2020_12_iran_202012_iran_202012_users",
+      "rows": 238,
+      "pct": 0.64
+    },
+    {
+      "dataset": "CNCC_0621_tweets_csv_hashed_2019",
+      "rows": 204,
+      "pct": 0.55
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2018",
+      "rows": 117,
+      "pct": 0.32
+    },
+    {
+      "dataset": "hashed_2021_12_CNCC_0621_CNCC_0621_users",
+      "rows": 112,
+      "pct": 0.3
+    },
+    {
+      "dataset": "iran_092020_users_csv_hashed",
+      "rows": 104,
+      "pct": 0.28
+    },
+    {
+      "dataset": "hashed_2020_12_GRU_202012_GRU_202012_users",
+      "rows": 70,
+      "pct": 0.19
+    },
+    {
+      "dataset": "hashed_2021_12_RNA_0621_RNA_0621_users",
+      "rows": 50,
+      "pct": 0.14
+    },
+    {
+      "dataset": "hashed_2020_12_IRA_202012_IRA_202012_users",
+      "rows": 31,
+      "pct": 0.08
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2021",
+      "rows": 23,
+      "pct": 0.06
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2014",
+      "rows": 18,
+      "pct": 0.05
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2013",
+      "rows": 18,
+      "pct": 0.05
+    },
+    {
+      "dataset": "hashed_2021_12_REA_0621_REA_0621_users",
+      "rows": 16,
+      "pct": 0.04
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2018",
+      "rows": 13,
+      "pct": 0.04
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2014",
+      "rows": 8,
+      "pct": 0.02
+    },
+    {
+      "dataset": "ira_092020_users_csv_hashed",
+      "rows": 5,
+      "pct": 0.01
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2017",
+      "rows": 5,
+      "pct": 0.01
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2017",
+      "rows": 5,
+      "pct": 0.01
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2013",
+      "rows": 4,
+      "pct": 0.01
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2012",
+      "rows": 3,
+      "pct": 0.01
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2015",
+      "rows": 3,
+      "pct": 0.01
+    },
+    {
+      "dataset": "RNA_0621_tweets_csv_hashed_2015",
+      "rows": 1,
+      "pct": 0.0
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2016",
+      "rows": 1,
+      "pct": 0.0
+    },
+    {
+      "dataset": "REA_0621_tweets_csv_hashed_2012",
+      "rows": 1,
+      "pct": 0.0
+    }
+  ],
+  "feature_availability_pct": {
+    "record_id": 100.0,
+    "dataset": 100.0,
+    "source_path": 100.0,
+    "domain": 100.0,
+    "grain": 100.0,
+    "text": 82.3,
+    "author_id": 90.84,
+    "created_at": 83.11,
+    "lang": 69.77,
+    "authenticity_label": 96.83,
+    "label_raw": 97.29,
+    "label_source": 100.0,
+    "numeric_features_json": 87.21,
+    "governance_status": 100.0,
+    "schema_version": 100.0
+  },
+  "grain_completeness": {
+    "text_in_text_grains_pct": 95.88,
+    "numeric_in_account_grains_pct": 83.12,
+    "label_overall_pct": 96.83
+  },
+  "numeric_key_frequency": {
+    "follower_count": {
+      "rows": 27701,
+      "pct_of_corpus": 75.02
+    },
+    "following_count": {
+      "rows": 27701,
+      "pct_of_corpus": 75.02
+    },
+    "verified": {
+      "rows": 2903,
+      "pct_of_corpus": 7.86
+    },
+    "default_profile": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "default_profile_image": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "favourites_count": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "followers_count": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "friends_count": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "geo_enabled": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "listed_count": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "profile_background_tile": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "profile_use_background_image": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "protected": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "statuses_count": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "utc_offset": {
+      "rows": 2000,
+      "pct_of_corpus": 5.42
+    },
+    "account_age_days": {
+      "rows": 1387,
+      "pct_of_corpus": 3.76
+    },
+    "profile_text_color": {
+      "rows": 1193,
+      "pct_of_corpus": 3.23
+    },
+    "digit_ratio": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "digits_count": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "repeat_char_count": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "special_char_count": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "username_length": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "activity": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "age": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "bot_score_english": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "count": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "user_id": {
+      "rows": 1000,
+      "pct_of_corpus": 2.71
+    },
+    "posts_per_day": {
+      "rows": 903,
+      "pct_of_corpus": 2.45
+    },
+    "bio_length": {
+      "rows": 900,
+      "pct_of_corpus": 2.44
+    },
+    "caption_similarity_score": {
+      "rows": 899,
+      "pct_of_corpus": 2.43
+    },
+    "content_similarity_score": {
+      "rows": 897,
+      "pct_of_corpus": 2.43
+    },
+    "follow_unfollow_rate": {
+      "rows": 893,
+      "pct_of_corpus": 2.42
+    },
+    "followers": {
+      "rows": 891,
+      "pct_of_corpus": 2.41
+    },
+    "has_profile_pic": {
+      "rows": 889,
+      "pct_of_corpus": 2.41
+    },
+    "follower_following_ratio": {
+      "rows": 884,
+      "pct_of_corpus": 2.39
+    },
+    "posts": {
+      "rows": 883,
+      "pct_of_corpus": 2.39
+    },
+    "following": {
+      "rows": 881,
+      "pct_of_corpus": 2.39
+    },
+    "username_randomness": {
+      "rows": 881,
+      "pct_of_corpus": 2.39
+    },
+    "spam_comments_rate": {
+      "rows": 880,
+      "pct_of_corpus": 2.38
+    },
+    "generic_comment_rate": {
+      "rows": 871,
+      "pct_of_corpus": 2.36
+    }
+  },
+  "duplicates": {
+    "record_id_duplicates": 0,
+    "exact_full_row_duplicates": 367,
+    "content_duplicates": 504,
+    "content_duplicate_pct": 1.36,
+    "authored_rows": 33544,
+    "distinct_authors": 6970,
+    "rows_per_author_mean": 4.81,
+    "max_rows_single_author": 3416,
+    "authors_in_multiple_datasets": 1757
+  },
+  "class_imbalance": {
+    "labeled_rows": 35755,
+    "positive_inauthentic": 32239,
+    "negative_authentic": 3516,
+    "positive_pct_of_labeled": 90.17,
+    "imbalance_ratio_pos_to_neg": 9.17,
+    "majority_baseline_accuracy_pct": 90.17,
+    "positives_from_io": 27702,
+    "io_share_of_positives_pct": 85.93,
+    "excluding_io": {
+      "labeled": 8053,
+      "positive": 4537,
+      "negative": 3516,
+      "positive_pct": 56.34
+    },
+    "by_grain": {
+      "tweet": {
+        "0": 340,
+        "1": 26429,
+        "null": 0
+      },
+      "account": {
+        "0": 2039,
+        "1": 4931,
+        "null": 1000
+      },
+      "comment": {
+        "0": 282,
+        "1": 218,
+        "null": 0
+      },
+      "text": {
+        "0": 855,
+        "1": 661,
+        "null": 170
+      }
+    },
+    "by_domain": {
+      "coordination": {
+        "0": 0,
+        "1": 27702,
+        "null": 0
+      },
+      "authenticity": {
+        "0": 1671,
+        "1": 2329,
+        "null": 0
+      },
+      "bot": {
+        "0": 990,
+        "1": 1547,
+        "null": 0
+      },
+      "reference": {
+        "0": 0,
+        "1": 0,
+        "null": 1000
+      },
+      "ai_text": {
+        "0": 855,
+        "1": 661,
+        "null": 170
+      }
+    }
+  },
+  "username_shortcut_rows": 1000
+}
