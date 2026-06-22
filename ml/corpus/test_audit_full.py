@@ -79,9 +79,48 @@ def test_stats_shape():
                              numeric_features_json='{"followers": %d.0}' % i))
     s = af._stats(acc)
     for key in ("total_rows_full_scan", "authenticity", "semantic_labels", "imbalance",
-                "feature_completeness_pct", "numeric_features", "duplicates", "quality"):
+                "feature_completeness_pct", "numeric_features", "duplicates", "quality",
+                "cross_dataset_leakage"):
         assert key in s
     assert s["total_rows_full_scan"] == 5
+
+
+def test_quantiles_and_hist():
+    q = af._quantiles(list(range(101)))
+    assert q["median"] == 50.0 and q["p25"] == 25.0 and q["p75"] == 75.0
+    assert q["outlier_pct_of_sample"] == 0.0 and q["sample_n"] == 101
+    assert af._quantiles([]) == {}
+    assert af._ascii_hist([]) == ["(no data)"]
+    assert "all = 5" in af._ascii_hist([5, 5, 5])[0]
+    assert len(af._ascii_hist([1, 1, 2, 3, 8], bins=5)) == 5
+
+
+def test_schema_inconsistencies():
+    from types import SimpleNamespace as NS
+    infos = [
+        NS(family="io_users", columns=["userid", "follower_count"], path="a"),
+        NS(family="io_users", columns=["userid", "follower_count", "extra"], path="b"),
+        NS(family="cc", columns=["userId", "followerCount"], path="c"),       # casing variant
+        NS(family="sc", columns=["userid", "follower_count"], path="d"),       # of c
+    ]
+    res = af.schema_inconsistencies(infos)
+    assert res["family_variants"]["io_users"]["distinct_schemas"] == 2
+    assert len(res["casing_variants"]) >= 1
+
+
+def test_cross_dataset_and_domain_leakage():
+    acc = af.Acc()
+    # identical content in two different datasets, same domain -> cross-dataset exact dup
+    af._update(acc, _rec(record_id="1", dataset="d1", domain="authenticity",
+                         author_id="a", numeric_features_json=None))
+    af._update(acc, _rec(record_id="2", dataset="d2", domain="authenticity",
+                         author_id="a", numeric_features_json=None))
+    assert acc.exact_cross_dataset >= 1
+    # same author later appears in a different domain -> cross-domain author (leakage signal)
+    af._update(acc, _rec(record_id="3", dataset="d3", domain="bot", grain="tweet",
+                         author_id="a", text="hi", numeric_features_json=None,
+                         label_source="tsv_label"))
+    assert acc.author_cross_domain >= 1
 
 
 def _run_all() -> bool:
