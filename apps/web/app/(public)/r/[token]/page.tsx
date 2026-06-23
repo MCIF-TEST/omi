@@ -85,7 +85,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
               {v.meta.slug} · {template}
             </div>
           </div>
-          <h1 className="text-3xl font-semibold text-fg tracking-tight leading-tight">
+          <h1 className="display text-3xl font-semibold text-fg tracking-tight leading-tight">
             {v.meta.label}
           </h1>
           <p className="mt-1 font-mono text-xs text-fg-faint break-all report-muted">
