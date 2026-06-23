@@ -199,10 +199,8 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
     <div className="space-y-5 -mt-2">
       <header className="flex items-baseline justify-between flex-wrap gap-3">
         <div>
-          <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
-            Workspace
-          </p>
-          <h1 className="text-2xl font-semibold text-fg tracking-tight">Investigate</h1>
+          <span className="section-label">Intelligence · Workspace</span>
+          <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-2">Investigate</h1>
         </div>
         {state.data?.investigation_slug && (
           <a
@@ -225,7 +223,7 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
       </Card>
 
       {state.error && (
-        <div className="rounded-sm border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger font-mono">
+        <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger font-mono">
           {state.error}
         </div>
       )}
