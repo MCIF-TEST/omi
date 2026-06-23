@@ -13,32 +13,38 @@ import { type ComprehensiveScanResult, type CoordinationCluster, isCorroborated 
 export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
   const prob = data.overall_probability;
   const v = data.video;
+  const conf = _overallConfidence(data);
+  const state = _resultState(data, conf);
   return (
     <article className="p-6 space-y-6">
       {/* First-view comprehension aid — the same reading-order guidance the
           public/campaign reports carry, on the user's OWN first result. */}
       <HowToRead storageKey="investigate-synthesis" />
-      {/* Verdict hero */}
-      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/30 p-5 md:p-6">
-        <div className="relative flex items-center gap-5 flex-wrap">
-          <ScoreRing value={prob} tier={data.overall_tier} size={96} stroke={8} />
-          <div className="flex-1 min-w-[200px]">
-            <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <span className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
-                Comprehensive verdict
-              </span>
+      {/* Verdict hero — the dominant, glanceable unit: gauge + tier + confidence,
+          fused. The probability is the visual king; everything below is a sub-score. */}
+      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-7">
+        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
+        <div className="relative flex items-center gap-6 flex-wrap md:flex-nowrap">
+          <ScoreRing value={prob} tier={data.overall_tier} size={132} stroke={10} className="shrink-0" />
+          <div className="flex-1 min-w-[220px]">
+            <span className="section-label">Suspicion verdict</span>
+            <div className="flex items-center gap-3 mt-2.5 mb-2.5 flex-wrap">
               <TierBadge tier={data.overall_tier} size="lg" />
+              <span className="text-sm text-fg-mute">
+                {Math.round(prob * 100)}% inauthenticity probability
+              </span>
             </div>
             <p className="text-sm text-fg-dim leading-relaxed">{data.summary}</p>
+            <div className="mt-4">
+              <ConfidenceBand probability={prob} confidence={conf} />
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Why this verdict — the trust contract on the headline the user actually
-          sees. Confidence + evidence-for + evidence-weakening + corroboration +
-          an honest result-state, all derived from data already on the payload.
-          No new score: confidence is the mean of the detectors' own confidence. */}
-      <VerdictTrustBlock data={data} />
+      {/* Why this verdict — result-state + evidence-for / weakening. Confidence is
+          now fused into the hero above; corroboration + sampling caveats remain. */}
+      <VerdictTrustBlock data={data} conf={conf} state={state} />
 
       {/* Stat strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -279,9 +285,9 @@ function _evidenceAgainst(data: ComprehensiveScanResult, conf: number, state: Re
   return _dedupe(out).slice(0, 5);
 }
 
-function VerdictTrustBlock({ data }: { data: ComprehensiveScanResult }) {
-  const conf = _overallConfidence(data);
-  const state = _resultState(data, conf);
+function VerdictTrustBlock({ data, conf, state }: {
+  data: ComprehensiveScanResult; conf: number; state: ResultState;
+}) {
   const meta = RESULT_STATE_META[state];
   const forItems = _evidenceFor(data);
   const againstItems = _evidenceAgainst(data, conf, state);
@@ -326,11 +332,6 @@ function VerdictTrustBlock({ data }: { data: ComprehensiveScanResult }) {
           these accounts, not a measure of the whole audience.
         </p>
       )}
-
-      {/* Confidence band — the verdict is a number AND its uncertainty */}
-      <div className="bg-bg border border-border-1 rounded-xl p-4">
-        <ConfidenceBand probability={data.overall_probability} confidence={conf} />
-      </div>
 
       {/* Why this verdict / what would weaken it */}
       <EvidenceForAgainst
@@ -520,7 +521,7 @@ function Stat({ icon, label, value, sub }: {
         <span className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">{label}</span>
         <span className="text-fg-faint">{icon}</span>
       </div>
-      <div className="text-xl font-semibold text-fg mono tracking-tight">{value}</div>
+      <div className="stat-value text-xl font-semibold text-fg">{value}</div>
       <div className="text-2xs text-fg-mute font-mono tracking-wider">{sub}</div>
     </div>
   );
@@ -536,7 +537,7 @@ function SubScan({ label, prob, tier, sub, customBody }: {
       </div>
       {customBody ?? (
         <>
-          <div className="text-xl font-semibold text-fg mono tracking-tight mb-1">
+          <div className="stat-value text-xl font-semibold text-fg mb-1">
             {prob != null ? `${Math.round(prob * 100)}%` : '—'}
           </div>
           <div className="flex items-center gap-2">
