@@ -81,7 +81,7 @@ export function BulkClient({ credits }: { credits: number }) {
             onChange={(e) => setUrlText(e.target.value)}
             placeholder={`https://youtube.com/watch?v=abc123\nhttps://youtube.com/watch?v=xyz789\nhttps://youtube.com/@ChannelName`}
             rows={10}
-            className="w-full px-4 py-3 bg-bg-elev border border-border-2 rounded-md text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent font-mono resize-y"
+            className="w-full px-4 py-3 bg-bg-elev-2 border border-border-2 rounded-lg text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 transition-colors font-mono resize-y"
           />
           {urlText && urls.length > 20 && (
             <p className="text-xs text-amber-400 mt-1">
@@ -111,7 +111,7 @@ export function BulkClient({ credits }: { credits: number }) {
         </div>
 
         {urlCount > 0 && (
-          <div className="bg-bg-elev border border-border-1 rounded-sm px-4 py-3 flex items-center gap-4 text-sm">
+          <div className="surface-inset px-4 py-3 flex items-center gap-4 text-sm">
             <div className="flex-1 space-y-0.5">
               <div className="font-mono text-xs text-fg">
                 <span className="text-fg-dim">{urlCount} URL{urlCount === 1 ? '' : 's'} · </span>
@@ -229,7 +229,7 @@ function ResultRow({ result }: { result: BulkScanJobResult }) {
   const isOk = result.status === 'ok';
 
   return (
-    <div className={`flex items-center gap-4 px-4 py-3 rounded-sm border text-sm transition-colors ${
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-lg border text-sm transition-colors ${
       isPending ? 'border-border-1 bg-bg-elev opacity-50' :
       isFailed ? 'border-danger/30 bg-danger/5' :
       'border-border-1 bg-bg-elev'
@@ -276,7 +276,7 @@ function StatusBadge({ status }: { status: string }) {
     failed: 'text-danger border-danger/40 bg-danger/10',
   };
   return (
-    <span className={`px-2 py-0.5 rounded-sm border font-mono text-2xs uppercase tracking-wider ${styles[status] ?? styles.queued}`}>
+    <span className={`px-2 py-0.5 rounded-full border font-mono text-2xs uppercase tracking-wider ${styles[status] ?? styles.queued}`}>
       {status}
     </span>
   );

@@ -71,8 +71,8 @@ export default function AboutPage() {
   return (
     <article className="space-y-10">
       <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-3">About</p>
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight leading-tight">
+        <span className="section-label mb-3">About</span>
+        <h1 className="display text-3xl md:text-4xl font-semibold tracking-tight leading-tight mt-3">
           Evidence-based{' '}
           <span className="text-brand">Campaign Intelligence</span>
         </h1>

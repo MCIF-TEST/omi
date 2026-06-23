@@ -8,10 +8,8 @@ export default async function BulkPage() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
-          Workflow
-        </p>
-        <h1 className="text-2xl font-semibold text-fg tracking-tight">Bulk scan</h1>
+        <span className="section-label">Intelligence · Workflow</span>
+        <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-3">Bulk scan</h1>
         <p className="mt-1 text-sm text-fg-dim max-w-xl">
           Paste up to 20 YouTube video or channel URLs. OMISPHERE scans them
           sequentially in the background — come back when it&apos;s done.
