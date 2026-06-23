@@ -85,16 +85,15 @@ export default async function ChannelIntelligencePage({
       </Link>
 
       {/* Channel header */}
-      <header className="relative overflow-hidden bg-bg-elev border border-border-1 rounded-2xl p-6 shadow-card">
+      <header className="aurora relative overflow-hidden bg-bg-elev border border-border-1 rounded-2xl p-6">
+        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
         <div className="relative flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-bg border border-border-2 flex items-center justify-center text-accent-2 shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-bg-elev-2 border border-border-2 flex items-center justify-center text-accent-2 shrink-0">
             <User size={20} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-1.5 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
-              {data.platform} · channel intelligence
-            </p>
+            <span className="section-label">{data.platform} · Channel intelligence</span>
+            <div className="mt-2.5" />
             <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight truncate">
               {data.display_name || data.handle}
             </h1>
@@ -109,7 +108,7 @@ export default async function ChannelIntelligencePage({
           </div>
           {data.follower_count != null && (
             <div className="shrink-0 text-right">
-              <div className="font-mono text-xl font-semibold text-fg tabular-nums">
+              <div className="stat-value text-xl font-semibold text-fg">
                 {data.follower_count.toLocaleString()}
               </div>
               <div className="font-mono text-2xs text-fg-mute uppercase tracking-wider">subscribers</div>
@@ -320,7 +319,7 @@ export default async function ChannelIntelligencePage({
                 <Link
                   key={v.content_id}
                   href={`/content/${data.platform}/${v.content_id}`}
-                  className="flex items-center gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/30 transition-colors group"
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border-1 card-interactive group"
                 >
                   {v.thumbnail_url && (
                     // eslint-disable-next-line @next/next/no-img-element

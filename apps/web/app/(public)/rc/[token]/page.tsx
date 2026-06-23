@@ -88,7 +88,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
               {v.meta.platform} · {v.meta.status}
             </div>
           </div>
-          <h1 className="text-3xl font-semibold text-fg tracking-tight leading-tight flex items-center gap-2">
+          <h1 className="display text-3xl font-semibold text-fg tracking-tight leading-tight flex items-center gap-2">
             <Megaphone size={22} className="text-accent report-accent shrink-0" />
             {v.meta.name}
           </h1>
