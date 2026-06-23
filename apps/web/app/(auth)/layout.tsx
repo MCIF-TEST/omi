@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </Link>
       </header>
 
-      <main className="relative z-10 flex-1 flex items-center justify-center px-6 py-10">
+      <main className="aurora relative z-10 flex-1 flex items-center justify-center px-6 py-10">
         <div className="w-full max-w-md">{children}</div>
       </main>
 

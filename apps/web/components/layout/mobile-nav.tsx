@@ -131,7 +131,7 @@ export function MobileNav({ email, isNewUser = false }: { email: string; isNewUs
             className="sheet-scrim absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setSheetOpen(false)}
           />
-          <div className="sheet-panel absolute inset-x-0 bottom-0 bg-bg-elev border-t border-border-1 rounded-t-2xl shadow-card-lg safe-bottom">
+          <div className="sheet-panel absolute inset-x-0 bottom-0 bg-bg-elev border-t border-border-1 rounded-t-2xl shadow-overlay safe-bottom">
             {/* Grabber + header */}
             <div className="flex flex-col items-center pt-2.5 pb-1">
               <span className="w-9 h-1 rounded-full bg-border-2" aria-hidden />
