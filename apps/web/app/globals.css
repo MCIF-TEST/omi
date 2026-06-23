@@ -19,11 +19,12 @@
   --border-2:   #2f3236;
   --border-hot: #43474e;
 
-  /* Text — cool near-neutral ramp */
-  --text:       #f3f5f7;
-  --text-dim:   #a6adb7;
-  --text-mute:  #6b727c;
-  --text-faint: #454b54;
+  /* Text — cool near-neutral ramp. Tuned for WCAG AA on the obsidian surfaces:
+     dim ~8:1, mute ~6:1, faint ~3.5:1 (faint is for non-essential/decoration). */
+  --text:       #f4f6f8;
+  --text-dim:   #aeb6c1;
+  --text-mute:  #8b94a1;
+  --text-faint: #646d79;
 
   /* Accents */
   --accent:     #3b8eff;
