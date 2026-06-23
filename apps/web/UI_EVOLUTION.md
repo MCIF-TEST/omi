@@ -92,10 +92,15 @@ The pre-existing UI was already competent (coherent dark theme, custom primitive
   brand-glow CTAs, rounded-xl surfaces, gradient-border scope) · **Settings**
   (aurora header, card-interactive rows) · **Mobile nav** (overlay sheet) ·
   **Marketing layout** (aurora — propagates to pricing/about/terms/privacy).
-- ⏳ Remaining (already inherit the new shell + primitives + tokens; bespoke
-  page-level polish pending): Investigate workspace, Graph (interactive SVG —
-  dedicated effort), Monitoring / Search / Bulk client panels, Reports, and the
-  pricing/about body copy.
+- ✅ **Graph** (aurora header, gradient-border inspector; RadialGraph viz
+  hero-grade + on-brand) · **Monitoring / Search / Bulk** client panels ·
+  **Investigate workspace** (header + states) · **Content detail** · **Pricing /
+  About** · **mobile nav** · **auth/marketing shells**.
+- **Sweep complete** — every primary, coordination, evidence, source, ops, and
+  marketing surface now carries the identity. Remaining is engine-dependent only:
+  RadialGraph node-by-community coloring needs a backend `community_id` (no
+  frontend fix), and the public Report (`/rc`, `/r`) pages inherit the new
+  primitives/print theme.
 
 ## E. Before / after (so far)
 
