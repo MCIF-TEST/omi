@@ -88,8 +88,14 @@ The pre-existing UI was already competent (coherent dark theme, custom primitive
   identity, display hero panels (evidence-for/against, gate, members, timeline intact).
 - ✅ **Narrative detail** — aurora header + cluster identity, display stat panels
   (propagation/signal/graph structure intact).
-- ⏳ Investigate workspace, Graph, Reports, Monitoring, Settings, Search, Bulk,
-  Landing, Auth, mobile-nav.
+- ✅ **Auth** (aurora canvas, display headings) · **Landing** (aurora hero,
+  brand-glow CTAs, rounded-xl surfaces, gradient-border scope) · **Settings**
+  (aurora header, card-interactive rows) · **Mobile nav** (overlay sheet) ·
+  **Marketing layout** (aurora — propagates to pricing/about/terms/privacy).
+- ⏳ Remaining (already inherit the new shell + primitives + tokens; bespoke
+  page-level polish pending): Investigate workspace, Graph (interactive SVG —
+  dedicated effort), Monitoring / Search / Bulk client panels, Reports, and the
+  pricing/about body copy.
 
 ## E. Before / after (so far)
 
