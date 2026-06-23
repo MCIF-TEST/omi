@@ -8,31 +8,35 @@
    ===================================================================== */
 
 :root {
-  /* Surfaces */
-  --bg-deep:    #04050b;
-  --bg:         #080a12;
-  --bg-elev:    #0e1019;
-  --bg-elev-2:  #161a26;
+  /* Surfaces — refined neutral obsidian (premium console, less "blue HUD") */
+  --bg-deep:    #08090b;
+  --bg:         #0b0c0e;
+  --bg-elev:    #111315;
+  --bg-elev-2:  #181a1d;
 
-  /* Borders */
-  --border:     #1b2030;
-  --border-2:   #29303f;
-  --border-hot: #3c4a6c;
+  /* Borders — crisp neutral hairlines (Linear/Vercel) */
+  --border:     #232529;
+  --border-2:   #2f3236;
+  --border-hot: #43474e;
 
-  /* Text */
-  --text:       #eef2f9;
-  --text-dim:   #aab3c6;
-  --text-mute:  #6e7890;
-  --text-faint: #424c63;
+  /* Text — cool near-neutral ramp */
+  --text:       #f3f5f7;
+  --text-dim:   #a6adb7;
+  --text-mute:  #6b727c;
+  --text-faint: #454b54;
 
   /* Accents */
   --accent:     #3b8eff;
   --accent-2:   #6ba9ff;
   --accent-dim: #1d5fd0;
 
-  /* Spectral end — violet (logo gradient terminus only) */
+  /* Intelligence identity — electric blue + violet (the OmiSphere signature).
+     Blue = primary action / authenticity; violet = AI reasoning / coordination. */
   --violet:     #8b5cf6;
   --violet-2:   #a78bfa;
+  --violet-dim: #6d28d9;
+  --grad-brand: linear-gradient(118deg, var(--accent-2) 0%, var(--accent) 46%, var(--violet) 100%);
+  --grad-brand-soft: linear-gradient(118deg, rgba(107,169,255,0.16) 0%, rgba(59,142,255,0.13) 46%, rgba(139,92,246,0.16) 100%);
 
   /* Status / tiers */
   --tier-low:      #22d3a8;
@@ -47,8 +51,8 @@
   --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
   /* Surfaces — 5th level (inputs / active rows) + inset wells (code/evidence) */
-  --bg-elev-3: #1c2130;
-  --bg-inset:  #090b12;
+  --bg-elev-3: #212427;
+  --bg-inset:  #090a0c;
 
   /* Confidence / data-sufficiency ramp — SEPARATE from the action accent and the
      probability tier ramp. Uncertainty reads as desaturation, not a loud hue. */
@@ -123,9 +127,9 @@
   /* Structural grid lines — no radial blobs */
   .bg-grid {
     background-image:
-      linear-gradient(rgba(30, 38, 56, 0.28) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(30, 38, 56, 0.28) 1px, transparent 1px);
-    background-size: 60px 60px, 60px 60px;
+      linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+    background-size: 64px 64px, 64px 64px;
   }
 
   /* Film grain — adds surface texture, keeps it from feeling digital-flat */
@@ -169,17 +173,68 @@
 
   /* Glass surface */
   .glass {
-    background: rgba(14, 16, 25, 0.7);
-    backdrop-filter: blur(20px) saturate(130%);
-    -webkit-backdrop-filter: blur(20px) saturate(130%);
-    border: 1px solid rgba(60, 74, 108, 0.45);
+    background: rgba(17, 19, 21, 0.72);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
+    border: 1px solid rgba(67, 71, 78, 0.5);
   }
 
-  /* Accent border card — replaces the animated gradient-border */
+  /* True blue->violet gradient border (intelligence-panel highlight) */
   .gradient-border {
-    background: var(--bg-elev);
-    border-radius: 8px;
-    border: 1px solid rgba(59, 142, 255, 0.28);
+    background:
+      linear-gradient(var(--bg-elev), var(--bg-elev)) padding-box,
+      var(--grad-brand) border-box;
+    border: 1px solid transparent;
+    border-radius: 12px;
+  }
+
+  /* Atmospheric aurora — restrained blue+violet field for headers / hero only */
+  .aurora {
+    position: relative;
+    isolation: isolate;
+  }
+  .aurora::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    background:
+      radial-gradient(60% 120% at 12% -10%, rgba(59,142,255,0.14), transparent 60%),
+      radial-gradient(50% 120% at 92% -20%, rgba(139,92,246,0.13), transparent 60%);
+  }
+
+  /* Section label — uppercase mono eyebrow with a gradient tick */
+  .section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.625rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-mute);
+  }
+  .section-label::before {
+    content: '';
+    width: 14px; height: 2px; border-radius: 2px;
+    background: var(--grad-brand);
+  }
+
+  /* Stat / metric value — display font, tabular, optical tightening */
+  .stat-value {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  /* Gradient hairline divider */
+  .divider-gradient {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(90deg, transparent, var(--border-2) 18%, var(--border-2) 82%, transparent);
   }
 
   /* Interactive card — consistent affordance: hairline brighten + faint surface lift */
@@ -221,32 +276,47 @@
   }
   .btn-glow:active { transform: translateY(1px); }
 
-  /* Sidebar nav item */
+  /* Sidebar nav item — clean highlight pill, no left bar (Linear) */
   .nav-item {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 7px 10px;
-    border-radius: 4px;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 7px;
     font-size: 0.875rem;
+    font-weight: 450;
     color: var(--text-dim);
-    transition: color 0.14s ease, background 0.14s ease;
+    transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
     position: relative;
   }
-  .nav-item:hover { color: var(--text); background: rgba(22, 26, 38, 0.85); }
+  .nav-item:hover { color: var(--text); background: var(--bg-elev); }
   .nav-item.active {
-    color: var(--accent-2);
-    background: rgba(59, 142, 255, 0.09);
+    color: var(--text);
+    background:
+      linear-gradient(90deg, rgba(59,142,255,0.10), rgba(139,92,246,0.05) 70%, transparent),
+      var(--bg-elev-2);
+    box-shadow: inset 0 0 0 1px var(--border-2);
   }
   .nav-item.active::before {
     content: '';
     position: absolute;
-    left: 0;
-    top: 20%;
-    height: 60%;
-    width: 2px;
-    background: var(--accent);
-    border-radius: 0 2px 2px 0;
+    left: 0; top: 50%;
+    height: 16px; width: 2.5px;
+    transform: translateY(-50%);
+    border-radius: 0 3px 3px 0;
+    background: var(--grad-brand);
+  }
+
+  /* Keyboard hint */
+  .kbd {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.625rem;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 4px;
+    color: var(--text-mute);
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-2);
   }
 
   /* Animated bar */

@@ -13,7 +13,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-lg p-6 shadow-inner-top',
+        'rounded-xl p-6',
         gradient
           ? 'gradient-border'
           : 'bg-bg-elev border border-border-1',

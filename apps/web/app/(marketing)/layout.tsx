@@ -17,14 +17,14 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <Link href="/login"   className="hover:text-fg-dim transition-colors">Log in</Link>
           <Link
             href="/signup"
-            className="text-accent border border-accent/30 bg-accent/[0.07] px-3 py-1.5 rounded-sm hover:bg-accent/[0.13] hover:border-accent/50 transition-all"
+            className="text-accent border border-accent/30 bg-accent/[0.07] px-3 py-1.5 rounded-md hover:bg-accent/[0.13] hover:border-accent/50 transition-all"
           >
             Sign up
           </Link>
         </nav>
       </header>
 
-      <main className="relative z-10 flex-1 max-w-3xl mx-auto w-full px-6 py-12">
+      <main className="aurora relative z-10 flex-1 max-w-3xl mx-auto w-full px-6 py-12">
         {children}
       </main>
 

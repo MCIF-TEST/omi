@@ -38,6 +38,12 @@ import { NarrativeMembers } from './narrative-members';
 
 export const dynamic = 'force-dynamic';
 
+function clusterIndex(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return (h % 8) + 1;
+}
+
 export async function generateMetadata({ params }: { params: { id: string } }) {
   return { title: `Narrative #${params.id} — OMISPHERE` };
 }
@@ -201,28 +207,25 @@ export default async function NarrativeDetailPage({
       </Link>
 
       {/* Header */}
-      <header className="space-y-3">
+      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7 space-y-3">
+        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet/50 to-transparent" />
         <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={`inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2.5 py-1 rounded-sm border ${risk.cls}`}
-          >
+          <span className="cluster-dot" style={{ ['--c' as string]: `var(--cluster-${clusterIndex(String(detail.id))})` }} />
+          <span className={`inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2.5 py-1 rounded-full border ${risk.cls}`}>
             {risk.icon}
             {risk.label} risk
           </span>
-          <span className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-sm border border-border-2 text-fg-dim">
+          <span className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-full border border-border-2 text-fg-dim">
             {prettyLabel(detail.coordination_label)}
           </span>
           {detail.cluster_confidence >= 3 && (
-            <span className="inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-sm border border-accent/40 bg-accent/10 text-accent">
+            <span className="inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-full border border-accent/40 bg-accent/10 text-accent">
               <Activity size={10} />
               {detail.cluster_confidence}-signal cluster
             </span>
           )}
           {detail.platforms.map((p) => (
-            <span
-              key={p}
-              className="font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-sm border border-border-2 text-fg-mute"
-            >
+            <span key={p} className="font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-full border border-border-2 text-fg-mute">
               {p}
             </span>
           ))}
@@ -231,7 +234,7 @@ export default async function NarrativeDetailPage({
           </span>
         </div>
 
-        <h1 className="text-xl font-semibold text-fg tracking-tight leading-snug max-w-3xl">
+        <h1 className="display text-2xl font-semibold text-fg tracking-tight leading-snug max-w-3xl">
           {detail.label || `Narrative #${detail.id}`}
         </h1>
 
@@ -522,17 +525,17 @@ function BigStat({
     extreme: 'text-tier-high',
   }[tone];
   return (
-    <div className="bg-bg-elev border border-border-1 rounded-md p-4">
+    <div className="bg-bg-elev border border-border-1 rounded-xl p-4 card-interactive">
       <div className="flex items-center gap-1.5 font-mono text-2xs text-fg-mute uppercase tracking-wider mb-2">
         {icon}
         {label}
       </div>
       <div
-        className={`font-mono text-2xl font-semibold tabular-nums leading-none mb-3 ${toneTextCls}`}
+        className={`stat-value text-2xl font-semibold leading-none mb-3 ${toneTextCls}`}
       >
         {value}
       </div>
-      <div className="h-1 bg-border-1 rounded-full overflow-hidden">
+      <div className="h-1 bg-bg-elev-3 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full ${barCls} transition-all`}
           style={{ width: `${Math.min(100, barPct)}%` }}
@@ -556,13 +559,13 @@ function SmallStat({
   highlight?: boolean;
 }) {
   return (
-    <div className="bg-bg-elev border border-border-1 rounded-md p-3">
+    <div className="bg-bg-elev border border-border-1 rounded-xl p-3 card-interactive">
       <div className="flex items-center gap-1.5 font-mono text-2xs text-fg-mute uppercase tracking-wider mb-1.5">
         {icon}
         {label}
       </div>
       <div
-        className={`font-mono text-base font-semibold tabular-nums ${
+        className={`stat-value text-base font-semibold ${
           highlight ? 'text-tier-elevated' : 'text-fg'
         }`}
       >

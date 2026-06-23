@@ -110,17 +110,15 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           <ArrowLeft size={14} /> Back
         </Link>
 
-        <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-7 shadow-card">
+        <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-7">
+          <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
           <div className="relative flex items-center gap-5 flex-wrap">
             {latest && (
               <ScoreRing value={latest.overall_probability} tier={latest.tier} size={92} stroke={7} />
             )}
             <div className="flex-1 min-w-[200px]">
-              <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-2 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
-                Account · {platform}
-              </p>
-              <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="section-label">Account · {platform}</span>
+              <div className="flex items-baseline gap-3 flex-wrap mt-2.5">
                 <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight">{history.handle}</h1>
                 {history.display_name && (
                   <span className="text-fg-mute">· {history.display_name}</span>
@@ -190,7 +188,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         <Card>
           <CardLabel>Latest scan · {timeAgo(latest.scanned_at)}</CardLabel>
           <div className="flex items-baseline justify-between gap-4 flex-wrap mb-3">
-            <span className="text-3xl font-bold tracking-tight mono text-fg">
+            <span className="stat-value text-3xl font-semibold text-fg">
               {pct(latest.overall_probability)}
             </span>
             <span className={`px-2.5 py-0.5 rounded-full border font-mono text-2xs uppercase tracking-wider ${tierBg(latest.tier)}`}>
@@ -398,14 +396,14 @@ function SignalCard({ signal }: { signal: SignalResult }) {
     'text-tier-low';
 
   return (
-    <div className="bg-bg border border-border-1 rounded-xl p-3.5 hover:border-border-hot/60 transition-colors">
+    <div className="bg-bg-elev-2/40 border border-border-1 rounded-xl p-3.5 card-interactive">
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">{label}</span>
-        <span className={`font-mono font-bold text-sm ${textColor}`}>
+        <span className={`font-mono font-bold text-sm tabular ${textColor}`}>
           {Math.round(prob * 100)}%
         </span>
       </div>
-      <div className="h-1.5 w-full bg-border-1 rounded-full overflow-hidden mb-2">
+      <div className="h-1.5 w-full bg-bg-elev-3 rounded-full overflow-hidden mb-2">
         <div
           className={`h-full rounded-full ${barColor}`}
           style={{ width: `${Math.round(prob * 100)}%`, opacity: Math.max(0.35, conf) }}

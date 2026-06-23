@@ -16,11 +16,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-8 max-w-3xl">
-      <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
-          Account
-        </p>
-        <h1 className="text-2xl font-semibold text-fg tracking-tight">Settings</h1>
+      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6">
+        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
+        <span className="section-label">Operations · Account</span>
+        <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-3">Settings</h1>
       </header>
 
       <Card>
@@ -72,7 +71,7 @@ export default async function SettingsPage() {
         <CardLabel>History</CardLabel>
         <Link
           href="/settings/activity"
-          className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
+          className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border-1 card-interactive"
         >
           <div className="flex items-center gap-3">
             <Clock size={16} className="text-fg-dim" />
@@ -93,7 +92,7 @@ export default async function SettingsPage() {
           <div className="space-y-2">
             <Link
               href="/settings/engine"
-              className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
+              className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border-1 card-interactive"
             >
               <div className="flex items-center gap-3">
                 <Gauge size={16} className="text-accent" />
@@ -109,7 +108,7 @@ export default async function SettingsPage() {
             </Link>
             <Link
               href="/settings/calibration"
-              className="flex items-center justify-between gap-3 p-3 rounded-sm border border-border-1 hover:border-border-hot hover:bg-bg-elev-2/40 transition-colors"
+              className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border-1 card-interactive"
             >
               <div className="flex items-center gap-3">
                 <Target size={16} className="text-accent" />

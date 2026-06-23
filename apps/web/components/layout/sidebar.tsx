@@ -55,9 +55,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
 
 // Pre-activation (no investigations yet) the nav narrows to the value-moment
 // path: Dashboard / Investigate / Investigations / Campaigns / Settings.
-// Narratives, Graph, Content DB, and Monitoring reappear after the first
-// investigation — they're analysis surfaces for work that doesn't exist yet,
-// and each is a way to get lost before experiencing the product's value.
 const NEW_USER_VISIBLE = new Set([
   '/dashboard', '/investigate', '/investigations', '/campaigns', '/settings',
 ]);
@@ -73,18 +70,21 @@ export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-border-1 bg-bg">
-      {/* Logo */}
-      <div className="px-4 py-5 border-b border-border-1/60">
+    <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border-1 bg-bg-deep">
+      {/* Brand lockup — aurora-tinted intelligence header */}
+      <div className="aurora px-4 h-14 flex items-center border-b border-border-1/70">
         <Logo size="sm" />
       </div>
 
       {/* Nav groups */}
-      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
+      <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-6">
         {visibleGroups(isNewUser).map((group) => (
           <div key={group.label}>
-            <div className="px-3 mb-1.5 font-mono text-[0.6rem] tracking-[0.2em] text-fg-faint uppercase select-none">
-              {group.label}
+            <div className="px-2.5 mb-2 flex items-center gap-2 select-none">
+              <span className="h-px w-2.5 rounded bg-gradient-to-r from-accent to-violet" />
+              <span className="font-mono text-[0.6rem] tracking-[0.22em] text-fg-faint uppercase">
+                {group.label}
+              </span>
             </div>
             <div className="space-y-0.5">
               {group.items.map((item) => {
@@ -99,13 +99,16 @@ export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
                     )}
                   >
                     <Icon
-                      size={15}
-                      strokeWidth={active ? 2 : 1.5}
-                      className={active ? 'text-accent' : 'text-fg-mute group-hover:text-fg-dim'}
+                      size={16}
+                      strokeWidth={active ? 2.1 : 1.6}
+                      className={cn(
+                        'transition-colors',
+                        active ? 'text-accent-2' : 'text-fg-mute group-hover:text-fg-dim',
+                      )}
                     />
                     <span className="flex-1">{item.label}</span>
                     {item.badge && (
-                      <span className="font-mono text-[0.55rem] tracking-wider uppercase text-fg-faint border border-border-2 px-1 py-0.5 rounded-sm">
+                      <span className="font-mono text-[0.55rem] tracking-wider uppercase text-fg-faint border border-border-2 px-1 py-0.5 rounded">
                         {item.badge}
                       </span>
                     )}
@@ -126,11 +129,20 @@ export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-border-1/60">
-        <div className="font-mono text-[0.6rem] tracking-[0.15em] text-fg-faint uppercase">
-          v1 · beta
-        </div>
+      {/* Status footer */}
+      <div className="px-4 py-3 border-t border-border-1/70 flex items-center justify-between">
+        <span className="inline-flex items-center gap-2">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-tier-low opacity-60 animate-ping" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-tier-low" />
+          </span>
+          <span className="font-mono text-[0.6rem] tracking-[0.15em] text-fg-mute uppercase">
+            Engine online
+          </span>
+        </span>
+        <span className="font-mono text-[0.6rem] tracking-[0.15em] text-fg-faint uppercase">
+          v1
+        </span>
       </div>
     </aside>
   );

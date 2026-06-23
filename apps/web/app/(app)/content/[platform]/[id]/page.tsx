@@ -102,22 +102,22 @@ export default async function ContentEntityPage({
           <img
             src={e.thumbnail_url}
             alt=""
-            className="w-32 h-20 object-cover rounded-md border border-border-1 shrink-0"
+            className="w-32 h-20 object-cover rounded-lg border border-border-1 shrink-0"
           />
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-sm border border-border-2 text-fg-mute">
+            <span className="font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-full border border-border-2 text-fg-mute">
               {e.platform}
             </span>
             <span
-              className={`inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-sm border ${risk.cls}`}
+              className={`inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-full border ${risk.cls}`}
             >
               {risk.icon}
               {risk.label} risk
             </span>
           </div>
-          <h1 className="text-xl font-semibold text-fg tracking-tight leading-tight">
+          <h1 className="display text-xl font-semibold text-fg tracking-tight leading-tight">
             {e.title || e.content_id}
           </h1>
           {e.author_handle && (
@@ -471,7 +471,7 @@ function BigStat({
         {label}
       </div>
       <div
-        className={`font-mono text-2xl font-semibold tabular-nums mb-0.5 ${
+        className={`stat-value text-2xl font-semibold mb-0.5 ${
           accent ? 'text-tier-elevated' : 'text-fg'
         }`}
       >

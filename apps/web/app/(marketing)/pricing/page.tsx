@@ -45,7 +45,7 @@ export default function PricingPage() {
           <Sparkles size={11} />
           Pricing
         </div>
-        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
+        <h1 className="display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
           One plan. <span className="text-brand">Cancel anytime.</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
@@ -62,7 +62,7 @@ export default function PricingPage() {
 
           <div className="relative">
             <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-              <span className="text-5xl font-bold tracking-tight">
+              <span className="stat-value text-5xl font-bold tracking-tight">
                 <span className="text-brand">$9.99</span>
                 <span className="text-base text-fg-dim font-normal ml-1.5">/month</span>
               </span>

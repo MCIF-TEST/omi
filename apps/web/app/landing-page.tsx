@@ -28,7 +28,7 @@ export function LandingPage() {
           <Link href="/login"   className="hover:text-fg transition-colors">Log in</Link>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-1.5 bg-accent text-bg-deep text-[0.7rem] font-semibold px-3.5 py-1.5 rounded-sm hover:bg-accent-2 transition-colors"
+            className="inline-flex items-center gap-1.5 bg-accent text-bg-deep text-[0.7rem] font-semibold px-3.5 py-1.5 rounded-md hover:bg-accent-2 transition-colors"
           >
             Sign up
             <ArrowRight size={11} />
@@ -37,7 +37,7 @@ export function LandingPage() {
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 pt-16 md:pt-20 pb-12 max-w-6xl mx-auto w-full">
+      <section className="aurora relative z-10 px-6 md:px-8 pt-16 md:pt-20 pb-12 max-w-6xl mx-auto w-full">
         <div className="grid lg:grid-cols-[1fr_440px] gap-10 lg:gap-14 items-start">
 
           {/* Left: copy */}
@@ -88,14 +88,14 @@ export function LandingPage() {
             >
               <a
                 href="/rc/cmp_feat_cn_xinjiang"
-                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-6 py-2.5 rounded-sm hover:bg-accent-2 transition-colors text-sm btn-glow"
+                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-6 py-2.5 rounded-lg hover:bg-accent-2 transition-colors text-sm btn-glow shadow-glow-brand"
               >
                 See a real campaign — no sign-up
                 <ArrowRight size={14} />
               </a>
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 border border-border-2 text-fg-dim font-medium px-5 py-2.5 rounded-sm hover:text-fg hover:border-border-hot transition-colors text-sm"
+                className="inline-flex items-center gap-2 border border-border-2 text-fg-dim font-medium px-5 py-2.5 rounded-lg hover:text-fg hover:border-border-hot transition-colors text-sm"
               >
                 Scan your own — sign up free
               </Link>
@@ -148,7 +148,7 @@ export function LandingPage() {
       {/* ── Demo console ────────────────────────────────────────── */}
       <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
         <Reveal from="up">
-          <div className="border border-border-2 rounded-sm bg-bg-elev">
+          <div className="border border-border-2 rounded-xl bg-bg-elev overflow-hidden">
             <div className="px-5 py-3 border-b border-border-1/60 flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-3">
                 <span className="flex gap-1.5" aria-hidden>
@@ -180,7 +180,7 @@ export function LandingPage() {
           </h2>
         </Reveal>
 
-        <div className="border border-border-1 rounded-sm divide-y divide-border-1">
+        <div className="border border-border-1 rounded-xl divide-y divide-border-1 overflow-hidden">
           {CAPABILITIES.map((cap, i) => (
             <Reveal key={cap.title} delay={i * 55} from="up">
               <div className="group flex gap-4 p-5 hover:bg-bg-elev/50 transition-colors">
@@ -218,7 +218,7 @@ export function LandingPage() {
 
           {STEPS.map((s, i) => (
             <Reveal key={s.title} delay={i * 80} from="up">
-              <div className="border border-border-1 rounded-sm p-5 bg-bg-elev shadow-inner-top card-interactive relative">
+              <div className="border border-border-1 rounded-xl p-5 bg-bg-elev card-interactive relative">
                 <div className="absolute -top-2.5 left-5 font-mono text-[0.6rem] tracking-[0.16em] text-fg-faint uppercase bg-bg-deep border border-border-1 px-2 py-0.5">
                   {String(i + 1).padStart(2, '0')}
                 </div>
@@ -236,7 +236,7 @@ export function LandingPage() {
       {/* ── Scope ───────────────────────────────────────────────── */}
       <section className="relative z-10 px-6 md:px-8 pb-12 max-w-5xl mx-auto w-full">
         <Reveal>
-          <div className="border border-border-1 rounded-sm p-6">
+          <div className="gradient-border p-6">
             <p className="font-mono text-2xs tracking-[0.18em] uppercase text-fg-mute mb-3">Scope, plainly</p>
             <p className="text-sm text-fg-dim leading-relaxed">
               Today OMISPHERE scans <span className="text-fg font-medium">YouTube</span> and
@@ -265,7 +265,7 @@ export function LandingPage() {
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-7 py-2.5 rounded-sm hover:bg-accent-2 transition-colors btn-glow"
+                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-7 py-2.5 rounded-lg hover:bg-accent-2 transition-colors btn-glow shadow-glow-brand"
               >
                 Begin investigating
                 <ArrowRight size={14} />

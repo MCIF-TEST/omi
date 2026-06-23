@@ -17,7 +17,7 @@ export default function LoginPage({
           <ShieldCheck size={13} />
           Intelligence Access
         </div>
-        <h1 className="text-2xl font-semibold text-fg tracking-tight mb-2">
+        <h1 className="display text-2xl font-semibold text-fg tracking-tight mb-2">
           Welcome back
         </h1>
         <p className="text-sm text-fg-dim mb-7">
