@@ -48,6 +48,12 @@ const METHOD_RATIONALE_WHEN_SILENT: Record<string, string> = {
   age_cohort:               'account creation dates not clustered',
 };
 
+function clusterIndex(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return (h % 8) + 1;
+}
+
 interface PageProps {
   params: { campaign_key: string };
   searchParams?: { ref?: string };
@@ -104,28 +110,27 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
       )}
 
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <Megaphone size={18} className="text-accent" />
-          <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">
-            Campaign · {detail.platform} · {detail.member_count} accounts
-          </span>
+      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
+        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
+        <div className="flex items-center gap-2 flex-wrap mb-2.5">
+          <span className="cluster-dot" style={{ ['--c' as string]: `var(--cluster-${clusterIndex(detail.campaign_key)})` }} />
+          <span className="section-label">Coordination · Campaign</span>
           <StatusPill status={detail.status} />
           {!corroborated && (
-            <span className="inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-sm border border-tier-moderate/40 bg-tier-moderate/10 text-tier-moderate">
+            <span className="inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-full border border-tier-moderate/40 bg-tier-moderate/10 text-tier-moderate">
               <AlertTriangle size={10} />
               supporting only
             </span>
           )}
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight leading-tight">
+        <h1 className="display text-2xl md:text-3xl font-semibold tracking-tight leading-tight">
           {detail.name}
         </h1>
-        <p className="text-sm text-fg-mute mt-1 font-mono">
-          first detected {timeAgo(detail.first_detected_at)} · last seen{' '}
-          {timeAgo(detail.last_seen_at)} · {detail.observation_count}×
+        <p className="text-sm text-fg-mute mt-1.5 font-mono">
+          {detail.platform} · {detail.member_count} accounts · first detected {timeAgo(detail.first_detected_at)} ·
+          last seen {timeAgo(detail.last_seen_at)} · {detail.observation_count}×
         </p>
-      </div>
+      </header>
 
       {/* Hero — score / confidence / corroboration. NEVER one number on its own. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -539,7 +544,7 @@ function MethodChip({ method }: { method: string }) {
   return (
     <span
       title={discriminative ? 'Discriminative detector' : 'Supporting detector'}
-      className={`inline-flex items-center font-mono text-[0.6rem] tracking-wider uppercase px-1.5 py-0.5 rounded-sm border ${cls}`}
+      className={`inline-flex items-center font-mono text-[0.6rem] tracking-wider uppercase px-1.5 py-0.5 rounded-full border ${cls}`}
     >
       {METHOD_LABEL[method] || method}
     </span>
@@ -564,8 +569,8 @@ function HeroPanel({
     ok:       'text-accent',
   }[tone];
   return (
-    <div className="bg-bg-elev border border-border-1 rounded-md p-5">
-      <div className="flex items-center justify-between mb-2">
+    <div className="bg-bg-elev border border-border-1 rounded-xl p-5 card-interactive">
+      <div className="flex items-center justify-between mb-2.5">
         <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute flex items-center gap-1.5">
           {icon} {label}
         </span>
@@ -575,8 +580,8 @@ function HeroPanel({
           </span>
         )}
       </div>
-      <div className={`text-3xl font-semibold tabular-nums ${headlineCls}`}>{headline}</div>
-      <div className="mt-1 text-xs text-fg-mute">{sub}</div>
+      <div className={`stat-value text-3xl font-semibold ${headlineCls}`}>{headline}</div>
+      <div className="mt-1.5 text-xs text-fg-mute">{sub}</div>
     </div>
   );
 }
