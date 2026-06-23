@@ -40,17 +40,12 @@ export default async function InvestigationPage({ params }: { params: { slug: st
       </div>
 
       {/* Hero header */}
-      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-8 shadow-card">
-        {/* Ambient glow */}
-        <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-violet/[0.06] blur-2xl pointer-events-none" aria-hidden />
-
+      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-8">
+        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
         <div className="relative flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-0">
-            <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-2 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
-              Saved investigation · {inv.slug}
-            </p>
-            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mb-2">{inv.label}</h1>
+            <span className="section-label">Saved investigation · {inv.slug}</span>
+            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mb-2 mt-3">{inv.label}</h1>
             <p className="font-mono text-xs text-fg-faint break-all">{inv.input_url}</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
