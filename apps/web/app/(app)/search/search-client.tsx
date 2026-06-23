@@ -59,10 +59,8 @@ export function SearchClient({ initialQuery }: { initialQuery: string }) {
   return (
     <div className="space-y-6 max-w-3xl">
       <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
-          Intelligence database
-        </p>
-        <h1 className="text-2xl font-semibold text-fg tracking-tight mb-4">Account search</h1>
+        <span className="section-label">Intelligence · Database</span>
+        <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-3 mb-4">Account search</h1>
 
         {/* Search input */}
         <div className="relative">
@@ -73,7 +71,7 @@ export function SearchClient({ initialQuery }: { initialQuery: string }) {
             value={query}
             onChange={(e) => handleChange(e.target.value)}
             placeholder="Search by handle, display name, or channel ID…"
-            className="w-full pl-11 pr-4 py-3 bg-bg-elev border border-border-2 rounded-md text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent text-sm"
+            className="w-full pl-11 pr-4 py-3 bg-bg-elev-2 border border-border-2 rounded-lg text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 transition-colors text-sm"
             autoFocus
           />
           {loading && (
@@ -136,7 +134,7 @@ function AccountRow({ account }: { account: AccountSearchResult }) {
     <li>
       <Link
         href={`/accounts/${encodeURIComponent(account.external_id)}?platform=${account.platform}`}
-        className="flex items-center gap-4 p-4 bg-bg-elev border border-border-1 rounded-md hover:border-border-hot hover:bg-bg-elev-2/50 transition-colors group"
+        className="flex items-center gap-4 p-4 bg-bg-elev border border-border-1 rounded-xl card-interactive group"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3 mb-1 flex-wrap">
@@ -164,7 +162,7 @@ function AccountRow({ account }: { account: AccountSearchResult }) {
             </div>
           )}
         </div>
-        <ArrowRight size={14} className="text-fg-mute shrink-0 group-hover:text-fg transition-colors" />
+        <ArrowRight size={14} className="text-fg-faint shrink-0 group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
       </Link>
     </li>
   );
