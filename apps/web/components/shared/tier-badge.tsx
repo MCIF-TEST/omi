@@ -50,7 +50,7 @@ export function TierBadge({ tier, className, size = 'md' }: TierBadgeProps) {
     <span
       title={TIER_TITLE[key] + (key === 'unknown' ? '' : TIER_SCALE)}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-sm border font-mono uppercase tracking-wider',
+        'inline-flex items-center gap-1.5 rounded-full border font-mono uppercase tracking-wider',
         BG[key],
         SIZE[size],
         className,

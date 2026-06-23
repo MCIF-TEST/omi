@@ -1,11 +1,13 @@
-import { ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Check, Minus } from 'lucide-react';
 
 /**
  * TrustList — one column of an evidence-for / evidence-weakening split. The
  * platform's discipline is that no verdict is shown without BOTH what supports
  * it and what weakens it; this is the presentational half of that contract.
- * Empty states are rendered explicitly so absence of counter-evidence is itself
- * visible (not silently omitted).
+ * Each item carries an icon (check = a signal that fired / supports; dash = a
+ * caveat / silent signal), and the column is faintly tinted to its meaning so
+ * the two read as distinct at a glance — never colour alone. Empty states are
+ * explicit so absence of counter-evidence is itself visible.
  */
 export function TrustList({
   tone,
@@ -18,24 +20,28 @@ export function TrustList({
   items: readonly string[];
   empty: string;
 }) {
-  const headCls = tone === 'for' ? 'text-accent' : 'text-tier-moderate';
-  const Icon = tone === 'for' ? ShieldCheck : AlertTriangle;
+  const isFor = tone === 'for';
+  const Head = isFor ? ShieldCheck : AlertTriangle;
+  const ItemIcon = isFor ? Check : Minus;
+  const headCls = isFor ? 'text-tier-low' : 'text-tier-moderate';
+  const wrapCls = isFor
+    ? 'border-tier-low/25 bg-tier-low/[0.04]'
+    : 'border-tier-moderate/25 bg-tier-moderate/[0.04]';
+  const iconCls = isFor ? 'text-tier-low' : 'text-fg-mute';
   return (
-    <div className="bg-bg/40 border border-border-1/70 rounded-md p-4">
-      <div
-        className={`flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider ${headCls} mb-2.5`}
-      >
-        <Icon size={12} />
+    <div className={`rounded-xl border p-4 ${wrapCls}`}>
+      <div className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wide ${headCls} mb-3`}>
+        <Head size={13} strokeWidth={2.2} />
         {title}
       </div>
       {items.length === 0 ? (
         <p className="text-xs text-fg-mute italic">{empty}</p>
       ) : (
-        <ul className="space-y-1.5 text-sm text-fg-dim">
+        <ul className="space-y-2.5">
           {items.map((it, i) => (
-            <li key={i} className="leading-snug">
-              <span className="text-fg-faint mr-1">·</span>
-              {it}
+            <li key={i} className="flex items-start gap-2.5 text-sm text-fg-dim leading-snug">
+              <ItemIcon size={14} strokeWidth={2.5} className={`shrink-0 mt-0.5 ${iconCls}`} />
+              <span>{it}</span>
             </li>
           ))}
         </ul>
@@ -59,12 +65,7 @@ export function EvidenceForAgainst({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       <TrustList tone="for" title="Evidence for" items={forItems} empty={forEmpty} />
-      <TrustList
-        tone="weakening"
-        title="Evidence weakening / uncertainty"
-        items={againstItems}
-        empty={againstEmpty}
-      />
+      <TrustList tone="weakening" title="Evidence weakening" items={againstItems} empty={againstEmpty} />
     </div>
   );
 }

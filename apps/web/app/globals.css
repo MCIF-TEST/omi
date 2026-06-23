@@ -19,11 +19,12 @@
   --border-2:   #2f3236;
   --border-hot: #43474e;
 
-  /* Text — cool near-neutral ramp */
-  --text:       #f3f5f7;
-  --text-dim:   #a6adb7;
-  --text-mute:  #6b727c;
-  --text-faint: #454b54;
+  /* Text — cool near-neutral ramp. Tuned for WCAG AA on the obsidian surfaces:
+     dim ~8:1, mute ~6:1, faint ~3.5:1 (faint is for non-essential/decoration). */
+  --text:       #f4f6f8;
+  --text-dim:   #aeb6c1;
+  --text-mute:  #8b94a1;
+  --text-faint: #646d79;
 
   /* Accents */
   --accent:     #3b8eff;
@@ -205,14 +206,16 @@
       radial-gradient(50% 120% at 92% -20%, rgba(139,92,246,0.13), transparent 60%);
   }
 
-  /* Section label — uppercase mono eyebrow with a gradient tick */
+  /* Section label — uppercase SANS eyebrow with a gradient tick. Sans (not mono)
+     because it's human-readable label text; mono is reserved for IDs/URLs/values. */
   .section-label {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 0.625rem;
-    letter-spacing: 0.22em;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--text-mute);
   }
