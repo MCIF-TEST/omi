@@ -139,15 +139,13 @@ export function GraphClient() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-8 md:py-7 shadow-card">
+      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-8 md:py-7">
+        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
         <div className="relative flex items-start justify-between gap-4 flex-wrap">
           <div className="max-w-2xl">
-            <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase mb-2 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-2" />
-              Coordination intelligence
-            </p>
-            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight">
-              My Graphs
+            <span className="section-label">Coordination · Network graphs</span>
+            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mt-3">
+              Network graphs
             </h1>
             <p className="mt-2.5 text-sm text-fg-dim leading-relaxed">
               Build named graphs of commenter profiles. Omi automatically draws coordination
@@ -374,9 +372,11 @@ function GraphDetailPanel({
   return (
     <div className="space-y-4">
       {/* Section label */}
-      <div className="flex items-center gap-2 font-mono text-2xs tracking-[0.2em] text-accent uppercase">
-        <Network size={12} />
-        {data.name} — {data.member_count} member{data.member_count !== 1 ? 's' : ''} · {data.edges.length} coordination edge{data.edges.length !== 1 ? 's' : ''}
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <span className="section-label">{data.name}</span>
+        <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
+          {data.member_count} member{data.member_count !== 1 ? 's' : ''} · {data.edges.length} coordination edge{data.edges.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       {data.members.length === 0 ? (
@@ -401,7 +401,7 @@ function GraphDetailPanel({
           {/* Members list / selected node detail */}
           <div className="space-y-3">
             {selected ? (
-              <div className="rounded-2xl border border-border-1 bg-bg-elev p-4 space-y-3">
+              <div className="gradient-border p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-mono text-2xs tracking-[0.2em] text-accent-2 uppercase">Selected</p>
                   <button
