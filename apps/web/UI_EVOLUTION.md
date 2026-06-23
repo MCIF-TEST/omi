@@ -80,9 +80,12 @@ The pre-existing UI was already competent (coherent dark theme, custom primitive
 - ✅ **Narratives (list)** — "how ideas spread": pill filters, cluster identity,
   coordination bars.
 - ✅ **Investigations (archive)** — open/concluded sections, evidence-forward rows.
-- ⏳ Investigate workspace, Investigation detail, Campaign detail, Narrative detail,
-  Account detail, Graph, Reports, Content DB, Monitoring, Settings, Search, Bulk,
-  Landing, Auth, mobile-nav.
+- ✅ **Account detail** — behavioral-fingerprint surface brought into the identity
+  (aurora header, display score, detector breakdown) — evidence core preserved.
+- ✅ **Investigation detail** — aurora header / identity pass (evidence viewer intact).
+- ✅ **Content DB** — pill filters, premium entity cards, surface-inset metrics.
+- ⏳ Campaign detail, Narrative detail, Investigate workspace, Graph, Reports,
+  Monitoring, Settings, Search, Bulk, Landing, Auth, mobile-nav.
 
 ## E. Before / after (so far)
 
