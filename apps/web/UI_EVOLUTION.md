@@ -84,8 +84,12 @@ The pre-existing UI was already competent (coherent dark theme, custom primitive
   (aurora header, display score, detector breakdown) — evidence core preserved.
 - ✅ **Investigation detail** — aurora header / identity pass (evidence viewer intact).
 - ✅ **Content DB** — pill filters, premium entity cards, surface-inset metrics.
-- ⏳ Campaign detail, Narrative detail, Investigate workspace, Graph, Reports,
-  Monitoring, Settings, Search, Bulk, Landing, Auth, mobile-nav.
+- ✅ **Campaign detail** — coordination investigation: aurora header + cluster
+  identity, display hero panels (evidence-for/against, gate, members, timeline intact).
+- ✅ **Narrative detail** — aurora header + cluster identity, display stat panels
+  (propagation/signal/graph structure intact).
+- ⏳ Investigate workspace, Graph, Reports, Monitoring, Settings, Search, Bulk,
+  Landing, Auth, mobile-nav.
 
 ## E. Before / after (so far)
 
