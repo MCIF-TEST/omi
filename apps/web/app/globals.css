@@ -206,14 +206,16 @@
       radial-gradient(50% 120% at 92% -20%, rgba(139,92,246,0.13), transparent 60%);
   }
 
-  /* Section label — uppercase mono eyebrow with a gradient tick */
+  /* Section label — uppercase SANS eyebrow with a gradient tick. Sans (not mono)
+     because it's human-readable label text; mono is reserved for IDs/URLs/values. */
   .section-label {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 0.625rem;
-    letter-spacing: 0.22em;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--text-mute);
   }

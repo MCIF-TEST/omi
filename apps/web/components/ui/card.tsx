@@ -42,7 +42,7 @@ export const CardLabel = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElemen
     <div
       ref={ref}
       className={cn(
-        'font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-3',
+        'text-2xs font-semibold tracking-[0.12em] text-fg-mute uppercase mb-3',
         className,
       )}
       {...props}

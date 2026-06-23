@@ -236,7 +236,7 @@ export function LandingPage() {
       {/* ── Scope ───────────────────────────────────────────────── */}
       <section className="relative z-10 px-6 md:px-8 pb-12 max-w-5xl mx-auto w-full">
         <Reveal>
-          <div className="gradient-border p-6">
+          <div className="rounded-xl border border-border-1 bg-bg-elev p-6">
             <p className="font-mono text-2xs tracking-[0.18em] uppercase text-fg-mute mb-3">Scope, plainly</p>
             <p className="text-sm text-fg-dim leading-relaxed">
               Today OMISPHERE scans <span className="text-fg font-medium">YouTube</span> and

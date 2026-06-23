@@ -45,8 +45,8 @@ export default async function InvestigationPage({ params }: { params: { slug: st
         <div className="relative flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-0">
             <span className="section-label">Saved investigation · {inv.slug}</span>
-            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mb-2 mt-3">{inv.label}</h1>
-            <p className="font-mono text-xs text-fg-faint break-all">{inv.input_url}</p>
+            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mb-1.5 mt-3 line-clamp-2 break-words">{inv.label}</h1>
+            <p className="font-mono text-xs text-fg-faint truncate">{inv.input_url}</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {inv.verdict && inv.verdict !== 'pending' && (

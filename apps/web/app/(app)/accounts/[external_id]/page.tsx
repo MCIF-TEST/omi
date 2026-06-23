@@ -125,7 +125,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
                 )}
                 {latest && <TierBadge tier={latest.tier} size="lg" />}
               </div>
-              <p className="mt-1.5 font-mono text-xs text-fg-faint break-all">{history.external_id}</p>
+              <p className="mt-1.5 font-mono text-xs text-fg-faint truncate">{history.external_id}</p>
             </div>
           </div>
         </header>
