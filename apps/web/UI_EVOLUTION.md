@@ -73,19 +73,28 @@ The pre-existing UI was already competent (coherent dark theme, custom primitive
 ## D. Pages improved (running)
 
 - ✅ **App shell (all authenticated pages)** — new frame via sidebar + topbar + tokens.
-- ⏳ Dashboard (intelligence workspace), Investigate workspace, Investigation detail,
-  Campaigns list/detail, Narratives list/detail, Account detail, Graph, Reports,
-  Content DB, Monitoring, Settings, Landing, Auth.
+- ✅ **Dashboard** — intelligence workspace (aurora header, telemetry tiles,
+  gradient-bordered featured panel with cluster-color, evidence-forward lists).
+- ✅ **Campaigns (list)** — coordination surface: cluster identity, premium cards,
+  refined filters, corroboration framing.
+- ✅ **Narratives (list)** — "how ideas spread": pill filters, cluster identity,
+  coordination bars.
+- ✅ **Investigations (archive)** — open/concluded sections, evidence-forward rows.
+- ⏳ Investigate workspace, Investigation detail, Campaign detail, Narrative detail,
+  Account detail, Graph, Reports, Content DB, Monitoring, Settings, Search, Bulk,
+  Landing, Auth, mobile-nav.
 
 ## E. Before / after (so far)
 
 - **Before:** blue-tinted HUD, mono-uppercase everywhere, thin nav bar, buried
-  search, sharp templated cards, decorative glow/grain.
+  search, sharp templated cards, decorative glow/grain, scores as bare numbers.
 - **After:** premium neutral-obsidian canvas with a deliberate blue→violet
-  intelligence signature; aurora-tinted workspace shell; a real command bar;
-  pill badges, soft-ring inputs, gradient-bordered intelligence panels, and
-  confidence rendered as honest desaturation. The frame already reads as a
-  different, more serious product.
+  intelligence signature; aurora-lit workspace shell + command bar; cluster-color
+  identity across coordination surfaces; pill badges, gradient-bordered panels,
+  display stat numerals, confidence as honest desaturation; teaching empty states.
+- **Increments (all `typecheck` + `next build` green):** identity+shell `2f101ea`,
+  dashboard `7f59c3a`, campaigns `88fd5b1`, narratives `ef0cc6d`,
+  investigations `8131d7f` (+ earlier primitive passes).
 
 ## F. Remaining design recommendations (roadmap, moat-first)
 
