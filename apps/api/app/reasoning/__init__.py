@@ -16,3 +16,4 @@ from app.reasoning.providers import (  # noqa: F401
     LLMProvider, ProviderResult, TemplateProvider, get_provider,
 )
 from app.reasoning.commentary import synthesize_commentary  # noqa: F401
+from app.reasoning import analyst  # noqa: F401 — OMI_ANALYST_PRODUCTION_WIRING_V1 (off by default)
