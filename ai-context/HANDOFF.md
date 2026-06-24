@@ -7,7 +7,7 @@
 > long-resolved push-token incident) — that file is kept only for history and
 > should not be trusted for current state.
 
-_Last updated: 2026-06-24 · active branch: `claude/stoic-edison-2ueecx` · last large arc: **Omi Analyst HF model registration** (OMI_ANALYST_MODEL_IMPORT_V1; registry/structure-only, no weights/train/prod change; see §2.0)_
+_Last updated: 2026-06-24 · active branch: `claude/stoic-edison-2ueecx` · last large arc: **Omi Analyst working implementation** (OMI_ANALYST_IMPLEMENTATION_V1; ml/ R&D, schema-valid, 25/25 tests; no train/prod/engine change; see §2.0)_
 
 ---
 
@@ -72,7 +72,30 @@ engine risk; see §4). The highest-value *strategic* lever is user acquisition.
 Branch auto-merges into `main` in the remote env. Grouped by workstream; commit
 hashes are the tip of each arc.
 
-### 0. Omi Analyst — HF model registration / import (`ml/analyst/hf_repo/` + pipeline) ← newest
+### 0. Omi Analyst — working implementation (`ml/analyst/omi_analyst/`) ← newest
+Goal (OMI_ANALYST_IMPLEMENTATION_V1): a **runnable, schema-validated Omi Analyst** that
+interprets existing engine evidence into the four assessment types (account, campaign,
+narrative, investigation), each with supporting + contradicting evidence, a confidence
+explanation, an uncertainty statement, and a recommended next step. **No fine-tune, no
+train, no detector/scoring/OmiScore/apps change** — built entirely in the decoupled `ml/`
+tree. Grounded in the real `app/reasoning/` seam (`LLMProvider`/`ProviderResult`/template
+fallback) + the engine evidence shapes (`ScanResult`/`SignalResult`/`DetectorContribution`/
+`ScoreBreakdown`/OmiScore/coordination/narrative). Built `ml/analyst/omi_analyst/`:
+`config.py` (loads `analyst_config.json` from the HF registry `Andrewexiga/omi-analyst-v1`
+with local-mirror fallback), `evidence_bundle.py` (Appendix-A projection),
+`providers.py` (**DeterministicAnalystProvider** always-on + schema-valid, **QwenAnalystProvider**
+gated/off-by-default with graceful fallback — mirrors AnthropicProvider→Template),
+`schema_validate.py` (dependency-free validator vs `analyst_response_schema.json` + banned-phrase
++ F1/F5 guards), `store.py` (JSONL output store for future training data), `analyst.py`
+(orchestrator with the 4 entry points). Plus `run_analyst_demo.py` (all 4 valid) and
+`test_omi_analyst.py` (**25/25 green**). Echoes engine probability/tier (never recomputes),
+respects the corroboration gate (non-discriminative coordination can't reach `coordinated`),
+treats supplemental ai_writing as context, forces `inconclusive` on thin data. **Off by
+default**; deterministic path makes it work today. Production wiring (add `OmiAnalystProvider`
+to `app/reasoning/`, async/cached, template fallback) is the documented next step (spec
+Appendix B) — intentionally NOT done to keep the engine untouched.
+
+### 0a. Omi Analyst — HF model registration / import (`ml/analyst/hf_repo/` + pipeline)
 Goal (OMI_ANALYST_MODEL_IMPORT_V1): make `Andrewexiga/omi-analyst-v1` the permanent,
 *configured* registry for the reasoning model — **no fine-tune, no train, no
 production/scoring/detector/OmiScore change**. Audited HF live via the connector:
@@ -93,7 +116,7 @@ mode=upload; then `hf-analyst-pull` to confirm GitHub can pull it). Lifecycle + 
 were already specced in `huggingface_model_lifecycle.md` / `future_finetuning_strategy.md` /
 `REPOSITORY_STRUCTURE.md`.
 
-### 0a. Omi Analyst V1 — specification for the reasoning layer (`ml/analyst/`, spec-only)
+### 0b. Omi Analyst V1 — specification for the reasoning layer (`ml/analyst/`, spec-only)
 Goal: define **how Omi Analyst thinks** before any build/fine-tune/deploy. Omi Analyst
 is the **reasoning layer** (powered by `Qwen/Qwen3-4B-Thinking-2507-FP8`, home HF
 `Andrewexiga/omi-analyst-v1`) that *interprets* the engine's evidence — it is **not**
@@ -370,7 +393,11 @@ omi/
 │   │   │                              README.md=model card (base_model metadata), config/, base/BASE_MODEL.md, .gitattributes — no weights
 │   │   ├── hf_repo_manifest.toml      GitHub→HF file map for the registry
 │   │   ├── register_hf_model.py       registration pipeline (validate-default / --upload); never publishes weights
-│   │   └── test_register_hf_model.py  offline self-test (11/11)
+│   │   ├── test_register_hf_model.py  offline self-test (11/11)
+│   │   ├── omi_analyst/               WORKING IMPLEMENTATION (OMI_ANALYST_IMPLEMENTATION_V1):
+│   │   │                              config·evidence_bundle·providers(deterministic+Qwen)·schema_validate·store·analyst
+│   │   ├── run_analyst_demo.py        runs all 4 assessments on sample evidence (all valid)
+│   │   └── test_omi_analyst.py        offline test suite (25/25)
 │   ├── features/              OMI_FEATURE_SCHEMA_V1.md — the canonical 42-dim feature contract
 │   ├── schemas/              OMI_LABEL_SCHEMA_V1.md — engine-independent label contract
 │   ├── corpus/               Unified corpus: discovery → normalization → audit

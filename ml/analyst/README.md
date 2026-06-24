@@ -57,6 +57,33 @@ populated** — the registration writes run via the GitHub Actions `HF_TOKEN` se
 specified in `huggingface_model_lifecycle.md`, `REPOSITORY_STRUCTURE.md`, and
 `future_finetuning_strategy.md`.
 
+## Working implementation (OMI_ANALYST_IMPLEMENTATION_V1)
+
+A runnable, schema-validated Analyst lives in `omi_analyst/` — it interprets existing
+engine evidence into the four assessment types, each carrying supporting evidence,
+contradicting evidence, a confidence explanation, an uncertainty statement, and a
+recommended next investigation step. It mirrors the `app/reasoning/` provider protocol
+(drop-in as `OmiAnalystProvider`), loads config from `Andrewexiga/omi-analyst-v1`, is
+powered by Qwen when enabled, and ALWAYS runs via a deterministic schema-valid fallback.
+**No training, no fine-tuning, no detector/scoring/OmiScore change** — it consumes
+already-computed evidence.
+
+| Path | What |
+|---|---|
+| `omi_analyst/config.py` | Loads `analyst_config.json` from the HF registry (with `HF_TOKEN`), local-mirror fallback. |
+| `omi_analyst/evidence_bundle.py` | Projects engine outputs (fingerprint/detectors/coordination/narrative/evidence) → Evidence Bundle (spec Appendix A). |
+| `omi_analyst/providers.py` | `DeterministicAnalystProvider` (always-on, schema-valid) + `QwenAnalystProvider` (gated; graceful fallback). |
+| `omi_analyst/schema_validate.py` | Dependency-free validator against `analyst_response_schema.json` (+ banned-phrase + F1/F5 guards). |
+| `omi_analyst/store.py` | Append-only JSONL store of outputs for future training-data collection (`data/`). |
+| `omi_analyst/analyst.py` | `OmiAnalyst` orchestrator: `assess_account / assess_campaign / assess_narrative / summarize_investigation`. |
+| `run_analyst_demo.py` | Runs all four assessments on sample evidence (all valid). |
+| `test_omi_analyst.py` | Offline test suite (25/25). |
+
+**Off by default** (`OMI_ANALYST_ENABLED` unset → deterministic path; set it + an
+endpoint to use Qwen). To wire into production later (spec Appendix B): add
+`OmiAnalystProvider` to `app/reasoning/` peer to `AnthropicProvider`, async + cached on
+the `Investigation` row, deterministic fallback retained — no request-path or engine change.
+
 ## Core doctrine (inherited from `ai-context/VISION.md`)
 
 Evidence, not verdict · probabilistic language only · describe behavior not people ·
