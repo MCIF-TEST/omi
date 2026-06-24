@@ -1,0 +1,3 @@
+# Generated Omi Analyst outputs (training-data collection) — not committed.
+# This directory is the default AnalystOutputStore location.
+*.jsonl
