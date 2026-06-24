@@ -180,6 +180,22 @@ class Settings(BaseSettings):
     reasoning_max_input_chars: int = 4000
 
     # -----------------------------------------------------------------------
+    # Omi Analyst reasoning layer (OMI_ANALYST_PRODUCTION_WIRING_V1).
+    # OFF by default. When enabled, app/reasoning exposes a feature-flagged,
+    # async, cached *structured* assessment that INTERPRETS the engine's already-
+    # computed evidence (it never runs a detector, recomputes a score, or touches
+    # OmiScore). Powered by Qwen/Qwen3-4B-Thinking-2507-FP8 when an endpoint is
+    # configured; otherwise the always-on deterministic, schema-valid provider.
+    # Config is loaded from the HF registry repo below (local-mirror fallback).
+    # The product is fully functional with this off — it is strictly additive.
+    # -----------------------------------------------------------------------
+    analyst_enabled: bool = False
+    analyst_hf_repo: str = "Andrewexiga/omi-analyst-v1"
+    analyst_hf_revision: str | None = None
+    analyst_endpoint_url: str | None = None
+    analyst_timeout_seconds: float = 30.0
+
+    # -----------------------------------------------------------------------
     # Learned detector (ML track). Off by default: when use_ml_scorer is
     # False or no model artifact is present, scanning runs the rule engine
     # unchanged. Point ml_model_path at a joblib bundle (downloaded from the

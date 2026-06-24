@@ -648,6 +648,23 @@ class CommentaryResponse(BaseModel):
     cached: bool
 
 
+class AnalystResponse(BaseModel):
+    """Omi Analyst — structured, evidence-bounded assessment of an investigation.
+
+    Feature-flagged (off by default). ``status`` is ``"ready"`` when ``assessment`` is
+    present, or ``"generating"`` when generation was kicked off asynchronously and the
+    client should poll again. ``assessment`` validates against
+    ``ml/analyst/analyst_response_schema.json``."""
+
+    slug: str
+    enabled: bool
+    status: str  # "ready" | "generating"
+    cached: bool
+    assessment: dict | None = None
+    provider: str | None = None
+    generated_at: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Monitoring + watchlists (Phase 8)
 # ---------------------------------------------------------------------------

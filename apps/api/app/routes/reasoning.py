@@ -13,11 +13,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from app.core import background
 from app.core.auth import CurrentUser, require_user
-from app.reasoning import synthesize_commentary
-from app.schemas import CommentaryResponse
+from app.core.config import get_settings
+from app.reasoning import analyst, synthesize_commentary
+from app.schemas import AnalystResponse, CommentaryResponse
 from app.storage.db import get_session
 from app.storage.repository import AccountRepository
 
@@ -79,4 +81,58 @@ def generate_commentary(
             tokens_used=result.tokens_used,
             generated_at=now,
             cached=False,
+        )
+
+
+@router.post("/{slug}/analyst", response_model=AnalystResponse)
+def generate_analyst_assessment(
+    slug: str,
+    response: Response,
+    refresh: bool = Query(False, description="Force regeneration even if cached."),
+    current: CurrentUser = Depends(require_user),
+) -> AnalystResponse:
+    """Return (or asynchronously generate) the Omi Analyst's structured, evidence-
+    bounded assessment of an investigation. Feature-flagged OFF by default; never
+    touches detection, scoring, or OmiScore — it interprets evidence the engine
+    already produced.
+
+    * Disabled  -> 503.
+    * Cached    -> 200 with the assessment.
+    * Uncached  -> 202; generation runs off the request hot path (background pool)
+      and the client polls this endpoint again until it returns 200.
+    """
+    settings = get_settings()
+    if not analyst.analyst_enabled(settings):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Omi Analyst is disabled (feature-flagged off).",
+        )
+
+    with get_session() as session:
+        repo = AccountRepository(session)
+        inv = repo.get_investigation(
+            slug=slug, user_id=current.id if current.id != 0 else None,
+        )
+        if inv is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Investigation not found.",
+            )
+
+        entry = analyst.cached_assessment(inv)
+        if entry and not refresh:
+            return AnalystResponse(
+                slug=inv.slug, enabled=True, status="ready", cached=True,
+                assessment=entry["assessment"], provider=entry.get("provider"),
+                generated_at=entry.get("generated_at"),
+            )
+
+        # Async: generate off the request hot path; client polls for the result.
+        background.submit(
+            analyst.generate_and_persist, inv.slug,
+            current.id if current.id != 0 else None, refresh,
+        )
+        response.status_code = status.HTTP_202_ACCEPTED
+        return AnalystResponse(
+            slug=inv.slug, enabled=True, status="generating", cached=False,
         )

@@ -7,7 +7,7 @@
 > long-resolved push-token incident) — that file is kept only for history and
 > should not be trusted for current state.
 
-_Last updated: 2026-06-24 · active branch: `claude/stoic-edison-2ueecx` · last large arc: **Omi Analyst working implementation** (OMI_ANALYST_IMPLEMENTATION_V1; ml/ R&D, schema-valid, 25/25 tests; no train/prod/engine change; see §2.0)_
+_Last updated: 2026-06-24 · active branch: `claude/stoic-edison-2ueecx` · last large arc: **Omi Analyst production wiring** (OMI_ANALYST_PRODUCTION_WIRING_V1; flagged off, async, cached; full suite 754 passed; no engine/scoring/OmiScore change; see §2.0)_
 
 ---
 
@@ -72,7 +72,25 @@ engine risk; see §4). The highest-value *strategic* lever is user acquisition.
 Branch auto-merges into `main` in the remote env. Grouped by workstream; commit
 hashes are the tip of each arc.
 
-### 0. Omi Analyst — working implementation (`ml/analyst/omi_analyst/`) ← newest
+### 0. Omi Analyst — production wiring into `app/reasoning/` (OMI_ANALYST_PRODUCTION_WIRING_V1) ← newest
+Goal: connect the completed Analyst (`ml/analyst/omi_analyst/`) into the backend as an
+**optional, feature-flagged, async, cached** reasoning capability — **no detector / scoring /
+OmiScore change** (confirmed: zero diff under `app/detection` + `app/intelligence`), strictly
+additive like the Phase-7 LLM layer. Added `app/reasoning/analyst.py`: lazily imports the
+completed pure-stdlib impl **only when `analyst_enabled`** (off path imports nothing from
+`ml/`); projects `Investigation.payload_json` → Evidence Bundle (comment_section grain); runs
+the deterministic/Qwen provider; **SAVEPOINT-isolated** cache on
+`payload_json["analyst_assessment_v1"]`; `generate_and_persist` background worker. Plus a
+flagged route `POST /v1/investigations/{slug}/analyst` (503 off · 200 cached · **202 +
+background generation** uncached), 5 `Settings` flags (`analyst_enabled=False` default +
+registry/endpoint config), the `AnalystResponse` schema, and `tests/test_reasoning_analyst.py`
+(8 tests, exercising the real impl). **Full backend suite green: 754 passed (180s).**
+Deterministic assessment ≈0.26 ms in-process; the Qwen path (when an endpoint is set) runs off
+the request hot path, bounded by `analyst_timeout_seconds`. Off by default → zero overhead and
+byte-identical existing behavior. Rollback: flip `OMI_ANALYST_ENABLED` (no logic redeploy) or
+revert the additive files.
+
+### 0a. Omi Analyst — working implementation (`ml/analyst/omi_analyst/`)
 Goal (OMI_ANALYST_IMPLEMENTATION_V1): a **runnable, schema-validated Omi Analyst** that
 interprets existing engine evidence into the four assessment types (account, campaign,
 narrative, investigation), each with supporting + contradicting evidence, a confidence
@@ -95,7 +113,7 @@ default**; deterministic path makes it work today. Production wiring (add `OmiAn
 to `app/reasoning/`, async/cached, template fallback) is the documented next step (spec
 Appendix B) — intentionally NOT done to keep the engine untouched.
 
-### 0a. Omi Analyst — HF model registration / import (`ml/analyst/hf_repo/` + pipeline)
+### 0b. Omi Analyst — HF model registration / import (`ml/analyst/hf_repo/` + pipeline)
 Goal (OMI_ANALYST_MODEL_IMPORT_V1): make `Andrewexiga/omi-analyst-v1` the permanent,
 *configured* registry for the reasoning model — **no fine-tune, no train, no
 production/scoring/detector/OmiScore change**. Audited HF live via the connector:
@@ -116,7 +134,7 @@ mode=upload; then `hf-analyst-pull` to confirm GitHub can pull it). Lifecycle + 
 were already specced in `huggingface_model_lifecycle.md` / `future_finetuning_strategy.md` /
 `REPOSITORY_STRUCTURE.md`.
 
-### 0b. Omi Analyst V1 — specification for the reasoning layer (`ml/analyst/`, spec-only)
+### 0c. Omi Analyst V1 — specification for the reasoning layer (`ml/analyst/`, spec-only)
 Goal: define **how Omi Analyst thinks** before any build/fine-tune/deploy. Omi Analyst
 is the **reasoning layer** (powered by `Qwen/Qwen3-4B-Thinking-2507-FP8`, home HF
 `Andrewexiga/omi-analyst-v1`) that *interprets* the engine's evidence — it is **not**
@@ -281,7 +299,8 @@ omi/
 │   │   │   │   └── anomalies.py        Anomaly detection over monitored series
 │   │   │   ├── reasoning/      Natural-language commentary
 │   │   │   │   ├── commentary.py       Generate analyst commentary (LLM or template)
-│   │   │   │   └── providers.py        LLM provider plumbing (Anthropic; off by default)
+│   │   │   │   ├── providers.py        LLM provider plumbing (Anthropic; off by default)
+│   │   │   │   └── analyst.py          OMI ANALYST production wiring — flagged/async/cached (off by default); lazily uses ml/analyst/omi_analyst
 │   │   │   ├── reports/        Report generation
 │   │   │   │   ├── campaign_pack.py    Campaign report pack builder
 │   │   │   │   └── templates.py        Report templates
