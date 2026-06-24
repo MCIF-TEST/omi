@@ -54,8 +54,16 @@ ml/
 ├── training/           offline, config-driven training pipelines
 ├── evaluation/         held-out evaluation harnesses, metrics, reports
 ├── inference/          offline/batch inference + the promotion contract
-└── schemas/            versioned data contracts between every layer
+├── schemas/            versioned data contracts between every layer
+└── analyst/            Omi Analyst spec — the REASONING layer (OMI_ANALYST_SPEC_V1)
 ```
+
+> **Note on `analyst/`.** The behavioral/explainability families above are *detection*
+> models (they produce probabilities/priors). **Omi Analyst** is a different kind of
+> system — the **reasoning layer** that *interprets* the engine's evidence (powered by
+> `Qwen/Qwen3-4B-Thinking-2507-FP8`, hosted at HF `Andrewexiga/omi-analyst-v1`). It is
+> specified — not built — in `ml/analyst/`; it never recomputes a detector. See
+> `ml/analyst/README.md`.
 
 ## The pipeline (how every future model flows through these folders)
 

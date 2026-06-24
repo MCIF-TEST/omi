@@ -1,0 +1,64 @@
+# OmiSphere — Hugging Face MODEL registration manifest (OMI_ANALYST_MODEL_IMPORT_V1)
+#
+# Declares the target HF MODEL repo and the exact file map that the registration
+# pipeline (ml/analyst/register_hf_model.py) publishes to it. This populates the
+# permanent Analyst registry `Andrewexiga/omi-analyst-v1` with the V1 model card,
+# config, base pointer, prompt, and response schema.
+#
+# Source of truth is GitHub: prompt/schema are published FROM their canonical
+# ml/analyst/ locations (single copy, no drift); the HF-side card/config/base/
+# attributes live under ml/analyst/hf_repo/. source paths are repo-root relative.
+#
+# SAFE BY DEFAULT: the pipeline validates and does nothing without --upload.
+# It does NOT fine-tune, train, modify production scoring/detectors/OmiScore, or
+# touch apps/api | apps/web. V1 publishes NO weights (base model + prompt only).
+
+schema_version = 1
+
+[target]
+repo_id = "Andrewexiga/omi-analyst-v1"
+repo_type = "model"
+private = true
+base_model = "Qwen/Qwen3-4B-Thinking-2507-FP8"
+pretty_name = "Omi Analyst (registry)"
+
+# --- the HF model card (root README; carries the base_model YAML metadata) ---
+[[file]]
+source = "ml/analyst/hf_repo/README.md"
+path_in_repo = "README.md"
+kind = "model_card"
+
+# --- configuration ---
+[[file]]
+source = "ml/analyst/hf_repo/config/analyst_config.json"
+path_in_repo = "config/analyst_config.json"
+kind = "config"
+
+[[file]]
+source = "ml/analyst/hf_repo/config/generation_config.json"
+path_in_repo = "config/generation_config.json"
+kind = "config"
+
+# --- base-model pointer (V1 ships no weights) ---
+[[file]]
+source = "ml/analyst/hf_repo/base/BASE_MODEL.md"
+path_in_repo = "base/BASE_MODEL.md"
+kind = "base_pointer"
+
+# --- LFS rules (correct for future adapters/weights) ---
+[[file]]
+source = "ml/analyst/hf_repo/.gitattributes"
+path_in_repo = ".gitattributes"
+kind = "attributes"
+
+# --- system prompt: published FROM its canonical GitHub source (no copy) ---
+[[file]]
+source = "ml/analyst/analyst_system_prompt_v1.md"
+path_in_repo = "prompts/analyst_system_prompt_v1.md"
+kind = "prompt"
+
+# --- response schema: published FROM its canonical GitHub source (no copy) ---
+[[file]]
+source = "ml/analyst/analyst_response_schema.json"
+path_in_repo = "schema/analyst_response_schema.json"
+kind = "schema"

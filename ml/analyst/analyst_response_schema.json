@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omisphere.ai/schemas/analyst_response_v1.json",
+  "title": "Omi Analyst Response V1",
+  "description": "The structured, machine-readable output of Omi Analyst — the reasoning layer that interprets evidence produced by the OmiSphere detection engine. SPECIFICATION ONLY: this schema is the contract a future Qwen-backed provider must satisfy; it is not yet wired into apps/api. Every field is evidence-traceable; the analyst echoes the engine's suspicion (never recomputes it), always reports counter-evidence and uncertainty, and respects the corroboration gate. See OMI_ANALYST_SPEC_V1.md sections 6, 13, 16, 18.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "analyst_version",
+    "prompt_version",
+    "schema_version",
+    "model_revision",
+    "subject",
+    "verdict",
+    "suspicion_tier",
+    "suspicion_probability",
+    "confidence_band",
+    "confidence_rationale",
+    "headline",
+    "assessment",
+    "evidence_for",
+    "evidence_against",
+    "uncertainty",
+    "what_would_change_this",
+    "corroboration",
+    "limits_statement"
+  ],
+  "properties": {
+    "analyst_version": {
+      "type": "string",
+      "description": "Omi Analyst version that produced this (v1 = base Qwen, v2 = prompt-engineered, v3 = fine-tuned, v4 = Omi reasoning model).",
+      "enum": ["v1", "v2", "v3", "v4"]
+    },
+    "prompt_version": {
+      "type": "string",
+      "description": "Version of the system prompt used (e.g. 'v1').",
+      "pattern": "^v[0-9]+$"
+    },
+    "schema_version": {
+      "type": "integer",
+      "description": "Version of THIS response schema. Append-only; bump on any change.",
+      "const": 1
+    },
+    "model_revision": {
+      "type": "string",
+      "description": "The pinned Hugging Face model revision (commit sha or tag) of Andrewexiga/omi-analyst-v1 that generated this. Never 'latest' — reproducibility requires a pinned revision."
+    },
+    "subject": {
+      "type": "object",
+      "description": "What was assessed. The analyst uses only the pseudonymous ref; it never surfaces raw PII.",
+      "additionalProperties": false,
+      "required": ["grain", "ref", "platform"],
+      "properties": {
+        "grain": {
+          "type": "string",
+          "description": "The investigation grain. Each grain has its own framework in OMI_ANALYST_SPEC_V1.md sections 7-11.",
+          "enum": ["account", "campaign", "narrative", "comment_section", "commenter"]
+        },
+        "ref": {
+          "type": "string",
+          "description": "Pseudonymous/hashed subject reference (never raw handle or PII)."
+        },
+        "platform": {
+          "type": "string",
+          "enum": ["youtube", "twitter", "unknown"],
+          "description": "Source platform. 'unknown' must never be silently treated as youtube."
+        }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "description": "RECOMMENDED verdict for the human analyst, in Omi's existing Investigation.verdict vocabulary. A recommendation, never a persisted truth. 'confirmed_bot_ring' requires a human/platform ground-truth anchor (E1/E2) — engine probability alone yields at most 'likely_inauthentic' (spec section 6.3).",
+      "enum": [
+        "confirmed_bot_ring",
+        "likely_inauthentic",
+        "mixed",
+        "likely_authentic",
+        "inconclusive"
+      ]
+    },
+    "suspicion_tier": {
+      "type": "string",
+      "description": "The engine's 4-level Tier, ECHOED (not recomputed) from the evidence bundle. The analyst may recommend a lower verdict but must report the engine's tier faithfully.",
+      "enum": ["low", "moderate", "elevated", "high"]
+    },
+    "coordination_label": {
+      "type": ["string", "null"],
+      "description": "For campaign/narrative grains: the existing coordination label. May reach 'coordinated'/'manipulation_network' ONLY when corroboration.discriminative_methods is non-empty AND single_axis_capped is false (spec section 6.3). null for non-coordination grains.",
+      "enum": [
+        "organic",
+        "mixed",
+        "suspicious",
+        "coordinated",
+        "manipulation_network",
+        null
+      ]
+    },
+    "suspicion_probability": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Echoes the engine's overall_probability for the subject. The analyst MUST NOT recompute or alter this value (failure mode F8)."
+    },
+    "confidence_band": {
+      "type": "string",
+      "description": "How much a human should trust this assessment — SEPARATE from suspicion level. Must not exceed the engine's confidence band (spec section 5). 'insufficient' forces verdict = 'inconclusive'.",
+      "enum": ["high", "moderate", "low", "insufficient"]
+    },
+    "confidence_rationale": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Why this confidence band — names the data-sufficiency, corroboration count, and conflicting signals that set it. If evidence_against is empty, this field must state that no exculpatory signal was present."
+    },
+    "headline": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "description": "One-line plain-language interpretation. Probabilistic language; behavior not persons."
+    },
+    "assessment": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Analytic prose, 150-400 words depending on grain. Probabilistic throughout, cites specific signals and counts, ends with a probabilistic-limits sentence. No banned absolute phrasings (spec section 15.3)."
+    },
+    "evidence_for": {
+      "type": "array",
+      "description": "Signals that RAISED suspicion, ranked by impact. Each traces to the bundle. Must NOT contain any supplemental signal (those go in supplemental_context).",
+      "items": { "$ref": "#/$defs/evidenceItem" }
+    },
+    "evidence_against": {
+      "type": "array",
+      "description": "Exculpatory signals that LOWERED suspicion (direction == 'lowers'), high authenticity, legitimate-coordination fit. MANDATORY field. Empty ONLY when confidence_rationale states no exculpatory signal was present (failure mode F5).",
+      "items": { "$ref": "#/$defs/evidenceItem" }
+    },
+    "supplemental_context": {
+      "type": "array",
+      "description": "Signals marked supplemental (e.g. ai_writing) — reported as neutral context with ZERO suspicion weight (spec E7 / failure mode F6).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "note"],
+        "properties": {
+          "signal": { "type": "string" },
+          "note": {
+            "type": "string",
+            "description": "Plain-language context note; must make clear this carries no suspicion weight."
+          }
+        }
+      }
+    },
+    "uncertainty": {
+      "type": "array",
+      "description": "Explicit named uncertainties — thin data, abstained detectors, single-axis dependence, conflicting signals, domain shift, absent controls (spec section 12). MANDATORY; an honest assessment names its limits.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "what_would_change_this": {
+      "type": "array",
+      "description": "The specific new evidence that would raise or lower the verdict — operationalizes the 'records evolve' principle (spec section 12).",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "corroboration": {
+      "type": "object",
+      "description": "The corroboration state carried from the engine, used to bound the verdict and coordination_label.",
+      "additionalProperties": false,
+      "required": ["discriminative_methods", "single_axis_capped", "convergence"],
+      "properties": {
+        "discriminative_methods": {
+          "type": "array",
+          "description": "Discriminative coordination methods that fired (fingerprint_cluster, co_engagement, co_tag). Non-empty is required for 'coordinated'/'manipulation_network'.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "fingerprint_cluster",
+              "co_engagement",
+              "co_tag",
+              "temporal_semantic",
+              "style_match",
+              "age_cohort",
+              "reply_pods"
+            ]
+          }
+        },
+        "single_axis_capped": {
+          "type": "boolean",
+          "description": "True when score_breakdown.single_axis_capped — one axis carried the score; corroboration absent. Caps the verdict (spec section 6.2)."
+        },
+        "convergence": {
+          "type": "boolean",
+          "description": "True when >=2 independent detectors converged (convergence_bonus_logit > 0 or convergence_score elevated)."
+        }
+      }
+    },
+    "legitimate_hypothesis": {
+      "type": ["string", "null"],
+      "description": "REQUIRED for campaign/narrative/commenter coordination reads: the explicit legitimate-coordination hypothesis considered (newsroom, fandom, official on-message, benign automation) and whether the evidence distinguishes hostile from benign coordination (spec section 13, Phase 3 precision discipline). null only for pure single-account authenticity reads with no coordination signal."
+    },
+    "limits_statement": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Closing statement that the assessment is probabilistic and the human analyst sets the final verdict (analyst-controlled doctrine)."
+    }
+  },
+  "$defs": {
+    "evidenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal", "claim", "evidence_refs"],
+      "properties": {
+        "signal": {
+          "type": "string",
+          "description": "The detector/method/source this evidence comes from (e.g. 'temporal', 'co_engagement', 'memory', 'authenticity'). Must exist in the evidence bundle."
+        },
+        "impact": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "The detector's share of total absolute score movement (DetectorContribution.impact), echoed from the bundle — not invented by the analyst."
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["raises", "lowers", "neutral"],
+          "description": "Echoed from DetectorContribution.direction."
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Plain-language, probabilistic statement of what this signal indicates. Behavior, not persons."
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "description": "References back into the evidence bundle (detector name, contribution id, cluster method, or a quoted sample) that substantiate the claim. A claim with no ref is a fabrication and is rejected (failure mode F1).",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "analyst_version": "v1",
+      "prompt_version": "v1",
+      "schema_version": 1,
+      "model_revision": "PINNED_REVISION_SHA",
+      "subject": { "grain": "account", "ref": "acct_9f3a2b", "platform": "youtube" },
+      "verdict": "mixed",
+      "suspicion_tier": "elevated",
+      "coordination_label": null,
+      "suspicion_probability": 0.68,
+      "confidence_band": "low",
+      "confidence_rationale": "Elevated probability rests on a single discriminative axis (temporal cadence) and the score was single-axis-capped; only 9 posts were available, so the engagement and semantic detectors abstained.",
+      "headline": "Posting cadence is unusually regular, but the read rests on one signal over thin data.",
+      "assessment": "The evidence is consistent with mechanical posting regularity: the temporal detector reports low inter-post interval variation at moderate confidence, which accounts for most of the score's upward movement. However, this is a single-axis result — the engine capped it short of a high verdict because no independent detector corroborated it, and with only nine posts the engagement and semantic detectors abstained. An established interaction footprint pulled the score down slightly. Patterns suggest this account warrants a closer look rather than a conclusion. These findings are probabilistic; the human analyst sets the verdict.",
+      "evidence_for": [
+        { "signal": "temporal", "impact": 0.61, "direction": "raises", "claim": "Inter-post intervals show low variation, consistent with scheduled or automated posting.", "evidence_refs": ["signals.temporal", "contributions.temporal"] }
+      ],
+      "evidence_against": [
+        { "signal": "community", "impact": 0.14, "direction": "lowers", "claim": "A modest established interaction footprint is more consistent with an organic account.", "evidence_refs": ["contributions.community"] }
+      ],
+      "supplemental_context": [
+        { "signal": "ai_writing", "note": "Some AI-assisted phrasing observed; carries no suspicion weight." }
+      ],
+      "uncertainty": [
+        "Only 9 posts available — engagement and semantic detectors abstained.",
+        "Score was single-axis-capped; no corroborating detector fired."
+      ],
+      "what_would_change_this": [
+        "Thirty or more posts to let the cadence finding be corroborated by engagement/semantic signals.",
+        "A co-engagement or fingerprint link to other accounts."
+      ],
+      "corroboration": { "discriminative_methods": [], "single_axis_capped": true, "convergence": false },
+      "legitimate_hypothesis": null,
+      "limits_statement": "This is a probabilistic assessment; the human analyst sets the final verdict."
+    }
+  ]
+}

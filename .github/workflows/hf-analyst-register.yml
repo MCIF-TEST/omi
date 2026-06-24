@@ -1,0 +1,57 @@
+name: hf-analyst-register
+
+# OmiSphere -> Hugging Face Analyst MODEL registration (OMI_ANALYST_MODEL_IMPORT_V1).
+# Manual trigger only, SAFE BY DEFAULT: mode=validate does no upload. Choosing
+# mode=upload publishes the V1 model card (which configures the base_model),
+# config, base pointer, prompt, and response schema to the permanent registry
+# Andrewexiga/omi-analyst-v1. It publishes NO weights and does NOT fine-tune,
+# train, modify production code/scoring/detectors/OmiScore, or deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "validate (no upload) or upload"
+        type: choice
+        options: [validate, upload]
+        default: validate
+      create_repo:
+        description: "create the HF model repo (private) if missing (exist_ok)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  analyst-register:
+    name: HF · analyst register (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install huggingface_hub
+        run: pip install --upgrade "huggingface_hub>=0.23"
+      - name: Self-test the registration pipeline
+        run: python ml/analyst/test_register_hf_model.py
+      - name: Run analyst model registration
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODE: ${{ inputs.mode }}
+          CREATE_REPO: ${{ inputs.create_repo }}
+        run: |
+          set -euo pipefail
+          ARGS=(--manifest ml/analyst/hf_repo_manifest.toml)
+          if [ "${MODE}" = "upload" ]; then
+            ARGS+=(--upload)
+            if [ "${CREATE_REPO}" = "true" ]; then ARGS+=(--create-repo); fi
+          else
+            ARGS+=(--validate)
+          fi
+          python ml/analyst/register_hf_model.py "${ARGS[@]}"
