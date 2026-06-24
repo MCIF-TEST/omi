@@ -1,0 +1,40 @@
+name: hf-analyst-pull
+
+# Verify GitHub can PULL the Omi Analyst model from Hugging Face using HF_TOKEN.
+# Manual trigger only. It authenticates, reads Andrewexiga/omi-analyst-v1, and
+# downloads the lightweight contract artifacts (card/config/prompt/schema/base) via
+# snapshot_download -- proving the end-to-end pull path. It does NOT train, fine-tune,
+# upload, modify production code, or touch scoring. Read-only pull.
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "optional revision/sha/tag to pull (default: repo main)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyst-pull:
+    name: HF · analyst pull (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install huggingface_hub
+        run: pip install --upgrade "huggingface_hub>=0.23"
+      - name: Verify Hugging Face analyst model pull
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          OMI_ANALYST_HF_REPO: Andrewexiga/omi-analyst-v1
+          OMI_ANALYST_HF_REVISION: ${{ inputs.revision }}
+        run: python ml/inference/hf_analyst_pull_check.py

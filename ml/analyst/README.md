@@ -34,6 +34,29 @@ recommendations, confidence assessments, counter-evidence, and uncertainty.
 | `huggingface_model_lifecycle.md` | **E** | HF as the first-class registry/store/versioning layer; lifecycle tags, serving, rollback, cost. |
 | `REPOSITORY_STRUCTURE.md` | **F** | Recommended layout of the `Andrewexiga/omi-analyst-v1` HF repo + companion dataset repos. |
 
+## Model registration / import (OMI_ANALYST_MODEL_IMPORT_V1)
+
+The push-ready Hugging Face registry lives under `hf_repo/` and is published by a
+manifest-driven pipeline — **no weights, no fine-tune, no training, no production change**:
+
+| Path | What |
+|---|---|
+| `hf_repo/README.md` | The **HF model card** — its `base_model:` YAML metadata is what *configures the foundation model* (`Qwen/Qwen3-4B-Thinking-2507-FP8`) on the Hub. |
+| `hf_repo/config/analyst_config.json`, `generation_config.json` | V1 decoding/config + base-model pin + schema pointer. |
+| `hf_repo/base/BASE_MODEL.md` | Base-model pointer (V1/V2 ship no weights). |
+| `hf_repo/.gitattributes` | LFS rules (correct for future V3/V4 adapters/weights). |
+| `hf_repo_manifest.toml` | The GitHub→HF file map (prompt + schema publish from their canonical sources — no copy/drift). |
+| `register_hf_model.py` | Registration pipeline: `--validate` (default, offline) / `--dry-run` / `--upload` (needs `HF_TOKEN`). Publishes card/config/base/prompt/schema; **never weights**. |
+| `test_register_hf_model.py` | Offline self-test (11/11). |
+| `../inference/hf_analyst_pull_check.py` | Verifies GitHub can **pull** the model via `HF_TOKEN` (`snapshot_download`). |
+| `.github/workflows/hf-analyst-register.yml`, `hf-analyst-pull.yml` | Manual-dispatch CI (validate/upload; pull), mirroring the existing HF workflows. |
+
+**Status:** the target repo `Andrewexiga/omi-analyst-v1` exists (private) but is **not yet
+populated** — the registration writes run via the GitHub Actions `HF_TOKEN` secret
+(trigger `hf-analyst-register` with `mode=upload`). Lifecycle, serving, and versioning are
+specified in `huggingface_model_lifecycle.md`, `REPOSITORY_STRUCTURE.md`, and
+`future_finetuning_strategy.md`.
+
 ## Core doctrine (inherited from `ai-context/VISION.md`)
 
 Evidence, not verdict · probabilistic language only · describe behavior not people ·

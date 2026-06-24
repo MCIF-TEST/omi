@@ -7,7 +7,7 @@
 > long-resolved push-token incident) — that file is kept only for history and
 > should not be trusted for current state.
 
-_Last updated: 2026-06-23 · active branch: `claude/stoic-edison-2ueecx` · last large arc: **Omi Analyst V1 specification** (spec-only; see §2.0)_
+_Last updated: 2026-06-24 · active branch: `claude/stoic-edison-2ueecx` · last large arc: **Omi Analyst HF model registration** (OMI_ANALYST_MODEL_IMPORT_V1; registry/structure-only, no weights/train/prod change; see §2.0)_
 
 ---
 
@@ -72,7 +72,28 @@ engine risk; see §4). The highest-value *strategic* lever is user acquisition.
 Branch auto-merges into `main` in the remote env. Grouped by workstream; commit
 hashes are the tip of each arc.
 
-### 0. Omi Analyst V1 — specification for the reasoning layer (`ml/analyst/`, spec-only) ← newest
+### 0. Omi Analyst — HF model registration / import (`ml/analyst/hf_repo/` + pipeline) ← newest
+Goal (OMI_ANALYST_MODEL_IMPORT_V1): make `Andrewexiga/omi-analyst-v1` the permanent,
+*configured* registry for the reasoning model — **no fine-tune, no train, no
+production/scoring/detector/OmiScore change**. Audited HF live via the connector:
+authenticated `Andrewexiga`; the target repo **exists but was an empty private shell**
+(only `region:us`, no card, no `base_model`); base `Qwen/Qwen3-4B-Thinking-2507-FP8`
+verified (qwen3, ~4.41B, FP8, Apache-2.0). Authored the **push-ready HF repo** under
+`ml/analyst/hf_repo/` — the **model card** (root `README.md` whose `base_model:` YAML
+metadata is what *configures the foundation model* on the Hub), `config/analyst_config.json`
++ `generation_config.json`, `base/BASE_MODEL.md` (V1 ships **no weights**), `.gitattributes`
+— plus a manifest-driven registration pipeline (`hf_repo_manifest.toml`,
+`register_hf_model.py` validate-default/`--upload`, `test_register_hf_model.py` **11/11
+green**) and a **pull verifier** (`ml/inference/hf_analyst_pull_check.py`) with two
+manual-dispatch workflows (`hf-analyst-register.yml`, `hf-analyst-pull.yml`) following the
+existing HF-CI pattern. **Honest status: the HF repo is NOT yet populated** — this remote
+container has no `HF_TOKEN`/`huggingface_hub` (the HF MCP is read-only), so the actual write
+runs via the existing **GitHub Actions `HF_TOKEN` secret** (trigger `hf-analyst-register`
+mode=upload; then `hf-analyst-pull` to confirm GitHub can pull it). Lifecycle + versioning
+were already specced in `huggingface_model_lifecycle.md` / `future_finetuning_strategy.md` /
+`REPOSITORY_STRUCTURE.md`.
+
+### 0a. Omi Analyst V1 — specification for the reasoning layer (`ml/analyst/`, spec-only)
 Goal: define **how Omi Analyst thinks** before any build/fine-tune/deploy. Omi Analyst
 is the **reasoning layer** (powered by `Qwen/Qwen3-4B-Thinking-2507-FP8`, home HF
 `Andrewexiga/omi-analyst-v1`) that *interprets* the engine's evidence — it is **not**
@@ -344,7 +365,12 @@ omi/
 │   │   ├── future_finetuning_strategy.md V1→V4 + dataset structure (blocker: gold labels = 0 rows)
 │   │   ├── huggingface_model_lifecycle.md  HF as first-class registry/store/versioning
 │   │   ├── REPOSITORY_STRUCTURE.md    recommended layout of the HF model repo
-│   │   └── README.md                  folder orientation
+│   │   ├── README.md                  folder orientation
+│   │   ├── hf_repo/                   PUSH-READY HF model repo (OMI_ANALYST_MODEL_IMPORT_V1):
+│   │   │                              README.md=model card (base_model metadata), config/, base/BASE_MODEL.md, .gitattributes — no weights
+│   │   ├── hf_repo_manifest.toml      GitHub→HF file map for the registry
+│   │   ├── register_hf_model.py       registration pipeline (validate-default / --upload); never publishes weights
+│   │   └── test_register_hf_model.py  offline self-test (11/11)
 │   ├── features/              OMI_FEATURE_SCHEMA_V1.md — the canonical 42-dim feature contract
 │   ├── schemas/              OMI_LABEL_SCHEMA_V1.md — engine-independent label contract
 │   ├── corpus/               Unified corpus: discovery → normalization → audit
@@ -366,6 +392,7 @@ omi/
 │   ├── inference/            HF connectivity probes
 │   │   ├── hf_connectivity_check.py          Read-only HF reachability
 │   │   ├── hf_dataset_connectivity_check.py  Read+write dataset round-trip
+│   │   ├── hf_analyst_pull_check.py          Verify GitHub can PULL omi-analyst-v1 (snapshot_download)
 │   │   └── HF_CONNECTIVITY.md / README.md
 │   ├── models/
 │   │   ├── omi-behavioral-v1/        XGBoost baseline: model.joblib, holdout, metrics,
@@ -404,7 +431,7 @@ omi/
 ├── packages/shared/          Shared types/contracts across apps (README)
 ├── scripts/                  Windows dev helpers: setup_omisphere.bat, start_omisphere.bat
 ├── .github/workflows/        CI: tests.yml + hf-connectivity / hf-dataset-connectivity /
-│                             hf-dataset-upload / hf-sync-datasets
+│                             hf-dataset-upload / hf-sync-datasets / hf-analyst-register / hf-analyst-pull
 ├── .claude/                  Claude Code project config (skills, settings)
 ├── render.yaml / requirements.txt / runtime.txt   Root deploy/runtime config
 ├── .env.example              Env template

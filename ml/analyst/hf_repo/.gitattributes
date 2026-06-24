@@ -1,0 +1,16 @@
+# Hugging Face LFS rules for Andrewexiga/omi-analyst-v1.
+# V1 ships NO weights (base model + prompt only); these rules make the repo correct
+# for when V3 LoRA adapters / V4 merged weights land. Text artifacts (md/json/txt)
+# stay plain so they diff cleanly in HF git history.
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.pth filter=lfs diff=lfs merge=lfs -text
+*.gguf filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
+*.h5 filter=lfs diff=lfs merge=lfs -text
+*.ckpt filter=lfs diff=lfs merge=lfs -text
+*.tflite filter=lfs diff=lfs merge=lfs -text
+*.msgpack filter=lfs diff=lfs merge=lfs -text
+*.model filter=lfs diff=lfs merge=lfs -text
+*.npz filter=lfs diff=lfs merge=lfs -text
