@@ -12,8 +12,8 @@ from typing import Any
 
 from .artifacts import Artifact
 
-# Output-kind names map to the artifact ``kind`` values.
-_VALID_OUTPUT_KINDS = frozenset({"finding", "critique", "ruling"})
+# Output-kind names map to the artifact ``kind`` values (open registry — additive).
+_VALID_OUTPUT_KINDS = frozenset({"finding", "critique", "ruling", "memory"})
 
 
 @dataclass(frozen=True)

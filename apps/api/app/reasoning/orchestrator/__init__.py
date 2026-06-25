@@ -14,6 +14,7 @@ from .modules import (
     CounterEvidenceAnalyst,
     FloorJudge,
     Judge,
+    MemoryAnalyst,
     build_ruling_assessment,
     default_council,
 )
@@ -21,7 +22,7 @@ from .orchestrator import BudgetController, CouncilResult, Orchestrator
 
 __all__ = [
     "Blackboard", "BlackboardView",
-    "AnalystModule", "BehaviorAnalyst", "CounterEvidenceAnalyst", "Judge", "FloorJudge",
-    "build_ruling_assessment", "default_council",
+    "AnalystModule", "BehaviorAnalyst", "CounterEvidenceAnalyst", "MemoryAnalyst",
+    "Judge", "FloorJudge", "build_ruling_assessment", "default_council",
     "Orchestrator", "BudgetController", "CouncilResult",
 ]

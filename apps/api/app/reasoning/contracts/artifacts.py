@@ -55,3 +55,20 @@ class Ruling(Artifact):
 
     def __post_init__(self) -> None:
         self.kind = "ruling"
+
+
+@dataclass
+class Memory(Artifact):
+    """Institutional-memory context artifact (Sprint 005). ``supporting`` = priors
+    consistent with the current read (CONTEXT ONLY — never feeds evidence_for, never
+    changes the number); ``contradicting`` = exculpatory priors (controls / contradicting
+    history) the Judge may weigh as evidence_against. Memory is context, never proof.
+    ``evidence_refs`` cite the bundle evidence that matched (resolvable); the ``ko_id`` per
+    item is provenance."""
+
+    supporting: list[dict[str, Any]] = field(default_factory=list)
+    contradicting: list[dict[str, Any]] = field(default_factory=list)
+    uncertainty: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.kind = "memory"

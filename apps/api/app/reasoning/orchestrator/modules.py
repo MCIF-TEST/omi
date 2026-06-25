@@ -12,11 +12,12 @@ downstream and the Floor is the fallback.
 """
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from app.evidence.bundle import EvidenceBundle
+from app.memory.graph import retrieve
 
-from app.reasoning.contracts import Artifact, Critique, Finding, ReasoningContract, Ruling
+from app.reasoning.contracts import Artifact, Critique, Finding, Memory, ReasoningContract, Ruling
 
 from .blackboard import BlackboardView
 
@@ -96,6 +97,64 @@ class CounterEvidenceAnalyst:
 
 
 # --------------------------------------------------------------------------- #
+# Tier 1 — Memory Analyst (institutional memory as a council specialist)
+# --------------------------------------------------------------------------- #
+class MemoryAnalyst:
+    """Institutional memory participating in the council as a specialist (Sprint 005).
+
+    Retrieves PriorContext from the knowledge graph and publishes a structured ``Memory``
+    artifact — context, never proof. It never raises suspicion; exculpatory priors may lower
+    via the Judge's evidence_against, supporting priors are context only. Replaceable by a
+    Qwen-backed implementation behind the same contract with **no orchestration change**."""
+
+    def __init__(self, store: Any, *, now: Any | None = None, top_k: int = 5) -> None:
+        self._store = store
+        self._now = now
+        self._top_k = top_k
+        self.contract = ReasoningContract(
+            module="memory_analyst", tier=1, output_kind="memory", contract_version="v1",
+            inputs=("*",),
+            constraints=(
+                "memory is context, never proof",
+                "never raises suspicion (no evidence_for)",
+                "cite bundle evidence; ko ids are provenance",
+                "exculpatory priors may lower, never raise",
+            ),
+        )
+
+    def run(self, view: BlackboardView) -> list[Artifact]:
+        priors = retrieve(self._store, view.bundle, top_k=self._top_k, now=self._now)
+        supporting: list[dict] = []
+        contradicting: list[dict] = []
+        uncertainty: list[str] = []
+        refs: list[str] = []
+        for p in priors:
+            note = ("a known legitimate-coordination control — exculpatory context"
+                    if p.is_control else "context, not proof")
+            item = {
+                "ko_id": p.ko_id, "type": p.type, "label": p.label,
+                "confidence": p.confidence, "stability": p.stability_score,
+                "influence_class": p.influence_class, "evidence_refs": list(p.evidence_refs),
+                "claim": (f"Current evidence resembles '{p.label}' ({p.type}), seen in prior "
+                          f"investigations (confidence {round(p.confidence * 100)}%, "
+                          f"stability {round(p.stability_score * 100)}%) — {note}."),
+            }
+            refs.extend(p.evidence_refs)
+            if p.influence_class == "exculpatory":
+                contradicting.append(item)
+            else:
+                supporting.append(item)
+            if p.stability_score < 0.5 or p.confidence < 0.3:
+                uncertainty.append(
+                    f"Prior '{p.label}' matched at low confidence/stability — weak context only."
+                )
+        return [Memory(
+            module=self.contract.module, evidence_refs=list(dict.fromkeys(refs)),
+            supporting=supporting, contradicting=contradicting, uncertainty=uncertainty,
+        )]
+
+
+# --------------------------------------------------------------------------- #
 # Tier 3 — Judge + FloorJudge (adjudication)
 # --------------------------------------------------------------------------- #
 _BANDS = {"insufficient": 0, "low": 1, "moderate": 2, "high": 3}
@@ -149,6 +208,7 @@ def build_ruling_assessment(
     *,
     findings: list[Finding] | None = None,
     critique: Critique | None = None,
+    memories: list[Memory] | None = None,
 ) -> dict:
     """Assemble a Governor-valid assessment from the bundle (+ optional council artifacts).
 
@@ -205,6 +265,19 @@ def build_ruling_assessment(
 
     uncertainty = [u["statement"] for u in bundle.epistemics.get("unknowns", []) if u.get("statement")]
     uncertainty += [m["what"] for m in bundle.epistemics.get("missing_evidence", []) if m.get("what")]
+    # Institutional memory — CONTEXT ONLY. Exculpatory priors (controls / contradicting
+    # history) may lower via evidence_against; supporting priors are reported as context and
+    # NEVER enter evidence_for or change the echoed number / tier / corroboration.
+    for mem in (memories or []):
+        for c in getattr(mem, "contradicting", []):
+            evidence_against.append({
+                "signal": f"memory:{c.get('type', 'prior')}",
+                "claim": c.get("claim", ""),
+                "evidence_refs": list(c.get("evidence_refs", [])),
+            })
+        for sp in getattr(mem, "supporting", []):
+            uncertainty.append(f"Institutional memory (context, not proof): {sp.get('claim', '')}")
+        uncertainty.extend(getattr(mem, "uncertainty", []))
     if not uncertainty:
         uncertainty = ["Single automated pass over one snapshot; treat as a provisional read."]
     if not wwc:
@@ -249,8 +322,11 @@ class Judge:
     def run(self, view: BlackboardView) -> list[Artifact]:
         findings = [a for a in view.findings() if isinstance(a, Finding)]
         critiques = [a for a in view.critiques() if isinstance(a, Critique)]
+        memories = [a for a in view.memories() if isinstance(a, Memory)]
         critique = critiques[0] if critiques else None
-        assessment = build_ruling_assessment(view.bundle, findings=findings, critique=critique)
+        assessment = build_ruling_assessment(
+            view.bundle, findings=findings, critique=critique, memories=memories,
+        )
         return [Ruling(module=self.contract.module, assessment=assessment,
                        evidence_refs=_ruling_refs(assessment))]
 

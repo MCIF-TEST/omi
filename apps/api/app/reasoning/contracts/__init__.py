@@ -8,10 +8,10 @@ orchestration** — modules never couple to each other, only to these contracts.
 """
 from __future__ import annotations
 
-from .artifacts import Artifact, Critique, Finding, Ruling
+from .artifacts import Artifact, Critique, Finding, Memory, Ruling
 from .contract import ReasoningContract, validate_artifact
 
 __all__ = [
-    "Artifact", "Finding", "Critique", "Ruling",
+    "Artifact", "Finding", "Critique", "Ruling", "Memory",
     "ReasoningContract", "validate_artifact",
 ]

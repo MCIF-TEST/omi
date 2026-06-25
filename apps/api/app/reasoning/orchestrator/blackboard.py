@@ -35,6 +35,9 @@ class BlackboardView:
     def critiques(self) -> list[Artifact]:
         return [a for a in self._visible if a.kind == "critique"]
 
+    def memories(self) -> list[Artifact]:
+        return [a for a in self._visible if a.kind == "memory"]
+
     def artifacts(self) -> list[Artifact]:
         return list(self._visible)
 
