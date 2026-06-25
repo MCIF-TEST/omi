@@ -6,6 +6,8 @@ SAVEPOINT-isolated persistence, and that nothing here touches detection/scoring/
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -160,3 +162,28 @@ def test_assess_payload_never_raises_on_garbage(monkeypatch):
     # Malformed payload must degrade to None or a valid assessment, never raise.
     out = analyst.assess_payload({"nonsense": True}, ref="sub_x")
     assert out is None or out["subject"]["grain"] == "comment_section"
+
+
+# --- inference-pipeline fallback (Sprint 001 runtime foundation) ------------ #
+def test_qwen_endpoint_unreachable_falls_back_to_deterministic(monkeypatch):
+    """When an HF inference endpoint is configured but unreachable (and no
+    HF_TOKEN), the Qwen provider must degrade to the deterministic Floor —
+    never raise, always schema-valid, echo preserved. This is the runtime
+    guarantee the Sprint-001 path depends on."""
+    _enable(monkeypatch)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
+    settings = SimpleNamespace(
+        analyst_hf_repo="Andrewexiga/omi-analyst-v1",
+        analyst_hf_revision=None,
+        analyst_endpoint_url="http://127.0.0.1:9/unreachable",
+    )
+    out = analyst.assess_payload(
+        _payload(), ref="sub_x", platform="youtube", settings=settings,
+    )
+    assert out is not None  # graceful fallback, never None on good evidence
+    assert out["subject"]["grain"] == "comment_section"
+    for el in REQUIRED_ELEMENTS:
+        assert el in out and out[el] not in (None, ""), el
+    # echo discipline survives the fallback: the engine's number is not recomputed
+    assert out["suspicion_probability"] == 0.72

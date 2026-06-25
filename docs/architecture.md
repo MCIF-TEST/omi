@@ -214,7 +214,8 @@ touches the DB directly.
 
 ## 9. Deployment
 
-* **Render Blueprint** (`infrastructure/render.yaml`) provisions:
+* **Render Blueprint** (`render.yaml`, repo root — the single canonical config)
+  provisions:
   * `omisphere-web` (Next.js)
   * `omisphere-api` (FastAPI)
   * Both behind the same custom domain via Render's routing.

@@ -645,6 +645,46 @@ export interface CommentaryResponse {
   cached: boolean;
 }
 
+// Omi Analyst — structured, evidence-bounded assessment of an investigation.
+// Feature-flagged OFF by default; the route returns 503 when disabled, 202 while
+// generating (poll again), and 200 with `assessment` when ready. `assessment`
+// mirrors ml/analyst/analyst_response_schema.json.
+export interface AnalystEvidenceItem {
+  signal: string;
+  claim: string;
+  direction?: 'raises' | 'lowers' | 'neutral';
+  impact?: number;
+  evidence_refs?: string[];
+}
+
+export interface AnalystAssessment {
+  verdict: string;
+  suspicion_tier: string;
+  suspicion_probability: number;
+  confidence_band: string;
+  confidence_rationale: string;
+  headline: string;
+  assessment: string;
+  evidence_for: AnalystEvidenceItem[];
+  evidence_against: AnalystEvidenceItem[];
+  uncertainty: string[];
+  what_would_change_this: string[];
+  limits_statement: string;
+  coordination_label?: string | null;
+  legitimate_hypothesis?: string | null;
+  supplemental_context?: { signal: string; note: string }[];
+}
+
+export interface AnalystResponse {
+  slug: string;
+  enabled: boolean;
+  status: 'ready' | 'generating';
+  cached: boolean;
+  assessment: AnalystAssessment | null;
+  provider?: string | null;
+  generated_at?: string | null;
+}
+
 // Monitoring + watchlists (Phase 8) ------------------------------------------
 
 export interface AlertOut {
