@@ -136,3 +136,12 @@ def generate_analyst_assessment(
         return AnalystResponse(
             slug=inv.slug, enabled=True, status="generating", cached=False,
         )
+
+
+@router.get("/analyst/status")
+def analyst_runtime_status(current: CurrentUser = Depends(require_user)) -> dict:
+    """Diagnostic snapshot of the AI runtime path — which links are configured / ready
+    (HF token, endpoint, impl, the mandatory Governor, the always-on Floor). No secrets:
+    token presence is a boolean, never the value. Used for inference health checks +
+    monitoring + verifying activation readiness."""
+    return analyst.runtime_status(get_settings())

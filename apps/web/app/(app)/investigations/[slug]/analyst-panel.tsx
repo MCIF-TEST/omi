@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Brain, Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Brain, Loader2, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
@@ -160,6 +160,13 @@ function AssessmentView({
       <PlainList label="Confidence & uncertainty" lead={a.confidence_rationale} items={a.uncertainty} />
       <PlainList label="What would change this" items={a.what_would_change_this} />
 
+      {a.governance && (
+        <p className="text-2xs font-mono text-fg-mute flex items-center gap-1.5 flex-wrap">
+          <ShieldCheck size={11} className="text-accent shrink-0" />
+          Governor {a.governance.verdict ?? 'n/a'} · {a.governance.provider ?? 'floor'}
+          {typeof a.governance.latency_ms === 'number' ? ` · ${Math.round(a.governance.latency_ms)}ms` : ''}
+        </p>
+      )}
       {a.limits_statement && (
         <p className="text-2xs text-fg-faint border-t border-border-1/60 pt-3 leading-relaxed">
           {a.limits_statement}

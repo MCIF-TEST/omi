@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -135,8 +137,15 @@ def build_bundle(payload: dict, *, ref: str, platform: str, impl) -> dict:
 def assess_payload(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
 ) -> dict | None:
-    """Produce a schema-valid structured assessment for an investigation payload, or
-    None if the feature is off / unavailable / errored. Never raises."""
+    """Produce a Governor-validated structured assessment for an investigation payload,
+    or None if the feature is off / unavailable / errored. Never raises.
+
+    The Constitutional Governor (Sprint 002) is **mandatory** on this path: the provider's
+    assessment is validated against a freshly-bound canonical Evidence Bundle; on REJECT it
+    falls back to the always-valid deterministic Floor (itself Governor-validated). A
+    ``governance`` block (verdict, trace id, provider, model revision, latency) is attached
+    for transparency. The Governor is never skipped and the Floor is never bypassed.
+    """
     settings = settings or get_settings()
     if not analyst_enabled(settings):
         return None
@@ -148,18 +157,114 @@ def assess_payload(
             repo_id=settings.analyst_hf_repo, revision=settings.analyst_hf_revision,
         )
         endpoint = getattr(settings, "analyst_endpoint_url", None)
-        provider = (impl.QwenAnalystProvider(endpoint_url=endpoint) if endpoint
-                    else impl.DeterministicAnalystProvider())
-        analyst = impl.OmiAnalyst(config=config, provider=provider, store=None, record=False)
-        bundle = build_bundle(payload, ref=ref, platform=platform, impl=impl)
-        outcome = analyst.assess(bundle)
+        timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
+        if endpoint:
+            provider = impl.QwenAnalystProvider(endpoint_url=endpoint, timeout=timeout)
+        else:
+            provider = impl.DeterministicAnalystProvider()
+        analyst_obj = impl.OmiAnalyst(config=config, provider=provider, store=None, record=False)
+        lossy_bundle = build_bundle(payload, ref=ref, platform=platform, impl=impl)
+
+        t0 = time.perf_counter()
+        outcome = analyst_obj.assess(lossy_bundle)
+        latency_ms = (time.perf_counter() - t0) * 1000.0
         if not outcome.valid:
             logger.warning("omi_analyst produced invalid output: %s", outcome.errors[:3])
             return None
-        return outcome.response
+
+        return _govern(
+            outcome.response, payload, ref=ref, platform=platform,
+            provider=outcome.provider, latency_ms=latency_ms,
+            model_revision=getattr(config, "model_revision", None),
+            impl=impl, config=config, lossy_bundle=lossy_bundle,
+        )
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")
         return None
+
+
+def _govern(
+    assessment: dict, payload: dict, *, ref: str, platform: str, provider: str,
+    latency_ms: float, model_revision: str | None, impl: Any, config: Any, lossy_bundle: dict,
+) -> dict:
+    """Mandatory Constitutional Governor gate (deterministic, model-free).
+
+    Validates the assessment against a canonical Evidence Bundle (``app.evidence.Binder``)
+    using ``app.governor.Governor``. PERMIT -> attach a ``governance`` block + return.
+    REJECT -> ship the deterministic Floor (regenerated + Governor-validated), recording
+    the rejected codes. Any error -> the deterministic Floor is the safest output. Never
+    raises — governance must never break the caller."""
+    from app.evidence import Binder
+    from app.governor import Governor
+
+    def _meta(trace: Any, prov: str, **extra: Any) -> dict:
+        m = {
+            "verdict": trace.verdict,
+            "trace_id": trace.trace_id(),
+            "violation_codes": trace.violation_codes,
+            "provider": prov,
+            "model_revision": model_revision,
+            "latency_ms": round(float(latency_ms), 2),
+            "constitution_version": Governor.constitution_version,
+        }
+        m.update(extra)
+        return m
+
+    governor = Governor()
+    try:
+        bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform)
+        trace = governor.validate(assessment, bundle, corroboration=assessment.get("corroboration"))
+        if trace.permitted:
+            assessment["governance"] = _meta(trace, provider)
+            logger.info("analyst governed: PERMIT provider=%s latency=%.1fms", provider, latency_ms)
+            return assessment
+
+        logger.warning("analyst REJECTED by governor %s; falling back to Floor", trace.violation_codes)
+        floor = impl.DeterministicAnalystProvider().generate(lossy_bundle, config).response
+        ftrace = governor.validate(floor, bundle, corroboration=floor.get("corroboration"))
+        floor["governance"] = _meta(
+            ftrace, "deterministic-floor",
+            fallback_from=provider, rejected_codes=trace.violation_codes,
+        )
+        return floor
+    except Exception:  # noqa: BLE001 — governance must never break the caller
+        logger.exception("governor gate errored; returning the deterministic Floor")
+        try:
+            floor = impl.DeterministicAnalystProvider().generate(lossy_bundle, config).response
+            floor["governance"] = {
+                "verdict": "error", "provider": "deterministic-floor",
+                "model_revision": model_revision, "fallback_from": provider,
+            }
+            return floor
+        except Exception:  # noqa: BLE001
+            assessment["governance"] = {"verdict": "error", "provider": provider}
+            return assessment
+
+
+def runtime_status(settings: Settings | None = None) -> dict:
+    """Diagnostic snapshot of the AI runtime path — which links are configured / ready.
+
+    No secrets: ``HF_TOKEN`` presence is a boolean, never the value. Only imports the
+    ``ml/`` impl when the feature is enabled (the off path stays import-free)."""
+    settings = settings or get_settings()
+    enabled = analyst_enabled(settings)
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+    impl_ok: bool | None = (_impl() is not None) if enabled else None
+    provider = "qwen" if (enabled and endpoint) else "deterministic-floor"
+    return {
+        "enabled": enabled,
+        "impl_importable": impl_ok,
+        "endpoint_configured": bool(endpoint),
+        "hf_token_present": token_present,
+        "model_repo": getattr(settings, "analyst_hf_repo", None),
+        "model_revision": getattr(settings, "analyst_hf_revision", None),
+        "timeout_seconds": float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
+        "provider": provider,
+        "governor": "mandatory",
+        "deterministic_floor": "always-on",
+        "ready_for_live_qwen": bool(enabled and endpoint and token_present and impl_ok is True),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -213,7 +318,8 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
         )
         if assessment is None:
             return None
-        provider = assessment.get("model_revision", "omi-analyst")
+        gov = assessment.get("governance") or {}
+        provider = gov.get("provider") or assessment.get("model_revision", "omi-analyst")
         return persist_assessment(session, inv, assessment, provider)
 
 

@@ -673,6 +673,13 @@ export interface AnalystAssessment {
   coordination_label?: string | null;
   legitimate_hypothesis?: string | null;
   supplemental_context?: { signal: string; note: string }[];
+  governance?: {
+    verdict?: string;
+    provider?: string;
+    latency_ms?: number;
+    model_revision?: string | null;
+    trace_id?: string;
+  };
 }
 
 export interface AnalystResponse {
