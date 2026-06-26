@@ -7,6 +7,7 @@ every decision through the mandatory Governor with the deterministic Floor as fa
 """
 from __future__ import annotations
 
+from .ai_modules import RemoteAnalyst, ai_behavior_analyst, build_council
 from .blackboard import Blackboard, BlackboardView
 from .modules import (
     AnalystModule,
@@ -25,4 +26,5 @@ __all__ = [
     "AnalystModule", "BehaviorAnalyst", "CounterEvidenceAnalyst", "MemoryAnalyst",
     "Judge", "FloorJudge", "build_ruling_assessment", "default_council",
     "Orchestrator", "BudgetController", "CouncilResult",
+    "RemoteAnalyst", "ai_behavior_analyst", "build_council",
 ]
