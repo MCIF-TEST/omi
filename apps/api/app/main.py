@@ -28,7 +28,7 @@ from app.monitoring import lifespan_monitoring
 from app.routes import (
     accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, graph,
     health, intelligence, investigations, labels, learning, metrics, monitoring, narratives,
-    reasoning, reports, scan, scan_async, watchlists,
+    reasoning, reports, scan, scan_async, shadow, watchlists,
 )
 from app.storage.db import init_db
 
@@ -271,6 +271,7 @@ def create_app() -> FastAPI:
     app.include_router(graph.router)
     app.include_router(investigations.router)
     app.include_router(reasoning.router)
+    app.include_router(shadow.admin_router)
     app.include_router(reports.share_router)
     app.include_router(reports.public_router)
     app.include_router(monitoring.router)
