@@ -195,6 +195,11 @@ class Settings(BaseSettings):
     analyst_endpoint_url: str | None = None
     analyst_timeout_seconds: float = 30.0
     analyst_max_retries: int = 2
+    # Active prompt version for the AI behavior analyst (None -> registry default / rollback).
+    analyst_prompt_version: str | None = None
+    # Context Builder mode/budget for AI specialists ("raw" baseline | "structured").
+    analyst_context_mode: str = "raw"
+    analyst_context_budget: str = "standard"
 
     # -----------------------------------------------------------------------
     # Learned detector (ML track). Off by default: when use_ml_scorer is
