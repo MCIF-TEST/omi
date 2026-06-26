@@ -8,6 +8,7 @@ investigations + human anchors (never the LLM), and is consumed by the council o
 """
 from __future__ import annotations
 
+from .extract import extract_candidates, record_settled_investigation
 from .objects import KnowledgeObject, ObservationLedgerEntry
 from .retrieval import RankedPrior, bundle_signature, retrieve
 from .store import MemoryStore, jaccard
@@ -16,4 +17,5 @@ __all__ = [
     "KnowledgeObject", "ObservationLedgerEntry",
     "MemoryStore", "jaccard",
     "RankedPrior", "retrieve", "bundle_signature",
+    "extract_candidates", "record_settled_investigation",
 ]
