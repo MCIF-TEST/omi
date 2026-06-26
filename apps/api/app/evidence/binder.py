@@ -24,6 +24,7 @@ from .bundle import (
     EvidenceItem,
     Relationship,
 )
+from .enrich import enrich_bundle
 
 BINDER_VERSION = "binder-v1"
 _PLATFORMS = frozenset({"youtube", "twitter", "reddit", "unknown"})
@@ -50,6 +51,7 @@ class Binder:
         platform: str = "unknown",
         engine_version: str = "unknown",
         feature_schema_version: int = 1,
+        enrich: bool = False,
     ) -> EvidenceBundle:
         payload = payload or {}
         plat = platform if platform in _PLATFORMS else "unknown"
@@ -225,6 +227,15 @@ class Binder:
             "missing_evidence": missing,
             "unknowns": unknowns,
         }
+
+        # --- evidence enrichment (opt-in, additive, derived-only) ------------ #
+        # Project richer structured facets from the SAME engine output. Off by default so the
+        # bundle_id is unchanged; on -> derived items/edges are appended deterministically.
+        if enrich:
+            enrich_bundle(
+                bundle, payload, mint_ev=next_ev, mint_rel=next_rel,
+                subject_id=subject_id, prov=prov,
+            )
 
         # --- capabilities ---------------------------------------------------- #
         present = {it.facet for it in bundle.evidence.values()}

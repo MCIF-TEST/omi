@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.auth import CurrentUser, require_user
 from app.core.config import get_settings
-from app.evidence import Binder
+from app.evidence import Binder, evidence_quality
 from app.reasoning import analyst
 from app.reasoning.context import build_context
 from app.reasoning.model_providers import build_remote_provider, provider_status
@@ -23,6 +23,7 @@ from app.reasoning.shadow import (
     all_reports,
     cached_report,
     compare_context_modes,
+    compare_evidence_modes,
     persist_report,
     run_shadow,
 )
@@ -66,6 +67,35 @@ def list_prompts(analyst_name: str | None = None, current: CurrentUser = Depends
     _require_admin(current)
     registry = default_registry()
     return {"analysts": registry.analysts(), "prompts": registry.records(analyst_name)}
+
+
+@admin_router.post("/evidence/{slug}")
+def run_evidence(
+    slug: str,
+    current: CurrentUser = Depends(require_user),
+) -> dict:
+    """Evidence-quality metrics for the baseline vs enriched bundle of one investigation
+    (model-independent, works offline). When a model endpoint is configured, also runs the
+    baseline-vs-enriched reasoning comparison through Shadow Mode."""
+    _require_admin(current)
+    with get_session() as session:
+        repo = AccountRepository(session)
+        inv = repo.get_investigation(slug=slug, user_id=current.id if current.id != 0 else None)
+        if inv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found.")
+        payload = inv.payload_json or {}
+        ref, platform = analyst._ref(inv.slug), analyst._platform_of(inv)
+        baseline = evidence_quality(Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform))
+        enriched = evidence_quality(
+            Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform, enrich=True)
+        )
+
+        provider = build_remote_provider(get_settings())
+        execution = None
+        if provider is not None:
+            execution = compare_evidence_modes(payload, ref=ref, provider=provider, platform=platform)
+        return {"slug": slug, "baseline_evidence": baseline, "enriched_evidence": enriched,
+                "execution": execution}
 
 
 @admin_router.post("/context/{slug}")

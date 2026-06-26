@@ -18,6 +18,8 @@ from .bundle import (
     digest,
 )
 from .binder import Binder
+from .enrich import enrich_bundle
+from .quality import evidence_quality
 
 __all__ = [
     "BUNDLE_SCHEMA_VERSION",
@@ -27,6 +29,8 @@ __all__ = [
     "Entity",
     "Relationship",
     "Binder",
+    "enrich_bundle",
+    "evidence_quality",
     "canonical_json",
     "digest",
 ]

@@ -22,12 +22,13 @@ CONTEXT_VERSION = "ctx-v1"
 
 _ALL_SECTIONS = (
     "behavioral_summary", "strongest_supporting", "strongest_contradicting", "uncertainty_summary",
-    "prior_context", "coordination_highlights", "graph_highlights", "narrative_highlights",
-    "metadata_highlights", "investigation_timeline",
+    "prior_context", "coordination_highlights", "derived_evidence", "graph_highlights",
+    "narrative_highlights", "metadata_highlights", "investigation_timeline",
 )
 
 # A budget prioritizes evidence quality, not token count alone: it caps items per section and
 # selects which sections to include, keeping the highest-signal evidence (and its citations).
+# ``derived_evidence`` auto-surfaces any Sprint-010 enriched evidence (empty when absent).
 BUDGETS: dict[str, dict] = {
     "compact": {
         "per_section": 2, "token_cap": 400,
@@ -37,10 +38,15 @@ BUDGETS: dict[str, dict] = {
     "standard": {
         "per_section": 4, "token_cap": 1000,
         "sections": ("behavioral_summary", "strongest_supporting", "strongest_contradicting",
-                     "uncertainty_summary", "prior_context", "coordination_highlights"),
+                     "uncertainty_summary", "prior_context", "coordination_highlights",
+                     "derived_evidence"),
     },
     "comprehensive": {"per_section": 8, "token_cap": 2500, "sections": _ALL_SECTIONS},
 }
+
+# Atomic kinds the core Binder emits; everything else is Sprint-010 derived evidence.
+_BASE_KINDS = frozenset({"headline", "contribution", "detector_signal", "coordination_method"})
+_DEDICATED_FACETS = frozenset({"narrative", "metadata", "coordination"})
 
 
 @dataclass(frozen=True)
@@ -201,18 +207,38 @@ def _prior_context(bundle: Any, store: Any, now: Any, per: int) -> ContextSectio
 
 def _coordination_highlights(bundle: Any, per: int) -> ContextSection:
     items = sorted(
-        (it for it in bundle.evidence.values() if it.kind == "coordination_method"),
-        key=lambda it: (not it.discriminative, it.id),
+        (it for it in bundle.evidence.values()
+         if it.kind in ("coordination_method", "coordination_summary")),
+        key=lambda it: (it.kind != "coordination_summary", not it.discriminative, it.id),
     )
     sts = [
         ContextStatement(
             text=(f"{it.originating_detector} fired across {(it.value or {}).get('members', '?')} members "
-                  f"({'discriminative' if it.discriminative else 'non-discriminative — gated'})"),
+                  f"({'discriminative' if it.discriminative else 'non-discriminative — gated'})"
+                  if it.kind == "coordination_method"
+                  else f"coordination summary: {(it.value or {}).get('discriminative_methods', [])} "
+                       f"discriminative across {(it.value or {}).get('total_members', '?')} members"),
             evidence_refs=(it.id,),
         )
         for it in items[:per]
     ]
     return ContextSection("coordination_highlights", sts)
+
+
+def _derived_evidence(bundle: Any, per: int) -> ContextSection:
+    """Generic surface for Sprint-010 enriched evidence in non-dedicated facets (behavioral /
+    detector / graph derived kinds: feature_importance, temporal_pattern, detector_provenance,
+    cross_link, …). Future enriched kinds appear here automatically — no modification needed."""
+    items = sorted(
+        (it for it in bundle.evidence.values()
+         if it.kind not in _BASE_KINDS and it.facet not in _DEDICATED_FACETS),
+        key=lambda it: it.id,
+    )
+    sts = [
+        ContextStatement(text=f"{it.kind}: {it.originating_detector}", evidence_refs=(it.id,))
+        for it in items[:per]
+    ]
+    return ContextSection("derived_evidence", sts)
 
 
 def _graph_highlights(bundle: Any, per: int) -> ContextSection:
@@ -264,6 +290,7 @@ def build_context(
         "uncertainty_summary": lambda: _uncertainty_summary(bundle, per),
         "prior_context": lambda: _prior_context(bundle, store, now, per),
         "coordination_highlights": lambda: _coordination_highlights(bundle, per),
+        "derived_evidence": lambda: _derived_evidence(bundle, per),
         "graph_highlights": lambda: _graph_highlights(bundle, per),
         "narrative_highlights": lambda: _facet_highlights(bundle, "narrative", per, "narrative_highlights"),
         "metadata_highlights": lambda: _facet_highlights(bundle, "metadata", per, "metadata_highlights"),
