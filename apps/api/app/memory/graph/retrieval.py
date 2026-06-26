@@ -35,6 +35,7 @@ class RankedPrior:
     match_basis: str
     score: float
     evidence_refs: list[str] = field(default_factory=list)   # bundle ev ids that matched
+    tier: str | None = None                                  # distillation tier (Sprint 013), set by the engine
 
 
 def bundle_signature(bundle: EvidenceBundle) -> set[str]:

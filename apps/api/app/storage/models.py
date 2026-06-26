@@ -894,6 +894,10 @@ class KnowledgeObjectRow(Base):
     half_life_days: Mapped[float] = mapped_column(Float, default=180.0)
     retirement_floor: Mapped[float] = mapped_column(Float, default=0.12)
     platform_scope: Mapped[list] = mapped_column(JSON, default=list)
+    # Sprint 013: cached distillation tier (derived from the ledger; refreshed by consolidation).
+    # A performance cache for tier-filtered queries — never the source of truth.
+    tier: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    last_consolidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     observations: Mapped[list["ObservationLedgerRow"]] = relationship(

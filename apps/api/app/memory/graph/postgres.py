@@ -10,6 +10,7 @@ tokens are indexed for candidate lookup at scale.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Callable, Iterable
 
 from sqlalchemy import func, select
@@ -145,6 +146,37 @@ class PostgresMemoryStore:
             if row is not None:
                 row.superseded_by = new_id
                 self._revision(s, old_id, f"superseded_by:{new_id}")
+
+    # -- tier cache (Sprint 013 distillation) -------------------------------- #
+    def tiers(self) -> dict[str, str]:
+        """The cached distillation tiers (refreshed by consolidation) — a performance cache for
+        tier-filtered queries; the source of truth is always the recomputed ``tier_of``."""
+        with self._sf() as s:
+            rows = s.execute(
+                select(KnowledgeObjectRow.id, KnowledgeObjectRow.tier)
+                .where(KnowledgeObjectRow.tier.isnot(None))
+            ).all()
+            return {r[0]: r[1] for r in rows}
+
+    def set_tier(self, ko_id: str, tier: str) -> None:
+        with self._sf() as s:
+            row = s.get(KnowledgeObjectRow, ko_id)
+            if row is None:
+                return
+            prev = row.tier
+            row.tier = tier
+            row.last_consolidated_at = datetime.now(timezone.utc)
+            self._revision(s, ko_id, f"tier:{prev}->{tier}")
+
+    def tier_counts(self) -> dict[str, int]:
+        """SQL ``GROUP BY tier`` count — the scalable tier distribution (no full object load)."""
+        with self._sf() as s:
+            rows = s.execute(
+                select(KnowledgeObjectRow.tier, func.count())
+                .where(func.coalesce(KnowledgeObjectRow.superseded_by, "") == "")
+                .group_by(KnowledgeObjectRow.tier)
+            ).all()
+            return {(r[0] or "unconsolidated"): int(r[1]) for r in rows}
 
     # -- helpers -------------------------------------------------------------- #
     def _new_id(self, s: Session, type_: str) -> str:

@@ -29,6 +29,7 @@ class MemoryStore:
     def __init__(self) -> None:
         self._objs: dict[str, KnowledgeObject] = {}
         self._seq = 0
+        self._tiers: dict[str, str] = {}          # cached distillation tiers (Sprint 013)
 
     # -- read ----------------------------------------------------------------- #
     def get(self, ko_id: str) -> KnowledgeObject | None:
@@ -39,6 +40,26 @@ class MemoryStore:
 
     def __len__(self) -> int:
         return len(self._objs)
+
+    def candidates_for(self, bundle: Any) -> list[KnowledgeObject]:
+        """Narrow to non-superseded objects sharing a signature token with the bundle — the
+        in-memory analogue of the Postgres index path (parity for the retrieval engine)."""
+        from .retrieval import bundle_signature
+        tokens = bundle_signature(bundle)
+        if not tokens:
+            return []
+        return [o for o in self.all() if tokens & set(o.signature)]
+
+    # -- tier cache (Sprint 013 distillation) -------------------------------- #
+    def tiers(self) -> dict[str, str]:
+        return dict(self._tiers)
+
+    def set_tier(self, ko_id: str, tier: str) -> None:
+        prev = self._tiers.get(ko_id)
+        self._tiers[ko_id] = tier
+        ko = self._objs.get(ko_id)
+        if ko is not None:
+            ko.version_history.append({"rev": len(ko.version_history) + 1, "change": f"tier:{prev}->{tier}"})
 
     # -- write (evidence-gated) ---------------------------------------------- #
     def _new_id(self, type_: str) -> str:
