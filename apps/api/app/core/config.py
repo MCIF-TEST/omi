@@ -202,6 +202,19 @@ class Settings(BaseSettings):
     analyst_context_budget: str = "standard"
 
     # -----------------------------------------------------------------------
+    # Institutional Memory persistence (Sprint 012). OFF by default -> the
+    # in-memory store (existing behavior, hermetic tests). When enabled, the
+    # memory system persists to PostgreSQL. ``memory_database_url`` points the
+    # memory store at a DEDICATED database (e.g. Supabase) separate from the
+    # main app DB; unset -> memory shares the main database_url. The URL is a
+    # secret supplied via env (OMI_MEMORY_DATABASE_URL) — never committed.
+    # -----------------------------------------------------------------------
+    memory_persistence_enabled: bool = False
+    memory_database_url: str | None = None
+    memory_db_pool_size: int = 5
+    memory_db_max_overflow: int = 10
+
+    # -----------------------------------------------------------------------
     # Learned detector (ML track). Off by default: when use_ml_scorer is
     # False or no model artifact is present, scanning runs the rule engine
     # unchanged. Point ml_model_path at a joblib bundle (downloaded from the

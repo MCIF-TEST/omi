@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from app.evidence.bundle import EvidenceBundle
 
@@ -53,15 +54,16 @@ def _matched_refs(bundle: EvidenceBundle, signature: set[str]) -> list[str]:
     return [it.id for it in bundle.evidence.values() if it.originating_detector in signature][:5]
 
 
-def retrieve(
-    store: MemoryStore, bundle: EvidenceBundle, *,
+def rank_priors(
+    objects: "list", bundle: EvidenceBundle, *,
     top_k: int = 5, now: datetime | None = None,
     min_match: float = 0.5, control_boost: float = 1.5,
 ) -> list[RankedPrior]:
-    """Return the top-K relevant priors, ranked. Deterministic given ``(store, bundle, now)``."""
+    """Rank a given list of KnowledgeObjects against the bundle — the constitutional scoring,
+    independent of where the objects came from (in-memory or Postgres). Deterministic."""
     sig = bundle_signature(bundle)
     out: list[RankedPrior] = []
-    for ko in store.all():
+    for ko in objects:
         ko_sig = set(ko.signature)
         m = _containment(ko_sig, sig)
         if m < min_match:
@@ -81,3 +83,14 @@ def retrieve(
         ))
     out.sort(key=lambda r: (-r.score, r.ko_id))          # deterministic: score desc, ko_id tiebreak
     return out[:top_k]
+
+
+def retrieve(
+    store: Any, bundle: EvidenceBundle, *,
+    top_k: int = 5, now: datetime | None = None,
+    min_match: float = 0.5, control_boost: float = 1.5,
+) -> list[RankedPrior]:
+    """Return the top-K relevant priors from a store. Backend-agnostic: ``store`` may narrow the
+    candidate set (``candidates_for``) for scale, else all objects are ranked. Deterministic."""
+    objects = store.candidates_for(bundle) if hasattr(store, "candidates_for") else store.all()
+    return rank_priors(objects, bundle, top_k=top_k, now=now, min_match=min_match, control_boost=control_boost)
