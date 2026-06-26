@@ -85,19 +85,24 @@ def _rate(num: int, den: int) -> float | None:
 def evaluate_corpus(
     corpus: GoldCorpus, *, registry: Any = None, prompt_version: str | None = None,
     provider: Any = None, settings: Any | None = None, store: Any = None, now: Any = None,
+    context_mode: Any = None, context_budget: Any = None, enrich: bool = False,
 ) -> dict:
     """Run the shadow pipeline over every case and score against the human labels. Deterministic
     given a deterministic provider — so re-running it is a regression test, and running it under
-    a different ``prompt_version`` is a prompt comparison. Reports per-case results plus a
-    summary (label agreement, control FPR for both paths, number-preserved rate)."""
+    a different ``prompt_version`` / ``context_mode`` / ``enrich`` is a lever comparison. Returns
+    per-case results, the full shadow reports, and a summary (label agreement, control FPR for
+    both paths, number-preserved rate)."""
     cases = corpus.all()
     results: list[dict] = []
+    reports: list[dict] = []
     for case in cases:
         rep = run_shadow(
             case.payload, ref=case.ref or case.id, platform=case.platform, grain=case.grain,
             settings=settings, store=store, now=now, provider=provider,
             registry=registry, prompt_version=prompt_version,
+            context_mode=context_mode, context_budget=context_budget, enrich=enrich,
         )
+        reports.append(rep.to_dict())
         prod_a = rep.production["assessment"]
         shadow_a = rep.shadow["assessment"]
         is_control = bool(case.label.get("is_control"))
@@ -122,4 +127,4 @@ def evaluate_corpus(
         "number_preserved_rate": _rate(sum(1 for r in results if r["comparison"]["number_preserved"]), len(results)),
         "prompt_version": prompt_version or (registry.active_version("behavior_analyst") if registry else None),
     }
-    return {"summary": summary, "cases": results}
+    return {"summary": summary, "cases": results, "reports": reports}
