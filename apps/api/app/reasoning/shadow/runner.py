@@ -20,7 +20,9 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from app.evidence import Binder
 from app.evidence.bundle import digest
+from app.governor import Governor
 
 from app.reasoning.orchestrator import (
     BehaviorAnalyst,
@@ -60,12 +62,24 @@ def _deterministic_council(store: Any, now: Any) -> list:
     return council
 
 
-def _ai_council(provider: Any, store: Any, now: Any) -> list:
-    council = [ai_behavior_analyst(provider, store=store, now=now)]
+def _ai_council(
+    provider: Any, store: Any, now: Any, *,
+    registry: Any = None, prompt_version: Any = None, settings: Any = None,
+) -> list:
+    council = [ai_behavior_analyst(
+        provider, store=store, now=now, registry=registry,
+        prompt_version=prompt_version, settings=settings,
+    )]
     if store is not None:
         council.append(MemoryAnalyst(store, now=now))
     council.append(CounterEvidenceAnalyst())
     return council
+
+
+def _collect_prompt_meta(shadow_modules: list) -> dict:
+    """The versioned-prompt provenance of the shadow council's AI specialist (or deterministic)."""
+    metas = [m.prompt_meta for m in shadow_modules if isinstance(m, RemoteAnalyst) and m.prompt_meta]
+    return metas[0] if metas else {"mode": "deterministic"}
 
 
 def _collect_diagnostics(shadow_modules: list, wall_ms: float) -> dict:
@@ -97,6 +111,7 @@ class ShadowReport:
     comparison: dict
     diagnostics: dict
     inputs: dict
+    versioning: dict = field(default_factory=dict)
     generated_at: str = field(default_factory=_now_iso)
 
     def to_dict(self) -> dict:
@@ -106,20 +121,24 @@ class ShadowReport:
 def run_shadow(
     payload: dict, *, ref: str, platform: str = "youtube", grain: str = "comment_section",
     settings: Any | None = None, store: Any = None, now: Any = None, provider: Any = None,
+    registry: Any = None, prompt_version: Any = None,
 ) -> ShadowReport:
     """Run the deterministic + AI-backed councils over ``payload`` and build the comparison.
 
     ``provider`` (optional) injects an explicit reasoning provider for the shadow council;
     otherwise the council is assembled from settings (``build_council``) — AI-backed when an
-    endpoint is configured, deterministic-fallback otherwise. The production result is always
-    the deterministic council."""
+    endpoint is configured, deterministic-fallback otherwise. ``registry`` + ``prompt_version``
+    pin the AI analyst's versioned prompt (for benchmarking / A/B). The production result is
+    always the deterministic council."""
     if settings is None:
         from app.core.config import get_settings
         settings = get_settings()
 
     prod_modules = _deterministic_council(store, now)
     if provider is not None:
-        shadow_modules = _ai_council(provider, store, now)
+        shadow_modules = _ai_council(
+            provider, store, now, registry=registry, prompt_version=prompt_version, settings=settings,
+        )
     else:
         shadow_modules = build_council(settings, store=store, now=now)
 
@@ -130,13 +149,25 @@ def run_shadow(
 
     production = council_view(prod_result)
     shadow = council_view(shadow_result)
+    mem_rev = memory_revision(store)
+    model_rev = getattr(settings, "analyst_hf_revision", None)
+    bundle_version = Binder().bind(payload, grain=grain, subject_ref=ref, platform=platform).version_binding
+    versioning = {
+        "prompt": _collect_prompt_meta(shadow_modules),
+        "model_revision": model_rev,
+        "bundle_id": shadow_result.bundle_id,
+        "bundle_version": bundle_version,
+        "memory_revision": mem_rev,
+        "governor_revision": Governor.constitution_version,
+    }
     return ShadowReport(
         bundle_id=shadow_result.bundle_id,
-        memory_revision=memory_revision(store),
-        model_revision=getattr(settings, "analyst_hf_revision", None),
+        memory_revision=mem_rev,
+        model_revision=model_rev,
         production=production,
         shadow=shadow,
         comparison=compare(production, shadow),
         diagnostics=_collect_diagnostics(shadow_modules, wall_ms),
         inputs={"ref": ref, "platform": platform, "grain": grain},
+        versioning=versioning,
     )

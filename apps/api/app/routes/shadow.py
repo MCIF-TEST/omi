@@ -13,8 +13,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.auth import CurrentUser, require_user
 from app.core.config import get_settings
 from app.reasoning import analyst
-from app.reasoning.model_providers import provider_status
-from app.reasoning.shadow import aggregate_stats, all_reports, cached_report, persist_report, run_shadow
+from app.reasoning.model_providers import build_remote_provider, provider_status
+from app.reasoning.prompts import PromptExperiment, compare_prompts, default_registry
+from app.reasoning.shadow import (
+    ab_evaluate,
+    aggregate_stats,
+    all_reports,
+    cached_report,
+    persist_report,
+    run_shadow,
+)
 from app.storage.db import get_session
 from app.storage.repository import AccountRepository
 
@@ -46,6 +54,51 @@ def shadow_stats(current: CurrentUser = Depends(require_user)) -> dict:
     _require_admin(current)
     with get_session() as session:
         return aggregate_stats(all_reports(session))
+
+
+@admin_router.get("/prompts")
+def list_prompts(analyst_name: str | None = None, current: CurrentUser = Depends(require_user)) -> dict:
+    """The Prompt Registry listing — versioned, content-hashed prompts per analyst, with the
+    active version flagged. Selection is config-driven (``OMI_ANALYST_PROMPT_VERSION``)."""
+    _require_admin(current)
+    registry = default_registry()
+    return {"analysts": registry.analysts(), "prompts": registry.records(analyst_name)}
+
+
+@admin_router.post("/ab/{slug}")
+def run_ab(
+    slug: str,
+    variant_a: str = Query("v1"),
+    variant_b: str = Query("v2"),
+    analyst_name: str = Query("behavior_analyst"),
+    current: CurrentUser = Depends(require_user),
+) -> dict:
+    """A/B two prompt versions on one investigation. The prompt diff is always returned; the
+    live execution comparison requires a configured model endpoint (otherwise both variants
+    fall back to deterministic — a null result by construction)."""
+    _require_admin(current)
+    registry = default_registry()
+    try:
+        spec_a, spec_b = registry.resolve(analyst_name, variant_a), registry.resolve(analyst_name, variant_b)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown analyst or prompt version.")
+    prompts = compare_prompts(spec_a, spec_b)
+
+    with get_session() as session:
+        repo = AccountRepository(session)
+        inv = repo.get_investigation(slug=slug, user_id=current.id if current.id != 0 else None)
+        if inv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found.")
+        provider = build_remote_provider(get_settings())
+        if provider is None:
+            return {"slug": slug, "analyst": analyst_name, "prompts": prompts, "execution": None,
+                    "note": "Live A/B requires a configured model endpoint; prompt diff shown."}
+        result = ab_evaluate(
+            inv.payload_json or {}, ref=analyst._ref(inv.slug),
+            experiment=PromptExperiment(analyst_name, variant_a, variant_b),
+            provider_a=provider, provider_b=provider, platform=analyst._platform_of(inv), registry=registry,
+        )
+        return {"slug": slug, "analyst": analyst_name, "prompts": prompts, "execution": result}
 
 
 @admin_router.post("/investigations/{slug}")

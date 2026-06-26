@@ -28,6 +28,7 @@ from app.memory.graph import retrieve
 
 from app.reasoning.contracts import Artifact, Finding, ReasoningContract
 from app.reasoning.model_providers import ReasoningProvider, ReasoningRequest, ReasoningResponse
+from app.reasoning.prompts import PromptRegistry, default_registry
 
 from .blackboard import BlackboardView
 from .modules import AnalystModule, BehaviorAnalyst, CounterEvidenceAnalyst
@@ -53,6 +54,7 @@ class RemoteAnalyst:
         self._parser = parser
         self._fallback = fallback
         self.last_diagnostics: dict[str, Any] = {"mode": "uninitialized"}
+        self.prompt_meta: dict[str, Any] = {}      # {analyst, version, hash} — set by the factory
 
     def run(self, view: BlackboardView) -> list[Artifact]:
         provider_name = getattr(self._provider, "name", "?")
@@ -84,22 +86,13 @@ class RemoteAnalyst:
 # --------------------------------------------------------------------------- #
 # The first AI specialist: an AI-backed Behavior Analyst (Tier 1, Findings)
 # --------------------------------------------------------------------------- #
-_BEHAVIOR_SYSTEM = (
-    "You are OMI BEHAVIOR ANALYST, a Tier-1 specialist inside a constitutional reasoning "
-    "council. You receive behavioral evidence items (each with a stable id) and optional "
-    "prior context. For each informative behavioral signal, emit a short, probabilistic "
-    "finding. RULES: cite ONLY the provided evidence ids — never invent an id; prior context "
-    "is background, NOT proof, and must never be cited as evidence; never assert a verdict or "
-    "a probability number; expose uncertainty honestly. Output ONE JSON object: "
-    '{"findings":[{"signal":"...","claim":"...","direction":"raises|lowers|neutral",'
-    '"evidence_refs":["ev:...."]}],"uncertainty":["..."]}. Output only the JSON object.'
-)
-
-
-def _behavior_prompt(view: BlackboardView, *, store: Any = None, now: Any = None) -> ReasoningRequest:
+def _behavior_prompt(
+    view: BlackboardView, *, system: str, store: Any = None, now: Any = None,
+) -> ReasoningRequest:
     """Build the request from contract-permitted behavioral evidence (non-supplemental
     contributions only — supplemental signals carry zero suspicion weight, so they are not
-    offered) plus optional PriorContext as clearly-labeled background."""
+    offered) plus optional PriorContext as clearly-labeled background. ``system`` is the
+    versioned prompt template resolved from the registry."""
     items = [
         {"id": it.id, "signal": it.originating_detector, "direction": it.direction}
         for it in view.evidence(facet="behavioral")
@@ -118,7 +111,7 @@ def _behavior_prompt(view: BlackboardView, *, store: Any = None, now: Any = None
         + "\n\nPRIOR CONTEXT (institutional memory — background only, never proof, never cite):\n"
         + json.dumps(priors, ensure_ascii=False)
     )
-    return ReasoningRequest(system=_BEHAVIOR_SYSTEM, user=user, response_format="json")
+    return ReasoningRequest(system=system, user=user, response_format="json")
 
 
 def _parse_findings(response: ReasoningResponse, view: BlackboardView, *, module: str) -> list[Artifact]:
@@ -146,19 +139,30 @@ def _parse_findings(response: ReasoningResponse, view: BlackboardView, *, module
 
 def ai_behavior_analyst(
     provider: ReasoningProvider, *, store: Any = None, now: Any = None,
-    fallback: AnalystModule | None = None,
+    fallback: AnalystModule | None = None, registry: PromptRegistry | None = None,
+    prompt_version: str | None = None, settings: Any | None = None,
 ) -> RemoteAnalyst:
-    """The first AI-backed specialist: a drop-in for the Behavior Analyst contract that
-    reasons via ``provider`` and falls back to the deterministic ``BehaviorAnalyst`` on any
-    failure. ``store`` (optional) supplies PriorContext as background."""
+    """The first AI-backed specialist: a drop-in for the Behavior Analyst contract that reasons
+    via ``provider`` from a **versioned prompt** (registry-resolved, never embedded) and falls
+    back to the deterministic ``BehaviorAnalyst`` on any failure. Prompt selection is
+    config-driven: explicit ``prompt_version`` wins, else ``settings.analyst_prompt_version``,
+    else the registry's active version. ``store`` (optional) supplies PriorContext."""
+    registry = registry or default_registry()
+    if prompt_version is None and settings is not None:
+        prompt_version = getattr(settings, "analyst_prompt_version", None)
+    spec = registry.resolve("behavior_analyst", prompt_version)
     fb = fallback or BehaviorAnalyst()
     module = fb.contract.module
-    return RemoteAnalyst(
+    analyst = RemoteAnalyst(
         contract=fb.contract, provider=provider,
-        prompt_builder=lambda v: _behavior_prompt(v, store=store, now=now),
+        prompt_builder=lambda v: _behavior_prompt(v, system=spec.template, store=store, now=now),
         parser=lambda resp, v: _parse_findings(resp, v, module=module),
         fallback=fb,
     )
+    analyst.prompt_meta = {
+        "analyst": "behavior_analyst", "version": spec.prompt_version, "hash": spec.prompt_hash,
+    }
+    return analyst
 
 
 # --------------------------------------------------------------------------- #
@@ -176,7 +180,8 @@ def build_council(settings: Any | None = None, *, store: Any = None, now: Any = 
 
     provider = build_remote_provider(settings) if getattr(settings, "analyst_enabled", False) else None
     behavior: AnalystModule = (
-        ai_behavior_analyst(provider, store=store, now=now) if provider is not None else BehaviorAnalyst()
+        ai_behavior_analyst(provider, store=store, now=now, settings=settings)
+        if provider is not None else BehaviorAnalyst()
     )
     council: list[AnalystModule] = [behavior]
     if store is not None:
