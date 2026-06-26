@@ -65,10 +65,12 @@ def _deterministic_council(store: Any, now: Any) -> list:
 def _ai_council(
     provider: Any, store: Any, now: Any, *,
     registry: Any = None, prompt_version: Any = None, settings: Any = None,
+    context_mode: Any = None, context_budget: Any = None,
 ) -> list:
     council = [ai_behavior_analyst(
         provider, store=store, now=now, registry=registry,
         prompt_version=prompt_version, settings=settings,
+        context_mode=context_mode, context_budget=context_budget,
     )]
     if store is not None:
         council.append(MemoryAnalyst(store, now=now))
@@ -80,6 +82,13 @@ def _collect_prompt_meta(shadow_modules: list) -> dict:
     """The versioned-prompt provenance of the shadow council's AI specialist (or deterministic)."""
     metas = [m.prompt_meta for m in shadow_modules if isinstance(m, RemoteAnalyst) and m.prompt_meta]
     return metas[0] if metas else {"mode": "deterministic"}
+
+
+def _collect_context(shadow_modules: list) -> dict:
+    """The structured-context metrics of the shadow council's AI specialist (or raw/deterministic).
+    Captured even on fallback — the Context Builder runs deterministically regardless of the model."""
+    ctxs = [m.last_context for m in shadow_modules if isinstance(m, RemoteAnalyst) and m.last_context]
+    return ctxs[0] if ctxs else {"mode": "deterministic"}
 
 
 def _collect_diagnostics(shadow_modules: list, wall_ms: float) -> dict:
@@ -112,6 +121,7 @@ class ShadowReport:
     diagnostics: dict
     inputs: dict
     versioning: dict = field(default_factory=dict)
+    context: dict = field(default_factory=dict)
     generated_at: str = field(default_factory=_now_iso)
 
     def to_dict(self) -> dict:
@@ -122,14 +132,16 @@ def run_shadow(
     payload: dict, *, ref: str, platform: str = "youtube", grain: str = "comment_section",
     settings: Any | None = None, store: Any = None, now: Any = None, provider: Any = None,
     registry: Any = None, prompt_version: Any = None,
+    context_mode: Any = None, context_budget: Any = None,
 ) -> ShadowReport:
     """Run the deterministic + AI-backed councils over ``payload`` and build the comparison.
 
     ``provider`` (optional) injects an explicit reasoning provider for the shadow council;
     otherwise the council is assembled from settings (``build_council``) — AI-backed when an
     endpoint is configured, deterministic-fallback otherwise. ``registry`` + ``prompt_version``
-    pin the AI analyst's versioned prompt (for benchmarking / A/B). The production result is
-    always the deterministic council."""
+    pin the AI analyst's versioned prompt; ``context_mode`` + ``context_budget`` select the
+    Context Builder (raw vs structured) for the raw-vs-structured comparison. The production
+    result is always the deterministic council."""
     if settings is None:
         from app.core.config import get_settings
         settings = get_settings()
@@ -138,6 +150,7 @@ def run_shadow(
     if provider is not None:
         shadow_modules = _ai_council(
             provider, store, now, registry=registry, prompt_version=prompt_version, settings=settings,
+            context_mode=context_mode, context_budget=context_budget,
         )
     else:
         shadow_modules = build_council(settings, store=store, now=now)
@@ -170,4 +183,5 @@ def run_shadow(
         diagnostics=_collect_diagnostics(shadow_modules, wall_ms),
         inputs={"ref": ref, "platform": platform, "grain": grain},
         versioning=versioning,
+        context=_collect_context(shadow_modules),
     )

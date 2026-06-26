@@ -46,3 +46,31 @@ def ab_evaluate(
         "variant_a": rep_a.to_dict(),
         "variant_b": rep_b.to_dict(),
     }
+
+
+def compare_context_modes(
+    payload: dict, *, ref: str, provider_raw: Any, provider_structured: Any = None,
+    budget: str = "standard", platform: str = "youtube", grain: str = "comment_section",
+    registry: Any = None, settings: Any | None = None, store: Any = None, now: Any = None,
+) -> dict:
+    """Raw evidence context vs the structured Context Builder (Sprint 009): run the shadow
+    pipeline once per context mode (same prompt, same model) and compare the two AI reads, plus
+    surface the context-quality metrics of each. Determines whether *structuring* the context —
+    not changing the model — improves the read. ``provider_structured`` defaults to
+    ``provider_raw`` so a single deterministic provider drives a clean A/B."""
+    provider_structured = provider_structured or provider_raw
+    rep_raw = run_shadow(
+        payload, ref=ref, platform=platform, grain=grain, settings=settings, store=store, now=now,
+        provider=provider_raw, registry=registry, context_mode="raw",
+    )
+    rep_structured = run_shadow(
+        payload, ref=ref, platform=platform, grain=grain, settings=settings, store=store, now=now,
+        provider=provider_structured, registry=registry, context_mode="structured", context_budget=budget,
+    )
+    return {
+        "comparison": compare(rep_raw.shadow, rep_structured.shadow),
+        "raw_context": rep_raw.context,
+        "structured_context": rep_structured.context,
+        "raw": rep_raw.to_dict(),
+        "structured": rep_structured.to_dict(),
+    }

@@ -12,7 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.auth import CurrentUser, require_user
 from app.core.config import get_settings
+from app.evidence import Binder
 from app.reasoning import analyst
+from app.reasoning.context import build_context
 from app.reasoning.model_providers import build_remote_provider, provider_status
 from app.reasoning.prompts import PromptExperiment, compare_prompts, default_registry
 from app.reasoning.shadow import (
@@ -20,6 +22,7 @@ from app.reasoning.shadow import (
     aggregate_stats,
     all_reports,
     cached_report,
+    compare_context_modes,
     persist_report,
     run_shadow,
 )
@@ -63,6 +66,35 @@ def list_prompts(analyst_name: str | None = None, current: CurrentUser = Depends
     _require_admin(current)
     registry = default_registry()
     return {"analysts": registry.analysts(), "prompts": registry.records(analyst_name)}
+
+
+@admin_router.post("/context/{slug}")
+def run_context(
+    slug: str,
+    budget: str = Query("standard"),
+    current: CurrentUser = Depends(require_user),
+) -> dict:
+    """Build the structured Context Builder output + quality metrics for one investigation
+    (model-independent, so it works offline). When a model endpoint is configured, also runs
+    the raw-vs-structured reasoning comparison through Shadow Mode."""
+    _require_admin(current)
+    with get_session() as session:
+        repo = AccountRepository(session)
+        inv = repo.get_investigation(slug=slug, user_id=current.id if current.id != 0 else None)
+        if inv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found.")
+        payload = inv.payload_json or {}
+        ref, platform = analyst._ref(inv.slug), analyst._platform_of(inv)
+        bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform)
+        ctx = build_context(bundle, budget=budget)
+
+        provider = build_remote_provider(get_settings())
+        execution = None
+        if provider is not None:
+            execution = compare_context_modes(
+                payload, ref=ref, provider_raw=provider, budget=budget, platform=platform,
+            )
+        return {"slug": slug, "budget": budget, "context": ctx.to_dict(), "execution": execution}
 
 
 @admin_router.post("/ab/{slug}")
