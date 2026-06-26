@@ -194,6 +194,7 @@ class Settings(BaseSettings):
     analyst_hf_revision: str | None = None
     analyst_endpoint_url: str | None = None
     analyst_timeout_seconds: float = 30.0
+    analyst_max_retries: int = 2
 
     # -----------------------------------------------------------------------
     # Learned detector (ML track). Off by default: when use_ml_scorer is

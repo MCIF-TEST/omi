@@ -8,6 +8,7 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { SavedInvestigationViewer } from './viewer';
 import { ShareBlock } from './share-block';
 import { CommentaryBlock } from './commentary-block';
+import { AnalystPanel } from './analyst-panel';
 import { VerdictWidget } from './verdict-widget';
 import { env } from '@/lib/env';
 
@@ -99,6 +100,8 @@ export default async function InvestigationPage({ params }: { params: { slug: st
         initialProvider={inv.commentary_provider}
         initialGeneratedAt={inv.commentary_generated_at}
       />
+
+      <AnalystPanel slug={inv.slug} />
 
       <ShareBlock
         slug={inv.slug}

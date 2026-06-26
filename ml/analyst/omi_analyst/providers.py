@@ -493,8 +493,10 @@ class QwenAnalystProvider:
 
     name = "qwen-omi-analyst-v1"
 
-    def __init__(self, endpoint_url: str | None = None):
+    def __init__(self, endpoint_url: str | None = None, *, timeout: float = 30.0, max_retries: int = 2):
         self._endpoint = endpoint_url or os.environ.get("OMI_ANALYST_ENDPOINT_URL") or ""
+        self._timeout = float(timeout)
+        self._max_retries = max(0, int(max_retries))
         self._fallback = DeterministicAnalystProvider()
 
     def build_user_message(self, bundle: dict) -> str:
@@ -515,26 +517,34 @@ class QwenAnalystProvider:
         token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
         if not self._endpoint or not token:
             return None
-        try:  # pragma: no cover - no endpoint reachable in CI/this container
-            import urllib.request
+        import time as _time
+        import urllib.request
 
-            payload = json.dumps({
-                "inputs": f"<|system|>\n{system}\n<|user|>\n{user}",
-                "parameters": {"temperature": config.temperature,
-                               "max_new_tokens": config.max_new_tokens, "return_full_text": False},
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                self._endpoint, data=payload,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            if isinstance(data, list) and data:
-                return data[0].get("generated_text")
-            if isinstance(data, dict):
-                return data.get("generated_text")
-        except Exception:  # noqa: BLE001 — network/endpoint/parse error → fall back
-            return None
+        body = json.dumps({
+            "inputs": f"<|system|>\n{system}\n<|user|>\n{user}",
+            "parameters": {"temperature": config.temperature,
+                           "max_new_tokens": config.max_new_tokens, "return_full_text": False},
+        }).encode("utf-8")
+        # Retry transient failures (timeout / 5xx / connection) with capped exponential
+        # backoff before giving up to the deterministic fallback.
+        for attempt in range(self._max_retries + 1):
+            try:
+                req = urllib.request.Request(
+                    self._endpoint, data=body,
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                if isinstance(data, list) and data:
+                    return data[0].get("generated_text")
+                if isinstance(data, dict):
+                    return data.get("generated_text")
+                return None
+            except Exception:  # noqa: BLE001 — network/endpoint/parse error
+                if attempt < self._max_retries:
+                    _time.sleep(min(2.0, 0.5 * (2 ** attempt)))
+                    continue
+                return None
         return None
 
     @staticmethod
