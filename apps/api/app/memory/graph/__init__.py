@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from .extract import extract_candidates, record_settled_investigation
 from .objects import KnowledgeObject, ObservationLedgerEntry
-from .retrieval import RankedPrior, bundle_signature, retrieve
+from .postgres import PostgresMemoryStore
+from .retrieval import RankedPrior, bundle_signature, rank_priors, retrieve
 from .store import MemoryStore, jaccard
 
 __all__ = [
     "KnowledgeObject", "ObservationLedgerEntry",
-    "MemoryStore", "jaccard",
-    "RankedPrior", "retrieve", "bundle_signature",
+    "MemoryStore", "PostgresMemoryStore", "jaccard",
+    "RankedPrior", "retrieve", "rank_priors", "bundle_signature",
     "extract_candidates", "record_settled_investigation",
 ]

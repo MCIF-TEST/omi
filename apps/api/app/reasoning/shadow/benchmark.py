@@ -74,3 +74,35 @@ def compare_context_modes(
         "raw": rep_raw.to_dict(),
         "structured": rep_structured.to_dict(),
     }
+
+
+def compare_evidence_modes(
+    payload: dict, *, ref: str, provider: Any = None, platform: str = "youtube",
+    grain: str = "comment_section", registry: Any = None, settings: Any | None = None,
+    store: Any = None, now: Any = None, context_mode: Any = None,
+) -> dict:
+    """Baseline evidence vs enriched evidence (Sprint 010): run the shadow pipeline once per
+    Binder mode (enrich off/on; same prompt, same model, same context mode) and compare the two
+    AI reads, surfacing each bundle's evidence-quality metrics + the quality deltas. Determines
+    whether *richer evidence* improves the read. Deterministic given a deterministic provider."""
+    rep_base = run_shadow(
+        payload, ref=ref, platform=platform, grain=grain, settings=settings, store=store, now=now,
+        provider=provider, registry=registry, context_mode=context_mode, enrich=False,
+    )
+    rep_rich = run_shadow(
+        payload, ref=ref, platform=platform, grain=grain, settings=settings, store=store, now=now,
+        provider=provider, registry=registry, context_mode=context_mode, enrich=True,
+    )
+    deltas = {
+        k: round(rep_rich.evidence[k] - rep_base.evidence[k], 4)
+        for k in ("evidence_completeness", "facet_coverage", "graph_density", "timeline_completeness")
+        if isinstance(rep_base.evidence.get(k), (int, float)) and isinstance(rep_rich.evidence.get(k), (int, float))
+    }
+    return {
+        "comparison": compare(rep_base.shadow, rep_rich.shadow),
+        "baseline_evidence": rep_base.evidence,
+        "enriched_evidence": rep_rich.evidence,
+        "quality_deltas": deltas,
+        "baseline": rep_base.to_dict(),
+        "enriched": rep_rich.to_dict(),
+    }

@@ -29,17 +29,22 @@ def replay(
     payload: dict, *, previous: Any, ref: str, platform: str = "youtube",
     grain: str = "comment_section", settings: Any | None = None,
     store: Any = None, now: Any = None, provider: Any = None,
+    registry: Any = None, prompt_version: Any = None,
+    context_mode: Any = None, context_budget: Any = None, enrich: bool = False,
 ) -> dict:
     """Re-run the shadow pipeline and compare to ``previous`` (a ``ShadowReport`` or its dict).
 
-    Returns a replay result: whether each path reproduced, whether the pinned inputs matched
-    (bundle / memory / model revision), and any drift. Determinism guarantee: the production
-    path reproduces whenever the bundle id matches; the shadow path reproduces under a
-    deterministic provider."""
+    Pass the same run parameters (``provider`` / ``prompt_version`` / ``context_mode`` /
+    ``enrich`` …) the original used, so replay reproduces faithfully. Returns whether each path
+    reproduced, whether the pinned inputs matched (bundle / memory / model revision), and any
+    drift. Determinism guarantee: the production path reproduces whenever the bundle id matches;
+    the shadow path reproduces under a deterministic provider."""
     prev = previous.to_dict() if hasattr(previous, "to_dict") else dict(previous)
     current = run_shadow(
         payload, ref=ref, platform=platform, grain=grain,
         settings=settings, store=store, now=now, provider=provider,
+        registry=registry, prompt_version=prompt_version,
+        context_mode=context_mode, context_budget=context_budget, enrich=enrich,
     )
 
     same_inputs = {

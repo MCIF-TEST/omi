@@ -29,6 +29,8 @@ class MemoryStore:
     def __init__(self) -> None:
         self._objs: dict[str, KnowledgeObject] = {}
         self._seq = 0
+        self._tiers: dict[str, str] = {}          # cached distillation tiers (Sprint 013)
+        self._feedback: list = []                 # append-only retrieval feedback (Sprint 014)
 
     # -- read ----------------------------------------------------------------- #
     def get(self, ko_id: str) -> KnowledgeObject | None:
@@ -39,6 +41,52 @@ class MemoryStore:
 
     def __len__(self) -> int:
         return len(self._objs)
+
+    def candidates_for(self, bundle: Any) -> list[KnowledgeObject]:
+        """Narrow to non-superseded objects sharing a signature token with the bundle — the
+        in-memory analogue of the Postgres index path (parity for the retrieval engine)."""
+        from .retrieval import bundle_signature
+        tokens = bundle_signature(bundle)
+        if not tokens:
+            return []
+        return [o for o in self.all() if tokens & set(o.signature)]
+
+    # -- tier cache (Sprint 013 distillation) -------------------------------- #
+    def tiers(self) -> dict[str, str]:
+        return dict(self._tiers)
+
+    def set_tier(self, ko_id: str, tier: str) -> None:
+        prev = self._tiers.get(ko_id)
+        self._tiers[ko_id] = tier
+        ko = self._objs.get(ko_id)
+        if ko is not None:
+            ko.version_history.append({"rev": len(ko.version_history) + 1, "change": f"tier:{prev}->{tier}"})
+
+    # -- compression: merge an equivalent duplicate into a canonical object --- #
+    def merge_into(self, canonical_id: str, dup_id: str) -> int:
+        """Re-parent ``dup``'s observations onto ``canonical`` (denser, provenance preserved —
+        each observation keeps its investigation/evidence), then archive the now-empty duplicate.
+        Returns the number of observations moved. Deterministic."""
+        canon, dup = self._objs.get(canonical_id), self._objs.get(dup_id)
+        if canon is None or dup is None:
+            return 0
+        moved = len(dup.ledger)
+        canon.ledger.extend(dup.ledger)
+        dup.ledger = []
+        canon.version_history.append({"rev": len(canon.version_history) + 1, "change": f"merged:{dup_id}"})
+        self.supersede(dup_id, canonical_id)
+        return moved
+
+    # -- retrieval feedback (Sprint 014, append-only; ranking only) ----------- #
+    def record_feedback(self, fb: Any) -> Any:
+        self._feedback.append(fb)
+        ko = self._objs.get(fb.ko_id)
+        if ko is not None:
+            ko.reuse_count += 1
+        return fb
+
+    def feedback(self, *, ko_id: str | None = None) -> list:
+        return [f for f in self._feedback if ko_id is None or f.ko_id == ko_id]
 
     # -- write (evidence-gated) ---------------------------------------------- #
     def _new_id(self, type_: str) -> str:

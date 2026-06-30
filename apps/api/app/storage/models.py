@@ -20,6 +20,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -855,3 +856,147 @@ class EventLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, index=True
     )
+
+
+# ---------------------------------------------------------------------------
+# Institutional Intelligence Memory — production persistence (Sprint 012).
+#
+# The durable home of the memory system (Sprint 005/006). The CONSTITUTION lives
+# in the domain model (app/memory/graph/objects.py), not the schema: confidence,
+# contradiction history, and epistemic status are RECOMPUTED from the append-only
+# observation ledger — never stored — so memory always evolves and can never
+# ossify into a stored verdict. These tables persist evidence + observed patterns
+# only; the typed memories (coordination / behavioral / control / narrative /
+# campaign) are rows distinguished by ``type`` (+ ``is_control``), indexed for
+# lookup at scale. No LLM opinion is ever written.
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeObjectRow(Base):
+    """A persisted KnowledgeObject — a recurring, falsifiable pattern. Aggregates are derived
+    from the ledger, never stored here."""
+
+    __tablename__ = "knowledge_objects"
+    __table_args__ = (
+        Index("ix_ko_type_control", "type", "is_control"),
+        Index("ix_ko_active", "superseded_by"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    type: Mapped[str] = mapped_column(String(64))     # indexed via composite ix_ko_type_control (leading col)
+    family: Mapped[str] = mapped_column(String(64), default="patterns_signatures")
+    label: Mapped[str] = mapped_column(Text, default="")
+    signature: Mapped[list] = mapped_column(JSON, default=list)
+    attributes: Mapped[dict] = mapped_column(JSON, default=dict)
+    is_control: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    influence_class: Mapped[str] = mapped_column(String(16), default="context")
+    superseded_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    half_life_days: Mapped[float] = mapped_column(Float, default=180.0)
+    retirement_floor: Mapped[float] = mapped_column(Float, default=0.12)
+    platform_scope: Mapped[list] = mapped_column(JSON, default=list)
+    # Sprint 013: cached distillation tier (derived from the ledger; refreshed by consolidation).
+    # A performance cache for tier-filtered queries — never the source of truth.
+    tier: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    last_consolidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Sprint 014: denormalized retrieval-reuse counter (source of truth is retrieval_feedback).
+    # A measurement that influences future retrieval RANKING only — never a score or verdict.
+    reuse_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    observations: Mapped[list["ObservationLedgerRow"]] = relationship(
+        back_populates="knowledge_object", cascade="all, delete-orphan",
+        order_by="ObservationLedgerRow.seq",
+    )
+    signatures: Mapped[list["KnowledgeObjectSignatureRow"]] = relationship(
+        back_populates="knowledge_object", cascade="all, delete-orphan",
+    )
+
+
+class KnowledgeObjectSignatureRow(Base):
+    """One signature token of a KnowledgeObject — the indexed seam for fast signature lookup
+    across millions of objects (find candidates sharing a firing detector/method)."""
+
+    __tablename__ = "knowledge_object_signatures"
+    __table_args__ = (
+        Index("ix_kosig_token", "token"),
+        UniqueConstraint("ko_id", "token", name="uq_kosig_ko_token"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of uq_kosig_ko_token
+    token: Mapped[str] = mapped_column(String(128))
+    knowledge_object: Mapped["KnowledgeObjectRow"] = relationship(back_populates="signatures")
+
+
+class ObservationLedgerRow(Base):
+    """One append-only evidence observation. Never updated or deleted — the raw record is kept so
+    aggregates can be recomputed and history is never overwritten."""
+
+    __tablename__ = "observation_ledger"
+    __table_args__ = (
+        Index("ix_obs_ko_seq", "ko_id", "seq"),
+        Index("ix_obs_stance", "stance"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of ix_obs_ko_seq
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    investigation: Mapped[str] = mapped_column(String(128), index=True)
+    stance: Mapped[str] = mapped_column(String(16))
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    independence_key: Mapped[str] = mapped_column(String(128), default="")
+    at: Mapped[str] = mapped_column(String(40), default="")
+    human_anchor: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    memory_influence: Mapped[str] = mapped_column(String(16), default="none")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    knowledge_object: Mapped["KnowledgeObjectRow"] = relationship(back_populates="observations")
+
+
+class MemoryRevisionRow(Base):
+    """Version history for a KnowledgeObject — every create / observe / supersede step (audit)."""
+
+    __tablename__ = "memory_revisions"
+    __table_args__ = (Index("ix_memrev_ko", "ko_id", "rev"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of ix_memrev_ko
+    rev: Mapped[int] = mapped_column(Integer, default=1)
+    change: Mapped[str] = mapped_column(String(64), default="")
+    investigation: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class RetrievalFeedbackRow(Base):
+    """Append-only retrieval feedback (Sprint 014). Records WHY a memory was retrieved and what
+    happened — whether it influenced reasoning, whether the Governor accepted the ruling that
+    used it, and whether the analyst agreed. This improves future retrieval RANKING only; it
+    never changes an investigation's score, the Governor, or OmiScore. Measurement, not control."""
+
+    __tablename__ = "retrieval_feedback"
+    __table_args__ = (Index("ix_rfb_ko", "ko_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of ix_rfb_ko
+    investigation: Mapped[str] = mapped_column(String(128), index=True)
+    selected_because: Mapped[str] = mapped_column(Text, default="")
+    influenced: Mapped[bool] = mapped_column(Boolean, default=False)
+    governor_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    analyst_agreed: Mapped[bool] = mapped_column(Boolean, default=False)
+    at: Mapped[str] = mapped_column(String(40), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class PriorContextCacheRow(Base):
+    """A cached PriorContext retrieval keyed by the bundle signature hash. Memory influences
+    CONTEXT only; this is a read accelerator, never a source of new evidence."""
+
+    __tablename__ = "prior_context_cache"
+    # signature_hash carries unique=True (→ a unique index); a separate ix_pcc_sig would duplicate it.
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    signature_hash: Mapped[str] = mapped_column(String(80), unique=True)
+    result: Mapped[list] = mapped_column(JSON, default=list)
+    memory_revision: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

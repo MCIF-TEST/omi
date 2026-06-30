@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from app.evidence import Binder
+from app.evidence import Binder, evidence_quality
 from app.evidence.bundle import digest
 from app.governor import Governor
 
@@ -122,6 +122,7 @@ class ShadowReport:
     inputs: dict
     versioning: dict = field(default_factory=dict)
     context: dict = field(default_factory=dict)
+    evidence: dict = field(default_factory=dict)
     generated_at: str = field(default_factory=_now_iso)
 
     def to_dict(self) -> dict:
@@ -132,7 +133,7 @@ def run_shadow(
     payload: dict, *, ref: str, platform: str = "youtube", grain: str = "comment_section",
     settings: Any | None = None, store: Any = None, now: Any = None, provider: Any = None,
     registry: Any = None, prompt_version: Any = None,
-    context_mode: Any = None, context_budget: Any = None,
+    context_mode: Any = None, context_budget: Any = None, enrich: bool = False,
 ) -> ShadowReport:
     """Run the deterministic + AI-backed councils over ``payload`` and build the comparison.
 
@@ -140,8 +141,9 @@ def run_shadow(
     otherwise the council is assembled from settings (``build_council``) — AI-backed when an
     endpoint is configured, deterministic-fallback otherwise. ``registry`` + ``prompt_version``
     pin the AI analyst's versioned prompt; ``context_mode`` + ``context_budget`` select the
-    Context Builder (raw vs structured) for the raw-vs-structured comparison. The production
-    result is always the deterministic council."""
+    Context Builder; ``enrich`` turns on Sprint-010 evidence enrichment (applied to both
+    councils, for the baseline-vs-enriched comparison). The production result is always the
+    deterministic council."""
     if settings is None:
         from app.core.config import get_settings
         settings = get_settings()
@@ -155,23 +157,24 @@ def run_shadow(
     else:
         shadow_modules = build_council(settings, store=store, now=now)
 
-    prod_result = Orchestrator(modules=prod_modules).run(payload, ref=ref, platform=platform, grain=grain)
+    prod_result = Orchestrator(modules=prod_modules).run(payload, ref=ref, platform=platform, grain=grain, enrich=enrich)
     t0 = time.perf_counter()
-    shadow_result = Orchestrator(modules=shadow_modules).run(payload, ref=ref, platform=platform, grain=grain)
+    shadow_result = Orchestrator(modules=shadow_modules).run(payload, ref=ref, platform=platform, grain=grain, enrich=enrich)
     wall_ms = (time.perf_counter() - t0) * 1000.0
 
     production = council_view(prod_result)
     shadow = council_view(shadow_result)
     mem_rev = memory_revision(store)
     model_rev = getattr(settings, "analyst_hf_revision", None)
-    bundle_version = Binder().bind(payload, grain=grain, subject_ref=ref, platform=platform).version_binding
+    bundle = Binder().bind(payload, grain=grain, subject_ref=ref, platform=platform, enrich=enrich)
     versioning = {
         "prompt": _collect_prompt_meta(shadow_modules),
         "model_revision": model_rev,
         "bundle_id": shadow_result.bundle_id,
-        "bundle_version": bundle_version,
+        "bundle_version": bundle.version_binding,
         "memory_revision": mem_rev,
         "governor_revision": Governor.constitution_version,
+        "enrich": bool(enrich),
     }
     return ShadowReport(
         bundle_id=shadow_result.bundle_id,
@@ -184,4 +187,5 @@ def run_shadow(
         inputs={"ref": ref, "platform": platform, "grain": grain},
         versioning=versioning,
         context=_collect_context(shadow_modules),
+        evidence=evidence_quality(bundle),
     )

@@ -68,8 +68,8 @@ class Orchestrator:
         self.budget = budget or BudgetController()
 
     def run(self, payload: dict, *, ref: str, platform: str = "youtube",
-            grain: str = "comment_section") -> CouncilResult:
-        bundle = Binder().bind(payload, grain=grain, subject_ref=ref, platform=platform)
+            grain: str = "comment_section", enrich: bool = False) -> CouncilResult:
+        bundle = Binder().bind(payload, grain=grain, subject_ref=ref, platform=platform, enrich=enrich)
         bb = Blackboard(bundle)
 
         if self.budget.decide(bundle) == "floor_only":
