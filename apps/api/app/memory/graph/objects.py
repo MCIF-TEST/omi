@@ -61,6 +61,7 @@ class KnowledgeObject:
     retirement_floor: float = 0.12
     version_history: list[dict[str, Any]] = field(default_factory=list)
     platform_scope: list[str] = field(default_factory=list)
+    reuse_count: int = 0                      # Sprint 014: retrieval reuse (measurement; ranking only)
 
     # -- ledger partitions ---------------------------------------------------- #
     def _supports(self) -> list[ObservationLedgerEntry]:

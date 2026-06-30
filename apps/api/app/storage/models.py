@@ -898,6 +898,9 @@ class KnowledgeObjectRow(Base):
     # A performance cache for tier-filtered queries — never the source of truth.
     tier: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     last_consolidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Sprint 014: denormalized retrieval-reuse counter (source of truth is retrieval_feedback).
+    # A measurement that influences future retrieval RANKING only — never a score or verdict.
+    reuse_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     observations: Mapped[list["ObservationLedgerRow"]] = relationship(
@@ -962,6 +965,26 @@ class MemoryRevisionRow(Base):
     change: Mapped[str] = mapped_column(String(64), default="")
     investigation: Mapped[str | None] = mapped_column(String(128), nullable=True)
     at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class RetrievalFeedbackRow(Base):
+    """Append-only retrieval feedback (Sprint 014). Records WHY a memory was retrieved and what
+    happened — whether it influenced reasoning, whether the Governor accepted the ruling that
+    used it, and whether the analyst agreed. This improves future retrieval RANKING only; it
+    never changes an investigation's score, the Governor, or OmiScore. Measurement, not control."""
+
+    __tablename__ = "retrieval_feedback"
+    __table_args__ = (Index("ix_rfb_ko", "ko_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"), index=True)
+    investigation: Mapped[str] = mapped_column(String(128), index=True)
+    selected_because: Mapped[str] = mapped_column(Text, default="")
+    influenced: Mapped[bool] = mapped_column(Boolean, default=False)
+    governor_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    analyst_agreed: Mapped[bool] = mapped_column(Boolean, default=False)
+    at: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
