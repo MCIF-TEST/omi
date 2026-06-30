@@ -13,7 +13,34 @@ from typing import Any
 from .compression import compression_potential
 from .feedback import aggregate_feedback
 from .quality_signals import quality_of
-from .tiers import ARCHETYPE, ARCHIVED, INSTITUTIONAL, RETRIEVABLE_TIERS, tier_of
+from .tiers import ARCHETYPE, ARCHIVED, INSTITUTIONAL, RETRIEVABLE_TIERS, is_retrievable, tier_of
+
+
+def retrieval_benchmark(store: Any, *, now: datetime | None = None) -> dict:
+    """A real, timed retrieval over a probe bundle synthesized from the densest retrievable memory's
+    signature — reports retrieval **latency** + **scan fraction** without storing anything, proving
+    the index-assisted path (scan_fraction stays small as the corpus grows). Returns ``{}`` when no
+    retrievable memory exists yet. Deterministic given ``(store, now)``."""
+    from app.evidence import Binder
+
+    from .retrieval_engine import retrieve_priors
+
+    retrievable = [k for k in store.all() if is_retrievable(tier_of(k, now))]
+    if not retrievable:
+        return {}
+    densest = max(retrievable, key=lambda k: (len(k.ledger), k.id))
+    sig = list(densest.signature) or ["temporal"]
+    payload = {
+        "overall_probability": 0.5, "overall_tier": "moderate", "confidence": 0.5,
+        "contributions": [{"name": t, "impact": 0.4, "direction": "raises"} for t in sig],
+    }
+    bundle = Binder().bind(payload, grain="comment_section", subject_ref="bench", platform="youtube")
+    res = retrieve_priors(store, bundle, now=now)
+    return {
+        "latency_ms": res.latency_ms, "scan_fraction": res.plan.scan_fraction,
+        "scanned": res.plan.scanned, "corpus_total": res.plan.corpus_total,
+        "surfaced": len(res.priors),
+    }
 
 
 def memory_stats(store: Any, *, now: datetime | None = None) -> dict:
@@ -76,16 +103,27 @@ def dashboard(store: Any, *, feedback: list | None = None, now: datetime | None 
     total_retrievals = sum(a["reuse_count"] for a in agg.values())
     useful_retrievals = sum(a["useful"] for a in agg.values())
     precision = round(useful_retrievals / total_retrievals, 4) if total_retrievals else 0.0
+    influenced_retrievals = sum(1 for f in fb_rows if getattr(f, "influenced", False))
+    false_retrievals = total_retrievals - influenced_retrievals
+    relevance = round(influenced_retrievals / total_retrievals, 4) if total_retrievals else 0.0
+    institutional_reuse = sum(
+        int(getattr(k, "reuse_count", 0)) for k in active if tier_map.get(k.id) in (ARCHETYPE, INSTITUTIONAL)
+    )
 
     return {
         **base,
         "compression": compression_potential(store, now=now),
+        "retrieval": retrieval_benchmark(store, now=now),
         "reuse": {
             "total_reuse": total_reuse,
             "reused_objects": reused_objects,
             "mean_reuse": round(total_reuse / len(active), 4) if active else 0.0,
+            "institutional_reuse": institutional_reuse,
         },
         "retrieval_precision": precision,
+        "retrieval_relevance": relevance,
+        "influenced_retrievals": influenced_retrievals,
+        "false_retrievals": false_retrievals,
         "retrieval_events": total_retrievals,
         "top_archetypes": top_archetypes,
         "top_institutional": top_institutional,

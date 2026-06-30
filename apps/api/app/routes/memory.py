@@ -19,6 +19,7 @@ from app.memory.consolidation import consolidate
 from app.memory.feedback import RetrievalFeedback
 from app.memory.graph.postgres import PostgresMemoryStore
 from app.memory.metrics import dashboard, memory_stats
+from app.memory.pipeline import measure_memory_impact
 
 admin_router = APIRouter(prefix="/v1/admin/memory", tags=["admin-memory"])
 
@@ -112,3 +113,35 @@ def record_feedback(body: FeedbackIn, current: CurrentUser = Depends(require_use
     )
     store.record_feedback(fb)
     return {"recorded": fb.to_dict()}
+
+
+@admin_router.post("/impact/{slug}")
+def investigation_memory_impact(
+    slug: str, learn: bool = True, current: CurrentUser = Depends(require_user),
+) -> dict:
+    """Run the COMPLETE live loop over one real stored investigation and measure memory's effect:
+    Investigation → Bundle → Governor → Retrieval → Council → Shadow → Memory Candidate. Runs the
+    real Shadow pipeline with and without memory to isolate memory's effect, records Governor-gated
+    feedback, and (``learn=true``, the default) writes the Governor-gated memory candidate to the
+    durable store — connecting real investigations to persistent institutional memory.
+
+    Engineering/validation tool: the user's production result is untouched and the engine number is
+    constitutionally preserved (verified in the returned ``number_preserved``)."""
+    _require_admin(current)
+    from app.reasoning import analyst
+    from app.storage.db import get_session
+    from app.storage.repository import AccountRepository
+
+    with get_session() as session:
+        repo = AccountRepository(session)
+        inv = repo.get_investigation(slug=slug, user_id=current.id if current.id != 0 else None)
+        if inv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found.")
+        payload = inv.payload_json or {}
+        ref, platform = analyst._ref(inv.slug), analyst._platform_of(inv)
+
+    impact = measure_memory_impact(
+        payload, ref=ref, platform=platform, store=_durable_store(),
+        settings=get_settings(), learn=learn,
+    )
+    return {"slug": slug, "impact": impact.to_dict()}

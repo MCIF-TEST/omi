@@ -883,7 +883,7 @@ class KnowledgeObjectRow(Base):
     )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    type: Mapped[str] = mapped_column(String(64), index=True)
+    type: Mapped[str] = mapped_column(String(64))     # indexed via composite ix_ko_type_control (leading col)
     family: Mapped[str] = mapped_column(String(64), default="patterns_signatures")
     label: Mapped[str] = mapped_column(Text, default="")
     signature: Mapped[list] = mapped_column(JSON, default=list)
@@ -923,7 +923,7 @@ class KnowledgeObjectSignatureRow(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"), index=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of uq_kosig_ko_token
     token: Mapped[str] = mapped_column(String(128))
     knowledge_object: Mapped["KnowledgeObjectRow"] = relationship(back_populates="signatures")
 
@@ -939,7 +939,7 @@ class ObservationLedgerRow(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"), index=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of ix_obs_ko_seq
     seq: Mapped[int] = mapped_column(Integer, default=0)
     investigation: Mapped[str] = mapped_column(String(128), index=True)
     stance: Mapped[str] = mapped_column(String(16))
@@ -960,7 +960,7 @@ class MemoryRevisionRow(Base):
     __table_args__ = (Index("ix_memrev_ko", "ko_id", "rev"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"), index=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of ix_memrev_ko
     rev: Mapped[int] = mapped_column(Integer, default=1)
     change: Mapped[str] = mapped_column(String(64), default="")
     investigation: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -978,7 +978,7 @@ class RetrievalFeedbackRow(Base):
     __table_args__ = (Index("ix_rfb_ko", "ko_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"), index=True)
+    ko_id: Mapped[str] = mapped_column(ForeignKey("knowledge_objects.id", ondelete="CASCADE"))  # leading col of ix_rfb_ko
     investigation: Mapped[str] = mapped_column(String(128), index=True)
     selected_because: Mapped[str] = mapped_column(Text, default="")
     influenced: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -993,7 +993,7 @@ class PriorContextCacheRow(Base):
     CONTEXT only; this is a read accelerator, never a source of new evidence."""
 
     __tablename__ = "prior_context_cache"
-    __table_args__ = (Index("ix_pcc_sig", "signature_hash"),)
+    # signature_hash carries unique=True (→ a unique index); a separate ix_pcc_sig would duplicate it.
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     signature_hash: Mapped[str] = mapped_column(String(80), unique=True)
