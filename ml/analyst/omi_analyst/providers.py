@@ -493,10 +493,16 @@ class QwenAnalystProvider:
 
     name = "qwen-omi-analyst-v1"
 
-    def __init__(self, endpoint_url: str | None = None, *, timeout: float = 30.0, max_retries: int = 2):
+    def __init__(
+        self, endpoint_url: str | None = None, *, timeout: float = 30.0, max_retries: int = 2,
+        system_prompt: str | None = None,
+    ):
         self._endpoint = endpoint_url or os.environ.get("OMI_ANALYST_ENDPOINT_URL") or ""
         self._timeout = float(timeout)
         self._max_retries = max(0, int(max_retries))
+        # Sprint 016: the caller (app Prompt Registry) injects the authoritative system prompt.
+        # The embedded ``_load_system_prompt()`` remains only as a standalone fallback.
+        self._system_prompt = system_prompt
         self._fallback = DeterministicAnalystProvider()
 
     def build_user_message(self, bundle: dict) -> str:
@@ -564,7 +570,7 @@ class QwenAnalystProvider:
             return None
 
     def generate(self, bundle: dict, config: AnalystConfig) -> AnalystResult:
-        system = _load_system_prompt()
+        system = self._system_prompt or _load_system_prompt()
         user = self.build_user_message(bundle)
         raw = self._call_model(system, user, config)
         obj = self._extract_json(raw) if raw else None

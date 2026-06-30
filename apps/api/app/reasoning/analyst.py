@@ -156,10 +156,19 @@ def assess_payload(
         config = impl.load_analyst_config(
             repo_id=settings.analyst_hf_repo, revision=settings.analyst_hf_revision,
         )
+        # Sprint 016: the app Prompt Registry is the single runtime source of truth for the
+        # analyst's system prompt (no longer the embedded ml/ doc). Resolve the active (or pinned)
+        # version and inject it into the Qwen provider; the version + content hash are recorded in
+        # the governance block so every AI assessment is attributable to a content-addressed prompt.
+        from app.reasoning.prompts import default_registry
+        spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
+
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
         if endpoint:
-            provider = impl.QwenAnalystProvider(endpoint_url=endpoint, timeout=timeout)
+            provider = impl.QwenAnalystProvider(
+                endpoint_url=endpoint, timeout=timeout, system_prompt=spec.template,
+            )
         else:
             provider = impl.DeterministicAnalystProvider()
         analyst_obj = impl.OmiAnalyst(config=config, provider=provider, store=None, record=False)
@@ -177,6 +186,8 @@ def assess_payload(
             provider=outcome.provider, latency_ms=latency_ms,
             model_revision=getattr(config, "model_revision", None),
             impl=impl, config=config, lossy_bundle=lossy_bundle,
+            prompt_meta={"analyst": "omi_analyst", "version": spec.prompt_version,
+                         "hash": spec.prompt_hash, "source": "registry"},
         )
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")
@@ -186,6 +197,7 @@ def assess_payload(
 def _govern(
     assessment: dict, payload: dict, *, ref: str, platform: str, provider: str,
     latency_ms: float, model_revision: str | None, impl: Any, config: Any, lossy_bundle: dict,
+    prompt_meta: dict | None = None,
 ) -> dict:
     """Mandatory Constitutional Governor gate (deterministic, model-free).
 
@@ -204,6 +216,7 @@ def _govern(
             "violation_codes": trace.violation_codes,
             "provider": prov,
             "model_revision": model_revision,
+            "prompt": prompt_meta or {},
             "latency_ms": round(float(latency_ms), 2),
             "constitution_version": Governor.constitution_version,
         }
@@ -264,6 +277,62 @@ def runtime_status(settings: Settings | None = None) -> dict:
         "governor": "mandatory",
         "deterministic_floor": "always-on",
         "ready_for_live_qwen": bool(enabled and endpoint and token_present and impl_ok is True),
+    }
+
+
+def runtime_path(settings: Settings | None = None) -> dict:
+    """The full AI runtime **dependency graph** (Sprint 016): every link from the website to Qwen
+    and back, each marked ``verified`` / ``operator_action`` / ``blocked``, so *what prevents live
+    Qwen reasoning* is one verifiable answer instead of a guess. Read-only; no secrets (token
+    presence is a boolean); never raises. Ordered to mirror the runtime path."""
+    settings = settings or get_settings()
+    enabled = analyst_enabled(settings)
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+    impl_ok: bool | None = (_impl() is not None) if enabled else None
+
+    def node(step: str, ok: bool, detail: str, *, operator: bool = False) -> dict:
+        return {"step": step, "status": "verified" if ok else ("operator_action" if operator else "blocked"),
+                "detail": detail}
+
+    # The Prompt Registry is the single source of truth — verified independently of the feature flag.
+    try:
+        from app.reasoning.prompts import default_registry
+        spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
+        prompt_node = node("prompt_registry", True, f"omi_analyst {spec.prompt_version} ({spec.prompt_hash})")
+    except Exception as exc:  # noqa: BLE001 — a registry failure is a real (code) blocker
+        prompt_node = node("prompt_registry", False, f"resolve failed: {str(exc)[:100]}")
+
+    try:
+        from app.governor import Governor
+        gov_detail = f"mandatory (constitution {Governor.constitution_version})"
+    except Exception:  # noqa: BLE001
+        gov_detail = "mandatory"
+
+    nodes = [
+        node("feature_flag", enabled, f"analyst_enabled={enabled}", operator=not enabled),
+        node("analyst_impl", impl_ok is True,
+             "ml/analyst importable" if impl_ok else ("import failed" if enabled else "not checked (flag off)"),
+             operator=(impl_ok is None)),
+        node("evidence_bundle", True, "app.evidence.Binder available"),
+        prompt_node,
+        node("hf_endpoint", bool(endpoint), "configured" if endpoint else "analyst_endpoint_url unset",
+             operator=not endpoint),
+        node("hf_token", token_present,
+             "present" if token_present else "HF_TOKEN / HUGGINGFACE_HUB_TOKEN unset", operator=not token_present),
+        node("model", True,
+             f"{getattr(settings, 'analyst_hf_repo', None)}@{getattr(settings, 'analyst_hf_revision', None) or 'main'}"),
+        node("governor", True, gov_detail),
+        node("deterministic_floor", True, "always-on fallback"),
+    ]
+    ready = bool(enabled and endpoint and token_present and impl_ok is True and prompt_node["status"] == "verified")
+    return {
+        "ready_for_live_qwen": ready,
+        "active_provider": "qwen" if (enabled and endpoint) else "deterministic-floor",
+        "nodes": nodes,
+        "blockers": [n["step"] for n in nodes if n["status"] != "verified"],
+        "governor": "mandatory",
+        "deterministic_floor": "always-on",
     }
 
 

@@ -141,7 +141,11 @@ def generate_analyst_assessment(
 @router.get("/analyst/status")
 def analyst_runtime_status(current: CurrentUser = Depends(require_user)) -> dict:
     """Diagnostic snapshot of the AI runtime path — which links are configured / ready
-    (HF token, endpoint, impl, the mandatory Governor, the always-on Floor). No secrets:
-    token presence is a boolean, never the value. Used for inference health checks +
-    monitoring + verifying activation readiness."""
-    return analyst.runtime_status(get_settings())
+    (HF token, endpoint, impl, the mandatory Governor, the always-on Floor) plus the full
+    ordered runtime **dependency graph** (Sprint 016: every link marked verified /
+    operator_action / blocked, so activation readiness is a single verifiable answer). No
+    secrets: token presence is a boolean, never the value."""
+    settings = get_settings()
+    status = analyst.runtime_status(settings)
+    status["runtime_path"] = analyst.runtime_path(settings)
+    return status

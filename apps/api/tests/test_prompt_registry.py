@@ -70,9 +70,12 @@ def test_records_listing_flags_active():
 # --- default registry + comparison ------------------------------------------ #
 def test_default_registry_seeds_behavior_prompts():
     reg = default_registry()
-    assert reg.analysts() == ["behavior_analyst"]
+    # Sprint 016: the production OMI ANALYST prompt is now registry-owned alongside the council's
+    # behavior_analyst prompts (the registry is the single runtime source of truth).
+    assert sorted(reg.analysts()) == ["behavior_analyst", "omi_analyst"]
     assert reg.versions("behavior_analyst") == ["v1", "v2"]
     assert reg.active_version("behavior_analyst") == "v1"          # conservative default
+    assert reg.active_version("omi_analyst") == "v1"
 
 
 def test_compare_prompts_diffs_versions():
