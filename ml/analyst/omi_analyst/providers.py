@@ -495,7 +495,7 @@ class QwenAnalystProvider:
 
     def __init__(
         self, endpoint_url: str | None = None, *, timeout: float = 30.0, max_retries: int = 2,
-        system_prompt: str | None = None,
+        system_prompt: str | None = None, transport: Any | None = None,
     ):
         self._endpoint = endpoint_url or os.environ.get("OMI_ANALYST_ENDPOINT_URL") or ""
         self._timeout = float(timeout)
@@ -503,6 +503,9 @@ class QwenAnalystProvider:
         # Sprint 016: the caller (app Prompt Registry) injects the authoritative system prompt.
         # The embedded ``_load_system_prompt()`` remains only as a standalone fallback.
         self._system_prompt = system_prompt
+        # Sprint 017: the model HTTP call is delegated to the ONE constitutional transport
+        # (app RemoteReasoningProvider), injected by the production path — no bespoke HTTP client.
+        self._transport = transport
         self._fallback = DeterministicAnalystProvider()
 
     def build_user_message(self, bundle: dict) -> str:
@@ -518,40 +521,22 @@ class QwenAnalystProvider:
         )
 
     def _call_model(self, system: str, user: str, config: AnalystConfig) -> str | None:
-        """Call the Qwen model via an HF inference endpoint if configured. Returns the
-        raw text, or None to signal 'unavailable -> fall back'. Never raises."""
-        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
-        if not self._endpoint or not token:
-            return None
-        import time as _time
-        import urllib.request
+        """Call the Qwen model through the **injected transport** — the ONE constitutional HTTP
+        client (``app.reasoning.model_providers.RemoteReasoningProvider``), which owns the request
+        shape, revision pinning, capped-backoff retries, and thinking-trace stripping. Returns the
+        raw generated text, or None to signal 'unavailable -> fall back'. Never raises.
 
-        body = json.dumps({
-            "inputs": f"<|system|>\n{system}\n<|user|>\n{user}",
-            "parameters": {"temperature": config.temperature,
-                           "max_new_tokens": config.max_new_tokens, "return_full_text": False},
-        }).encode("utf-8")
-        # Retry transient failures (timeout / 5xx / connection) with capped exponential
-        # backoff before giving up to the deterministic fallback.
-        for attempt in range(self._max_retries + 1):
-            try:
-                req = urllib.request.Request(
-                    self._endpoint, data=body,
-                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                )
-                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                if isinstance(data, list) and data:
-                    return data[0].get("generated_text")
-                if isinstance(data, dict):
-                    return data.get("generated_text")
-                return None
-            except Exception:  # noqa: BLE001 — network/endpoint/parse error
-                if attempt < self._max_retries:
-                    _time.sleep(min(2.0, 0.5 * (2 ** attempt)))
-                    continue
-                return None
-        return None
+        Sprint 017 (runtime convergence): this provider no longer carries a bespoke HTTP client.
+        The production path injects the shared transport; with no transport (decoupled standalone
+        use of this module) there is no model client, so the analyst degrades to its deterministic
+        fallback."""
+        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+        if not self._endpoint or not token or self._transport is None:
+            return None
+        try:
+            return self._transport(system, user, config)
+        except Exception:  # noqa: BLE001 — transport failure -> deterministic fallback
+            return None
 
     @staticmethod
     def _extract_json(text: str) -> dict | None:

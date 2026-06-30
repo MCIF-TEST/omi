@@ -125,36 +125,34 @@ def test_analyst_status_endpoint():
         assert isinstance(body["hf_token_present"], bool)  # presence only, no secret
 
 
-# --- Qwen provider: timeout / retries / fallback (mocked transport) --------- #
-def test_qwen_provider_retries_then_returns_none(monkeypatch):
+# --- Qwen provider: delegates to the ONE constitutional transport (Sprint 017) ------ #
+def test_qwen_provider_delegates_to_injected_transport(monkeypatch):
+    """The analyst provider no longer carries a bespoke HTTP client — it delegates to the ONE
+    injected constitutional transport. A failing transport degrades to None (-> deterministic).
+    The retry/timeout behavior is owned + tested on the shared RemoteReasoningProvider."""
     impl = analyst._impl()
     assert impl is not None
     monkeypatch.setenv("HF_TOKEN", "test-token")
-    import time as _t
-    import urllib.request
-    monkeypatch.setattr(_t, "sleep", lambda *_: None)  # no real backoff delay
     calls = {"n": 0}
 
-    def boom(*a, **k):
+    def _transport(system, user, config):
         calls["n"] += 1
-        raise OSError("connection refused")
+        return None  # simulate endpoint failure
 
-    monkeypatch.setattr(urllib.request, "urlopen", boom)
-    prov = impl.QwenAnalystProvider(endpoint_url="http://127.0.0.1:9/x", timeout=0.01, max_retries=2)
-    out = prov._call_model("sys", "user", impl.load_analyst_config())
-    assert out is None
-    assert calls["n"] == 3  # 1 initial + 2 retries
+    prov = impl.QwenAnalystProvider(endpoint_url="http://x/y", transport=_transport)
+    assert prov._call_model("sys", "user", impl.load_analyst_config()) is None
+    assert calls["n"] == 1
+    # with no transport injected (decoupled standalone use) there is no model client at all.
+    prov2 = impl.QwenAnalystProvider(endpoint_url="http://x/y")
+    assert prov2._call_model("sys", "user", impl.load_analyst_config()) is None
 
 
 def test_qwen_provider_generate_falls_back_to_deterministic(monkeypatch):
     impl = analyst._impl()
     monkeypatch.setenv("HF_TOKEN", "test-token")
-    import time as _t
-    import urllib.request
-    monkeypatch.setattr(_t, "sleep", lambda *_: None)
-    monkeypatch.setattr(urllib.request, "urlopen",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("unreachable")))
-    prov = impl.QwenAnalystProvider(endpoint_url="http://127.0.0.1:9/x", timeout=0.01, max_retries=1)
+    # No model output from the transport -> graceful deterministic fallback.
+    prov = impl.QwenAnalystProvider(
+        endpoint_url="http://127.0.0.1:9/x", transport=lambda *a, **k: None)
     bundle = impl.evidence_bundle.project_investigation_bundle(
         ref="sub_x", platform="youtube",
         scan={"overall_probability": 0.5, "tier": "moderate", "confidence": 0.5},
@@ -163,3 +161,28 @@ def test_qwen_provider_generate_falls_back_to_deterministic(monkeypatch):
     res = prov.generate(bundle, impl.load_analyst_config())
     assert res.provider.startswith("qwen-omi-analyst-v1->fallback")  # graceful degradation
     assert res.response["subject"]["grain"] == "comment_section"
+
+
+def test_production_path_injects_constitutional_transport(monkeypatch):
+    """assess_payload wires the analyst's model call through the ONE constitutional
+    RemoteReasoningProvider — verified by capturing the request it would send."""
+    _enable(monkeypatch)
+    monkeypatch.setenv("HF_TOKEN", "test-token")
+    monkeypatch.setattr(
+        analyst, "get_settings",
+        lambda: type("S", (), {"analyst_enabled": True, "analyst_hf_repo": "Andrewexiga/omi-analyst-v1",
+                               "analyst_hf_revision": None, "analyst_endpoint_url": "https://ep.invalid/x",
+                               "analyst_timeout_seconds": 5.0, "analyst_max_retries": 1,
+                               "analyst_prompt_version": None})())
+    captured = {}
+    from app.reasoning.model_providers import RemoteReasoningProvider
+
+    def _fake_complete(self, request):
+        captured["system"] = request.system
+        from app.reasoning.model_providers import ProviderUnavailable
+        raise ProviderUnavailable("no live endpoint in test")  # force deterministic fallback
+
+    monkeypatch.setattr(RemoteReasoningProvider, "complete", _fake_complete)
+    out = analyst.assess_payload(_payload(), ref="sub_x", platform="youtube")
+    assert out is not None and out["suspicion_probability"] == 0.72   # echo preserved via fallback
+    assert "OMI ANALYST" in captured["system"]                        # registry prompt reached the ONE client
