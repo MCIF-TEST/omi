@@ -151,9 +151,9 @@ def trace_investigation(payload: dict, *, ref: str, platform: str = "youtube",
         return {"inputs": {"signature_tokens": "bundle signature"},
                 "outputs": {"priors_retrieved": len(res.priors), "scan_fraction": res.plan.scan_fraction},
                 "_status": "executed",
-                "transmitted_to_production_analyst": False,
-                "note": "institutional memory feeds the shadow council; the production analyst reasons "
-                        "over the structured evidence bundle"}
+                "transmitted_to_production_analyst": True,
+                "note": "Sprint 021 — institutional memory is injected into the analyst's input as "
+                        "prior_context (background, never proof); the live Qwen specialist reasons with it"}
     _timed("memory_retrieval", _memory)
 
     # 3. Context Builder — structured context (shadow-council input; production analyst uses the ml projection).

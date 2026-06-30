@@ -139,7 +139,7 @@ def _components_from_payload(payload: dict, impl) -> list[dict]:
     return out
 
 
-def build_bundle(payload: dict, *, ref: str, platform: str, impl) -> dict:
+def build_bundle(payload: dict, *, ref: str, platform: str, impl, prior_context: list | None = None) -> dict:
     scan = {
         "overall_probability": payload.get("overall_probability") or 0.0,
         "tier": payload.get("overall_tier") or payload.get("tier") or "low",
@@ -149,11 +149,39 @@ def build_bundle(payload: dict, *, ref: str, platform: str, impl) -> dict:
         "contributions": payload.get("contributions") or [],
         "coordination": _coordination_from_payload(payload),
     }
-    return impl.evidence_bundle.project_investigation_bundle(
+    bundle = impl.evidence_bundle.project_investigation_bundle(
         ref=ref, platform=platform, scan=scan,
         components=_components_from_payload(payload, impl),
         cross_links=payload.get("cross_links") or [],
     )
+    # Sprint 021 — institutional memory reaches the AI specialist as labeled CONTEXT (never proof).
+    # Additive: the deterministic provider ignores this key (so its output is unchanged), while the
+    # Qwen provider serializes the whole bundle, so the live model reasons with prior context.
+    if prior_context:
+        bundle["prior_context"] = prior_context
+    return bundle
+
+
+def _retrieve_prior_context(store: Any, app_bundle: Any, *, now: Any = None, top_k: int = 5) -> list[dict]:
+    """Retrieve institutional PriorContext for the analyst's input (Sprint 021). Each prior is
+    background context — labeled, never proof, and carries NO resolvable evidence id (so the model
+    cannot cite it as evidence; the memory boundary is preserved). Returns ``[]`` when memory is
+    empty / unavailable. Never raises."""
+    if store is None or app_bundle is None:
+        return []
+    try:
+        from app.memory.graph import retrieve
+
+        priors = retrieve(store, app_bundle, top_k=top_k, now=now)
+        return [{
+            "type": p.type, "label": p.label,
+            "confidence": round(float(p.confidence), 3), "stability": round(float(p.stability_score), 3),
+            "epistemic_status": p.epistemic_status, "influence_class": p.influence_class,
+            "basis": p.match_basis, "note": "institutional memory — background context, never proof",
+        } for p in priors]
+    except Exception:  # noqa: BLE001 — memory must never break the analyst
+        logger.warning("prior-context retrieval failed; proceeding without memory", exc_info=True)
+        return []
 
 
 # --------------------------------------------------------------------------- #
@@ -185,16 +213,20 @@ class _AnalystJudge:
     )
 
     def __init__(self, *, impl: Any, config: Any, provider: Any, payload: dict,
-                 ref: str, platform: str, prompt_meta: dict) -> None:
+                 ref: str, platform: str, prompt_meta: dict, store: Any = None, now: Any = None) -> None:
         self._impl, self._config, self._provider = impl, config, provider
         self._payload, self._ref, self._platform = payload, ref, platform
+        self._store, self._now = store, now
         self.last_meta: dict[str, Any] = {
             "provider": "none", "latency_ms": 0.0,
             "model_revision": getattr(config, "model_revision", None), "prompt": prompt_meta,
         }
 
     def run(self, view: Any) -> list:
-        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform, impl=self._impl)
+        prior_context = _retrieve_prior_context(self._store, getattr(view, "bundle", None), now=self._now)
+        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform,
+                             impl=self._impl, prior_context=prior_context)
+        self.last_meta["prior_context"] = len(prior_context)
         analyst_obj = self._impl.OmiAnalyst(
             config=self._config, provider=self._provider, store=None, record=False)
         t0 = time.perf_counter()
@@ -216,14 +248,17 @@ class _AnalystFloor:
     )
 
     def __init__(self, *, impl: Any, config: Any, payload: dict, ref: str, platform: str,
-                 model_revision: str | None) -> None:
+                 model_revision: str | None, store: Any = None, now: Any = None) -> None:
         self._impl, self._config = impl, config
         self._payload, self._ref, self._platform = payload, ref, platform
+        self._store, self._now = store, now
         self.last_meta = {"provider": "deterministic-floor", "latency_ms": 0.0,
                           "model_revision": model_revision, "prompt": {}}
 
     def run(self, view: Any) -> list:
-        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform, impl=self._impl)
+        prior_context = _retrieve_prior_context(self._store, getattr(view, "bundle", None), now=self._now)
+        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform,
+                             impl=self._impl, prior_context=prior_context)
         result = self._impl.DeterministicAnalystProvider().generate(lossy, self._config)
         return [Ruling(module=self.contract.module, assessment=result.response)]
 
@@ -272,10 +307,15 @@ def assess_payload(
             provider = impl.DeterministicAnalystProvider()
 
         model_revision = getattr(config, "model_revision", None)
+        # Sprint 021 — wire institutional memory into the AI specialist's input. ``get_memory_store``
+        # returns the durable store when memory persistence is enabled, else an empty in-memory store
+        # (so retrieval naturally no-ops). Memory is CONTEXT only; it never moves the engine number.
+        from app.memory.repository import get_memory_store
+        store = get_memory_store(settings)
         judge = _AnalystJudge(impl=impl, config=config, provider=provider, payload=payload,
-                              ref=ref, platform=platform, prompt_meta=prompt_meta)
+                              ref=ref, platform=platform, prompt_meta=prompt_meta, store=store)
         floor = _AnalystFloor(impl=impl, config=config, payload=payload, ref=ref,
-                              platform=platform, model_revision=model_revision)
+                              platform=platform, model_revision=model_revision, store=store)
         result = Orchestrator(modules=[], judge=judge, floor=floor).run(
             payload, ref=ref, platform=platform, grain="comment_section")
         return _attach_governance(result, judge=judge, floor=floor)

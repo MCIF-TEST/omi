@@ -90,12 +90,12 @@ def test_trace_runs_through_the_mandatory_governor():
     assert spec["outputs"]["suspicion_probability"] == 0.74
 
 
-def test_trace_is_honest_about_shadow_only_stages():
-    """Memory retrieval + Context Builder execute, but the trace states they feed the shadow
-    council, not the monolithic production analyst — no false 'connected' claim."""
+def test_trace_reports_memory_connected_context_still_shadow_only():
+    """Sprint 021 wired institutional memory into the production analyst (prior_context); the Context
+    Builder still feeds only the shadow council — the trace reflects each honestly."""
     t = trace_investigation(_payload(), ref="sub_x", platform="youtube")
     stages = {s["stage"]: s for s in t["stages"]}
-    assert stages["memory_retrieval"]["transmitted_to_production_analyst"] is False
+    assert stages["memory_retrieval"]["transmitted_to_production_analyst"] is True
     assert stages["context_builder"]["transmitted_to_production_analyst"] is False
 
 
