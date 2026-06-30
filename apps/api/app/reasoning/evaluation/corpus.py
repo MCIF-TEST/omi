@@ -128,3 +128,72 @@ def evaluate_corpus(
         "prompt_version": prompt_version or (registry.active_version("behavior_analyst") if registry else None),
     }
     return {"summary": summary, "cases": results, "reports": reports}
+
+
+# --------------------------------------------------------------------------- #
+# The default Gold Corpus (Sprint 020) — realistic, evidence-backed scenarios.
+#
+# A statistically meaningful benchmark spanning the investigation stress categories: hostile
+# coordination, legitimate / organic coordination, AI-generated engagement, bot amplification,
+# mixed authenticity, ambiguous (thin-data) investigations, misinformation campaigns, and highly
+# organic viral events. Each case mirrors a real ComprehensiveScanResult (engine probability +
+# tier + signed per-detector contributions + coordination clusters); the label is the reviewed
+# expectation. Controls (``is_control``) are the precision frontier — authentic / legitimate
+# subjects that must NEVER be read as hostile coordination.
+# --------------------------------------------------------------------------- #
+def _case(prob, tier, conf, contributions, *, method=None, members=4, weak=None, single_axis=False):
+    payload = {
+        "overall_probability": prob, "overall_tier": tier, "confidence": conf,
+        "contributions": contributions, "weak_signals": weak or [], "single_axis_capped": single_axis,
+    }
+    if method:
+        payload["video"] = {"clusters": [{"method": method, "members": [f"@u{i}" for i in range(members)]}]}
+    return payload
+
+
+def default_gold_corpus() -> "GoldCorpus":
+    """A curated, deterministic Gold Corpus covering every stress category — the standing benchmark
+    for reasoning quality. Deterministic ordering by id; safe to extend."""
+    R = {"name": "temporal", "impact": 0.5, "direction": "raises"}
+    R2 = {"name": "duplicate_phrasing", "impact": 0.42, "direction": "raises"}
+    L = {"name": "community", "impact": 0.3, "direction": "lowers"}
+    L2 = {"name": "account_age", "impact": 0.25, "direction": "lowers"}
+    AIW = {"name": "ai_writing", "impact": 0.3, "direction": "raises", "supplemental": True}
+    NARR = {"name": "narrative_repetition", "impact": 0.5, "direction": "raises"}
+
+    corpus = GoldCorpus()
+    cases = [
+        # --- hostile coordination (must be flagged → recall) ------------------------------ #
+        ("hostile_fingerprint_ring", _case(0.88, "high", 0.72, [R, R2], method="fingerprint_cluster", members=6),
+         {"expected_verdict": "likely_inauthentic", "expected_coordination_label": "suspicious"}, False),
+        ("hostile_botnet_coengage", _case(0.79, "elevated", 0.66, [R, R2], method="co_engagement", members=5),
+         {"expected_verdict": "likely_inauthentic", "expected_coordination_label": "suspicious"}, False),
+        ("misinfo_campaign_cotag", _case(0.82, "high", 0.7, [NARR, R], method="co_tag", members=7),
+         {"expected_verdict": "likely_inauthentic", "expected_coordination_label": "suspicious"}, False),
+        ("bot_amplification_burst", _case(0.76, "elevated", 0.64, [R, R2], method="co_engagement", members=8),
+         {"expected_verdict": "likely_inauthentic", "expected_coordination_label": "suspicious"}, False),
+        # --- legitimate / organic coordination (controls → precision) --------------------- #
+        ("organic_viral_coengage", _case(0.12, "low", 0.6, [L, L2], method="co_engagement", members=9),
+         {"is_control": True, "expected_verdict": "likely_authentic"}, True),
+        ("legit_community_rally", _case(0.46, "moderate", 0.55, [R, L, L2], method="co_engagement", members=5),
+         {"is_control": True}, True),
+        ("organic_viral_no_coord", _case(0.14, "low", 0.62, [L, L2]),
+         {"is_control": True, "expected_verdict": "likely_authentic"}, True),
+        ("legit_newsroom_cotag", _case(0.38, "moderate", 0.5, [L, {"name": "verified_history", "impact": 0.3, "direction": "lowers"}],
+                                       method="co_tag", members=4), {"is_control": True}, True),
+        # --- AI-generated engagement (supplemental → never suspicion) --------------------- #
+        ("ai_assisted_authentic", _case(0.4, "moderate", 0.55, [AIW, L]),
+         {"is_control": True}, True),
+        # --- mixed authenticity / ambiguous ------------------------------------------------ #
+        ("mixed_authenticity", _case(0.52, "moderate", 0.5, [R, L]),
+         {"expected_verdict": "mixed"}, False),
+        ("ambiguous_thin_data", _case(0.41, "moderate", 0.14, [{"name": "temporal", "impact": 0.2, "direction": "raises"}],
+                                      weak=["only 5 posts — most detectors abstained"]),
+         {"expected_verdict": "inconclusive"}, False),
+        # --- single-axis capped coordination (gated → not asserted) ----------------------- #
+        ("single_axis_capped", _case(0.6, "elevated", 0.6, [R], method="co_engagement", members=4, single_axis=True),
+         {}, False),
+    ]
+    for cid, payload, label, _is_ctrl in cases:
+        corpus.add(GoldCase(id=cid, payload=payload, label=label, ref=cid, reviewer="omi-engineering"))
+    return corpus

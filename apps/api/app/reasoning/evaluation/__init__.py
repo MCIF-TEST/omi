@@ -7,6 +7,6 @@ prompt-comparison harness over the Shadow Mode pipeline.
 """
 from __future__ import annotations
 
-from .corpus import GoldCase, GoldCorpus, evaluate_corpus
+from .corpus import GoldCase, GoldCorpus, default_gold_corpus, evaluate_corpus
 
-__all__ = ["GoldCase", "GoldCorpus", "evaluate_corpus"]
+__all__ = ["GoldCase", "GoldCorpus", "evaluate_corpus", "default_gold_corpus"]

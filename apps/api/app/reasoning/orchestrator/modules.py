@@ -194,12 +194,19 @@ def _verdict(tier: str, band: str, corr: dict) -> str:
     return "inconclusive"
 
 
-def _coordination_label(bundle: EvidenceBundle, corr: dict) -> str | None:
+def _coordination_label(bundle: EvidenceBundle, corr: dict, verdict: str) -> str | None:
+    """The coordination read, kept CONSISTENT with the authenticity read (Sprint 020). A
+    discriminative coordination method is 'suspicious' only when the final verdict is hostile
+    (``likely_inauthentic``); on an authentic / mixed / inconclusive subject the same coordination is
+    at least as consistent with organic or legitimate behaviour, so it is 'mixed' (never 'suspicious',
+    which would contradict the verdict and false-positive on organic viral events). ``None`` when
+    there is no coordination signal."""
     methods = [it for it in bundle.evidence.values() if it.kind == "coordination_method"]
     if not methods:
         return None
-    if corr["discriminative_methods"] and not corr["single_axis_capped"]:
-        return "suspicious"   # gated: discriminative present but not asserting "coordinated" deterministically
+    disc = bool(corr["discriminative_methods"]) and not corr["single_axis_capped"]
+    if disc and verdict == "likely_inauthentic":
+        return "suspicious"
     return "mixed"
 
 
@@ -322,21 +329,23 @@ def build_ruling_assessment(
 
     # Sprint 019 — legitimate-coordination reasoning. A KNOWN legitimate-coordination control in
     # institutional memory is exculpatory: it LOWERS the read (constitutional — memory may lower,
-    # never raise). When present with a discriminative coordination read, it downgrades the analyst's
-    # *interpretation* from hostile to mixed (the evidence no longer distinguishes hostile from benign
-    # coordination) and yields the explicit legitimate hypothesis. The engine number, tier, confidence
-    # band, and the corroboration gate are untouched, so OmiScore + the Governor are unaffected.
+    # never raise). When present with a discriminative coordination read it downgrades the analyst's
+    # *interpretation* (verdict) from hostile to mixed and yields the explicit legitimate hypothesis.
+    # The engine number, tier, confidence band, and the corroboration gate are untouched.
     control_priors = _exculpatory_controls(memories)
     legitimate_hypothesis = _legitimate_hypothesis(corr, control_priors)
-    coordination_label = _coordination_label(bundle, corr)
-    if control_priors and corr["discriminative_methods"]:
-        if verdict == "likely_inauthentic":
-            verdict = "mixed"
-        if coordination_label == "suspicious":
-            coordination_label = "mixed"
+    if control_priors and corr["discriminative_methods"] and verdict == "likely_inauthentic":
+        verdict = "mixed"
         rationale += " A known legitimate-coordination control in memory makes the benign reading at least as likely."
         wwc = [f"Ground-truth confirmation that the {'+'.join(corr['discriminative_methods'])} "
                "coordination is hostile (not the known legitimate control) would restore the elevated read."] + wwc
+
+    # Sprint 020 — the coordination read must be CONSISTENT with the authenticity read: a
+    # discriminative method is 'suspicious' only when the final verdict is hostile (likely_inauthentic).
+    # On an authentic / mixed / inconclusive subject the same co-engagement is at least as consistent
+    # with organic or legitimate coordination, so it is 'mixed', never 'suspicious' — which previously
+    # false-positived on organic viral events (a likely_authentic subject labeled suspicious).
+    coordination_label = _coordination_label(bundle, corr, verdict)
 
     pct = round(prob * 100)
     return {
