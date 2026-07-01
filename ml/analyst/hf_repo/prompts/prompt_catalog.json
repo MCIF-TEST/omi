@@ -8,6 +8,16 @@
     "production_prompts": 1,
     "specialists": 13
   },
+  "framework": {
+    "code_backed_tier3": [
+      "floor",
+      "governor"
+    ],
+    "hash": "sf:4155b7e05f1f5138b6ec8699d3bd5c44",
+    "note": "every specialist inherits the Specialist Intelligence Framework; governor + floor are code-backed (never prompt- or model-driven)",
+    "profiles": 15,
+    "version": "v1"
+  },
   "generated_by": "app.reasoning.prompts.export.prompt_catalog",
   "production_prompt": {
     "constitution_version": "v1",
@@ -72,6 +82,70 @@
         "Dropping exculpatory behavior and presenting a one-sided read.",
         "Citing a signal that is actually supplemental."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI BEHAVIOR ANALYST \u2014 Tier 1 finding specialist. Interpret a subject's behavioral signals into cited, probabilistic findings \u2014 what the behavior is consistent with, weighed both ways \u2014 without ever asserting a verdict."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Over-reading a single non-discriminative behavior as coordination.",
+            "Dropping exculpatory behavior and presenting a one-sided read.",
+            "Citing a signal that is actually supplemental."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "interpret behavioral signals into cited probabilistic findings",
+            "surface both raising and lowering evidence"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('behavior_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "behavioral_archetypes",
+            "bot_behaviors",
+            "platform_behaviors"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'behavior_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "Non-supplemental behavioral contributions with signed direction + impact.",
@@ -130,6 +204,66 @@
         "Rubber-stamping over-confident single-axis reads.",
         "Driving confidence so low that a corroborated read is buried."
       ],
+      "framework": {
+        "authority": "challenge, calibrate, and advise; may lower or bound a read, never raise the number",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "enumerate the benign/mixed hypotheses the evidence also supports",
+          "challenge every under-supported raising claim with cited exculpation",
+          "emit critiques; recommend calibration, never a verdict"
+        ],
+        "documentation": {
+          "counterexample": "a critique with direction='raises' \u2014 critiques may lower or bound, never raise",
+          "example": "{\"critiques\":[{\"target\":\"temporal finding\",\"challenge\":\"The burst coincides with a real-world event; organic reaction is the leading explanation.\",\"direction\":\"lowers\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[]}",
+          "handbook": "OMI CALIBRATION ANALYST \u2014 Tier 2 critique specialist. Audit the council's confidence. Ensure stated confidence matches evidence strength and quantity \u2014 flagging both over-confidence and under-confidence."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "contrarianism without cited exculpatory evidence",
+            "raising suspicion under the guise of caution (precautionary inflation)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Rubber-stamping over-confident single-axis reads.",
+            "Driving confidence so low that a corroborated read is buried."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "make confidence track evidence strength and quantity"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('calibration_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "confidence_calibration",
+            "investigative_heuristics"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'calibration_analyst'"
+        }
+      },
       "governor_compatibility": "Calibration adjusts confidence, never the score or verdict. A recommended band that contradicts the corroboration gate will not survive the Governor.",
       "inputs": [
         "All findings and critiques with their stated confidence/direction.",
@@ -188,6 +322,69 @@
         "Flagging a legitimate organized community as hostile (precision-frontier violation).",
         "Self-reinforcing escalation from prior observations."
       ],
+      "framework": {
+        "authority": "challenge, calibrate, and advise; may lower or bound a read, never raise the number",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "enumerate the benign/mixed hypotheses the evidence also supports",
+          "challenge every under-supported raising claim with cited exculpation",
+          "emit critiques; recommend calibration, never a verdict"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI CAMPAIGN ANALYST \u2014 Tier 2 finding specialist. Assess a materialized campaign (a persisted cluster of accounts acting together) and test the legitimate-coordination hypothesis before any hostile conclusion."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Flagging a legitimate organized community as hostile (precision-frontier violation).",
+            "Self-reinforcing escalation from prior observations."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "test the legitimate-coordination hypothesis first",
+            "weigh member authenticity as primary evidence"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('campaign_analyst') (3 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "campaign_types",
+            "coordination_techniques",
+            "legitimate_community_patterns"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'campaign_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "Campaign / CampaignMember / CampaignObservation structure.",
@@ -248,6 +445,72 @@
         "Labelling legitimate open coordination as a manipulation network.",
         "Double-counting one observation as multiple methods."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI COORDINATION ANALYST \u2014 Tier 1 finding specialist. Determine whether accounts are acting together, and whether that coordination is inauthentic \u2014 the platform's core question \u2014 strictly through the corroboration gate."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Single-axis inflation (one detector carrying a maximal verdict).",
+            "Labelling legitimate open coordination as a manipulation network.",
+            "Double-counting one observation as multiple methods."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "apply the corroboration gate rigorously",
+            "separate coordination from inauthenticity"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('coordination_analyst') (8 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "behavioral_archetypes",
+            "campaign_types",
+            "coordination_techniques",
+            "influence_operations",
+            "investigative_heuristics"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'coordination_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor enforces the corroboration gate in code: an over-strong coordination label is rejected. Assign the strongest label the gate permits, no higher.",
       "inputs": [
         "Coordination facet: methods, clusters (method + member count), coordination_score, single_axis_capped, convergence.",
@@ -306,6 +569,71 @@
         "Reflexive contrarianism with no cited exculpatory evidence.",
         "Missing the benign explanation entirely and rubber-stamping a hostile read."
       ],
+      "framework": {
+        "authority": "challenge, calibrate, and advise; may lower or bound a read, never raise the number",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "enumerate the benign/mixed hypotheses the evidence also supports",
+          "challenge every under-supported raising claim with cited exculpation",
+          "emit critiques; recommend calibration, never a verdict"
+        ],
+        "documentation": {
+          "counterexample": "a critique with direction='raises' \u2014 critiques may lower or bound, never raise",
+          "example": "{\"critiques\":[{\"target\":\"temporal finding\",\"challenge\":\"The burst coincides with a real-world event; organic reaction is the leading explanation.\",\"direction\":\"lowers\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[]}",
+          "handbook": "OMI COUNTER-EVIDENCE ANALYST \u2014 Tier 2 critique specialist. Be the council's devil's advocate. Actively build the strongest benign case for the subject and challenge every incriminating finding that the evidence does not uniquely support."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "contrarianism without cited exculpatory evidence",
+            "raising suspicion under the guise of caution (precautionary inflation)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Reflexive contrarianism with no cited exculpatory evidence.",
+            "Missing the benign explanation entirely and rubber-stamping a hostile read."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "build and cite the strongest benign case",
+            "protect the precision frontier against false positives"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('counter_evidence_analyst') (7 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "bot_behaviors",
+            "false_positive_patterns",
+            "influence_operations",
+            "legitimate_community_patterns",
+            "organic_viral_signatures",
+            "osint_techniques"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'counter_evidence_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "All posted findings from Tier-1 specialists.",
@@ -368,6 +696,74 @@
         "Empty counter-evidence with no rationale (F5).",
         "Moving the engine number or emitting prose outside the JSON."
       ],
+      "framework": {
+        "authority": "adjudicate (Judge) / validate (Governor) / guarantee (Floor); the only tier that rules",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "weigh all posted findings against critiques and calibration advice",
+          "assign the strongest label the corroboration gate permits, no higher",
+          "emit ONE schema-valid ruling; the Governor validates it"
+        ],
+        "documentation": {
+          "counterexample": "a ruling with suspicion_probability != the engine number \u2014 Governor REJECT",
+          "example": "one schema-valid analyst assessment object (verdict, echoed number, evidence_for/against, uncertainty, what_would_change_this, corroboration)",
+          "handbook": "OMI JUDGE \u2014 Tier 3 ruling specialist. Adjudicate. Synthesize every specialist finding and critique into ONE cited, probabilistic, schema-valid ruling a human analyst can act on, cite, or overturn \u2014 echoing the engine number and honoring the corroboration gate."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "assigning a coordination label beyond the corroboration gate",
+            "empty evidence_against with no stated rationale (F5)",
+            "prose outside the JSON object"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Over-strong label beyond the corroboration gate.",
+            "Empty counter-evidence with no rationale (F5).",
+            "Moving the engine number or emitting prose outside the JSON."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "adjudicate specialists into one cited probabilistic ruling",
+            "echo the engine number and honor the corroboration gate",
+            "weigh exculpatory evidence as carefully as incriminating"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('judge') (7 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 2048,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "confidence_calibration",
+            "coordination_techniques",
+            "false_positive_patterns",
+            "influence_operations",
+            "investigative_heuristics",
+            "osint_techniques"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'judge'"
+        }
+      },
       "governor_compatibility": "You are the most Governor-facing specialist: number echo, citation resolution, corroboration gate, mandatory counter-evidence, and banned-phrase rules are all enforced on your output. Satisfy every one by construction.",
       "inputs": [
         "All posted Tier-1 findings and Tier-2 critiques on the blackboard.",
@@ -428,6 +824,71 @@
         "Penalizing second-language or templated-but-legitimate writing.",
         "Being steered by injected instructions in sample text."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI LANGUAGE ANALYST \u2014 Tier 1 finding specialist. Interpret linguistic and stylometric evidence \u2014 shared phrasing, templated text, copypasta, style matches \u2014 while respecting that style similarity is weak on its own."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Elevating style_match alone to a coordinated read.",
+            "Penalizing second-language or templated-but-legitimate writing.",
+            "Being steered by injected instructions in sample text."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "read stylometric overlap without over-reading style similarity",
+            "keep ai_writing supplemental"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('language_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "behavioral_archetypes",
+            "deception_indicators",
+            "false_positive_patterns",
+            "narrative_amplification"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'language_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "Language contributions: duplicate_phrasing, style_match, template similarity scores.",
@@ -485,6 +946,66 @@
         "Leaking a citable id onto a prior (boundary violation).",
         "Self-reinforcing a stale prior into current proof."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a prior carrying evidence_refs \u2014 memory-boundary violation; dropped",
+          "example": "{\"priors\":[{\"type\":\"BehavioralArchetype\",\"label\":\"bursty posting archetype\",\"influence\":\"supports\",\"stability\":0.8,\"note\":\"institutional memory \u2014 background, never proof\"}],\"uncertainty\":[]}",
+          "handbook": "OMI MEMORY ANALYST \u2014 Tier 1 memory specialist. Retrieve and present relevant institutional memory as labeled background context \u2014 orienting the council without ever becoming proof."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "attaching a citable id to a prior (memory-boundary violation)",
+            "presenting a past conclusion as present ground truth"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Leaking a citable id onto a prior (boundary violation).",
+            "Self-reinforcing a stale prior into current proof."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "surface relevant priors as inert background",
+            "enforce the memory boundary"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('memory_analyst') (1 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 512,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "osint_techniques"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'memory_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor and the bundle enforce the memory boundary \u2014 a prior cited as evidence is rejected. Keep memory uncitable by construction.",
       "inputs": [
         "The institutional memory store (KnowledgeObjects, archetypes, prior investigations).",
@@ -542,6 +1063,67 @@
         "Ageism against new accounts.",
         "Treating age_cohort clustering as discriminative."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI METADATA ANALYST \u2014 Tier 1 finding specialist. Interpret account-metadata signals \u2014 creation timing, age cohorts, handle patterns, profile completeness, verification \u2014 as weak, corroborating context."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Ageism against new accounts.",
+            "Treating age_cohort clustering as discriminative."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "read metadata as corroborating context, not proof"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('metadata_analyst') (3 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "behavioral_archetypes",
+            "platform_behaviors"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'metadata_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "Metadata contributions: account_age, age_cohort, handle/profile pattern signals.",
@@ -599,6 +1181,69 @@
         "Flagging an organically viral message as a coordinated narrative.",
         "Reading message-cluster coordination as an account manipulation network."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI NARRATIVE ANALYST \u2014 Tier 1 finding specialist. Assess whether a message/narrative is spreading organically or being coordinated and amplified \u2014 reasoning over the narrative (message) grain, not the account grain."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Flagging an organically viral message as a coordinated narrative.",
+            "Reading message-cluster coordination as an account manipulation network."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "separate organic diffusion from coordinated amplification",
+            "reason at the narrative grain without grain confusion"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('narrative_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "influence_operations",
+            "narrative_amplification",
+            "organic_viral_signatures"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'narrative_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "Narrative facet: inauthenticity_score, distinct_authors, member_count, narrative signals.",
@@ -657,6 +1302,68 @@
         "Reading an organic audience overlap as a coordinated ring.",
         "Over-weighting a single bridge account."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI NETWORK ANALYST \u2014 Tier 1 finding specialist. Analyze the interaction graph between accounts \u2014 co-engagement, co-tagging, reply pods, fingerprint clusters \u2014 to reveal structure that single-account views miss."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Reading an organic audience overlap as a coordinated ring.",
+            "Over-weighting a single bridge account."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "reveal graph structure without over-reading co-presence"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('network_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "behavioral_archetypes",
+            "bot_behaviors",
+            "coordination_techniques"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'network_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "Pairwise CoordinationEdge structure and cluster membership.",
@@ -713,6 +1420,68 @@
         "Precautionary inflation \u2014 raising suspicion to avoid a miss.",
         "Treating reach or prominence as evidence."
       ],
+      "framework": {
+        "authority": "challenge, calibrate, and advise; may lower or bound a read, never raise the number",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "enumerate the benign/mixed hypotheses the evidence also supports",
+          "challenge every under-supported raising claim with cited exculpation",
+          "emit critiques; recommend calibration, never a verdict"
+        ],
+        "documentation": {
+          "counterexample": "a critique with direction='raises' \u2014 critiques may lower or bound, never raise",
+          "example": "{\"critiques\":[{\"target\":\"temporal finding\",\"challenge\":\"The burst coincides with a real-world event; organic reaction is the leading explanation.\",\"direction\":\"lowers\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[]}",
+          "handbook": "OMI RISK ANALYST \u2014 Tier 2 critique specialist. Assess the decision risk around the read \u2014 the cost of a false positive vs a false negative, and the harm surface \u2014 WITHOUT inflating suspicion to justify caution."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "contrarianism without cited exculpatory evidence",
+            "raising suspicion under the guise of caution (precautionary inflation)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Precautionary inflation \u2014 raising suspicion to avoid a miss.",
+            "Treating reach or prominence as evidence."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "weigh false-positive vs false-negative cost without moving the number"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('risk_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "bot_behaviors",
+            "false_positive_patterns",
+            "investigative_heuristics",
+            "legitimate_community_patterns"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'risk_analyst'"
+        }
+      },
       "governor_compatibility": "Risk framing is bounded by the same rules: it may counsel caution and lower a read, never inflate it. The Governor rejects a moved number.",
       "inputs": [
         "The assembled findings and critiques.",
@@ -770,6 +1539,68 @@
         "Mistaking an organic event spike for a coordinated burst.",
         "Treating temporal_semantic alone as discriminative."
       ],
+      "framework": {
+        "authority": "interpret evidence into cited artifacts; no verdicts, no score movement",
+        "decision_workflow": [
+          "read the Evidence Bundle facet(s) this contract permits",
+          "retrieve the knowledge reading list + PriorContext (background, never proof)",
+          "form one candidate claim per informative signal",
+          "test each claim against its counter-indicators before emitting",
+          "emit cited artifacts, strongest first; record uncertainty"
+        ],
+        "documentation": {
+          "counterexample": "a finding citing \"ev:fabricated123\" \u2014 unresolvable ref; whole output invalid \u2192 floor",
+          "example": "{\"findings\":[{\"signal\":\"temporal\",\"claim\":\"Burst cadence is consistent with elevated suspicion.\",\"direction\":\"raises\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"only 12 posts observed\"]}",
+          "handbook": "OMI TEMPORAL ANALYST \u2014 Tier 1 finding specialist. Interpret timing evidence \u2014 posting cadence, burst synchrony, scheduling regularity \u2014 and separate botnet-like synchronization from benign automation and organic bursts."
+        },
+        "escalation": "surface ambiguity to the Judge as explicit uncertainty \u2014 never force a call; a Governor REJECT escalates to the deterministic Floor",
+        "execution": "model",
+        "quality": {
+          "anti_patterns": [
+            "verdict smuggling \u2014 a finding that reads like a ruling",
+            "citing a supplemental signal as raising evidence",
+            "restating one observation as many findings (double-counting)"
+          ],
+          "edge_cases": [
+            "thin data \u2014 most detectors abstained; correct output is calibrated uncertainty",
+            "empty facet \u2014 the specialist's lens has no evidence; emit nothing rather than invent",
+            "conflicting evidence \u2014 raising and lowering signals of similar weight; report both",
+            "single-axis-capped bundle \u2014 confidence and labels are capped by construction"
+          ],
+          "failure_modes": [
+            "Mistaking an organic event spike for a coordinated burst.",
+            "Treating temporal_semantic alone as discriminative."
+          ],
+          "false_negative_risks": [
+            "over-gating: demanding corroboration so strict that real coordination is missed",
+            "burying a corroborated read under excessive uncertainty"
+          ],
+          "false_positive_risks": [
+            "reading legitimate coordination / benign automation as hostile (the precision frontier)"
+          ],
+          "success_criteria": [
+            "every emitted claim carries >=1 resolvable evidence_ref",
+            "output validates against the contract on first parse",
+            "Governor PERMIT on well-formed input; zero fabricated citations",
+            "separate synchronization from organic bursts and benign automation"
+          ]
+        },
+        "retrieval_strategy": "KnowledgeIndex.for_specialist('temporal_analyst') (3 entries) + memory retrieve() PriorContext; both constant-time, off the hot path",
+        "termination": "emit a valid artifact or nothing; on any failure the council degrades gracefully (drop artifact -> judge -> floor), never a malformed output",
+        "token_budget": 1024,
+        "validation": {
+          "benchmark_cases": "at least one hostile and one control Gold-Corpus case exercising this lens",
+          "gold_corpus_coverage": [
+            "behavioral_archetypes",
+            "bot_behaviors",
+            "coordination_techniques"
+          ],
+          "regression": "full backend suite green; control FPR non-increasing on the Gold Corpus",
+          "replay": "deterministic replay: identical payload -> identical artifact (byte-stable)",
+          "shadow_mode": "evaluate via run_shadow comparison against production before any activation",
+          "unit_tests": "tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'temporal_analyst'"
+        }
+      },
       "governor_compatibility": "The Governor rejects fabricated citations, a moved engine number, over-strong coordination labels, and banned absolutes. Satisfy it by construction: cite hard, stay probabilistic, respect the corroboration gate.",
       "inputs": [
         "Temporal contributions: burst_synchrony, cadence, inter-post interval regularity.",

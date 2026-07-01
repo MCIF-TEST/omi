@@ -110,6 +110,27 @@ _EVIDENCE_RULE = (
 )
 
 
+def _framework_block(key: str) -> dict:
+    """The Specialist Intelligence Framework dimensions for one specialist (Phase A1) — derived
+    from the ONE framework module so the catalog carries the complete inherited record."""
+    from .framework import framework_profiles
+
+    profile = next(p for p in framework_profiles() if p.key == key)
+    rec = profile.to_record()
+    return {
+        "execution": rec["execution"],
+        "authority": rec["identity"]["authority"],
+        "decision_workflow": rec["reasoning"]["decision_workflow"],
+        "escalation": rec["reasoning"]["escalation"],
+        "termination": rec["reasoning"]["termination"],
+        "quality": rec["quality"],
+        "validation": rec["validation"],
+        "token_budget": rec["technical"]["token_budget"],
+        "retrieval_strategy": rec["technical"]["retrieval_strategy"],
+        "documentation": rec["documentation"],
+    }
+
+
 def _specialist_entry(spec, reg) -> dict:
     ps = reg.resolve(spec.key, LIBRARY_VERSION)
     return {
@@ -141,6 +162,7 @@ def _specialist_entry(spec, reg) -> dict:
             "primary_blocks": list(spec.primary_blocks),
             "interacts_with": list(spec.interactions),
         },
+        "framework": _framework_block(spec.key),
     }
 
 
@@ -166,11 +188,19 @@ def prompt_catalog() -> dict:
         "published_asset": "prompts/analyst_system_prompt_v1.md",
         "constitution_version": CONSTITUTION_VERSION,
     }
+    from .framework import FRAMEWORK_VERSION, framework_hash, framework_profiles
+
+    code_backed = sorted(p.key for p in framework_profiles() if p.technical.prompt_hash is None)
     return {
         "catalog_version": CATALOG_VERSION,
         "generated_by": "app.reasoning.prompts.export.prompt_catalog",
         "source_of_truth": "GitHub app.reasoning.prompts registry + specialist library (do not hand-edit)",
         "constitution": {"version": CONSTITUTION_VERSION, "hash": constitution_hash()},
+        "framework": {"version": FRAMEWORK_VERSION, "hash": framework_hash(),
+                      "profiles": len(framework_profiles()),
+                      "code_backed_tier3": code_backed,
+                      "note": "every specialist inherits the Specialist Intelligence Framework; "
+                              "governor + floor are code-backed (never prompt- or model-driven)"},
         "schema": {"response_schema": "schema/analyst_response_schema.json", "response_format": "json_object"},
         "specialists_activated": False,
         "production_prompt": production,
@@ -256,6 +286,34 @@ def knowledge_matches_committed() -> bool:
         return False
 
 
+# --------------------------------------------------------------------------- #
+# Specialist Framework handbook — GitHub-side contributor doc (Phase A1)
+# --------------------------------------------------------------------------- #
+HANDBOOK_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "SPECIALIST_FRAMEWORK.md"
+)
+
+
+def write_handbook(path: Path | None = None) -> Path:
+    """Write the generated Specialist Framework handbook (drift-guarded; GitHub-only doc —
+    engineering documentation, not a deployment artifact)."""
+    from .framework import render_handbook
+
+    target = path or HANDBOOK_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_handbook(), encoding="utf-8")
+    return target
+
+
+def handbook_matches_committed() -> bool:
+    from .framework import render_handbook
+
+    try:
+        return HANDBOOK_PATH.read_text(encoding="utf-8") == render_handbook()
+    except OSError:
+        return False
+
+
 __all__ = [
     "MANIFEST_VERSION", "MANIFEST_PATH", "prompt_manifest", "render_manifest_json",
     "write_manifest", "manifest_matches_committed",
@@ -263,10 +321,12 @@ __all__ = [
     "write_catalog", "catalog_matches_committed",
     "KNOWLEDGE_PATH", "knowledge_manifest", "render_knowledge_json",
     "write_knowledge", "knowledge_matches_committed",
+    "HANDBOOK_PATH", "write_handbook", "handbook_matches_committed",
 ]
 
 
-if __name__ == "__main__":  # regenerate the committed manifest + catalog + knowledge index
+if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + handbook
     print(f"wrote {write_manifest()}")
     print(f"wrote {write_catalog()}")
     print(f"wrote {write_knowledge()}")
+    print(f"wrote {write_handbook()}")

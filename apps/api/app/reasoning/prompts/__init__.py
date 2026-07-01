@@ -20,6 +20,15 @@ from .registry import (
     compare_prompts,
     default_registry,
 )
+from .framework import (
+    FRAMEWORK_VERSION,
+    SpecialistProfile,
+    framework_hash,
+    framework_profiles,
+    lift,
+    new_specialist,
+    validate_framework,
+)
 from .spec import PromptSpec
 from .specialists import (
     LIBRARY_VERSION,
@@ -39,4 +48,7 @@ __all__ = [
     # Phase 2 — specialist prompt library
     "LIBRARY_VERSION", "SPECIALISTS", "SpecialistSpec",
     "register_specialist_library", "render", "specialist_prompt_specs",
+    # Phase A1 — the Specialist Intelligence Framework
+    "FRAMEWORK_VERSION", "SpecialistProfile", "framework_profiles", "framework_hash",
+    "lift", "new_specialist", "validate_framework",
 ]
