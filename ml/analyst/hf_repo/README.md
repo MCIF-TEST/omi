@@ -75,6 +75,33 @@ cached, with the deterministic `TemplateProvider` as the always-on fallback, and
 down OmiSphere (Render + Postgres remain the system of record). See the GitHub
 `huggingface_model_lifecycle.md` §4–5 for the serving/rollback contract.
 
+## Prompt suite & integrity
+
+- `prompts/analyst_system_prompt_v1.md` is the **active production** system prompt (`omi_analyst`
+  v1). It is the only prompt the deployed V1 uses.
+- `prompts/prompt_manifest.json` is generated **from the GitHub Prompt Registry** (the single source
+  of truth) by `apps/api` `app.reasoning.prompts.export`. It records every registered prompt's
+  version + content hash (`ph:`), the **constitution** version + hash (`cx:`), and the
+  **specialist-library** status. A drift-guard test regenerates and compares it, so GitHub and this
+  repo cannot diverge on prompt integrity.
+- The **13-specialist prompt library** and the **constitutional prompt hierarchy** exist in GitHub as
+  versioned readiness assets and are recorded in the manifest by hash. They are **inert** (not
+  activated); the deployed V1 does not use them, so their full bodies stay in GitHub until the
+  council is activated (no unnecessary duplication).
+
+## Serving API (endpoint compatibility)
+
+The client (`RemoteReasoningProvider`) speaks **two** endpoint contracts, selected by the Render
+variable `OMI_ANALYST_ENDPOINT_API` so the operator matches the endpoint they deploy — no guessing:
+
+- `generate` (default): raw TGI text-generation (`POST` with `inputs` + `parameters`).
+- `messages`: OpenAI-compatible `/v1/chat/completions` (`messages=[system,user]`), which lets the
+  endpoint apply **Qwen3's chat template server-side** — recommended for a Qwen3-Thinking chat
+  deployment. Point `OMI_ANALYST_ENDPOINT_URL` at the corresponding route.
+
+Both paths strip the `<think>` trace, extract the JSON object, schema-validate, echo the engine
+number, and fall back to the deterministic floor on any failure.
+
 ## Evaluation
 
 **V1 has not been evaluated yet — and this card will not show fabricated metrics.**

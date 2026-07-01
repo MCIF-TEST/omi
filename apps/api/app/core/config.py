@@ -195,6 +195,12 @@ class Settings(BaseSettings):
     analyst_endpoint_url: str | None = None
     analyst_timeout_seconds: float = 30.0
     analyst_max_retries: int = 2
+    # Serving API the deployed endpoint speaks. "generate" (default) posts the raw
+    # TGI text-generation body (existing behavior, byte-identical). "messages" posts
+    # the OpenAI-compatible /v1/chat/completions body so the endpoint applies Qwen3's
+    # chat template server-side. Set this to match the endpoint you deploy; the URL
+    # must already point at the right route. No guessing — the operator chooses.
+    analyst_endpoint_api: str = "generate"
     # Active prompt version for the AI behavior analyst (None -> registry default / rollback).
     analyst_prompt_version: str | None = None
     # Context Builder mode/budget for AI specialists ("raw" baseline | "structured").

@@ -81,13 +81,51 @@ def assemble_stream(chunks: Iterable[bytes | str]) -> str:
 
 
 def _extract_generated(raw: bytes) -> str:
-    """Pull ``generated_text`` from a non-streaming HF response body."""
+    """Pull ``generated_text`` from a non-streaming HF text-generation response body."""
     data = json.loads(raw.decode("utf-8"))
     if isinstance(data, list) and data:
         return str(data[0].get("generated_text") or "")
     if isinstance(data, dict):
         return str(data.get("generated_text") or "")
     return ""
+
+
+def _extract_message(raw: bytes) -> str:
+    """Pull the assistant content from a non-streaming OpenAI-compatible
+    ``/v1/chat/completions`` response body (``choices[0].message.content``)."""
+    data = json.loads(raw.decode("utf-8"))
+    if isinstance(data, dict):
+        choices = data.get("choices")
+        if isinstance(choices, list) and choices:
+            msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+            if isinstance(msg, dict):
+                return str(msg.get("content") or "")
+    return ""
+
+
+def assemble_message_stream(chunks: Iterable[bytes | str]) -> str:
+    """Reassemble OpenAI-compatible chat SSE ``data:`` chunks (``choices[].delta.content``) into
+    the full message. Defensive: ignores keep-alives, ``[DONE]``, and unparseable lines — so the
+    messages streaming path is testable without a live endpoint."""
+    out: list[str] = []
+    for raw in chunks:
+        line = (raw.decode("utf-8", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw)).strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[len("data:"):].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            obj = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        choices = obj.get("choices") or []
+        if choices and isinstance(choices[0], dict):
+            delta = choices[0].get("delta") or {}
+            tok = delta.get("content") if isinstance(delta, dict) else None
+            if tok:
+                out.append(str(tok))
+    return "".join(out)
 
 
 def _is_timeout(exc: BaseException | None) -> bool:
@@ -105,6 +143,7 @@ class RemoteReasoningProvider:
     revision: str | None = None
     timeout: float = 30.0
     max_retries: int = 2
+    api: str = "generate"                    # "generate" (raw TGI) | "messages" (OpenAI chat)
     token_env: tuple[str, ...] = ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN")
     backoff_cap: float = 2.0
     name: str = "remote-hf-qwen"
@@ -116,16 +155,17 @@ class RemoteReasoningProvider:
                 return val
         return None
 
-    def _fetch(self, body: bytes, headers: dict, stream: bool) -> tuple[str, int]:
+    def _fetch(self, body: bytes, headers: dict, stream: bool, parse, parse_stream) -> tuple[str, int]:
         """Call the endpoint with capped-backoff retries on transient failures. Returns
         ``(text, attempts)``; raises ``ProviderTimeout``/``ProviderError`` when exhausted.
-        Retries only NETWORK errors — protocol/parse errors are handled by the caller once."""
+        Retries only NETWORK errors — protocol/parse errors are handled by the caller once. The
+        response parser (``parse`` non-stream / ``parse_stream`` SSE) is API-specific."""
         last: BaseException | None = None
         for attempt in range(self.max_retries + 1):
             try:
                 req = urllib.request.Request(self.endpoint_url, data=body, headers=headers)
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    text = assemble_stream(resp) if stream else _extract_generated(resp.read())
+                    text = parse_stream(resp) if stream else parse(resp.read())
                 return text, attempt + 1
             except Exception as exc:  # noqa: BLE001 — network/endpoint error → maybe retry
                 last = exc
@@ -135,10 +175,23 @@ class RemoteReasoningProvider:
             raise ProviderTimeout(f"endpoint timed out after {self.max_retries + 1} attempts") from last
         raise ProviderError(f"endpoint unreachable: {last}") from last
 
-    def complete(self, request: ReasoningRequest) -> ReasoningResponse:
-        token = self._token()
-        if not self.endpoint_url or not token:
-            raise ProviderUnavailable("reasoning endpoint or token is not configured")
+    def _request_body(self, request: ReasoningRequest):
+        """Build the wire body + the matching (non-stream, stream) parsers for the configured
+        serving API. ``generate`` is the raw TGI text-generation contract (unchanged, byte-
+        identical); ``messages`` is the OpenAI-compatible chat contract, which lets the endpoint
+        apply Qwen3's chat template server-side."""
+        if self.api == "messages":
+            body = json.dumps({
+                "model": self.model or "tgi",
+                "messages": [
+                    {"role": "system", "content": request.system},
+                    {"role": "user", "content": request.user},
+                ],
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+                "stream": bool(request.stream),
+            }).encode("utf-8")
+            return body, _extract_message, assemble_message_stream
         body = json.dumps({
             "inputs": f"<|system|>\n{request.system}\n<|user|>\n{request.user}",
             "parameters": {
@@ -148,10 +201,17 @@ class RemoteReasoningProvider:
             },
             "stream": bool(request.stream),
         }).encode("utf-8")
+        return body, _extract_generated, assemble_stream
+
+    def complete(self, request: ReasoningRequest) -> ReasoningResponse:
+        token = self._token()
+        if not self.endpoint_url or not token:
+            raise ProviderUnavailable("reasoning endpoint or token is not configured")
+        body, parse, parse_stream = self._request_body(request)
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         t0 = time.perf_counter()
-        text, attempts = self._fetch(body, headers, request.stream)
+        text, attempts = self._fetch(body, headers, request.stream, parse, parse_stream)
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
         text = strip_thinking(text)
@@ -161,7 +221,7 @@ class RemoteReasoningProvider:
         return ReasoningResponse(
             text=text, model=self.model, revision=self.revision, structured=structured,
             diagnostics={
-                "provider": self.name, "attempts": attempts,
+                "provider": self.name, "attempts": attempts, "api": self.api,
                 "latency_ms": round(latency_ms, 2), "streamed": bool(request.stream),
                 "model": self.model, "revision": self.revision,
             },

@@ -45,15 +45,17 @@ def analyst_enabled(settings: Settings | None = None) -> bool:
     return bool(getattr(settings, "analyst_enabled", False))
 
 
-def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision: str | None):
+def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision: str | None,
+                    api: str = "generate"):
     """The ONE Qwen HTTP transport (Sprint 017). The production analyst's model call goes through
     the constitutional ``RemoteReasoningProvider`` — the same HF client the council uses — instead
-    of a second bespoke HTTP implementation. Returns the raw generated text, or None on any failure
-    so the analyst degrades to its deterministic provider."""
+    of a second bespoke HTTP implementation. ``api`` selects the raw ``generate`` or OpenAI-
+    compatible ``messages`` serving contract. Returns the raw generated text, or None on any
+    failure so the analyst degrades to its deterministic provider."""
     from app.reasoning.model_providers import ReasoningRequest, RemoteReasoningProvider
 
     provider = RemoteReasoningProvider(
-        endpoint_url=endpoint, timeout=timeout, max_retries=max_retries, revision=revision)
+        endpoint_url=endpoint, timeout=timeout, max_retries=max_retries, revision=revision, api=api)
 
     def _call(system: str, user: str, config: Any) -> str | None:
         try:
@@ -300,7 +302,8 @@ def assess_payload(
             transport = _qwen_transport(
                 endpoint, timeout=timeout,
                 max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
-                revision=getattr(settings, "analyst_hf_revision", None))
+                revision=getattr(settings, "analyst_hf_revision", None),
+                api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"))
             provider = impl.QwenAnalystProvider(
                 endpoint_url=endpoint, timeout=timeout, system_prompt=spec.template, transport=transport)
         else:

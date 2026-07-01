@@ -97,13 +97,70 @@ def endpoint_health(settings: Settings | None = None) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Post-deploy smoke test — run one real investigation through the live endpoint
+# --------------------------------------------------------------------------- #
+_SMOKE_PAYLOAD = {
+    "overall_probability": 0.74, "overall_tier": "elevated", "confidence": 0.6,
+    "contributions": [{"name": "temporal", "impact": 0.5, "direction": "raises"},
+                      {"name": "community", "impact": 0.2, "direction": "lowers"}],
+    "video": {"clusters": [{"method": "co_engagement", "members": ["@a", "@b", "@c"]}]},
+}
+
+
+def endpoint_smoke_test(payload: dict | None = None, *, ref: str = "smoke_subject",
+                        platform: str = "youtube", settings: Settings | None = None) -> dict:
+    """Run ONE canonical investigation end-to-end through the *live* endpoint and report whether a
+    genuinely Qwen-backed, Governor-permitted, number-preserving assessment came back — the exact
+    post-deploy check an operator runs after wiring the Render env. Forces ``analyst_enabled`` so it
+    tests the endpoint regardless of the production flag; reports ``not_configured`` (never raises)
+    when no endpoint/token is set. A ``qwen_backed`` result with ``governor_verdict=permit`` and
+    ``number_echoed`` is the green light; anything else means the deploy is not live yet."""
+    settings = settings or get_settings()
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+    if not endpoint or not token_present:
+        return {"status": "not_configured", "endpoint_configured": bool(endpoint),
+                "hf_token_present": token_present,
+                "detail": "set OMI_ANALYST_ENDPOINT_URL + HF_TOKEN, then re-run the smoke test"}
+    from app.reasoning import analyst as _analyst
+
+    pay = payload or _SMOKE_PAYLOAD
+    t0 = time.perf_counter()
+    try:
+        assessment = _analyst.assess_payload(pay, ref=ref, platform=platform,
+                                             settings=_trace_settings(settings))
+    except Exception as exc:  # noqa: BLE001 — report, never raise
+        return {"status": "error", "detail": f"{type(exc).__name__}: {str(exc)[:160]}"}
+    latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    if not assessment:
+        return {"status": "no_output", "latency_ms": latency_ms,
+                "detail": "assess_payload returned None (feature off or impl missing)"}
+    gov = assessment.get("governance", {})
+    provider = gov.get("provider", "none")
+    qwen_backed = ("qwen" in provider) and ("fallback" not in provider)
+    return {
+        "status": "qwen_backed" if qwen_backed else "fallback_deterministic",
+        "endpoint_api": str(getattr(settings, "analyst_endpoint_api", "generate")),
+        "provider": provider,
+        "qwen_backed": qwen_backed,
+        "governor_verdict": gov.get("verdict"),
+        "number_echoed": assessment.get("suspicion_probability") == pay.get("overall_probability"),
+        "model_revision": gov.get("model_revision"),
+        "prompt": gov.get("prompt", {}),
+        "latency_ms": latency_ms,
+        "expected_when_live": "status=qwen_backed · governor_verdict=permit · number_echoed=true",
+    }
+
+
+# --------------------------------------------------------------------------- #
 # End-to-end trace — execute the production pipeline, report every stage
 # --------------------------------------------------------------------------- #
 def _trace_settings(settings: Settings) -> Any:
     """A settings view that forces ``analyst_enabled=True`` so the trace exercises the real pipeline
     mechanics even when the production flag is off (the actual flag state is reported separately)."""
     keys = ("analyst_hf_repo", "analyst_hf_revision", "analyst_endpoint_url",
-            "analyst_timeout_seconds", "analyst_max_retries", "analyst_prompt_version")
+            "analyst_timeout_seconds", "analyst_max_retries", "analyst_prompt_version",
+            "analyst_endpoint_api")
     return SimpleNamespace(analyst_enabled=True, **{k: getattr(settings, k, None) for k in keys})
 
 
@@ -229,4 +286,4 @@ def trace_investigation(payload: dict, *, ref: str, platform: str = "youtube",
     }
 
 
-__all__ = ["prompt_integrity", "endpoint_health", "trace_investigation"]
+__all__ = ["prompt_integrity", "endpoint_health", "endpoint_smoke_test", "trace_investigation"]

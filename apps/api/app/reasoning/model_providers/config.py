@@ -31,6 +31,7 @@ def build_remote_provider(settings: Any | None = None) -> RemoteReasoningProvide
         revision=getattr(settings, "analyst_hf_revision", None),
         timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
         max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
+        api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"),
     )
 
 
