@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import Settings, get_settings
+from app.reasoning.contracts import ReasoningContract, Ruling
 
 logger = logging.getLogger("omi.reasoning.analyst")
 
@@ -42,6 +43,32 @@ _impl_failed = False
 def analyst_enabled(settings: Settings | None = None) -> bool:
     settings = settings or get_settings()
     return bool(getattr(settings, "analyst_enabled", False))
+
+
+def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision: str | None,
+                    api: str = "generate"):
+    """The ONE Qwen HTTP transport (Sprint 017). The production analyst's model call goes through
+    the constitutional ``RemoteReasoningProvider`` — the same HF client the council uses — instead
+    of a second bespoke HTTP implementation. ``api`` selects the raw ``generate`` or OpenAI-
+    compatible ``messages`` serving contract. Returns the raw generated text, or None on any
+    failure so the analyst degrades to its deterministic provider."""
+    from app.reasoning.model_providers import ReasoningRequest, RemoteReasoningProvider
+
+    provider = RemoteReasoningProvider(
+        endpoint_url=endpoint, timeout=timeout, max_retries=max_retries, revision=revision, api=api)
+
+    def _call(system: str, user: str, config: Any) -> str | None:
+        try:
+            resp = provider.complete(ReasoningRequest(
+                system=system, user=user, response_format="text",
+                temperature=getattr(config, "temperature", 0.2),
+                max_tokens=getattr(config, "max_new_tokens", 1024), revision=revision,
+            ))
+            return resp.text
+        except Exception:  # noqa: BLE001 — provider failure -> deterministic fallback
+            return None
+
+    return _call
 
 
 def _impl():
@@ -114,7 +141,7 @@ def _components_from_payload(payload: dict, impl) -> list[dict]:
     return out
 
 
-def build_bundle(payload: dict, *, ref: str, platform: str, impl) -> dict:
+def build_bundle(payload: dict, *, ref: str, platform: str, impl, prior_context: list | None = None) -> dict:
     scan = {
         "overall_probability": payload.get("overall_probability") or 0.0,
         "tier": payload.get("overall_tier") or payload.get("tier") or "low",
@@ -124,27 +151,133 @@ def build_bundle(payload: dict, *, ref: str, platform: str, impl) -> dict:
         "contributions": payload.get("contributions") or [],
         "coordination": _coordination_from_payload(payload),
     }
-    return impl.evidence_bundle.project_investigation_bundle(
+    bundle = impl.evidence_bundle.project_investigation_bundle(
         ref=ref, platform=platform, scan=scan,
         components=_components_from_payload(payload, impl),
         cross_links=payload.get("cross_links") or [],
     )
+    # Sprint 021 — institutional memory reaches the AI specialist as labeled CONTEXT (never proof).
+    # Additive: the deterministic provider ignores this key (so its output is unchanged), while the
+    # Qwen provider serializes the whole bundle, so the live model reasons with prior context.
+    if prior_context:
+        bundle["prior_context"] = prior_context
+    return bundle
+
+
+def _retrieve_prior_context(store: Any, app_bundle: Any, *, now: Any = None, top_k: int = 5) -> list[dict]:
+    """Retrieve institutional PriorContext for the analyst's input (Sprint 021). Each prior is
+    background context — labeled, never proof, and carries NO resolvable evidence id (so the model
+    cannot cite it as evidence; the memory boundary is preserved). Returns ``[]`` when memory is
+    empty / unavailable. Never raises."""
+    if store is None or app_bundle is None:
+        return []
+    try:
+        from app.memory.graph import retrieve
+
+        priors = retrieve(store, app_bundle, top_k=top_k, now=now)
+        return [{
+            "type": p.type, "label": p.label,
+            "confidence": round(float(p.confidence), 3), "stability": round(float(p.stability_score), 3),
+            "epistemic_status": p.epistemic_status, "influence_class": p.influence_class,
+            "basis": p.match_basis, "note": "institutional memory — background context, never proof",
+        } for p in priors]
+    except Exception:  # noqa: BLE001 — memory must never break the analyst
+        logger.warning("prior-context retrieval failed; proceeding without memory", exc_info=True)
+        return []
 
 
 # --------------------------------------------------------------------------- #
 # Assessment (sync core) — off the hot path; safe to run in a worker thread
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# The analyst as the constitutional council's judge (Sprint 017 — runtime convergence)
+# --------------------------------------------------------------------------- #
+# Production runs through the ONE Orchestrator — the same constitutional spine the shadow
+# council uses. The rich OMI ANALYST is the council's *judge* (its schema-shaped assessment IS
+# the Ruling); the deterministic analyst is the council's *floor*. The Orchestrator supplies the
+# ONE Binder, the **mandatory** Governor, and the deterministic Floor fallback. There is no
+# parallel governance path. OmiScore is never touched.
+_JUDGE_CONSTRAINTS = (
+    "echo the engine number; never recompute the score",
+    "evidence, not verdict; cite only provided evidence",
+    "respect the corroboration gate; supplemental signals are context only",
+)
+
+
+class _AnalystJudge:
+    """The production OMI ANALYST wrapped as the council judge. ``OmiAnalyst.assess`` already
+    degrades a failed/invalid model output to its deterministic provider, so ``run`` yields a
+    schema-shaped Ruling; the Orchestrator's Governor + Floor are the outer constitutional gate."""
+
+    contract = ReasoningContract(
+        module="omi_analyst", tier=3, output_kind="ruling", contract_version="v1",
+        inputs=("*",), constraints=_JUDGE_CONSTRAINTS,
+    )
+
+    def __init__(self, *, impl: Any, config: Any, provider: Any, payload: dict,
+                 ref: str, platform: str, prompt_meta: dict, store: Any = None, now: Any = None) -> None:
+        self._impl, self._config, self._provider = impl, config, provider
+        self._payload, self._ref, self._platform = payload, ref, platform
+        self._store, self._now = store, now
+        self.last_meta: dict[str, Any] = {
+            "provider": "none", "latency_ms": 0.0,
+            "model_revision": getattr(config, "model_revision", None), "prompt": prompt_meta,
+        }
+
+    def run(self, view: Any) -> list:
+        prior_context = _retrieve_prior_context(self._store, getattr(view, "bundle", None), now=self._now)
+        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform,
+                             impl=self._impl, prior_context=prior_context)
+        self.last_meta["prior_context"] = len(prior_context)
+        analyst_obj = self._impl.OmiAnalyst(
+            config=self._config, provider=self._provider, store=None, record=False)
+        t0 = time.perf_counter()
+        outcome = analyst_obj.assess(lossy)
+        self.last_meta = {**self.last_meta, "provider": outcome.provider,
+                          "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
+        if not outcome.valid:                          # essentially unreachable (assess self-degrades)
+            logger.warning("omi_analyst produced invalid output: %s", outcome.errors[:3])
+            return []                                  # no Ruling → caller degrades to None
+        return [Ruling(module=self.contract.module, assessment=outcome.response)]
+
+
+class _AnalystFloor:
+    """The deterministic analyst as the council's always-valid Floor judge (rich, schema-shaped)."""
+
+    contract = ReasoningContract(
+        module="omi_analyst_floor", tier=3, output_kind="ruling", contract_version="v1",
+        inputs=("*",), constraints=("always schema-valid by construction",),
+    )
+
+    def __init__(self, *, impl: Any, config: Any, payload: dict, ref: str, platform: str,
+                 model_revision: str | None, store: Any = None, now: Any = None) -> None:
+        self._impl, self._config = impl, config
+        self._payload, self._ref, self._platform = payload, ref, platform
+        self._store, self._now = store, now
+        self.last_meta = {"provider": "deterministic-floor", "latency_ms": 0.0,
+                          "model_revision": model_revision, "prompt": {}}
+
+    def run(self, view: Any) -> list:
+        prior_context = _retrieve_prior_context(self._store, getattr(view, "bundle", None), now=self._now)
+        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform,
+                             impl=self._impl, prior_context=prior_context)
+        result = self._impl.DeterministicAnalystProvider().generate(lossy, self._config)
+        return [Ruling(module=self.contract.module, assessment=result.response)]
+
+
 def assess_payload(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
 ) -> dict | None:
-    """Produce a Governor-validated structured assessment for an investigation payload,
-    or None if the feature is off / unavailable / errored. Never raises.
+    """Produce a Governor-validated structured assessment for an investigation payload, or None if
+    the feature is off / unavailable / errored. Never raises.
 
-    The Constitutional Governor (Sprint 002) is **mandatory** on this path: the provider's
-    assessment is validated against a freshly-bound canonical Evidence Bundle; on REJECT it
-    falls back to the always-valid deterministic Floor (itself Governor-validated). A
-    ``governance`` block (verdict, trace id, provider, model revision, latency) is attached
-    for transparency. The Governor is never skipped and the Floor is never bypassed.
+    Sprint 017 — runtime convergence: this executes through the **constitutional council
+    Orchestrator** (the same one the shadow council uses), not a parallel reasoning path. The rich
+    OMI ANALYST is the council's *judge* and the deterministic analyst is its *floor*; the
+    Orchestrator supplies the ONE Binder, the **mandatory** Governor, and the deterministic Floor
+    fallback. The prompt comes from the ONE Prompt Registry (Sprint 016). A ``governance`` block
+    (verdict, trace id, provider, model revision, prompt, latency) is attached for transparency.
+    The Governor is never skipped; the Floor is never bypassed; OmiScore is never touched.
     """
     settings = settings or get_settings()
     if not analyst_enabled(settings):
@@ -153,92 +286,69 @@ def assess_payload(
     if impl is None:
         return None
     try:
+        from app.reasoning.orchestrator import Orchestrator
+        from app.reasoning.prompts import default_registry
+
         config = impl.load_analyst_config(
             repo_id=settings.analyst_hf_repo, revision=settings.analyst_hf_revision,
         )
+        spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
+        prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,
+                       "hash": spec.prompt_hash, "source": "registry"}
+
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
         if endpoint:
-            provider = impl.QwenAnalystProvider(endpoint_url=endpoint, timeout=timeout)
+            transport = _qwen_transport(
+                endpoint, timeout=timeout,
+                max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
+                revision=getattr(settings, "analyst_hf_revision", None),
+                api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"))
+            provider = impl.QwenAnalystProvider(
+                endpoint_url=endpoint, timeout=timeout, system_prompt=spec.template, transport=transport)
         else:
             provider = impl.DeterministicAnalystProvider()
-        analyst_obj = impl.OmiAnalyst(config=config, provider=provider, store=None, record=False)
-        lossy_bundle = build_bundle(payload, ref=ref, platform=platform, impl=impl)
 
-        t0 = time.perf_counter()
-        outcome = analyst_obj.assess(lossy_bundle)
-        latency_ms = (time.perf_counter() - t0) * 1000.0
-        if not outcome.valid:
-            logger.warning("omi_analyst produced invalid output: %s", outcome.errors[:3])
-            return None
-
-        return _govern(
-            outcome.response, payload, ref=ref, platform=platform,
-            provider=outcome.provider, latency_ms=latency_ms,
-            model_revision=getattr(config, "model_revision", None),
-            impl=impl, config=config, lossy_bundle=lossy_bundle,
-        )
+        model_revision = getattr(config, "model_revision", None)
+        # Sprint 021 — wire institutional memory into the AI specialist's input. ``get_memory_store``
+        # returns the durable store when memory persistence is enabled, else an empty in-memory store
+        # (so retrieval naturally no-ops). Memory is CONTEXT only; it never moves the engine number.
+        from app.memory.repository import get_memory_store
+        store = get_memory_store(settings)
+        judge = _AnalystJudge(impl=impl, config=config, provider=provider, payload=payload,
+                              ref=ref, platform=platform, prompt_meta=prompt_meta, store=store)
+        floor = _AnalystFloor(impl=impl, config=config, payload=payload, ref=ref,
+                              platform=platform, model_revision=model_revision, store=store)
+        result = Orchestrator(modules=[], judge=judge, floor=floor).run(
+            payload, ref=ref, platform=platform, grain="comment_section")
+        return _attach_governance(result, judge=judge, floor=floor)
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")
         return None
 
 
-def _govern(
-    assessment: dict, payload: dict, *, ref: str, platform: str, provider: str,
-    latency_ms: float, model_revision: str | None, impl: Any, config: Any, lossy_bundle: dict,
-) -> dict:
-    """Mandatory Constitutional Governor gate (deterministic, model-free).
-
-    Validates the assessment against a canonical Evidence Bundle (``app.evidence.Binder``)
-    using ``app.governor.Governor``. PERMIT -> attach a ``governance`` block + return.
-    REJECT -> ship the deterministic Floor (regenerated + Governor-validated), recording
-    the rejected codes. Any error -> the deterministic Floor is the safest output. Never
-    raises — governance must never break the caller."""
-    from app.evidence import Binder
+def _attach_governance(result: Any, *, judge: "_AnalystJudge", floor: "_AnalystFloor") -> dict:
+    """Attach the transparency ``governance`` block from the Orchestrator's CouncilResult — the
+    same fields the pre-convergence gate emitted, so the API + cache contract is byte-preserved."""
     from app.governor import Governor
 
-    def _meta(trace: Any, prov: str, **extra: Any) -> dict:
-        m = {
-            "verdict": trace.verdict,
-            "trace_id": trace.trace_id(),
-            "violation_codes": trace.violation_codes,
-            "provider": prov,
-            "model_revision": model_revision,
-            "latency_ms": round(float(latency_ms), 2),
-            "constitution_version": Governor.constitution_version,
-        }
-        m.update(extra)
-        return m
-
-    governor = Governor()
-    try:
-        bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform)
-        trace = governor.validate(assessment, bundle, corroboration=assessment.get("corroboration"))
-        if trace.permitted:
-            assessment["governance"] = _meta(trace, provider)
-            logger.info("analyst governed: PERMIT provider=%s latency=%.1fms", provider, latency_ms)
-            return assessment
-
-        logger.warning("analyst REJECTED by governor %s; falling back to Floor", trace.violation_codes)
-        floor = impl.DeterministicAnalystProvider().generate(lossy_bundle, config).response
-        ftrace = governor.validate(floor, bundle, corroboration=floor.get("corroboration"))
-        floor["governance"] = _meta(
-            ftrace, "deterministic-floor",
-            fallback_from=provider, rejected_codes=trace.violation_codes,
-        )
-        return floor
-    except Exception:  # noqa: BLE001 — governance must never break the caller
-        logger.exception("governor gate errored; returning the deterministic Floor")
-        try:
-            floor = impl.DeterministicAnalystProvider().generate(lossy_bundle, config).response
-            floor["governance"] = {
-                "verdict": "error", "provider": "deterministic-floor",
-                "model_revision": model_revision, "fallback_from": provider,
-            }
-            return floor
-        except Exception:  # noqa: BLE001
-            assessment["governance"] = {"verdict": "error", "provider": provider}
-            return assessment
+    assessment = dict(result.assessment)
+    meta = floor.last_meta if result.fallback else judge.last_meta
+    gov = {
+        "verdict": result.trace.verdict,
+        "trace_id": result.trace.trace_id(),
+        "violation_codes": list(result.trace.violation_codes),
+        "provider": meta["provider"],
+        "model_revision": meta["model_revision"],
+        "prompt": judge.last_meta.get("prompt") or {},
+        "latency_ms": meta["latency_ms"],
+        "constitution_version": Governor.constitution_version,
+    }
+    if result.fallback:
+        gov["fallback_from"] = judge.last_meta["provider"]
+        gov["rejected_codes"] = list(result.rejected_codes)
+    assessment["governance"] = gov
+    return assessment
 
 
 def runtime_status(settings: Settings | None = None) -> dict:
@@ -264,6 +374,62 @@ def runtime_status(settings: Settings | None = None) -> dict:
         "governor": "mandatory",
         "deterministic_floor": "always-on",
         "ready_for_live_qwen": bool(enabled and endpoint and token_present and impl_ok is True),
+    }
+
+
+def runtime_path(settings: Settings | None = None) -> dict:
+    """The full AI runtime **dependency graph** (Sprint 016): every link from the website to Qwen
+    and back, each marked ``verified`` / ``operator_action`` / ``blocked``, so *what prevents live
+    Qwen reasoning* is one verifiable answer instead of a guess. Read-only; no secrets (token
+    presence is a boolean); never raises. Ordered to mirror the runtime path."""
+    settings = settings or get_settings()
+    enabled = analyst_enabled(settings)
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+    impl_ok: bool | None = (_impl() is not None) if enabled else None
+
+    def node(step: str, ok: bool, detail: str, *, operator: bool = False) -> dict:
+        return {"step": step, "status": "verified" if ok else ("operator_action" if operator else "blocked"),
+                "detail": detail}
+
+    # The Prompt Registry is the single source of truth — verified independently of the feature flag.
+    try:
+        from app.reasoning.prompts import default_registry
+        spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
+        prompt_node = node("prompt_registry", True, f"omi_analyst {spec.prompt_version} ({spec.prompt_hash})")
+    except Exception as exc:  # noqa: BLE001 — a registry failure is a real (code) blocker
+        prompt_node = node("prompt_registry", False, f"resolve failed: {str(exc)[:100]}")
+
+    try:
+        from app.governor import Governor
+        gov_detail = f"mandatory (constitution {Governor.constitution_version})"
+    except Exception:  # noqa: BLE001
+        gov_detail = "mandatory"
+
+    nodes = [
+        node("feature_flag", enabled, f"analyst_enabled={enabled}", operator=not enabled),
+        node("analyst_impl", impl_ok is True,
+             "ml/analyst importable" if impl_ok else ("import failed" if enabled else "not checked (flag off)"),
+             operator=(impl_ok is None)),
+        node("evidence_bundle", True, "app.evidence.Binder available"),
+        prompt_node,
+        node("hf_endpoint", bool(endpoint), "configured" if endpoint else "analyst_endpoint_url unset",
+             operator=not endpoint),
+        node("hf_token", token_present,
+             "present" if token_present else "HF_TOKEN / HUGGINGFACE_HUB_TOKEN unset", operator=not token_present),
+        node("model", True,
+             f"{getattr(settings, 'analyst_hf_repo', None)}@{getattr(settings, 'analyst_hf_revision', None) or 'main'}"),
+        node("governor", True, gov_detail),
+        node("deterministic_floor", True, "always-on fallback"),
+    ]
+    ready = bool(enabled and endpoint and token_present and impl_ok is True and prompt_node["status"] == "verified")
+    return {
+        "ready_for_live_qwen": ready,
+        "active_provider": "qwen" if (enabled and endpoint) else "deterministic-floor",
+        "nodes": nodes,
+        "blockers": [n["step"] for n in nodes if n["status"] != "verified"],
+        "governor": "mandatory",
+        "deterministic_floor": "always-on",
     }
 
 

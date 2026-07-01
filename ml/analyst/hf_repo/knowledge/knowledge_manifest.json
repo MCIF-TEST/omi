@@ -1,0 +1,946 @@
+{
+  "categories": [
+    {
+      "id": "behavioral_archetypes",
+      "name": "Behavioral Archetypes"
+    },
+    {
+      "id": "bot_behaviors",
+      "name": "Bot Behaviors"
+    },
+    {
+      "id": "campaign_types",
+      "name": "Campaign Types"
+    },
+    {
+      "id": "confidence_calibration",
+      "name": "Confidence Calibration Guidelines"
+    },
+    {
+      "id": "coordination_techniques",
+      "name": "Coordination Techniques"
+    },
+    {
+      "id": "deception_indicators",
+      "name": "Deception Indicators"
+    },
+    {
+      "id": "false_positive_patterns",
+      "name": "False-positive Patterns"
+    },
+    {
+      "id": "influence_operations",
+      "name": "Influence Operations"
+    },
+    {
+      "id": "investigative_heuristics",
+      "name": "Known Investigative Heuristics"
+    },
+    {
+      "id": "legitimate_community_patterns",
+      "name": "Legitimate Community Patterns"
+    },
+    {
+      "id": "narrative_amplification",
+      "name": "Narrative Amplification"
+    },
+    {
+      "id": "organic_viral_signatures",
+      "name": "Organic Viral Signatures"
+    },
+    {
+      "id": "osint_techniques",
+      "name": "Known OSINT Techniques"
+    },
+    {
+      "id": "platform_behaviors",
+      "name": "Platform-specific Behaviors"
+    }
+  ],
+  "counts": {
+    "categories": 14,
+    "entries": 25
+  },
+  "entries": [
+    {
+      "category": "influence_operations",
+      "confidence": "established",
+      "content_hash": "ie:eedebf02d99bec132309dca221aa3214",
+      "id": "astroturfing",
+      "investigation_types": [
+        "campaign",
+        "narrative"
+      ],
+      "platforms": [
+        "x",
+        "reddit",
+        "youtube"
+      ],
+      "relationships": [
+        "manufactured_amplification",
+        "consensus_illusion",
+        "sockpuppets",
+        "legitimate_coordination"
+      ],
+      "specialists": [
+        "narrative_analyst",
+        "coordination_analyst",
+        "counter_evidence_analyst"
+      ],
+      "tags": [
+        "astroturf",
+        "grassroots",
+        "influence"
+      ],
+      "title": "Astroturfing",
+      "version": "v1"
+    },
+    {
+      "category": "investigative_heuristics",
+      "confidence": "established",
+      "content_hash": "ie:4718f814dd5d51dba80a1db57cfc1593",
+      "id": "base_rate_discipline",
+      "investigation_types": [
+        "comment_section",
+        "narrative"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok"
+      ],
+      "relationships": [
+        "co_engagement_coordination",
+        "organic_virality",
+        "confidence_bands"
+      ],
+      "specialists": [
+        "calibration_analyst",
+        "risk_analyst"
+      ],
+      "tags": [
+        "base_rate",
+        "heuristic",
+        "coincidence"
+      ],
+      "title": "Base-rate Discipline",
+      "version": "v1"
+    },
+    {
+      "category": "bot_behaviors",
+      "confidence": "established",
+      "content_hash": "ie:7f58cac4607655a759559588b1d85a45",
+      "id": "benign_automation",
+      "investigation_types": [
+        "account",
+        "campaign"
+      ],
+      "platforms": [
+        "x",
+        "youtube"
+      ],
+      "relationships": [
+        "bot_amplification",
+        "precision_frontier",
+        "legitimate_coordination"
+      ],
+      "specialists": [
+        "counter_evidence_analyst",
+        "behavior_analyst",
+        "risk_analyst"
+      ],
+      "tags": [
+        "automation",
+        "scheduler",
+        "benign",
+        "false_positive"
+      ],
+      "title": "Benign Automation",
+      "version": "v1"
+    },
+    {
+      "category": "bot_behaviors",
+      "confidence": "established",
+      "content_hash": "ie:3f71a26958e7fd008f6f41744abbd247",
+      "id": "bot_amplification",
+      "investigation_types": [
+        "narrative",
+        "campaign"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok"
+      ],
+      "relationships": [
+        "benign_automation",
+        "temporal_synchrony",
+        "manufactured_amplification"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "temporal_analyst",
+        "network_analyst"
+      ],
+      "tags": [
+        "bot",
+        "automation",
+        "amplification"
+      ],
+      "title": "Bot Amplification",
+      "version": "v1"
+    },
+    {
+      "category": "coordination_techniques",
+      "confidence": "established",
+      "content_hash": "ie:8675e56fb07e2a26ae6cba6802daa161",
+      "id": "co_engagement_coordination",
+      "investigation_types": [
+        "comment_section",
+        "campaign"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok"
+      ],
+      "relationships": [
+        "engagement_pods",
+        "discriminative_corroboration_gate",
+        "organic_virality"
+      ],
+      "specialists": [
+        "network_analyst",
+        "coordination_analyst"
+      ],
+      "tags": [
+        "co_engagement",
+        "overlap",
+        "discriminative"
+      ],
+      "title": "Co-engagement Coordination",
+      "version": "v1"
+    },
+    {
+      "category": "confidence_calibration",
+      "confidence": "established",
+      "content_hash": "ie:ea68e548cf7be223218b926f9f2a0d40",
+      "id": "confidence_bands",
+      "investigation_types": [
+        "comment_section",
+        "campaign",
+        "narrative"
+      ],
+      "platforms": [
+        "youtube",
+        "x",
+        "reddit",
+        "tiktok"
+      ],
+      "relationships": [
+        "single_axis_cap",
+        "base_rate_discipline",
+        "independent_corroboration"
+      ],
+      "specialists": [
+        "calibration_analyst",
+        "judge"
+      ],
+      "tags": [
+        "confidence",
+        "calibration",
+        "bands"
+      ],
+      "title": "Confidence Bands",
+      "version": "v1"
+    },
+    {
+      "category": "influence_operations",
+      "confidence": "emerging",
+      "content_hash": "ie:365552e6274737214fbdb432bf5dc11b",
+      "id": "consensus_illusion",
+      "investigation_types": [
+        "narrative"
+      ],
+      "platforms": [
+        "x",
+        "reddit"
+      ],
+      "relationships": [
+        "manufactured_amplification",
+        "astroturfing"
+      ],
+      "specialists": [
+        "narrative_analyst",
+        "judge"
+      ],
+      "tags": [
+        "consensus",
+        "social_proof",
+        "bandwagon",
+        "psychological"
+      ],
+      "title": "Consensus Illusion",
+      "version": "v1"
+    },
+    {
+      "category": "campaign_types",
+      "confidence": "established",
+      "content_hash": "ie:612fa1f5032354604fb25188de9293bf",
+      "id": "coordinated_campaign",
+      "investigation_types": [
+        "campaign"
+      ],
+      "platforms": [
+        "x",
+        "youtube"
+      ],
+      "relationships": [
+        "coordinated_inauthentic_behavior",
+        "legitimate_coordination",
+        "astroturfing"
+      ],
+      "specialists": [
+        "campaign_analyst",
+        "coordination_analyst"
+      ],
+      "tags": [
+        "campaign",
+        "materialized",
+        "membership"
+      ],
+      "title": "Coordinated Campaign",
+      "version": "v1"
+    },
+    {
+      "category": "coordination_techniques",
+      "confidence": "established",
+      "content_hash": "ie:800b42fbe27307f73272f50ef6e59802",
+      "id": "coordinated_inauthentic_behavior",
+      "investigation_types": [
+        "campaign",
+        "comment_section",
+        "narrative"
+      ],
+      "platforms": [
+        "youtube",
+        "x",
+        "reddit",
+        "tiktok"
+      ],
+      "relationships": [
+        "astroturfing",
+        "engagement_pods",
+        "sockpuppets",
+        "discriminative_corroboration_gate",
+        "legitimate_coordination"
+      ],
+      "specialists": [
+        "coordination_analyst",
+        "campaign_analyst",
+        "judge"
+      ],
+      "tags": [
+        "cib",
+        "coordination",
+        "inauthentic",
+        "manipulation"
+      ],
+      "title": "Coordinated Inauthentic Behavior (CIB)",
+      "version": "v1"
+    },
+    {
+      "category": "investigative_heuristics",
+      "confidence": "established",
+      "content_hash": "ie:43332cde8d5872086274c706d5c304de",
+      "id": "discriminative_corroboration_gate",
+      "investigation_types": [
+        "comment_section",
+        "campaign",
+        "narrative"
+      ],
+      "platforms": [
+        "youtube",
+        "x",
+        "reddit",
+        "tiktok"
+      ],
+      "relationships": [
+        "fingerprint_clustering",
+        "co_engagement_coordination",
+        "single_axis_cap",
+        "temporal_synchrony",
+        "stylometric_matching"
+      ],
+      "specialists": [
+        "coordination_analyst",
+        "calibration_analyst",
+        "judge"
+      ],
+      "tags": [
+        "corroboration",
+        "discriminative",
+        "gate",
+        "heuristic"
+      ],
+      "title": "Discriminative Corroboration Gate",
+      "version": "v1"
+    },
+    {
+      "category": "coordination_techniques",
+      "confidence": "established",
+      "content_hash": "ie:f3e0dadfbacdc6f355089d3af4f72efe",
+      "id": "engagement_pods",
+      "investigation_types": [
+        "comment_section",
+        "campaign"
+      ],
+      "platforms": [
+        "x",
+        "tiktok",
+        "youtube"
+      ],
+      "relationships": [
+        "co_engagement_coordination",
+        "coordinated_inauthentic_behavior",
+        "organic_virality"
+      ],
+      "specialists": [
+        "network_analyst",
+        "coordination_analyst",
+        "temporal_analyst"
+      ],
+      "tags": [
+        "pods",
+        "engagement",
+        "reciprocal",
+        "co_engagement"
+      ],
+      "title": "Engagement Pods",
+      "version": "v1"
+    },
+    {
+      "category": "coordination_techniques",
+      "confidence": "established",
+      "content_hash": "ie:049cb33fc768f380e2ea6ca95bea8461",
+      "id": "fingerprint_clustering",
+      "investigation_types": [
+        "comment_section",
+        "campaign"
+      ],
+      "platforms": [
+        "youtube",
+        "x"
+      ],
+      "relationships": [
+        "discriminative_corroboration_gate",
+        "coordinated_inauthentic_behavior"
+      ],
+      "specialists": [
+        "coordination_analyst",
+        "network_analyst"
+      ],
+      "tags": [
+        "fingerprint",
+        "device",
+        "discriminative",
+        "cluster"
+      ],
+      "title": "Fingerprint Clustering",
+      "version": "v1"
+    },
+    {
+      "category": "osint_techniques",
+      "confidence": "established",
+      "content_hash": "ie:5a59e9d61d69cb03c05b1bbe58f4892c",
+      "id": "independent_corroboration",
+      "investigation_types": [
+        "campaign",
+        "comment_section"
+      ],
+      "platforms": [
+        "youtube",
+        "x",
+        "reddit"
+      ],
+      "relationships": [
+        "discriminative_corroboration_gate",
+        "single_axis_cap"
+      ],
+      "specialists": [
+        "counter_evidence_analyst",
+        "judge",
+        "memory_analyst"
+      ],
+      "tags": [
+        "corroboration",
+        "independence",
+        "osint"
+      ],
+      "title": "Independent Corroboration",
+      "version": "v1"
+    },
+    {
+      "category": "legitimate_community_patterns",
+      "confidence": "established",
+      "content_hash": "ie:806a0457d22b380dc00128c7d1f1cbb2",
+      "id": "legitimate_coordination",
+      "investigation_types": [
+        "campaign",
+        "narrative"
+      ],
+      "platforms": [
+        "youtube",
+        "x",
+        "reddit"
+      ],
+      "relationships": [
+        "precision_frontier",
+        "coordinated_inauthentic_behavior",
+        "benign_automation",
+        "organic_virality"
+      ],
+      "specialists": [
+        "counter_evidence_analyst",
+        "campaign_analyst",
+        "risk_analyst"
+      ],
+      "tags": [
+        "legitimate",
+        "newsroom",
+        "fandom",
+        "precision_frontier"
+      ],
+      "title": "Legitimate Coordination",
+      "version": "v1"
+    },
+    {
+      "category": "narrative_amplification",
+      "confidence": "established",
+      "content_hash": "ie:97d79d224dd7175d11a8f1c031177857",
+      "id": "manufactured_amplification",
+      "investigation_types": [
+        "narrative"
+      ],
+      "platforms": [
+        "x",
+        "tiktok",
+        "youtube"
+      ],
+      "relationships": [
+        "organic_virality",
+        "astroturfing",
+        "consensus_illusion",
+        "bot_amplification"
+      ],
+      "specialists": [
+        "narrative_analyst",
+        "language_analyst"
+      ],
+      "tags": [
+        "amplification",
+        "narrative",
+        "manufactured"
+      ],
+      "title": "Manufactured Amplification",
+      "version": "v1"
+    },
+    {
+      "category": "behavioral_archetypes",
+      "confidence": "emerging",
+      "content_hash": "ie:4544ba35ebec57ba79a8c8f180f3f1c3",
+      "id": "new_account_cohorts",
+      "investigation_types": [
+        "campaign",
+        "comment_section"
+      ],
+      "platforms": [
+        "x",
+        "youtube"
+      ],
+      "relationships": [
+        "temporal_synchrony",
+        "discriminative_corroboration_gate"
+      ],
+      "specialists": [
+        "metadata_analyst"
+      ],
+      "tags": [
+        "age_cohort",
+        "new_accounts",
+        "creation_burst",
+        "metadata"
+      ],
+      "title": "New-account Cohorts",
+      "version": "v1"
+    },
+    {
+      "category": "organic_viral_signatures",
+      "confidence": "established",
+      "content_hash": "ie:f6380cbc908ade3ca602b1719b71d42c",
+      "id": "organic_virality",
+      "investigation_types": [
+        "narrative",
+        "comment_section"
+      ],
+      "platforms": [
+        "tiktok",
+        "x",
+        "youtube"
+      ],
+      "relationships": [
+        "manufactured_amplification",
+        "precision_frontier",
+        "legitimate_coordination"
+      ],
+      "specialists": [
+        "narrative_analyst",
+        "counter_evidence_analyst"
+      ],
+      "tags": [
+        "organic",
+        "viral",
+        "breadth",
+        "authentic"
+      ],
+      "title": "Organic Viral Signatures",
+      "version": "v1"
+    },
+    {
+      "category": "platform_behaviors",
+      "confidence": "emerging",
+      "content_hash": "ie:f78f52a354ed9f1cc7f6eba28fb2062f",
+      "id": "platform_x_norms",
+      "investigation_types": [
+        "narrative"
+      ],
+      "platforms": [
+        "x"
+      ],
+      "relationships": [
+        "manufactured_amplification",
+        "platform_youtube_norms"
+      ],
+      "specialists": [
+        "metadata_analyst",
+        "behavior_analyst"
+      ],
+      "tags": [
+        "x",
+        "twitter",
+        "platform",
+        "retweet"
+      ],
+      "title": "X / Twitter Platform Norms",
+      "version": "v1"
+    },
+    {
+      "category": "platform_behaviors",
+      "confidence": "emerging",
+      "content_hash": "ie:a34273067cc4a069d379a51fcb15ac6a",
+      "id": "platform_youtube_norms",
+      "investigation_types": [
+        "comment_section"
+      ],
+      "platforms": [
+        "youtube"
+      ],
+      "relationships": [
+        "engagement_pods",
+        "platform_x_norms"
+      ],
+      "specialists": [
+        "metadata_analyst",
+        "behavior_analyst"
+      ],
+      "tags": [
+        "youtube",
+        "platform",
+        "comments"
+      ],
+      "title": "YouTube Platform Norms",
+      "version": "v1"
+    },
+    {
+      "category": "false_positive_patterns",
+      "confidence": "established",
+      "content_hash": "ie:3f9e879a7f9e6c7694cdb9deb2b9b753",
+      "id": "precision_frontier",
+      "investigation_types": [
+        "campaign",
+        "narrative",
+        "comment_section"
+      ],
+      "platforms": [
+        "youtube",
+        "x",
+        "reddit",
+        "tiktok"
+      ],
+      "relationships": [
+        "legitimate_coordination",
+        "organic_virality",
+        "second_language_writing",
+        "benign_automation"
+      ],
+      "specialists": [
+        "counter_evidence_analyst",
+        "risk_analyst",
+        "judge"
+      ],
+      "tags": [
+        "false_positive",
+        "precision",
+        "legitimacy"
+      ],
+      "title": "The Precision Frontier",
+      "version": "v1"
+    },
+    {
+      "category": "false_positive_patterns",
+      "confidence": "emerging",
+      "content_hash": "ie:6112d5944bfa20c8f28f8c8fd16c71f6",
+      "id": "second_language_writing",
+      "investigation_types": [
+        "comment_section"
+      ],
+      "platforms": [
+        "youtube",
+        "reddit",
+        "x"
+      ],
+      "relationships": [
+        "stylometric_matching",
+        "precision_frontier"
+      ],
+      "specialists": [
+        "language_analyst",
+        "counter_evidence_analyst"
+      ],
+      "tags": [
+        "stylometry",
+        "esl",
+        "template",
+        "false_positive"
+      ],
+      "title": "Second-language & Templated Writing",
+      "version": "v1"
+    },
+    {
+      "category": "confidence_calibration",
+      "confidence": "established",
+      "content_hash": "ie:61f244dd4816f019358ebc1cbaf081bb",
+      "id": "single_axis_cap",
+      "investigation_types": [
+        "comment_section",
+        "campaign",
+        "narrative"
+      ],
+      "platforms": [
+        "youtube",
+        "x"
+      ],
+      "relationships": [
+        "discriminative_corroboration_gate",
+        "confidence_bands",
+        "temporal_synchrony"
+      ],
+      "specialists": [
+        "calibration_analyst",
+        "judge"
+      ],
+      "tags": [
+        "single_axis",
+        "cap",
+        "calibration"
+      ],
+      "title": "Single-axis Cap",
+      "version": "v1"
+    },
+    {
+      "category": "behavioral_archetypes",
+      "confidence": "established",
+      "content_hash": "ie:57708b03f3546f612afa6db8da7c753e",
+      "id": "sockpuppets",
+      "investigation_types": [
+        "comment_section",
+        "account"
+      ],
+      "platforms": [
+        "reddit",
+        "x",
+        "youtube"
+      ],
+      "relationships": [
+        "stylometric_matching",
+        "coordinated_inauthentic_behavior",
+        "fingerprint_clustering"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "language_analyst",
+        "network_analyst"
+      ],
+      "tags": [
+        "sockpuppet",
+        "persona",
+        "one-actor"
+      ],
+      "title": "Sockpuppets",
+      "version": "v1"
+    },
+    {
+      "category": "deception_indicators",
+      "confidence": "emerging",
+      "content_hash": "ie:54b99c8eaa6614bbcd1b6d7bc07a3947",
+      "id": "stylometric_matching",
+      "investigation_types": [
+        "comment_section"
+      ],
+      "platforms": [
+        "reddit",
+        "youtube",
+        "x"
+      ],
+      "relationships": [
+        "second_language_writing",
+        "sockpuppets",
+        "discriminative_corroboration_gate"
+      ],
+      "specialists": [
+        "language_analyst"
+      ],
+      "tags": [
+        "stylometry",
+        "style_match",
+        "non-discriminative"
+      ],
+      "title": "Stylometric Matching",
+      "version": "v1"
+    },
+    {
+      "category": "behavioral_archetypes",
+      "confidence": "established",
+      "content_hash": "ie:de93b6fe51e926e006388e3c393af5a3",
+      "id": "temporal_synchrony",
+      "investigation_types": [
+        "narrative",
+        "comment_section"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok"
+      ],
+      "relationships": [
+        "single_axis_cap",
+        "bot_amplification",
+        "organic_virality",
+        "benign_automation"
+      ],
+      "specialists": [
+        "temporal_analyst",
+        "coordination_analyst"
+      ],
+      "tags": [
+        "temporal",
+        "synchrony",
+        "burst",
+        "non-discriminative"
+      ],
+      "title": "Temporal Synchrony",
+      "version": "v1"
+    }
+  ],
+  "generated_by": "app.reasoning.prompts.export.knowledge_manifest",
+  "library_hash": "il:7afa40771b797e9ded177582bf746677",
+  "manifest_version": "v1",
+  "source_of_truth": "GitHub app.reasoning.knowledge.default_library (do not hand-edit)",
+  "specialist_dependencies": {
+    "behavior_analyst": [
+      "benign_automation",
+      "bot_amplification",
+      "platform_x_norms",
+      "platform_youtube_norms",
+      "sockpuppets"
+    ],
+    "calibration_analyst": [
+      "base_rate_discipline",
+      "confidence_bands",
+      "discriminative_corroboration_gate",
+      "single_axis_cap"
+    ],
+    "campaign_analyst": [
+      "coordinated_campaign",
+      "coordinated_inauthentic_behavior",
+      "legitimate_coordination"
+    ],
+    "coordination_analyst": [
+      "astroturfing",
+      "co_engagement_coordination",
+      "coordinated_campaign",
+      "coordinated_inauthentic_behavior",
+      "discriminative_corroboration_gate",
+      "engagement_pods",
+      "fingerprint_clustering",
+      "temporal_synchrony"
+    ],
+    "counter_evidence_analyst": [
+      "astroturfing",
+      "benign_automation",
+      "independent_corroboration",
+      "legitimate_coordination",
+      "organic_virality",
+      "precision_frontier",
+      "second_language_writing"
+    ],
+    "judge": [
+      "confidence_bands",
+      "consensus_illusion",
+      "coordinated_inauthentic_behavior",
+      "discriminative_corroboration_gate",
+      "independent_corroboration",
+      "precision_frontier",
+      "single_axis_cap"
+    ],
+    "language_analyst": [
+      "manufactured_amplification",
+      "second_language_writing",
+      "sockpuppets",
+      "stylometric_matching"
+    ],
+    "memory_analyst": [
+      "independent_corroboration"
+    ],
+    "metadata_analyst": [
+      "new_account_cohorts",
+      "platform_x_norms",
+      "platform_youtube_norms"
+    ],
+    "narrative_analyst": [
+      "astroturfing",
+      "consensus_illusion",
+      "manufactured_amplification",
+      "organic_virality"
+    ],
+    "network_analyst": [
+      "bot_amplification",
+      "co_engagement_coordination",
+      "engagement_pods",
+      "fingerprint_clustering",
+      "sockpuppets"
+    ],
+    "risk_analyst": [
+      "base_rate_discipline",
+      "benign_automation",
+      "legitimate_coordination",
+      "precision_frontier"
+    ],
+    "temporal_analyst": [
+      "bot_amplification",
+      "engagement_pods",
+      "temporal_synchrony"
+    ]
+  },
+  "taxonomy_hash": "kc:7bcac40a3ea1b3451f9fc00d78cf9a2a"
+}

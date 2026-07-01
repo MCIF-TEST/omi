@@ -141,7 +141,44 @@ def generate_analyst_assessment(
 @router.get("/analyst/status")
 def analyst_runtime_status(current: CurrentUser = Depends(require_user)) -> dict:
     """Diagnostic snapshot of the AI runtime path — which links are configured / ready
-    (HF token, endpoint, impl, the mandatory Governor, the always-on Floor). No secrets:
-    token presence is a boolean, never the value. Used for inference health checks +
-    monitoring + verifying activation readiness."""
-    return analyst.runtime_status(get_settings())
+    (HF token, endpoint, impl, the mandatory Governor, the always-on Floor) plus the full
+    ordered runtime **dependency graph** (Sprint 016: every link marked verified /
+    operator_action / blocked, so activation readiness is a single verifiable answer). No
+    secrets: token presence is a boolean, never the value."""
+    settings = get_settings()
+    status = analyst.runtime_status(settings)
+    status["runtime_path"] = analyst.runtime_path(settings)
+    return status
+
+
+@router.get("/analyst/integrity")
+def analyst_integrity(current: CurrentUser = Depends(require_user)) -> dict:
+    """Live AI integration diagnostics (Sprint 018): prompt integrity (the Prompt Registry is the
+    single source of truth; the ml/ + HF model-card mirror matches; per-specialist content-addressed
+    hashes; model-revision pin status) + a real Hugging Face endpoint health probe (when configured).
+    No secrets — token presence is a boolean."""
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+    from app.reasoning.trace import endpoint_health, prompt_integrity
+
+    settings = get_settings()
+    return {"prompt_integrity": prompt_integrity(settings), "endpoint_health": endpoint_health(settings)}
+
+
+@router.post("/{slug}/analyst/trace")
+def analyst_trace(slug: str, current: CurrentUser = Depends(require_user)) -> dict:
+    """Execute the production AI pipeline over a REAL stored investigation and return the ordered,
+    per-stage end-to-end trace (execution time, inputs, outputs, failures, fallback). Read-only
+    diagnostic — reuses the production runtime, never mutates the investigation or OmiScore."""
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+    from app.reasoning.trace import trace_investigation
+
+    with get_session() as session:
+        inv = AccountRepository(session).get_investigation(
+            slug=slug, user_id=current.id if current.id != 0 else None)
+        if inv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found.")
+        payload = inv.payload_json or {}
+        ref, platform = analyst._ref(inv.slug), analyst._platform_of(inv)
+    return {"slug": slug, "trace": trace_investigation(payload, ref=ref, platform=platform)}

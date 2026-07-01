@@ -57,6 +57,33 @@ source = "ml/analyst/analyst_system_prompt_v1.md"
 path_in_repo = "prompts/analyst_system_prompt_v1.md"
 kind = "prompt"
 
+# --- prompt manifest: generated FROM the app Prompt Registry (single source of truth) by
+# apps/api app.reasoning.prompts.export; carries every prompt's version + content hash, the
+# constitution version + hash, and the specialist-library status. A drift-guard test keeps it
+# in lockstep with the registry, so GitHub and HF cannot diverge on prompt integrity. ---
+[[file]]
+source = "ml/analyst/hf_repo/prompts/prompt_manifest.json"
+path_in_repo = "prompts/prompt_manifest.json"
+kind = "prompt_manifest"
+
+# --- prompt catalog: complete per-prompt metadata (mission, inputs/outputs, constraints,
+# evidence/citation/memory/context rules, Governor compatibility, schema, version, hash,
+# constitution version, dependencies) for the production prompt + the 13 specialists.
+# Generated FROM the registry + specialist library; drift-guarded. ---
+[[file]]
+source = "ml/analyst/hf_repo/prompts/prompt_catalog.json"
+path_in_repo = "prompts/prompt_catalog.json"
+kind = "prompt_catalog"
+
+# --- Intelligence Library index: the curated knowledge (25 entries across 14 categories) the
+# specialists reason from — per-entry metadata + content hash, category taxonomy, and the
+# specialist dependency map. Generated FROM app.reasoning.knowledge (single source of truth);
+# full entry bodies stay canonical in GitHub (not duplicated). Drift-guarded. ---
+[[file]]
+source = "ml/analyst/hf_repo/knowledge/knowledge_manifest.json"
+path_in_repo = "knowledge/knowledge_manifest.json"
+kind = "knowledge_manifest"
+
 # --- response schema: published FROM its canonical GitHub source (no copy) ---
 [[file]]
 source = "ml/analyst/analyst_response_schema.json"

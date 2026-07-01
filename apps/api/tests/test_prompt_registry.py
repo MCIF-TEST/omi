@@ -70,9 +70,16 @@ def test_records_listing_flags_active():
 # --- default registry + comparison ------------------------------------------ #
 def test_default_registry_seeds_behavior_prompts():
     reg = default_registry()
-    assert reg.analysts() == ["behavior_analyst"]
-    assert reg.versions("behavior_analyst") == ["v1", "v2"]
-    assert reg.active_version("behavior_analyst") == "v1"          # conservative default
+    # Sprint 016: the production OMI ANALYST prompt is registry-owned alongside the council's
+    # behavior_analyst prompts. AI Readiness (Phase 2): the full Specialist Prompt Library (lib-v1)
+    # is also registered but INERT — the LIVE prompts keep their conservative active v1 so
+    # deterministic replay is preserved.
+    analysts = set(reg.analysts())
+    assert {"behavior_analyst", "omi_analyst"} <= analysts
+    assert {"coordination_analyst", "judge", "memory_analyst"} <= analysts   # library present
+    assert reg.versions("behavior_analyst") == ["lib-v1", "v1", "v2"]        # lib added, v1/v2 intact
+    assert reg.active_version("behavior_analyst") == "v1"          # conservative default, unchanged
+    assert reg.active_version("omi_analyst") == "v1"
 
 
 def test_compare_prompts_diffs_versions():
