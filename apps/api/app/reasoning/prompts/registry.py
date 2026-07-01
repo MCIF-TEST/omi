@@ -197,4 +197,12 @@ def default_registry() -> PromptRegistry:
         reasoning_objectives=_OMI_ANALYST_OBJECTIVES, constraints=_OMI_ANALYST_CONSTRAINTS,
         expected_output_contract="analyst_assessment",
     ), activate=True)
+    # AI Readiness — the permanent Specialist Prompt Library (13 specialists, version ``lib-v1``).
+    # Additive + inert: registered but NOT activated over any live prompt, so behavior_analyst and
+    # omi_analyst keep their active v1 (deterministic replay preserved) and no execution path
+    # resolves the new keys unless explicitly selected. The registry is still the ONE source of
+    # truth — the library lives here, not in a parallel store.
+    from .specialists import register_specialist_library
+
+    register_specialist_library(reg)
     return reg

@@ -7,6 +7,13 @@ prompt evolution — without touching the architecture or any constitutional gua
 """
 from __future__ import annotations
 
+from .constitution import (
+    CONSTITUTION,
+    CONSTITUTION_VERSION,
+    ConstitutionBlock,
+    constitution_hash,
+    constitution_text,
+)
 from .registry import (
     PromptExperiment,
     PromptRegistry,
@@ -14,8 +21,22 @@ from .registry import (
     default_registry,
 )
 from .spec import PromptSpec
+from .specialists import (
+    LIBRARY_VERSION,
+    SPECIALISTS,
+    SpecialistSpec,
+    register_specialist_library,
+    render,
+    specialist_prompt_specs,
+)
 
 __all__ = [
     "PromptSpec", "PromptRegistry", "PromptExperiment",
     "compare_prompts", "default_registry",
+    # Phase 3 — constitutional building blocks
+    "CONSTITUTION", "CONSTITUTION_VERSION", "ConstitutionBlock",
+    "constitution_hash", "constitution_text",
+    # Phase 2 — specialist prompt library
+    "LIBRARY_VERSION", "SPECIALISTS", "SpecialistSpec",
+    "register_specialist_library", "render", "specialist_prompt_specs",
 ]
