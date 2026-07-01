@@ -51,6 +51,42 @@ repo's `prompts/`, `schema/`, and `config/`. The reproducible artifact is the
 **contract**, not a checkpoint. (V3+ adds LoRA adapters under `adapters/`; see the
 GitHub `future_finetuning_strategy.md`.)
 
+## Architecture & reasoning pipeline
+
+The Analyst runs **inside** OmiSphere's constitutional reasoning architecture — it is a reasoning
+component, never a standalone classifier. A single investigation flows:
+
+```
+website request → Evidence Bundle (Binder, immutable citable ids)
+   → Prompt Registry (resolves the versioned system prompt, content-hashed)
+   → Institutional Memory (prior_context — background, never proof)
+   → Qwen specialist (this model) via RemoteReasoningProvider
+   → schema validation + number-echo guard
+   → MANDATORY Governor (PERMIT / REJECT)
+   → on REJECT or any failure → deterministic Floor
+   → governed assessment (verdict, evidence-for/against, uncertainty)
+```
+
+- **Specialist architecture.** The production prompt (`omi_analyst`) is the council **Judge**. A
+  full 13-specialist **prompt library** (behavior, counter-evidence, narrative, language,
+  coordination, campaign, metadata, network, temporal, memory, risk, calibration, judge) exists in
+  GitHub as versioned, content-hashed readiness assets and is catalogued here in
+  `prompts/prompt_catalog.json`. **These specialists are inert** — the deployed V1 uses only
+  `omi_analyst`; they activate later with no architecture change.
+- **Governor (mandatory, unchanged).** Every model output is re-validated: fabricated citations, a
+  moved engine number, an over-strong coordination label, missing counter-evidence rationale, or
+  banned phrasing → REJECT → the deterministic Floor ships instead. The model cannot emit an
+  ungoverned verdict.
+- **Memory.** Institutional Memory (Supabase-backed when enabled) supplies `prior_context` as
+  labeled background with no citable id — it orients reasoning, never proves a claim, never moves
+  the score.
+- **Shadow Mode & evaluation.** New prompts/revisions run in Shadow (logged, compared, not
+  surfaced) and are scored on the Gold Corpus (control FPR, label agreement, number-preserved)
+  before promotion. Promotion is a deliberate config/tag change, never automatic.
+- **Prompt Registry (single source of truth).** All prompts are versioned + content-addressed in
+  GitHub; `prompts/prompt_manifest.json` + `prompts/prompt_catalog.json` are the drift-guarded
+  mirrors published here, so this repo can never diverge from runtime.
+
 ## Intended use & boundary
 
 - **Intended:** turn an OmiSphere **evidence bundle** (detector contributions, OmiScore,
@@ -102,6 +138,20 @@ variable `OMI_ANALYST_ENDPOINT_API` so the operator matches the endpoint they de
 Both paths strip the `<think>` trace, extract the JSON object, schema-validate, echo the engine
 number, and fall back to the deterministic floor on any failure.
 
+## Deployment
+
+Full operator runbook: **`ml/analyst/DEPLOYMENT.md`** (GitHub). In brief, deployment is
+configuration, not code:
+
+1. Create a private HF Inference Endpoint on this repo at a **pinned revision sha**.
+2. Set Render env: `OMI_ANALYST_ENABLED=true`, `OMI_ANALYST_ENDPOINT_URL`,
+   `OMI_ANALYST_ENDPOINT_API` (`messages` recommended), `HF_TOKEN` (read-only),
+   `OMI_ANALYST_HF_REVISION=<sha>`; optionally `OMI_MEMORY_PERSISTENCE_ENABLED` +
+   `OMI_MEMORY_DATABASE_URL` for durable memory.
+3. Verify: health check → smoke test (expect `qwen_backed · permit · number_echoed`).
+4. Rollback (any one lever): `OMI_ANALYST_ENABLED=false`, re-pin the prior revision, or rely on
+   the always-on schema/Governor guard. Postgres is never touched by the Analyst.
+
 ## Evaluation
 
 **V1 has not been evaluated yet — and this card will not show fabricated metrics.**
@@ -129,6 +179,26 @@ stays **pre-shadow / not promoted**.
 - **Pin a revision sha, never `latest`** (reproducibility + safe rollback).
 - One registry repo for all versions; a new repo is created only on a base-model
   **family** change.
+
+## Roadmap & version compatibility
+
+- **V1 (now):** base Qwen + `omi_analyst` v1 prompt + schema. No weights.
+- **V2:** prompt-engineered (refined prompt + few-shot), still no weights.
+- **V3:** LoRA adapter over the base (`adapters/v3/`), reversible, tiny artifact.
+- **V4:** merged/preference-tuned reasoning model; precision-frontier FPR is a hard gate.
+- **Compatibility:** each revision pins its base-model revision, `prompt_version`, and
+  `schema_version` together, so the running model and its contract are always reproducible. The
+  runtime resolves the prompt from the GitHub registry and records its `prompt_hash` in every
+  assessment — a mismatched prompt/schema pair cannot ship. See `prompts/prompt_manifest.json`.
+
+## Repository relationships
+
+- **GitHub `omi/ml/analyst/`** — source of truth (specs, prompts, schema, strategy), PR-reviewed.
+- **This HF repo** — the deployable mirror + runtime registry (immutable revisions, lifecycle tags).
+- **HF datasets** `omi-analyst-eval` / `omi-analyst-sft` — governed eval + SFT data (see
+  `huggingface_model_lifecycle.md` §6).
+- Prompt/schema/config are **authored in GitHub and published here** by
+  `ml/analyst/register_hf_model.py`, so GitHub and HF cannot drift (drift-guarded in CI).
 
 ## Provenance & licensing
 

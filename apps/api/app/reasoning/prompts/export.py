@@ -91,12 +91,122 @@ def manifest_matches_committed() -> bool:
         return False
 
 
+# --------------------------------------------------------------------------- #
+# Prompt Catalog — complete per-prompt metadata (Sprint 024, Phase 2)
+# --------------------------------------------------------------------------- #
+CATALOG_VERSION = "v1"
+CATALOG_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts" / "prompt_catalog.json"
+)
+_CONTEXT_RULE = (
+    "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); "
+    "institutional memory arrives as prior_context (background, never proof, no citable id). Read "
+    "both; cite only bundle evidence ids."
+)
+_EVIDENCE_RULE = (
+    "Cite only bundle evidence; discriminative methods (fingerprint_cluster, co_engagement, co_tag) "
+    "vs non-discriminative are gated; supplemental signals carry zero suspicion weight "
+    "(see constitution evidence_rules block)."
+)
+
+
+def _specialist_entry(spec, reg) -> dict:
+    ps = reg.resolve(spec.key, LIBRARY_VERSION)
+    return {
+        "key": spec.key,
+        "title": spec.title,
+        "tier": spec.tier,
+        "output_kind": spec.output_kind,
+        "version": LIBRARY_VERSION,
+        "prompt_hash": ps.prompt_hash,
+        "expected_output_contract": ps.expected_output_contract,
+        "json_schema": ("schema/analyst_response_schema.json" if spec.output_kind == "ruling"
+                        else f"council {spec.output_kind} artifact contract"),
+        "constitution_version": CONSTITUTION_VERSION,
+        "composes_constitution": True,
+        "mission": spec.mission,
+        "inputs": list(spec.available_evidence),
+        "outputs": spec.output_contract,
+        "constraints": list(spec.constraints),
+        "reasoning_rules": {"allowed": list(spec.allowed_reasoning),
+                            "forbidden": list(spec.forbidden_reasoning)},
+        "evidence_rules": _EVIDENCE_RULE,
+        "citation_rules": spec.citation,
+        "memory_rules": spec.memory_usage,
+        "context_rules": _CONTEXT_RULE,
+        "governor_compatibility": spec.governor_constraints,
+        "failure_modes": list(spec.failure_modes),
+        "dependencies": {
+            "constitution": f"{CONSTITUTION_VERSION} ({constitution_hash()})",
+            "primary_blocks": list(spec.primary_blocks),
+            "interacts_with": list(spec.interactions),
+        },
+    }
+
+
+def prompt_catalog() -> dict:
+    """The complete per-prompt metadata catalog (Phase 2): mission, inputs, outputs, constraints,
+    evidence / citation / memory / context rules, Governor compatibility, JSON schema, version,
+    prompt hash, constitution version, and dependencies — for the active production prompt and each
+    of the 13 specialists. Generated from the registry + specialist library (single source of
+    truth), so it mirrors runtime exactly and is drift-guarded. Complements ``prompt_manifest`` (the
+    hash index) with full metadata."""
+    reg = default_registry()
+    omi = reg.resolve("omi_analyst")
+    production = {
+        "key": "omi_analyst",
+        "role": "active production judge prompt — the ONLY prompt the deployed V1 uses",
+        "version": reg.active_version("omi_analyst"),
+        "prompt_hash": omi.prompt_hash,
+        "expected_output_contract": omi.expected_output_contract,
+        "json_schema": "schema/analyst_response_schema.json",
+        "response_format": "json_object",
+        "constraints": list(omi.constraints),
+        "reasoning_objectives": list(omi.reasoning_objectives),
+        "published_asset": "prompts/analyst_system_prompt_v1.md",
+        "constitution_version": CONSTITUTION_VERSION,
+    }
+    return {
+        "catalog_version": CATALOG_VERSION,
+        "generated_by": "app.reasoning.prompts.export.prompt_catalog",
+        "source_of_truth": "GitHub app.reasoning.prompts registry + specialist library (do not hand-edit)",
+        "constitution": {"version": CONSTITUTION_VERSION, "hash": constitution_hash()},
+        "schema": {"response_schema": "schema/analyst_response_schema.json", "response_format": "json_object"},
+        "specialists_activated": False,
+        "production_prompt": production,
+        "specialists": [_specialist_entry(s, reg) for s in sorted(SPECIALISTS, key=lambda x: x.key)],
+        "counts": {"production_prompts": 1, "specialists": len(SPECIALISTS)},
+    }
+
+
+def render_catalog_json() -> str:
+    """The catalog as canonical, stable JSON text (sorted keys, trailing newline)."""
+    return json.dumps(prompt_catalog(), indent=2, sort_keys=True) + "\n"
+
+
+def write_catalog(path: Path | None = None) -> Path:
+    target = path or CATALOG_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_catalog_json(), encoding="utf-8")
+    return target
+
+
+def catalog_matches_committed() -> bool:
+    """True when the committed prompt catalog equals a freshly generated one (drift guard)."""
+    try:
+        return CATALOG_PATH.read_text(encoding="utf-8") == render_catalog_json()
+    except OSError:
+        return False
+
+
 __all__ = [
     "MANIFEST_VERSION", "MANIFEST_PATH", "prompt_manifest", "render_manifest_json",
     "write_manifest", "manifest_matches_committed",
+    "CATALOG_VERSION", "CATALOG_PATH", "prompt_catalog", "render_catalog_json",
+    "write_catalog", "catalog_matches_committed",
 ]
 
 
-if __name__ == "__main__":  # regenerate the committed manifest
-    p = write_manifest()
-    print(f"wrote {p}")
+if __name__ == "__main__":  # regenerate the committed manifest + catalog
+    print(f"wrote {write_manifest()}")
+    print(f"wrote {write_catalog()}")

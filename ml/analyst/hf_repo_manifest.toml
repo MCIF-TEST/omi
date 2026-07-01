@@ -66,6 +66,15 @@ source = "ml/analyst/hf_repo/prompts/prompt_manifest.json"
 path_in_repo = "prompts/prompt_manifest.json"
 kind = "prompt_manifest"
 
+# --- prompt catalog: complete per-prompt metadata (mission, inputs/outputs, constraints,
+# evidence/citation/memory/context rules, Governor compatibility, schema, version, hash,
+# constitution version, dependencies) for the production prompt + the 13 specialists.
+# Generated FROM the registry + specialist library; drift-guarded. ---
+[[file]]
+source = "ml/analyst/hf_repo/prompts/prompt_catalog.json"
+path_in_repo = "prompts/prompt_catalog.json"
+kind = "prompt_catalog"
+
 # --- response schema: published FROM its canonical GitHub source (no copy) ---
 [[file]]
 source = "ml/analyst/analyst_response_schema.json"
