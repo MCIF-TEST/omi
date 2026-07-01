@@ -75,6 +75,15 @@ source = "ml/analyst/hf_repo/prompts/prompt_catalog.json"
 path_in_repo = "prompts/prompt_catalog.json"
 kind = "prompt_catalog"
 
+# --- Intelligence Library index: the curated knowledge (25 entries across 14 categories) the
+# specialists reason from — per-entry metadata + content hash, category taxonomy, and the
+# specialist dependency map. Generated FROM app.reasoning.knowledge (single source of truth);
+# full entry bodies stay canonical in GitHub (not duplicated). Drift-guarded. ---
+[[file]]
+source = "ml/analyst/hf_repo/knowledge/knowledge_manifest.json"
+path_in_repo = "knowledge/knowledge_manifest.json"
+kind = "knowledge_manifest"
+
 # --- response schema: published FROM its canonical GitHub source (no copy) ---
 [[file]]
 source = "ml/analyst/analyst_response_schema.json"

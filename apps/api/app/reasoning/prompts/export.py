@@ -199,14 +199,74 @@ def catalog_matches_committed() -> bool:
         return False
 
 
+# --------------------------------------------------------------------------- #
+# Intelligence Library manifest — publish the knowledge alongside prompts (Sprint 025, Phase 5)
+# --------------------------------------------------------------------------- #
+KNOWLEDGE_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "knowledge" / "knowledge_manifest.json"
+)
+
+
+def knowledge_manifest() -> dict:
+    """The Intelligence Library published alongside the prompts: per-entry metadata + content hash,
+    the category taxonomy, the specialist dependency map, and the library hash — generated FROM the
+    library (single source of truth). Full entry bodies stay canonical in GitHub (not duplicated);
+    this index is the drift-guarded HF mirror."""
+    from app.reasoning.knowledge import (
+        default_library, specialist_dependencies, taxonomy_hash,
+    )
+
+    lib = default_library()
+    entries = [{
+        "id": e.id, "title": e.title, "category": e.category, "confidence": e.confidence,
+        "version": e.version, "content_hash": e.content_hash,
+        "relationships": list(e.relationships), "specialists": list(e.specialists),
+        "platforms": list(e.platforms), "investigation_types": list(e.investigation_types),
+        "tags": list(e.tags),
+    } for e in lib.active()]
+    return {
+        "manifest_version": "v1",
+        "generated_by": "app.reasoning.prompts.export.knowledge_manifest",
+        "source_of_truth": "GitHub app.reasoning.knowledge.default_library (do not hand-edit)",
+        "library_hash": lib.library_hash(),
+        "taxonomy_hash": taxonomy_hash(),
+        "categories": [{"id": c.id, "name": c.name} for c in lib.categories()],
+        "counts": {"entries": len(entries), "categories": len(lib.categories())},
+        "specialist_dependencies": specialist_dependencies(lib),
+        "entries": entries,
+    }
+
+
+def render_knowledge_json() -> str:
+    return json.dumps(knowledge_manifest(), indent=2, sort_keys=True) + "\n"
+
+
+def write_knowledge(path: Path | None = None) -> Path:
+    target = path or KNOWLEDGE_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_knowledge_json(), encoding="utf-8")
+    return target
+
+
+def knowledge_matches_committed() -> bool:
+    """True when the committed knowledge manifest equals a freshly generated one (drift guard)."""
+    try:
+        return KNOWLEDGE_PATH.read_text(encoding="utf-8") == render_knowledge_json()
+    except OSError:
+        return False
+
+
 __all__ = [
     "MANIFEST_VERSION", "MANIFEST_PATH", "prompt_manifest", "render_manifest_json",
     "write_manifest", "manifest_matches_committed",
     "CATALOG_VERSION", "CATALOG_PATH", "prompt_catalog", "render_catalog_json",
     "write_catalog", "catalog_matches_committed",
+    "KNOWLEDGE_PATH", "knowledge_manifest", "render_knowledge_json",
+    "write_knowledge", "knowledge_matches_committed",
 ]
 
 
-if __name__ == "__main__":  # regenerate the committed manifest + catalog
+if __name__ == "__main__":  # regenerate the committed manifest + catalog + knowledge index
     print(f"wrote {write_manifest()}")
     print(f"wrote {write_catalog()}")
+    print(f"wrote {write_knowledge()}")
