@@ -5,7 +5,7 @@
   },
   "counts": {
     "analysts": 14,
-    "prompts": 16
+    "prompts": 17
   },
   "generated_by": "app.reasoning.prompts.export.prompt_manifest",
   "manifest_version": "v1",
@@ -27,6 +27,18 @@
       ],
       "prompt_hash": "ph:2a64818e79328eb07e0a09c4f6fed0ad",
       "version": "lib-v1"
+    },
+    {
+      "active": false,
+      "analyst": "behavior_analyst",
+      "composes_constitution": false,
+      "expected_output_contract": "finding",
+      "model_compatibility": [
+        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "qwen-family"
+      ],
+      "prompt_hash": "ph:f8249695cf379140e56b2cdba5101cfc",
+      "version": "lib-v2"
     },
     {
       "active": true,

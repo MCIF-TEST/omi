@@ -77,7 +77,8 @@ def test_default_registry_seeds_behavior_prompts():
     analysts = set(reg.analysts())
     assert {"behavior_analyst", "omi_analyst"} <= analysts
     assert {"coordination_analyst", "judge", "memory_analyst"} <= analysts   # library present
-    assert reg.versions("behavior_analyst") == ["lib-v1", "v1", "v2"]        # lib added, v1/v2 intact
+    # Phase B1 added the Behavioral Intelligence Library's improved lib-v2 (inert).
+    assert reg.versions("behavior_analyst") == ["lib-v1", "lib-v2", "v1", "v2"]
     assert reg.active_version("behavior_analyst") == "v1"          # conservative default, unchanged
     assert reg.active_version("omi_analyst") == "v1"
 

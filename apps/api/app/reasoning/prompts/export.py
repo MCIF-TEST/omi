@@ -314,6 +314,32 @@ def handbook_matches_committed() -> bool:
         return False
 
 
+# --------------------------------------------------------------------------- #
+# Behavioral Intelligence Library handbook — GitHub-side doc (Phase B1)
+# --------------------------------------------------------------------------- #
+BEHAVIORAL_HANDBOOK_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "BEHAVIORAL_ANALYST.md"
+)
+
+
+def write_behavioral_handbook(path: Path | None = None) -> Path:
+    from .behavioral import render_behavioral_handbook
+
+    target = path or BEHAVIORAL_HANDBOOK_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_behavioral_handbook(), encoding="utf-8")
+    return target
+
+
+def behavioral_handbook_matches_committed() -> bool:
+    from .behavioral import render_behavioral_handbook
+
+    try:
+        return BEHAVIORAL_HANDBOOK_PATH.read_text(encoding="utf-8") == render_behavioral_handbook()
+    except OSError:
+        return False
+
+
 __all__ = [
     "MANIFEST_VERSION", "MANIFEST_PATH", "prompt_manifest", "render_manifest_json",
     "write_manifest", "manifest_matches_committed",
@@ -322,11 +348,13 @@ __all__ = [
     "KNOWLEDGE_PATH", "knowledge_manifest", "render_knowledge_json",
     "write_knowledge", "knowledge_matches_committed",
     "HANDBOOK_PATH", "write_handbook", "handbook_matches_committed",
+    "BEHAVIORAL_HANDBOOK_PATH", "write_behavioral_handbook", "behavioral_handbook_matches_committed",
 ]
 
 
-if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + handbook
+if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + handbooks
     print(f"wrote {write_manifest()}")
     print(f"wrote {write_catalog()}")
     print(f"wrote {write_knowledge()}")
     print(f"wrote {write_handbook()}")
+    print(f"wrote {write_behavioral_handbook()}")

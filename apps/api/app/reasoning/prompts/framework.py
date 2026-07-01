@@ -33,6 +33,7 @@ asset); rendered into the contributor handbook. GitHub is the single source of t
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.evidence.bundle import digest
 
@@ -577,10 +578,26 @@ def example_investigation_planner() -> SpecialistProfile:
 # --------------------------------------------------------------------------- #
 # The framework surface
 # --------------------------------------------------------------------------- #
+# Per-specialist deep-library overrides (Phase B1 pattern): a specialist's intelligence library
+# (behavioral.py, ...) registers a provider returning ``lift`` overrides, so its authored
+# methodology / failure / evaluation dimensions replace the derived defaults — one source, no
+# duplication, and the catalog/handbook automatically carry the deep record.
+_PROFILE_OVERRIDES: dict[str, Any] = {}
+
+
+def register_profile_overrides(key: str, provider) -> None:
+    """Register a callable returning ``lift`` override kwargs for one specialist key."""
+    _PROFILE_OVERRIDES[key] = provider
+
+
 def framework_profiles() -> list[SpecialistProfile]:
     """Every governed specialist's framework profile: the 13 library specialists (lifted — zero
-    re-authoring) + the 2 code-backed Tier-3 guarantees. Deterministic order by key."""
-    lifted = [lift(s) for s in SPECIALISTS]
+    re-authoring, deep-library overrides applied where registered) + the 2 code-backed Tier-3
+    guarantees. Deterministic order by key."""
+    lifted = [
+        lift(s, **(_PROFILE_OVERRIDES[s.key]() if s.key in _PROFILE_OVERRIDES else {}))
+        for s in SPECIALISTS
+    ]
     return sorted(lifted + [GOVERNOR_PROFILE, FLOOR_PROFILE], key=lambda p: p.key)
 
 

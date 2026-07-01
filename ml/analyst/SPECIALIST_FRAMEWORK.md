@@ -1,6 +1,6 @@
 # OMI Specialist Intelligence Framework — Handbook
 
-> GENERATED from `app.reasoning.prompts.framework` (framework v1, `sf:4155b7e05f1f5138b6ec8699d3bd5c44`, constitution v1). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`.
+> GENERATED from `app.reasoning.prompts.framework` (framework v1, `sf:c1c13889cb8595518b103f464020fa82`, constitution v1). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`.
 
 Every AI specialist inherits this framework. Authored content lives in ONE place (the specialist's `SpecialistSpec` — its thirteen prompt sections); the framework derives identity, reasoning workflow, governance, technical, quality, validation, and documentation dimensions from it. GitHub is the single source of truth; Hugging Face receives the synchronized catalog through the existing publish workflow.
 
@@ -32,11 +32,11 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
 - **Prompt:** lib-v1 `ph:2a64818e79328eb07e0a09c4f6fed0ad`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
-- **Retrieval:** KnowledgeIndex.for_specialist('behavior_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('behavior_analyst') (13 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'behavior_analyst'
-- **Handbook:** OMI BEHAVIOR ANALYST — Tier 1 finding specialist. Interpret a subject's behavioral signals into cited, probabilistic findings — what the behavior is consistent with, weighed both ways — without ever asserting a verdict.
-- **Counterexample:** a finding citing "ev:fabricated123" — unresolvable ref; whole output invalid → floor
+- **Handbook:** OMI BEHAVIOR ANALYST — Tier 1 finding specialist. Interpret a subject's behavioral signals into cited, probabilistic findings — what the behavior is consistent with, weighed both ways — without ever asserting a verdict. Deep library: ml/analyst/BEHAVIORAL_ANALYST.md (methodology, knowledge base, playbook, failure + evaluation libraries).
+- **Counterexample:** a finding that reads 'mechanical cadence therefore bot' — regularity is never guilt; the benign twin (scheduler) was not tested
 
 ### OMI CALIBRATION ANALYST (`calibration_analyst`) — Tier 2 · model
 
@@ -58,7 +58,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
 - **Prompt:** lib-v1 `ph:d9da8b0af846b194bc995f6ea5fa4e89`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
-- **Retrieval:** KnowledgeIndex.for_specialist('campaign_analyst') (3 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('campaign_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'campaign_analyst'
 - **Handbook:** OMI CAMPAIGN ANALYST — Tier 2 finding specialist. Assess a materialized campaign (a persisted cluster of accounts acting together) and test the legitimate-coordination hypothesis before any hostile conclusion.
@@ -84,7 +84,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"critiques":[{"target":"<finding/claim challenged>","challenge":"<why the evidence does not uniquely support it, or the benign alternative>","
 - **Prompt:** lib-v1 `ph:74ad29a2d6f246e22f42f6f1bfd60ab5`
 - **Schema:** council critique artifact contract · **Token budget:** 1024
-- **Retrieval:** KnowledgeIndex.for_specialist('counter_evidence_analyst') (7 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('counter_evidence_analyst') (8 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'counter_evidence_analyst'
 - **Handbook:** OMI COUNTER-EVIDENCE ANALYST — Tier 2 critique specialist. Be the council's devil's advocate. Actively build the strongest benign case for the subject and challenge every incriminating finding that the evidence does not uniquely support.
@@ -136,7 +136,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
 - **Prompt:** lib-v1 `ph:df3a35497227c16297f435031e1ee8be`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
-- **Retrieval:** KnowledgeIndex.for_specialist('language_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('language_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'language_analyst'
 - **Handbook:** OMI LANGUAGE ANALYST — Tier 1 finding specialist. Interpret linguistic and stylometric evidence — shared phrasing, templated text, copypasta, style matches — while respecting that style similarity is weak on its own.
@@ -149,7 +149,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"priors":[{"type":"<archetype/prior>","label":"<short>","influence":"supports|contradicts|neutral","stability":0.0,"note":"institutional memor
 - **Prompt:** lib-v1 `ph:aa290644525d5f1ef4786dffa35f0cc4`
 - **Schema:** council memory artifact contract · **Token budget:** 512
-- **Retrieval:** KnowledgeIndex.for_specialist('memory_analyst') (1 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('memory_analyst') (2 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'memory_analyst'
 - **Handbook:** OMI MEMORY ANALYST — Tier 1 memory specialist. Retrieve and present relevant institutional memory as labeled background context — orienting the council without ever becoming proof.
@@ -162,7 +162,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
 - **Prompt:** lib-v1 `ph:acbb253eb5adfd8a0adf19e337640bfd`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
-- **Retrieval:** KnowledgeIndex.for_specialist('metadata_analyst') (3 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('metadata_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'metadata_analyst'
 - **Handbook:** OMI METADATA ANALYST — Tier 1 finding specialist. Interpret account-metadata signals — creation timing, age cohorts, handle patterns, profile completeness, verification — as weak, corroborating context.
@@ -188,7 +188,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
 - **Prompt:** lib-v1 `ph:59c15010c217b40d1d45ea8d71baa57f`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
-- **Retrieval:** KnowledgeIndex.for_specialist('network_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('network_analyst') (6 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'network_analyst'
 - **Handbook:** OMI NETWORK ANALYST — Tier 1 finding specialist. Analyze the interaction graph between accounts — co-engagement, co-tagging, reply pods, fingerprint clusters — to reveal structure that single-account views miss.
@@ -214,7 +214,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
 - **Prompt:** lib-v1 `ph:907cf2908b69e18f371b12ef21a562e6`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
-- **Retrieval:** KnowledgeIndex.for_specialist('temporal_analyst') (3 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
+- **Retrieval:** KnowledgeIndex.for_specialist('temporal_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
 - **Validation:** tests must cover: contract shape, citation resolution, supplemental gating, and graceful fallback for 'temporal_analyst'
 - **Handbook:** OMI TEMPORAL ANALYST — Tier 1 finding specialist. Interpret timing evidence — posting cadence, burst synchrony, scheduling regularity — and separate botnet-like synchronization from benign automation and organic bursts.

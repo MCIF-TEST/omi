@@ -193,6 +193,20 @@ def default_gold_corpus() -> "GoldCorpus":
         # --- single-axis capped coordination (gated → not asserted) ----------------------- #
         ("single_axis_capped", _case(0.6, "elevated", 0.6, [R], method="co_engagement", members=4, single_axis=True),
          {}, False),
+        # --- behavioral benchmarks (Phase B1 — the Behavioral Intelligence Library) ------- #
+        # engagement farming: templated replies + co-engagement recurrence (hostile → recall).
+        ("engagement_farm_replies", _case(0.81, "high", 0.68, [R, R2], method="co_engagement", members=7),
+         {"expected_verdict": "likely_inauthentic", "expected_coordination_label": "suspicious"}, False),
+        # benign scheduler: mechanical cadence + verified history, NO discriminative method — the
+        # regularity-is-never-guilt control (precision frontier).
+        ("benign_scheduler_news", _case(0.22, "low", 0.6,
+                                        [{"name": "temporal", "impact": 0.3, "direction": "raises"},
+                                         {"name": "verified_history", "impact": 0.35, "direction": "lowers"},
+                                         L]),
+         {"is_control": True, "expected_verdict": "likely_authentic"}, True),
+        # hybrid creator: two regimes, no deception evidence — must stay a calibrated mixed read.
+        ("hybrid_creator_mixed", _case(0.5, "moderate", 0.55, [R, L]),
+         {"expected_verdict": "mixed"}, False),
     ]
     for cid, payload, label, _is_ctrl in cases:
         corpus.add(GoldCase(id=cid, payload=payload, label=label, ref=cid, reviewer="omi-engineering"))
