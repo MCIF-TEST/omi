@@ -1,6 +1,6 @@
 # OMI Specialist Intelligence Framework — Handbook
 
-> GENERATED from `app.reasoning.prompts.framework` (framework v1, `sf:c1c13889cb8595518b103f464020fa82`, constitution v1). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`.
+> GENERATED from `app.reasoning.prompts.framework` (framework v1, `sf:a93f6fc233209ce73a0b3d7c6900e273`, constitution v1). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`.
 
 Every AI specialist inherits this framework. Authored content lives in ONE place (the specialist's `SpecialistSpec` — its thirteen prompt sections); the framework derives identity, reasoning workflow, governance, technical, quality, validation, and documentation dimensions from it. GitHub is the single source of truth; Hugging Face receives the synchronized catalog through the existing publish workflow.
 

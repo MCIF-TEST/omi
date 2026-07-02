@@ -2,9 +2,9 @@
   "schema_version": 1,
   "analyst_version": "v1",
   "registry_repo": "Andrewexiga/omi-analyst-v1",
-  "base_model": "Qwen/Qwen3-4B-Thinking-2507-FP8",
+  "base_model": "mistralai/Mistral-7B-Instruct-v0.3",
   "base_model_revision": "main",
-  "base_model_revision_note": "PIN to an immutable commit sha before any shadow/candidate/production serving. 'main' is a moving ref and is NOT reproducible (see huggingface_model_lifecycle.md §3 and §5: pin a revision, never latest).",
+  "base_model_revision_note": "PIN to an immutable commit sha before any shadow/candidate/production serving. 'main' is a moving ref and is NOT reproducible (see huggingface_model_lifecycle.md \u00a73 and \u00a75: pin a revision, never latest).",
   "weights": "none",
   "weights_note": "V1 = base model + system prompt; the contract is the artifact. Fine-tuned adapters arrive at V3 under adapters/.",
   "prompt_version": "v1",
@@ -19,8 +19,8 @@
     "repetition_penalty": 1.0
   },
   "thinking": {
-    "enabled": true,
-    "note": "Qwen3-4B-Thinking emits a reasoning trace before its answer. Strip the trace; only the final JSON object is the Analyst output, and it must validate against response_schema_file before use (a malformed output is rejected and the template fallback is served)."
+    "enabled": false,
+    "note": "Mistral-7B-Instruct-v0.3 emits no reasoning trace. The client's <think>-strip remains as an inert safeguard for thinking-variant models; only the final JSON object is the Analyst output and it must validate against response_schema_file before use (a malformed output is rejected and the deterministic fallback is served)."
   },
   "serving": {
     "on_request_path": false,
@@ -32,7 +32,9 @@
       "revision": "OMI_ANALYST_HF_REVISION",
       "enabled": "OMI_ANALYST_ENABLED",
       "endpoint": "OMI_ANALYST_ENDPOINT_URL",
-      "token": "HF_TOKEN (read-only for serving)"
+      "token": "HF_TOKEN (read-only for serving)",
+      "model_id": "OMI_ANALYST_MODEL_ID",
+      "endpoint_api": "OMI_ANALYST_ENDPOINT_API (messages recommended)"
     }
   }
 }

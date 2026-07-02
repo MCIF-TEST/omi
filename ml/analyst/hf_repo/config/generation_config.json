@@ -1,5 +1,5 @@
 {
-  "_note": "Omi Analyst V1 serving decoding defaults for Andrewexiga/omi-analyst-v1 over Qwen/Qwen3-4B-Thinking-2507-FP8. These are Omi's serving defaults (mirrors analyst_config.json 'decoding'); they do NOT replace the base model's own tokenizer/eos configuration, which is resolved from the pinned base revision at load time. Not a training artifact.",
+  "_note": "Omi Analyst V1 serving decoding defaults for Andrewexiga/omi-analyst-v1 over mistralai/Mistral-7B-Instruct-v0.3. These are Omi's serving defaults (mirrors analyst_config.json 'decoding'); they do NOT replace the base model's own tokenizer/eos configuration, which is resolved from the pinned base revision at load time. Not a training artifact.",
   "do_sample": true,
   "temperature": 0.2,
   "top_p": 0.9,

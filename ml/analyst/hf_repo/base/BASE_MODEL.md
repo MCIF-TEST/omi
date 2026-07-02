@@ -9,10 +9,10 @@
 
 | | |
 |---|---|
-| **Repo** | [`Qwen/Qwen3-4B-Thinking-2507-FP8`](https://hf.co/Qwen/Qwen3-4B-Thinking-2507-FP8) |
-| **Architecture** | `qwen3` · ~4.41B params · FP8 quantized · reasoning ("Thinking") variant |
+| **Repo** | [`mistralai/Mistral-7B-Instruct-v0.3`](https://hf.co/mistralai/Mistral-7B-Instruct-v0.3) |
+| **Architecture** | `mistral` · ~7.25B params · BF16 · instruction-tuned (v0.3: function-calling-capable, extended 32k vocab) |
 | **License** | Apache-2.0 (permits private hosting, fine-tuning, redistribution of derivatives) |
-| **Derives from** | a quantization of `Qwen/Qwen3-4B-Thinking-2507` |
+| **Derives from** | `mistralai/Mistral-7B-v0.3` (base) |
 | **Pinned revision** | `main` — **MUST be replaced with an immutable commit sha before serving** |
 
 ## Why a pointer and not weights
@@ -24,12 +24,13 @@ the upgrade path clean: V3 adds a small LoRA **adapter** over this same base (un
 
 ## How "the model" is loaded (V1)
 
-1. Resolve the **pinned base revision** of `Qwen/Qwen3-4B-Thinking-2507-FP8` via
+1. Resolve the **pinned base revision** of `mistralai/Mistral-7B-Instruct-v0.3` via
    `huggingface_hub` (or point an HF Inference Endpoint at it).
 2. Apply this repo's `config/analyst_config.json` (decoding + schema pointer),
    `prompts/analyst_system_prompt_v1.md`, and `schema/analyst_response_schema.json`.
-3. Generate, **strip the thinking trace**, and validate the final JSON object against the
-   response schema before use (invalid → deterministic template fallback).
+3. Generate and validate the final JSON object against the
+   response schema before use (invalid → deterministic template fallback). The client's
+   thinking-trace strip remains as an inert safeguard for thinking-variant models.
 
 ## Pinning discipline (non-negotiable before serving)
 

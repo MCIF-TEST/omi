@@ -146,7 +146,7 @@ class RemoteReasoningProvider:
     api: str = "generate"                    # "generate" (raw TGI) | "messages" (OpenAI chat)
     token_env: tuple[str, ...] = ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN")
     backoff_cap: float = 2.0
-    name: str = "remote-hf-qwen"
+    name: str = "remote-hf"
 
     def _token(self) -> str | None:
         for key in self.token_env:
@@ -179,7 +179,7 @@ class RemoteReasoningProvider:
         """Build the wire body + the matching (non-stream, stream) parsers for the configured
         serving API. ``generate`` is the raw TGI text-generation contract (unchanged, byte-
         identical); ``messages`` is the OpenAI-compatible chat contract, which lets the endpoint
-        apply Qwen3's chat template server-side."""
+        apply the served model's chat template server-side."""
         if self.api == "messages":
             body = json.dumps({
                 "model": self.model or "tgi",
@@ -226,3 +226,57 @@ class RemoteReasoningProvider:
                 "model": self.model, "revision": self.revision,
             },
         )
+
+    # ----------------------------------------------------------------------- #
+    # Served-model identity probe — VERIFICATION ONLY (never on the hot path).
+    # ----------------------------------------------------------------------- #
+    def _info_url(self) -> str:
+        """Derive the TGI ``/info`` route (root-relative) from the configured inference URL, so a
+        raw ``generate`` endpoint can still report which model it loaded."""
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(self.endpoint_url)
+        return urlunsplit((parts.scheme, parts.netloc, "/info", "", ""))
+
+    def probe_served_model(self) -> dict:
+        """Report the model the endpoint is **actually serving** — the missing evidence for
+        "the endpoint is Mistral, not some other model". Off the hot path; best-effort; never raises.
+
+        * ``messages`` API — the OpenAI-compatible completion echoes the served model in the
+          top-level ``model`` field; that is authoritative and free (one 1-token call).
+        * ``generate`` API — raw TGI completions carry no model id, so we GET the standard TGI
+          ``/info`` route (``model_id``). If the endpoint shape doesn't expose it we report
+          ``served_model=None`` with a reason rather than guessing.
+
+        Returns ``served_model`` / ``source`` / ``reachable`` / ``latency_ms`` (+ ``detail`` on
+        failure). The caller compares ``served_model`` against the configured model id."""
+        token = self._token()
+        if not self.endpoint_url or not token:
+            return {"served_model": None, "source": "not_configured", "reachable": None,
+                    "endpoint_configured": bool(self.endpoint_url), "hf_token_present": bool(token)}
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        t0 = time.perf_counter()
+        try:
+            if self.api == "messages":
+                body = json.dumps({
+                    "model": self.model or "tgi",
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 1, "stream": False,
+                }).encode("utf-8")
+                req = urllib.request.Request(self.endpoint_url, data=body, headers=headers)
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                served = data.get("model") if isinstance(data, dict) else None
+                source = "chat_completion_model_field"
+            else:
+                req = urllib.request.Request(self._info_url(), headers=headers)  # GET
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                served = data.get("model_id") if isinstance(data, dict) else None
+                source = "tgi_info_endpoint"
+            return {"served_model": served or None, "source": source, "reachable": True,
+                    "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
+        except Exception as exc:  # noqa: BLE001 — report, never raise
+            return {"served_model": None, "source": "probe_failed", "reachable": False,
+                    "detail": f"{type(exc).__name__}: {str(exc)[:160]}",
+                    "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2)}

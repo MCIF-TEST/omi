@@ -272,7 +272,7 @@ def behavior_v2_prompt_spec() -> PromptSpec:
     return PromptSpec(
         analyst=BEHAVIOR_V2.key, prompt_version=BEHAVIOR_V2_VERSION, template=render(BEHAVIOR_V2),
         created_at="2026-07-01", author="omi-engineering",
-        model_compatibility=("Qwen/Qwen3-4B-Thinking-2507-FP8", "qwen-family"),
+        model_compatibility=("mistralai/Mistral-7B-Instruct-v0.3", "mistral-family", "qwen-family"),
         reasoning_objectives=BEHAVIOR_V2.reasoning_objectives, constraints=BEHAVIOR_V2.constraints,
         expected_output_contract="finding",
     )

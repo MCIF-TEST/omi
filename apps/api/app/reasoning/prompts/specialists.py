@@ -756,7 +756,7 @@ def to_prompt_spec(spec: SpecialistSpec) -> PromptSpec:
     return PromptSpec(
         analyst=spec.key, prompt_version=LIBRARY_VERSION, template=render(spec),
         created_at="2026-07-01", author="omi-engineering",
-        model_compatibility=("Qwen/Qwen3-4B-Thinking-2507-FP8", "qwen-family"),
+        model_compatibility=("mistralai/Mistral-7B-Instruct-v0.3", "mistral-family", "qwen-family"),
         reasoning_objectives=spec.reasoning_objectives, constraints=spec.constraints,
         expected_output_contract=spec.output_kind if spec.output_kind != "ruling" else "analyst_assessment",
     )

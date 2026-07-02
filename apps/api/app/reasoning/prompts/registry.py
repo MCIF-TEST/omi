@@ -179,21 +179,21 @@ def default_registry() -> PromptRegistry:
     reg.register(PromptSpec(
         analyst="behavior_analyst", prompt_version="v1", template=_BEHAVIOR_V1,
         created_at="2026-06-26", author="omi-engineering",
-        model_compatibility=("Qwen/Qwen3-4B-Thinking-2507-FP8", "qwen-family"),
+        model_compatibility=("mistralai/Mistral-7B-Instruct-v0.3", "mistral-family", "qwen-family"),
         reasoning_objectives=_BEHAVIOR_OBJECTIVES, constraints=_BEHAVIOR_CONSTRAINTS,
         expected_output_contract="finding",
     ), activate=True)
     reg.register(PromptSpec(
         analyst="behavior_analyst", prompt_version="v2", template=_BEHAVIOR_V2,
         created_at="2026-06-26", author="omi-engineering",
-        model_compatibility=("Qwen/Qwen3-4B-Thinking-2507-FP8", "qwen-family"),
+        model_compatibility=("mistralai/Mistral-7B-Instruct-v0.3", "mistral-family", "qwen-family"),
         reasoning_objectives=_BEHAVIOR_OBJECTIVES + ("rank findings strongest-first",),
         constraints=_BEHAVIOR_CONSTRAINTS, expected_output_contract="finding",
     ))
     reg.register(PromptSpec(
         analyst="omi_analyst", prompt_version="v1", template=_OMI_ANALYST_V1,
         created_at="2026-06-30", author="omi-engineering",
-        model_compatibility=("Qwen/Qwen3-4B-Thinking-2507-FP8", "qwen-family"),
+        model_compatibility=("mistralai/Mistral-7B-Instruct-v0.3", "mistral-family", "qwen-family"),
         reasoning_objectives=_OMI_ANALYST_OBJECTIVES, constraints=_OMI_ANALYST_CONSTRAINTS,
         expected_output_contract="analyst_assessment",
     ), activate=True)

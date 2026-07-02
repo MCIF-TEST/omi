@@ -13,7 +13,7 @@
       "floor",
       "governor"
     ],
-    "hash": "sf:c1c13889cb8595518b103f464020fa82",
+    "hash": "sf:a93f6fc233209ce73a0b3d7c6900e273",
     "note": "every specialist inherits the Specialist Intelligence Framework; governor + floor are code-backed (never prompt- or model-driven)",
     "profiles": 15,
     "version": "v1"
