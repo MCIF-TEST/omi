@@ -1,12 +1,12 @@
 # Omi Analyst — Deployment Runbook
 
-> **Operator runbook.** Step-by-step activation of the live Qwen Analyst on a Hugging Face
+> **Operator runbook.** Step-by-step activation of the live Analyst on a Hugging Face
 > Inference Endpoint. This is the *how*; the *why/strategy* (lifecycle tags, serving economics,
 > cost) lives in `huggingface_model_lifecycle.md` and is not repeated here. Deployment is
 > **configuration, not code** — the code path is complete and verified. Nothing here touches the
 > Governor, OmiScore, or the deterministic floor.
 
-Repo: `Andrewexiga/omi-analyst-v1` (private) · Base: `Qwen/Qwen3-4B-Thinking-2507-FP8` · Runtime:
+Repo: `Andrewexiga/omi-analyst-v1` (private) · Runtime model: `mistralai/Mistral-7B-Instruct-v0.3` · Runtime:
 Render (`apps/api`) · Memory: Supabase (optional).
 
 ---
@@ -25,7 +25,7 @@ Render (`apps/api`) · Memory: Supabase (optional).
 2. Pin the **revision sha** (Advanced → Revision). Reproducibility + safe rollback depend on this.
 3. Pick the serving container:
    - **Messages API (recommended)** — TGI / OpenAI-compatible `/v1/chat/completions`. The endpoint
-     applies Qwen3's chat template server-side.
+     applies the served model's chat template server-side.
    - **Generate API** — raw TGI `/generate`.
 4. Enable **scale-to-zero** to bound cost (the Analyst is off the request-critical path).
 5. Copy the endpoint **URL** (the full route matching the API you chose).
@@ -39,6 +39,7 @@ Set on the `apps/api` service, then deploy:
 | `OMI_ANALYST_ENABLED` | `true` | master switch (kill switch = set `false`) |
 | `OMI_ANALYST_ENDPOINT_URL` | `<endpoint URL>` | must match the API route below |
 | `OMI_ANALYST_ENDPOINT_API` | `messages` (recommended) or `generate` | must match the endpoint container |
+| `OMI_ANALYST_MODEL_ID` | `mistralai/Mistral-7B-Instruct-v0.3` | the runtime model (informational + diagnostics) |
 | `HF_TOKEN` | `<read token>` | never printed; read from env only |
 | `OMI_ANALYST_HF_REVISION` | `<commit sha>` | **pin**, never `main`/`latest` |
 | `OMI_ANALYST_HF_REPO` | `Andrewexiga/omi-analyst-v1` | default already correct |
@@ -79,7 +80,7 @@ endpoint_smoke_test()
 
 **Expected when live:**
 ```
-status = "qwen_backed"          # NOT "fallback_deterministic"
+status = "qwen_backed"          # historical field name = "model-backed"; NOT "fallback_deterministic"
 governor_verdict = "permit"
 number_echoed = true
 provider = "qwen-omi-analyst-v1"
@@ -90,7 +91,7 @@ prompt = { source: "registry", version: "v1", hash: "ph:…" }
 
 If `status = "not_configured"` → env not set. If `status = "fallback_deterministic"` → the endpoint
 was unreachable or returned invalid output (see Troubleshooting); the product is still correct (the
-floor served a valid governed assessment), it just isn't Qwen-backed yet.
+floor served a valid governed assessment), it just isn't model-backed yet.
 
 ## 6. Expected logs & outputs
 
@@ -115,7 +116,7 @@ record.
 - Watch the fallback-rate: a rising `provider = …->fallback:deterministic` share means the endpoint
   is flaky, slow, or emitting invalid JSON.
 - Watch p95 latency vs `OMI_ANALYST_TIMEOUT_SECONDS`.
-- Watch Governor `reject` rate on Qwen output (should be ~0; a spike means a prompt/model
+- Watch Governor `reject` rate on model output (should be ~0; a spike means a prompt/model
   regression — roll back the revision).
 
 ## 9. Troubleshooting

@@ -146,7 +146,7 @@ class RemoteReasoningProvider:
     api: str = "generate"                    # "generate" (raw TGI) | "messages" (OpenAI chat)
     token_env: tuple[str, ...] = ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN")
     backoff_cap: float = 2.0
-    name: str = "remote-hf-qwen"
+    name: str = "remote-hf"
 
     def _token(self) -> str | None:
         for key in self.token_env:
@@ -179,7 +179,7 @@ class RemoteReasoningProvider:
         """Build the wire body + the matching (non-stream, stream) parsers for the configured
         serving API. ``generate`` is the raw TGI text-generation contract (unchanged, byte-
         identical); ``messages`` is the OpenAI-compatible chat contract, which lets the endpoint
-        apply Qwen3's chat template server-side."""
+        apply the served model's chat template server-side."""
         if self.api == "messages":
             body = json.dumps({
                 "model": self.model or "tgi",

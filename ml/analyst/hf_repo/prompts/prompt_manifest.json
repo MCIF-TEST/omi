@@ -22,7 +22,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:2a64818e79328eb07e0a09c4f6fed0ad",
@@ -34,7 +35,8 @@
       "composes_constitution": false,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:f8249695cf379140e56b2cdba5101cfc",
@@ -46,7 +48,8 @@
       "composes_constitution": false,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:d5af4efc74a482079b7d53f7bf601f95",
@@ -58,7 +61,8 @@
       "composes_constitution": false,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:23580747dac31638c306c0ef20073d96",
@@ -70,7 +74,8 @@
       "composes_constitution": true,
       "expected_output_contract": "critique",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:513d52dab6c8ce1741c067238d1d7b41",
@@ -82,7 +87,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:d9da8b0af846b194bc995f6ea5fa4e89",
@@ -94,7 +100,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:38879c25a02830c798ec8b94cbacf921",
@@ -106,7 +113,8 @@
       "composes_constitution": true,
       "expected_output_contract": "critique",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:74ad29a2d6f246e22f42f6f1bfd60ab5",
@@ -118,7 +126,8 @@
       "composes_constitution": true,
       "expected_output_contract": "analyst_assessment",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:3b3fc19356423e24405bef95b2783430",
@@ -130,7 +139,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:df3a35497227c16297f435031e1ee8be",
@@ -142,7 +152,8 @@
       "composes_constitution": true,
       "expected_output_contract": "memory",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:aa290644525d5f1ef4786dffa35f0cc4",
@@ -154,7 +165,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:acbb253eb5adfd8a0adf19e337640bfd",
@@ -166,7 +178,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:813a8b8842b12addf01dc52696f2bf66",
@@ -178,7 +191,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:59c15010c217b40d1d45ea8d71baa57f",
@@ -190,7 +204,8 @@
       "composes_constitution": false,
       "expected_output_contract": "analyst_assessment",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:715d4e26feb9d799f0f6bfc4a82629e9",
@@ -202,7 +217,8 @@
       "composes_constitution": true,
       "expected_output_contract": "critique",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:3aaa0fab044593a183f07a8d7e5e6aa9",
@@ -214,7 +230,8 @@
       "composes_constitution": true,
       "expected_output_contract": "finding",
       "model_compatibility": [
-        "Qwen/Qwen3-4B-Thinking-2507-FP8",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral-family",
         "qwen-family"
       ],
       "prompt_hash": "ph:907cf2908b69e18f371b12ef21a562e6",

@@ -97,6 +97,36 @@ def endpoint_health(settings: Settings | None = None) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Consolidated system health — one place that answers "what is running?"
+# --------------------------------------------------------------------------- #
+def system_health(settings: Settings | None = None) -> dict:
+    """One consolidated diagnostic: active provider, active runtime model, endpoint status,
+    Prompt Registry versions, and Specialist Framework version — regardless of which model the
+    endpoint serves (the constitutional stack is model-agnostic). Read-only; no secrets; never
+    raises."""
+    settings = settings or get_settings()
+    from app.reasoning.prompts import FRAMEWORK_VERSION, default_registry, framework_hash
+
+    enabled = bool(getattr(settings, "analyst_enabled", False))
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    reg = default_registry()
+    return {
+        "active_provider": "remote-model" if (enabled and endpoint) else "deterministic-floor",
+        "active_model": getattr(settings, "analyst_model_id", None),
+        "endpoint": endpoint_health(settings),
+        "endpoint_api": str(getattr(settings, "analyst_endpoint_api", "generate")),
+        "model_revision": getattr(settings, "analyst_hf_revision", None),
+        "prompt_registry": {
+            "omi_analyst_active": reg.active_version("omi_analyst"),
+            "behavior_analyst_active": reg.active_version("behavior_analyst"),
+            "analysts": len(reg.analysts()),
+        },
+        "specialist_framework": {"version": FRAMEWORK_VERSION, "hash": framework_hash()},
+        "governor": "mandatory", "deterministic_floor": "always-on",
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Post-deploy smoke test — run one real investigation through the live endpoint
 # --------------------------------------------------------------------------- #
 _SMOKE_PAYLOAD = {
@@ -286,4 +316,4 @@ def trace_investigation(payload: dict, *, ref: str, platform: str = "youtube",
     }
 
 
-__all__ = ["prompt_integrity", "endpoint_health", "endpoint_smoke_test", "trace_investigation"]
+__all__ = ["prompt_integrity", "endpoint_health", "endpoint_smoke_test", "system_health", "trace_investigation"]

@@ -1,6 +1,6 @@
 ---
 license: apache-2.0
-base_model: Qwen/Qwen3-4B-Thinking-2507-FP8
+base_model: mistralai/Mistral-7B-Instruct-v0.3
 library_name: transformers
 pipeline_tag: text-generation
 tags:
@@ -35,7 +35,7 @@ runtime registry.
 |---|---|
 | **Name** | `Andrewexiga/omi-analyst-v1` (private registry) |
 | **Role** | Reasoning layer — interprets engine evidence into an explainable, evidence-bounded assessment |
-| **Foundation model** | [`Qwen/Qwen3-4B-Thinking-2507-FP8`](https://hf.co/Qwen/Qwen3-4B-Thinking-2507-FP8) — qwen3, ~4.41B params, FP8, Apache-2.0, reasoning ("Thinking") variant |
+| **Foundation model** | [`mistralai/Mistral-7B-Instruct-v0.3`](https://hf.co/mistralai/Mistral-7B-Instruct-v0.3) — mistral, ~7.25B params, Apache-2.0, instruction-tuned |
 | **Current version** | **V1** — base model + system prompt. **Ships no weights** (the *contract* is the artifact) |
 | **Output** | A structured JSON object valid against `schema/analyst_response_schema.json` (draft 2020-12) + a human-readable report |
 | **Prompt** | `prompts/analyst_system_prompt_v1.md` (`prompt_version: v1`) |
@@ -44,9 +44,9 @@ runtime registry.
 
 ## What V1 actually is
 
-V1 is the **base Qwen reasoning model + the Omi Analyst system prompt + the response
+V1 is the **base instruction-tuned model + the Omi Analyst system prompt + the response
 schema**. There are **no fine-tuned weights** in this revision — loading "the model"
-means: pull `Qwen/Qwen3-4B-Thinking-2507-FP8` at its pinned revision, then apply this
+means: pull `mistralai/Mistral-7B-Instruct-v0.3` at its pinned revision, then apply this
 repo's `prompts/`, `schema/`, and `config/`. The reproducible artifact is the
 **contract**, not a checkpoint. (V3+ adds LoRA adapters under `adapters/`; see the
 GitHub `future_finetuning_strategy.md`.)
@@ -60,7 +60,7 @@ component, never a standalone classifier. A single investigation flows:
 website request → Evidence Bundle (Binder, immutable citable ids)
    → Prompt Registry (resolves the versioned system prompt, content-hashed)
    → Institutional Memory (prior_context — background, never proof)
-   → Qwen specialist (this model) via RemoteReasoningProvider
+   → remote model specialist (this model) via RemoteReasoningProvider
    → schema validation + number-echo guard
    → MANDATORY Governor (PERMIT / REJECT)
    → on REJECT or any failure → deterministic Floor
@@ -104,7 +104,7 @@ website request → Evidence Bundle (Binder, immutable citable ids)
 
 ## Serving (honest engineering note)
 
-A 4.4B FP8 reasoning model is **not** the CPU-only, in-process profile of the dormant
+A 7B instruction-tuned model is **not** the CPU-only, in-process profile of the dormant
 tabular scorer. The Analyst is served **off the request-critical path**: async +
 cached, with the deterministic `TemplateProvider` as the always-on fallback, and is
 **off by default**. A scan never blocks on the Analyst, and a HF outage cannot take
@@ -132,11 +132,13 @@ variable `OMI_ANALYST_ENDPOINT_API` so the operator matches the endpoint they de
 
 - `generate` (default): raw TGI text-generation (`POST` with `inputs` + `parameters`).
 - `messages`: OpenAI-compatible `/v1/chat/completions` (`messages=[system,user]`), which lets the
-  endpoint apply **Qwen3's chat template server-side** — recommended for a Qwen3-Thinking chat
-  deployment. Point `OMI_ANALYST_ENDPOINT_URL` at the corresponding route.
+  endpoint apply **the served model's chat template server-side** — recommended for
+  Mistral-7B-Instruct-v0.3 (its template has no native system token; the endpoint's chat
+  route handles the mapping). Point `OMI_ANALYST_ENDPOINT_URL` at the corresponding route.
 
-Both paths strip the `<think>` trace, extract the JSON object, schema-validate, echo the engine
-number, and fall back to the deterministic floor on any failure.
+Both paths extract the JSON object, schema-validate, echo the engine number, and fall back to
+the deterministic floor on any failure (the `<think>`-strip remains as an inert safeguard for
+thinking-variant models).
 
 ## Deployment
 
@@ -182,7 +184,7 @@ stays **pre-shadow / not promoted**.
 
 ## Roadmap & version compatibility
 
-- **V1 (now):** base Qwen + `omi_analyst` v1 prompt + schema. No weights.
+- **V1 (now):** base Mistral-7B-Instruct-v0.3 + `omi_analyst` v1 prompt + schema. No weights.
 - **V2:** prompt-engineered (refined prompt + few-shot), still no weights.
 - **V3:** LoRA adapter over the base (`adapters/v3/`), reversible, tiny artifact.
 - **V4:** merged/preference-tuned reasoning model; precision-frontier FPR is a hard gate.
@@ -202,7 +204,7 @@ stays **pre-shadow / not promoted**.
 
 ## Provenance & licensing
 
-Derived from `Qwen/Qwen3-4B-Thinking-2507-FP8` (**Apache-2.0**), which permits private
+Derived from `mistralai/Mistral-7B-Instruct-v0.3` (**Apache-2.0**), which permits private
 hosting, fine-tuning, and redistribution of derivatives — no licensing blocker for the
 V1→V4 path. This registry repo is **private**.
 

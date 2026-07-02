@@ -184,7 +184,8 @@ class Settings(BaseSettings):
     # OFF by default. When enabled, app/reasoning exposes a feature-flagged,
     # async, cached *structured* assessment that INTERPRETS the engine's already-
     # computed evidence (it never runs a detector, recomputes a score, or touches
-    # OmiScore). Powered by Qwen/Qwen3-4B-Thinking-2507-FP8 when an endpoint is
+    # OmiScore). Powered by the model served at the configured endpoint (production
+    # runtime model: mistralai/Mistral-7B-Instruct-v0.3) when an endpoint is
     # configured; otherwise the always-on deterministic, schema-valid provider.
     # Config is loaded from the HF registry repo below (local-mirror fallback).
     # The product is fully functional with this off — it is strictly additive.
@@ -192,6 +193,10 @@ class Settings(BaseSettings):
     analyst_enabled: bool = False
     analyst_hf_repo: str = "Andrewexiga/omi-analyst-v1"
     analyst_hf_revision: str | None = None
+    # The RUNTIME model the inference endpoint serves (informational + diagnostics; the endpoint
+    # itself pins the actual weights). Distinct from analyst_hf_repo, which is the Omi contract
+    # registry (prompt/schema/config), not the model.
+    analyst_model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"
     analyst_endpoint_url: str | None = None
     analyst_timeout_seconds: float = 30.0
     analyst_max_retries: int = 2

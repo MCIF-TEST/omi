@@ -19,7 +19,7 @@ schema_version = 1
 repo_id = "Andrewexiga/omi-analyst-v1"
 repo_type = "model"
 private = true
-base_model = "Qwen/Qwen3-4B-Thinking-2507-FP8"
+base_model = "mistralai/Mistral-7B-Instruct-v0.3"
 pretty_name = "Omi Analyst (registry)"
 
 # --- the HF model card (root README; carries the base_model YAML metadata) ---

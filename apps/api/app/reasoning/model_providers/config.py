@@ -13,8 +13,8 @@ from typing import Any
 
 from .remote import RemoteReasoningProvider
 
-# The model the omi-analyst endpoint serves today; informational (the endpoint pins the model).
-_DEFAULT_MODEL = "Qwen/Qwen3-4B-Thinking-2507-FP8"
+# The production runtime model (informational; the deployed endpoint pins the actual weights).
+_DEFAULT_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 
 
 def build_remote_provider(settings: Any | None = None) -> RemoteReasoningProvider | None:
@@ -27,7 +27,7 @@ def build_remote_provider(settings: Any | None = None) -> RemoteReasoningProvide
         return None
     return RemoteReasoningProvider(
         endpoint_url=endpoint,
-        model=getattr(settings, "analyst_hf_repo", None) or _DEFAULT_MODEL,
+        model=getattr(settings, "analyst_model_id", None) or _DEFAULT_MODEL,
         revision=getattr(settings, "analyst_hf_revision", None),
         timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
         max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
@@ -49,7 +49,8 @@ def provider_status(settings: Any | None = None) -> dict:
         "analyst_enabled": enabled,
         "endpoint_configured": bool(endpoint),
         "hf_token_present": token_present,
-        "model": getattr(settings, "analyst_hf_repo", None),
+        "model": getattr(settings, "analyst_model_id", None) or _DEFAULT_MODEL,
+        "registry_repo": getattr(settings, "analyst_hf_repo", None),
         "revision": getattr(settings, "analyst_hf_revision", None),
         "timeout_seconds": float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
         "max_retries": int(getattr(settings, "analyst_max_retries", 2) or 2),
