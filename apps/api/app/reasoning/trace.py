@@ -69,31 +69,65 @@ def prompt_integrity(settings: Settings | None = None) -> dict:
 # --------------------------------------------------------------------------- #
 # Live endpoint health — actually probe the HF endpoint when configured
 # --------------------------------------------------------------------------- #
+def _models_match(served: str | None, expected: str | None) -> bool | None:
+    """Tolerant model-id equality. ``None`` when either side is unknown. Exact match wins; else
+    compare the bare repo name (a dedicated endpoint may echo ``mistralai/Mistral-7B-Instruct-v0.3``
+    or just ``Mistral-7B-Instruct-v0.3``), case-insensitively."""
+    if not served or not expected:
+        return None
+    s, e = served.strip().lower(), expected.strip().lower()
+    return True if s == e else (s.split("/")[-1] == e.split("/")[-1])
+
+
 def endpoint_health(settings: Settings | None = None) -> dict:
     """Probe the configured Hugging Face inference endpoint with a minimal request and report
-    reachability + latency. When no endpoint/token is configured, reports ``not_configured`` (the
-    current state) — never an error. No secrets (token presence is a boolean)."""
+    reachability + latency **and the model it is actually serving**. Honors the configured serving
+    API (``analyst_endpoint_api``) so a ``messages`` deployment is probed with the chat contract —
+    never a ``generate``-shaped body that a chat endpoint would reject (which used to mis-report a
+    healthy endpoint as unreachable). When no endpoint/token is configured, reports
+    ``not_configured`` — never an error. No secrets (token presence is a boolean)."""
     settings = settings or get_settings()
     endpoint = getattr(settings, "analyst_endpoint_url", None)
     token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+    expected_model = getattr(settings, "analyst_model_id", None)
+    api = str(getattr(settings, "analyst_endpoint_api", "generate") or "generate")
     if not endpoint or not token_present:
         return {"status": "not_configured", "endpoint_configured": bool(endpoint),
-                "hf_token_present": token_present, "reachable": None,
-                "detail": "set OMI_ANALYST_ENDPOINT_URL + HF_TOKEN to enable live Qwen"}
+                "hf_token_present": token_present, "reachable": None, "endpoint_api": api,
+                "expected_model": expected_model, "served_model": None, "model_matches": None,
+                "detail": "set OMI_ANALYST_ENDPOINT_URL + HF_TOKEN to enable the live analyst"}
     from app.reasoning.model_providers import ReasoningRequest, RemoteReasoningProvider
 
     provider = RemoteReasoningProvider(
-        endpoint_url=endpoint, timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
-        max_retries=0, revision=getattr(settings, "analyst_hf_revision", None))
+        endpoint_url=endpoint, model=expected_model or "",
+        timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
+        max_retries=0, revision=getattr(settings, "analyst_hf_revision", None), api=api)
     t0 = time.perf_counter()
+    detail: str | None = None
     try:
         provider.complete(ReasoningRequest(system="ping", user="ping", response_format="text", max_tokens=1))
-        return {"status": "reachable", "endpoint_configured": True, "hf_token_present": True,
-                "reachable": True, "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
+        reachable = True
     except Exception as exc:  # noqa: BLE001 — report, never raise
-        return {"status": "unreachable", "endpoint_configured": True, "hf_token_present": True,
-                "reachable": False, "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2),
-                "detail": f"{type(exc).__name__}: {str(exc)[:160]}"}
+        reachable = False
+        detail = f"{type(exc).__name__}: {str(exc)[:160]}"
+    latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+
+    # Served-model identity — the evidence that the endpoint is the RIGHT model, not merely up.
+    identity = provider.probe_served_model() if reachable else {"served_model": None, "source": "endpoint_unreachable"}
+    served = identity.get("served_model")
+    model_matches = _models_match(served, expected_model)
+    out = {"status": "reachable" if reachable else "unreachable",
+           "endpoint_configured": True, "hf_token_present": True, "reachable": reachable,
+           "endpoint_api": api, "latency_ms": latency_ms,
+           "expected_model": expected_model, "served_model": served,
+           "served_model_source": identity.get("source"), "model_matches": model_matches}
+    if detail:
+        out["detail"] = detail
+    if reachable and served and model_matches is False:
+        out["model_mismatch_detail"] = (
+            f"endpoint is serving '{served}' but config expects '{expected_model}' — "
+            "correct OMI_ANALYST_MODEL_ID or redeploy the intended endpoint")
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -167,19 +201,48 @@ def endpoint_smoke_test(payload: dict | None = None, *, ref: str = "smoke_subjec
                 "detail": "assess_payload returned None (feature off or impl missing)"}
     gov = assessment.get("governance", {})
     provider = gov.get("provider", "none")
-    qwen_backed = ("qwen" in provider) and ("fallback" not in provider)
+    # ``model_backed`` = a genuine remote-model assessment (not the deterministic floor). The
+    # provider identifier keeps its historical ``qwen-`` prefix (stable provider name, not a claim
+    # about the foundation model); the foundation model is reported separately via ``served_model``.
+    model_backed = ("fallback" not in provider) and ("deterministic" not in provider)
+    expected_model = getattr(settings, "analyst_model_id", None)
+    identity = _identity_probe(settings)
+    served = identity.get("served_model")
     return {
-        "status": "qwen_backed" if qwen_backed else "fallback_deterministic",
+        "status": "qwen_backed" if model_backed else "fallback_deterministic",  # historical key
+        "model_backed": model_backed,
         "endpoint_api": str(getattr(settings, "analyst_endpoint_api", "generate")),
         "provider": provider,
-        "qwen_backed": qwen_backed,
+        "qwen_backed": model_backed,                                            # historical alias
+        "active_model": expected_model,
+        "served_model": served,
+        "served_model_source": identity.get("source"),
+        "model_matches": _models_match(served, expected_model),
         "governor_verdict": gov.get("verdict"),
         "number_echoed": assessment.get("suspicion_probability") == pay.get("overall_probability"),
         "model_revision": gov.get("model_revision"),
         "prompt": gov.get("prompt", {}),
         "latency_ms": latency_ms,
-        "expected_when_live": "status=qwen_backed · governor_verdict=permit · number_echoed=true",
+        "expected_when_live": ("status=qwen_backed · governor_verdict=permit · number_echoed=true · "
+                               f"served_model≈{expected_model} (model_matches=true)"),
     }
+
+
+def _identity_probe(settings: Settings) -> dict:
+    """Best-effort served-model probe used by the smoke test — reports which model the endpoint is
+    serving, or a reason it couldn't be determined. Never raises."""
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+    if not endpoint or not token_present:
+        return {"served_model": None, "source": "not_configured"}
+    from app.reasoning.model_providers import RemoteReasoningProvider
+
+    provider = RemoteReasoningProvider(
+        endpoint_url=endpoint, model=getattr(settings, "analyst_model_id", None) or "",
+        timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
+        max_retries=0, revision=getattr(settings, "analyst_hf_revision", None),
+        api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"))
+    return provider.probe_served_model()
 
 
 # --------------------------------------------------------------------------- #
@@ -268,7 +331,8 @@ def trace_investigation(payload: dict, *, ref: str, platform: str = "youtube",
     is_fallback = ("deterministic" in provider) or ("fallback" in provider)
     stages.append({"stage": "qwen_model", "status": "executed",
                    "duration_ms": float(gov.get("latency_ms", 0.0)),
-                   "outputs": {"provider": provider, "prompt": gov.get("prompt", {})},
+                   "outputs": {"provider": provider, "active_model": getattr(settings, "analyst_model_id", None),
+                               "prompt": gov.get("prompt", {})},
                    "fallback": "deterministic" if is_fallback else "none"})
     stages.append({"stage": "specialist_output_and_judge", "status": "executed" if assessment else "no_output",
                    "duration_ms": 0.0,
@@ -305,9 +369,11 @@ def trace_investigation(payload: dict, *, ref: str, platform: str = "youtube",
         "ref": ref, "platform": platform,
         "flag_state": {
             "analyst_enabled": bool(getattr(settings, "analyst_enabled", False)),
-            "active_provider": "qwen" if (getattr(settings, "analyst_enabled", False)
-                                          and getattr(settings, "analyst_endpoint_url", None)) else "deterministic-floor",
+            "active_provider": "remote-model" if (getattr(settings, "analyst_enabled", False)
+                                                  and getattr(settings, "analyst_endpoint_url", None)) else "deterministic-floor",
+            "active_model": getattr(settings, "analyst_model_id", None),
             "endpoint_configured": bool(getattr(settings, "analyst_endpoint_url", None)),
+            "endpoint_identity": _identity_probe(settings),
             "governor": "mandatory", "deterministic_floor": "always-on",
         },
         "trace_executed_as": "forced-enabled (mechanics shown even when the production flag is off)",

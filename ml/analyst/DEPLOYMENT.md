@@ -65,7 +65,14 @@ no-ops):
 
 - **Endpoint reachability:** `GET /v1/investigations/analyst/integrity` → `endpoint_health.status`
   should be `reachable` (it is `not_configured` until the URL + token are set). Equivalent in code:
-  `app.reasoning.trace.endpoint_health()`.
+  `app.reasoning.trace.endpoint_health()`. The probe now uses the **configured** `endpoint_api`, so a
+  `messages` (chat) endpoint is probed with the chat contract — a chat endpoint is no longer
+  mis-reported `unreachable` for a generate-shaped ping.
+- **Right model, not merely up:** the same `endpoint_health` block reports `served_model` (what the
+  endpoint is actually serving), `expected_model` (`mistralai/Mistral-7B-Instruct-v0.3`), and
+  `model_matches` — confirm `model_matches: true`. A `false` here (with `model_mismatch_detail`)
+  means the endpoint is serving a *different* model than configured; fix `OMI_ANALYST_MODEL_ID` or
+  redeploy the intended endpoint before going live.
 - **Readiness snapshot:** `app.reasoning.model_providers.provider_status()` →
   `ai_specialist_ready: true` once flag + endpoint + token are all present.
 
@@ -81,17 +88,28 @@ endpoint_smoke_test()
 **Expected when live:**
 ```
 status = "qwen_backed"          # historical field name = "model-backed"; NOT "fallback_deterministic"
+model_backed = true             # clearer alias of the same signal
 governor_verdict = "permit"
 number_echoed = true
-provider = "qwen-omi-analyst-v1"
+provider = "qwen-omi-analyst-v1"   # stable PROVIDER name (not a claim about the foundation model)
+active_model = "mistralai/Mistral-7B-Instruct-v0.3"   # configured runtime model
+served_model = "mistralai/Mistral-7B-Instruct-v0.3"   # what the endpoint actually served
+model_matches = true            # served == expected → you are provably on Mistral
 endpoint_api = "messages"       # or "generate"
 model_revision = "<your sha>"
 prompt = { source: "registry", version: "v1", hash: "ph:…" }
 ```
 
+The `provider` string retains its historical `qwen-` prefix as a **stable provider identifier**; it
+is not a statement about the foundation model. The foundation model is reported separately and
+authoritatively via `active_model` / `served_model` / `model_matches` — that trio is the proof the
+endpoint is Mistral.
+
 If `status = "not_configured"` → env not set. If `status = "fallback_deterministic"` → the endpoint
 was unreachable or returned invalid output (see Troubleshooting); the product is still correct (the
-floor served a valid governed assessment), it just isn't model-backed yet.
+floor served a valid governed assessment), it just isn't model-backed yet. If `model_backed = true`
+but `model_matches = false` → the endpoint is live but serving the **wrong model**; correct
+`OMI_ANALYST_MODEL_ID` or the endpoint deployment.
 
 ## 6. Expected logs & outputs
 
