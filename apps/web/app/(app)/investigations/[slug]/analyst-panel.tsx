@@ -75,6 +75,16 @@ export function AnalystPanel({ slug }: { slug: string }) {
     await step(refresh);
   };
 
+  // Auto-load on mount: the analyst now runs server-side for every investigation
+  // (scheduled at scan time), so surface its cached assessment automatically — the AI
+  // reading is part of the report, not a manual action. A cached result returns
+  // immediately (no new model call); 503 degrades to the graceful "not enabled" notice.
+  useEffect(() => {
+    void run(false);
+    // Fire once per investigation; `run` is stable for the component's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
   return (
     <Card>
       <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">

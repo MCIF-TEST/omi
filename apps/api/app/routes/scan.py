@@ -1602,6 +1602,7 @@ def _persist_investigation(
     for attempt in range(3):
         try:
             t0 = _time.time()
+            created = False
             with get_session() as session:
                 from app.storage.repository import AccountRepository
                 repo = AccountRepository(session)
@@ -1626,6 +1627,7 @@ def _persist_investigation(
                         quota_used=quota_used,
                         payload_json=payload,
                     )
+                    created = True
                     log.info(
                         "investigation %s created in %.1fs", slug, _time.time() - t0
                     )
@@ -1643,6 +1645,13 @@ def _persist_investigation(
                         "investigation %s updated (batch %d) in %.1fs",
                         slug, inv.batch_count, _time.time() - t0,
                     )
+            if created:
+                # Wire the AI analyst into every investigation: schedule a background,
+                # cached, exactly-once assessment now that the row is committed. This is the
+                # missing link that makes a real investigation reach the live model endpoint —
+                # a NO-OP unless OMI_ANALYST_ENABLED is set, so the default path is unchanged.
+                from app.reasoning import analyst as _analyst
+                _analyst.maybe_autogenerate(slug, effective_user_id)
             return True  # success — row is committed before we return
         except IntegrityError:
             # A concurrent batch created this slug between our lookup and insert.
