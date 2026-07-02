@@ -205,4 +205,10 @@ def default_registry() -> PromptRegistry:
     from .specialists import register_specialist_library
 
     register_specialist_library(reg)
+    # Phase B1 — the Behavioral Intelligence Library's improved prompt, versioned as lib-v2.
+    # Inert like the rest of the library: registered, content-addressed, NOT activated (the live
+    # behavior_analyst v1 stays active; deterministic replay untouched).
+    from .behavioral import behavior_v2_prompt_spec
+
+    reg.register(behavior_v2_prompt_spec(), activate=False)
     return reg

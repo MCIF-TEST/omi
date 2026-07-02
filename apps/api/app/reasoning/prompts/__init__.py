@@ -20,6 +20,20 @@ from .registry import (
     compare_prompts,
     default_registry,
 )
+from .behavioral import (  # noqa: F401 — importing registers the behavioral framework overrides
+    BEHAVIORAL_LIBRARY_VERSION,
+    behavior_v2_prompt_spec,
+    render_behavioral_handbook,
+)
+from .framework import (
+    FRAMEWORK_VERSION,
+    SpecialistProfile,
+    framework_hash,
+    framework_profiles,
+    lift,
+    new_specialist,
+    validate_framework,
+)
 from .spec import PromptSpec
 from .specialists import (
     LIBRARY_VERSION,
@@ -39,4 +53,9 @@ __all__ = [
     # Phase 2 — specialist prompt library
     "LIBRARY_VERSION", "SPECIALISTS", "SpecialistSpec",
     "register_specialist_library", "render", "specialist_prompt_specs",
+    # Phase A1 — the Specialist Intelligence Framework
+    "FRAMEWORK_VERSION", "SpecialistProfile", "framework_profiles", "framework_hash",
+    "lift", "new_specialist", "validate_framework",
+    # Phase B1 — the Behavioral Intelligence Library (reference implementation)
+    "BEHAVIORAL_LIBRARY_VERSION", "behavior_v2_prompt_spec", "render_behavioral_handbook",
 ]

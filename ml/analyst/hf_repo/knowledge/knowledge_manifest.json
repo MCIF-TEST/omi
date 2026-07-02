@@ -59,9 +59,74 @@
   ],
   "counts": {
     "categories": 14,
-    "entries": 25
+    "entries": 33
   },
   "entries": [
+    {
+      "category": "behavioral_archetypes",
+      "confidence": "established",
+      "content_hash": "ie:e1f5964875ecc3fce779b22524412500",
+      "id": "account_aging_behavior",
+      "investigation_types": [
+        "account"
+      ],
+      "platforms": [
+        "x",
+        "reddit",
+        "youtube"
+      ],
+      "relationships": [
+        "new_account_cohorts",
+        "behavior_evolution",
+        "posting_cadence_analysis"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "metadata_analyst"
+      ],
+      "tags": [
+        "age",
+        "dormancy",
+        "activation",
+        "history",
+        "pivot"
+      ],
+      "title": "Account Aging & Behavioral History",
+      "version": "v1"
+    },
+    {
+      "category": "deception_indicators",
+      "confidence": "emerging",
+      "content_hash": "ie:4c6751d747073ee0893fc88546e11e24",
+      "id": "adversarial_evasion",
+      "investigation_types": [
+        "account",
+        "campaign"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok",
+        "reddit"
+      ],
+      "relationships": [
+        "behavior_evolution",
+        "sockpuppets",
+        "precision_frontier"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "counter_evidence_analyst"
+      ],
+      "tags": [
+        "evasion",
+        "adversarial",
+        "warming",
+        "jitter"
+      ],
+      "title": "Adversarial Evasion Behavior",
+      "version": "v1"
+    },
     {
       "category": "influence_operations",
       "confidence": "established",
@@ -124,6 +189,39 @@
         "coincidence"
       ],
       "title": "Base-rate Discipline",
+      "version": "v1"
+    },
+    {
+      "category": "behavioral_archetypes",
+      "confidence": "emerging",
+      "content_hash": "ie:6979a6a289d7a55fc3707fc6d5d14cfe",
+      "id": "behavior_evolution",
+      "investigation_types": [
+        "campaign",
+        "account"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok"
+      ],
+      "relationships": [
+        "account_aging_behavior",
+        "adversarial_evasion",
+        "coordinated_campaign"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "memory_analyst",
+        "campaign_analyst"
+      ],
+      "tags": [
+        "evolution",
+        "drift",
+        "trajectory",
+        "adaptation"
+      ],
+      "title": "Behavior Evolution & Campaign Drift",
       "version": "v1"
     },
     {
@@ -387,6 +485,37 @@
       "version": "v1"
     },
     {
+      "category": "behavioral_archetypes",
+      "confidence": "established",
+      "content_hash": "ie:cec15ae7e6abd057b5f0bcd706c3cb8b",
+      "id": "engagement_farming",
+      "investigation_types": [
+        "account",
+        "comment_section"
+      ],
+      "platforms": [
+        "x",
+        "tiktok",
+        "youtube"
+      ],
+      "relationships": [
+        "reply_farms",
+        "engagement_pods",
+        "posting_cadence_analysis"
+      ],
+      "specialists": [
+        "behavior_analyst"
+      ],
+      "tags": [
+        "engagement",
+        "farming",
+        "metrics",
+        "volume"
+      ],
+      "title": "Engagement Farming",
+      "version": "v1"
+    },
+    {
       "category": "coordination_techniques",
       "confidence": "established",
       "content_hash": "ie:f3e0dadfbacdc6f355089d3af4f72efe",
@@ -447,6 +576,37 @@
         "cluster"
       ],
       "title": "Fingerprint Clustering",
+      "version": "v1"
+    },
+    {
+      "category": "behavioral_archetypes",
+      "confidence": "established",
+      "content_hash": "ie:fe8314ae8bde2ce6676350e900a58c54",
+      "id": "hybrid_operation",
+      "investigation_types": [
+        "account"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok"
+      ],
+      "relationships": [
+        "benign_automation",
+        "bot_amplification",
+        "posting_cadence_analysis"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "temporal_analyst"
+      ],
+      "tags": [
+        "hybrid",
+        "cyborg",
+        "scheduler",
+        "mixed"
+      ],
+      "title": "Hybrid Human-Bot Operation",
       "version": "v1"
     },
     {
@@ -662,6 +822,40 @@
       "version": "v1"
     },
     {
+      "category": "investigative_heuristics",
+      "confidence": "established",
+      "content_hash": "ie:e23ef8c2bca3efc6a1d4b7b83a8a8cd2",
+      "id": "posting_cadence_analysis",
+      "investigation_types": [
+        "account"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "tiktok",
+        "reddit"
+      ],
+      "relationships": [
+        "temporal_synchrony",
+        "benign_automation",
+        "account_aging_behavior",
+        "hybrid_operation"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "temporal_analyst"
+      ],
+      "tags": [
+        "cadence",
+        "timing",
+        "circadian",
+        "mechanical",
+        "burst"
+      ],
+      "title": "Posting Cadence Analysis",
+      "version": "v1"
+    },
+    {
       "category": "false_positive_patterns",
       "confidence": "established",
       "content_hash": "ie:3f9e879a7f9e6c7694cdb9deb2b9b753",
@@ -694,6 +888,36 @@
         "legitimacy"
       ],
       "title": "The Precision Frontier",
+      "version": "v1"
+    },
+    {
+      "category": "behavioral_archetypes",
+      "confidence": "established",
+      "content_hash": "ie:330c7152b33983a5854a1b7540ed83c6",
+      "id": "reply_farms",
+      "investigation_types": [
+        "comment_section"
+      ],
+      "platforms": [
+        "x",
+        "youtube"
+      ],
+      "relationships": [
+        "engagement_farming",
+        "engagement_pods",
+        "spam_campaigns"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "network_analyst"
+      ],
+      "tags": [
+        "replies",
+        "farm",
+        "early",
+        "templated"
+      ],
+      "title": "Reply Farms",
       "version": "v1"
     },
     {
@@ -790,6 +1014,38 @@
       "version": "v1"
     },
     {
+      "category": "behavioral_archetypes",
+      "confidence": "established",
+      "content_hash": "ie:850405e3dd3e4c63c02fced2e5e9925b",
+      "id": "spam_campaigns",
+      "investigation_types": [
+        "comment_section",
+        "campaign"
+      ],
+      "platforms": [
+        "x",
+        "youtube",
+        "reddit"
+      ],
+      "relationships": [
+        "reply_farms",
+        "coordinated_inauthentic_behavior",
+        "engagement_farming"
+      ],
+      "specialists": [
+        "behavior_analyst",
+        "language_analyst"
+      ],
+      "tags": [
+        "spam",
+        "commercial",
+        "links",
+        "promo"
+      ],
+      "title": "Spam Campaigns",
+      "version": "v1"
+    },
+    {
       "category": "deception_indicators",
       "confidence": "emerging",
       "content_hash": "ie:54b99c8eaa6614bbcd1b6d7bc07a3947",
@@ -853,16 +1109,24 @@
     }
   ],
   "generated_by": "app.reasoning.prompts.export.knowledge_manifest",
-  "library_hash": "il:7afa40771b797e9ded177582bf746677",
+  "library_hash": "il:36e59878c0a66620a157f58d721ce1ef",
   "manifest_version": "v1",
   "source_of_truth": "GitHub app.reasoning.knowledge.default_library (do not hand-edit)",
   "specialist_dependencies": {
     "behavior_analyst": [
+      "account_aging_behavior",
+      "adversarial_evasion",
+      "behavior_evolution",
       "benign_automation",
       "bot_amplification",
+      "engagement_farming",
+      "hybrid_operation",
       "platform_x_norms",
       "platform_youtube_norms",
-      "sockpuppets"
+      "posting_cadence_analysis",
+      "reply_farms",
+      "sockpuppets",
+      "spam_campaigns"
     ],
     "calibration_analyst": [
       "base_rate_discipline",
@@ -871,6 +1135,7 @@
       "single_axis_cap"
     ],
     "campaign_analyst": [
+      "behavior_evolution",
       "coordinated_campaign",
       "coordinated_inauthentic_behavior",
       "legitimate_coordination"
@@ -886,6 +1151,7 @@
       "temporal_synchrony"
     ],
     "counter_evidence_analyst": [
+      "adversarial_evasion",
       "astroturfing",
       "benign_automation",
       "independent_corroboration",
@@ -907,12 +1173,15 @@
       "manufactured_amplification",
       "second_language_writing",
       "sockpuppets",
+      "spam_campaigns",
       "stylometric_matching"
     ],
     "memory_analyst": [
+      "behavior_evolution",
       "independent_corroboration"
     ],
     "metadata_analyst": [
+      "account_aging_behavior",
       "new_account_cohorts",
       "platform_x_norms",
       "platform_youtube_norms"
@@ -928,6 +1197,7 @@
       "co_engagement_coordination",
       "engagement_pods",
       "fingerprint_clustering",
+      "reply_farms",
       "sockpuppets"
     ],
     "risk_analyst": [
@@ -939,6 +1209,8 @@
     "temporal_analyst": [
       "bot_amplification",
       "engagement_pods",
+      "hybrid_operation",
+      "posting_cadence_analysis",
       "temporal_synchrony"
     ]
   },

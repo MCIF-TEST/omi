@@ -111,7 +111,7 @@ def test_library_is_registered_but_inert_live_prompts_unchanged():
     assert _EXPECTED_SPECIALISTS <= set(reg.analysts())
     assert reg.active_version("behavior_analyst") == "v1"      # live prompt untouched
     assert reg.active_version("omi_analyst") == "v1"           # production judge untouched
-    assert reg.versions("behavior_analyst") == ["lib-v1", "v1", "v2"]
+    assert reg.versions("behavior_analyst") == ["lib-v1", "lib-v2", "v1", "v2"]
     # a brand-new specialist has only the library version (its sole resolvable default).
     assert reg.versions("coordination_analyst") == ["lib-v1"]
 

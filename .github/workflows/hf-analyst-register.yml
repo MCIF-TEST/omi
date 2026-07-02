@@ -1,11 +1,18 @@
 name: hf-analyst-register
+run-name: "HF · analyst register — ${{ inputs.mode || 'auto-upload (push)' }} @ ${{ github.ref_name }}"
 
 # OmiSphere -> Hugging Face Analyst MODEL registration (OMI_ANALYST_MODEL_IMPORT_V1).
-# Manual trigger only, SAFE BY DEFAULT: mode=validate does no upload. Choosing
-# mode=upload publishes the V1 model card (which configures the base_model),
-# config, base pointer, prompt, and response schema to the permanent registry
+# THE one publish pipeline: GitHub (source of truth) -> this workflow -> HF repo
 # Andrewexiga/omi-analyst-v1. It publishes NO weights and does NOT fine-tune,
 # train, modify production code/scoring/detectors/OmiScore, or deploy.
+#
+# Two triggers:
+#  * workflow_dispatch — manual, SAFE BY DEFAULT: mode=validate does no upload.
+#    The run name shows the mode + ref, and the step summary states loudly
+#    whether anything was published (a validate run publishes NOTHING).
+#  * push to main touching the published package sources — auto-synchronizes the
+#    HF repo (mode=upload) so main and Hugging Face cannot drift. The register
+#    script validates before uploading; identical content is a harmless no-op.
 on:
   workflow_dispatch:
     inputs:
@@ -18,6 +25,15 @@ on:
         description: "create the HF model repo (private) if missing (exist_ok)"
         type: boolean
         default: false
+  push:
+    branches: [main]
+    paths:
+      - "ml/analyst/hf_repo/**"
+      - "ml/analyst/analyst_system_prompt_v1.md"
+      - "ml/analyst/analyst_response_schema.json"
+      - "ml/analyst/hf_repo_manifest.toml"
+      - "ml/analyst/register_hf_model.py"
+      - ".github/workflows/hf-analyst-register.yml"
 
 permissions:
   contents: read
@@ -28,7 +44,7 @@ concurrency:
 
 jobs:
   analyst-register:
-    name: HF · analyst register (${{ inputs.mode }})
+    name: "HF · analyst register (${{ inputs.mode || 'auto-upload' }})"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -40,11 +56,22 @@ jobs:
         run: pip install --upgrade "huggingface_hub>=0.23"
       - name: Self-test the registration pipeline
         run: python ml/analyst/test_register_hf_model.py
+      - name: Mode banner (what this run will and will not do)
+        env:
+          MODE: ${{ inputs.mode || 'upload' }}
+        run: |
+          if [ "${MODE}" = "upload" ]; then
+            echo "### 🚀 UPLOAD MODE — publishing the package to Andrewexiga/omi-analyst-v1" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### 🔍 VALIDATE ONLY — checks the package; **nothing is published to Hugging Face**" >> "$GITHUB_STEP_SUMMARY"
+            echo "Re-run with mode=upload (or merge to main) to publish." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Ref: \`${GITHUB_REF_NAME}\` · Event: \`${GITHUB_EVENT_NAME}\`" >> "$GITHUB_STEP_SUMMARY"
       - name: Run analyst model registration
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          MODE: ${{ inputs.mode }}
-          CREATE_REPO: ${{ inputs.create_repo }}
+          MODE: ${{ inputs.mode || 'upload' }}
+          CREATE_REPO: ${{ inputs.create_repo || 'false' }}
         run: |
           set -euo pipefail
           ARGS=(--manifest ml/analyst/hf_repo_manifest.toml)
