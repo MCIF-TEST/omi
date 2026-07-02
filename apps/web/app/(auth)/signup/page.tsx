@@ -1,13 +1,20 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Sparkles, Zap, Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { getCurrentUser } from '@/lib/auth';
 import { SignupForm } from './signup-form';
 import { TRIAL_CREDITS } from '@/lib/plan';
 
 export const metadata = { title: 'Sign up — OMISPHERE' };
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  // Validated-session redirect only — a stale cookie must render the form
+  // (see middleware.ts: existence-only bounces caused a redirect loop).
+  const user = await getCurrentUser();
+  if (user) redirect('/dashboard');
+
   return (
     <Card gradient className="shadow-card-lg relative overflow-hidden">
       <div className="relative">

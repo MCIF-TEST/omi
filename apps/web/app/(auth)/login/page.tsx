@@ -1,15 +1,31 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { getCurrentUser } from '@/lib/auth';
 import { LoginForm } from './login-form';
 
 export const metadata = { title: 'Log in — OMISPHERE' };
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
   searchParams: { next?: string };
 }) {
+  // Already-authenticated users skip the form — but only on a VALIDATED
+  // session (the API resolved the cookie to a real user). A stale cookie
+  // must land here and see the form, never bounce (see middleware.ts —
+  // an existence-only bounce here is what caused the /login <-> /dashboard
+  // redirect loop).
+  const user = await getCurrentUser();
+  if (user) {
+    // Only honor same-origin paths from ?next= (no protocol-relative or
+    // absolute URLs) so this can never become an open redirect.
+    const next = searchParams.next;
+    const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+    redirect(safeNext);
+  }
+
   return (
     <Card gradient className="shadow-card-lg relative overflow-hidden">
       <div className="relative">
