@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from app.core.auth import (
+    SESSION_COOKIE_NAME,
     CurrentUser,
     clear_session,
     get_optional_user,
@@ -409,6 +410,8 @@ def delete_account(
 
 @router.get("/me", response_model=UserOut | None)
 def me(
+    request: Request,
+    response: Response,
     current: CurrentUser | None = Depends(get_optional_user),
     settings: Settings = Depends(get_settings),
 ) -> UserOut | None:
@@ -418,6 +421,13 @@ def me(
     is no concept of a logged-in user; everything is unrestricted.
     """
     if current is None or current.id == 0:
+        # Self-heal stale sessions: a cookie that was PRESENTED but did not
+        # resolve (rotated session secret, expired signature, or the user row
+        # no longer exists — e.g. the DB was reset on an ephemeral-disk
+        # redeploy) is cleared here, so clients stop carrying a dead cookie
+        # for its remaining 30-day lifetime.
+        if request.cookies.get(SESSION_COOKIE_NAME):
+            clear_session(response)
         return None
     return UserOut(
         id=current.id,
