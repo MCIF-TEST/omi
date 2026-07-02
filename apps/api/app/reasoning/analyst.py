@@ -21,6 +21,7 @@ import hashlib
 import logging
 import os
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,29 +47,52 @@ def analyst_enabled(settings: Settings | None = None) -> bool:
 
 
 def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision: str | None,
-                    api: str = "generate"):
+                    api: str = "generate", model: str | None = None):
     """The ONE Qwen HTTP transport (Sprint 017). The production analyst's model call goes through
     the constitutional ``RemoteReasoningProvider`` — the same HF client the council uses — instead
     of a second bespoke HTTP implementation. ``api`` selects the raw ``generate`` or OpenAI-
-    compatible ``messages`` serving contract. Returns the raw generated text, or None on any
-    failure so the analyst degrades to its deterministic provider."""
+    compatible ``messages`` serving contract; ``model`` names the served model in the request body
+    (so a dedicated endpoint's logs attribute the call correctly instead of the generic ``tgi``).
+    Returns the raw generated text, or None on any failure so the analyst degrades to its
+    deterministic provider. Each call is logged at INFO so Render logs show the outbound model
+    request and its outcome."""
     from app.reasoning.model_providers import ReasoningRequest, RemoteReasoningProvider
 
     provider = RemoteReasoningProvider(
-        endpoint_url=endpoint, timeout=timeout, max_retries=max_retries, revision=revision, api=api)
+        endpoint_url=endpoint, model=model or "", timeout=timeout, max_retries=max_retries,
+        revision=revision, api=api)
 
     def _call(system: str, user: str, config: Any) -> str | None:
+        t0 = time.perf_counter()
         try:
             resp = provider.complete(ReasoningRequest(
                 system=system, user=user, response_format="text",
                 temperature=getattr(config, "temperature", 0.2),
                 max_tokens=getattr(config, "max_new_tokens", 1024), revision=revision,
             ))
+            dt = (time.perf_counter() - t0) * 1000.0
+            logger.info("analyst.model_call: OK endpoint=%s api=%s model=%s chars=%d latency_ms=%.0f",
+                        _redact_endpoint(endpoint), api, model or "tgi", len(resp.text or ""), dt)
             return resp.text
-        except Exception:  # noqa: BLE001 — provider failure -> deterministic fallback
+        except Exception as exc:  # noqa: BLE001 — provider failure -> deterministic fallback
+            dt = (time.perf_counter() - t0) * 1000.0
+            logger.warning("analyst.model_call: FAILED endpoint=%s api=%s model=%s latency_ms=%.0f "
+                           "err=%s: %s -> deterministic fallback", _redact_endpoint(endpoint), api,
+                           model or "tgi", dt, type(exc).__name__, str(exc)[:160])
             return None
 
     return _call
+
+
+def _redact_endpoint(url: str | None) -> str:
+    """Host-only view of the endpoint URL for logs (never the full path/query)."""
+    if not url:
+        return "-"
+    try:
+        from urllib.parse import urlsplit
+        return urlsplit(url).netloc or url[:40]
+    except Exception:  # noqa: BLE001
+        return url[:40]
 
 
 def _impl():
@@ -299,15 +323,22 @@ def assess_payload(
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
         if endpoint:
+            api = str(getattr(settings, "analyst_endpoint_api", "generate") or "generate")
+            model_id = getattr(settings, "analyst_model_id", None)
             transport = _qwen_transport(
                 endpoint, timeout=timeout,
                 max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
                 revision=getattr(settings, "analyst_hf_revision", None),
-                api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"))
+                api=api, model=model_id)
             provider = impl.QwenAnalystProvider(
                 endpoint_url=endpoint, timeout=timeout, system_prompt=spec.template, transport=transport)
+            logger.info("analyst.assess: REMOTE provider selected ref=%s endpoint=%s api=%s model=%s "
+                        "prompt=%s(%s) -> model call will be made",
+                        ref, _redact_endpoint(endpoint), api, model_id, spec.prompt_version, spec.prompt_hash)
         else:
             provider = impl.DeterministicAnalystProvider()
+            logger.info("analyst.assess: no analyst_endpoint_url configured ref=%s -> deterministic "
+                        "floor (NO model call). Set OMI_ANALYST_ENDPOINT_URL to reach the endpoint.", ref)
 
         model_revision = getattr(config, "model_revision", None)
         # Sprint 021 — wire institutional memory into the AI specialist's input. ``get_memory_store``
@@ -321,7 +352,13 @@ def assess_payload(
                               platform=platform, model_revision=model_revision, store=store)
         result = Orchestrator(modules=[], judge=judge, floor=floor).run(
             payload, ref=ref, platform=platform, grain="comment_section")
-        return _attach_governance(result, judge=judge, floor=floor)
+        governed = _attach_governance(result, judge=judge, floor=floor)
+        gov = governed.get("governance", {})
+        prov = str(gov.get("provider", "?"))
+        model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
+        logger.info("analyst.assess: DONE ref=%s provider=%s model_backed=%s governor=%s revision=%s",
+                    ref, prov, model_backed, gov.get("verdict"), gov.get("model_revision"))
+        return governed
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")
         return None
@@ -462,31 +499,77 @@ def persist_assessment(session, inv, assessment: dict, provider: str) -> dict:
     return entry
 
 
+_autogen_inflight: set[str] = set()
+_autogen_lock = threading.Lock()
+
+
 def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) -> dict | None:
     """Background worker: open an own session, generate the assessment, cache it.
-    Idempotent. Runs off the request hot path via app.core.background.submit."""
+    Idempotent. Runs off the request hot path via app.core.background.submit.
+
+    Exactly-once per investigation: the durable on-row cache is the cross-process guard, and an
+    in-process in-flight set collapses the scan-time auto-trigger racing a UI-triggered request —
+    so a single investigation makes at most ONE model (HF endpoint) call."""
     settings = get_settings()
     if not analyst_enabled(settings):
         return None
-    from app.storage.db import get_session
-    from app.storage.repository import AccountRepository
+    with _autogen_lock:
+        if slug in _autogen_inflight and not refresh:
+            logger.info("analyst.generate: already in flight for slug=%s; skipping duplicate model call", slug)
+            return None
+        _autogen_inflight.add(slug)
+    try:
+        from app.storage.db import get_session
+        from app.storage.repository import AccountRepository
 
-    with get_session() as session:
-        repo = AccountRepository(session)
-        inv = repo.get_investigation(slug=slug, user_id=user_id)
-        if inv is None:
-            return None
-        if not refresh and cached_assessment(inv):
-            return cached_assessment(inv)
-        assessment = assess_payload(
-            inv.payload_json or {},
-            ref=_ref(inv.slug), platform=_platform_of(inv), settings=settings,
-        )
-        if assessment is None:
-            return None
-        gov = assessment.get("governance") or {}
-        provider = gov.get("provider") or assessment.get("model_revision", "omi-analyst")
-        return persist_assessment(session, inv, assessment, provider)
+        with get_session() as session:
+            repo = AccountRepository(session)
+            inv = repo.get_investigation(slug=slug, user_id=user_id)
+            if inv is None:
+                logger.info("analyst.generate: investigation slug=%s not found (user_id=%s); skipping",
+                            slug, user_id)
+                return None
+            if not refresh and cached_assessment(inv):
+                logger.info("analyst.generate: slug=%s already has a cached assessment; no model call", slug)
+                return cached_assessment(inv)
+            assessment = assess_payload(
+                inv.payload_json or {},
+                ref=_ref(inv.slug), platform=_platform_of(inv), settings=settings,
+            )
+            if assessment is None:
+                return None
+            gov = assessment.get("governance") or {}
+            provider = gov.get("provider") or assessment.get("model_revision", "omi-analyst")
+            return persist_assessment(session, inv, assessment, provider)
+    finally:
+        with _autogen_lock:
+            _autogen_inflight.discard(slug)
+
+
+def maybe_autogenerate(slug: str, user_id: int | None) -> bool:
+    """Schedule a background analyst assessment for a freshly persisted investigation, so that
+    EVERY real investigation reaches the model exactly once — the wire that was missing.
+
+    Before this, ``assess_payload`` (→ the RemoteReasoningProvider → the HF endpoint) was reachable
+    only through an explicit ``POST /v1/investigations/{slug}/analyst`` (the UI "Generate
+    assessment" button); a normal scan never triggered it, so a live endpoint received zero
+    requests. This runs off the scan's hot path via the background pool, is idempotent (cache +
+    in-flight guard), and is a NO-OP unless the analyst is enabled — so it is fully backward
+    compatible (endpoint unset → deterministic floor, exactly as before). Never raises."""
+    try:
+        settings = get_settings()
+        if not analyst_enabled(settings):
+            return False
+        from app.core import background
+        fut = background.submit(generate_and_persist, slug, user_id, False)
+        scheduled = fut is not None
+        target = "remote-model" if getattr(settings, "analyst_endpoint_url", None) else "deterministic-floor"
+        logger.info("analyst.autogenerate: %s assessment for investigation slug=%s (target=%s)",
+                    "scheduled" if scheduled else "could not schedule", slug, target)
+        return scheduled
+    except Exception:  # noqa: BLE001 — auto-generation must never disturb a scan
+        logger.exception("analyst.autogenerate: failed to schedule for slug=%s", slug)
+        return False
 
 
 def _platform_of(inv) -> str:
