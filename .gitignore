@@ -24,6 +24,7 @@ out/
 
 # Runtime data
 apps/api/data/
+apps/web/data/
 .docker-data/
 
 # Dataset ingestion runtime artifacts (provenance is per-DB / per-run; the
