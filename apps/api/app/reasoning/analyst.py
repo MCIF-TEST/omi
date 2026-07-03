@@ -359,6 +359,10 @@ def assess_payload(
         spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,
                        "hash": spec.prompt_hash, "source": "registry"}
+        # The canonical AI deployment package (published to HF; loaded from bundled data) that this
+        # investigation reasons with — content-addressed, recorded on every assessment for reproducibility.
+        from app.reasoning.package import load_ai_package
+        ai_package = load_ai_package(getattr(settings, "analyst_model_id", None))
 
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
@@ -400,9 +404,11 @@ def assess_payload(
         gov = governed.get("governance", {})
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
+        governed["ai_package"] = ai_package.provenance()
         governed["metrics"] = _assessment_metrics(
             governed, gov, settings, store_ms=store_ms, reasoning_ms=reasoning_ms,
             model_backed=model_backed, prompt_meta=prompt_meta)
+        governed["metrics"]["package_hash"] = ai_package.package_hash
         m = governed["metrics"]
         logger.info("analyst.assess: DONE ref=%s provider=%s model_backed=%s governor=%s revision=%s "
                     "| metrics total=%.0fms model=%.0fms governor+assembly=%.0fms est_completion_tokens=%d",

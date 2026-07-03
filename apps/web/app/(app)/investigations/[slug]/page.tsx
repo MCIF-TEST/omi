@@ -7,7 +7,6 @@ import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { SavedInvestigationViewer } from './viewer';
 import { ShareBlock } from './share-block';
-import { CommentaryBlock } from './commentary-block';
 import { AnalystPanel } from './analyst-panel';
 import { VerdictWidget } from './verdict-widget';
 import { env } from '@/lib/env';
@@ -94,13 +93,9 @@ export default async function InvestigationPage({ params }: { params: { slug: st
         />
       </Card>
 
-      <CommentaryBlock
-        slug={inv.slug}
-        initialText={inv.commentary_text}
-        initialProvider={inv.commentary_provider}
-        initialGeneratedAt={inv.commentary_generated_at}
-      />
-
+      {/* Single governed AI surface: the Omi Analyst assessment is generated from the one
+          model-backed inference per investigation. The former free-text commentary block
+          (separate Anthropic/template path) is retired to keep one report from one inference. */}
       <AnalystPanel slug={inv.slug} />
 
       <ShareBlock
