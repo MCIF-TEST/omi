@@ -4,6 +4,10 @@ Proves: OFF by default (no logs, byte-identical behavior); ON -> a HF REQUEST ba
 model, prompt hash, package hash, request body) before sending and a HF RESPONSE banner (status,
 headers, RAW body verbatim — unparsed) after receiving; secrets are redacted; and the returned
 result is identical whether the flag is on or off (instrumentation only, never alters the response).
+
+Critically, the banners are emitted straight to **stdout** (not through the logging level stack), so
+they survive whatever ``OMI_LOG_LEVEL`` production runs at — the regression that made them invisible
+in the deployed Render logs. ``test_banners_survive_warning_root_logger`` is the proof of that fix.
 """
 from __future__ import annotations
 
@@ -54,20 +58,19 @@ def _complete():
         return p.complete(ReasoningRequest(system="SYS_PROMPT", user="USR_MSG", response_format="json"))
 
 
-def test_forensic_off_by_default(caplog):
+def test_forensic_off_by_default(capsys):
     assert forensic_on() is False
-    with caplog.at_level(logging.INFO, logger="omi.reasoning.forensic"):
-        out = _complete()
-    assert "HF REQUEST" not in caplog.text and "HF RESPONSE" not in caplog.text
+    out = _complete()
+    captured = capsys.readouterr().out
+    assert "HF REQUEST" not in captured and "HF RESPONSE" not in captured
     assert out.structured == {"ok": 1}                       # behaves exactly as today
 
 
-def test_forensic_on_logs_request_then_raw_response(monkeypatch, caplog):
+def test_forensic_on_logs_request_then_raw_response(monkeypatch, capsys):
     monkeypatch.setenv("OMI_FORENSIC_CAPTURE", "true")
     assert forensic_on() is True
-    with caplog.at_level(logging.INFO, logger="omi.reasoning.forensic"):
-        out = _complete()
-    t = caplog.text
+    out = _complete()
+    t = capsys.readouterr().out
     # request banner + fields
     assert "HF REQUEST" in t
     assert "http://ep/v1/chat/completions" in t
@@ -80,18 +83,36 @@ def test_forensic_on_logs_request_then_raw_response(monkeypatch, caplog):
     assert '"choices"' in t and '"content": "{\\"ok\\": 1}"' in t  # raw JSON as returned
     assert "<redacted>" in t                                  # Authorization header scrubbed
     assert "hf_secret_xyz" not in t                           # the secret value never leaks
+    # request banner precedes response banner (order preserved)
+    assert t.index("HF REQUEST") < t.index("HF RESPONSE")
     # the response is UNCHANGED by logging
     assert out.structured == {"ok": 1}
 
 
-def test_request_body_redacts_token_shapes(monkeypatch, caplog):
+def test_banners_survive_warning_root_logger(monkeypatch, capsys):
+    """The regression proof: with the root logger at WARNING (production default), the old
+    ``_forensic_log.info(...)`` banners were dropped. The stdout emit must still appear."""
+    monkeypatch.setenv("OMI_FORENSIC_CAPTURE", "true")
+    root = logging.getLogger()
+    prior = root.level
+    root.setLevel(logging.WARNING)
+    try:
+        out = _complete()
+    finally:
+        root.setLevel(prior)
+    t = capsys.readouterr().out
+    assert "HF REQUEST" in t and "HF RESPONSE" in t           # visible despite WARNING-level root
+    assert out.structured == {"ok": 1}
+
+
+def test_request_body_redacts_token_shapes(monkeypatch, capsys):
     monkeypatch.setenv("OMI_FORENSIC_CAPTURE", "true")
     # a prompt that accidentally contains a token-shaped string must be scrubbed in the log
     p = RemoteReasoningProvider(endpoint_url="http://ep", api="messages", model="M", max_retries=0)
     with patch("app.reasoning.model_providers.remote.urllib.request.urlopen", return_value=_Resp()):
-        with caplog.at_level(logging.INFO, logger="omi.reasoning.forensic"):
-            p.complete(ReasoningRequest(system="leak hf_ABCDEF123456 here", user="U", response_format="json"))
-    assert "hf_ABCDEF123456" not in caplog.text and "<redacted>" in caplog.text
+        p.complete(ReasoningRequest(system="leak hf_ABCDEF123456 here", user="U", response_format="json"))
+    t = capsys.readouterr().out
+    assert "hf_ABCDEF123456" not in t and "<redacted>" in t
 
 
 def test_result_identical_on_vs_off(monkeypatch):

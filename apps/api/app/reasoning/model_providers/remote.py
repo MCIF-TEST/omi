@@ -53,6 +53,31 @@ def forensic_on() -> bool:
     return os.environ.get("OMI_FORENSIC_CAPTURE", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _emit_forensic(text: str) -> None:
+    """Emit a forensic banner so it ALWAYS reaches the platform logs.
+
+    Root cause of the missing banners in production: the previous implementation used
+    ``_forensic_log.info(...)``. In production ``OMI_LOG_LEVEL`` is above INFO (e.g. WARNING),
+    so ``_configure_logging()`` sets the root level above INFO and every INFO record — including
+    these banners — is dropped before any handler sees it. The flag was on and the code was
+    deployed, but the framework silently suppressed the output.
+
+    The fix bypasses the logging level/formatter/handler stack entirely: write straight to
+    stdout with an explicit flush. Render (and every other platform) captures process stdout,
+    so the banner is visible whenever ``OMI_FORENSIC_CAPTURE`` is set, at any log level.
+    A second (best-effort) emit at WARNING keeps the banner in the structured JSON log for
+    environments that scrape the logger instead of raw stdout; it is never relied upon and can
+    never raise. Emission must never perturb the request path, so everything is guarded."""
+    try:
+        print(text, flush=True)
+    except Exception:  # noqa: BLE001 — forensic emission must never break the request
+        pass
+    try:
+        _forensic_log.warning("%s", text)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _redact(text: str) -> str:
     """Scrub anything token-shaped. The wire body carries no secrets (the token rides in headers),
     but this is defensive per 'redact secrets only'."""
@@ -71,20 +96,19 @@ def _safe_headers(headers) -> dict:
 
 def _log_hf_request(*, endpoint_url: str, model: str, prompt_hash: str | None,
                     package_hash: str | None, body: bytes) -> None:
-    _forensic_log.info(
+    decoded = body.decode("utf-8", "replace") if isinstance(body, (bytes, bytearray)) else str(body)
+    _emit_forensic(
         "\n=====================\nHF REQUEST\n=====================\n"
-        "Endpoint URL : %s\nModel ID     : %s\nPrompt hash  : %s\nPackage hash : %s\n"
-        "Request body : %s",
-        endpoint_url, model or "(unset)", prompt_hash or "n/a", package_hash or "n/a",
-        _redact(body.decode("utf-8", "replace") if isinstance(body, (bytes, bytearray)) else str(body)))
+        f"Endpoint URL : {endpoint_url}\nModel ID     : {model or '(unset)'}\n"
+        f"Prompt hash  : {prompt_hash or 'n/a'}\nPackage hash : {package_hash or 'n/a'}\n"
+        f"Request body : {_redact(decoded)}")
 
 
 def _log_hf_response(status, headers, raw_body) -> None:
     body = raw_body.decode("utf-8", "replace") if isinstance(raw_body, (bytes, bytearray)) else str(raw_body)
-    _forensic_log.info(
+    _emit_forensic(
         "\n=====================\nHF RESPONSE\n=====================\n"
-        "HTTP status : %s\nHeaders     : %s\nRaw body    : %s",
-        status, _safe_headers(headers), body)
+        f"HTTP status : {status}\nHeaders     : {_safe_headers(headers)}\nRaw body    : {body}")
 
 
 def strip_thinking(text: str) -> str:
