@@ -253,7 +253,8 @@ def _trace_settings(settings: Settings) -> Any:
     mechanics even when the production flag is off (the actual flag state is reported separately)."""
     keys = ("analyst_hf_repo", "analyst_hf_revision", "analyst_endpoint_url",
             "analyst_timeout_seconds", "analyst_max_retries", "analyst_prompt_version",
-            "analyst_endpoint_api")
+            "analyst_endpoint_api", "analyst_model_id", "memory_persistence_enabled",
+            "memory_database_url", "analyst_cost_per_1k_tokens_usd")
     return SimpleNamespace(analyst_enabled=True, **{k: getattr(settings, k, None) for k in keys})
 
 
@@ -382,4 +383,132 @@ def trace_investigation(payload: dict, *, ref: str, platform: str = "youtube",
     }
 
 
-__all__ = ["prompt_integrity", "endpoint_health", "endpoint_smoke_test", "system_health", "trace_investigation"]
+# --------------------------------------------------------------------------- #
+# Forensic audit — capture every stage of ONE investigation (endpoint untrusted)
+# --------------------------------------------------------------------------- #
+import logging as _logging
+
+_audit_log = _logging.getLogger("omi.reasoning.audit")
+
+
+def _fallback_reason(gov: dict, provider: str, model_backed: bool, model_call_made: bool,
+                     raw: str | None) -> str | None:
+    """Exact reason a fallback occurred, or ``None`` when the model answer was used.
+
+    Two distinct fallback causes: the Governor REJECTED valid model output (its ``rejected_codes``),
+    or the model output never got that far — it wasn't schema-valid JSON, so the judge substituted
+    the floor BEFORE the Governor (which then permits the floor). No endpoint => no model call."""
+    if model_backed:
+        return None
+    if gov.get("verdict") == "reject":
+        return f"governor_reject: {gov.get('rejected_codes') or gov.get('violation_codes')}"
+    if not model_call_made:
+        return "no_model_call (endpoint unset/unreachable) -> deterministic floor"
+    if "fallback" in provider:
+        return ("model_output_not_schema_valid_json (endpoint returned non-JSON / invalid / "
+                "unschema output; the judge fell back to the floor before the Governor)")
+    return "deterministic_floor"
+
+
+def audit_investigation(payload: dict, *, ref: str, platform: str = "youtube",
+                        settings: Settings | None = None) -> dict:
+    """Run the REAL production analyst path over ``payload`` ONCE with full capture, treating the
+    Hugging Face endpoint as untrusted, and return per-stage evidence that PROVES or DISPROVES each
+    link. It is the production path (``assess_payload``) with a forensic sidecar — not a
+    reimplementation — so the evidence reflects real behavior. Read-only; never raises.
+
+    Captures the six required items, each with a status:
+      1. the exact final prompt (system + user) sent to the endpoint,
+      2. the prompt version/hash loaded from the (HF-published) AI package,
+      3. the model id the endpoint returned,
+      4. the raw model response BEFORE any Governor/JSON processing,
+      5. the Governor verdict + exact rejection reason (if it fell back),
+      6. whether the report renders the model response or the deterministic floor.
+    """
+    settings = settings or get_settings()
+    from app.reasoning import analyst as _analyst
+
+    capture: dict = {}
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    expected_model = getattr(settings, "analyst_model_id", None)
+    t0 = time.perf_counter()
+    try:
+        assessment = _analyst.assess_payload(
+            payload, ref=ref, platform=platform, settings=_trace_settings(settings), capture=capture)
+    except Exception as exc:  # noqa: BLE001 — report, never raise
+        return {"status": "error", "detail": f"{type(exc).__name__}: {str(exc)[:200]}", "capture": capture}
+    total_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+
+    gov = (assessment or {}).get("governance", {}) if assessment else {}
+    provider = str(gov.get("provider", "none"))
+    model_backed = bool(assessment) and ("fallback" not in provider) and ("deterministic" not in provider)
+    raw = capture.get("raw_text_pre_processing")
+    served = capture.get("served_model")
+    model_call_made = "request_wire_body" in capture
+
+    def _st(ok: bool | None, proven: str, disproven: str, unverified: str = "UNVERIFIED") -> str:
+        return proven if ok is True else (disproven if ok is False else unverified)
+
+    items = {
+        "1_final_prompt_sent": {
+            "status": _st(model_call_made, "PROVEN", "DISPROVEN (no model call — floor served)"),
+            "endpoint_url": capture.get("endpoint_url"), "endpoint_api": capture.get("endpoint_api"),
+            "system_prompt": capture.get("final_prompt_system"),
+            "user_message": capture.get("final_prompt_user"),
+            "wire_body_preview": (capture.get("request_wire_body") or "")[:600],
+        },
+        "2_prompt_version_hash": {
+            "status": _st(bool(capture.get("prompt_hash")), "PROVEN", "DISPROVEN"),
+            "prompt_version": capture.get("prompt_version"), "prompt_hash": capture.get("prompt_hash"),
+            "ai_package": capture.get("ai_package"),
+        },
+        "3_served_model_id": {
+            "status": _st(_models_match(served, expected_model), "PROVEN (matches expected)",
+                          "DISPROVEN (WRONG MODEL)", "UNVERIFIED (no model id in response / no call)"),
+            "served_model": served, "expected_model": expected_model,
+        },
+        "4_raw_model_response": {
+            "status": _st((raw is not None) if model_call_made else None, "PROVEN", "DISPROVEN"),
+            "raw_text_pre_governor": raw,
+            "raw_response_body_preview": (capture.get("raw_response_body") or "")[:600],
+            "attempts": capture.get("attempts"), "latency_ms": capture.get("latency_ms"),
+        },
+        "5_governor": {
+            "status": _st(gov.get("verdict") in ("permit", "reject"), "PROVEN", "DISPROVEN"),
+            "verdict": gov.get("verdict"), "trace_id": gov.get("trace_id"),
+            "violation_codes": gov.get("violation_codes", []),
+            "fallback_occurred": not model_backed,
+            "fallback_reason": _fallback_reason(gov, provider, model_backed, model_call_made, raw),
+            "governor_rejected_codes": gov.get("rejected_codes"),
+            "fallback_from": gov.get("fallback_from"),
+            "constitution_version": gov.get("constitution_version"),
+        },
+        "6_report_renders": {
+            "status": "MODEL" if model_backed else "DETERMINISTIC_FLOOR",
+            "provider": provider, "model_backed": model_backed,
+            "note": ("the UI/report renders exactly this persisted assessment; provider identifies "
+                     "the source (model vs floor)"),
+        },
+    }
+
+    # Log each item (truncated) so Render logs carry the same forensic trail.
+    for key in ("1_final_prompt_sent", "2_prompt_version_hash", "3_served_model_id",
+                "4_raw_model_response", "5_governor", "6_report_renders"):
+        _audit_log.info("audit[%s] %s = %s", ref, key, str(items[key].get("status")))
+    _audit_log.info("audit[%s] served_model=%s expected=%s | governor=%s provider=%s | prompt_hash=%s",
+                    ref, served, expected_model, gov.get("verdict"), provider, capture.get("prompt_hash"))
+
+    endpoint_trusted = bool(model_backed and _models_match(served, expected_model) is not False)
+    return {
+        "status": "ok",
+        "ref": ref, "platform": platform,
+        "endpoint_configured": bool(endpoint),
+        "total_ms": total_ms,
+        "endpoint_trust_verdict": ("TRUSTED (model-backed, permitted, model id verified)" if endpoint_trusted
+                                   else "NOT TRUSTED (floor served, or model id unverified/wrong)"),
+        "items": items,
+    }
+
+
+__all__ = ["prompt_integrity", "endpoint_health", "endpoint_smoke_test", "system_health",
+           "trace_investigation", "audit_investigation"]

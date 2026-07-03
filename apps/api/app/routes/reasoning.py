@@ -186,3 +186,25 @@ def analyst_trace(slug: str, current: CurrentUser = Depends(require_user)) -> di
         payload = inv.payload_json or {}
         ref, platform = analyst._ref(inv.slug), analyst._platform_of(inv)
     return {"slug": slug, "trace": trace_investigation(payload, ref=ref, platform=platform)}
+
+
+@router.post("/{slug}/analyst/audit")
+def analyst_audit(slug: str, current: CurrentUser = Depends(require_user)) -> dict:
+    """Forensic single-investigation audit (endpoint UNTRUSTED): run the REAL analyst path once with
+    full capture and return per-stage evidence — the exact final prompt sent, the prompt
+    version/hash from the AI package, the served model id, the raw model response before the
+    Governor, the Governor verdict + rejection reason on fallback, and whether the report renders the
+    model or the deterministic floor. Read-only; reuses the production runtime; also written to the
+    Render log (``omi.reasoning.audit``)."""
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+    from app.reasoning.trace import audit_investigation
+
+    with get_session() as session:
+        inv = AccountRepository(session).get_investigation(
+            slug=slug, user_id=current.id if current.id != 0 else None)
+        if inv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found.")
+        payload = inv.payload_json or {}
+        ref, platform = analyst._ref(inv.slug), analyst._platform_of(inv)
+    return {"slug": slug, "audit": audit_investigation(payload, ref=ref, platform=platform)}

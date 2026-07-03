@@ -47,7 +47,7 @@ def analyst_enabled(settings: Settings | None = None) -> bool:
 
 
 def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision: str | None,
-                    api: str = "generate", model: str | None = None):
+                    api: str = "generate", model: str | None = None, capture: dict | None = None):
     """The ONE Qwen HTTP transport (Sprint 017). The production analyst's model call goes through
     the constitutional ``RemoteReasoningProvider`` — the same HF client the council uses — instead
     of a second bespoke HTTP implementation. ``api`` selects the raw ``generate`` or OpenAI-
@@ -60,7 +60,7 @@ def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision
 
     provider = RemoteReasoningProvider(
         endpoint_url=endpoint, model=model or "", timeout=timeout, max_retries=max_retries,
-        revision=revision, api=api)
+        revision=revision, api=api, capture=capture)
 
     def _call(system: str, user: str, config: Any) -> str | None:
         t0 = time.perf_counter()
@@ -331,6 +331,7 @@ def _assessment_metrics(governed: dict, gov: dict, settings: Settings, *, store_
 
 def assess_payload(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
+    capture: dict | None = None,
 ) -> dict | None:
     """Produce a Governor-validated structured assessment for an investigation payload, or None if
     the feature is off / unavailable / errored. Never raises.
@@ -363,6 +364,11 @@ def assess_payload(
         # investigation reasons with — content-addressed, recorded on every assessment for reproducibility.
         from app.reasoning.package import load_ai_package
         ai_package = load_ai_package(getattr(settings, "analyst_model_id", None))
+        if capture is not None:
+            # Item 2 — the prompt version/hash loaded from the (HF-published) package.
+            capture["prompt_version"] = spec.prompt_version
+            capture["prompt_hash"] = spec.prompt_hash
+            capture["ai_package"] = ai_package.provenance()
 
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
@@ -373,7 +379,7 @@ def assess_payload(
                 endpoint, timeout=timeout,
                 max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
                 revision=getattr(settings, "analyst_hf_revision", None),
-                api=api, model=model_id)
+                api=api, model=model_id, capture=capture)
             provider = impl.QwenAnalystProvider(
                 endpoint_url=endpoint, timeout=timeout, system_prompt=spec.template, transport=transport)
             logger.info("analyst.assess: REMOTE provider selected ref=%s endpoint=%s api=%s model=%s "
