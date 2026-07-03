@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Brain, Loader2, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react';
-import { Card, CardLabel, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Brain, Loader2, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import {
   apiClient,
@@ -109,20 +108,16 @@ export function AnalystPanel({ slug }: { slug: string }) {
           turned on — the investigation evidence above is unaffected.
         </p>
       ) : !assessment ? (
-        <>
-          <CardTitle>No assessment yet</CardTitle>
-          <p className="text-sm text-fg-dim mb-4 max-w-xl">
-            Generate the Omi Analyst&apos;s structured reading of this investigation —
-            a recommended verdict with calibrated confidence, the evidence for and
-            against, and what would change the conclusion. It interprets the evidence
-            the engine already produced; it never recomputes a score.
-          </p>
-          <Button onClick={() => run(false)} disabled={pending}>
-            {pending ? <><Loader2 size={14} className="animate-spin" /> Reasoning…</> : <><Brain size={14} /> Generate assessment</>}
-          </Button>
-        </>
+        // The analyst runs automatically for every investigation — no manual generation.
+        // Surface the in-progress / pending state; the assessment fills in when ready.
+        <p className="text-sm text-fg-dim flex items-start gap-2">
+          <Loader2 size={14} className={`mt-0.5 shrink-0 text-fg-mute${pending ? ' animate-spin' : ''}`} />
+          {pending
+            ? 'Reasoning over the investigation evidence…'
+            : 'The Omi Analyst’s structured reading of this investigation will appear here. It interprets the evidence the engine already produced; it never recomputes a score.'}
+        </p>
       ) : (
-        <AssessmentView a={assessment} pending={pending} onRefresh={() => run(true)} />
+        <AssessmentView a={assessment} />
       )}
 
       {error && (
@@ -142,9 +137,7 @@ function verdictLabel(v: string): string {
   return (VERDICT_LABELS as Record<string, string>)[v] ?? v;
 }
 
-function AssessmentView({
-  a, pending, onRefresh,
-}: { a: AnalystAssessment; pending: boolean; onRefresh: () => void }) {
+function AssessmentView({ a }: { a: AnalystAssessment }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -182,10 +175,6 @@ function AssessmentView({
           {a.limits_statement}
         </p>
       )}
-
-      <Button variant="secondary" size="sm" onClick={onRefresh} disabled={pending}>
-        {pending ? <><Loader2 size={12} className="animate-spin" /> Regenerating…</> : <><RefreshCw size={12} /> Regenerate</>}
-      </Button>
     </div>
   );
 }

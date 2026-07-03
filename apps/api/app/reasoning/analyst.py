@@ -289,6 +289,46 @@ class _AnalystFloor:
         return [Ruling(module=self.contract.module, assessment=result.response)]
 
 
+# --------------------------------------------------------------------------- #
+# Runtime measurement — per-investigation metrics + cache effectiveness
+# --------------------------------------------------------------------------- #
+_cache_stats = {"served_from_cache": 0, "generated": 0}
+
+
+def runtime_metrics() -> dict:
+    """Process-lifetime AI runtime counters (cache effectiveness). Read-only; cheap; never raises."""
+    c = dict(_cache_stats)
+    total = c["served_from_cache"] + c["generated"]
+    return {"assessment_cache": {**c, "total": total,
+                                 "hit_rate": round(c["served_from_cache"] / total, 4) if total else 0.0}}
+
+
+def _assessment_metrics(governed: dict, gov: dict, settings: Settings, *, store_ms: float,
+                        reasoning_ms: float, model_backed: bool, prompt_meta: dict) -> dict:
+    """Additive per-investigation measurement (never affects the assessment). App-measured latencies
+    are precise; token/cost are clearly-labeled completion-side ESTIMATES — authoritative token
+    usage is available from the endpoint's ``usage`` field (a Phase-2 capture in the provider)."""
+    import json as _json
+
+    model_ms = float(gov.get("latency_ms", 0.0) or 0.0)
+    payload_only = {k: v for k, v in governed.items() if k not in ("governance", "metrics")}
+    est_completion_tokens = round(len(_json.dumps(payload_only, ensure_ascii=False)) / 4)
+    rate = float(getattr(settings, "analyst_cost_per_1k_tokens_usd", 0.0) or 0.0)
+    return {
+        "total_reasoning_ms": round(reasoning_ms, 2),
+        "model_ms": round(model_ms, 2),
+        "governor_and_assembly_ms": round(max(0.0, reasoning_ms - model_ms), 2),
+        "memory_store_ms": round(store_ms, 2),
+        "memory_durable": bool(getattr(settings, "memory_persistence_enabled", False)),
+        "model_backed": model_backed,
+        "est_completion_tokens": est_completion_tokens,
+        "est_completion_cost_usd": round(est_completion_tokens / 1000.0 * rate, 6) if rate else None,
+        "token_source": "estimate:chars/4 (authoritative usage is endpoint-side)",
+        "prompt_version": prompt_meta.get("version"),
+        "prompt_hash": prompt_meta.get("hash"),
+    }
+
+
 def assess_payload(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
 ) -> dict | None:
@@ -319,6 +359,10 @@ def assess_payload(
         spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,
                        "hash": spec.prompt_hash, "source": "registry"}
+        # The canonical AI deployment package (published to HF; loaded from bundled data) that this
+        # investigation reasons with — content-addressed, recorded on every assessment for reproducibility.
+        from app.reasoning.package import load_ai_package
+        ai_package = load_ai_package(getattr(settings, "analyst_model_id", None))
 
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
@@ -344,20 +388,33 @@ def assess_payload(
         # Sprint 021 — wire institutional memory into the AI specialist's input. ``get_memory_store``
         # returns the durable store when memory persistence is enabled, else an empty in-memory store
         # (so retrieval naturally no-ops). Memory is CONTEXT only; it never moves the engine number.
+        t_store0 = time.perf_counter()
         from app.memory.repository import get_memory_store
         store = get_memory_store(settings)
+        store_ms = (time.perf_counter() - t_store0) * 1000.0
         judge = _AnalystJudge(impl=impl, config=config, provider=provider, payload=payload,
                               ref=ref, platform=platform, prompt_meta=prompt_meta, store=store)
         floor = _AnalystFloor(impl=impl, config=config, payload=payload, ref=ref,
                               platform=platform, model_revision=model_revision, store=store)
+        t_run0 = time.perf_counter()
         result = Orchestrator(modules=[], judge=judge, floor=floor).run(
             payload, ref=ref, platform=platform, grain="comment_section")
+        reasoning_ms = (time.perf_counter() - t_run0) * 1000.0
         governed = _attach_governance(result, judge=judge, floor=floor)
         gov = governed.get("governance", {})
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
-        logger.info("analyst.assess: DONE ref=%s provider=%s model_backed=%s governor=%s revision=%s",
-                    ref, prov, model_backed, gov.get("verdict"), gov.get("model_revision"))
+        governed["ai_package"] = ai_package.provenance()
+        governed["metrics"] = _assessment_metrics(
+            governed, gov, settings, store_ms=store_ms, reasoning_ms=reasoning_ms,
+            model_backed=model_backed, prompt_meta=prompt_meta)
+        governed["metrics"]["package_hash"] = ai_package.package_hash
+        m = governed["metrics"]
+        logger.info("analyst.assess: DONE ref=%s provider=%s model_backed=%s governor=%s revision=%s "
+                    "| metrics total=%.0fms model=%.0fms governor+assembly=%.0fms est_completion_tokens=%d",
+                    ref, prov, model_backed, gov.get("verdict"), gov.get("model_revision"),
+                    m["total_reasoning_ms"], m["model_ms"], m["governor_and_assembly_ms"],
+                    m["est_completion_tokens"])
         return governed
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")
@@ -530,7 +587,9 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
                             slug, user_id)
                 return None
             if not refresh and cached_assessment(inv):
-                logger.info("analyst.generate: slug=%s already has a cached assessment; no model call", slug)
+                _cache_stats["served_from_cache"] += 1
+                logger.info("analyst.generate: slug=%s already has a cached assessment; no model call "
+                            "(cache hit_rate=%.2f)", slug, runtime_metrics()["assessment_cache"]["hit_rate"])
                 return cached_assessment(inv)
             assessment = assess_payload(
                 inv.payload_json or {},
@@ -538,6 +597,7 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
             )
             if assessment is None:
                 return None
+            _cache_stats["generated"] += 1
             gov = assessment.get("governance") or {}
             provider = gov.get("provider") or assessment.get("model_revision", "omi-analyst")
             return persist_assessment(session, inv, assessment, provider)
