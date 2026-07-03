@@ -209,6 +209,13 @@ class Settings(BaseSettings):
     # Blended $/1k tokens for the served model, used only to annotate the per-investigation
     # metrics block with a cost estimate. 0.0 -> cost is reported as null (no guess).
     analyst_cost_per_1k_tokens_usd: float = 0.0
+    # Phase B — how the analyst SYSTEM prompt is assembled from the HF package.
+    #   "registry" (default): the validated base omi_analyst prompt only (current behavior).
+    #   "package": base prompt + constitution (governance/reasoning rules) + Knowledge Library,
+    #   assembled by app.reasoning.prompt_builder.PromptBuilder. Flipping to "package" CHANGES what
+    #   the model receives and MUST be validated against the live endpoint (control-FPR must not
+    #   regress) before production — verify via POST /v1/investigations/{slug}/analyst/audit.
+    analyst_prompt_assembly: str = "registry"
     # Active prompt version for the AI behavior analyst (None -> registry default / rollback).
     analyst_prompt_version: str | None = None
     # Context Builder mode/budget for AI specialists ("raw" baseline | "structured").

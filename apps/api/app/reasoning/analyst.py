@@ -47,7 +47,7 @@ def analyst_enabled(settings: Settings | None = None) -> bool:
 
 
 def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision: str | None,
-                    api: str = "generate", model: str | None = None):
+                    api: str = "generate", model: str | None = None, capture: dict | None = None):
     """The ONE Qwen HTTP transport (Sprint 017). The production analyst's model call goes through
     the constitutional ``RemoteReasoningProvider`` — the same HF client the council uses — instead
     of a second bespoke HTTP implementation. ``api`` selects the raw ``generate`` or OpenAI-
@@ -60,7 +60,7 @@ def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision
 
     provider = RemoteReasoningProvider(
         endpoint_url=endpoint, model=model or "", timeout=timeout, max_retries=max_retries,
-        revision=revision, api=api)
+        revision=revision, api=api, capture=capture)
 
     def _call(system: str, user: str, config: Any) -> str | None:
         t0 = time.perf_counter()
@@ -295,6 +295,35 @@ class _AnalystFloor:
 _cache_stats = {"served_from_cache": 0, "generated": 0}
 
 
+# Phase B — the origin of every report field: the MODEL reasons over the evidence and generates the
+# analytical conclusions; the deterministic engine produces the authoritative measurable signals,
+# which the model ECHOES and must never override (echo discipline). This map is the architectural
+# contract surfaced in the forensic audit (items 8 & 9).
+_MODEL_GENERATED_FIELDS = (
+    "verdict", "confidence_band", "confidence_rationale", "headline", "assessment",
+    "evidence_for", "evidence_against", "uncertainty", "what_would_change_this",
+    "limits_statement", "coordination_label", "legitimate_hypothesis", "supplemental_context",
+)
+_DETERMINISTIC_ECHOED_FIELDS = ("suspicion_probability", "suspicion_tier")
+_SYSTEM_FIELDS = ("governance", "ai_package", "prompt_build", "metrics", "subject",
+                  "analyst_version", "prompt_version", "schema_version", "model_revision")
+
+
+def field_provenance() -> dict:
+    """Which report fields originate from the model vs the deterministic engine vs the system.
+    Static architectural contract (Phase-B items 8/9): the AI is the analyst (it generates the
+    reasoning), the deterministic engine is the evidence source (its measurable numbers are echoed,
+    never overridden), and the Governor/package fields are system provenance."""
+    return {
+        "model_generated": list(_MODEL_GENERATED_FIELDS),
+        "deterministic_echoed": list(_DETERMINISTIC_ECHOED_FIELDS),
+        "system_provenance": list(_SYSTEM_FIELDS),
+        "doctrine": ("the model generates the analytical conclusions FROM the evidence; the engine's "
+                     "suspicion_probability/tier are authoritative measurable signals the model echoes "
+                     "and never moves (echo discipline); the Governor re-validates every field"),
+    }
+
+
 def runtime_metrics() -> dict:
     """Process-lifetime AI runtime counters (cache effectiveness). Read-only; cheap; never raises."""
     c = dict(_cache_stats)
@@ -331,6 +360,7 @@ def _assessment_metrics(governed: dict, gov: dict, settings: Settings, *, store_
 
 def assess_payload(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
+    capture: dict | None = None,
 ) -> dict | None:
     """Produce a Governor-validated structured assessment for an investigation payload, or None if
     the feature is off / unavailable / errored. Never raises.
@@ -363,6 +393,19 @@ def assess_payload(
         # investigation reasons with — content-addressed, recorded on every assessment for reproducibility.
         from app.reasoning.package import load_ai_package
         ai_package = load_ai_package(getattr(settings, "analyst_model_id", None))
+        # Phase B — the Prompt Builder assembles the analyst SYSTEM prompt from the HF package
+        # (base prompt + constitution + knowledge) when analyst_prompt_assembly="package"; the
+        # default "registry" returns the validated base prompt unchanged (byte-identical behavior).
+        from app.reasoning.prompt_builder import PromptBuilder
+        prompt_mode = str(getattr(settings, "analyst_prompt_assembly", "registry") or "registry")
+        built = PromptBuilder(ai_package).build_system(base_system=spec.template, mode=prompt_mode)
+        system_prompt = built.system
+        if capture is not None:
+            # Item 2 — the prompt version/hash loaded from the (HF-published) package.
+            capture["prompt_version"] = spec.prompt_version
+            capture["prompt_hash"] = spec.prompt_hash
+            capture["ai_package"] = ai_package.provenance()
+            capture["prompt_build"] = built.manifest
 
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
@@ -373,12 +416,13 @@ def assess_payload(
                 endpoint, timeout=timeout,
                 max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
                 revision=getattr(settings, "analyst_hf_revision", None),
-                api=api, model=model_id)
+                api=api, model=model_id, capture=capture)
             provider = impl.QwenAnalystProvider(
-                endpoint_url=endpoint, timeout=timeout, system_prompt=spec.template, transport=transport)
+                endpoint_url=endpoint, timeout=timeout, system_prompt=system_prompt, transport=transport)
             logger.info("analyst.assess: REMOTE provider selected ref=%s endpoint=%s api=%s model=%s "
-                        "prompt=%s(%s) -> model call will be made",
-                        ref, _redact_endpoint(endpoint), api, model_id, spec.prompt_version, spec.prompt_hash)
+                        "prompt=%s(%s) assembly=%s -> model call will be made",
+                        ref, _redact_endpoint(endpoint), api, model_id, spec.prompt_version,
+                        spec.prompt_hash, prompt_mode)
         else:
             provider = impl.DeterministicAnalystProvider()
             logger.info("analyst.assess: no analyst_endpoint_url configured ref=%s -> deterministic "
@@ -405,6 +449,7 @@ def assess_payload(
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
         governed["ai_package"] = ai_package.provenance()
+        governed["prompt_build"] = built.manifest
         governed["metrics"] = _assessment_metrics(
             governed, gov, settings, store_ms=store_ms, reasoning_ms=reasoning_ms,
             model_backed=model_backed, prompt_meta=prompt_meta)

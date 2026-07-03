@@ -147,6 +147,11 @@ class RemoteReasoningProvider:
     token_env: tuple[str, ...] = ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN")
     backoff_cap: float = 2.0
     name: str = "remote-hf"
+    # Optional forensic sidecar. When a dict is supplied, ``complete`` records the EXACT wire body,
+    # the final system/user prompt, the raw response body, the served model id, and the pre-Governor
+    # raw text into it. Off the production hot path (None by default) — pure observability, never
+    # alters the request, the response, or control flow.
+    capture: dict | None = None
 
     def _token(self) -> str | None:
         for key in self.token_env:
@@ -191,7 +196,17 @@ class RemoteReasoningProvider:
                 "max_tokens": request.max_tokens,
                 "stream": bool(request.stream),
             }).encode("utf-8")
-            return body, _extract_message, assemble_message_stream
+
+            def parse(raw: bytes) -> str:
+                if self.capture is not None:
+                    self.capture["raw_response_body"] = raw.decode("utf-8", "replace")[:12000]
+                    try:
+                        self.capture["served_model"] = json.loads(raw).get("model")
+                    except Exception:  # noqa: BLE001
+                        self.capture["served_model"] = None
+                return _extract_message(raw)
+
+            return body, parse, assemble_message_stream
         body = json.dumps({
             "inputs": f"<|system|>\n{request.system}\n<|user|>\n{request.user}",
             "parameters": {
@@ -201,7 +216,14 @@ class RemoteReasoningProvider:
             },
             "stream": bool(request.stream),
         }).encode("utf-8")
-        return body, _extract_generated, assemble_stream
+
+        def parse_gen(raw: bytes) -> str:
+            if self.capture is not None:
+                self.capture["raw_response_body"] = raw.decode("utf-8", "replace")[:12000]
+                self.capture["served_model"] = None  # raw TGI /generate does not echo the model id
+            return _extract_generated(raw)
+
+        return body, parse_gen, assemble_stream
 
     def complete(self, request: ReasoningRequest) -> ReasoningResponse:
         token = self._token()
@@ -209,10 +231,23 @@ class RemoteReasoningProvider:
             raise ProviderUnavailable("reasoning endpoint or token is not configured")
         body, parse, parse_stream = self._request_body(request)
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        if self.capture is not None:
+            self.capture["endpoint_url"] = self.endpoint_url
+            self.capture["endpoint_api"] = self.api
+            self.capture["configured_model"] = self.model
+            self.capture["revision"] = self.revision
+            self.capture["request_wire_body"] = body.decode("utf-8", "replace")[:12000]
+            self.capture["final_prompt_system"] = request.system
+            self.capture["final_prompt_user"] = request.user
 
         t0 = time.perf_counter()
         text, attempts = self._fetch(body, headers, request.stream, parse, parse_stream)
         latency_ms = (time.perf_counter() - t0) * 1000.0
+        if self.capture is not None:
+            # The RAW model text, BEFORE thinking-strip / JSON-extract / Governor.
+            self.capture["raw_text_pre_processing"] = (text or "")[:12000]
+            self.capture["attempts"] = attempts
+            self.capture["latency_ms"] = round(latency_ms, 2)
 
         text = strip_thinking(text)
         structured = extract_json(text) if request.response_format == "json" else None
