@@ -159,11 +159,12 @@ def analyst_integrity(current: CurrentUser = Depends(require_user)) -> dict:
     No secrets — token presence is a boolean."""
     if not current.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+    from app.reasoning import analyst
     from app.reasoning.trace import endpoint_health, prompt_integrity, system_health
 
     settings = get_settings()
     return {"prompt_integrity": prompt_integrity(settings), "endpoint_health": endpoint_health(settings),
-            "system_health": system_health(settings)}
+            "system_health": system_health(settings), "runtime_metrics": analyst.runtime_metrics()}
 
 
 @router.post("/{slug}/analyst/trace")

@@ -206,6 +206,9 @@ class Settings(BaseSettings):
     # chat template server-side. Set this to match the endpoint you deploy; the URL
     # must already point at the right route. No guessing — the operator chooses.
     analyst_endpoint_api: str = "generate"
+    # Blended $/1k tokens for the served model, used only to annotate the per-investigation
+    # metrics block with a cost estimate. 0.0 -> cost is reported as null (no guess).
+    analyst_cost_per_1k_tokens_usd: float = 0.0
     # Active prompt version for the AI behavior analyst (None -> registry default / rollback).
     analyst_prompt_version: str | None = None
     # Context Builder mode/budget for AI specialists ("raw" baseline | "structured").
