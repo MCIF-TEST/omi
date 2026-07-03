@@ -254,7 +254,7 @@ def _trace_settings(settings: Settings) -> Any:
     keys = ("analyst_hf_repo", "analyst_hf_revision", "analyst_endpoint_url",
             "analyst_timeout_seconds", "analyst_max_retries", "analyst_prompt_version",
             "analyst_endpoint_api", "analyst_model_id", "memory_persistence_enabled",
-            "memory_database_url", "analyst_cost_per_1k_tokens_usd")
+            "memory_database_url", "analyst_cost_per_1k_tokens_usd", "analyst_prompt_assembly")
     return SimpleNamespace(analyst_enabled=True, **{k: getattr(settings, k, None) for k in keys})
 
 
@@ -488,6 +488,19 @@ def audit_investigation(payload: dict, *, ref: str, platform: str = "youtube",
             "provider": provider, "model_backed": model_backed,
             "note": ("the UI/report renders exactly this persisted assessment; provider identifies "
                      "the source (model vs floor)"),
+        },
+        "7_deterministic_fallback": {
+            "status": "OCCURRED" if not model_backed else "NONE",
+            "fallback_reason": _fallback_reason(gov, provider, model_backed, model_call_made, raw),
+        },
+        "8_9_field_provenance": _analyst.field_provenance(),
+        "10_identity": {
+            "package_hash": (capture.get("ai_package") or {}).get("package_hash"),
+            "prompt_hash": capture.get("prompt_hash"),
+            "prompt_assembly": (capture.get("prompt_build") or {}).get("mode"),
+            "system_prompt_sha": (capture.get("prompt_build") or {}).get("system_prompt_sha"),
+            "knowledge_entries_used": (capture.get("prompt_build") or {}).get("knowledge_entries_used"),
+            "served_model": served, "model_revision": gov.get("model_revision"),
         },
     }
 

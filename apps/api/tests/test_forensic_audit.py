@@ -150,6 +150,10 @@ def test_audit_endpoint_route_admin_only_and_shapes():
     with TestClient(app) as tc:  # local mode -> synthetic admin
         body = tc.post("/v1/investigations/inv_audit_1/analyst/audit").json()
     assert body["slug"] == "inv_audit_1"
-    assert set(body["audit"]["items"]) == {
-        "1_final_prompt_sent", "2_prompt_version_hash", "3_served_model_id",
-        "4_raw_model_response", "5_governor", "6_report_renders"}
+    keys = set(body["audit"]["items"])
+    assert {"1_final_prompt_sent", "2_prompt_version_hash", "3_served_model_id",
+            "4_raw_model_response", "5_governor", "6_report_renders",
+            "7_deterministic_fallback", "8_9_field_provenance", "10_identity"} <= keys
+    # items 8/9 — field provenance is present and non-empty
+    fp = body["audit"]["items"]["8_9_field_provenance"]
+    assert fp["model_generated"] and fp["deterministic_echoed"]
