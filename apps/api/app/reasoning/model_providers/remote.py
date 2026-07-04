@@ -16,10 +16,12 @@ Stdlib-only (``urllib``) — no new dependency; mirrors the proven Sprint-003 Qw
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import socket
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Iterable
@@ -34,6 +36,79 @@ from .base import (
 )
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+# --------------------------------------------------------------------------- #
+# Temporary forensic capture — OMI_FORENSIC_CAPTURE=true logs the EXACT HF wire
+# request + the raw response, unparsed. Off by default: when the flag is unset or
+# false, none of this runs and the transport behaves byte-identically. Logging
+# only — it never touches the request, the response, or control flow.
+# --------------------------------------------------------------------------- #
+_forensic_log = logging.getLogger("omi.reasoning.forensic")
+_SECRET_HEADERS = {"authorization", "set-cookie", "cookie", "x-api-key", "api-key"}
+_TOKEN_RE = re.compile(r"(hf_[A-Za-z0-9]+|Bearer\s+\S+)")
+
+
+def forensic_on() -> bool:
+    """True only when OMI_FORENSIC_CAPTURE is explicitly enabled. Read at call time."""
+    return os.environ.get("OMI_FORENSIC_CAPTURE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _emit_forensic(text: str) -> None:
+    """Emit a forensic banner so it ALWAYS reaches the platform logs.
+
+    Root cause of the missing banners in production: the previous implementation used
+    ``_forensic_log.info(...)``. In production ``OMI_LOG_LEVEL`` is above INFO (e.g. WARNING),
+    so ``_configure_logging()`` sets the root level above INFO and every INFO record — including
+    these banners — is dropped before any handler sees it. The flag was on and the code was
+    deployed, but the framework silently suppressed the output.
+
+    The fix bypasses the logging level/formatter/handler stack entirely: write straight to
+    stdout with an explicit flush. Render (and every other platform) captures process stdout,
+    so the banner is visible whenever ``OMI_FORENSIC_CAPTURE`` is set, at any log level.
+    A second (best-effort) emit at WARNING keeps the banner in the structured JSON log for
+    environments that scrape the logger instead of raw stdout; it is never relied upon and can
+    never raise. Emission must never perturb the request path, so everything is guarded."""
+    try:
+        print(text, flush=True)
+    except Exception:  # noqa: BLE001 — forensic emission must never break the request
+        pass
+    try:
+        _forensic_log.warning("%s", text)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _redact(text: str) -> str:
+    """Scrub anything token-shaped. The wire body carries no secrets (the token rides in headers),
+    but this is defensive per 'redact secrets only'."""
+    return _TOKEN_RE.sub("<redacted>", text or "")
+
+
+def _safe_headers(headers) -> dict:
+    out = {}
+    try:
+        for k, v in dict(headers).items():
+            out[k] = "<redacted>" if k.lower() in _SECRET_HEADERS else v
+    except Exception:  # noqa: BLE001
+        return {}
+    return out
+
+
+def _log_hf_request(*, endpoint_url: str, model: str, prompt_hash: str | None,
+                    package_hash: str | None, body: bytes) -> None:
+    decoded = body.decode("utf-8", "replace") if isinstance(body, (bytes, bytearray)) else str(body)
+    _emit_forensic(
+        "\n=====================\nHF REQUEST\n=====================\n"
+        f"Endpoint URL : {endpoint_url}\nModel ID     : {model or '(unset)'}\n"
+        f"Prompt hash  : {prompt_hash or 'n/a'}\nPackage hash : {package_hash or 'n/a'}\n"
+        f"Request body : {_redact(decoded)}")
+
+
+def _log_hf_response(status, headers, raw_body) -> None:
+    body = raw_body.decode("utf-8", "replace") if isinstance(raw_body, (bytes, bytearray)) else str(raw_body)
+    _emit_forensic(
+        "\n=====================\nHF RESPONSE\n=====================\n"
+        f"HTTP status : {status}\nHeaders     : {_safe_headers(headers)}\nRaw body    : {body}")
 
 
 def strip_thinking(text: str) -> str:
@@ -152,6 +227,10 @@ class RemoteReasoningProvider:
     # raw text into it. Off the production hot path (None by default) — pure observability, never
     # alters the request, the response, or control flow.
     capture: dict | None = None
+    # Provenance for the forensic HF-REQUEST log (OMI_FORENSIC_CAPTURE). Set by the analyst
+    # transport; ``None`` on bare probes -> logged as "n/a". Never affects the request.
+    prompt_hash: str | None = None
+    package_hash: str | None = None
 
     def _token(self) -> str | None:
         for key in self.token_env:
@@ -166,12 +245,29 @@ class RemoteReasoningProvider:
         Retries only NETWORK errors — protocol/parse errors are handled by the caller once. The
         response parser (``parse`` non-stream / ``parse_stream`` SSE) is API-specific."""
         last: BaseException | None = None
+        forensic = forensic_on()
         for attempt in range(self.max_retries + 1):
             try:
                 req = urllib.request.Request(self.endpoint_url, data=body, headers=headers)
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    text = parse_stream(resp) if stream else parse(resp.read())
+                    if stream:
+                        text = parse_stream(resp)
+                    else:
+                        raw = resp.read()
+                        if forensic:  # log the RAW body exactly as returned, BEFORE any parsing
+                            _log_hf_response(getattr(resp, "status", None) or resp.getcode(),
+                                             resp.headers, raw)
+                        text = parse(raw)
                 return text, attempt + 1
+            except urllib.error.HTTPError as he:  # 4xx/5xx — the endpoint DID respond with a body
+                last = he
+                if forensic:
+                    try:
+                        _log_hf_response(he.code, he.headers, he.read())
+                    except Exception:  # noqa: BLE001 — logging must never mask the error
+                        pass
+                if attempt < self.max_retries:
+                    time.sleep(min(self.backoff_cap, 0.5 * (2 ** attempt)))
             except Exception as exc:  # noqa: BLE001 — network/endpoint error → maybe retry
                 last = exc
                 if attempt < self.max_retries:
@@ -239,6 +335,10 @@ class RemoteReasoningProvider:
             self.capture["request_wire_body"] = body.decode("utf-8", "replace")[:12000]
             self.capture["final_prompt_system"] = request.system
             self.capture["final_prompt_user"] = request.user
+
+        if forensic_on():  # temporary forensic capture — log the EXACT request before sending
+            _log_hf_request(endpoint_url=self.endpoint_url, model=self.model,
+                            prompt_hash=self.prompt_hash, package_hash=self.package_hash, body=body)
 
         t0 = time.perf_counter()
         text, attempts = self._fetch(body, headers, request.stream, parse, parse_stream)
