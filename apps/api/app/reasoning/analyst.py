@@ -359,12 +359,16 @@ def _assessment_metrics(governed: dict, gov: dict, settings: Settings, *, store_
     }
 
 
-def assess_payload(
+def _assess_core(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
     capture: dict | None = None,
 ) -> dict | None:
     """Produce a Governor-validated structured assessment for an investigation payload, or None if
     the feature is off / unavailable / errored. Never raises.
+
+    P2.1 — this is the AI Investigation Runtime's delegated orchestration core; reach it ONLY through
+    the runtime (``app.reasoning.runtime.assess_investigation``) / the ``assess_payload`` compatibility
+    wrapper below, never directly. The council orchestration + metadata are unchanged.
 
     Sprint 017 — runtime convergence: this executes through the **constitutional council
     Orchestrator** (the same one the shadow council uses), not a parallel reasoning path. The rich
@@ -466,6 +470,20 @@ def assess_payload(
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")
         return None
+
+
+def assess_payload(
+    payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
+    capture: dict | None = None,
+) -> dict | None:
+    """Compatibility wrapper (P2.1 AI-runtime cutover). The **AI Investigation Runtime** is now the
+    ONE orchestration layer for AI execution; every investigation executes through it. This delegates
+    unchanged, so all legacy callers (routes, forensic trace/audit, training data) keep working with
+    byte-identical behavior, governance, metadata, and package/prompt hashes — only the orchestration
+    entry point moved into the runtime. Never raises."""
+    from app.reasoning.runtime import assess_investigation
+
+    return assess_investigation(payload, ref=ref, platform=platform, settings=settings, capture=capture)
 
 
 def _attach_governance(result: Any, *, judge: "_AnalystJudge", floor: "_AnalystFloor") -> dict:
