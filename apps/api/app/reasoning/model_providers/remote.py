@@ -111,6 +111,43 @@ def _log_hf_response(status, headers, raw_body) -> None:
         f"HTTP status : {status}\nHeaders     : {_safe_headers(headers)}\nRaw body    : {body}")
 
 
+_REQUEST_ID_HEADERS = ("x-request-id", "x-inference-id", "x-amzn-requestid", "x-amzn-request-id",
+                       "x-request-context", "request-id")
+
+
+def _capture_endpoint_meta(capture: dict, resp, raw_body) -> None:
+    """Record response-side endpoint metadata — HTTP status, the endpoint request id, and token
+    usage — into the capture sidecar for the AI Investigation Runtime. Additive + best-effort +
+    never raises; only invoked when a capture dict is supplied, so the no-capture path is
+    byte-identical. Pure observability — it never alters the request, the response, or control flow."""
+    try:
+        capture["response_status"] = getattr(resp, "status", None) or resp.getcode()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        headers = getattr(resp, "headers", None)
+        if headers is not None:
+            for key in _REQUEST_ID_HEADERS:
+                val = headers.get(key)
+                if val:
+                    capture["endpoint_request_id"] = val
+                    break
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        text = raw_body.decode("utf-8", "replace") if isinstance(raw_body, (bytes, bytearray)) else str(raw_body)
+        obj = json.loads(text)
+        usage = obj.get("usage") if isinstance(obj, dict) else None
+        if isinstance(usage, dict):
+            capture["usage"] = {
+                "prompt_tokens": usage.get("prompt_tokens"),
+                "completion_tokens": usage.get("completion_tokens"),
+                "total_tokens": usage.get("total_tokens"),
+            }
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def strip_thinking(text: str) -> str:
     """Drop a leading ``<think>...</think>`` reasoning trace (Qwen-Thinking models)."""
     return _THINK.sub("", text or "").strip()
@@ -257,6 +294,8 @@ class RemoteReasoningProvider:
                         if forensic:  # log the RAW body exactly as returned, BEFORE any parsing
                             _log_hf_response(getattr(resp, "status", None) or resp.getcode(),
                                              resp.headers, raw)
+                        if self.capture is not None:  # additive endpoint metadata for the AI runtime
+                            _capture_endpoint_meta(self.capture, resp, raw)
                         text = parse(raw)
                 return text, attempt + 1
             except urllib.error.HTTPError as he:  # 4xx/5xx — the endpoint DID respond with a body
