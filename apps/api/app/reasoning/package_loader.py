@@ -259,6 +259,84 @@ def load_package(model_id: str | None = None, *, verify: bool = True) -> LoadedP
 def reset_package_cache() -> None:
     """Drop the loader cache (tests / after a package regeneration)."""
     _CACHE.clear()
+    _COMMENT_CACHE.clear()
 
 
-__all__ = ["LoadedPackage", "PackageIntegrityError", "load_package", "reset_package_cache"]
+# --------------------------------------------------------------------------- #
+# Comment-analysis assets (Phase P3.1) — loaded through the same canonical loader
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class CommentAssets:
+    """Immutable, verified snapshot of the comment-analysis package assets — the comment system
+    task, response contract, assembly template, and CommentAnalysis output schema. Loaded here so
+    the Comment Analysis prompt builder never reads package sources directly."""
+
+    comment_system_task: str
+    comment_response_contract: str
+    comment_template_version: str
+    comment_template_hash: str
+    comment_contract_hash: str
+    comment_schema_hash: str
+    _comment_template_json: str
+    _comment_schema_json: str
+
+    def comment_template(self) -> dict:
+        return json.loads(self._comment_template_json)
+
+    def comment_output_schema(self) -> dict:
+        return json.loads(self._comment_schema_json)
+
+    def verify(self) -> dict:
+        checks = {
+            "integrity.system_task": bool(self.comment_system_task.strip()),
+            "integrity.response_contract": bool(self.comment_response_contract.strip()),
+            "integrity.template": bool(self.comment_template().get("system_task")),
+            "integrity.schema": bool(self.comment_output_schema().get("comment_analysis")),
+        }
+        failed = [k for k, ok in checks.items() if not ok]
+        if failed:
+            raise PackageIntegrityError(f"comment assets verification failed: {failed}")
+        return {"verified": True, "checks": list(checks)}
+
+
+_COMMENT_CACHE: dict[str, CommentAssets] = {}
+
+
+def load_comment_assets(*, verify: bool = True) -> CommentAssets:
+    """Return the verified, cached, immutable comment-analysis assets. The ONLY runtime entry point
+    for the comment package assets — fail-closed like :func:`load_package`."""
+    cached = _COMMENT_CACHE.get("__default__")
+    if cached is not None:
+        return cached
+    from app.reasoning.prompts.comment_template import (
+        COMMENT_TEMPLATE_VERSION,
+        comment_assembly_template,
+        comment_contract_hash,
+        comment_output_schema,
+        comment_response_contract,
+        comment_schema_hash,
+        comment_system_task_text,
+        comment_template_hash,
+    )
+
+    tmpl = comment_assembly_template()
+    ca = CommentAssets(
+        comment_system_task=comment_system_task_text(),
+        comment_response_contract=comment_response_contract(),
+        comment_template_version=COMMENT_TEMPLATE_VERSION,
+        comment_template_hash=comment_template_hash(),
+        comment_contract_hash=comment_contract_hash(),
+        comment_schema_hash=comment_schema_hash(),
+        _comment_template_json=json.dumps(tmpl, ensure_ascii=False, sort_keys=True),
+        _comment_schema_json=json.dumps(comment_output_schema(), ensure_ascii=False, sort_keys=True),
+    )
+    if verify:
+        ca.verify()
+    _COMMENT_CACHE["__default__"] = ca
+    return ca
+
+
+__all__ = [
+    "LoadedPackage", "PackageIntegrityError", "load_package", "reset_package_cache",
+    "CommentAssets", "load_comment_assets",
+]

@@ -1,0 +1,335 @@
+"""AI-Native Comment Analysis (Phase P3.1) — the first migrated reasoning stage.
+
+Mistral reasons about every individual comment; the deterministic engine only produces evidence.
+The flow is exactly the canonical architecture:
+
+    CommentEvidenceBundle (P3.0)  →  Package Loader (P1.2)  →  Prompt Builder (package assets only)
+      →  ONE Hugging Face request (via the ONE transport)  →  Mistral  →  Governor  →  typed report.
+
+Per the approved P3.1 decision, the model returns per-comment :class:`CommentAnalysis` objects inside
+ONE comment-section assessment that echoes the deterministic thread number, so the existing
+constitutional Governor validates the wrapper **unchanged**. The deterministic Floor stays available
+and produces a factual per-comment analysis when the endpoint is unreachable or the ruling is
+rejected. This module embeds ZERO prompt text — all scaffolding comes from the comment package asset.
+
+Only Comment Analysis is migrated. No other stage, prompt, package asset, heuristic, endpoint,
+result, or report is changed. A compatibility mapping keeps the existing thread UI working.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+from dataclasses import asdict, dataclass
+from typing import Any
+
+from app.core.config import Settings, get_settings
+from app.evidence import Binder
+from app.evidence.bundle import digest
+from app.reasoning import analyst as _analyst
+from app.reasoning.context.investigation import InvestigationContext
+from app.reasoning.evidence_bundles import CommentEvidenceBundle, build_comment_bundle
+from app.reasoning.model_providers.remote import extract_json, forensic_on
+from app.reasoning.package_loader import load_comment_assets, load_package
+from app.reasoning.prompt.builder import PromptPackage
+
+logger = logging.getLogger("omi.reasoning.comment_analysis")
+
+
+# --------------------------------------------------------------------------- #
+# Typed output — structured reasoning only (no prose/markdown/UI)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class CommentAnalysis:
+    """One comment's structured analysis. Immutable; the required P3.1 fields only."""
+
+    comment_ref: str
+    authenticity_assessment: str
+    manipulation_likelihood: float
+    behavioral_reasoning: str
+    linguistic_reasoning: str
+    engagement_reasoning: str
+    supporting_evidence: tuple[str, ...] = ()
+    contradictory_evidence: tuple[str, ...] = ()
+    uncertainty: tuple[str, ...] = ()
+    confidence: float = 0.0
+    reasoning_trace: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CommentAnalysisReport:
+    """The immutable output of the Comment Analysis stage: the per-comment analyses + the
+    Governor-validated comment-section wrapper's provenance. Content-addressed by ``report_id``."""
+
+    comment_analyses: tuple[CommentAnalysis, ...]
+    provider: str
+    model_backed: bool
+    fallback: bool
+    governor_verdict: str
+    governor_trace_id: str
+    violation_codes: tuple[str, ...]
+    thread_probability: float | None
+    thread_tier: str | None
+    comment_count: int
+    comment_bundle_id: str
+    package_hash: str
+    comment_template_hash: str
+    model_id: str
+    endpoint_called: bool
+    forensic_captured: bool
+    report_id: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["comment_analyses"] = [c.to_dict() for c in self.comment_analyses]
+        return d
+
+
+# --------------------------------------------------------------------------- #
+# Prompt builder — assembles the comment prompt from package assets only (zero embedded text)
+# --------------------------------------------------------------------------- #
+def _comment_ref(author_ref: str, text: str, created_at: str | None) -> str:
+    return digest({"a": author_ref, "t": text, "c": created_at}, prefix="cm:")
+
+
+def _render_comments(bundle: CommentEvidenceBundle) -> list[dict]:
+    return [{"comment_ref": _comment_ref(c.author_ref, c.text, c.created_at), "author_ref": c.author_ref,
+             "text": c.text, "created_at": c.created_at} for c in bundle.comments]
+
+
+def build_comment_prompt_package(
+    bundle: CommentEvidenceBundle, *, loaded=None, comment_assets=None, model_id: str | None = None,
+) -> PromptPackage:
+    """Assemble the comment-analysis PromptPackage from package assets + the CommentEvidenceBundle.
+    Zero embedded prompt text — every header/instruction/contract comes from the comment package
+    asset; the shared base prompt / constitution / framework / knowledge come from the loader."""
+    lp = loaded or load_package(model_id)
+    ca = comment_assets or load_comment_assets()
+    tmpl = ca.comment_template()
+
+    system = "\n\n".join([
+        lp.system_prompt,
+        "# REASONING & GOVERNANCE CONSTITUTION\n" + lp.constitution,
+        "# SPECIALIST INVESTIGATION FRAMEWORK\n" + json.dumps(lp.framework(), ensure_ascii=False, sort_keys=True),
+        "# KNOWLEDGE LIBRARY\n" + json.dumps(lp.knowledge()[:12], ensure_ascii=False, sort_keys=True),
+        tmpl["system_task"],
+        "# OUTPUT CONTRACT\n" + tmpl["response_contract"],
+    ]).strip()
+
+    thread = {"thread_probability": bundle.thread_probability, "thread_tier": bundle.thread_tier,
+              "comment_count": bundle.comment_count}
+    sections = {"thread": thread, "comments": _render_comments(bundle)}
+    ev = [tmpl["evidence_preamble"]]
+    for s in tmpl["evidence_sections"]:
+        ev.append(s["header"] + "\n" + json.dumps(sections.get(s["section"], {}), ensure_ascii=False, sort_keys=True))
+    ev.append(tmpl["evidence_instruction"])
+    user = "\n\n".join(ev).strip()
+
+    manifest = {
+        "assembled_from": "hf-analyst-package (comment stage, via loader)",
+        "package_hash": lp.package_hash, "prompt_hash": lp.prompt_hash,
+        "constitution_hash": lp.constitution_hash, "framework_hash": lp.framework_hash,
+        "knowledge_hash": lp.knowledge_hash, "comment_template_hash": ca.comment_template_hash,
+        "comment_contract_hash": ca.comment_contract_hash, "comment_schema_hash": ca.comment_schema_hash,
+        "comment_bundle_id": bundle.bundle_id(), "model_id": lp.model_id,
+        "response_format": "json_object", "schema_ref": "comment_analysis_v1",
+        "system_prompt_sha": "sys:" + hashlib.sha256(system.encode("utf-8")).hexdigest()[:24],
+    }
+    ppid = digest({"system": system, "user": user, "manifest": manifest}, prefix="pp:")
+    return PromptPackage(system=system, user=user, response_format="json_object",
+                         schema_ref="comment_analysis_v1", model_id=lp.model_id,
+                         manifest=manifest, prompt_package_id=ppid)
+
+
+# --------------------------------------------------------------------------- #
+# Deterministic Floor — factual per-comment analysis (no model)
+# --------------------------------------------------------------------------- #
+def _floor_comment_analyses(bundle: CommentEvidenceBundle) -> tuple[CommentAnalysis, ...]:
+    """Factual, deterministic per-comment analysis from the comment evidence — the always-available
+    Floor. Structured statements only; the engine's thread number is the per-comment prior."""
+    prob = float(bundle.thread_probability or 0.0)
+    tier = str(bundle.thread_tier or "low")
+    verdict = {"low": "inconclusive", "moderate": "mixed", "elevated": "mixed",
+               "high": "inauthentic"}.get(tier, "inconclusive")
+    out = []
+    for c in bundle.comments:
+        ref = _comment_ref(c.author_ref, c.text, c.created_at)
+        length = len(c.text)
+        out.append(CommentAnalysis(
+            comment_ref=ref, authenticity_assessment=verdict, manipulation_likelihood=round(prob, 6),
+            behavioral_reasoning=f"comment length {length} chars; author {c.author_ref}",
+            linguistic_reasoning=f"{length} characters of text observed",
+            engagement_reasoning=("posted on parent " + c.parent_ref) if c.parent_ref else "no parent context",
+            supporting_evidence=((f"thread suspicion {round(prob, 3)} ({tier})",) if prob >= 0.5 else ()),
+            contradictory_evidence=((f"thread suspicion {round(prob, 3)} is below the elevated gate",)
+                                    if prob < 0.5 else ()),
+            uncertainty=("deterministic floor — no per-comment model reasoning was available",),
+            confidence=0.2, reasoning_trace=("echo thread number", "band by thread tier",
+                                             "no model reasoning (floor)"),
+        ))
+    return tuple(out)
+
+
+# --------------------------------------------------------------------------- #
+# The Comment Analysis runtime
+# --------------------------------------------------------------------------- #
+def run_comment_analysis(
+    context: InvestigationContext,
+    bundle: CommentEvidenceBundle | None = None,
+    *,
+    payload: dict,
+    platform: str | None = None,
+    settings: Settings | None = None,
+) -> CommentAnalysisReport:
+    """Run AI-native Comment Analysis: one inference over the CommentEvidenceBundle, Governor-gated,
+    Floor-backed. ``payload`` supplies the deterministic Governor/Floor evidence (same object the
+    Context Builder consumed). Never raises — failure degrades to the deterministic Floor."""
+    settings = settings or get_settings()
+    payload = payload or {}
+    bundle = bundle if bundle is not None else build_comment_bundle(context)
+    ref = context.investigation.ref or _analyst._ref(context.context_id)
+    platform = platform or context.investigation.platform or "unknown"
+
+    loaded = load_package(getattr(settings, "analyst_model_id", None))
+    comment_assets = load_comment_assets()
+    pp = build_comment_prompt_package(bundle, loaded=loaded, comment_assets=comment_assets)
+
+    impl = _analyst._impl()
+    # The ONE Binder → the same canonical comment_section EvidenceBundle the Governor validates
+    # against (the echo source is its ``headline()``). Same bind params as the council Orchestrator.
+    gov_bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform)
+    config = (impl.load_analyst_config(repo_id=getattr(settings, "analyst_hf_repo", None),
+                                       revision=getattr(settings, "analyst_hf_revision", None))
+              if impl is not None else None)
+
+    capture: dict[str, Any] = {}
+    endpoint = getattr(settings, "analyst_endpoint_url", None)
+    enabled = _analyst.analyst_enabled(settings) and impl is not None
+    raw: str | None = None
+    endpoint_called = False
+    if enabled and endpoint:
+        transport = _analyst._qwen_transport(
+            endpoint, timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
+            max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
+            revision=getattr(settings, "analyst_hf_revision", None),
+            api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"),
+            model=pp.model_id, capture=capture,
+            prompt_hash=pp.manifest["prompt_hash"], package_hash=pp.manifest["package_hash"])
+        endpoint_called = True
+        raw = transport(pp.system, pp.user, config)  # ONE request
+
+    analyses, provider, model_backed, trace = self_adjudicate(raw, bundle, gov_bundle)
+    return _report(bundle, loaded, comment_assets, analyses, provider, model_backed, trace,
+                   endpoint_called)
+
+
+def self_adjudicate(raw, bundle, gov_bundle):
+    """Adjudicate the comment stage. The model's comment-section wrapper is echo-guarded to the
+    engine number and put through the **mandatory Governor**; on ANY failure the deterministic
+    **Floor** — the canonical FloorJudge wrapper (always Governor-valid by construction) plus a
+    factual per-comment analysis — is used, itself Governor-validated.
+
+    Per the approved P3.1 grain decision the Governor validates the constitutional comment-section
+    wrapper UNCHANGED. The per-comment ``CommentAnalysis`` objects ride ALONGSIDE the wrapper in
+    ``comment_analyses`` — they are not part of the analyst response schema, so they are separated
+    out before schema/Governor validation and never alter the wrapper the Governor sees."""
+    from app.governor import Governor
+    from app.reasoning.orchestrator.modules import build_ruling_assessment
+
+    governor = Governor()
+    hl = gov_bundle.headline()
+    if raw:
+        obj = extract_json(raw)
+        if isinstance(obj, dict):
+            core = {k: v for k, v in obj.items() if k != "comment_analyses"}
+            # Echo-guard (S4): never let the model move the engine's number/tier — echo the
+            # Governor's own bundle headline so the wrapper is validated against the truth source.
+            core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
+            core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
+            # The MANDATORY Governor is the gate — it validates the constitutional comment-section
+            # wrapper UNCHANGED (the per-comment CommentAnalysis objects are separated out above and
+            # never seen by the Governor). Permit => model-backed; any REJECT => deterministic Floor.
+            trace = governor.validate(core, gov_bundle, corroboration=core.get("corroboration"))
+            if trace.permitted:
+                return _model_comment_analyses(obj, bundle), "qwen-omi-analyst-v1", True, trace
+            logger.warning("comment_analysis: model wrapper REJECTED %s; Floor fallback",
+                           trace.violation_codes)
+    # Deterministic Floor — the canonical always-valid wrapper + a factual per-comment analysis.
+    wrapper = build_ruling_assessment(gov_bundle)
+    ftrace = governor.validate(wrapper, gov_bundle, corroboration=wrapper.get("corroboration"))
+    provider = ("deterministic-analyst-v1" if not raw
+                else "qwen-omi-analyst-v1->fallback:deterministic-analyst-v1")
+    return _floor_comment_analyses(bundle), provider, False, ftrace
+
+
+def _model_comment_analyses(obj: dict, bundle: CommentEvidenceBundle) -> tuple[CommentAnalysis, ...]:
+    raw_list = obj.get("comment_analyses") or []
+    if not isinstance(raw_list, list) or not raw_list:
+        return _floor_comment_analyses(bundle)  # model omitted the per-comment detail → factual floor
+
+    def _f(v) -> float:
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
+
+    out = []
+    for d in raw_list:
+        if not isinstance(d, dict):
+            continue
+        out.append(CommentAnalysis(
+            comment_ref=str(d.get("comment_ref") or ""),
+            authenticity_assessment=str(d.get("authenticity_assessment") or "inconclusive"),
+            manipulation_likelihood=_f(d.get("manipulation_likelihood")),
+            behavioral_reasoning=str(d.get("behavioral_reasoning") or ""),
+            linguistic_reasoning=str(d.get("linguistic_reasoning") or ""),
+            engagement_reasoning=str(d.get("engagement_reasoning") or ""),
+            supporting_evidence=tuple(str(x) for x in (d.get("supporting_evidence") or [])),
+            contradictory_evidence=tuple(str(x) for x in (d.get("contradictory_evidence") or [])),
+            uncertainty=tuple(str(x) for x in (d.get("uncertainty") or [])),
+            confidence=_f(d.get("confidence")),
+            reasoning_trace=tuple(str(x) for x in (d.get("reasoning_trace") or [])),
+        ))
+    return tuple(out) or _floor_comment_analyses(bundle)
+
+
+def _report(bundle, loaded, comment_assets, analyses, provider, model_backed, trace,
+            endpoint_called) -> CommentAnalysisReport:
+    addressed = {"analyses": [a.to_dict() for a in analyses], "provider": provider,
+                 "model_backed": model_backed, "governor_verdict": trace.verdict,
+                 "comment_bundle_id": bundle.bundle_id(), "package_hash": loaded.package_hash}
+    return CommentAnalysisReport(
+        comment_analyses=analyses, provider=provider, model_backed=model_backed,
+        fallback=not model_backed, governor_verdict=trace.verdict,
+        governor_trace_id=trace.trace_id(), violation_codes=tuple(trace.violation_codes),
+        thread_probability=bundle.thread_probability, thread_tier=bundle.thread_tier,
+        comment_count=bundle.comment_count, comment_bundle_id=bundle.bundle_id(),
+        package_hash=loaded.package_hash, comment_template_hash=comment_assets.comment_template_hash,
+        model_id=loaded.model_id, endpoint_called=endpoint_called, forensic_captured=forensic_on(),
+        report_id=digest(addressed, prefix="car:"),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Compatibility layer — keep the existing thread UI working
+# --------------------------------------------------------------------------- #
+def to_thread_compat(report: CommentAnalysisReport) -> dict:
+    """Map the AI CommentAnalysisReport back to the thread-shaped fields the existing UI consumes,
+    so the current comment display keeps functioning until a future UI migration. The deterministic
+    thread_scan remains the live UI source; this proves the report can supply the same shape."""
+    return {
+        "overall_probability": report.thread_probability or 0.0,
+        "tier": report.thread_tier or "low",
+        "comment_count": report.comment_count,
+        "provider": report.provider,
+        "model_backed": report.model_backed,
+    }
+
+
+__all__ = [
+    "CommentAnalysis", "CommentAnalysisReport", "build_comment_prompt_package",
+    "run_comment_analysis", "to_thread_compat",
+]

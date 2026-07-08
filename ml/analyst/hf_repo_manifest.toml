@@ -92,6 +92,15 @@ source = "ml/analyst/hf_repo/prompts/prompt_template.json"
 path_in_repo = "prompts/prompt_template.json"
 kind = "prompt_template"
 
+# --- comment-analysis prompt template + response contract + output schema (P3.1): the canonical
+# assembly asset the Comment Prompt Builder fills for the first AI-native reasoning stage. Generated
+# FROM app.reasoning.prompts.comment_template (single source of truth) by
+# app.reasoning.prompts.export; drift-guarded. Additive — independent of prompt_template.json. ---
+[[file]]
+source = "ml/analyst/hf_repo/prompts/comment_prompt_template.json"
+path_in_repo = "prompts/comment_prompt_template.json"
+kind = "comment_prompt_template"
+
 # --- response schema: published FROM its canonical GitHub source (no copy) ---
 [[file]]
 source = "ml/analyst/analyst_response_schema.json"
