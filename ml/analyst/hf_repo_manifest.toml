@@ -84,6 +84,14 @@ source = "ml/analyst/hf_repo/knowledge/knowledge_manifest.json"
 path_in_repo = "knowledge/knowledge_manifest.json"
 kind = "knowledge_manifest"
 
+# --- prompt template + response contract: the canonical assembly asset (P1.1) the Prompt Builder
+# fills. Generated FROM app.reasoning.prompts.template (single source of truth) by
+# app.reasoning.prompts.export; drift-guarded so GitHub and HF cannot diverge on the scaffolding. ---
+[[file]]
+source = "ml/analyst/hf_repo/prompts/prompt_template.json"
+path_in_repo = "prompts/prompt_template.json"
+kind = "prompt_template"
+
 # --- response schema: published FROM its canonical GitHub source (no copy) ---
 [[file]]
 source = "ml/analyst/analyst_response_schema.json"
