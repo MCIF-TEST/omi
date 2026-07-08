@@ -287,6 +287,60 @@ def knowledge_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Prompt Template + Response Contract — the assembly asset published to HF (Phase P1.1)
+# --------------------------------------------------------------------------- #
+PROMPT_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts" / "prompt_template.json"
+)
+
+
+def prompt_template_manifest() -> dict:
+    """The Prompt Template + Response Contract, published alongside the prompts so the deployed
+    runtime (and any auditor) carries the exact assembly scaffolding the Prompt Builder fills.
+    Generated FROM the template asset (single source of truth); drift-guarded."""
+    from .template import (
+        PROMPT_TEMPLATE_VERSION,
+        assembly_template,
+        contract_hash,
+        template_hash,
+    )
+
+    tmpl = assembly_template()
+    return {
+        "manifest_version": "v1",
+        "generated_by": "app.reasoning.prompts.export.prompt_template_manifest",
+        "source_of_truth": "GitHub app.reasoning.prompts.template (do not hand-edit)",
+        "template_version": PROMPT_TEMPLATE_VERSION,
+        "template_hash": template_hash(),
+        "response_contract_hash": contract_hash(),
+        "response_format": "json_object",
+        "response_schema": "schema/analyst_response_schema.json",
+        "system_block_order": [b["slot"] for b in tmpl["system_blocks"]],
+        "evidence_section_order": [s["section"] for s in tmpl["evidence_sections"]],
+        "template": tmpl,
+    }
+
+
+def render_prompt_template_json() -> str:
+    return json.dumps(prompt_template_manifest(), indent=2, sort_keys=True) + "\n"
+
+
+def write_prompt_template(path: Path | None = None) -> Path:
+    target = path or PROMPT_TEMPLATE_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_prompt_template_json(), encoding="utf-8")
+    return target
+
+
+def prompt_template_matches_committed() -> bool:
+    """True when the committed prompt-template manifest equals a freshly generated one (drift guard)."""
+    try:
+        return PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8") == render_prompt_template_json()
+    except OSError:
+        return False
+
+
+# --------------------------------------------------------------------------- #
 # Specialist Framework handbook — GitHub-side contributor doc (Phase A1)
 # --------------------------------------------------------------------------- #
 HANDBOOK_PATH = (
@@ -347,6 +401,8 @@ __all__ = [
     "write_catalog", "catalog_matches_committed",
     "KNOWLEDGE_PATH", "knowledge_manifest", "render_knowledge_json",
     "write_knowledge", "knowledge_matches_committed",
+    "PROMPT_TEMPLATE_PATH", "prompt_template_manifest", "render_prompt_template_json",
+    "write_prompt_template", "prompt_template_matches_committed",
     "HANDBOOK_PATH", "write_handbook", "handbook_matches_committed",
     "BEHAVIORAL_HANDBOOK_PATH", "write_behavioral_handbook", "behavioral_handbook_matches_committed",
 ]
@@ -356,5 +412,6 @@ if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + 
     print(f"wrote {write_manifest()}")
     print(f"wrote {write_catalog()}")
     print(f"wrote {write_knowledge()}")
+    print(f"wrote {write_prompt_template()}")
     print(f"wrote {write_handbook()}")
     print(f"wrote {write_behavioral_handbook()}")

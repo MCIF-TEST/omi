@@ -35,6 +35,14 @@ from .framework import (
     validate_framework,
 )
 from .spec import PromptSpec
+from .template import (
+    PROMPT_TEMPLATE_VERSION,
+    RESPONSE_CONTRACT,
+    assembly_template,
+    contract_hash,
+    response_contract,
+    template_hash,
+)
 from .specialists import (
     LIBRARY_VERSION,
     SPECIALISTS,
@@ -58,4 +66,7 @@ __all__ = [
     "lift", "new_specialist", "validate_framework",
     # Phase B1 — the Behavioral Intelligence Library (reference implementation)
     "BEHAVIORAL_LIBRARY_VERSION", "behavior_v2_prompt_spec", "render_behavioral_handbook",
+    # Phase P1.1 — the Prompt Template + Response Contract assembly asset
+    "PROMPT_TEMPLATE_VERSION", "RESPONSE_CONTRACT", "assembly_template", "response_contract",
+    "template_hash", "contract_hash",
 ]

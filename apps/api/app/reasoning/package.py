@@ -31,6 +31,9 @@ class AIPackage:
     knowledge_hash: str
     constitution_version: str
     constitution_hash: str
+    template_version: str
+    template_hash: str
+    contract_hash: str
     analysts: int
     knowledge_entries: int
     knowledge_categories: int
@@ -49,6 +52,8 @@ class AIPackage:
             "knowledge_library": {"hash": self.knowledge_hash, "entries": self.knowledge_entries,
                                   "categories": self.knowledge_categories},
             "constitution": {"version": self.constitution_version, "hash": self.constitution_hash},
+            "prompt_template": {"version": self.template_version, "hash": self.template_hash,
+                                "response_contract_hash": self.contract_hash},
         }
 
 
@@ -60,16 +65,22 @@ def load_ai_package(model_id: str | None = None) -> AIPackage:
     from app.reasoning.prompts import (
         CONSTITUTION_VERSION,
         FRAMEWORK_VERSION,
+        PROMPT_TEMPLATE_VERSION,
         constitution_hash,
+        contract_hash,
         default_registry,
         framework_hash,
+        template_hash,
     )
 
     reg = default_registry()
     lib = _k.default_library()
     omi = reg.resolve("omi_analyst")
     ph, fh, kh, ch = omi.prompt_hash, framework_hash(), lib.library_hash(), constitution_hash()
-    package_hash = "pkg:" + hashlib.sha256("|".join([ph, fh, kh, ch]).encode("utf-8")).hexdigest()[:24]
+    th, rc = template_hash(), contract_hash()
+    # The package_hash certifies the EXACT AI layer — now including the Prompt Template + Response
+    # Contract assembly asset (P1.1), so a scaffolding change is a new, attributable package version.
+    package_hash = "pkg:" + hashlib.sha256("|".join([ph, fh, kh, ch, th, rc]).encode("utf-8")).hexdigest()[:24]
     return AIPackage(
         model_id=model_id or "mistralai/Mistral-7B-Instruct-v0.3",
         registry_version=reg.active_version("omi_analyst"),
@@ -79,6 +90,9 @@ def load_ai_package(model_id: str | None = None) -> AIPackage:
         knowledge_hash=kh,
         constitution_version=CONSTITUTION_VERSION,
         constitution_hash=ch,
+        template_version=PROMPT_TEMPLATE_VERSION,
+        template_hash=th,
+        contract_hash=rc,
         analysts=len(reg.analysts()),
         knowledge_entries=len(lib.all()),
         knowledge_categories=len(lib.categories()),
