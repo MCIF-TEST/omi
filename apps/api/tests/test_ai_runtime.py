@@ -1,81 +1,72 @@
-"""Phase P2.0 — the AI Investigation Runtime (the ONE orchestration layer for AI execution).
+"""Phase P2.0 → P3.3 — the AI Investigation Runtime's ONE inference primitive.
 
-Proves the runtime chains InvestigationContext → Package Loader → Prompt Builder → HF endpoint →
-capture → Governor → fallback → one immutable result, that it performs **exactly one inference** via
-the ONE transport, captures the full execution provenance, always invokes the Governor, and falls
-back to the deterministic Floor on failure/reject — reusing the single implementations (no duplicated
-endpoint / retry / forensic / governor / fallback logic).
+Proves ``AIInvestigationRuntime.infer`` (reached via ``run_stage_inference``) performs **exactly one
+inference** via the ONE transport, captures the full execution provenance, always invokes the
+Governor, and falls back to the deterministic Floor on failure/reject — reusing the single
+implementations (no duplicated endpoint / retry / forensic / governor / fallback logic). The prompt it
+reasons over is a :class:`PromptPackage` from the ONE Canonical Prompt Builder.
 """
 from __future__ import annotations
 
-import dataclasses
 import json
 from pathlib import Path
 
 import pytest
 
 from app.core.config import get_settings
+from app.evidence import Binder
 from app.reasoning import analyst as _analyst
 from app.reasoning import runtime as runtime_mod
+from app.reasoning.comment_analysis import build_comment_prompt_package
 from app.reasoning.context import build_investigation_context
-from app.reasoning.runtime import AIInvestigationResult, run_investigation
+from app.reasoning.evidence_bundles import build_comment_bundle
+from app.reasoning.orchestrator.modules import build_ruling_assessment
+from app.reasoning.runtime import RuntimeInference, run_stage_inference
 
 
 def _payload() -> dict:
     return {
-        "overall_probability": 0.72, "overall_tier": "elevated", "confidence": 0.55,
-        "summary": "Elevated suspicion.", "video_id": "v1",
-        "contributions": [{"name": "temporal", "impact": 0.4, "direction": "raises", "headline": "bursty"}],
+        "overall_probability": 0.72, "overall_tier": "elevated", "confidence": 0.55, "video_id": "v1",
         "video": {
+            "thread_scan": {"overall_probability": 0.5, "tier": "moderate"},
             "coordination_score": 0.66, "coordination_tier": "elevated",
-            "clusters": [{"method": "co_engagement", "members": ["a", "b", "c"], "score": 0.7,
-                          "evidence": ["tight"]}],
             "commenters": [{"external_id": "a", "handle": "@a", "overall_probability": 0.8, "tier": "high",
-                            "confidence": 0.6, "reasons": ["bursty posting"],
-                            "signals": [{"name": "temporal", "probability": 0.8, "confidence": 0.7}]}],
-        },
+                            "confidence": 0.6,
+                            "recent_activity": [{"text": "great video!!", "created_at": "2026-01-01T00:00:00Z",
+                                                 "parent_id": "v9"}],
+                            "signals": [{"name": "temporal", "probability": 0.8, "confidence": 0.7}]}]},
     }
 
 
-def _ctx(payload=None):
-    return build_investigation_context(payload or _payload(), ref="slug1", platform="youtube",
-                                       slug="slug1", kind="video")
-
-
-def _valid_model_response(payload) -> dict:
-    """A schema-valid analyst response (generated via the deterministic provider) to stand in for a
-    good Mistral output in the model-backed path."""
-    impl = _analyst._impl()
-    ref = _analyst._ref("slug1")
-    lossy = _analyst.build_bundle(payload, ref=ref, platform="youtube", impl=impl)
-    config = impl.load_analyst_config(repo_id=get_settings().analyst_hf_repo, revision=None)
-    return impl.DeterministicAnalystProvider().generate(lossy, config).response
+def _pp_and_gov(payload=None):
+    payload = payload or _payload()
+    ctx = build_investigation_context(payload, ref="slug1", platform="youtube", slug="slug1", kind="video")
+    pp = build_comment_prompt_package(build_comment_bundle(ctx))
+    ref = ctx.investigation.ref or _analyst._ref(ctx.context_id)
+    gov = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform="youtube")
+    return pp, gov
 
 
 def _enabled_settings(**over):
-    base = {"analyst_enabled": True, "analyst_endpoint_url": "http://endpoint/v1/chat/completions"}
+    base = {"analyst_enabled": True, "analyst_endpoint_url": "http://endpoint/generate"}
     base.update(over)
     return get_settings().model_copy(update=base)
 
 
 # --------------------------------------------------------------------------- #
-# Floor path (no endpoint) — always returns an immutable, Governor-validated result
+# Floor path (no endpoint) — Governor-validated RuntimeInference, no endpoint call
 # --------------------------------------------------------------------------- #
-def test_returns_immutable_result_via_floor_when_disabled():
-    res = run_investigation(_ctx(), payload=_payload(), platform="youtube")
-    assert isinstance(res, AIInvestigationResult)
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        res.provider = "x"
-    assert res.model_backed is False and res.fallback is True
-    assert res.endpoint_called is False
-    assert res.governor_verdict in ("permit", "reject")
-    assert res.governor_trace_id.startswith("vt:")
-    # the identity + provenance is always captured
-    assert res.package_hash.startswith("pkg:") and res.prompt_hash.startswith("ph:")
-    assert res.template_hash.startswith("tmpl:") and res.model_id == "mistralai/Mistral-7B-Instruct-v0.3"
-    assert res.context_id == _ctx().context_id and res.result_id.startswith("air:")
-    # the engine number is echoed, never moved
-    assert res.assessment["suspicion_probability"] == pytest.approx(0.72)
+def test_floor_when_disabled_is_governed_and_captures_identity():
+    pp, gov = _pp_and_gov()
+    inf = run_stage_inference(pp, gov)
+    assert isinstance(inf, RuntimeInference)
+    assert inf.model_backed is False and inf.fallback is True and inf.endpoint_called is False
+    assert inf.provider == "deterministic-analyst-v1"
+    assert inf.trace.permitted and inf.trace.trace_id().startswith("vt:")
+    # identity flows from the PromptPackage; no endpoint => zero forensic
+    assert inf.package_hash == pp.manifest["package_hash"] and inf.prompt_hash == pp.manifest["prompt_hash"]
+    assert inf.served_model == pp.model_id == "mistralai/Mistral-7B-Instruct-v0.3"
+    assert inf.latency_ms == 0.0 and inf.attempts == 0 and inf.tokens is None
 
 
 # --------------------------------------------------------------------------- #
@@ -83,7 +74,8 @@ def test_returns_immutable_result_via_floor_when_disabled():
 # --------------------------------------------------------------------------- #
 def test_exactly_one_inference_and_captures_metadata(monkeypatch):
     payload = _payload()
-    valid = _valid_model_response(payload)
+    pp, gov = _pp_and_gov(payload)
+    valid = build_ruling_assessment(gov)                          # a Governor-valid wrapper
     calls: list[tuple[str, str]] = []
 
     def fake_qwen_transport(endpoint, **kw):
@@ -91,7 +83,7 @@ def test_exactly_one_inference_and_captures_metadata(monkeypatch):
 
         def _call(system, user, config):
             calls.append((system, user))
-            if cap is not None:  # the ONE transport populates the capture sidecar
+            if cap is not None:                                  # the ONE transport populates capture
                 cap.update({"latency_ms": 12.3, "attempts": 1, "response_status": 200,
                             "endpoint_request_id": "req-abc-123",
                             "usage": {"prompt_tokens": 900, "completion_tokens": 120, "total_tokens": 1020}})
@@ -100,42 +92,38 @@ def test_exactly_one_inference_and_captures_metadata(monkeypatch):
         return _call
 
     monkeypatch.setattr(_analyst, "_qwen_transport", fake_qwen_transport)
-    res = run_investigation(_ctx(payload), payload=payload, platform="youtube", settings=_enabled_settings())
+    inf = run_stage_inference(pp, gov, settings=_enabled_settings())
 
     assert len(calls) == 1                                        # exactly one inference
-    assert res.endpoint_called is True and res.model_backed is True and res.fallback is False
-    assert res.provider == "qwen-omi-analyst-v1"
-    assert res.governor_verdict == "permit"
-    # the prompt sent is the canonically-built PromptPackage (system+user), not a bespoke prompt
-    from app.reasoning.prompt import build_prompt_package
-    pp = build_prompt_package(_ctx(payload))
+    assert inf.endpoint_called is True and inf.model_backed is True and inf.fallback is False
+    assert inf.provider == "qwen-omi-analyst-v1" and inf.trace.permitted
+    # the prompt sent is EXACTLY the canonically-built PromptPackage (system+user)
     assert calls[0][0] == pp.system and calls[0][1] == pp.user
-    # full execution provenance captured
-    assert res.latency_ms == pytest.approx(12.3) and res.attempts == 1
-    assert res.tokens == {"prompt_tokens": 900, "completion_tokens": 120, "total_tokens": 1020}
-    assert res.endpoint_request_id == "req-abc-123" and res.response_status == 200
+    # full execution provenance captured + surfaced
+    assert inf.latency_ms == pytest.approx(12.3) and inf.attempts == 1
+    assert inf.tokens == {"prompt_tokens": 900, "completion_tokens": 120, "total_tokens": 1020}
+    assert inf.endpoint_request_id == "req-abc-123" and inf.response_status == 200
 
 
 def test_fallback_to_floor_when_endpoint_unreachable(monkeypatch):
-    payload = _payload()
+    pp, gov = _pp_and_gov()
     calls = []
 
     def fake_qwen_transport(endpoint, **kw):
         def _call(system, user, config):
             calls.append(1)
-            return None  # transport returns None on endpoint failure (after its own retries)
+            return None                                          # transport gave up (after its retries)
         return _call
 
     monkeypatch.setattr(_analyst, "_qwen_transport", fake_qwen_transport)
-    res = run_investigation(_ctx(payload), payload=payload, settings=_enabled_settings())
+    inf = run_stage_inference(pp, gov, settings=_enabled_settings())
     assert len(calls) == 1                                        # one inference attempt, still
-    assert res.model_backed is False and res.fallback is True
-    assert res.provider == "deterministic-analyst-v1"            # clean floor (endpoint never answered)
-    assert res.governor_verdict == "permit"
+    assert inf.model_backed is False and inf.fallback is True
+    assert inf.provider == "deterministic-analyst-v1" and inf.trace.permitted
 
 
 def test_fallback_to_floor_when_model_output_invalid(monkeypatch):
-    payload = _payload()
+    pp, gov = _pp_and_gov()
 
     def fake_qwen_transport(endpoint, **kw):
         def _call(system, user, config):
@@ -143,21 +131,15 @@ def test_fallback_to_floor_when_model_output_invalid(monkeypatch):
         return _call
 
     monkeypatch.setattr(_analyst, "_qwen_transport", fake_qwen_transport)
-    res = run_investigation(_ctx(payload), payload=payload, settings=_enabled_settings())
-    assert res.model_backed is False and res.fallback is True
-    assert res.provider.startswith("qwen-omi-analyst-v1->fallback:")   # model answered but was rejected
-    assert res.governor_verdict == "permit"
+    inf = run_stage_inference(pp, gov, settings=_enabled_settings())
+    assert inf.model_backed is False and inf.fallback is True
+    assert inf.provider.startswith("qwen-omi-analyst-v1->fallback:")   # model answered but was rejected
+    assert inf.trace.permitted
 
 
 # --------------------------------------------------------------------------- #
-# Determinism + the "single endpoint caller" invariant
+# The "single endpoint caller" + "single Governor" invariants (source-level)
 # --------------------------------------------------------------------------- #
-def test_result_is_content_addressed():
-    a = run_investigation(_ctx(), payload=_payload())
-    b = run_investigation(_ctx(), payload=_payload())
-    assert a.result_id == b.result_id and a.result_id.startswith("air:")
-
-
 def test_runtime_owns_no_endpoint_or_governor_primitive():
     """The runtime orchestrates by delegation: it reaches the endpoint ONLY through the shared
     transport factory and must not open its own HTTP client or reimplement retries."""
@@ -165,8 +147,7 @@ def test_runtime_owns_no_endpoint_or_governor_primitive():
     assert "_qwen_transport" in src                               # reuses the ONE transport factory
     assert "urlopen(" not in src and "import urllib" not in src   # no bespoke endpoint code
     assert "for attempt in range" not in src                      # no duplicated retry loop
-    # the Governor is invoked, not reimplemented
-    assert "governor.validate(" in src
+    assert "governor.validate(" in src                            # the Governor is invoked, not reimplemented
 
 
 def test_capture_helper_records_usage_and_request_id():

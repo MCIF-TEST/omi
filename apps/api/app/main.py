@@ -71,7 +71,7 @@ def _log_optional_feature_state() -> None:
     else:
         tw_state = "on"
     parts.append(f"Twitter/X ingestion: {tw_state}")
-    parts.append(f"Anthropic LLM: {'on' if s.anthropic_api_key else 'off (using template fallback)'}")
+    parts.append("Investigation commentary: deterministic presentation (Anthropic 2nd reasoning engine retired — P3.4)")
     parts.append(f"SMTP email alerts: {'on (' + s.smtp_host + ')' if s.smtp_host else 'off — webhook delivery still works'}")
     parts.append(f"Stripe billing: {'on' if s.stripe_secret_key and s.stripe_price_id else 'off (free tier only)'}")
     parts.append(f"Background monitoring: {'on' if s.enable_monitoring else 'off'}")

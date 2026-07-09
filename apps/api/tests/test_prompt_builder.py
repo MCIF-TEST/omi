@@ -2,9 +2,14 @@
 
 Proves: the builder appends the constitution (governance/reasoning rules) and the Knowledge Library
 to the base system prompt, from package assets only, content-addressed and deterministic; the
-``registry`` mode is a byte-identical no-op (backwards compatible); the flag switches the system
-prompt the model actually receives; and the field-provenance contract (items 8/9) holds — the model
-generates the analytical conclusions while the engine's numbers are echoed, never overridden.
+``registry`` mode is a byte-identical no-op (backwards compatible); and the field-provenance contract
+(items 8/9) holds — the model generates the analytical conclusions while the engine's numbers are
+echoed, never overridden.
+
+The ``PromptBuilder`` class is retained + unit-tested here, but as of P3.4 it is RETIRED from the
+production path: the Investigation Summary is now a canonical reasoning stage whose prompt is assembled
+by the ONE canonical stage builder (``build_prompt('investigation_summary', bundle)``). The production
+integration test below asserts that canonical-stage assembly.
 """
 from __future__ import annotations
 
@@ -82,19 +87,26 @@ def test_builder_uses_no_hardcoded_reasoning_text_only_package_assets():
 
 
 # --------------------------------------------------------------------------- #
-# The flag switches the system prompt the MODEL actually receives
+# P3.4 — the production Investigation Summary prompt is assembled by the ONE canonical stage builder
+# (``build_prompt('investigation_summary', bundle)``), NOT the flag-driven PromptBuilder above. The
+# system ALWAYS carries the package constitution + specialist framework + knowledge + the
+# investigation-summary task; the user carries the InvestigationSummaryBundle evidence sections.
 # --------------------------------------------------------------------------- #
-def _settings(assembly):
+def _settings():
     return SimpleNamespace(
         analyst_enabled=True, analyst_endpoint_url="https://ep", analyst_hf_repo="Andrewexiga/omi-analyst-v1",
         analyst_hf_revision="sha1", analyst_prompt_version=None, analyst_model_id=MISTRAL,
         analyst_timeout_seconds=30.0, analyst_max_retries=0, analyst_endpoint_api="messages",
-        analyst_cost_per_1k_tokens_usd=0.0, analyst_prompt_assembly=assembly,
+        analyst_cost_per_1k_tokens_usd=0.0, analyst_prompt_assembly="registry",
         memory_persistence_enabled=False, memory_database_url=None)
 
 
-@pytest.mark.parametrize("assembly, expect_framework", [("registry", False), ("package", True)])
-def test_assess_payload_sends_the_assembled_system_prompt(assembly, expect_framework):
+def test_assess_payload_sends_the_canonical_stage_prompt():
+    """P3.4: the Investigation Summary is a canonical reasoning stage — the prompt the MODEL receives is
+    assembled by ``build_prompt('investigation_summary', bundle)`` from package assets only, so the
+    system carries the constitution + specialist framework + knowledge + the investigation-summary
+    task + output contract, and the user carries the InvestigationSummaryBundle evidence sections (not
+    a raw lossy dump)."""
     captured = {}
 
     def _fake(req, timeout=None):
@@ -103,11 +115,23 @@ def test_assess_payload_sends_the_assembled_system_prompt(assembly, expect_frame
                                  "choices": [{"message": {"content": '{"x":1}'}}]}).encode())
 
     with patch("app.reasoning.model_providers.remote.urllib.request.urlopen", _fake):
-        out = analyst.assess_payload(_PAYLOAD, ref="sub_pb", platform="youtube", settings=_settings(assembly))
-    system_sent = captured["body"]["messages"][0]["content"]
-    assert ("REASONING & GOVERNANCE FRAMEWORK" in system_sent) is expect_framework
-    # provenance recorded on the assessment either way
-    assert out["prompt_build"]["mode"] == assembly
+        out = analyst.assess_payload(_PAYLOAD, ref="sub_pb", platform="youtube", settings=_settings())
+    msgs = captured["body"]["messages"]
+    system_sent, user_sent = msgs[0]["content"], msgs[1]["content"]
+    # system: the shared package assets + the stage task + the output contract (all from the package)
+    assert "REASONING & GOVERNANCE CONSTITUTION" in system_sent
+    assert "SPECIALIST INVESTIGATION FRAMEWORK" in system_sent
+    assert "KNOWLEDGE LIBRARY" in system_sent
+    assert "INVESTIGATION SUMMARY TASK" in system_sent
+    assert "OUTPUT CONTRACT" in system_sent
+    # user: the InvestigationSummaryBundle evidence sections — not the legacy raw lossy JSON dump
+    assert "Investigation-level engine signal" in user_sent
+    assert "Cross-account coordination digest" in user_sent
+    assert '"grain": "comment_section"' not in user_sent
+    # provenance records the canonical stage assembly (mode + system sha + knowledge window)
+    assert out["prompt_build"]["mode"] == "stage:investigation_summary"
+    assert out["prompt_build"]["system_prompt_sha"].startswith("sys:")
+    assert len(out["prompt_build"]["knowledge_entries_used"]) == 12
 
 
 # --------------------------------------------------------------------------- #

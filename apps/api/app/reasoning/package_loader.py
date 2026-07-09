@@ -260,6 +260,8 @@ def reset_package_cache() -> None:
     """Drop the loader cache (tests / after a package regeneration)."""
     _CACHE.clear()
     _COMMENT_CACHE.clear()
+    _COMMENTER_HISTORY_CACHE.clear()
+    _INVESTIGATION_SUMMARY_CACHE.clear()
 
 
 # --------------------------------------------------------------------------- #
@@ -336,7 +338,163 @@ def load_comment_assets(*, verify: bool = True) -> CommentAssets:
     return ca
 
 
+# --------------------------------------------------------------------------- #
+# Commenter-history assets (Phase P3.2) — loaded through the same canonical loader
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class CommenterHistoryAssets:
+    """Immutable, verified snapshot of the commenter-history package assets — the system task,
+    response contract, assembly template, and CommenterHistoryAnalysis output schema. Loaded here so
+    the Commenter History prompt builder never reads package sources directly."""
+
+    system_task: str
+    response_contract: str
+    template_version: str
+    template_hash: str
+    contract_hash: str
+    schema_hash: str
+    _template_json: str
+    _schema_json: str
+
+    def template(self) -> dict:
+        return json.loads(self._template_json)
+
+    def output_schema(self) -> dict:
+        return json.loads(self._schema_json)
+
+    def verify(self) -> dict:
+        checks = {
+            "integrity.system_task": bool(self.system_task.strip()),
+            "integrity.response_contract": bool(self.response_contract.strip()),
+            "integrity.template": bool(self.template().get("system_task")),
+            "integrity.schema": bool(self.output_schema().get("commenter_analysis")),
+        }
+        failed = [k for k, ok in checks.items() if not ok]
+        if failed:
+            raise PackageIntegrityError(f"commenter-history assets verification failed: {failed}")
+        return {"verified": True, "checks": list(checks)}
+
+
+_COMMENTER_HISTORY_CACHE: dict[str, CommenterHistoryAssets] = {}
+
+
+def load_commenter_history_assets(*, verify: bool = True) -> CommenterHistoryAssets:
+    """Return the verified, cached, immutable commenter-history assets. The ONLY runtime entry point
+    for the commenter-history package assets — fail-closed like :func:`load_package`."""
+    cached = _COMMENTER_HISTORY_CACHE.get("__default__")
+    if cached is not None:
+        return cached
+    from app.reasoning.prompts.commenter_history_template import (
+        COMMENTER_HISTORY_TEMPLATE_VERSION,
+        commenter_history_assembly_template,
+        commenter_history_contract_hash,
+        commenter_history_output_schema,
+        commenter_history_response_contract,
+        commenter_history_schema_hash,
+        commenter_history_system_task_text,
+        commenter_history_template_hash,
+    )
+
+    tmpl = commenter_history_assembly_template()
+    cha = CommenterHistoryAssets(
+        system_task=commenter_history_system_task_text(),
+        response_contract=commenter_history_response_contract(),
+        template_version=COMMENTER_HISTORY_TEMPLATE_VERSION,
+        template_hash=commenter_history_template_hash(),
+        contract_hash=commenter_history_contract_hash(),
+        schema_hash=commenter_history_schema_hash(),
+        _template_json=json.dumps(tmpl, ensure_ascii=False, sort_keys=True),
+        _schema_json=json.dumps(commenter_history_output_schema(), ensure_ascii=False, sort_keys=True),
+    )
+    if verify:
+        cha.verify()
+    _COMMENTER_HISTORY_CACHE["__default__"] = cha
+    return cha
+
+
+# --------------------------------------------------------------------------- #
+# Investigation-summary assets (Phase P3.4) — loaded through the same canonical loader
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class InvestigationSummaryAssets:
+    """Immutable, verified snapshot of the investigation-summary package assets — the system task,
+    response contract, assembly template, and the output-schema descriptor. Loaded here so the
+    Investigation Summary prompt builder never reads package sources directly. Unlike the comment /
+    commenter-history assets, the summary stage's output contract is the EXISTING analyst response
+    schema (referenced, not redefined), so this carries only the descriptor + the assembly template."""
+
+    system_task: str
+    response_contract: str
+    schema_ref: str
+    template_version: str
+    template_hash: str
+    contract_hash: str
+    schema_hash: str
+    _template_json: str
+    _schema_json: str
+
+    def template(self) -> dict:
+        return json.loads(self._template_json)
+
+    def output_schema(self) -> dict:
+        return json.loads(self._schema_json)
+
+    def verify(self) -> dict:
+        checks = {
+            "integrity.system_task": bool(self.system_task.strip()),
+            "integrity.response_contract": bool(self.response_contract.strip()),
+            "integrity.template": bool(self.template().get("system_task")),
+            "integrity.schema_ref": self.schema_ref.endswith("analyst_response_schema.json"),
+            "integrity.schema": bool(self.output_schema().get("model_responsible_fields")),
+        }
+        failed = [k for k, ok in checks.items() if not ok]
+        if failed:
+            raise PackageIntegrityError(f"investigation-summary assets verification failed: {failed}")
+        return {"verified": True, "checks": list(checks)}
+
+
+_INVESTIGATION_SUMMARY_CACHE: dict[str, InvestigationSummaryAssets] = {}
+
+
+def load_investigation_summary_assets(*, verify: bool = True) -> InvestigationSummaryAssets:
+    """Return the verified, cached, immutable investigation-summary assets. The ONLY runtime entry
+    point for the investigation-summary package assets — fail-closed like :func:`load_package`."""
+    cached = _INVESTIGATION_SUMMARY_CACHE.get("__default__")
+    if cached is not None:
+        return cached
+    from app.reasoning.prompts.investigation_summary_template import (
+        INVESTIGATION_SUMMARY_SCHEMA_REF,
+        INVESTIGATION_SUMMARY_TEMPLATE_VERSION,
+        investigation_summary_assembly_template,
+        investigation_summary_contract_hash,
+        investigation_summary_output_schema,
+        investigation_summary_response_contract,
+        investigation_summary_schema_hash,
+        investigation_summary_system_task_text,
+        investigation_summary_template_hash,
+    )
+
+    tmpl = investigation_summary_assembly_template()
+    isa = InvestigationSummaryAssets(
+        system_task=investigation_summary_system_task_text(),
+        response_contract=investigation_summary_response_contract(),
+        schema_ref=INVESTIGATION_SUMMARY_SCHEMA_REF,
+        template_version=INVESTIGATION_SUMMARY_TEMPLATE_VERSION,
+        template_hash=investigation_summary_template_hash(),
+        contract_hash=investigation_summary_contract_hash(),
+        schema_hash=investigation_summary_schema_hash(),
+        _template_json=json.dumps(tmpl, ensure_ascii=False, sort_keys=True),
+        _schema_json=json.dumps(investigation_summary_output_schema(), ensure_ascii=False, sort_keys=True),
+    )
+    if verify:
+        isa.verify()
+    _INVESTIGATION_SUMMARY_CACHE["__default__"] = isa
+    return isa
+
+
 __all__ = [
     "LoadedPackage", "PackageIntegrityError", "load_package", "reset_package_cache",
     "CommentAssets", "load_comment_assets",
+    "CommenterHistoryAssets", "load_commenter_history_assets",
+    "InvestigationSummaryAssets", "load_investigation_summary_assets",
 ]

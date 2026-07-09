@@ -147,6 +147,32 @@ class CrossLinkItem:
     related_refs: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class CoordinationDigestItem:
+    """Investigation-level coordination EVIDENCE (a digest — the clusters themselves are owned by the
+    Coordination bundle). Pure measured numbers: score, tier, the single-axis-cap state, which
+    discriminative methods fired, and how many clusters. No verdict, no prose."""
+
+    coordination_score: float = 0.0
+    coordination_tier: str = "low"
+    single_axis_capped: bool = False
+    discriminative_methods: tuple[str, ...] = ()
+    cluster_count: int = 0
+
+
+@dataclass(frozen=True)
+class AccountsDigestItem:
+    """Investigation-level account roll-up EVIDENCE (the per-account detail is owned by the Account
+    bundle). Pure measured counts + probabilities — how many accounts, how many reach each suspicion
+    band, and the peak/mean engine probability. No verdict, no prose."""
+
+    count: int = 0
+    flagged_count: int = 0          # tier in {moderate, elevated, high}
+    high_count: int = 0             # tier == high
+    max_probability: float = 0.0
+    mean_probability: float = 0.0
+
+
 # --------------------------------------------------------------------------- #
 # The seven canonical stage bundles
 # --------------------------------------------------------------------------- #
@@ -243,6 +269,16 @@ class InvestigationSummaryBundle(_BundleMixin):
     post_content_id: str | None = None
     platform: str = "unknown"
     cross_links: tuple[CrossLinkItem, ...] = ()
+    # --- P3.4 enrichment — the investigation-synthesis EVIDENCE the AI Investigation Summary stage
+    # reasons over. Per the doctrine "the deterministic system measures evidence; the AI reasons over
+    # evidence", these are pure measured signals (no prose, no verdict): the coordination digest, the
+    # signed contribution drivers, the account roll-up, data-quality caveats, and institutional-memory
+    # context. Additive — the six ``component_bundle_ids`` DAG references are retained unchanged.
+    coordination: CoordinationDigestItem | None = None
+    contributions: tuple[ContributionItem, ...] = ()
+    accounts_digest: AccountsDigestItem | None = None
+    weak_signals: tuple[str, ...] = ()
+    memory_priors: tuple[MemoryPriorItem, ...] = ()
     # (stage, bundle_id) pairs — a hashable, deterministic map of the six referenced stage bundles.
     component_bundle_ids: tuple[tuple[str, str], ...] = ()
 
@@ -339,17 +375,82 @@ def build_campaign_bundle(ctx: InvestigationContext) -> CampaignEvidenceBundle:
     return CampaignEvidenceBundle(candidate_cluster_refs=refs, count=len(refs))
 
 
+_FLAGGED_TIERS = {"moderate", "elevated", "high"}
+
+
+def _coordination_digest(ctx: InvestigationContext) -> CoordinationDigestItem | None:
+    """The investigation-level coordination EVIDENCE digest (numbers only; the clusters stay owned by
+    the Coordination bundle). ``None`` when the engine surfaced no coordination section."""
+    co = ctx.coordination
+    if not co.present:
+        return None
+    return CoordinationDigestItem(
+        coordination_score=co.coordination_score, coordination_tier=co.coordination_tier,
+        single_axis_capped=co.single_axis_capped,
+        discriminative_methods=tuple(co.discriminative_methods), cluster_count=co.cluster_count,
+    )
+
+
+def _summary_contributions(ctx: InvestigationContext) -> tuple[ContributionItem, ...]:
+    """Surface the strongest signed drivers across the investigation's accounts as investigation-level
+    EVIDENCE — the per-account contributions deduplicated by name (strongest |impact| kept), ordered
+    deterministically, and capped. Pure surfacing: no score is recomputed and nothing is summed."""
+    strongest: dict[str, ContributionItem] = {}
+    for a in ctx.accounts.accounts:
+        for k in a.contributions:
+            cur = strongest.get(k.name)
+            if cur is None or abs(k.impact) > abs(cur.impact):
+                strongest[k.name] = ContributionItem(name=k.name, impact=k.impact,
+                                                     direction=k.direction, supplemental=k.supplemental)
+    ordered = sorted(strongest.values(), key=lambda c: (-abs(c.impact), c.name))
+    return tuple(ordered[:8])
+
+
+def _accounts_digest(ctx: InvestigationContext) -> AccountsDigestItem | None:
+    """The investigation-level account roll-up EVIDENCE (counts + probabilities; per-account detail
+    stays owned by the Account bundle). ``None`` when no accounts were assembled."""
+    accounts = ctx.accounts.accounts
+    if not accounts:
+        return None
+    probs = [a.overall_probability for a in accounts]
+    return AccountsDigestItem(
+        count=len(accounts),
+        flagged_count=sum(1 for a in accounts if a.tier in _FLAGGED_TIERS),
+        high_count=sum(1 for a in accounts if a.tier == "high"),
+        max_probability=round(max(probs), 6), mean_probability=round(sum(probs) / len(probs), 6),
+    )
+
+
+def _summary_weak_signals(ctx: InvestigationContext) -> tuple[str, ...]:
+    """Deduplicated data-quality caveats across the accounts — first-seen order (deterministic given
+    the account order), capped. Evidence of what limits the read, never a verdict."""
+    seen: list[str] = []
+    for a in ctx.accounts.accounts:
+        for w in a.weak_signals:
+            if w not in seen:
+                seen.append(w)
+            if len(seen) >= 8:
+                return tuple(seen)
+    return tuple(seen)
+
+
 def build_investigation_summary_bundle(
     ctx: InvestigationContext, *, components: dict[str, str] | None = None,
 ) -> InvestigationSummaryBundle:
     inv = ctx.investigation
     links = tuple(CrossLinkItem(kind=l.kind, severity=l.severity, evidence=l.evidence,
                                 related_refs=l.related_refs) for l in ctx.cross_platform.links)
+    priors = tuple(MemoryPriorItem(type=p.type, label=p.label, confidence=p.confidence,
+                                   influence_class=p.influence_class, epistemic_status=p.epistemic_status)
+                   for p in ctx.memory.priors)
     return InvestigationSummaryBundle(
         overall_probability=inv.overall_probability, overall_tier=inv.overall_tier,
         confidence=inv.confidence, convergence_score=inv.convergence_score,
         inputs_provided=inv.inputs_provided, post_content_id=ctx.post.content_id,
         platform=inv.platform, cross_links=links,
+        coordination=_coordination_digest(ctx), contributions=_summary_contributions(ctx),
+        accounts_digest=_accounts_digest(ctx), weak_signals=_summary_weak_signals(ctx),
+        memory_priors=priors,
         component_bundle_ids=tuple(sorted((components or {}).items())),
     )
 
@@ -403,6 +504,7 @@ def build_evidence_bundles(context: InvestigationContext) -> EvidenceBundleSet:
 
 __all__ = [
     "EVIDENCE_BUNDLE_SCHEMA_VERSION",
+    "CoordinationDigestItem", "AccountsDigestItem",
     "CommentEvidenceBundle", "CommenterHistoryBundle", "AccountEvidenceBundle",
     "NarrativeEvidenceBundle", "CoordinationEvidenceBundle", "CampaignEvidenceBundle",
     "InvestigationSummaryBundle", "EvidenceBundleSet",

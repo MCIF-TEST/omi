@@ -1,15 +1,14 @@
-"""LLM provider abstraction.
+"""LLM provider abstraction for investigation COMMENTARY (analyst-style prose).
 
-Two implementations:
+``TemplateProvider`` — deterministic, no API calls, never fails — is the sole production provider.
 
-* ``TemplateProvider`` — deterministic, no API calls. Ships with every
-  install; never fails. Output is competent if not poetic.
-* ``AnthropicProvider`` — calls Claude Haiku. Activated by setting
-  ``OMI_ANTHROPIC_API_KEY``. Uses prompt caching on the system
-  message so repeated calls are cheap.
-
-Selection is automatic: if the key is set AND the ``anthropic`` SDK
-is importable, use Anthropic; else fall back.
+Phase P3.4 (canonical reasoning unification) RETIRED the Anthropic (Claude Haiku) provider that used to
+back commentary. It was a SECOND production AI reasoning engine: a different model, reached with prompt
+text embedded in ``commentary.py`` and WITHOUT the Package Loader, the Evidence Bundle, the Governor, or
+the deterministic Floor. Omi now has exactly ONE production AI reasoning architecture — the canonical
+stage pipeline (Evidence Bundle → canonical Prompt Builder → AI Investigation Runtime → Mistral →
+Governor). Commentary is a DETERMINISTIC PRESENTATION projection of the engine's evidence, not an
+independent reasoning engine. Tests can still inject a provider via ``set_provider_for_tests``.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 
 
 @dataclass
@@ -130,84 +129,24 @@ def _parse_digest(digest: str) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Anthropic provider
-# ---------------------------------------------------------------------------
-
-
-class AnthropicProvider:
-    """Calls Claude Haiku via the Anthropic SDK with prompt caching on
-    the system message (~80% input-token reduction at scale)."""
-
-    name: str
-
-    def __init__(self, api_key: str, model: str):
-        self._api_key = api_key
-        self._model = model
-        self.name = f"anthropic-{model}"
-
-    def synthesize(self, *, system: str, user: str, max_tokens: int) -> ProviderResult:
-        try:
-            from anthropic import Anthropic  # type: ignore
-        except ImportError:
-            # SDK not installed — fall back to template gracefully.
-            return TemplateProvider().synthesize(
-                system=system, user=user, max_tokens=max_tokens,
-            )
-
-        try:
-            client = Anthropic(api_key=self._api_key)
-            resp = client.messages.create(
-                model=self._model,
-                max_tokens=max_tokens,
-                # Cache the system message — identical across all calls,
-                # so after the first generation we pay ~10% of the input
-                # cost for the system portion.
-                system=[
-                    {
-                        "type": "text",
-                        "text": system,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=[{"role": "user", "content": user}],
-            )
-            blocks = getattr(resp, "content", []) or []
-            text_parts: list[str] = []
-            for b in blocks:
-                t = getattr(b, "text", None)
-                if isinstance(t, str):
-                    text_parts.append(t)
-            text = "".join(text_parts).strip()
-            usage = getattr(resp, "usage", None)
-            tokens = 0
-            if usage is not None:
-                tokens = int(getattr(usage, "input_tokens", 0)) + int(getattr(usage, "output_tokens", 0))
-            return ProviderResult(text=text or "(empty response)", provider=self.name, tokens_used=tokens)
-        except Exception:  # noqa: BLE001 — network/API error → fall back gracefully
-            return TemplateProvider().synthesize(
-                system=system, user=user, max_tokens=max_tokens,
-            )
-
-
-# ---------------------------------------------------------------------------
 # Selector
 # ---------------------------------------------------------------------------
+# Phase P3.4 retired the Anthropic (Claude Haiku) provider — the second production AI reasoning engine.
+# The deterministic ``TemplateProvider`` is the sole production commentary provider, so commentary is a
+# deterministic PRESENTATION projection and the canonical Mistral stage pipeline is the ONE production
+# AI reasoning architecture. The ``settings.anthropic_*`` config fields are inert (retained only for
+# backward-compatible env parsing).
 
 _provider_override: LLMProvider | None = None
 
 
 def get_provider(settings: Settings | None = None) -> LLMProvider:
-    """Return the active provider. Anthropic when configured; template otherwise.
-
-    Tests can inject a fake via ``set_provider_for_tests()``.
-    """
+    """Return the active commentary provider. The deterministic ``TemplateProvider`` is the sole
+    production provider (Phase P3.4 retired the Anthropic 2nd reasoning engine). Tests can inject a
+    fake via ``set_provider_for_tests()``. ``settings`` is accepted for signature compatibility."""
     if _provider_override is not None:
         return _provider_override
-    settings = settings or get_settings()
-    key = (settings.anthropic_api_key or "").strip()
-    if not key:
-        return TemplateProvider()
-    return AnthropicProvider(api_key=key, model=settings.anthropic_model)
+    return TemplateProvider()
 
 
 def set_provider_for_tests(p: LLMProvider | None) -> None:
