@@ -22,15 +22,15 @@ interface Props {
 
 // Brand-aligned community palette
 const COMMUNITY_COLORS = [
-  '#3b8eff', '#8b5cf6', '#22d3a8', '#f472b6',
-  '#fb8c3c', '#facc15', '#6ba9ff', '#a78bfa',
+  '#c0734e', '#4f8fd6', '#4a9e6f', '#b06ad0',
+  '#b58936', '#2f9db2', '#d06a86', '#7f86e0',
 ];
 
 const TIER_HALO: Record<Tier, string> = {
-  low:      'rgba(34, 211, 168, 0.30)',
-  moderate: 'rgba(245, 182, 47, 0.42)',
-  elevated: 'rgba(251, 140, 60, 0.55)',
-  high:     'rgba(251, 59, 107, 0.65)',
+  low:      'rgba(46, 207, 150, 0.30)',
+  moderate: 'rgba(242, 188, 46, 0.42)',
+  elevated: 'rgba(248, 118, 58, 0.55)',
+  high:     'rgba(244, 63, 104, 0.65)',
 };
 
 export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
@@ -87,9 +87,9 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
         <defs>
           {/* Deep-space background */}
           <radialGradient id="rg-bg" cx="50%" cy="50%" r="70%">
-            <stop offset="0%"   stopColor="#0a1020" />
-            <stop offset="60%"  stopColor="#05070f" />
-            <stop offset="100%" stopColor="#030409" />
+            <stop offset="0%"   stopColor="#1a1610" />
+            <stop offset="60%"  stopColor="#0b0908" />
+            <stop offset="100%" stopColor="#060505" />
           </radialGradient>
           {/* Node glow */}
           <filter id="rg-glow" x="-80%" y="-80%" width="260%" height="260%">
@@ -106,10 +106,10 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
         <rect x="0" y="0" width={W} height={H} fill="url(#rg-bg)" />
 
         {/* Concentric guide rings */}
-        <circle cx={cx} cy={cy} r={ringSize.inner} fill="none" stroke="rgba(59,142,255,0.14)" strokeDasharray="2 6" />
-        <circle cx={cx} cy={cy} r={ringSize.outer} fill="none" stroke="rgba(59,142,255,0.09)" strokeDasharray="2 7" />
+        <circle cx={cx} cy={cy} r={ringSize.inner} fill="none" stroke="rgba(217,164,74,0.16)" strokeDasharray="2 6" />
+        <circle cx={cx} cy={cy} r={ringSize.outer} fill="none" stroke="rgba(217,164,74,0.10)" strokeDasharray="2 7" />
         {/* Radial spokes (faint) */}
-        <g stroke="rgba(59,142,255,0.05)" strokeWidth="0.5">
+        <g stroke="rgba(217,164,74,0.06)" strokeWidth="0.5">
           {Array.from({ length: 12 }).map((_, i) => {
             const a = (i / 12) * Math.PI * 2;
             return (
@@ -137,7 +137,7 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
             const qx = mx + (cx - mx) * 0.18;
             const qy = my + (cy - my) * 0.18;
             const baseOpacity = hoverId ? (active ? 1 : 0.07) : 1;
-            const stroke = traced ? 'rgba(107,169,255,' : 'rgba(120,150,210,';
+            const stroke = traced ? 'rgba(236,194,117,' : 'rgba(168,158,140,';
             return (
               <path
                 key={i}
@@ -160,7 +160,7 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
           const isFocal = n.external_id === focal;
           const r = isFocal ? 17 : 9;
           const fill = COMMUNITY_COLORS[n.community_id % COMMUNITY_COLORS.length];
-          const halo = n.tier ? TIER_HALO[n.tier] : 'rgba(120, 150, 210, 0.22)';
+          const halo = n.tier ? TIER_HALO[n.tier] : 'rgba(168, 158, 140, 0.22)';
           const hovered = hoverId === n.external_id;
           const active = isActive(n.external_id);
           const tx = cx + p.x, ty = cy + p.y;
@@ -188,13 +188,13 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
               <circle
                 r={r}
                 fill={fill}
-                stroke={isFocal ? 'var(--accent-2)' : '#05070f'}
+                stroke={isFocal ? 'var(--accent-2)' : '#0b0908'}
                 strokeWidth={isFocal ? 2.5 : 1.5}
                 filter={isFocal ? 'url(#rg-glow-focal)' : hovered ? 'url(#rg-glow)' : undefined}
                 style={isFocal ? { animation: 'hv-node-pulse 3s ease-in-out infinite' } : undefined}
               />
               {/* inner highlight */}
-              <circle r={r * 0.4} cx={-r * 0.25} cy={-r * 0.25} fill="rgba(255,255,255,0.35)" />
+              <circle r={r * 0.4} cx={-r * 0.25} cy={-r * 0.25} fill="rgba(255,250,240,0.35)" />
               {(isFocal || hovered) && (
                 <text
                   y={r + 17}
@@ -203,7 +203,7 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
                   fontSize={12}
                   fontWeight={isFocal ? 600 : 400}
                   fontFamily="JetBrains Mono, monospace"
-                  style={{ paintOrder: 'stroke', stroke: '#05070f', strokeWidth: 3 }}
+                  style={{ paintOrder: 'stroke', stroke: '#0b0908', strokeWidth: 3 }}
                 >
                   {truncate(n.handle, 22)}
                 </text>

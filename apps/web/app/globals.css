@@ -3,86 +3,96 @@
 @tailwind utilities;
 
 /* =====================================================================
-   OMISPHERE — Online Media Intelligence
-   Deep black · electric blue · Space Grotesk + Inter + JetBrains Mono
+   OMISPHERE — "OMI NOIR"
+   The dark room where evidence is read.
+
+   Warm obsidian surfaces · parchment ink · brass instruments ·
+   violet for AI reasoning · and ONE ceremonial gradient: the THERMAL
+   BAND — the suspicion spectrum itself (low→high) as the brand mark.
+
+   Voices:  Instrument Serif = the dossier (page titles, verdict prose)
+            Inter            = the interface
+            JetBrains Mono   = the evidence (ids, numbers, handles)
    ===================================================================== */
 
 :root {
-  /* Surfaces — refined neutral obsidian (premium console, less "blue HUD") */
-  --bg-deep:    #08090b;
-  --bg:         #0b0c0e;
-  --bg-elev:    #111315;
-  --bg-elev-2:  #181a1d;
+  /* Surfaces — warm obsidian ramp (film-noir room, not blue HUD) */
+  --bg-deep:    #0a0908;
+  --bg:         #0e0d0c;
+  --bg-elev:    #151312;
+  --bg-elev-2:  #1c1916;
+  --bg-elev-3:  #242018;
+  --bg-inset:   #070606;
 
-  /* Borders — crisp neutral hairlines (Linear/Vercel) */
-  --border:     #232529;
-  --border-2:   #2f3236;
-  --border-hot: #43474e;
+  /* Borders — warm hairlines */
+  --border:     #292420;
+  --border-2:   #37312a;
+  --border-hot: #4c443a;
 
-  /* Text — cool near-neutral ramp. Tuned for WCAG AA on the obsidian surfaces:
+  /* Text — parchment ink ramp. Tuned for WCAG AA on the obsidian surfaces:
      dim ~8:1, mute ~6:1, faint ~3.5:1 (faint is for non-essential/decoration). */
-  --text:       #f4f6f8;
-  --text-dim:   #aeb6c1;
-  --text-mute:  #8b94a1;
-  --text-faint: #646d79;
+  --text:       #f5f1e8;
+  --text-dim:   #b8b0a2;
+  --text-mute:  #918a7c;
+  --text-faint: #675f52;
 
-  /* Accents */
-  --accent:     #3b8eff;
-  --accent-2:   #6ba9ff;
-  --accent-dim: #1d5fd0;
+  /* Accents — brass: the investigator's lamp. Links, focus, live indicators. */
+  --accent:     #d9a44a;
+  --accent-2:   #ecc275;
+  --accent-dim: #a2742b;
 
-  /* Intelligence identity — electric blue + violet (the OmiSphere signature).
-     Blue = primary action / authenticity; violet = AI reasoning / coordination. */
-  --violet:     #8b5cf6;
-  --violet-2:   #a78bfa;
-  --violet-dim: #6d28d9;
-  --grad-brand: linear-gradient(118deg, var(--accent-2) 0%, var(--accent) 46%, var(--violet) 100%);
-  --grad-brand-soft: linear-gradient(118deg, rgba(107,169,255,0.16) 0%, rgba(59,142,255,0.13) 46%, rgba(139,92,246,0.16) 100%);
+  /* AI-reasoning identity — violet ink. The one cool voice in the warm room:
+     wherever the model speaks (analyst panels, reasoning), it writes in violet. */
+  --violet:     #a98be0;
+  --violet-2:   #c4aeee;
+  --violet-dim: #7d5cc6;
 
-  /* Status / tiers */
-  --tier-low:      #22d3a8;
-  --tier-moderate: #f5b62f;
-  --tier-elevated: #fb8c3c;
-  --tier-high:     #fb3b6b;
+  /* THE THERMAL BAND — the probability spectrum as the brand signature.
+     Omi's identity gradient IS the suspicion ramp (low → high). Ceremonial
+     use only: logo arc, section ticks, active-nav tick, scan progress. */
+  --grad-brand: linear-gradient(90deg, var(--tier-low) 0%, var(--tier-moderate) 36%, var(--tier-elevated) 66%, var(--tier-high) 100%);
+  --grad-brand-soft: linear-gradient(90deg, rgba(46,207,150,0.14) 0%, rgba(242,188,46,0.12) 36%, rgba(248,118,58,0.12) 66%, rgba(244,63,104,0.14) 100%);
+
+  /* Status / tiers — the semantic spectrum (always dot + label, never color-alone) */
+  --tier-low:      #2ecf96;
+  --tier-moderate: #f2bc2e;
+  --tier-elevated: #f8763a;
+  --tier-high:     #f43f68;
   --ok:    var(--tier-low);
   --warn:  var(--tier-moderate);
   --danger: var(--tier-high);
 
   /* Type */
-  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
-
-  /* Surfaces — 5th level (inputs / active rows) + inset wells (code/evidence) */
-  --bg-elev-3: #212427;
-  --bg-inset:  #090a0c;
+  --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 
   /* Confidence / data-sufficiency ramp — SEPARATE from the action accent and the
      probability tier ramp. Uncertainty reads as desaturation, not a loud hue. */
-  --confidence-strong: #22d3a8;
-  --confidence-medium: #f5b62f;
-  --confidence-weak:   #6e7890;
+  --confidence-strong: #2ecf96;
+  --confidence-medium: #f2bc2e;
+  --confidence-weak:   #837b6d;
 
   /* Cluster-identity palette — persistent per-cluster hue (narratives / campaigns /
-     accounts), desaturated for a dark canvas. Navigate by colour, not just label. */
+     accounts). Fixed order, validated (CVD ≥ 12, contrast ≥ 3:1 on --bg-elev). */
   --cluster-1: #c0734e;  /* terracotta */
   --cluster-2: #4f8fd6;  /* sapphire   */
   --cluster-3: #4a9e6f;  /* forest     */
-  --cluster-4: #b06ad0;  /* violet     */
-  --cluster-5: #d0a24a;  /* marigold   */
-  --cluster-6: #56b6c2;  /* teal       */
+  --cluster-4: #b06ad0;  /* orchid     */
+  --cluster-5: #b58936;  /* bronze     */
+  --cluster-6: #2f9db2;  /* teal       */
   --cluster-7: #d06a86;  /* rose       */
-  --cluster-8: #8a8fd0;  /* periwinkle */
+  --cluster-8: #7f86e0;  /* periwinkle */
 
   /* Evidence-syntax palette — rendering raw source data (JSON / logs / diffs). */
-  --ev-string:  #6bc47f;
-  --ev-key:     #6ba9ff;
-  --ev-number:  #d0a24a;
-  --ev-keyword: #b06ad0;
-  --ev-error:   #fb3b6b;
-  --ev-meta:    #6e7890;
+  --ev-string:  #86c98f;
+  --ev-key:     #e3b964;
+  --ev-number:  #6fb3d9;
+  --ev-keyword: #b79ae8;
+  --ev-error:   #f43f68;
+  --ev-meta:    #837b6d;
 
   /* Motion */
   --ease-omi:  cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-mech: cubic-bezier(0.72, 0, 0.12, 1);  /* mechanical reveals (Retool) */
+  --ease-mech: cubic-bezier(0.72, 0, 0.12, 1);  /* mechanical reveals */
   --dur-hover: 0.18s;
   --dur-panel: 0.40s;
   --dur-view:  0.60s;
@@ -102,11 +112,22 @@
     overscroll-behavior-y: none;
   }
   * { border-color: var(--border); }
-  ::selection { background: rgba(59, 142, 255, 0.25); color: #fff; }
+  ::selection { background: rgba(217, 164, 74, 0.30); color: #fffdf8; }
 
-  h1, h2, h3, h4 {
+  /* The dossier voice — page titles and hero statements read as a typeset case
+     file. Instrument Serif ships one weight (400); scale carries the hierarchy.
+     font-synthesis: none makes any stray font-semibold/bold utility render as
+     true 400 instead of an ugly synthesized bold (real italic still works). */
+  h1, h2 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    font-synthesis: none;
+  }
+  /* Working headings stay in the interface voice. */
+  h3, h4 {
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.015em;
     font-weight: 600;
   }
 
@@ -125,22 +146,22 @@
     background-clip: content-box;
   }
 
-  /* Structural grid lines — no radial blobs */
+  /* Structural grid lines — the case-board under the paper */
   .bg-grid {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+      linear-gradient(rgba(245, 241, 232, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245, 241, 232, 0.02) 1px, transparent 1px);
     background-size: 64px 64px, 64px 64px;
   }
 
-  /* Film grain — adds surface texture, keeps it from feeling digital-flat */
+  /* Film grain — noir texture; keeps the dark room from feeling digital-flat */
   .grain::after {
     content: '';
     position: fixed;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    opacity: 0.03;
+    opacity: 0.035;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
@@ -153,43 +174,57 @@
 
 @layer components {
   .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
-  .display { font-family: var(--font-display); letter-spacing: -0.02em; }
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+    font-weight: 400;
+    font-synthesis: none;
+  }
 
-  /* Brand gradient text */
+  /* Brass gradient text — the lamplight wordmark ("OMI") */
   .text-gradient,
   .text-brand {
-    background: linear-gradient(118deg, var(--accent-2) 0%, var(--accent) 44%, var(--violet) 100%);
+    background: linear-gradient(118deg, #f2d492 0%, #d9a44a 48%, #b87c2e 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
-  /* Chrome silver text */
+  /* Parchment-silver text — the counterpart wordmark ("SPHERE") */
   .text-silver {
-    background: linear-gradient(180deg, #ffffff 0%, #d2d9e6 48%, #9aa6bd 100%);
+    background: linear-gradient(180deg, #fffdf8 0%, #e6ded0 48%, #b3a992 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
-  /* Glass surface */
-  .glass {
-    background: rgba(17, 19, 21, 0.72);
-    backdrop-filter: blur(20px) saturate(120%);
-    -webkit-backdrop-filter: blur(20px) saturate(120%);
-    border: 1px solid rgba(67, 71, 78, 0.5);
+  /* Thermal gradient text — ceremonial only (hero numbers, spectrum labels) */
+  .text-thermal {
+    background: var(--grad-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 
-  /* True blue->violet gradient border (intelligence-panel highlight) */
+  /* Glass surface — smoked amber glass */
+  .glass {
+    background: rgba(21, 19, 18, 0.74);
+    backdrop-filter: blur(20px) saturate(115%);
+    -webkit-backdrop-filter: blur(20px) saturate(115%);
+    border: 1px solid rgba(76, 68, 58, 0.5);
+  }
+
+  /* Brass→violet gradient border (intelligence-panel highlight: where the
+     evidence meets the AI's reading) */
   .gradient-border {
     background:
       linear-gradient(var(--bg-elev), var(--bg-elev)) padding-box,
-      var(--grad-brand) border-box;
+      linear-gradient(118deg, var(--accent) 0%, var(--accent-dim) 46%, var(--violet-dim) 100%) border-box;
     border: 1px solid transparent;
     border-radius: 12px;
   }
 
-  /* Atmospheric aurora — restrained blue+violet field for headers / hero only */
+  /* Atmospheric ember — restrained brass+violet field for headers / hero only */
   .aurora {
     position: relative;
     isolation: isolate;
@@ -202,11 +237,11 @@
     pointer-events: none;
     border-radius: inherit;
     background:
-      radial-gradient(60% 120% at 12% -10%, rgba(59,142,255,0.14), transparent 60%),
-      radial-gradient(50% 120% at 92% -20%, rgba(139,92,246,0.13), transparent 60%);
+      radial-gradient(60% 120% at 12% -10%, rgba(217, 164, 74, 0.12), transparent 60%),
+      radial-gradient(50% 120% at 92% -20%, rgba(169, 139, 224, 0.09), transparent 60%);
   }
 
-  /* Section label — uppercase SANS eyebrow with a gradient tick. Sans (not mono)
+  /* Section label — uppercase SANS eyebrow with a THERMAL tick. Sans (not mono)
      because it's human-readable label text; mono is reserved for IDs/URLs/values. */
   .section-label {
     display: inline-flex;
@@ -225,11 +260,11 @@
     background: var(--grad-brand);
   }
 
-  /* Stat / metric value — display font, tabular, optical tightening */
+  /* Stat / metric value — figures are EVIDENCE: they speak in mono, tabular */
   .stat-value {
-    font-family: var(--font-display);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.04em;
     line-height: 1;
   }
 
@@ -270,16 +305,16 @@
     flex: none;
   }
 
-  /* Primary button */
+  /* Primary button — brass lamp glow */
   .btn-glow {
     transition: box-shadow 0.15s ease, background 0.12s ease;
   }
   .btn-glow:hover {
-    box-shadow: 0 0 0 1px rgba(59, 142, 255, 0.45), 0 4px 20px rgba(59, 142, 255, 0.08);
+    box-shadow: 0 0 0 1px rgba(217, 164, 74, 0.45), 0 4px 20px rgba(217, 164, 74, 0.10);
   }
   .btn-glow:active { transform: translateY(1px); }
 
-  /* Sidebar nav item — clean highlight pill, no left bar (Linear) */
+  /* Sidebar nav item — quiet parchment, thermal tick when active */
   .nav-item {
     display: flex;
     align-items: center;
@@ -296,7 +331,7 @@
   .nav-item.active {
     color: var(--text);
     background:
-      linear-gradient(90deg, rgba(59,142,255,0.10), rgba(139,92,246,0.05) 70%, transparent),
+      linear-gradient(90deg, rgba(217, 164, 74, 0.10), rgba(169, 139, 224, 0.04) 70%, transparent),
       var(--bg-elev-2);
     box-shadow: inset 0 0 0 1px var(--border-2);
   }
@@ -362,7 +397,7 @@
   .report-page .text-fg-faint,
   .report-page .report-muted { color: #555555 !important; }
   .report-page .text-accent,
-  .report-page .report-accent { color: #1d5fd0 !important; }
+  .report-page .report-accent { color: #8a5f14 !important; }
   .report-page .text-tier-elevated { color: #b8530c !important; }
   .report-page .text-tier-high     { color: #a4163a !important; }
   .report-page .text-tier-moderate { color: #92660a !important; }
@@ -467,7 +502,7 @@
   gap: 3px;
   min-height: 52px;
   flex: 1 1 0%;
-  color: var(--text-mute, #6b7488);
+  color: var(--text-mute, #918a7c);
   font-size: 0.6rem;
   letter-spacing: 0.04em;
   position: relative;
@@ -483,7 +518,7 @@
   width: 24px;
   height: 2px;
   border-radius: 0 0 2px 2px;
-  background: var(--accent);
+  background: var(--grad-brand);
 }
 
 @keyframes sheet-up {

@@ -16,9 +16,9 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           .report-card { border: 1px solid #d4d4d8 !important; background: #fafafa !important; page-break-inside: avoid; }
           .report-card * { color: #0b101d !important; }
           .report-muted { color: #6b7280 !important; }
-          .report-accent { color: #0e7490 !important; }
+          .report-accent { color: #8a5f14 !important; }
           .report-tier-pill { border: 1px solid currentColor !important; background: transparent !important; }
-          a { color: #0e7490 !important; text-decoration: none !important; }
+          a { color: #8a5f14 !important; text-decoration: none !important; }
           @page { margin: 18mm 16mm; }
         }
       `}</style>

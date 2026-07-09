@@ -106,8 +106,8 @@ export function PostingHeatmap({ comments }: Props) {
                     style={{
                       backgroundColor:
                         intensity === 0
-                          ? 'rgba(255,255,255,0.04)'
-                          : `rgba(96, 165, 250, ${Math.max(0.15, intensity)})`,
+                          ? 'rgba(245,241,232,0.04)'
+                          : `rgba(217, 164, 74, ${Math.max(0.15, intensity)})`,
                     }}
                     title={`${day} ${h}:00 — ${count} comment${count === 1 ? '' : 's'}`}
                   />
@@ -132,7 +132,7 @@ export function PostingHeatmap({ comments }: Props) {
             <div
               key={a}
               className="w-3 h-3 rounded-[2px]"
-              style={{ backgroundColor: `rgba(96, 165, 250, ${a})` }}
+              style={{ backgroundColor: `rgba(217, 164, 74, ${a})` }}
             />
           ))}
           <span className="uppercase tracking-wider">More</span>

@@ -52,13 +52,13 @@ export function LoadingOverlay({ active, status }: { active: boolean; status?: J
             it does not claim a known percentage. */}
         <div className="relative shrink-0 w-28 h-28 mx-auto sm:mx-0">
           <svg viewBox="0 0 112 112" className="w-full h-full -rotate-90">
-            <circle cx="56" cy="56" r="50" stroke="rgba(59,142,255,0.10)" strokeWidth="1.5" fill="none" />
-            <circle cx="56" cy="56" r="50" stroke="#3b8eff" strokeWidth="1.5" fill="none"
+            <circle cx="56" cy="56" r="50" stroke="rgba(217,164,74,0.12)" strokeWidth="1.5" fill="none" />
+            <circle cx="56" cy="56" r="50" stroke="#d9a44a" strokeWidth="1.5" fill="none"
               strokeDasharray="28 290"
               style={{ transformOrigin: '56px 56px', animation: 'hv-radar 2.8s linear infinite' }}
             />
-            <circle cx="56" cy="56" r="36" stroke="rgba(139,92,246,0.18)" strokeWidth="1" fill="none" />
-            <circle cx="56" cy="56" r="36" stroke="#8b5cf6" strokeWidth="1" fill="none"
+            <circle cx="56" cy="56" r="36" stroke="rgba(169,139,224,0.18)" strokeWidth="1" fill="none" />
+            <circle cx="56" cy="56" r="36" stroke="#a98be0" strokeWidth="1" fill="none"
               strokeDasharray="18 207"
               style={{ transformOrigin: '56px 56px', animation: 'hv-radar 2s linear infinite reverse' }}
             />

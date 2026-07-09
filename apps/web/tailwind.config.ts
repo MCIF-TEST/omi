@@ -52,7 +52,7 @@ const config: Config = {
       },
       fontFamily: {
         sans:    ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Space Grotesk', 'Inter', 'ui-sans-serif', 'sans-serif'],
+        display: ['Instrument Serif', 'Georgia', 'Times New Roman', 'serif'],
         mono:    ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {
@@ -69,20 +69,21 @@ const config: Config = {
         full: '9999px',
       },
       boxShadow: {
-        'glow':      '0 0 16px rgba(59,142,255,0.1), 0 0 32px rgba(59,142,255,0.04)',
-        'glow-sm':   '0 0 8px rgba(59,142,255,0.22)',
+        'glow':      '0 0 16px rgba(217,164,74,0.10), 0 0 32px rgba(217,164,74,0.04)',
+        'glow-sm':   '0 0 8px rgba(217,164,74,0.24)',
         'card':      '0 4px 20px rgba(0,0,0,0.4)',
         'card-lg':   '0 8px 40px rgba(0,0,0,0.55)',
-        'inner-top': 'inset 0 1px 0 rgba(255,255,255,0.04)',
-        'glow-danger': '0 0 8px rgba(251,59,107,0.25)',
-        'glow-violet': '0 0 16px rgba(139,92,246,0.16), 0 0 40px rgba(139,92,246,0.05)',
-        'glow-brand': '0 0 0 1px rgba(59,142,255,0.30), 0 8px 30px rgba(59,142,255,0.10), 0 8px 40px rgba(139,92,246,0.07)',
-        'overlay':   '0 16px 50px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
+        'inner-top': 'inset 0 1px 0 rgba(255,253,248,0.04)',
+        'glow-danger': '0 0 8px rgba(244,63,104,0.25)',
+        'glow-violet': '0 0 16px rgba(169,139,224,0.16), 0 0 40px rgba(169,139,224,0.05)',
+        'glow-brand': '0 0 0 1px rgba(217,164,74,0.32), 0 8px 30px rgba(217,164,74,0.10), 0 8px 40px rgba(169,139,224,0.06)',
+        'overlay':   '0 16px 50px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,253,248,0.04)',
         'hairline':  'inset 0 0 0 1px var(--border)',
         'pop':       '0 6px 24px -8px rgba(0,0,0,0.6), 0 0 0 1px var(--border)',
       },
       backgroundImage: {
-        'brand-gradient': 'linear-gradient(118deg, #6ba9ff 0%, #3b8eff 44%, #8b5cf6 100%)',
+        // The THERMAL BAND — the suspicion spectrum (low→high) as the brand mark.
+        'brand-gradient': 'linear-gradient(90deg, #2ecf96 0%, #f2bc2e 36%, #f8763a 66%, #f43f68 100%)',
       },
       transitionTimingFunction: {
         'omi': 'cubic-bezier(0.16, 1, 0.3, 1)',
