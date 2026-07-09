@@ -29,9 +29,9 @@ from app.evidence.bundle import digest
 from app.reasoning import analyst as _analyst
 from app.reasoning.context.investigation import InvestigationContext
 from app.reasoning.evidence_bundles import CommentEvidenceBundle, build_comment_bundle
-from app.reasoning.model_providers.remote import extract_json, forensic_on
 from app.reasoning.package_loader import load_comment_assets, load_package
 from app.reasoning.prompt.builder import PromptPackage
+from app.reasoning.runtime import RuntimeInference, run_stage_inference
 
 logger = logging.getLogger("omi.reasoning.comment_analysis")
 
@@ -80,6 +80,15 @@ class CommentAnalysisReport:
     model_id: str
     endpoint_called: bool
     forensic_captured: bool
+    # C4 — endpoint forensic metadata, surfaced from the runtime (never recomputed here). Excluded
+    # from the ``report_id`` content address because it is non-deterministic (wall-clock/network).
+    latency_ms: float = 0.0
+    attempts: int = 0
+    tokens: dict | None = None
+    endpoint_request_id: str | None = None
+    response_status: int | None = None
+    prompt_hash: str = ""
+    served_model: str = ""
     report_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -197,72 +206,23 @@ def run_comment_analysis(
     comment_assets = load_comment_assets()
     pp = build_comment_prompt_package(bundle, loaded=loaded, comment_assets=comment_assets)
 
-    impl = _analyst._impl()
-    # The ONE Binder → the same canonical comment_section EvidenceBundle the Governor validates
-    # against (the echo source is its ``headline()``). Same bind params as the council Orchestrator.
+    # The Governor's evidence bundle — its ``headline()`` is the echo source; same bind params as the
+    # council Orchestrator. The per-comment CommentAnalysis objects ride alongside the constitutional
+    # wrapper; the runtime's Governor validates the wrapper unchanged (P3.1 grain decision).
     gov_bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform)
-    config = (impl.load_analyst_config(repo_id=getattr(settings, "analyst_hf_repo", None),
-                                       revision=getattr(settings, "analyst_hf_revision", None))
-              if impl is not None else None)
 
-    capture: dict[str, Any] = {}
-    endpoint = getattr(settings, "analyst_endpoint_url", None)
-    enabled = _analyst.analyst_enabled(settings) and impl is not None
-    raw: str | None = None
-    endpoint_called = False
-    if enabled and endpoint:
-        transport = _analyst._qwen_transport(
-            endpoint, timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
-            max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
-            revision=getattr(settings, "analyst_hf_revision", None),
-            api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"),
-            model=pp.model_id, capture=capture,
-            prompt_hash=pp.manifest["prompt_hash"], package_hash=pp.manifest["package_hash"])
-        endpoint_called = True
-        raw = transport(pp.system, pp.user, config)  # ONE request
+    # THE ONE inference — owned by the AI Investigation Runtime (P3.1.6 cutover). This stage NEVER
+    # touches the transport or the Governor: the runtime calls the endpoint once, captures the full
+    # forensics, echo-guards, runs the MANDATORY Governor, and degrades to the deterministic Floor.
+    inference: RuntimeInference = run_stage_inference(pp, gov_bundle, settings=settings)
 
-    analyses, provider, model_backed, trace = self_adjudicate(raw, bundle, gov_bundle)
-    return _report(bundle, loaded, comment_assets, analyses, provider, model_backed, trace,
-                   endpoint_called)
-
-
-def self_adjudicate(raw, bundle, gov_bundle):
-    """Adjudicate the comment stage. The model's comment-section wrapper is echo-guarded to the
-    engine number and put through the **mandatory Governor**; on ANY failure the deterministic
-    **Floor** — the canonical FloorJudge wrapper (always Governor-valid by construction) plus a
-    factual per-comment analysis — is used, itself Governor-validated.
-
-    Per the approved P3.1 grain decision the Governor validates the constitutional comment-section
-    wrapper UNCHANGED. The per-comment ``CommentAnalysis`` objects ride ALONGSIDE the wrapper in
-    ``comment_analyses`` — they are not part of the analyst response schema, so they are separated
-    out before schema/Governor validation and never alter the wrapper the Governor sees."""
-    from app.governor import Governor
-    from app.reasoning.orchestrator.modules import build_ruling_assessment
-
-    governor = Governor()
-    hl = gov_bundle.headline()
-    if raw:
-        obj = extract_json(raw)
-        if isinstance(obj, dict):
-            core = {k: v for k, v in obj.items() if k != "comment_analyses"}
-            # Echo-guard (S4): never let the model move the engine's number/tier — echo the
-            # Governor's own bundle headline so the wrapper is validated against the truth source.
-            core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
-            core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
-            # The MANDATORY Governor is the gate — it validates the constitutional comment-section
-            # wrapper UNCHANGED (the per-comment CommentAnalysis objects are separated out above and
-            # never seen by the Governor). Permit => model-backed; any REJECT => deterministic Floor.
-            trace = governor.validate(core, gov_bundle, corroboration=core.get("corroboration"))
-            if trace.permitted:
-                return _model_comment_analyses(obj, bundle), "qwen-omi-analyst-v1", True, trace
-            logger.warning("comment_analysis: model wrapper REJECTED %s; Floor fallback",
-                           trace.violation_codes)
-    # Deterministic Floor — the canonical always-valid wrapper + a factual per-comment analysis.
-    wrapper = build_ruling_assessment(gov_bundle)
-    ftrace = governor.validate(wrapper, gov_bundle, corroboration=wrapper.get("corroboration"))
-    provider = ("deterministic-analyst-v1" if not raw
-                else "qwen-omi-analyst-v1->fallback:deterministic-analyst-v1")
-    return _floor_comment_analyses(bundle), provider, False, ftrace
+    # Typed per-comment extraction — the model's individual-comment reasoning when its wrapper was
+    # permitted and present, else the always-available deterministic per-comment Floor.
+    if inference.model_backed and inference.raw_obj is not None:
+        analyses = _model_comment_analyses(inference.raw_obj, bundle)
+    else:
+        analyses = _floor_comment_analyses(bundle)
+    return _report(bundle, loaded, comment_assets, analyses, inference)
 
 
 def _model_comment_analyses(obj: dict, bundle: CommentEvidenceBundle) -> tuple[CommentAnalysis, ...]:
@@ -296,19 +256,26 @@ def _model_comment_analyses(obj: dict, bundle: CommentEvidenceBundle) -> tuple[C
     return tuple(out) or _floor_comment_analyses(bundle)
 
 
-def _report(bundle, loaded, comment_assets, analyses, provider, model_backed, trace,
-            endpoint_called) -> CommentAnalysisReport:
-    addressed = {"analyses": [a.to_dict() for a in analyses], "provider": provider,
-                 "model_backed": model_backed, "governor_verdict": trace.verdict,
+def _report(bundle, loaded, comment_assets, analyses,
+            inference: RuntimeInference) -> CommentAnalysisReport:
+    trace = inference.trace
+    # Content address excludes the non-deterministic forensic capture (latency/tokens/etc.).
+    addressed = {"analyses": [a.to_dict() for a in analyses], "provider": inference.provider,
+                 "model_backed": inference.model_backed, "governor_verdict": trace.verdict,
                  "comment_bundle_id": bundle.bundle_id(), "package_hash": loaded.package_hash}
     return CommentAnalysisReport(
-        comment_analyses=analyses, provider=provider, model_backed=model_backed,
-        fallback=not model_backed, governor_verdict=trace.verdict,
+        comment_analyses=analyses, provider=inference.provider, model_backed=inference.model_backed,
+        fallback=inference.fallback, governor_verdict=trace.verdict,
         governor_trace_id=trace.trace_id(), violation_codes=tuple(trace.violation_codes),
         thread_probability=bundle.thread_probability, thread_tier=bundle.thread_tier,
         comment_count=bundle.comment_count, comment_bundle_id=bundle.bundle_id(),
         package_hash=loaded.package_hash, comment_template_hash=comment_assets.comment_template_hash,
-        model_id=loaded.model_id, endpoint_called=endpoint_called, forensic_captured=forensic_on(),
+        model_id=loaded.model_id, endpoint_called=inference.endpoint_called,
+        forensic_captured=inference.forensic_captured,
+        # C4 — the runtime's endpoint forensics survive into the typed result.
+        latency_ms=inference.latency_ms, attempts=inference.attempts, tokens=inference.tokens,
+        endpoint_request_id=inference.endpoint_request_id, response_status=inference.response_status,
+        prompt_hash=inference.prompt_hash, served_model=inference.served_model,
         report_id=digest(addressed, prefix="car:"),
     )
 

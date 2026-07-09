@@ -515,6 +515,15 @@ export interface FullVideoScanResult {
     tier: Tier;
     summary: string;
   };
+  // P3.1.6 — the AI-native Comment Analysis compatibility output. Present only when Comment
+  // Analysis is enabled; the UI consumes this in preference to the deterministic thread_scan.
+  comment_analysis?: {
+    overall_probability: number;
+    tier: Tier;
+    comment_count: number;
+    provider: string;
+    model_backed: boolean;
+  } | null;
   coordination_score: number;
   coordination_tier: Tier;
   clusters: CoordinationCluster[];

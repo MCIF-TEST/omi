@@ -225,19 +225,20 @@ def test_prompt_assembled_from_package_assets_only():
     assert pp.schema_ref == "comment_analysis_v1"
 
 
-def test_runtime_embeds_no_prompt_text_and_owns_no_endpoint_primitive():
+def test_runtime_embeds_no_prompt_text_and_delegates_inference_to_the_runtime():
     src = Path(CA.__file__).read_text(encoding="utf-8")
-    # the scaffolding text lives ONLY in the comment_template package asset, never in the runtime
+    # the scaffolding text lives ONLY in the comment_template package asset, never in the stage
     from app.reasoning.prompts.comment_template import COMMENT_RESPONSE_CONTRACT, COMMENT_SYSTEM_TASK
     assert COMMENT_SYSTEM_TASK[:40] not in src
     assert COMMENT_RESPONSE_CONTRACT[:40] not in src
     assert "# COMMENT ANALYSIS TASK" not in src
-    # the endpoint is reached ONLY through the ONE shared transport factory (no bespoke HTTP/retry)
-    assert "_qwen_transport" in src
+    # P3.1.6 cutover — the stage reaches inference ONLY through the AI Investigation Runtime; it
+    # never touches the transport or the Governor itself (those moved into runtime.infer).
+    assert "run_stage_inference" in src
+    assert "_qwen_transport" not in src
+    assert "governor.validate(" not in src.lower()
     assert "urlopen(" not in src and "import urllib" not in src
     assert "for attempt in range" not in src
-    # the Governor is invoked, not reimplemented
-    assert "governor.validate(" in src
 
 
 # --------------------------------------------------------------------------- #

@@ -241,6 +241,19 @@ class CoordinationClusterOut(BaseModel):
     metadata: dict[str, float] = Field(default_factory=dict)
 
 
+class ThreadCommentAnalysisOut(BaseModel):
+    """The AI Comment Analysis compatibility output (P3.1.6) surfaced to the UI — the thread-shaped
+    projection of the runtime's ``CommentAnalysisReport``. ``overall_probability``/``tier`` echo the
+    deterministic engine number (never recomputed by the model); ``provider``/``model_backed`` carry
+    the AI provenance. ``None`` when Comment Analysis is disabled (the UI then reads ``thread_scan``)."""
+
+    overall_probability: float = Field(ge=0.0, le=1.0)
+    tier: Tier
+    comment_count: int
+    provider: str
+    model_backed: bool
+
+
 class FullVideoScanResult(BaseModel):
     """The unified per-video output: per-commenter + thread-level + coordination."""
 
@@ -260,6 +273,9 @@ class FullVideoScanResult(BaseModel):
 
     # Thread-level: ai-writing + semantic over the full comment corpus
     thread_scan: ScanResult
+    # P3.1.6 — the AI-native Comment Analysis compatibility output. Present only when Comment
+    # Analysis is enabled; the UI consumes this in preference to the deterministic ``thread_scan``.
+    comment_analysis: ThreadCommentAnalysisOut | None = None
 
     # Cross-account coordination
     coordination_score: float = Field(ge=0.0, le=1.0)
