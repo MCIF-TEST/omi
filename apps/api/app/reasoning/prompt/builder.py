@@ -1,20 +1,14 @@
-"""The Canonical Prompt Builder — assemble the final prompt from package assets only.
+"""Prompt-builder shared types + the legacy P1.1 investigation-context builder.
 
-`build_prompt_package(context)` fills the Prompt Template asset's named slots with the other package
-assets (system prompt, constitution, specialist framework, knowledge library, response contract) and
-with the :class:`InvestigationContext` evidence, producing one content-addressed
-:class:`PromptPackage`.
+This module hosts :class:`PromptPackage` (the assembled prompt object every builder emits) and the
+**legacy** :func:`build_prompt_package` — the P1.1 whole-investigation builder that fills the
+investigation template's ``system_blocks`` slots from an :class:`InvestigationContext`.
 
-Two invariants this module upholds:
-
-1. **Zero embedded prompt text** — every header, preamble, guard, and instruction lives in the Prompt
-   Template asset; every block of content comes from an asset or the InvestigationContext. Structured
-   evidence is rendered as JSON (data, never instructions).
-2. **It never knows where assets originate** — all assets arrive from the ONE Canonical Package Loader
-   (:func:`app.reasoning.package_loader.load_package`). This module imports no prompt/constitution/
-   knowledge/framework/template source module; it reads a verified, immutable ``LoadedPackage``.
-
-No model, no endpoint, no inference — that is the next phase.
+The ONE canonical **stage** prompt builder — ``build_prompt(stage, bundle)``, which every AI reasoning
+stage uses — lives in :mod:`app.reasoning.prompt.stage_builder`. ``build_prompt_package`` is a
+different input shape (context, not bundle) and is currently UNWIRED; it is retained only because it
+is tied to the still-live investigation template asset (``prompt_template.json``) and its loader
+proofs. Both emit a content-addressed :class:`PromptPackage`; neither performs inference.
 """
 from __future__ import annotations
 
@@ -33,10 +27,9 @@ _RESPONSE_FORMAT = "json_object"
 
 @dataclass(frozen=True)
 class PromptPackage:
-    """The assembled, content-addressed prompt bundle — the Prompt Builder's output and the sole
-    input to the (future) inference stage. Carries the system + user messages and a provenance
-    manifest that content-addresses every package asset + the InvestigationContext it was built from.
-    """
+    """The assembled, content-addressed prompt bundle — a Prompt Builder's output and the sole input
+    to the inference stage. Carries the system + user messages and a provenance manifest that
+    content-addresses every package asset + the evidence it was built from."""
 
     system: str
     user: str
@@ -50,6 +43,14 @@ class PromptPackage:
         return asdict(self)
 
 
+# --------------------------------------------------------------------------- #
+# Legacy P1.1 investigation-context builder — RETAINED (not part of the P3.3 stage consolidation).
+# It assembles the whole-investigation prompt from the ONE Canonical Package Loader's *investigation*
+# template (``assembly_template()``'s ``system_blocks``), taking an InvestigationContext (not an
+# Evidence Bundle). It is currently UNWIRED (no production caller) but tied to the still-live
+# investigation template asset (``prompt_template.json``) + its loader proofs, so it is kept until
+# that subsystem's fate is decided. Distinct input shape from ``build_prompt(stage, bundle)``.
+# --------------------------------------------------------------------------- #
 def _block(header: str, preamble: str, body: str) -> str:
     return "\n".join(p for p in (header, preamble, body) if p)
 
@@ -61,13 +62,13 @@ def build_prompt_package(
     model_id: str | None = None,
     knowledge_limit: int = _KNOWLEDGE_LIMIT,
 ) -> PromptPackage:
-    """Assemble the :class:`PromptPackage` for one :class:`InvestigationContext`, exclusively from the
-    verified assets of the Canonical Package Loader. Deterministic + content-addressed; performs no
-    inference and calls no model."""
+    """Assemble the whole-investigation :class:`PromptPackage` from the investigation template slots,
+    exclusively from the verified assets of the Canonical Package Loader. Deterministic +
+    content-addressed; performs no inference and calls no model. (Legacy P1.1 — unwired; see the note
+    above. The per-stage prompt is :func:`build_prompt`.)"""
     lp = loaded or load_package(model_id)
     tmpl = lp.assembly_template()
 
-    # --- system message: fill the template's system blocks with the loaded package assets --------
     entries = lp.knowledge()[: max(0, knowledge_limit)]
     knowledge_used = [e["id"] for e in entries]
     knowledge_body = json.dumps(
@@ -87,7 +88,6 @@ def build_prompt_package(
         s for s in (_block(b["header"], b["preamble"], fills.get(b["slot"], "")) for b in tmpl["system_blocks"]) if s
     ).strip()
 
-    # --- user message: present the InvestigationContext evidence under the template's headers ----
     cdict = context.to_dict()
     ev_parts: list[str] = [tmpl["evidence_preamble"]]
     for s in tmpl["evidence_sections"]:

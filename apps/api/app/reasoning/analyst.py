@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import Settings, get_settings
-from app.reasoning.contracts import ReasoningContract, Ruling
 
 logger = logging.getLogger("omi.reasoning.analyst")
 
@@ -214,80 +213,12 @@ def _retrieve_prior_context(store: Any, app_bundle: Any, *, now: Any = None, top
 # --------------------------------------------------------------------------- #
 # Assessment (sync core) — off the hot path; safe to run in a worker thread
 # --------------------------------------------------------------------------- #
-# --------------------------------------------------------------------------- #
-# The analyst as the constitutional council's judge (Sprint 017 — runtime convergence)
-# --------------------------------------------------------------------------- #
-# Production runs through the ONE Orchestrator — the same constitutional spine the shadow
-# council uses. The rich OMI ANALYST is the council's *judge* (its schema-shaped assessment IS
-# the Ruling); the deterministic analyst is the council's *floor*. The Orchestrator supplies the
-# ONE Binder, the **mandatory** Governor, and the deterministic Floor fallback. There is no
-# parallel governance path. OmiScore is never touched.
-_JUDGE_CONSTRAINTS = (
-    "echo the engine number; never recompute the score",
-    "evidence, not verdict; cite only provided evidence",
-    "respect the corroboration gate; supplemental signals are context only",
-)
-
-
-class _AnalystJudge:
-    """The production OMI ANALYST wrapped as the council judge. ``OmiAnalyst.assess`` already
-    degrades a failed/invalid model output to its deterministic provider, so ``run`` yields a
-    schema-shaped Ruling; the Orchestrator's Governor + Floor are the outer constitutional gate."""
-
-    contract = ReasoningContract(
-        module="omi_analyst", tier=3, output_kind="ruling", contract_version="v1",
-        inputs=("*",), constraints=_JUDGE_CONSTRAINTS,
-    )
-
-    def __init__(self, *, impl: Any, config: Any, provider: Any, payload: dict,
-                 ref: str, platform: str, prompt_meta: dict, store: Any = None, now: Any = None) -> None:
-        self._impl, self._config, self._provider = impl, config, provider
-        self._payload, self._ref, self._platform = payload, ref, platform
-        self._store, self._now = store, now
-        self.last_meta: dict[str, Any] = {
-            "provider": "none", "latency_ms": 0.0,
-            "model_revision": getattr(config, "model_revision", None), "prompt": prompt_meta,
-        }
-
-    def run(self, view: Any) -> list:
-        prior_context = _retrieve_prior_context(self._store, getattr(view, "bundle", None), now=self._now)
-        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform,
-                             impl=self._impl, prior_context=prior_context)
-        self.last_meta["prior_context"] = len(prior_context)
-        analyst_obj = self._impl.OmiAnalyst(
-            config=self._config, provider=self._provider, store=None, record=False)
-        t0 = time.perf_counter()
-        outcome = analyst_obj.assess(lossy)
-        self.last_meta = {**self.last_meta, "provider": outcome.provider,
-                          "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
-        if not outcome.valid:                          # essentially unreachable (assess self-degrades)
-            logger.warning("omi_analyst produced invalid output: %s", outcome.errors[:3])
-            return []                                  # no Ruling → caller degrades to None
-        return [Ruling(module=self.contract.module, assessment=outcome.response)]
-
-
-class _AnalystFloor:
-    """The deterministic analyst as the council's always-valid Floor judge (rich, schema-shaped)."""
-
-    contract = ReasoningContract(
-        module="omi_analyst_floor", tier=3, output_kind="ruling", contract_version="v1",
-        inputs=("*",), constraints=("always schema-valid by construction",),
-    )
-
-    def __init__(self, *, impl: Any, config: Any, payload: dict, ref: str, platform: str,
-                 model_revision: str | None, store: Any = None, now: Any = None) -> None:
-        self._impl, self._config = impl, config
-        self._payload, self._ref, self._platform = payload, ref, platform
-        self._store, self._now = store, now
-        self.last_meta = {"provider": "deterministic-floor", "latency_ms": 0.0,
-                          "model_revision": model_revision, "prompt": {}}
-
-    def run(self, view: Any) -> list:
-        prior_context = _retrieve_prior_context(self._store, getattr(view, "bundle", None), now=self._now)
-        lossy = build_bundle(self._payload, ref=self._ref, platform=self._platform,
-                             impl=self._impl, prior_context=prior_context)
-        result = self._impl.DeterministicAnalystProvider().generate(lossy, self._config)
-        return [Ruling(module=self.contract.module, assessment=result.response)]
+# P3.2 — canonical runtime cutover. The council-wrapper layer (_AnalystJudge/_AnalystFloor/
+# _attach_governance, Sprint 017) is retired: the AI Investigation Runtime (``runtime.infer``,
+# judge_then_floor adjudication) now owns the endpoint call, the mandatory Governor, the
+# deterministic Floor, and the forensic capture — with the same Binder evidence, the same
+# registry prompt, and the same governance contract. The council Orchestrator remains only in
+# Shadow Mode (admin-only evaluation), never in production. OmiScore is never touched.
 
 
 # --------------------------------------------------------------------------- #
@@ -366,17 +297,17 @@ def _assess_core(
     """Produce a Governor-validated structured assessment for an investigation payload, or None if
     the feature is off / unavailable / errored. Never raises.
 
-    P2.1 — this is the AI Investigation Runtime's delegated orchestration core; reach it ONLY through
-    the runtime (``app.reasoning.runtime.assess_investigation``) / the ``assess_payload`` compatibility
-    wrapper below, never directly. The council orchestration + metadata are unchanged.
+    P2.1 — reach this ONLY through the runtime (``app.reasoning.runtime.assess_investigation``) /
+    the ``assess_payload`` compatibility wrapper below, never directly.
 
-    Sprint 017 — runtime convergence: this executes through the **constitutional council
-    Orchestrator** (the same one the shadow council uses), not a parallel reasoning path. The rich
-    OMI ANALYST is the council's *judge* and the deterministic analyst is its *floor*; the
-    Orchestrator supplies the ONE Binder, the **mandatory** Governor, and the deterministic Floor
-    fallback. The prompt comes from the ONE Prompt Registry (Sprint 016). A ``governance`` block
-    (verdict, trace id, provider, model revision, prompt, latency) is attached for transparency.
-    The Governor is never skipped; the Floor is never bypassed; OmiScore is never touched.
+    P3.2 — canonical runtime cutover: execution is owned by the **AI Investigation Runtime**
+    (``runtime.infer`` — the ONE endpoint path, the ONE mandatory Governor invocation, the ONE
+    deterministic Floor, the ONE forensic capture), with the legacy council's judge-then-floor
+    adjudication semantics preserved exactly. This stage assembles the same evidence (ONE Binder,
+    prior-context retrieval, lossy bundle) and the same prompt (ONE Prompt Registry system prompt
+    via the package Prompt Builder + the ml-impl user message) as before — byte-identical model
+    inputs, governance block, and metrics. The Governor is never skipped; the Floor is never
+    bypassed; OmiScore is never touched.
     """
     settings = settings or get_settings()
     if not analyst_enabled(settings):
@@ -385,7 +316,6 @@ def _assess_core(
     if impl is None:
         return None
     try:
-        from app.reasoning.orchestrator import Orchestrator
         from app.reasoning.prompts import default_registry
 
         config = impl.load_analyst_config(
@@ -395,42 +325,27 @@ def _assess_core(
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,
                        "hash": spec.prompt_hash, "source": "registry"}
         # The canonical AI deployment package (published to HF; loaded from bundled data) that this
-        # investigation reasons with — content-addressed, recorded on every assessment for reproducibility.
-        from app.reasoning.package import load_ai_package
-        ai_package = load_ai_package(getattr(settings, "analyst_model_id", None))
-        # Phase B — the Prompt Builder assembles the analyst SYSTEM prompt from the HF package
-        # (base prompt + constitution + knowledge) when analyst_prompt_assembly="package"; the
-        # default "registry" returns the validated base prompt unchanged (byte-identical behavior).
-        from app.reasoning.prompt_builder import PromptBuilder
-        prompt_mode = str(getattr(settings, "analyst_prompt_assembly", "registry") or "registry")
-        built = PromptBuilder(ai_package).build_system(base_system=spec.template, mode=prompt_mode)
-        system_prompt = built.system
-        if capture is not None:
-            # Item 2 — the prompt version/hash loaded from the (HF-published) package.
-            capture["prompt_version"] = spec.prompt_version
-            capture["prompt_hash"] = spec.prompt_hash
-            capture["ai_package"] = ai_package.provenance()
-            capture["prompt_build"] = built.manifest
+        # investigation reasons with — consumed through the ONE Canonical Package Loader (P3.2,
+        # fail-closed verified); ``identity`` is the same content-addressed AIPackage as before.
+        from app.reasoning.package_loader import load_package
+        ai_package = load_package(getattr(settings, "analyst_model_id", None)).identity
+        # P3.4 — the Investigation Summary is a canonical reasoning stage: its prompt is assembled below
+        # by the ONE Canonical Stage Prompt Builder over an InvestigationSummaryBundle, EXCLUSIVELY from
+        # package assets (zero embedded prompt text) — not the legacy PromptBuilder / build_user_message.
+        # The LoadedPackage is the stage builder's verified asset source; ``prompt_mode`` labels the
+        # forensic provenance.
+        loaded = load_package(getattr(settings, "analyst_model_id", None))
+        prompt_mode = "stage:investigation_summary"
 
         endpoint = getattr(settings, "analyst_endpoint_url", None)
-        timeout = float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0)
         if endpoint:
-            api = str(getattr(settings, "analyst_endpoint_api", "generate") or "generate")
-            model_id = getattr(settings, "analyst_model_id", None)
-            transport = _qwen_transport(
-                endpoint, timeout=timeout,
-                max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
-                revision=getattr(settings, "analyst_hf_revision", None),
-                api=api, model=model_id, capture=capture,
-                prompt_hash=spec.prompt_hash, package_hash=ai_package.package_hash)
-            provider = impl.QwenAnalystProvider(
-                endpoint_url=endpoint, timeout=timeout, system_prompt=system_prompt, transport=transport)
-            logger.info("analyst.assess: REMOTE provider selected ref=%s endpoint=%s api=%s model=%s "
-                        "prompt=%s(%s) assembly=%s -> model call will be made",
-                        ref, _redact_endpoint(endpoint), api, model_id, spec.prompt_version,
+            logger.info("analyst.assess: REMOTE path selected ref=%s endpoint=%s api=%s model=%s "
+                        "prompt=%s(%s) assembly=%s -> model call will be made by the runtime",
+                        ref, _redact_endpoint(endpoint),
+                        str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"),
+                        getattr(settings, "analyst_model_id", None), spec.prompt_version,
                         spec.prompt_hash, prompt_mode)
         else:
-            provider = impl.DeterministicAnalystProvider()
             logger.info("analyst.assess: no analyst_endpoint_url configured ref=%s -> deterministic "
                         "floor (NO model call). Set OMI_ANALYST_ENDPOINT_URL to reach the endpoint.", ref)
 
@@ -442,20 +357,86 @@ def _assess_core(
         from app.memory.repository import get_memory_store
         store = get_memory_store(settings)
         store_ms = (time.perf_counter() - t_store0) * 1000.0
-        judge = _AnalystJudge(impl=impl, config=config, provider=provider, payload=payload,
-                              ref=ref, platform=platform, prompt_meta=prompt_meta, store=store)
-        floor = _AnalystFloor(impl=impl, config=config, payload=payload, ref=ref,
-                              platform=platform, model_revision=model_revision, store=store)
+
+        # P3.2/P3.4 — the AI Investigation Runtime owns execution (endpoint + Governor + Floor +
+        # forensics). This stage assembles the SAME governance evidence (ONE Binder bind) and, as of
+        # P3.4, the MODEL prompt via the ONE Canonical Stage Prompt Builder over an
+        # InvestigationSummaryBundle (built from the ONE Investigation Context) — exclusively from
+        # package assets — then hands ONE PromptPackage to the runtime under the legacy
+        # judge-then-floor adjudication semantics. The deterministic Floor keeps MEASURING the evidence
+        # from the lossy bundle (byte-identical output); only the model's prompt moved onto the
+        # canonical stage architecture.
+        from app.evidence import Binder
+        from app.reasoning.context import build_investigation_context
+        from app.reasoning.evidence_bundles import build_investigation_summary_bundle
+        from app.reasoning.investigation_summary_analysis import (
+            build_investigation_summary_prompt_package,
+        )
+        from app.reasoning.package_loader import load_investigation_summary_assets
+        from app.reasoning.runtime import run_stage_inference
+
         t_run0 = time.perf_counter()
-        result = Orchestrator(modules=[], judge=judge, floor=floor).run(
-            payload, ref=ref, platform=platform, grain="comment_section")
+        gov_bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform)
+        prior_context = _retrieve_prior_context(store, gov_bundle)
+        lossy = build_bundle(payload, ref=ref, platform=platform, impl=impl,
+                             prior_context=prior_context)
+        floor_response = impl.DeterministicAnalystProvider().generate(lossy, config).response
+
+        summary_ctx = build_investigation_context(payload, ref=ref, platform=platform,
+                                                  settings=settings, store=store)
+        summary_bundle = build_investigation_summary_bundle(summary_ctx)
+        is_assets = load_investigation_summary_assets()
+        pp = build_investigation_summary_prompt_package(summary_bundle, loaded=loaded, assets=is_assets)
+
+        # Forensic provenance of the assembled prompt — preserves the trace/audit contract (mode,
+        # system_prompt_sha, knowledge_entries_used), now sourced from the canonical stage package.
+        # ``knowledge_entries_used`` mirrors the stage builder's knowledge window (the first 12).
+        prompt_build = {
+            "mode": prompt_mode,
+            "assembled_from": pp.manifest.get("assembled_from"),
+            "package_hash": pp.manifest.get("package_hash"),
+            "prompt_hash": pp.manifest.get("prompt_hash"),
+            "system_prompt_sha": pp.manifest.get("system_prompt_sha"),
+            "system_prompt_chars": len(pp.system),
+            "knowledge_entries_used": [e["id"] for e in loaded.knowledge()[:12]],
+            "investigation_summary_template_hash": pp.manifest.get("investigation_summary_template_hash"),
+            "investigation_summary_bundle_id": summary_bundle.bundle_id(),
+            "prompt_package_id": pp.prompt_package_id,
+        }
+        if capture is not None:
+            # Item 2 — the prompt version/hash loaded from the (HF-published) package.
+            capture["prompt_version"] = spec.prompt_version
+            capture["prompt_hash"] = spec.prompt_hash
+            capture["ai_package"] = ai_package.provenance()
+            capture["prompt_build"] = prompt_build
+        t_model0 = time.perf_counter()
+        inference = run_stage_inference(
+            pp, gov_bundle, settings=settings, config=config, floor_ruling=floor_response,
+            schema_prefilter=True, require_hf_token=True, capture=capture,
+            adjudication="judge_then_floor")
+        model_ms = (time.perf_counter() - t_model0) * 1000.0
         reasoning_ms = (time.perf_counter() - t_run0) * 1000.0
-        governed = _attach_governance(result, judge=judge, floor=floor)
-        gov = governed.get("governance", {})
+
+        from app.governor import Governor
+        governed = dict(inference.ruling)
+        gov: dict[str, Any] = {
+            "verdict": inference.trace.verdict,
+            "trace_id": inference.trace.trace_id(),
+            "violation_codes": list(inference.trace.violation_codes),
+            "provider": inference.provider,
+            "model_revision": model_revision,
+            "prompt": prompt_meta,
+            "latency_ms": 0.0 if inference.fallback_from else round(model_ms, 2),
+            "constitution_version": Governor.constitution_version,
+        }
+        if inference.fallback_from:
+            gov["fallback_from"] = inference.fallback_from
+            gov["rejected_codes"] = list(inference.rejected_codes)
+        governed["governance"] = gov
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
         governed["ai_package"] = ai_package.provenance()
-        governed["prompt_build"] = built.manifest
+        governed["prompt_build"] = prompt_build
         governed["metrics"] = _assessment_metrics(
             governed, gov, settings, store_ms=store_ms, reasoning_ms=reasoning_ms,
             model_backed=model_backed, prompt_meta=prompt_meta)
@@ -484,30 +465,6 @@ def assess_payload(
     from app.reasoning.runtime import assess_investigation
 
     return assess_investigation(payload, ref=ref, platform=platform, settings=settings, capture=capture)
-
-
-def _attach_governance(result: Any, *, judge: "_AnalystJudge", floor: "_AnalystFloor") -> dict:
-    """Attach the transparency ``governance`` block from the Orchestrator's CouncilResult — the
-    same fields the pre-convergence gate emitted, so the API + cache contract is byte-preserved."""
-    from app.governor import Governor
-
-    assessment = dict(result.assessment)
-    meta = floor.last_meta if result.fallback else judge.last_meta
-    gov = {
-        "verdict": result.trace.verdict,
-        "trace_id": result.trace.trace_id(),
-        "violation_codes": list(result.trace.violation_codes),
-        "provider": meta["provider"],
-        "model_revision": meta["model_revision"],
-        "prompt": judge.last_meta.get("prompt") or {},
-        "latency_ms": meta["latency_ms"],
-        "constitution_version": Governor.constitution_version,
-    }
-    if result.fallback:
-        gov["fallback_from"] = judge.last_meta["provider"]
-        gov["rejected_codes"] = list(result.rejected_codes)
-    assessment["governance"] = gov
-    return assessment
 
 
 def runtime_status(settings: Settings | None = None) -> dict:

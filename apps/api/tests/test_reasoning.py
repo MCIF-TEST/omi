@@ -61,9 +61,15 @@ def _seed_inv(slug: str = "inv_phase7", with_payload: dict | None = None) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_get_provider_returns_template_without_key():
-    p = get_provider()
-    assert p.name == "template"
+def test_get_provider_returns_the_deterministic_template_provider():
+    """P3.4 retired the Anthropic 2nd reasoning engine — commentary is now a deterministic presentation
+    projection, so ``get_provider`` always returns the template provider regardless of any
+    ``anthropic_*`` config (there is ONE production AI reasoning architecture)."""
+    from types import SimpleNamespace
+    assert get_provider().name == "template"
+    # even with an Anthropic key configured, the retired engine is never selected
+    assert get_provider(SimpleNamespace(anthropic_api_key="sk-should-be-ignored",
+                                        anthropic_model="claude-haiku-4-5-20251001")).name == "template"
 
 
 def test_template_provider_never_fails_on_empty_input():

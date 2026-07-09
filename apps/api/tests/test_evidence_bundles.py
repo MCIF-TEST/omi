@@ -137,9 +137,26 @@ def test_summary_is_the_dag_root_referencing_the_six_by_id():
                          "narrative_analysis", "coordination_analysis", "campaign_analysis"}
     assert comp["account_analysis"] == s.account.bundle_id()
     assert comp["coordination_analysis"] == s.coordination.bundle_id()
-    # the summary owns investigation-level evidence (echoed numbers + cross-links), not stage detail
+    # the summary owns investigation-level evidence (echoed numbers + cross-links) + the six DAG refs
     assert s.summary.overall_probability == pytest.approx(0.72)
     assert s.summary.cross_links and s.summary.cross_links[0].kind == "fellow_traveler"
+
+
+def test_summary_is_enriched_with_pure_synthesis_evidence_no_prose():
+    """P3.4 — the summary bundle carries the investigation-synthesis EVIDENCE the AI stage reasons over
+    (coordination digest, signed drivers, account roll-up, data-quality caveats), sourced from the
+    Investigation Context. Pure measured evidence: no prose/verdict field leaks in."""
+    s = build_evidence_bundles(_ctx())
+    sm = s.summary
+    assert sm.coordination is not None and sm.coordination.coordination_score == pytest.approx(0.66)
+    assert sm.coordination.discriminative_methods == ("co_engagement",)
+    assert sm.accounts_digest is not None and sm.accounts_digest.count == 1
+    assert sm.accounts_digest.flagged_count == 1 and sm.accounts_digest.high_count == 1
+    assert any(c.name == "temporal" for c in sm.contributions)
+    assert "few posts" in sm.weak_signals
+    # the enrichment is EVIDENCE only — no prose/presentation/verdict top-level fields
+    keys = set(dataclasses.asdict(sm))
+    assert not (keys & set(_PROSE_FORBIDDEN)), f"summary leaked presentation: {keys & set(_PROSE_FORBIDDEN)}"
 
 
 def test_builders_are_independent():

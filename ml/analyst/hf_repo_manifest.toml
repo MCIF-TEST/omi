@@ -101,6 +101,25 @@ source = "ml/analyst/hf_repo/prompts/comment_prompt_template.json"
 path_in_repo = "prompts/comment_prompt_template.json"
 kind = "comment_prompt_template"
 
+# --- commenter-history prompt template + response contract + output schema (P3.2): the canonical
+# assembly asset the Commenter History Prompt Builder fills. Generated FROM
+# app.reasoning.prompts.commenter_history_template (single source of truth) by
+# app.reasoning.prompts.export; drift-guarded. Additive — independent of the other templates. ---
+[[file]]
+source = "ml/analyst/hf_repo/prompts/commenter_history_prompt_template.json"
+path_in_repo = "prompts/commenter_history_prompt_template.json"
+kind = "commenter_history_prompt_template"
+
+# --- investigation-summary prompt template + response contract + output-schema descriptor (P3.4): the
+# canonical assembly asset the Investigation Summary Prompt Builder fills for the overall investigation
+# assessment. Generated FROM app.reasoning.prompts.investigation_summary_template (single source of
+# truth) by app.reasoning.prompts.export; drift-guarded. Additive — independent of the other templates
+# and the investigation package_hash; reuses the existing analyst_response_schema (no new schema). ---
+[[file]]
+source = "ml/analyst/hf_repo/prompts/investigation_summary_prompt_template.json"
+path_in_repo = "prompts/investigation_summary_prompt_template.json"
+kind = "investigation_summary_prompt_template"
+
 # --- response schema: published FROM its canonical GitHub source (no copy) ---
 [[file]]
 source = "ml/analyst/analyst_response_schema.json"

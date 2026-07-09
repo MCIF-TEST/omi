@@ -1,86 +1,44 @@
-"""The AI Investigation Runtime (Phase P2.0) — the ONE orchestration layer for AI execution.
+"""The AI Investigation Runtime (Phase P2.0 → P3.2/P3.3) — the ONE orchestration layer for AI.
 
-This is the single, canonical place an investigation is reasoned by the model. It composes the
-already-built layers in the approved order and returns one immutable result:
+``AIInvestigationRuntime.infer(prompt_package, gov_bundle)`` is the single, canonical place a stage's
+prompt is reasoned by the model. Every AI stage reaches it through :func:`run_stage_inference`:
 
-    InvestigationContext (P1.0)
-      → Package Loader (P1.2)        load + verify the canonical package
-      → Prompt Builder (P1.1)        assemble the PromptPackage from package assets only
+    Prompt Package (from the ONE Canonical Prompt Builder)
       → Hugging Face endpoint        exactly one inference, via the ONE transport
       → capture                      request/response/token/latency/request-id + package/prompt/model
-      → Governor                     validate the model's structured assessment
+      → Governor                     validate the model's structured wrapper (echo-guarded)
       → fallback                     deterministic Floor on failure / reject
-      → AIInvestigationResult        one immutable object
+      → RuntimeInference             the one object every stage receives
 
-It **owns no primitive logic** — every step delegates to the existing single implementation, so
-there is zero duplicated inference / retry / endpoint / forensic / governor / fallback code:
+It **owns no primitive logic** — every step delegates to the single implementation, so there is zero
+duplicated inference / retry / endpoint / forensic / governor / fallback code:
 
 * the endpoint call (retries, timeout, forensic capture, the capture sidecar) is the ONE transport
   ``RemoteReasoningProvider`` reached through ``analyst._qwen_transport``;
-* the Governor is ``app.governor.Governor``; the Floor is the deterministic analyst provider; the
-  evidence bundle + response schema are the existing ones.
+* the Governor is ``app.governor.Governor``; the Floor is the deterministic analyst provider.
 
-Exactly one inference per investigation. No UI, no report, no heuristics/score/prompt/package
-changes — the runtime only orchestrates. Everything else is meant to consume this runtime.
+Exactly one inference per stage. No UI, no report, no heuristics/score/prompt/package changes — the
+runtime only orchestrates. The Comment Analysis, Commenter History, and whole-investigation
+assessment stages all consume this runtime.
 """
 from __future__ import annotations
 
 import logging
-import time
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Any
 
 from app.core.config import Settings, get_settings
-from app.evidence import Binder
-from app.evidence.bundle import digest
 from app.reasoning import analyst as _analyst
-from app.reasoning.context.investigation import InvestigationContext
 from app.reasoning.model_providers.remote import extract_json, forensic_on
-from app.reasoning.package_loader import load_package
-from app.reasoning.prompt import build_prompt_package
 
 logger = logging.getLogger("omi.reasoning.runtime")
 
 _MODEL_ECHOED_FIELDS = ("suspicion_probability", "suspicion_tier")
-
-
-@dataclass(frozen=True)
-class AIInvestigationResult:
-    """The immutable output of one AI investigation run — the governed assessment plus the full
-    execution provenance (what package/prompt/model produced it, how the endpoint behaved, and how
-    the Governor ruled). Content-addressed by ``result_id`` (excludes wall-clock + latency)."""
-
-    assessment: dict
-    provider: str
-    model_backed: bool
-    fallback: bool
-    # governance
-    governor_verdict: str
-    governor_trace_id: str
-    violation_codes: tuple[str, ...]
-    constitution_version: str
-    # package / prompt / model identity
-    package_hash: str
-    prompt_hash: str
-    template_hash: str
-    model_id: str
-    prompt_package_id: str
-    context_id: str
-    # endpoint execution metadata
-    latency_ms: float
-    attempts: int
-    tokens: dict | None
-    endpoint_request_id: str | None
-    response_status: int | None
-    endpoint_called: bool
-    forensic_captured: bool
-    # content address (deterministic) + wall-clock (excluded from the address)
-    result_id: str = ""
-    generated_at: str = ""
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+# Per-stage typed sidecars that ride ALONGSIDE the constitutional wrapper (e.g. per-comment or
+# per-commenter analyses). They are separated out before the Governor validates the wrapper, so the
+# Governor sees the identical constitutional object for every stage — one strip list, no per-stage
+# Governor logic. A stage extracts its own typed structure from ``RuntimeInference.raw_obj``.
+_STAGE_SIDECAR_KEYS = ("comment_analyses", "commenter_analyses")
 
 
 @dataclass
@@ -109,6 +67,11 @@ class RuntimeInference:
     package_hash: str
     prompt_hash: str
     forensic_captured: bool
+    # --- judge_then_floor bookkeeping (P3.2): when the Governor rejected the candidate ruling and
+    # the served ruling is the re-validated Floor, these carry the rejected candidate's provider
+    # name and the rejecting trace's violation codes (the legacy governance contract).
+    fallback_from: str | None = None
+    rejected_codes: tuple[str, ...] = ()
 
 
 class AIInvestigationRuntime:
@@ -127,6 +90,9 @@ class AIInvestigationRuntime:
         config: Any = None,
         floor_ruling: dict | None = None,
         schema_prefilter: bool = False,
+        require_hf_token: bool = False,
+        capture: dict | None = None,
+        adjudication: str = "single_gate",
     ) -> RuntimeInference:
         """Run exactly one inference for a prompt package: call the ONE transport once (capturing
         latency/attempts/request-id/status/tokens), then adjudicate via the MANDATORY Governor with
@@ -135,16 +101,29 @@ class AIInvestigationRuntime:
 
         ``floor_ruling`` is the always-valid wrapper to fall back to (default: the canonical
         FloorJudge assessment for ``gov_bundle``). ``schema_prefilter`` additionally runs the
-        ``omi_analyst`` response-schema check before the Governor (used by the whole-investigation
-        assessment; the comment stage relies on the Governor as the sole gate)."""
+        ``omi_analyst`` response-schema check before the Governor. ``require_hf_token`` preserves the
+        legacy investigation-assessment gate: the endpoint is attempted only when an HF token is
+        present (no wasted unauthenticated request). ``capture`` is an optional caller-owned forensic
+        sidecar the ONE transport writes into directly (the trace/audit contract). ``adjudication``:
+
+        * ``"single_gate"`` (default; the comment stage + P2.0 result): the Floor is validated once
+          and served on any model failure.
+        * ``"judge_then_floor"`` (the investigation assessment): the candidate ruling — the model's
+          when valid, else the Floor standing in as the judge — is validated; on REJECT the Floor is
+          validated AGAIN and served with ``fallback_from`` + ``rejected_codes`` bookkeeping (the
+          exact legacy council semantics: two Governor validations on a reject)."""
         settings = settings or get_settings()
+        import os
         impl = _analyst._impl()
-        capture: dict[str, Any] = {}
+        capture = capture if capture is not None else {}
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         enabled = _analyst.analyst_enabled(settings) and impl is not None
+        model_path = bool(enabled and endpoint)
+        token_ok = (not require_hf_token) or bool(
+            os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
         raw: str | None = None
         endpoint_called = False
-        if enabled and endpoint:
+        if model_path and token_ok:
             transport = _analyst._qwen_transport(
                 endpoint, timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
                 max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
@@ -155,8 +134,9 @@ class AIInvestigationRuntime:
             endpoint_called = True
             raw = transport(pp.system, pp.user, config)  # THE ONE inference
 
-        ruling, raw_obj, provider, model_backed, trace = self._adjudicate(
-            raw, gov_bundle, impl, floor_ruling, schema_prefilter)
+        ruling, raw_obj, provider, model_backed, trace, fallback_from, rejected = self._adjudicate(
+            raw, gov_bundle, impl, floor_ruling, schema_prefilter,
+            model_path=model_path, adjudication=adjudication)
         usage = capture.get("usage")
         return RuntimeInference(
             ruling=ruling, raw_obj=raw_obj, provider=provider, model_backed=model_backed,
@@ -166,81 +146,70 @@ class AIInvestigationRuntime:
             endpoint_request_id=capture.get("endpoint_request_id"),
             response_status=capture.get("response_status"), served_model=pp.model_id,
             package_hash=pp.manifest["package_hash"], prompt_hash=pp.manifest["prompt_hash"],
-            forensic_captured=forensic_on())
-
-    def run(
-        self,
-        context: InvestigationContext,
-        *,
-        payload: dict,
-        platform: str | None = None,
-        settings: Settings | None = None,
-    ) -> AIInvestigationResult:
-        """Reason over one :class:`InvestigationContext` and return the immutable result.
-
-        ``payload`` is the engine's serialized investigation (the same object the Context Builder
-        consumed) — the runtime binds the Governor's Evidence Bundle + the deterministic Floor's
-        bundle from it (both are evidence-based and predate the context). Never raises for the
-        caller: any failure degrades to the always-valid deterministic Floor.
-        """
-        settings = settings or get_settings()
-        payload = payload or {}
-        ref = context.investigation.ref or _analyst._ref(context.context_id)
-        platform = platform or context.investigation.platform or "unknown"
-
-        # --- P1.2 + P1.1: load the canonical package, build the prompt from its assets ----------
-        loaded = load_package(getattr(settings, "analyst_model_id", None))
-        pp = build_prompt_package(context, loaded=loaded)
-
-        # --- the deterministic evidence the Governor + Floor validate against (reused collectors) -
-        impl = _analyst._impl()
-        gov_bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref,
-                                   platform=platform, enrich=True)
-        config = impl.load_analyst_config(
-            repo_id=getattr(settings, "analyst_hf_repo", None),
-            revision=getattr(settings, "analyst_hf_revision", None)) if impl is not None else None
-        lossy = _analyst.build_bundle(payload, ref=ref, platform=platform, impl=impl) if impl else {}
-        floor_ruling = (impl.DeterministicAnalystProvider().generate(lossy, config).response
-                        if impl is not None else None)
-
-        # --- the ONE inference (endpoint + Governor) — owned by the runtime, shared with every stage
-        inference = self.infer(pp, gov_bundle, settings=settings, config=config,
-                               floor_ruling=floor_ruling, schema_prefilter=True)
-        return self._result(context=context, pp=pp, loaded=loaded, inference=inference)
+            forensic_captured=forensic_on(), fallback_from=fallback_from, rejected_codes=rejected)
 
     # ------------------------------------------------------------------ #
-    def _adjudicate(self, raw, gov_bundle, impl, floor_ruling, schema_prefilter):
+    def _adjudicate(self, raw, gov_bundle, impl, floor_ruling, schema_prefilter, *,
+                    model_path: bool = False, adjudication: str = "single_gate"):
         """Parse → (optional schema pre-filter) → echo-guard → MANDATORY Governor. On any failure the
         deterministic Floor (``floor_ruling`` or the canonical FloorJudge assessment), itself
         Governor-validated. The ONE Governor invocation for every stage. Returns
-        ``(core_ruling, raw_obj, provider, model_backed, trace)`` — ``raw_obj`` is the untouched model
-        object so a stage can extract its own typed structure."""
+        ``(ruling, raw_obj, provider, model_backed, trace, fallback_from, rejected_codes)`` —
+        ``raw_obj`` is the untouched model object so a stage can extract its own typed structure."""
         from app.governor import Governor
         from app.reasoning.orchestrator.modules import build_ruling_assessment
 
         governor = Governor()
         hl = gov_bundle.headline()
         raw_obj = None
+        candidate = None
         if raw:
             obj = extract_json(raw)
             if isinstance(obj, dict):
                 raw_obj = obj
                 if not (schema_prefilter and self._schema_errors(obj, impl)):
-                    # Stage sidecars (e.g. per-comment analyses) ride alongside; the Governor validates
-                    # the constitutional wrapper only. Echo discipline — the model never moves the number.
-                    core = {k: v for k, v in obj.items() if k != "comment_analyses"}
+                    # Stage sidecars (per-comment / per-commenter analyses) ride alongside; the
+                    # Governor validates the constitutional wrapper only. Echo discipline — the model
+                    # never moves the number.
+                    core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
                     core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
                     core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
-                    trace = governor.validate(core, gov_bundle, corroboration=core.get("corroboration"))
-                    if trace.permitted:
-                        return core, obj, "qwen-omi-analyst-v1", True, trace
-                    logger.warning("runtime: model ruling REJECTED %s; Floor fallback", trace.violation_codes)
+                    candidate = core
+        floor = floor_ruling if floor_ruling is not None else build_ruling_assessment(gov_bundle)
 
-        wrapper = floor_ruling if floor_ruling is not None else build_ruling_assessment(gov_bundle)
-        ftrace = governor.validate(wrapper, gov_bundle, corroboration=wrapper.get("corroboration"))
+        if adjudication == "judge_then_floor":
+            # Legacy council semantics (the investigation assessment): the candidate ruling is the
+            # model's when valid, else the Floor STANDING IN as the judge (with the legacy provider
+            # naming keyed off whether the model path was configured). On REJECT the Floor is
+            # validated AGAIN and served with fallback bookkeeping — two Governor validations.
+            if candidate is not None:
+                cand_ruling, cand_provider = candidate, "qwen-omi-analyst-v1"
+            elif model_path:
+                cand_ruling = floor
+                cand_provider = "qwen-omi-analyst-v1->fallback:deterministic-analyst-v1"
+            else:
+                cand_ruling, cand_provider = floor, "deterministic-analyst-v1"
+            trace = governor.validate(cand_ruling, gov_bundle,
+                                      corroboration=cand_ruling.get("corroboration"))
+            if trace.permitted:
+                return (cand_ruling, raw_obj, cand_provider,
+                        cand_provider == "qwen-omi-analyst-v1", trace, None, ())
+            logger.warning("runtime: candidate ruling REJECTED %s; Floor fallback", trace.violation_codes)
+            ftrace = governor.validate(floor, gov_bundle, corroboration=floor.get("corroboration"))
+            return (floor, raw_obj, "deterministic-floor", False, ftrace,
+                    cand_provider, tuple(trace.violation_codes))
+
+        # single_gate (default): the model ruling is validated when present; the Floor is validated
+        # once and served on any model failure.
+        if candidate is not None:
+            trace = governor.validate(candidate, gov_bundle, corroboration=candidate.get("corroboration"))
+            if trace.permitted:
+                return candidate, raw_obj, "qwen-omi-analyst-v1", True, trace, None, ()
+            logger.warning("runtime: model ruling REJECTED %s; Floor fallback", trace.violation_codes)
+        ftrace = governor.validate(floor, gov_bundle, corroboration=floor.get("corroboration"))
         provider = ("deterministic-analyst-v1" if not raw
                     else "qwen-omi-analyst-v1->fallback:deterministic-analyst-v1")
-        return wrapper, raw_obj, provider, False, ftrace
+        return floor, raw_obj, provider, False, ftrace, None, ()
 
     @staticmethod
     def _schema_errors(obj: dict, impl) -> list:
@@ -250,58 +219,25 @@ class AIInvestigationRuntime:
         except Exception:  # noqa: BLE001 — if the validator is unreachable, treat as invalid -> Floor
             return ["schema validator unavailable"]
 
-    # ------------------------------------------------------------------ #
-    def _result(self, *, context, pp, loaded, inference: RuntimeInference) -> AIInvestigationResult:
-        from app.governor import Governor
-
-        trace = inference.trace
-        addressed = {
-            "assessment": inference.ruling, "provider": inference.provider,
-            "model_backed": inference.model_backed,
-            "governor_verdict": trace.verdict, "violation_codes": list(trace.violation_codes),
-            "package_hash": loaded.package_hash, "prompt_hash": loaded.prompt_hash,
-            "template_hash": loaded.template_hash, "model_id": loaded.model_id,
-            "prompt_package_id": pp.prompt_package_id, "context_id": context.context_id,
-        }
-        return AIInvestigationResult(
-            assessment=dict(inference.ruling), provider=inference.provider,
-            model_backed=inference.model_backed, fallback=inference.fallback,
-            governor_verdict=trace.verdict, governor_trace_id=trace.trace_id(),
-            violation_codes=tuple(trace.violation_codes),
-            constitution_version=Governor.constitution_version,
-            package_hash=loaded.package_hash, prompt_hash=loaded.prompt_hash,
-            template_hash=loaded.template_hash, model_id=loaded.model_id,
-            prompt_package_id=pp.prompt_package_id, context_id=context.context_id,
-            latency_ms=inference.latency_ms, attempts=inference.attempts, tokens=inference.tokens,
-            endpoint_request_id=inference.endpoint_request_id, response_status=inference.response_status,
-            endpoint_called=inference.endpoint_called, forensic_captured=inference.forensic_captured,
-            result_id=digest(addressed, prefix="air:"),
-            generated_at=datetime.now(timezone.utc).isoformat(),
-        )
-
 
 # The single shared instance + a module-level convenience — the canonical entry point.
 _RUNTIME = AIInvestigationRuntime()
 
 
-def run_investigation(
-    context: InvestigationContext, *, payload: dict, platform: str | None = None,
-    settings: Settings | None = None,
-) -> AIInvestigationResult:
-    """Run the canonical AI Investigation Runtime for one context. The one call the rest of the
-    system makes to reach the model."""
-    return _RUNTIME.run(context, payload=payload, platform=platform, settings=settings)
-
-
 def run_stage_inference(
     pp: Any, gov_bundle: Any, *, settings: Settings | None = None, config: Any = None,
-    floor_ruling: dict | None = None,
+    floor_ruling: dict | None = None, schema_prefilter: bool = False,
+    require_hf_token: bool = False, capture: dict | None = None,
+    adjudication: str = "single_gate",
 ) -> RuntimeInference:
     """The canonical per-stage inference entry — the ONE call a migrated reasoning stage makes to
     reach the model. Delegates to the shared runtime's :meth:`AIInvestigationRuntime.infer`, so the
     endpoint path, the capture, and the Governor invocation are owned by the runtime, never the
-    stage. (Comment Analysis is the first stage to reason through this.)"""
-    return _RUNTIME.infer(pp, gov_bundle, settings=settings, config=config, floor_ruling=floor_ruling)
+    stage. (Comment Analysis was the first stage to reason through this; the investigation
+    assessment reasons through it with ``adjudication="judge_then_floor"``.)"""
+    return _RUNTIME.infer(pp, gov_bundle, settings=settings, config=config, floor_ruling=floor_ruling,
+                          schema_prefilter=schema_prefilter, require_hf_token=require_hf_token,
+                          capture=capture, adjudication=adjudication)
 
 
 def assess_investigation(
@@ -321,6 +257,6 @@ def assess_investigation(
 
 
 __all__ = [
-    "AIInvestigationResult", "AIInvestigationRuntime", "RuntimeInference",
-    "run_investigation", "run_stage_inference", "assess_investigation",
+    "AIInvestigationRuntime", "RuntimeInference",
+    "run_stage_inference", "assess_investigation",
 ]

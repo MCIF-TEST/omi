@@ -17,8 +17,6 @@ result, or report is changed. A compatibility mapping keeps the existing thread 
 """
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -30,7 +28,7 @@ from app.reasoning import analyst as _analyst
 from app.reasoning.context.investigation import InvestigationContext
 from app.reasoning.evidence_bundles import CommentEvidenceBundle, build_comment_bundle
 from app.reasoning.package_loader import load_comment_assets, load_package
-from app.reasoning.prompt.builder import PromptPackage
+from app.reasoning.prompt import PromptPackage, StagePromptSpec, build_prompt, register_stage_prompt
 from app.reasoning.runtime import RuntimeInference, run_stage_inference
 
 logger = logging.getLogger("omi.reasoning.comment_analysis")
@@ -109,48 +107,43 @@ def _render_comments(bundle: CommentEvidenceBundle) -> list[dict]:
              "text": c.text, "created_at": c.created_at} for c in bundle.comments]
 
 
+def _comment_sections(bundle: CommentEvidenceBundle, ctx: dict) -> dict:
+    """Render the comment stage's evidence sections from the bundle (the ONLY comment-specific part
+    of prompt assembly; everything else is the shared canonical builder)."""
+    return {
+        "thread": {"thread_probability": bundle.thread_probability, "thread_tier": bundle.thread_tier,
+                   "comment_count": bundle.comment_count},
+        "comments": _render_comments(bundle),
+    }
+
+
+# Register the comment stage with the ONE Canonical Prompt Builder. The builder core stays
+# stage-agnostic; this spec supplies only what varies for the comment stage (assets, sections,
+# schema ref, manifest fields). Registered at import — reproduces the pre-P3.3 bytes exactly.
+_COMMENT_PROMPT_SPEC = StagePromptSpec(
+    stage="comment",
+    schema_ref="comment_analysis_v1",
+    assembled_from="hf-analyst-package (comment stage, via loader)",
+    load_assets=load_comment_assets,
+    template_of=lambda a: a.comment_template(),
+    render_sections=_comment_sections,
+    manifest_extra=lambda a, bundle: {
+        "comment_template_hash": a.comment_template_hash,
+        "comment_contract_hash": a.comment_contract_hash,
+        "comment_schema_hash": a.comment_schema_hash,
+        "comment_bundle_id": bundle.bundle_id(),
+    },
+)
+register_stage_prompt(_COMMENT_PROMPT_SPEC)
+
+
 def build_comment_prompt_package(
     bundle: CommentEvidenceBundle, *, loaded=None, comment_assets=None, model_id: str | None = None,
 ) -> PromptPackage:
-    """Assemble the comment-analysis PromptPackage from package assets + the CommentEvidenceBundle.
-    Zero embedded prompt text — every header/instruction/contract comes from the comment package
-    asset; the shared base prompt / constitution / framework / knowledge come from the loader."""
-    lp = loaded or load_package(model_id)
-    ca = comment_assets or load_comment_assets()
-    tmpl = ca.comment_template()
-
-    system = "\n\n".join([
-        lp.system_prompt,
-        "# REASONING & GOVERNANCE CONSTITUTION\n" + lp.constitution,
-        "# SPECIALIST INVESTIGATION FRAMEWORK\n" + json.dumps(lp.framework(), ensure_ascii=False, sort_keys=True),
-        "# KNOWLEDGE LIBRARY\n" + json.dumps(lp.knowledge()[:12], ensure_ascii=False, sort_keys=True),
-        tmpl["system_task"],
-        "# OUTPUT CONTRACT\n" + tmpl["response_contract"],
-    ]).strip()
-
-    thread = {"thread_probability": bundle.thread_probability, "thread_tier": bundle.thread_tier,
-              "comment_count": bundle.comment_count}
-    sections = {"thread": thread, "comments": _render_comments(bundle)}
-    ev = [tmpl["evidence_preamble"]]
-    for s in tmpl["evidence_sections"]:
-        ev.append(s["header"] + "\n" + json.dumps(sections.get(s["section"], {}), ensure_ascii=False, sort_keys=True))
-    ev.append(tmpl["evidence_instruction"])
-    user = "\n\n".join(ev).strip()
-
-    manifest = {
-        "assembled_from": "hf-analyst-package (comment stage, via loader)",
-        "package_hash": lp.package_hash, "prompt_hash": lp.prompt_hash,
-        "constitution_hash": lp.constitution_hash, "framework_hash": lp.framework_hash,
-        "knowledge_hash": lp.knowledge_hash, "comment_template_hash": ca.comment_template_hash,
-        "comment_contract_hash": ca.comment_contract_hash, "comment_schema_hash": ca.comment_schema_hash,
-        "comment_bundle_id": bundle.bundle_id(), "model_id": lp.model_id,
-        "response_format": "json_object", "schema_ref": "comment_analysis_v1",
-        "system_prompt_sha": "sys:" + hashlib.sha256(system.encode("utf-8")).hexdigest()[:24],
-    }
-    ppid = digest({"system": system, "user": user, "manifest": manifest}, prefix="pp:")
-    return PromptPackage(system=system, user=user, response_format="json_object",
-                         schema_ref="comment_analysis_v1", model_id=lp.model_id,
-                         manifest=manifest, prompt_package_id=ppid)
+    """Assemble the comment-analysis PromptPackage via the ONE Canonical Prompt Builder (P3.3). Thin
+    stage entry — all assembly lives in ``app.reasoning.prompt.build_prompt``; this only names the
+    stage. Byte-identical to the pre-consolidation output. Zero embedded prompt text."""
+    return build_prompt("comment", bundle, loaded=loaded, model_id=model_id, assets=comment_assets)
 
 
 # --------------------------------------------------------------------------- #

@@ -1,12 +1,21 @@
 """`synthesize_commentary` — the public entry point for Phase 7.
 
 Takes a stored ComprehensiveScanResult payload + investigation metadata,
-builds a tight structured digest, and asks the active provider for an
-analyst-style paragraph.
+builds a tight structured digest, and renders an analyst-style paragraph
+through the active provider.
 
 The function is **idempotent at the storage layer** — callers should
 cache the result on the Investigation row and only call this again
 when the user explicitly requests a refresh.
+
+Phase P3.4: this is a DETERMINISTIC PRESENTATION layer, not an AI reasoning
+engine. The Anthropic (Claude Haiku) provider that used to back it — a second
+production AI reasoning engine with its prompt text embedded below and no
+Package Loader / Evidence Bundle / Governor / Floor — was retired, so Omi has
+exactly ONE production AI reasoning architecture (the canonical Mistral stage
+pipeline). The ``SYSTEM_PROMPT`` blocks in this module are inert with the
+deterministic ``TemplateProvider`` (which ignores the system message); they are
+retained only to document the intended prose tone.
 """
 
 from __future__ import annotations

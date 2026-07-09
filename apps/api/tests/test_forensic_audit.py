@@ -73,10 +73,10 @@ def test_audit_trusted_endpoint_all_six_proven():
 
     assert out["status"] == "ok"
     it = out["items"]
-    # 1 — exact final prompt sent
+    # 1 — exact final prompt sent (P3.4: assembled by the canonical investigation-summary stage builder)
     assert it["1_final_prompt_sent"]["status"] == "PROVEN"
-    assert it["1_final_prompt_sent"]["system_prompt"]                       # the registry system prompt
-    assert "EVIDENCE BUNDLE" in it["1_final_prompt_sent"]["user_message"]
+    assert "INVESTIGATION SUMMARY TASK" in it["1_final_prompt_sent"]["system_prompt"]
+    assert "INVESTIGATION EVIDENCE" in it["1_final_prompt_sent"]["user_message"]
     # 2 — prompt version/hash from the package
     assert it["2_prompt_version_hash"]["status"] == "PROVEN"
     assert it["2_prompt_version_hash"]["prompt_hash"].startswith("ph:")

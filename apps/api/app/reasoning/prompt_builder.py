@@ -10,9 +10,15 @@ component hash, so the exact prompt that produced an assessment is reproducible 
 This promotes the Specialist Framework (expressed as the constitution the framework derives from)
 and the Knowledge Library into the production reasoning prompt. It is flag-gated
 (``analyst_prompt_assembly``): ``registry`` (default — the validated base prompt only) or
-``package`` (base + framework + knowledge). Flipping to ``package`` changes what the model receives
-and MUST be validated against the live endpoint (control-FPR must not regress) — see the audit
-endpoint. Deterministic safety, the Governor, and the floor are untouched.
+``package`` (base + framework + knowledge). Deterministic safety, the Governor, and the floor are
+untouched.
+
+RETIRED FROM PRODUCTION (Phase P3.4): the general Investigation Summary — the last production caller of
+this builder — is now a canonical reasoning stage whose prompt is assembled by the ONE canonical stage
+builder (``app.reasoning.prompt.build_prompt('investigation_summary', bundle)``), so ``PromptBuilder``
+is no longer on any production path. It is retained (and directly unit-tested) as the ``package``-mode
+system assembler, exactly as the legacy P1.1 ``build_prompt_package`` is retained, until its subsystem's
+fate is decided. The ONE production Prompt Builder is the canonical stage builder.
 """
 from __future__ import annotations
 

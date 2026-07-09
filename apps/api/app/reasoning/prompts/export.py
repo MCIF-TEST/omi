@@ -399,6 +399,131 @@ def comment_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Commenter-History Prompt Template + Output Schema — published to HF (Phase P3.2)
+# --------------------------------------------------------------------------- #
+COMMENTER_HISTORY_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts"
+    / "commenter_history_prompt_template.json"
+)
+
+
+def commenter_history_template_manifest() -> dict:
+    """The Commenter-History Prompt Template + Response Contract + Output Schema (Phase P3.2),
+    published alongside the prompts so the deployed commenter-history runtime (and any auditor)
+    carries the exact assembly scaffolding + output contract the Commenter History Prompt Builder
+    fills. Generated FROM the commenter_history_template asset (single source of truth);
+    drift-guarded. Additive: independent of the comment template + the investigation package_hash."""
+    from .commenter_history_template import (
+        COMMENTER_HISTORY_TEMPLATE_VERSION,
+        commenter_history_assembly_template,
+        commenter_history_contract_hash,
+        commenter_history_schema_hash,
+        commenter_history_template_hash,
+    )
+
+    tmpl = commenter_history_assembly_template()
+    return {
+        "manifest_version": "v1",
+        "generated_by": "app.reasoning.prompts.export.commenter_history_template_manifest",
+        "source_of_truth": "GitHub app.reasoning.prompts.commenter_history_template (do not hand-edit)",
+        "stage": "commenter_history",
+        "template_version": COMMENTER_HISTORY_TEMPLATE_VERSION,
+        "template_hash": commenter_history_template_hash(),
+        "response_contract_hash": commenter_history_contract_hash(),
+        "output_schema_hash": commenter_history_schema_hash(),
+        "response_format": "json_object",
+        "schema_ref": "commenter_history_v1",
+        "evidence_section_order": [s["section"] for s in tmpl["evidence_sections"]],
+        "template": tmpl,
+    }
+
+
+def render_commenter_history_template_json() -> str:
+    return json.dumps(commenter_history_template_manifest(), indent=2, sort_keys=True) + "\n"
+
+
+def write_commenter_history_template(path: Path | None = None) -> Path:
+    target = path or COMMENTER_HISTORY_TEMPLATE_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_commenter_history_template_json(), encoding="utf-8")
+    return target
+
+
+def commenter_history_template_matches_committed() -> bool:
+    """True when the committed commenter-history manifest equals a freshly generated one (drift guard)."""
+    try:
+        return (COMMENTER_HISTORY_TEMPLATE_PATH.read_text(encoding="utf-8")
+                == render_commenter_history_template_json())
+    except OSError:
+        return False
+
+
+# --------------------------------------------------------------------------- #
+# Investigation-Summary Prompt Template — published to HF (Phase P3.4)
+# --------------------------------------------------------------------------- #
+INVESTIGATION_SUMMARY_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts"
+    / "investigation_summary_prompt_template.json"
+)
+
+
+def investigation_summary_template_manifest() -> dict:
+    """The Investigation-Summary Prompt Template + Response Contract + Output-Schema descriptor
+    (Phase P3.4), published alongside the prompts so the deployed investigation-summary runtime (and
+    any auditor) carries the exact assembly scaffolding the Investigation Summary Prompt Builder fills.
+    Generated FROM the investigation_summary_template asset (single source of truth); drift-guarded.
+    Additive: independent of the comment / commenter-history templates + the investigation
+    ``package_hash``. Records ``schema_ref`` = the EXISTING analyst response schema (the summary stage
+    reuses it, so no new output schema is published)."""
+    from .investigation_summary_template import (
+        INVESTIGATION_SUMMARY_SCHEMA_REF,
+        INVESTIGATION_SUMMARY_TEMPLATE_VERSION,
+        investigation_summary_assembly_template,
+        investigation_summary_contract_hash,
+        investigation_summary_schema_hash,
+        investigation_summary_template_hash,
+    )
+
+    tmpl = investigation_summary_assembly_template()
+    return {
+        "manifest_version": "v1",
+        "generated_by": "app.reasoning.prompts.export.investigation_summary_template_manifest",
+        "source_of_truth": "GitHub app.reasoning.prompts.investigation_summary_template (do not hand-edit)",
+        "stage": "investigation_summary",
+        "template_version": INVESTIGATION_SUMMARY_TEMPLATE_VERSION,
+        "template_hash": investigation_summary_template_hash(),
+        "response_contract_hash": investigation_summary_contract_hash(),
+        "output_schema_descriptor_hash": investigation_summary_schema_hash(),
+        "response_format": "json_object",
+        "schema_ref": INVESTIGATION_SUMMARY_SCHEMA_REF,
+        "reuses_existing_schema": True,
+        "evidence_section_order": [s["section"] for s in tmpl["evidence_sections"]],
+        "template": tmpl,
+    }
+
+
+def render_investigation_summary_template_json() -> str:
+    return json.dumps(investigation_summary_template_manifest(), indent=2, sort_keys=True) + "\n"
+
+
+def write_investigation_summary_template(path: Path | None = None) -> Path:
+    target = path or INVESTIGATION_SUMMARY_TEMPLATE_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_investigation_summary_template_json(), encoding="utf-8")
+    return target
+
+
+def investigation_summary_template_matches_committed() -> bool:
+    """True when the committed investigation-summary manifest equals a freshly generated one (drift
+    guard)."""
+    try:
+        return (INVESTIGATION_SUMMARY_TEMPLATE_PATH.read_text(encoding="utf-8")
+                == render_investigation_summary_template_json())
+    except OSError:
+        return False
+
+
+# --------------------------------------------------------------------------- #
 # Specialist Framework handbook — GitHub-side contributor doc (Phase A1)
 # --------------------------------------------------------------------------- #
 HANDBOOK_PATH = (
@@ -463,6 +588,12 @@ __all__ = [
     "write_prompt_template", "prompt_template_matches_committed",
     "COMMENT_TEMPLATE_PATH", "comment_template_manifest", "render_comment_template_json",
     "write_comment_template", "comment_template_matches_committed",
+    "COMMENTER_HISTORY_TEMPLATE_PATH", "commenter_history_template_manifest",
+    "render_commenter_history_template_json", "write_commenter_history_template",
+    "commenter_history_template_matches_committed",
+    "INVESTIGATION_SUMMARY_TEMPLATE_PATH", "investigation_summary_template_manifest",
+    "render_investigation_summary_template_json", "write_investigation_summary_template",
+    "investigation_summary_template_matches_committed",
     "HANDBOOK_PATH", "write_handbook", "handbook_matches_committed",
     "BEHAVIORAL_HANDBOOK_PATH", "write_behavioral_handbook", "behavioral_handbook_matches_committed",
 ]
@@ -474,5 +605,7 @@ if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + 
     print(f"wrote {write_knowledge()}")
     print(f"wrote {write_prompt_template()}")
     print(f"wrote {write_comment_template()}")
+    print(f"wrote {write_commenter_history_template()}")
+    print(f"wrote {write_investigation_summary_template()}")
     print(f"wrote {write_handbook()}")
     print(f"wrote {write_behavioral_handbook()}")

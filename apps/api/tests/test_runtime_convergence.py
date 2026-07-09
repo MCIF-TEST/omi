@@ -1,15 +1,16 @@
-"""Runtime convergence — ONE constitutional AI runtime (Sprint 017).
+"""Runtime convergence — ONE canonical AI runtime (Sprint 017 → P3.2).
 
-Sprint 017 eliminates the parallel production reasoning path: the website's analyst now executes
-through the **constitutional council Orchestrator** (the same one Shadow Mode uses), with the rich
-OMI ANALYST as the council's *judge* and the deterministic analyst as its *floor*. These tests lock
-the convergence guarantees so the two runtimes can never silently diverge again:
+P3.2 eliminates the final parallel production reasoning path: the website's analyst now executes
+through the **AI Investigation Runtime** (``runtime.infer`` — the same primitive Comment Analysis
+reasons through), with the legacy council's judge-then-floor adjudication semantics preserved
+exactly. These tests lock the convergence guarantees so a second runtime can never silently return:
 
-  * production ``assess_payload`` runs through ``Orchestrator`` (ONE Binder + ONE mandatory Governor
-    + ONE deterministic Floor) — not a separate governance gate;
-  * a Governor REJECT falls back to the **rich** analyst floor (schema-shaped), not the lean council
-    ruling — so the API/output contract is preserved;
-  * the analyst's model call goes through the ONE constitutional Qwen client;
+  * production ``assess_payload`` runs through ``AIInvestigationRuntime.infer`` (ONE Binder + ONE
+    mandatory Governor + ONE deterministic Floor + ONE forensic capture) — the council Orchestrator
+    is never convened in production (it remains Shadow-Mode-only);
+  * a Governor REJECT falls back to the **rich** analyst floor (schema-shaped), re-validated, with
+    the legacy governance bookkeeping (deterministic-floor / fallback_from / rejected_codes);
+  * the analyst's model call goes through the ONE constitutional transport;
   * OmiScore is untouched (the engine number is echoed), and the deterministic fallback is intact.
 """
 from __future__ import annotations
@@ -42,25 +43,31 @@ def _enable(monkeypatch):
     monkeypatch.setattr(analyst, "analyst_enabled", lambda settings=None: True)
 
 
-def test_production_executes_through_the_orchestrator(monkeypatch):
-    """The single, decisive convergence check: production reasoning is produced by the council
-    Orchestrator, with the OMI ANALYST as its judge — not a parallel path."""
+def test_production_executes_through_the_canonical_runtime(monkeypatch):
+    """The single, decisive convergence check (P3.2): production reasoning is produced by the AI
+    Investigation Runtime's ``infer`` — exactly once, with the judge-then-floor semantics — and the
+    council Orchestrator is NEVER convened in production."""
     _enable(monkeypatch)
-    seen = {}
     from app.reasoning.orchestrator import Orchestrator
+    from app.reasoning.runtime import AIInvestigationRuntime
 
-    real_run = Orchestrator.run
+    infer_calls = []
+    orchestrator_runs = []
+    real_infer = AIInvestigationRuntime.infer
 
-    def _spy(self, payload, **kwargs):
-        seen["judge"] = type(self.judge).__name__
-        seen["floor"] = type(self.floor).__name__
-        seen["governor"] = type(self.governor).__name__
-        return real_run(self, payload, **kwargs)
+    def _spy_infer(self, pp, gov_bundle, **kwargs):
+        infer_calls.append({"adjudication": kwargs.get("adjudication"),
+                            "schema_prefilter": kwargs.get("schema_prefilter")})
+        return real_infer(self, pp, gov_bundle, **kwargs)
 
-    monkeypatch.setattr(Orchestrator, "run", _spy)
+    monkeypatch.setattr(AIInvestigationRuntime, "infer", _spy_infer)
+    monkeypatch.setattr(Orchestrator, "run",
+                        lambda self, *a, **k: orchestrator_runs.append(1))
     out = analyst.assess_payload(_payload(), ref="sub_x", platform="youtube")
     assert out is not None
-    assert seen == {"judge": "_AnalystJudge", "floor": "_AnalystFloor", "governor": "Governor"}
+    # ONE runtime inference with the legacy judge-then-floor semantics; NO council orchestration.
+    assert infer_calls == [{"adjudication": "judge_then_floor", "schema_prefilter": True}]
+    assert orchestrator_runs == []
     # the mandatory Governor stamped the result, and the engine number was echoed (OmiScore intact).
     assert out["governance"]["verdict"] == "permit"
     assert out["governance"]["trace_id"].startswith("vt:")
