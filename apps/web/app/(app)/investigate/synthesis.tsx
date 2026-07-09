@@ -85,11 +85,14 @@ export function Synthesis({ data }: { data: ComprehensiveScanResult }) {
             tier={v.coordination_tier}
             sub={`${v.clusters.length} cluster${v.clusters.length === 1 ? '' : 's'}`}
           />
+          {/* P3.1.6 — consume the AI Comment Analysis compatibility output when present; the
+              probability/tier echo the same engine number, so this never destabilizes the view.
+              Falls back to the deterministic thread_scan when Comment Analysis is disabled. */}
           <SubScan
             label="Thread"
-            prob={v.thread_scan.overall_probability}
-            tier={v.thread_scan.tier}
-            sub="whole corpus"
+            prob={(v.comment_analysis ?? v.thread_scan).overall_probability}
+            tier={(v.comment_analysis ?? v.thread_scan).tier}
+            sub={v.comment_analysis ? (v.comment_analysis.model_backed ? 'AI · whole corpus' : 'floor · whole corpus') : 'whole corpus'}
           />
           <SubScan
             label="Tier distribution"

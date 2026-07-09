@@ -341,6 +341,64 @@ def prompt_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Comment-Analysis Prompt Template + Output Schema — published to HF (Phase P3.1)
+# --------------------------------------------------------------------------- #
+COMMENT_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts" / "comment_prompt_template.json"
+)
+
+
+def comment_template_manifest() -> dict:
+    """The Comment-Analysis Prompt Template + Response Contract + Output Schema (Phase P3.1),
+    published alongside the prompts so the deployed comment runtime (and any auditor) carries the
+    exact assembly scaffolding + output contract the Comment Prompt Builder fills. Generated FROM
+    the comment_template asset (single source of truth); drift-guarded. Additive: independent of the
+    investigation ``prompt_template.json`` and the investigation ``package_hash``."""
+    from .comment_template import (
+        COMMENT_TEMPLATE_VERSION,
+        comment_assembly_template,
+        comment_contract_hash,
+        comment_schema_hash,
+        comment_template_hash,
+    )
+
+    tmpl = comment_assembly_template()
+    return {
+        "manifest_version": "v1",
+        "generated_by": "app.reasoning.prompts.export.comment_template_manifest",
+        "source_of_truth": "GitHub app.reasoning.prompts.comment_template (do not hand-edit)",
+        "stage": "comment_analysis",
+        "template_version": COMMENT_TEMPLATE_VERSION,
+        "template_hash": comment_template_hash(),
+        "response_contract_hash": comment_contract_hash(),
+        "output_schema_hash": comment_schema_hash(),
+        "response_format": "json_object",
+        "schema_ref": "comment_analysis_v1",
+        "evidence_section_order": [s["section"] for s in tmpl["evidence_sections"]],
+        "template": tmpl,
+    }
+
+
+def render_comment_template_json() -> str:
+    return json.dumps(comment_template_manifest(), indent=2, sort_keys=True) + "\n"
+
+
+def write_comment_template(path: Path | None = None) -> Path:
+    target = path or COMMENT_TEMPLATE_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_comment_template_json(), encoding="utf-8")
+    return target
+
+
+def comment_template_matches_committed() -> bool:
+    """True when the committed comment-template manifest equals a freshly generated one (drift guard)."""
+    try:
+        return COMMENT_TEMPLATE_PATH.read_text(encoding="utf-8") == render_comment_template_json()
+    except OSError:
+        return False
+
+
+# --------------------------------------------------------------------------- #
 # Specialist Framework handbook — GitHub-side contributor doc (Phase A1)
 # --------------------------------------------------------------------------- #
 HANDBOOK_PATH = (
@@ -403,6 +461,8 @@ __all__ = [
     "write_knowledge", "knowledge_matches_committed",
     "PROMPT_TEMPLATE_PATH", "prompt_template_manifest", "render_prompt_template_json",
     "write_prompt_template", "prompt_template_matches_committed",
+    "COMMENT_TEMPLATE_PATH", "comment_template_manifest", "render_comment_template_json",
+    "write_comment_template", "comment_template_matches_committed",
     "HANDBOOK_PATH", "write_handbook", "handbook_matches_committed",
     "BEHAVIORAL_HANDBOOK_PATH", "write_behavioral_handbook", "behavioral_handbook_matches_committed",
 ]
@@ -413,5 +473,6 @@ if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + 
     print(f"wrote {write_catalog()}")
     print(f"wrote {write_knowledge()}")
     print(f"wrote {write_prompt_template()}")
+    print(f"wrote {write_comment_template()}")
     print(f"wrote {write_handbook()}")
     print(f"wrote {write_behavioral_handbook()}")

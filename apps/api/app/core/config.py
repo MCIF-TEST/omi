@@ -221,6 +221,12 @@ class Settings(BaseSettings):
     # Context Builder mode/budget for AI specialists ("raw" baseline | "structured").
     analyst_context_mode: str = "raw"
     analyst_context_budget: str = "standard"
+    # P3.1.6 — the AI-native Comment Analysis cutover. OFF by default, so the production comment/
+    # thread surface is byte-identical to before (the deterministic thread_scan). When ON, every
+    # comprehensive investigation runs Comment Analysis through the AI Investigation Runtime and the
+    # UI consumes its compatibility output; with no endpoint configured the runtime uses the
+    # deterministic Floor, which echoes the same engine number (so the number never destabilizes).
+    comment_analysis_enabled: bool = False
 
     # -----------------------------------------------------------------------
     # Institutional Memory persistence (Sprint 012). OFF by default -> the
