@@ -96,7 +96,7 @@ class AccountItem:
     coordination_adjusted_probability: float | None = None
     tier: str = "low"
     confidence: float = 0.0
-    suspected_intent: str | None = None
+    # Ruling 3: suspected_intent removed — a heuristic interpretation is not evidence.
     signals: tuple[SignalItem, ...] = ()
     contributions: tuple[ContributionItem, ...] = ()
     weak_signals: tuple[str, ...] = ()
@@ -329,7 +329,7 @@ def build_account_bundle(ctx: InvestigationContext) -> AccountEvidenceBundle:
         accounts.append(AccountItem(
             author_ref=a.ref, overall_probability=a.overall_probability,
             coordination_adjusted_probability=a.coordination_adjusted_probability,
-            tier=a.tier, confidence=a.confidence, suspected_intent=a.suspected_intent,
+            tier=a.tier, confidence=a.confidence,
             signals=tuple(SignalItem(name=s.name, probability=s.probability, confidence=s.confidence,
                                      supplemental=s.supplemental) for s in a.signals),
             contributions=tuple(ContributionItem(name=k.name, impact=k.impact, direction=k.direction,

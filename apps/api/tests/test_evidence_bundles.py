@@ -109,6 +109,9 @@ def test_each_bundle_carries_only_its_stage_evidence_no_prose():
     assert ad["accounts"][0]["signals"][0]["name"] == "temporal"
     assert ad["accounts"][0]["omiscore"] is not None
     assert "clusters" not in ad and "comments" not in ad
+    # Ruling 3: suspected_intent (a heuristic interpretation) is NOT evidence — absent even though the
+    # payload commenter carries it.
+    assert "suspected_intent" not in ad["accounts"][0]
     # Coordination owns clusters + graph; Campaign owns only refs (no cluster copies)
     assert s.coordination.cluster_count == 2 and s.coordination.clusters
     cad = s.campaign.to_dict()

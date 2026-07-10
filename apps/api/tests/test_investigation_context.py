@@ -98,6 +98,20 @@ def test_returns_one_typed_object_with_all_sections():
         assert name in d
 
 
+def test_ruling3_heuristic_interpretations_are_not_projected_as_evidence():
+    """Ruling 3 (frozen architecture): intent_label / suspected_intent / reasons are heuristic
+    INTERPRETATIONS, not observations. Even though the payload carries them (the engine still
+    measures), the Repository's evidence projection must NOT expose them — on any account or the
+    focus author. Observations (weak_signals / coordination_evidence / signals) remain."""
+    ctx = _build()  # the payload has intent_label/reasons on chanA and the focus author
+    for acct in ctx.accounts.accounts:
+        d = acct.to_dict()
+        assert "intent_label" not in d and "suspected_intent" not in d and "reasons" not in d
+        assert "signals" in d and "weak_signals" in d          # observations preserved
+    author = ctx.author.to_dict()
+    assert "intent_label" not in author and "suspected_intent" not in author and "reasons" not in author
+
+
 def test_projects_accounts_coordination_campaigns_crosslinks():
     d = _build().to_dict()
     assert d["accounts"]["count"] == 2

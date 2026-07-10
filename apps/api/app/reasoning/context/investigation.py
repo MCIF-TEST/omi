@@ -117,9 +117,10 @@ class AuthorSection(Section):
     overall_probability: float | None = None
     tier: str | None = None
     confidence: float | None = None
-    suspected_intent: str | None = None
-    intent_label: str | None = None
-    reasons: tuple[str, ...] = ()
+    # Ruling 3 (frozen architecture): intent_label / suspected_intent / reasons are heuristic
+    # INTERPRETATIONS, not observations — they are no longer evidence and are not projected here. If
+    # an intent label is needed for compatibility it is derived from the AI investigation AFTER
+    # reasoning, never from the deterministic engine before it.
     follower_count: int | None = None
     history_size: int | None = None
     account_created_at: str | None = None
@@ -168,9 +169,8 @@ class AccountEvidence(Section):
     confidence: float = 0.0
     from_cache: bool = False
     matched_prior_neighbors: int = 0
-    suspected_intent: str | None = None
-    intent_label: str | None = None
-    reasons: tuple[str, ...] = ()
+    # Ruling 3: intent_label / suspected_intent / reasons removed — heuristic interpretations are not
+    # evidence. weak_signals / coordination_evidence / score_adjustments below are OBSERVATIONS (kept).
     weak_signals: tuple[str, ...] = ()
     coordination_evidence: tuple[str, ...] = ()
     score_adjustments: tuple[str, ...] = ()
@@ -462,8 +462,7 @@ def _account_evidence(c: dict, platform: str) -> AccountEvidence:
         tier=str(c.get("tier") or "low"), confidence=_f(c.get("confidence")),
         from_cache=bool(c.get("from_cache", False)),
         matched_prior_neighbors=int(_f(c.get("matched_prior_neighbors"))),
-        suspected_intent=c.get("suspected_intent"), intent_label=c.get("intent_label"),
-        reasons=tuple(str(r) for r in (c.get("reasons") or [])[:8]),
+        # Ruling 3: the engine's intent_label / suspected_intent / reasons are NOT projected as evidence.
         weak_signals=tuple(str(w) for w in (c.get("weak_signals") or [])[:8]),
         coordination_evidence=tuple(str(e) for e in (c.get("coordination_evidence") or [])[:8]),
         score_adjustments=tuple(str(a) for a in (c.get("score_adjustments") or [])[:8]),
@@ -579,8 +578,7 @@ def build_investigation_context(
             present=True, ref=_pseudo(str(fident)), platform=platform,
             overall_probability=_f(focus.get("overall_probability")),
             tier=str(focus.get("tier") or "low"), confidence=_f(focus.get("confidence")),
-            suspected_intent=focus.get("suspected_intent"), intent_label=focus.get("intent_label"),
-            reasons=tuple(str(r) for r in (focus.get("reasons") or [])[:8]),
+            # Ruling 3: intent_label / suspected_intent / reasons are interpretations, not evidence.
             follower_count=(int(_f(focus.get("follower_count"))) if focus.get("follower_count") is not None else None),
             history_size=(int(_f(focus.get("history_size"))) if focus.get("history_size") is not None else None),
             account_created_at=(str(focus.get("account_created_at")) if focus.get("account_created_at") else None),
