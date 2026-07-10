@@ -33,7 +33,7 @@ const RISK_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: s
 };
 
 const CHIP = 'font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-full border transition-colors';
-const CHIP_ON = 'border-transparent bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(59,142,255,0.4)]';
+const CHIP_ON = 'border-transparent bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(217,164,74,0.4)]';
 const CHIP_OFF = 'border-border-2 text-fg-dim hover:text-fg hover:border-border-hot';
 
 export default async function ContentPage({

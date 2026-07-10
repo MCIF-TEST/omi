@@ -11,11 +11,12 @@ interface SparklineProps {
   className?: string;
 }
 
+// Follows the theme's tier tokens so the curve always matches the badges.
 const tierStroke: Record<Tier, string> = {
-  low: '#10b981',
-  moderate: '#f59e0b',
-  elevated: '#fb923c',
-  high: '#ef4444',
+  low: 'var(--tier-low)',
+  moderate: 'var(--tier-moderate)',
+  elevated: 'var(--tier-elevated)',
+  high: 'var(--tier-high)',
 };
 
 export function Sparkline({ points, tier, height = 64, className }: SparklineProps) {

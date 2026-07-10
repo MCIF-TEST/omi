@@ -26,8 +26,8 @@ import { timeAgo } from '@/lib/format';
 // Pod colour palette — keep in sync with the radial-graph community palette so
 // users get visual continuity between the two coordination views.
 const POD_COLORS = [
-  '#22d3ee', '#a78bfa', '#f472b6', '#fb923c',
-  '#facc15', '#34d399', '#60a5fa', '#f87171',
+  '#c0734e', '#4f8fd6', '#4a9e6f', '#b06ad0',
+  '#b58936', '#2f9db2', '#d06a86', '#7f86e0',
 ];
 
 interface ReplyTreePanelProps {

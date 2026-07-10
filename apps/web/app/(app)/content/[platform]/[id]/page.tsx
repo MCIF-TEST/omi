@@ -294,11 +294,11 @@ function EvolutionChart({ batches }: { batches: CommentBatchOut[] }) {
 
   // Tier→stroke color for the score line segment
   const tierStroke: Record<string, string> = {
-    high: '#ef4444',
-    extreme: '#ef4444',
-    elevated: '#f97316',
-    moderate: '#eab308',
-    low: '#22c55e',
+    high: 'var(--tier-high)',
+    extreme: 'var(--tier-high)',
+    elevated: 'var(--tier-elevated)',
+    moderate: 'var(--tier-moderate)',
+    low: 'var(--tier-low)',
   };
 
   // Drift = latest − first (in percentage points)
@@ -400,7 +400,7 @@ function EvolutionChart({ batches }: { batches: CommentBatchOut[] }) {
               cx={xs[i]}
               cy={scoreY(b.coordination_score)}
               r={4}
-              fill={tierStroke[b.risk_tier] || '#9ca3af'}
+              fill={tierStroke[b.risk_tier] || 'var(--text-faint)'}
               stroke="rgb(var(--bg-elev))"
               strokeWidth={1.5}
             >
