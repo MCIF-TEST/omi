@@ -81,7 +81,8 @@ export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
         {visibleGroups(isNewUser).map((group) => (
           <div key={group.label}>
             <div className="px-2.5 mb-2 flex items-center gap-2 select-none">
-              <span className="h-px w-2.5 rounded bg-gradient-to-r from-accent to-violet" />
+              {/* thermal tick — every section eyebrow carries the spectrum */}
+              <span className="h-[2px] w-2.5 rounded bg-brand-gradient" />
               <span className="font-mono text-[0.6rem] tracking-[0.22em] text-fg-faint uppercase">
                 {group.label}
               </span>

@@ -110,9 +110,34 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     overscroll-behavior-y: none;
+    /* Native controls (checkbox, radio, range, progress) + the text caret wear
+       the brass lamp — the browser's own chrome joins the room. */
+    accent-color: var(--accent);
+    caret-color: var(--accent-2);
   }
   * { border-color: var(--border); }
   ::selection { background: rgba(217, 164, 74, 0.30); color: #fffdf8; }
+  ::placeholder { color: var(--text-faint); }
+
+  /* Headlines never orphan a word; emphasis inside serif titles turns brass. */
+  h1, h2 { text-wrap: balance; }
+  h1 em, h2 em { color: var(--accent-2); }
+  strong { color: var(--text); font-weight: 600; }
+
+  /* Prose links (unclassed only — component links style themselves): brass
+     underline held slightly off the baseline, brightening on hover. */
+  a:not([class]) {
+    color: var(--text);
+    text-decoration: underline;
+    text-decoration-color: rgba(217, 164, 74, 0.45);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    transition: text-decoration-color var(--dur-hover) ease;
+  }
+  a:not([class]):hover { text-decoration-color: var(--accent); }
+
+  hr { border: 0; height: 1px;
+       background: linear-gradient(90deg, transparent, var(--border-2) 18%, var(--border-2) 82%, transparent); }
 
   /* The dossier voice — page titles and hero statements read as a typeset case
      file. Instrument Serif ships one weight (400); scale carries the hierarchy.
@@ -305,7 +330,70 @@
     flex: none;
   }
 
-  /* Primary button — brass lamp glow */
+  /* ── Button materials ─────────────────────────────────────────────────────
+     Light comes from above. A pressable control is a machined object: a lit
+     top edge, a shadowed base, and 1px of real travel when pressed. */
+
+  /* The lamp — primary action. Brass turned on a lathe. */
+  .btn-lamp {
+    background: linear-gradient(180deg, #eec277 0%, #d9a44a 55%, #cd9438 100%);
+    color: #1a1206;
+    border: 1px solid #b5822f;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 253, 248, 0.38),   /* top edge catches the light */
+      inset 0 -1px 0 rgba(70, 45, 8, 0.35),      /* base sits in its own shade */
+      0 1px 2px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 0 rgba(255, 245, 220, 0.25);
+    transition: box-shadow 0.15s ease, filter 0.12s ease, transform 0.06s ease;
+  }
+  .btn-lamp:hover:not(:disabled) {
+    filter: brightness(1.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 253, 248, 0.42),
+      inset 0 -1px 0 rgba(70, 45, 8, 0.35),
+      0 1px 2px rgba(0, 0, 0, 0.5),
+      0 0 18px rgba(217, 164, 74, 0.22);          /* the lamp warms the desk */
+  }
+  .btn-lamp:active:not(:disabled) {
+    transform: translateY(1px);
+    filter: brightness(0.96);
+    box-shadow:
+      inset 0 1px 3px rgba(70, 45, 8, 0.45),      /* pressed: light leaves the top edge */
+      0 0 0 rgba(0, 0, 0, 0);
+  }
+  .btn-lamp:disabled {
+    background: var(--bg-elev-2);
+    color: var(--text-faint);
+    border-color: var(--border-2);
+    box-shadow: none;
+    text-shadow: none;
+  }
+
+  /* The slab — secondary action. A raised block of the room's own material. */
+  .btn-slab {
+    background: linear-gradient(180deg, var(--bg-elev-3) 0%, var(--bg-elev-2) 100%);
+    border: 1px solid var(--border-2);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 253, 248, 0.05),
+      0 1px 2px rgba(0, 0, 0, 0.35);
+    transition: border-color 0.15s ease, background 0.12s ease, transform 0.06s ease, box-shadow 0.15s ease;
+  }
+  .btn-slab:hover:not(:disabled) {
+    border-color: var(--border-hot);
+    background: var(--bg-elev-3);
+  }
+  .btn-slab:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Top light-catch for any raised surface (cards, dialogs, panels). */
+  .surface-lit { box-shadow: inset 0 1px 0 rgba(255, 253, 248, 0.045), 0 1px 2px rgba(0, 0, 0, 0.25); }
+
+  /* Status light — a dot that EMITS instead of merely being colored. */
+  .status-dot { box-shadow: 0 0 6px -1px currentColor, 0 0 2px currentColor; }
+
+  /* Legacy alias (pre-machined primary) — kept for stray call sites. */
   .btn-glow {
     transition: box-shadow 0.15s ease, background 0.12s ease;
   }
@@ -313,6 +401,13 @@
     box-shadow: 0 0 0 1px rgba(217, 164, 74, 0.45), 0 4px 20px rgba(217, 164, 74, 0.10);
   }
   .btn-glow:active { transform: translateY(1px); }
+
+  /* Dialog entrance — the panel arrives, it doesn't just appear. */
+  .dialog-panel { animation: dialog-in 0.18s var(--ease-omi); }
+  @keyframes dialog-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
+  }
 
   /* Sidebar nav item — quiet parchment, thermal tick when active */
   .nav-item {
@@ -345,7 +440,7 @@
     background: var(--grad-brand);
   }
 
-  /* Keyboard hint */
+  /* Keyboard hint — a real keycap: thicker base edge, lit top */
   .kbd {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 0.625rem;
@@ -355,6 +450,8 @@
     color: var(--text-mute);
     background: var(--bg-elev-2);
     border: 1px solid var(--border-2);
+    border-bottom-width: 2px;
+    box-shadow: inset 0 1px 0 rgba(255, 253, 248, 0.04);
   }
 
   /* Animated bar */
@@ -472,7 +569,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .stagger > *,
-  .btn-glow:active {
+  .btn-glow:active,
+  .btn-lamp:active,
+  .btn-slab:active,
+  .dialog-panel {
     animation: none !important;
     transform: none !important;
   }

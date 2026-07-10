@@ -240,7 +240,7 @@ export function LabelWidget({ platform, externalId }: Props) {
           type="button"
           onClick={save}
           disabled={state.kind === 'saving' || state.kind === 'saved'}
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-sm bg-accent hover:bg-accent-2 text-bg-deep disabled:opacity-50 font-mono text-2xs uppercase tracking-wider font-semibold transition-colors"
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md btn-lamp disabled:cursor-not-allowed font-mono text-2xs uppercase tracking-wider font-semibold transition-colors"
         >
           {state.kind === 'saving' ? (
             <><Loader2 size={12} className="animate-spin" /> Saving…</>

@@ -287,7 +287,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/signup"
-              className="inline-flex items-center gap-1.5 bg-accent text-bg-deep font-semibold px-4 h-9 rounded-sm hover:bg-accent-2 transition-colors text-sm"
+              className="inline-flex items-center gap-1.5 btn-lamp font-semibold px-4 h-9 rounded-md text-sm"
             >
               Investigate your own target — free
             </Link>

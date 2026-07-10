@@ -79,7 +79,7 @@ export function WtpPrompt() {
           type="button"
           onClick={() => void submit()}
           disabled={!text.trim()}
-          className="px-4 h-9 bg-accent text-bg-deep text-sm font-semibold rounded-sm hover:bg-accent-2 disabled:opacity-40"
+          className="px-4 h-9 btn-lamp text-sm font-semibold rounded-md inline-flex items-center disabled:cursor-not-allowed"
         >
           Send
         </button>

@@ -28,7 +28,7 @@ export function LandingPage() {
           <Link href="/login"   className="hover:text-fg transition-colors">Log in</Link>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-1.5 bg-accent text-bg-deep text-[0.7rem] font-semibold px-3.5 py-1.5 rounded-md hover:bg-accent-2 transition-colors"
+            className="inline-flex items-center gap-1.5 btn-lamp text-[0.7rem] font-semibold px-3.5 py-1.5 rounded-md"
           >
             Sign up
             <ArrowRight size={11} />
@@ -88,7 +88,7 @@ export function LandingPage() {
             >
               <a
                 href="/rc/cmp_feat_cn_xinjiang"
-                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-6 py-2.5 rounded-lg hover:bg-accent-2 transition-colors text-sm btn-glow shadow-glow-brand"
+                className="inline-flex items-center gap-2 btn-lamp font-semibold px-6 py-2.5 rounded-lg text-sm"
               >
                 See a real campaign — no sign-up
                 <ArrowRight size={14} />
@@ -265,7 +265,7 @@ export function LandingPage() {
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 bg-accent text-bg-deep font-semibold px-7 py-2.5 rounded-lg hover:bg-accent-2 transition-colors btn-glow shadow-glow-brand"
+                className="inline-flex items-center gap-2 btn-lamp font-semibold px-7 py-2.5 rounded-lg"
               >
                 Begin investigating
                 <ArrowRight size={14} />

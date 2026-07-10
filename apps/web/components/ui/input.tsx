@@ -6,9 +6,13 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     <input
       ref={ref}
       className={cn(
-        'w-full h-10 px-3 rounded-md bg-bg-elev-2 text-fg placeholder:text-fg-mute text-sm',
-        'border border-border-2 outline-none transition-colors duration-150',
-        'focus:border-accent focus:ring-2 focus:ring-accent/25',
+        // A well, not a slab: inputs sink INTO the desk (inset shadow), and the
+        // brass lamp finds them on focus. Caret is brass via the global layer.
+        'w-full h-10 px-3 rounded-md bg-bg-inset text-fg placeholder:text-fg-faint text-sm',
+        'border border-border-2 outline-none transition-[border-color,box-shadow] duration-150',
+        'shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)]',
+        'focus:border-accent/70 focus:ring-2 focus:ring-accent/20',
+        'focus:shadow-[inset_0_1px_3px_rgba(0,0,0,0.35),0_0_14px_rgba(217,164,74,0.10)]',
         className,
       )}
       {...props}

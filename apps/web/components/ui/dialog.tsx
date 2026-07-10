@@ -45,7 +45,7 @@ export function Dialog({ open, onClose, children, className, label }: DialogProp
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[16vh] px-4 bg-bg-deep/80 backdrop-blur-sm animate-fade-up"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[16vh] px-4 bg-bg-deep/85 backdrop-blur-md animate-fade-up"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -56,13 +56,13 @@ export function Dialog({ open, onClose, children, className, label }: DialogProp
       <div
         ref={ref}
         className={cn(
-          'w-full max-w-2xl bg-bg-elev border border-border-2 rounded-xl shadow-overlay',
+          'dialog-panel w-full max-w-2xl glass surface-lit rounded-2xl shadow-overlay',
           className,
         )}
       >
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1 text-fg-mute hover:text-fg-dim rounded-sm"
+          className="absolute top-3 right-3 p-1.5 text-fg-mute hover:text-fg rounded-md hover:bg-bg-elev-2 transition-colors"
           aria-label="Close"
           type="button"
         >

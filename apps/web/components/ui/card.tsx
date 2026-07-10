@@ -13,7 +13,8 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-xl p-6',
+        // surface-lit: every raised slab catches the room light on its top edge
+        'rounded-xl p-6 surface-lit',
         gradient
           ? 'gradient-border'
           : 'bg-bg-elev border border-border-1',
@@ -30,7 +31,7 @@ export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadi
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-lg font-semibold text-fg tracking-tight mb-2', className)}
+      className={cn('text-[0.95rem] font-semibold text-fg tracking-[-0.01em] mb-2', className)}
       {...props}
     />
   ),
