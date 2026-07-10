@@ -80,7 +80,7 @@ export function CampaignShareBlock({
           <button
             onClick={mint}
             disabled={pending}
-            className="inline-flex items-center gap-1.5 px-3 h-9 border border-accent-dim bg-accent/10 text-accent rounded-sm font-mono text-xs tracking-wider uppercase hover:bg-accent/20 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 h-9 border border-accent-dim bg-accent/10 text-accent rounded-sm font-mono text-xs tracking-wider uppercase hover:bg-accent/20 active:translate-y-px disabled:opacity-50"
           >
             <Link2 size={12} />
             {pending ? 'Creating…' : 'Create public link'}
@@ -111,7 +111,7 @@ export function CampaignShareBlock({
               href={path}
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-1.5 px-3 h-9 border border-accent-dim bg-accent/10 text-accent rounded-sm font-mono text-xs tracking-wider uppercase hover:bg-accent/20"
+              className="inline-flex items-center gap-1.5 px-3 h-9 border border-accent-dim bg-accent/10 text-accent rounded-sm font-mono text-xs tracking-wider uppercase hover:bg-accent/20 active:translate-y-px"
             >
               <ExternalLink size={12} /> Open report
             </a>
@@ -130,7 +130,7 @@ export function CampaignShareBlock({
             <button
               onClick={revoke}
               disabled={pending}
-              className="inline-flex items-center gap-1.5 px-3 h-9 border border-danger/40 bg-danger/10 text-danger rounded-sm font-mono text-xs tracking-wider uppercase hover:bg-danger/20 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 h-9 border border-danger/40 bg-danger/10 text-danger rounded-sm font-mono text-xs tracking-wider uppercase hover:bg-danger/20 active:translate-y-px disabled:opacity-50"
             >
               <X size={12} /> Revoke
             </button>

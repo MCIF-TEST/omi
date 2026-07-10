@@ -179,7 +179,7 @@ export function GraphClient() {
               type="button"
               onClick={handleCreate}
               disabled={!newName.trim()}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-sm bg-accent text-bg font-mono text-2xs uppercase tracking-wider disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md btn-lamp font-mono text-2xs uppercase tracking-wider disabled:cursor-not-allowed"
             >
               <Check size={12} /> Create
             </button>

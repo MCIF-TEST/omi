@@ -91,7 +91,7 @@ export function DemoScanForm() {
         <button
           type="submit"
           disabled={busy || !url.trim()}
-          className="inline-flex items-center gap-2 bg-accent text-bg-deep font-medium px-5 py-3 rounded-sm hover:bg-accent-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 btn-lamp font-semibold px-5 py-3 rounded-md disabled:cursor-not-allowed"
         >
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
           {busy ? 'Scanning…' : 'Run free scan'}
@@ -250,7 +250,7 @@ function DemoResult({
           </button>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 bg-accent text-bg-deep font-medium px-4 py-2 rounded-sm hover:bg-accent-2 transition-colors"
+            className="inline-flex items-center gap-2 btn-lamp font-semibold px-4 py-2 rounded-md"
           >
             Sign up free
             <ArrowRight size={14} />

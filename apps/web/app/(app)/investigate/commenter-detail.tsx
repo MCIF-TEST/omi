@@ -288,7 +288,7 @@ export function CommenterDetail({
             disabled={watch.loading}
             className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border font-mono text-2xs uppercase tracking-wider transition-colors disabled:opacity-50 ${
               watch.existing
-                ? 'border-accent bg-accent/10 text-accent hover:bg-accent/20'
+                ? 'border-accent bg-accent/10 text-accent hover:bg-accent/20 active:translate-y-px'
                 : 'border-border-2 text-fg-dim hover:text-fg hover:border-border-hot'
             }`}
             title={watch.existing
@@ -379,7 +379,7 @@ export function CommenterDetail({
                   type="button"
                   onClick={saveToGraphs}
                   disabled={graph.saving || (graph.selected.size === 0 && !(graph.addNew && graph.newName.trim()))}
-                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm bg-accent text-bg font-mono text-2xs uppercase tracking-wider disabled:opacity-40 hover:bg-accent/90 transition-colors"
+                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md btn-lamp font-mono text-2xs uppercase tracking-wider disabled:cursor-not-allowed"
                 >
                   {graph.saving ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
                   Save
@@ -487,7 +487,7 @@ export function CommenterDetail({
             type="button"
             onClick={runDeepScan}
             disabled={deep.loading}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 font-mono text-2xs uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 active:translate-y-px font-mono text-2xs uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
             title="Pull this account's recent activity (uses 1 credit)"
           >
             {deep.loading ? (

@@ -56,7 +56,7 @@ export function RescanButton({
       <button
         onClick={run}
         disabled={busy}
-        className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-3 py-1.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-3 py-1.5 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 active:translate-y-px transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         title={subtitle}
       >
         {busy ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}

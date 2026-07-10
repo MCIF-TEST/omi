@@ -56,9 +56,10 @@ export function TierBadge({ tier, className, size = 'md' }: TierBadgeProps) {
         className,
       )}
     >
+      {/* status-dot: the dot EMITS its color (tiny glow) — a status light, not paint */}
       <span
         className={cn(
-          'w-1.5 h-1.5 rounded-full shrink-0',
+          'w-1.5 h-1.5 rounded-full shrink-0 status-dot',
           DOT[key],
           key === 'high' && 'animate-pulse-dot',
         )}
