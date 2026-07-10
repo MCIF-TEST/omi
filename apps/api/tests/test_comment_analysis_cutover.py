@@ -1,15 +1,14 @@
-"""P3.1.6 — Comment Analysis production cutover (integration).
+"""Ruling 2 (frozen architecture) — scan-time AI inference is RETIRED.
 
-Proves the AI-native Comment Analysis stage EXECUTES in the real investigation path: a comprehensive
-scan (``/v1/scan/link``, the same entry YouTube and X share) runs Comment Analysis through the AI
-Investigation Runtime, and the response the frontend consumes carries the compatibility output at
-``video.comment_analysis``. Enabled-gated + backward compatible: with the flag OFF the deterministic
-``thread_scan`` is unchanged and ``comment_analysis`` is absent. The compat number ECHOES the engine's
-deterministic thread number (never recomputed by the model).
+Proves the canonical invariant: a comprehensive scan (``/v1/scan/link``, the same entry YouTube and X
+share) performs NO AI inference and calls NO endpoint — ``video.comment_analysis`` is absent even when
+``comment_analysis_enabled`` is set, because no component may call the endpoint before the Investigation
+Package is composed (exactly one endpoint request per investigation, off the scan hot path). The
+deterministic ``thread_scan`` remains the scan-time thread surface in every case. Comment intelligence
+is now a projection of the single AI investigation, not a scan-time stage.
 """
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -69,30 +68,28 @@ def _teardown(tc: TestClient) -> None:
     get_settings.cache_clear()
 
 
-def test_enabled_comprehensive_scan_invokes_comment_analysis(monkeypatch):
-    """CRITICAL #1 + #2 — a real comprehensive investigation invokes Comment Analysis and its compat
-    output reaches the response the frontend renders."""
+def test_scan_performs_no_inference_even_when_enabled(monkeypatch):
+    """Ruling 2 — even with ``comment_analysis_enabled`` set, a comprehensive scan performs NO AI
+    inference at scan time: ``comment_analysis`` is absent and the deterministic thread_scan stands.
+    Comment intelligence is deferred to the single AI investigation."""
     tc = _client(monkeypatch, comment_ai=True)
     try:
         r = tc.post("/v1/scan/link", json={"url": _TWEET_URL, "max_commenters": 10})
         assert r.status_code == 200, r.text
         video = r.json()["video"]
         assert video is not None
-        ca = video.get("comment_analysis")
-        assert ca is not None, "production comprehensive scan must invoke Comment Analysis when enabled"
-        # exactly the compatibility output the UI consumes
-        assert set(ca) >= {"overall_probability", "tier", "comment_count", "provider", "model_backed"}
-        # the number ECHOES the deterministic engine thread number — never recomputed by the model
-        assert ca["overall_probability"] == pytest.approx(video["thread_scan"]["overall_probability"])
-        # no live endpoint in the test env -> deterministic Floor (still Governor-validated upstream)
-        assert ca["model_backed"] is False and ca["provider"] == "deterministic-analyst-v1"
+        # scan-time AI inference is retired — no comment_analysis is produced at scan time
+        assert video.get("comment_analysis") is None, "scan time must not invoke any AI inference"
+        # the deterministic thread surface is intact and remains the scan-time thread number
+        assert video["thread_scan"]["overall_probability"] >= 0.0
     finally:
         _teardown(tc)
 
 
 def test_disabled_is_backward_compatible(monkeypatch):
     """With the flag OFF the response is byte-identical to before — no comment_analysis, the
-    deterministic thread_scan remains the thread surface."""
+    deterministic thread_scan remains the thread surface. (Now identical to the enabled path — the
+    flag no longer changes scan-time behavior, since scan-time inference is retired.)"""
     tc = _client(monkeypatch, comment_ai=False)
     try:
         r = tc.post("/v1/scan/link", json={"url": _TWEET_URL, "max_commenters": 10})

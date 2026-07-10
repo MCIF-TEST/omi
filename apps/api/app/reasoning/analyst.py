@@ -366,9 +366,8 @@ def _assess_core(
         # judge-then-floor adjudication semantics. The deterministic Floor keeps MEASURING the evidence
         # from the lossy bundle (byte-identical output); only the model's prompt moved onto the
         # canonical stage architecture.
-        from app.evidence import Binder
-        from app.reasoning.context import build_investigation_context
         from app.reasoning.evidence_bundles import build_investigation_summary_bundle
+        from app.reasoning.evidence_repository import EvidenceRepository
         from app.reasoning.investigation_summary_analysis import (
             build_investigation_summary_prompt_package,
         )
@@ -376,15 +375,18 @@ def _assess_core(
         from app.reasoning.runtime import run_stage_inference
 
         t_run0 = time.perf_counter()
-        gov_bundle = Binder().bind(payload, grain="comment_section", subject_ref=ref, platform=platform)
-        prior_context = _retrieve_prior_context(store, gov_bundle)
+        # The Evidence Repository is the ONE read-facade: it reads all of this investigation's evidence
+        # once (the governance bundle, the institutional-memory priors, the InvestigationContext) and
+        # freezes it into an immutable, content-addressed snapshot. The reasoning path consumes the
+        # snapshot; it never reads the stores itself. (R1 is behavior-preserving — identical reads.)
+        snapshot = EvidenceRepository().snapshot(
+            payload, ref=ref, platform=platform, settings=settings, store=store)
+        gov_bundle = snapshot.gov_bundle
         lossy = build_bundle(payload, ref=ref, platform=platform, impl=impl,
-                             prior_context=prior_context)
+                             prior_context=list(snapshot.prior_context))
         floor_response = impl.DeterministicAnalystProvider().generate(lossy, config).response
 
-        summary_ctx = build_investigation_context(payload, ref=ref, platform=platform,
-                                                  settings=settings, store=store)
-        summary_bundle = build_investigation_summary_bundle(summary_ctx)
+        summary_bundle = build_investigation_summary_bundle(snapshot.context)
         is_assets = load_investigation_summary_assets()
         pp = build_investigation_summary_prompt_package(summary_bundle, loaded=loaded, assets=is_assets)
 
@@ -401,6 +403,7 @@ def _assess_core(
             "knowledge_entries_used": [e["id"] for e in loaded.knowledge()[:12]],
             "investigation_summary_template_hash": pp.manifest.get("investigation_summary_template_hash"),
             "investigation_summary_bundle_id": summary_bundle.bundle_id(),
+            "evidence_snapshot_id": snapshot.snapshot_id,
             "prompt_package_id": pp.prompt_package_id,
         }
         if capture is not None:
