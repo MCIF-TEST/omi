@@ -144,8 +144,11 @@ def test_omiscore_reuses_compute_omiscore_over_payload_signals():
     d = _build().to_dict()
     assert d["omiscore"]["present"] and d["omiscore"]["count"] == 2
     s0 = d["omiscore"]["scores"][0]
+    # OmiScore is a numeric INDEX (measurement) — the numeric fields ride as evidence
     assert 0.0 <= s0["omi_score"] <= 100.0
-    assert s0["risk_level"] in ("low", "medium", "high")
+    assert "authenticity_score" in s0
+    # risk_level (a heuristic band) is NOT projected as evidence — it must be absent
+    assert "risk_level" not in s0
     assert s0["ref"].startswith("sub_")
 
 

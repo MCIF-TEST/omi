@@ -262,6 +262,7 @@ def reset_package_cache() -> None:
     _COMMENT_CACHE.clear()
     _COMMENTER_HISTORY_CACHE.clear()
     _INVESTIGATION_SUMMARY_CACHE.clear()
+    _COMPREHENSIVE_INVESTIGATION_CACHE.clear()
 
 
 # --------------------------------------------------------------------------- #
@@ -492,9 +493,94 @@ def load_investigation_summary_assets(*, verify: bool = True) -> InvestigationSu
     return isa
 
 
+# --------------------------------------------------------------------------- #
+# Comprehensive-investigation assets (single-inference architecture) — same canonical loader
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class ComprehensiveInvestigationAssets:
+    """Immutable, verified snapshot of the comprehensive single-inference investigation package assets
+    — the system task, response contract, assembly template, and the output-schema descriptor. Loaded
+    here so the comprehensive prompt builder never reads package sources directly. Like the summary
+    stage, the Lead-Investigator synthesis wrapper reuses the EXISTING analyst response schema; the six
+    per-domain reasoning sidecars are described by the output-schema descriptor."""
+
+    system_task: str
+    response_contract: str
+    schema_ref: str
+    section_keys: tuple[str, ...]
+    template_version: str
+    template_hash: str
+    contract_hash: str
+    schema_hash: str
+    _template_json: str
+    _schema_json: str
+
+    def template(self) -> dict:
+        return json.loads(self._template_json)
+
+    def output_schema(self) -> dict:
+        return json.loads(self._schema_json)
+
+    def verify(self) -> dict:
+        checks = {
+            "integrity.system_task": bool(self.system_task.strip()),
+            "integrity.response_contract": bool(self.response_contract.strip()),
+            "integrity.template": bool(self.template().get("system_task")),
+            "integrity.schema_ref": self.schema_ref.endswith("analyst_response_schema.json"),
+            "integrity.sidecars": len(self.section_keys) == 6,
+            "integrity.schema": bool(self.output_schema().get("section_sidecars")),
+        }
+        failed = [k for k, ok in checks.items() if not ok]
+        if failed:
+            raise PackageIntegrityError(f"comprehensive-investigation assets verification failed: {failed}")
+        return {"verified": True, "checks": list(checks)}
+
+
+_COMPREHENSIVE_INVESTIGATION_CACHE: dict[str, ComprehensiveInvestigationAssets] = {}
+
+
+def load_comprehensive_investigation_assets(*, verify: bool = True) -> ComprehensiveInvestigationAssets:
+    """Return the verified, cached, immutable comprehensive-investigation assets. The ONLY runtime entry
+    point for these package assets — fail-closed like :func:`load_package`."""
+    cached = _COMPREHENSIVE_INVESTIGATION_CACHE.get("__default__")
+    if cached is not None:
+        return cached
+    from app.reasoning.prompts.comprehensive_investigation_template import (
+        COMPREHENSIVE_INVESTIGATION_SCHEMA_REF,
+        COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION,
+        COMPREHENSIVE_SECTION_KEYS,
+        comprehensive_investigation_assembly_template,
+        comprehensive_investigation_contract_hash,
+        comprehensive_investigation_output_schema,
+        comprehensive_investigation_response_contract,
+        comprehensive_investigation_schema_hash,
+        comprehensive_investigation_system_task_text,
+        comprehensive_investigation_template_hash,
+    )
+
+    tmpl = comprehensive_investigation_assembly_template()
+    cia = ComprehensiveInvestigationAssets(
+        system_task=comprehensive_investigation_system_task_text(),
+        response_contract=comprehensive_investigation_response_contract(),
+        schema_ref=COMPREHENSIVE_INVESTIGATION_SCHEMA_REF,
+        section_keys=tuple(COMPREHENSIVE_SECTION_KEYS),
+        template_version=COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION,
+        template_hash=comprehensive_investigation_template_hash(),
+        contract_hash=comprehensive_investigation_contract_hash(),
+        schema_hash=comprehensive_investigation_schema_hash(),
+        _template_json=json.dumps(tmpl, ensure_ascii=False, sort_keys=True),
+        _schema_json=json.dumps(comprehensive_investigation_output_schema(), ensure_ascii=False, sort_keys=True),
+    )
+    if verify:
+        cia.verify()
+    _COMPREHENSIVE_INVESTIGATION_CACHE["__default__"] = cia
+    return cia
+
+
 __all__ = [
     "LoadedPackage", "PackageIntegrityError", "load_package", "reset_package_cache",
     "CommentAssets", "load_comment_assets",
     "CommenterHistoryAssets", "load_commenter_history_assets",
     "InvestigationSummaryAssets", "load_investigation_summary_assets",
+    "ComprehensiveInvestigationAssets", "load_comprehensive_investigation_assets",
 ]

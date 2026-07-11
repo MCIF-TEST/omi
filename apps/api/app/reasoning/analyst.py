@@ -335,7 +335,7 @@ def _assess_core(
         # The LoadedPackage is the stage builder's verified asset source; ``prompt_mode`` labels the
         # forensic provenance.
         loaded = load_package(getattr(settings, "analyst_model_id", None))
-        prompt_mode = "stage:investigation_summary"
+        prompt_mode = "stage:comprehensive_investigation"
 
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         if endpoint:
@@ -366,12 +366,12 @@ def _assess_core(
         # judge-then-floor adjudication semantics. The deterministic Floor keeps MEASURING the evidence
         # from the lossy bundle (byte-identical output); only the model's prompt moved onto the
         # canonical stage architecture.
-        from app.reasoning.evidence_bundles import build_investigation_summary_bundle
-        from app.reasoning.evidence_repository import EvidenceRepository
-        from app.reasoning.investigation_summary_analysis import (
-            build_investigation_summary_prompt_package,
+        from app.reasoning.comprehensive_investigation_analysis import (
+            build_comprehensive_investigation_prompt_package,
         )
-        from app.reasoning.package_loader import load_investigation_summary_assets
+        from app.reasoning.evidence_repository import EvidenceRepository
+        from app.reasoning.investigation_composer import InvestigationComposer
+        from app.reasoning.package_loader import load_comprehensive_investigation_assets
         from app.reasoning.runtime import run_stage_inference
 
         t_run0 = time.perf_counter()
@@ -386,13 +386,22 @@ def _assess_core(
                              prior_context=list(snapshot.prior_context))
         floor_response = impl.DeterministicAnalystProvider().generate(lossy, config).response
 
-        summary_bundle = build_investigation_summary_bundle(snapshot.context)
-        is_assets = load_investigation_summary_assets()
-        pp = build_investigation_summary_prompt_package(summary_bundle, loaded=loaded, assets=is_assets)
+        # The Investigation Composer assembles the COMPLETE, content-addressed InvestigationPackage from
+        # the snapshot; the comprehensive stage renders its full budgeted evidence into ONE prompt. This
+        # is the single production investigation inference: Mistral receives the actual structured
+        # evidence content of the complete package (seven domains) in ONE endpoint request.
+        package = InvestigationComposer().compose(snapshot)
+        # Teach the governance bundle to resolve the citation universe the model is SHOWN — the complete
+        # package's stable evidence ids + the reversible short aliases — so the ONE Governor's citation
+        # guard ACCEPTS legitimate alias citations while still rejecting fabricated ones.
+        from app.reasoning.investigation_render import build_alias_legend
+        investigation_legend = build_alias_legend(package)
+        gov_bundle.extra_citable = set(package.evidence_index) | investigation_legend.alias_tokens()
+        ci_assets = load_comprehensive_investigation_assets()
+        pp = build_comprehensive_investigation_prompt_package(package, loaded=loaded, assets=ci_assets)
 
         # Forensic provenance of the assembled prompt — preserves the trace/audit contract (mode,
-        # system_prompt_sha, knowledge_entries_used), now sourced from the canonical stage package.
-        # ``knowledge_entries_used`` mirrors the stage builder's knowledge window (the first 12).
+        # system_prompt_sha, knowledge_entries_used), now sourced from the comprehensive stage package.
         prompt_build = {
             "mode": prompt_mode,
             "assembled_from": pp.manifest.get("assembled_from"),
@@ -401,8 +410,12 @@ def _assess_core(
             "system_prompt_sha": pp.manifest.get("system_prompt_sha"),
             "system_prompt_chars": len(pp.system),
             "knowledge_entries_used": [e["id"] for e in loaded.knowledge()[:12]],
-            "investigation_summary_template_hash": pp.manifest.get("investigation_summary_template_hash"),
-            "investigation_summary_bundle_id": summary_bundle.bundle_id(),
+            "comprehensive_investigation_template_hash": pp.manifest.get(
+                "comprehensive_investigation_template_hash"),
+            "investigation_package_id": package.package_id,
+            "evidence_coverage_mode": pp.manifest.get("evidence_coverage_mode"),
+            "evidence_tokens_est": pp.manifest.get("evidence_tokens_est"),
+            "evidence_sampling_truncated": pp.manifest.get("evidence_sampling_truncated"),
             "evidence_snapshot_id": snapshot.snapshot_id,
             "prompt_package_id": pp.prompt_package_id,
         }
@@ -420,7 +433,7 @@ def _assess_core(
         model_ms = (time.perf_counter() - t_model0) * 1000.0
         reasoning_ms = (time.perf_counter() - t_run0) * 1000.0
 
-        from app.governor import Governor
+        from app.governor import Governor, validate_comprehensive_sections
         governed = dict(inference.ruling)
         gov: dict[str, Any] = {
             "verdict": inference.trace.verdict,
@@ -436,6 +449,19 @@ def _assess_core(
             gov["fallback_from"] = inference.fallback_from
             gov["rejected_codes"] = list(inference.rejected_codes)
         governed["governance"] = gov
+        # The comprehensive response's six per-domain reasoning sidecars ride alongside the
+        # Governor-validated synthesis wrapper. Structurally validate them + resolve their citations
+        # against the complete package's evidence universe (the stable evidence index + the reversible
+        # alias legend + the governance bundle). This is validation only — it moves no number and
+        # discards no served ruling; unresolved citations are recorded for the presentation layer.
+        sections_report = validate_comprehensive_sections(
+            inference.raw_obj, section_keys=ci_assets.section_keys,
+            evidence_index=package.evidence_index,
+            legend=investigation_legend.to_manifest(), gov_bundle=gov_bundle)
+        governed["comprehensive_sections"] = {
+            k: v for k, v in (inference.raw_obj or {}).items() if k in ci_assets.section_keys
+        }
+        governed["comprehensive_validation"] = sections_report
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
         governed["ai_package"] = ai_package.provenance()

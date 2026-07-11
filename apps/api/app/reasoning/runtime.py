@@ -38,7 +38,15 @@ _MODEL_ECHOED_FIELDS = ("suspicion_probability", "suspicion_tier")
 # per-commenter analyses). They are separated out before the Governor validates the wrapper, so the
 # Governor sees the identical constitutional object for every stage — one strip list, no per-stage
 # Governor logic. A stage extracts its own typed structure from ``RuntimeInference.raw_obj``.
-_STAGE_SIDECAR_KEYS = ("comment_analyses", "commenter_analyses")
+_STAGE_SIDECAR_KEYS = (
+    "comment_analyses", "commenter_analyses",
+    # The comprehensive single-inference response rides six per-domain reasoning sections ALONGSIDE the
+    # Lead-Investigator synthesis wrapper. They are separated here so the Governor validates the
+    # identical constitutional wrapper (one strip list, no per-stage Governor logic); the stage
+    # structurally validates + citation-resolves the six via ``validate_comprehensive_sections``.
+    "comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+    "narrative_reasoning", "coordination_reasoning", "campaign_reasoning",
+)
 
 
 @dataclass
