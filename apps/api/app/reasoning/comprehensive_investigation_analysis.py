@@ -60,6 +60,8 @@ def _manifest_extra(assets: Any, package: Any) -> dict:
     the coverage summary. The full legend/coverage ride in the user message (disclosure to the model);
     the manifest keeps a lean provenance summary."""
     rv = _rendered(package)
+    acct_cov = (rv.coverage.get("domains", {}) or {}).get("account_analysis", {})
+    comm_cov = (rv.coverage.get("domains", {}) or {}).get("comment_analysis", {})
     return {
         "comprehensive_investigation_template_hash": assets.template_hash,
         "comprehensive_investigation_contract_hash": assets.contract_hash,
@@ -70,6 +72,9 @@ def _manifest_extra(assets: Any, package: Any) -> dict:
         "evidence_coverage_mode": rv.coverage.get("mode"),
         "evidence_tokens_est": rv.tokens,
         "evidence_sampling_truncated": bool(rv.coverage.get("sampling", {}).get("truncated_upstream")),
+        "evidence_represented_accounts": acct_cov.get("represented"),
+        "evidence_omitted_accounts": acct_cov.get("omitted"),
+        "evidence_deduplicated_comments": comm_cov.get("deduplicated"),
     }
 
 

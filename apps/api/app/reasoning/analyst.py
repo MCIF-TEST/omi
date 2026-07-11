@@ -466,14 +466,50 @@ def _assess_core(
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
         governed["ai_package"] = ai_package.provenance()
         governed["prompt_build"] = prompt_build
+        # One correlated production trace for the single comprehensive investigation inference — reuses
+        # the existing forensic capture (no second logging subsystem). ``inference_count`` is the
+        # endpoint-request cardinality for THIS investigation: the architecture makes exactly one
+        # ``run_stage_inference`` call, so it is 1 when the endpoint was reached, else 0 (floor). It
+        # makes a second inference for one investigation immediately visible. IDs/hashes/counts only —
+        # no secrets, no tokens, no auth headers.
+        investigation_trace = {
+            "ref": ref,
+            "inference_count": 1 if inference.endpoint_called else 0,
+            "endpoint_called": inference.endpoint_called,
+            "model_backed": model_backed,
+            "fallback_reason": (inference.fallback_from or None),
+            "snapshot_id": snapshot.snapshot_id,
+            "investigation_package_id": package.package_id,
+            "prompt_package_id": pp.prompt_package_id,
+            "prompt_hash": pp.manifest.get("prompt_hash"),
+            "package_hash": pp.manifest.get("package_hash"),
+            "evidence_coverage_mode": pp.manifest.get("evidence_coverage_mode"),
+            "evidence_tokens_est": pp.manifest.get("evidence_tokens_est"),
+            "evidence_represented_accounts": pp.manifest.get("evidence_represented_accounts"),
+            "evidence_omitted_accounts": pp.manifest.get("evidence_omitted_accounts"),
+            "evidence_deduplicated_comments": pp.manifest.get("evidence_deduplicated_comments"),
+            "model_id": inference.served_model,
+            "endpoint_request_id": inference.endpoint_request_id,
+            "endpoint_attempts": inference.attempts,
+            "endpoint_latency_ms": round(inference.latency_ms, 2),
+            "response_status": inference.response_status,
+            "governor_verdict": gov.get("verdict"),
+            "comprehensive_structurally_valid": sections_report.get("structurally_valid"),
+            "comprehensive_unresolved_citations": sections_report.get("unresolved_total"),
+        }
+        governed["investigation_trace"] = investigation_trace
         governed["metrics"] = _assessment_metrics(
             governed, gov, settings, store_ms=store_ms, reasoning_ms=reasoning_ms,
             model_backed=model_backed, prompt_meta=prompt_meta)
         governed["metrics"]["package_hash"] = ai_package.package_hash
         m = governed["metrics"]
         logger.info("analyst.assess: DONE ref=%s provider=%s model_backed=%s governor=%s revision=%s "
+                    "| inference_count=%d endpoint_called=%s pkg=%s snapshot=%s coverage=%s ev_tokens=%s "
                     "| metrics total=%.0fms model=%.0fms governor+assembly=%.0fms est_completion_tokens=%d",
                     ref, prov, model_backed, gov.get("verdict"), gov.get("model_revision"),
+                    investigation_trace["inference_count"], inference.endpoint_called,
+                    package.package_id, snapshot.snapshot_id,
+                    investigation_trace["evidence_coverage_mode"], investigation_trace["evidence_tokens_est"],
                     m["total_reasoning_ms"], m["model_ms"], m["governor_and_assembly_ms"],
                     m["est_completion_tokens"])
         return governed
