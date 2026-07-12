@@ -11,6 +11,8 @@ import {
   type AnalystResponse,
   type AnalystAssessment,
   type AnalystEvidenceItem,
+  type ComprehensiveSection,
+  type ComprehensiveSections,
   type Tier,
 } from '@/lib/api';
 
@@ -137,31 +139,51 @@ function verdictLabel(v: string): string {
   return (VERDICT_LABELS as Record<string, string>)[v] ?? v;
 }
 
+// Whether Mistral actually authored this assessment. Prefer the explicit trace flag; fall back to the
+// governance provider string for assessments persisted before the trace existed. When false, the
+// synthesis prose is the deterministic Floor's — it must NEVER be shown as AI reasoning.
+function isModelBacked(a: AnalystAssessment): boolean {
+  if (typeof a.investigation_trace?.model_backed === 'boolean') return a.investigation_trace.model_backed;
+  const provider = a.governance?.provider ?? '';
+  return provider.length > 0 && !/fallback|deterministic|floor/i.test(provider);
+}
+
 function AssessmentView({ a }: { a: AnalystAssessment }) {
+  // Product-cutover rule: only Mistral-authored assessments render as AI reasoning. If the model was
+  // not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
+  // headline / assessment / evidence as though Mistral wrote it.
+  if (!isModelBacked(a)) return <AiUnavailable a={a} />;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <TierBadge tier={a.suspicion_tier as Tier} />
-        <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-hot px-2.5 py-1 rounded-full bg-bg-elev-2">
-          {verdictLabel(a.verdict)} · recommended
-        </span>
-        <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-          {pct(a.suspicion_probability)} suspicion · {a.confidence_band} confidence
-        </span>
+    <div className="space-y-5">
+      {/* ── LEAD INVESTIGATOR SYNTHESIS (Mistral) ─────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <TierBadge tier={a.suspicion_tier as Tier} />
+          <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-hot px-2.5 py-1 rounded-full bg-bg-elev-2">
+            {verdictLabel(a.verdict)} · recommended
+          </span>
+          <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
+            {pct(a.suspicion_probability)} suspicion · {a.confidence_band} confidence
+          </span>
+        </div>
+
+        {a.headline && <p className="text-sm text-fg leading-relaxed">{a.headline}</p>}
+        {a.assessment && (
+          <p className="text-sm text-fg-dim leading-relaxed whitespace-pre-line">{a.assessment}</p>
+        )}
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <EvidenceList label="Evidence for" tone="raise" items={a.evidence_for} />
+          <EvidenceList label="Evidence against" tone="lower" items={a.evidence_against} />
+        </div>
+
+        <PlainList label="Confidence & uncertainty" lead={a.confidence_rationale} items={a.uncertainty} />
+        <PlainList label="What would change this" items={a.what_would_change_this} />
       </div>
 
-      {a.headline && <p className="text-sm text-fg leading-relaxed">{a.headline}</p>}
-      {a.assessment && (
-        <p className="text-sm text-fg-dim leading-relaxed whitespace-pre-line">{a.assessment}</p>
-      )}
-
-      <div className="grid sm:grid-cols-2 gap-4">
-        <EvidenceList label="Evidence for" tone="raise" items={a.evidence_for} />
-        <EvidenceList label="Evidence against" tone="lower" items={a.evidence_against} />
-      </div>
-
-      <PlainList label="Confidence & uncertainty" lead={a.confidence_rationale} items={a.uncertainty} />
-      <PlainList label="What would change this" items={a.what_would_change_this} />
+      {/* ── DOMAIN REASONING (six views over the ONE comprehensive response) ── */}
+      <DomainReasoning sections={a.comprehensive_sections} />
 
       {a.governance && (
         <p className="text-2xs font-mono text-fg-mute flex items-center gap-1.5 flex-wrap">
@@ -176,6 +198,86 @@ function AssessmentView({ a }: { a: AnalystAssessment }) {
         </p>
       )}
     </div>
+  );
+}
+
+// AI reasoning was not produced by Mistral (endpoint unreachable / not enabled). We surface an honest
+// notice and DO NOT render the deterministic Floor's synthesized verdict/headline/assessment/evidence
+// as AI. The deterministic evidence + measurements remain available elsewhere on the page.
+function AiUnavailable({ a }: { a: AnalystAssessment }) {
+  return (
+    <div className="text-sm text-fg-dim flex items-start gap-2">
+      <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
+      <span>
+        AI reasoning is not available for this investigation yet — the reasoning model wasn’t reached,
+        so Mistral’s interpretation could not be produced. The deterministic evidence and measurements
+        on this page are unaffected.
+        {a.governance?.provider && (
+          <span className="block mt-1 text-2xs font-mono text-fg-faint">
+            provider: {a.governance.provider}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+const DOMAIN_PANELS: { key: keyof ComprehensiveSections; title: string }[] = [
+  { key: 'comment_reasoning', title: 'Comment analysis' },
+  { key: 'commenter_history_reasoning', title: 'Commenter history' },
+  { key: 'account_reasoning', title: 'Account analysis' },
+  { key: 'narrative_reasoning', title: 'Narrative analysis' },
+  { key: 'coordination_reasoning', title: 'Coordination analysis' },
+  { key: 'campaign_reasoning', title: 'Campaign analysis' },
+];
+
+// The six per-domain reasoning sections of the single comprehensive Mistral response. Each panel is a
+// pure view over the already-loaded assessment — expanding a panel triggers NO request (no per-panel
+// inference). Sections the model left empty are shown as "no reasoning provided" rather than hidden.
+function DomainReasoning({ sections }: { sections?: ComprehensiveSections }) {
+  const present = DOMAIN_PANELS.filter(({ key }) => sections?.[key] !== undefined);
+  if (present.length === 0) return null;
+  return (
+    <div className="border-t border-border-1/60 pt-4 space-y-2">
+      <CardLabel className="flex items-center gap-1.5">
+        <Brain size={11} /> Domain reasoning · one AI investigation
+      </CardLabel>
+      <div className="space-y-1.5">
+        {present.map(({ key, title }) => (
+          <DomainPanel key={key} title={title} section={sections?.[key]} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DomainPanel({ title, section }: { title: string; section?: ComprehensiveSection }) {
+  const text = section?.assessment?.trim();
+  const citations = section?.citations ?? [];
+  return (
+    <details className="group rounded-sm border border-border-1/60 bg-bg-elev-2/40 open:bg-bg-elev-2">
+      <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs font-mono uppercase tracking-wider text-fg-mute flex items-center justify-between gap-2">
+        <span>{title}</span>
+        <span className="text-fg-faint text-2xs group-open:hidden">expand</span>
+        <span className="text-fg-faint text-2xs hidden group-open:inline">collapse</span>
+      </summary>
+      <div className="px-3 pb-3 space-y-2">
+        {text ? (
+          <p className="text-xs text-fg-dim leading-relaxed whitespace-pre-line">{text}</p>
+        ) : (
+          <p className="text-xs text-fg-faint italic">No reasoning provided for this domain.</p>
+        )}
+        {citations.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {citations.map((c, i) => (
+              <span key={i} className="font-mono text-2xs text-fg-mute border border-border-1/60 rounded-full px-1.5 py-0.5">
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 

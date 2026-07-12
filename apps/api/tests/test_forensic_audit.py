@@ -73,9 +73,10 @@ def test_audit_trusted_endpoint_all_six_proven():
 
     assert out["status"] == "ok"
     it = out["items"]
-    # 1 — exact final prompt sent (P3.4: assembled by the canonical investigation-summary stage builder)
+    # 1 — exact final prompt sent (single-inference: assembled by the canonical comprehensive stage
+    # builder over the COMPLETE InvestigationPackage)
     assert it["1_final_prompt_sent"]["status"] == "PROVEN"
-    assert "INVESTIGATION SUMMARY TASK" in it["1_final_prompt_sent"]["system_prompt"]
+    assert "COMPREHENSIVE INVESTIGATION TASK" in it["1_final_prompt_sent"]["system_prompt"]
     assert "INVESTIGATION EVIDENCE" in it["1_final_prompt_sent"]["user_message"]
     # 2 — prompt version/hash from the package
     assert it["2_prompt_version_hash"]["status"] == "PROVEN"

@@ -170,6 +170,13 @@ class EvidenceBundle:
             return False
         if base in self.evidence or base in self.entities:
             return True
+        # Post-hoc citation universe: the exact evidence ids / aliases the model was SHOWN (the
+        # comprehensive investigation renders the complete package's stable ids + short aliases). Set by
+        # the stage before validation; empty for every legacy path. Citing something NOT shown still
+        # fails, so the fabrication guard stays meaningful. (Not content-addressed — a runtime attribute.)
+        extra = getattr(self, "extra_citable", None)
+        if extra and base in extra:
+            return True
         token = base.rsplit(".", 1)[1] if "." in base else base
         if any(it.originating_detector == token for it in self.evidence.values()):
             return True

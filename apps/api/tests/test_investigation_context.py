@@ -98,6 +98,20 @@ def test_returns_one_typed_object_with_all_sections():
         assert name in d
 
 
+def test_ruling3_heuristic_interpretations_are_not_projected_as_evidence():
+    """Ruling 3 (frozen architecture): intent_label / suspected_intent / reasons are heuristic
+    INTERPRETATIONS, not observations. Even though the payload carries them (the engine still
+    measures), the Repository's evidence projection must NOT expose them — on any account or the
+    focus author. Observations (weak_signals / coordination_evidence / signals) remain."""
+    ctx = _build()  # the payload has intent_label/reasons on chanA and the focus author
+    for acct in ctx.accounts.accounts:
+        d = acct.to_dict()
+        assert "intent_label" not in d and "suspected_intent" not in d and "reasons" not in d
+        assert "signals" in d and "weak_signals" in d          # observations preserved
+    author = ctx.author.to_dict()
+    assert "intent_label" not in author and "suspected_intent" not in author and "reasons" not in author
+
+
 def test_projects_accounts_coordination_campaigns_crosslinks():
     d = _build().to_dict()
     assert d["accounts"]["count"] == 2
@@ -130,8 +144,11 @@ def test_omiscore_reuses_compute_omiscore_over_payload_signals():
     d = _build().to_dict()
     assert d["omiscore"]["present"] and d["omiscore"]["count"] == 2
     s0 = d["omiscore"]["scores"][0]
+    # OmiScore is a numeric INDEX (measurement) — the numeric fields ride as evidence
     assert 0.0 <= s0["omi_score"] <= 100.0
-    assert s0["risk_level"] in ("low", "medium", "high")
+    assert "authenticity_score" in s0
+    # risk_level (a heuristic band) is NOT projected as evidence — it must be absent
+    assert "risk_level" not in s0
     assert s0["ref"].startswith("sub_")
 
 

@@ -524,6 +524,74 @@ def investigation_summary_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Comprehensive-Investigation Prompt Template — published to HF (single-inference architecture)
+# --------------------------------------------------------------------------- #
+COMPREHENSIVE_INVESTIGATION_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts"
+    / "comprehensive_investigation_prompt_template.json"
+)
+
+
+def comprehensive_investigation_template_manifest() -> dict:
+    """The Comprehensive-Investigation Prompt Template + Response Contract + Output-Schema descriptor
+    (single-inference architecture), published alongside the prompts so the deployed comprehensive
+    runtime (and any auditor) carries the exact assembly scaffolding the comprehensive Prompt Builder
+    fills. Generated FROM the comprehensive_investigation_template asset (single source of truth);
+    drift-guarded. Additive: independent of the other stage templates + the investigation
+    ``package_hash``. Records ``schema_ref`` = the EXISTING analyst response schema (the Lead-Investigator
+    synthesis wrapper reuses it) plus the six per-domain reasoning-section sidecar keys."""
+    from .comprehensive_investigation_template import (
+        COMPREHENSIVE_INVESTIGATION_SCHEMA_REF,
+        COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION,
+        COMPREHENSIVE_SECTION_KEYS,
+        comprehensive_investigation_assembly_template,
+        comprehensive_investigation_contract_hash,
+        comprehensive_investigation_schema_hash,
+        comprehensive_investigation_template_hash,
+    )
+
+    tmpl = comprehensive_investigation_assembly_template()
+    return {
+        "manifest_version": "v1",
+        "generated_by": "app.reasoning.prompts.export.comprehensive_investigation_template_manifest",
+        "source_of_truth": "GitHub app.reasoning.prompts.comprehensive_investigation_template (do not hand-edit)",
+        "stage": "comprehensive_investigation",
+        "template_version": COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION,
+        "template_hash": comprehensive_investigation_template_hash(),
+        "response_contract_hash": comprehensive_investigation_contract_hash(),
+        "output_schema_descriptor_hash": comprehensive_investigation_schema_hash(),
+        "response_format": "json_object",
+        "schema_ref": COMPREHENSIVE_INVESTIGATION_SCHEMA_REF,
+        "reuses_existing_schema": True,
+        "single_inference": True,
+        "section_sidecar_keys": list(COMPREHENSIVE_SECTION_KEYS),
+        "evidence_section_order": [s["section"] for s in tmpl["evidence_sections"]],
+        "template": tmpl,
+    }
+
+
+def render_comprehensive_investigation_template_json() -> str:
+    return json.dumps(comprehensive_investigation_template_manifest(), indent=2, sort_keys=True) + "\n"
+
+
+def write_comprehensive_investigation_template(path: Path | None = None) -> Path:
+    target = path or COMPREHENSIVE_INVESTIGATION_TEMPLATE_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_comprehensive_investigation_template_json(), encoding="utf-8")
+    return target
+
+
+def comprehensive_investigation_template_matches_committed() -> bool:
+    """True when the committed comprehensive-investigation manifest equals a freshly generated one
+    (drift guard)."""
+    try:
+        return (COMPREHENSIVE_INVESTIGATION_TEMPLATE_PATH.read_text(encoding="utf-8")
+                == render_comprehensive_investigation_template_json())
+    except OSError:
+        return False
+
+
+# --------------------------------------------------------------------------- #
 # Specialist Framework handbook — GitHub-side contributor doc (Phase A1)
 # --------------------------------------------------------------------------- #
 HANDBOOK_PATH = (
@@ -594,6 +662,9 @@ __all__ = [
     "INVESTIGATION_SUMMARY_TEMPLATE_PATH", "investigation_summary_template_manifest",
     "render_investigation_summary_template_json", "write_investigation_summary_template",
     "investigation_summary_template_matches_committed",
+    "COMPREHENSIVE_INVESTIGATION_TEMPLATE_PATH", "comprehensive_investigation_template_manifest",
+    "render_comprehensive_investigation_template_json", "write_comprehensive_investigation_template",
+    "comprehensive_investigation_template_matches_committed",
     "HANDBOOK_PATH", "write_handbook", "handbook_matches_committed",
     "BEHAVIORAL_HANDBOOK_PATH", "write_behavioral_handbook", "behavioral_handbook_matches_committed",
 ]
@@ -607,5 +678,6 @@ if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + 
     print(f"wrote {write_comment_template()}")
     print(f"wrote {write_commenter_history_template()}")
     print(f"wrote {write_investigation_summary_template()}")
+    print(f"wrote {write_comprehensive_investigation_template()}")
     print(f"wrote {write_handbook()}")
     print(f"wrote {write_behavioral_handbook()}")

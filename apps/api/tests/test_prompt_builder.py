@@ -122,14 +122,16 @@ def test_assess_payload_sends_the_canonical_stage_prompt():
     assert "REASONING & GOVERNANCE CONSTITUTION" in system_sent
     assert "SPECIALIST INVESTIGATION FRAMEWORK" in system_sent
     assert "KNOWLEDGE LIBRARY" in system_sent
-    assert "INVESTIGATION SUMMARY TASK" in system_sent
+    assert "COMPREHENSIVE INVESTIGATION TASK" in system_sent
     assert "OUTPUT CONTRACT" in system_sent
-    # user: the InvestigationSummaryBundle evidence sections — not the legacy raw lossy JSON dump
+    # user: the COMPLETE InvestigationPackage evidence sections (the single-inference path) — not the
+    # legacy raw lossy JSON dump; the account domain is a compact table with detector columns.
     assert "Investigation-level engine signal" in user_sent
-    assert "Cross-account coordination digest" in user_sent
+    assert "Coordination (clusters" in user_sent
+    assert "signal_columns" in user_sent            # the compact account table
     assert '"grain": "comment_section"' not in user_sent
-    # provenance records the canonical stage assembly (mode + system sha + knowledge window)
-    assert out["prompt_build"]["mode"] == "stage:investigation_summary"
+    # provenance records the canonical comprehensive stage assembly (mode + system sha + knowledge window)
+    assert out["prompt_build"]["mode"] == "stage:comprehensive_investigation"
     assert out["prompt_build"]["system_prompt_sha"].startswith("sys:")
     assert len(out["prompt_build"]["knowledge_entries_used"]) == 12
 

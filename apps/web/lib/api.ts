@@ -666,6 +666,25 @@ export interface AnalystEvidenceItem {
   evidence_refs?: string[];
 }
 
+// One per-domain reasoning section from the single comprehensive Mistral response. The model
+// authors a short `assessment` and cites evidence ids/aliases; the six sections are views over the
+// ONE inference (never separate AI calls).
+export interface ComprehensiveSection {
+  assessment: string;
+  citations?: string[];
+}
+
+// The six per-domain reasoning sections of the comprehensive Mistral response, keyed exactly as the
+// backend persists them (app.reasoning.prompts.comprehensive_investigation_template.COMPREHENSIVE_SECTION_KEYS).
+export interface ComprehensiveSections {
+  comment_reasoning?: ComprehensiveSection;
+  commenter_history_reasoning?: ComprehensiveSection;
+  account_reasoning?: ComprehensiveSection;
+  narrative_reasoning?: ComprehensiveSection;
+  coordination_reasoning?: ComprehensiveSection;
+  campaign_reasoning?: ComprehensiveSection;
+}
+
 export interface AnalystAssessment {
   verdict: string;
   suspicion_tier: string;
@@ -688,6 +707,23 @@ export interface AnalystAssessment {
     latency_ms?: number;
     model_revision?: string | null;
     trace_id?: string;
+  };
+  // The six domain-reasoning sections of the single comprehensive Mistral response (present when the
+  // comprehensive path produced them). Rendered as views over ONE inference — never fetched per panel.
+  comprehensive_sections?: ComprehensiveSections;
+  comprehensive_validation?: {
+    structurally_valid?: boolean;
+    unresolved_total?: number;
+  };
+  // Whether Mistral actually authored this assessment (true) or the deterministic Floor stood in
+  // (false). The UI must never present Floor prose as AI reasoning — it keys off this.
+  investigation_trace?: {
+    model_backed?: boolean;
+    inference_count?: number;
+    endpoint_called?: boolean;
+    evidence_coverage_mode?: string;
+    evidence_represented_accounts?: number | null;
+    evidence_omitted_accounts?: number | null;
   };
 }
 

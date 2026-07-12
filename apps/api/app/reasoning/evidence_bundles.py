@@ -68,25 +68,30 @@ class CommenterHistoryItem:
 
 @dataclass(frozen=True)
 class SignalItem:
-    name: str
+    name: str                          # detector identity — preserved so the AI can weigh disagreement
     probability: float = 0.0
     confidence: float = 0.0
     supplemental: bool = False
+    evidence: tuple[str, ...] = ()     # the detector's factual justification lines (provenance)
 
 
 @dataclass(frozen=True)
 class ContributionItem:
-    name: str
+    name: str                          # detector identity
     impact: float = 0.0
     direction: str = "neutral"
     supplemental: bool = False
+    logit_delta: float = 0.0           # how much this detector moved the score (measurement)
+    decorrelation_factor: float = 1.0  # correlation down-weighting applied (measurement)
+    evidence: str = ""                 # provenance string for the contribution
 
 
 @dataclass(frozen=True)
 class OmiScoreItem:
+    # OmiScore is a deterministic INDEX (measurement). risk_level — a heuristic band/classification —
+    # is NOT projected as evidence (it would tell the model a conclusion); only the numeric index rides.
     omi_score: float | None = None
     authenticity_score: float | None = None
-    risk_level: str | None = None
 
 
 @dataclass(frozen=True)
@@ -96,7 +101,7 @@ class AccountItem:
     coordination_adjusted_probability: float | None = None
     tier: str = "low"
     confidence: float = 0.0
-    suspected_intent: str | None = None
+    # Ruling 3: suspected_intent removed — a heuristic interpretation is not evidence.
     signals: tuple[SignalItem, ...] = ()
     contributions: tuple[ContributionItem, ...] = ()
     weak_signals: tuple[str, ...] = ()
@@ -329,14 +334,16 @@ def build_account_bundle(ctx: InvestigationContext) -> AccountEvidenceBundle:
         accounts.append(AccountItem(
             author_ref=a.ref, overall_probability=a.overall_probability,
             coordination_adjusted_probability=a.coordination_adjusted_probability,
-            tier=a.tier, confidence=a.confidence, suspected_intent=a.suspected_intent,
+            tier=a.tier, confidence=a.confidence,
             signals=tuple(SignalItem(name=s.name, probability=s.probability, confidence=s.confidence,
-                                     supplemental=s.supplemental) for s in a.signals),
+                                     supplemental=s.supplemental, evidence=s.evidence) for s in a.signals),
             contributions=tuple(ContributionItem(name=k.name, impact=k.impact, direction=k.direction,
-                                                 supplemental=k.supplemental) for k in a.contributions),
+                                                 supplemental=k.supplemental, logit_delta=k.logit_delta,
+                                                 decorrelation_factor=k.decorrelation_factor,
+                                                 evidence=k.evidence) for k in a.contributions),
             weak_signals=a.weak_signals,
-            omiscore=(OmiScoreItem(omi_score=o.get("omi_score"), authenticity_score=o.get("authenticity_score"),
-                                   risk_level=o.get("risk_level")) if o else None),
+            omiscore=(OmiScoreItem(omi_score=o.get("omi_score"),
+                                   authenticity_score=o.get("authenticity_score")) if o else None),
         ))
     priors = tuple(MemoryPriorItem(type=p.type, label=p.label, confidence=p.confidence,
                                    influence_class=p.influence_class, epistemic_status=p.epistemic_status)
@@ -400,8 +407,12 @@ def _summary_contributions(ctx: InvestigationContext) -> tuple[ContributionItem,
         for k in a.contributions:
             cur = strongest.get(k.name)
             if cur is None or abs(k.impact) > abs(cur.impact):
-                strongest[k.name] = ContributionItem(name=k.name, impact=k.impact,
-                                                     direction=k.direction, supplemental=k.supplemental)
+                # Preserve the detector's measured provenance (logit_delta / decorrelation_factor /
+                # evidence) so investigation-level surfacing never strips the disagreement signal.
+                strongest[k.name] = ContributionItem(
+                    name=k.name, impact=k.impact, direction=k.direction, supplemental=k.supplemental,
+                    logit_delta=k.logit_delta, decorrelation_factor=k.decorrelation_factor,
+                    evidence=k.evidence)
     ordered = sorted(strongest.values(), key=lambda c: (-abs(c.impact), c.name))
     return tuple(ordered[:8])
 

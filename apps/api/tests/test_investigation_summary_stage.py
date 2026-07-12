@@ -148,7 +148,11 @@ def test_committed_hf_template_matches_source_drift_guard():
 # --------------------------------------------------------------------------- #
 # Production path — the model reaches the canonical stage prompt; the compat shape is unchanged
 # --------------------------------------------------------------------------- #
-def test_production_summary_uses_the_canonical_stage_prompt_and_runtime():
+def test_production_path_is_now_the_comprehensive_single_inference_not_the_summary_stage():
+    """The Investigation-Summary stage is SUPERSEDED as the production path by the comprehensive
+    single-inference stage (the summary bundle is a strict projection of the complete package). The
+    summary stage module + builder remain intact (proven above), but production no longer routes
+    through it — it sends the COMPLETE InvestigationPackage in one comprehensive request."""
     captured = {}
 
     def _fake(req, timeout=None):
@@ -159,8 +163,9 @@ def test_production_summary_uses_the_canonical_stage_prompt_and_runtime():
     with patch("app.reasoning.model_providers.remote.urllib.request.urlopen", _fake):
         out = analyst.assess_payload(_PAYLOAD, ref="sub_is", platform="youtube", settings=_settings("https://ep"))
     system_sent = captured["body"]["messages"][0]["content"]
-    assert "INVESTIGATION SUMMARY TASK" in system_sent            # canonical stage system prompt reached the model
-    assert out["prompt_build"]["mode"] == "stage:investigation_summary"
+    assert "COMPREHENSIVE INVESTIGATION TASK" in system_sent      # the single-inference stage reached the model
+    assert "INVESTIGATION SUMMARY TASK" not in system_sent
+    assert out["prompt_build"]["mode"] == "stage:comprehensive_investigation"
 
 
 def test_compat_output_is_the_existing_analyst_response_shape():

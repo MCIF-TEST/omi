@@ -1267,45 +1267,11 @@ def _serialize_result(result) -> dict:
     return result.model_dump(mode="json")
 
 
-def _maybe_apply_comment_analysis(result, settings, *, platform: str) -> None:
-    """P3.1.6 cutover — run AI-native Comment Analysis through the AI Investigation Runtime and attach
-    its compatibility output to ``result.video.comment_analysis`` so the UI consumes it in place of
-    the deterministic ``thread_scan``.
-
-    NO-OP unless ``comment_analysis_enabled`` is set, so the default production path is byte-identical
-    to before. Fully isolated: any failure leaves the deterministic thread_scan intact (a scan is
-    never broken by the AI stage). Exactly one inference per investigation, owned by the runtime; the
-    engine number is echoed (never recomputed), so the surfaced probability/tier never destabilize."""
-    if not getattr(settings, "comment_analysis_enabled", False):
-        return
-    video = getattr(result, "video", None)
-    if video is None:
-        return
-    import logging
-    log = logging.getLogger("omi.scan")
-    try:
-        from app.reasoning.comment_analysis import run_comment_analysis, to_thread_compat
-        from app.reasoning.context import build_investigation_context
-        from app.schemas import ThreadCommentAnalysisOut
-
-        payload = _serialize_result(result)
-        ref = result.video_id or "investigation"
-        ctx = build_investigation_context(payload, ref=ref, platform=platform, slug=ref, kind="video")
-        report = run_comment_analysis(ctx, payload=payload, platform=platform, settings=settings)
-        compat = to_thread_compat(report)
-        video.comment_analysis = ThreadCommentAnalysisOut(
-            overall_probability=float(compat["overall_probability"]),
-            tier=compat["tier"],
-            comment_count=int(compat["comment_count"]),
-            provider=str(compat["provider"]),
-            model_backed=bool(compat["model_backed"]),
-        )
-        log.info(
-            "comment_analysis cutover: video=%s provider=%s model_backed=%s comments=%d verdict=%s",
-            ref, report.provider, report.model_backed, report.comment_count, report.governor_verdict,
-        )
-    except Exception:  # noqa: BLE001 — the AI cutover must never break a scan
-        log.warning("comment_analysis cutover failed; keeping deterministic thread_scan", exc_info=True)
+# Ruling 2 (frozen architecture): scan-time AI inference is RETIRED. No component calls the endpoint
+# before the Investigation Package is composed — there is exactly ONE endpoint request per
+# investigation, owned by the AI Investigation Runtime and reachable only through the Composer path.
+# Comment intelligence is therefore a projection of that ONE investigation (composed later, off the
+# scan hot path), never a scan-time stage. The deterministic thread_scan remains the scan-time surface.
 
 
 def _all_commenters_failed(result) -> bool:
@@ -1552,10 +1518,9 @@ def _run_comprehensive(
         next_page_token=out.next_page_token,
         video_id=out.video_id,
     )
-    # P3.1.6 — AI-native Comment Analysis cutover (enabled-gated, fully isolated). Runs the stage
-    # through the AI Investigation Runtime and attaches its compatibility output to
-    # result.video.comment_analysis so the UI consumes it in place of the deterministic thread_scan.
-    _maybe_apply_comment_analysis(result, settings, platform=source.platform)
+    # Ruling 2 (frozen architecture): NO AI inference at scan time. Comment intelligence now comes
+    # from the single AI investigation (composed later, off the scan hot path), not a scan-time call —
+    # so exactly one endpoint request occurs per investigation. The deterministic thread_scan stands.
     return result
 
 
