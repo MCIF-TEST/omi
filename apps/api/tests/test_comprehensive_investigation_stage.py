@@ -110,6 +110,15 @@ def test_stage_embeds_zero_prompt_text():
     assert "Emit exactly one JSON object" not in src
 
 
+def test_committed_hf_template_matches_source_drift_guard():
+    """The committed HF mirror (published via the GitHub Action from hf_repo_manifest.toml) must equal a
+    freshly generated one — so GitHub source and the Hugging Face package cannot drift."""
+    from app.reasoning.prompts.export import comprehensive_investigation_template_matches_committed
+    assert comprehensive_investigation_template_matches_committed(), (
+        "ml/analyst/hf_repo/prompts/comprehensive_investigation_prompt_template.json is stale — "
+        "regenerate via app.reasoning.prompts.export.write_comprehensive_investigation_template()")
+
+
 def test_loader_verifies_and_is_fail_closed():
     a = load_comprehensive_investigation_assets()
     assert a.verify()["verified"] is True

@@ -175,11 +175,16 @@ class AIInvestigationRuntime:
             obj = extract_json(raw)
             if isinstance(obj, dict):
                 raw_obj = obj
-                if not (schema_prefilter and self._schema_errors(obj, impl)):
-                    # Stage sidecars (per-comment / per-commenter analyses) ride alongside; the
-                    # Governor validates the constitutional wrapper only. Echo discipline — the model
-                    # never moves the number.
-                    core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
+                # Registered stage sidecars (per-comment / per-commenter analyses AND the six
+                # comprehensive per-domain reasoning sections) ride ALONGSIDE the constitutional
+                # wrapper. Separate ONLY those registered keys BEFORE core schema validation — so a
+                # contract-following comprehensive response is validated on its CORE wrapper, while any
+                # UNKNOWN top-level field stays in ``core`` and still fails the schema allowlist. The
+                # Governor then validates the identical constitutional wrapper for every stage; the six
+                # sections are validated separately (``validate_comprehensive_sections``) downstream.
+                core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
+                if not (schema_prefilter and self._schema_errors(core, impl)):
+                    # Echo discipline — the model never moves the number.
                     core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
                     core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
                     candidate = core
