@@ -276,6 +276,17 @@ class RemoteReasoningProvider:
                 return val
         return None
 
+    def _target_url(self) -> str:
+        """The URL to POST to. The ``messages`` (OpenAI-compatible) API lives at
+        ``/v1/chat/completions`` on HF TGI / vLLM inference endpoints; the raw ``generate`` API uses
+        the endpoint root (unchanged). Idempotent: if the operator already pointed the URL at the chat
+        route, it is left as-is — so both a bare endpoint URL and a full chat-completions URL work."""
+        url = self.endpoint_url
+        if self.api == "messages":
+            base = url.split("?", 1)[0].rstrip("/")
+            return base if base.endswith("/v1/chat/completions") else base + "/v1/chat/completions"
+        return url
+
     def _fetch(self, body: bytes, headers: dict, stream: bool, parse, parse_stream) -> tuple[str, int]:
         """Call the endpoint with capped-backoff retries on transient failures. Returns
         ``(text, attempts)``; raises ``ProviderTimeout``/``ProviderError`` when exhausted.
@@ -283,9 +294,10 @@ class RemoteReasoningProvider:
         response parser (``parse`` non-stream / ``parse_stream`` SSE) is API-specific."""
         last: BaseException | None = None
         forensic = forensic_on()
+        target_url = self._target_url()
         for attempt in range(self.max_retries + 1):
             try:
-                req = urllib.request.Request(self.endpoint_url, data=body, headers=headers)
+                req = urllib.request.Request(target_url, data=body, headers=headers)
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     if stream:
                         text = parse_stream(resp)
@@ -300,6 +312,10 @@ class RemoteReasoningProvider:
                 return text, attempt + 1
             except urllib.error.HTTPError as he:  # 4xx/5xx — the endpoint DID respond with a body
                 last = he
+                # Record the HTTP status even on failure so the forensic trace shows WHY a call fell
+                # back (e.g. 404 wrong route, 401 auth, 503 endpoint initializing) — not just null.
+                if self.capture is not None:
+                    self.capture["response_status"] = he.code
                 if forensic:
                     try:
                         _log_hf_response(he.code, he.headers, he.read())
@@ -367,7 +383,7 @@ class RemoteReasoningProvider:
         body, parse, parse_stream = self._request_body(request)
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         if self.capture is not None:
-            self.capture["endpoint_url"] = self.endpoint_url
+            self.capture["endpoint_url"] = self._target_url()
             self.capture["endpoint_api"] = self.api
             self.capture["configured_model"] = self.model
             self.capture["revision"] = self.revision
