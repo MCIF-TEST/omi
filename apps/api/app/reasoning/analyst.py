@@ -76,6 +76,12 @@ def _qwen_transport(endpoint: str, *, timeout: float, max_retries: int, revision
             return resp.text
         except Exception as exc:  # noqa: BLE001 — provider failure -> deterministic fallback
             dt = (time.perf_counter() - t0) * 1000.0
+            # Record the exact endpoint failure (class + message + real elapsed) into the forensic
+            # capture so the PERSISTED investigation trace self-diagnoses (timeout vs connection-refused
+            # vs DNS/TLS) without needing the Render log. Redacted of the endpoint host; message only.
+            if capture is not None:
+                capture["endpoint_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+                capture["endpoint_latency_ms"] = round(dt, 2)
             logger.warning("analyst.model_call: FAILED endpoint=%s api=%s model=%s latency_ms=%.0f "
                            "err=%s: %s -> deterministic fallback", _redact_endpoint(endpoint), api,
                            model or "tgi", dt, type(exc).__name__, str(exc)[:160])
@@ -493,6 +499,7 @@ def _assess_core(
             "endpoint_attempts": inference.attempts,
             "endpoint_latency_ms": round(inference.latency_ms, 2),
             "response_status": inference.response_status,
+            "endpoint_error": inference.endpoint_error,
             "governor_verdict": gov.get("verdict"),
             "comprehensive_structurally_valid": sections_report.get("structurally_valid"),
             "comprehensive_unresolved_citations": sections_report.get("unresolved_total"),

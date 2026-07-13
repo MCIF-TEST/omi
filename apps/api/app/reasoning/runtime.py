@@ -75,6 +75,9 @@ class RuntimeInference:
     package_hash: str
     prompt_hash: str
     forensic_captured: bool
+    # The exact transport failure (class + message) when the endpoint did not return a usable
+    # response — so the persisted trace self-diagnoses timeout vs connection vs DNS/TLS. None on success.
+    endpoint_error: str | None = None
     # --- judge_then_floor bookkeeping (P3.2): when the Governor rejected the candidate ruling and
     # the served ruling is the re-validated Floor, these carry the rejected candidate's provider
     # name and the rejecting trace's violation codes (the legacy governance contract).
@@ -149,12 +152,14 @@ class AIInvestigationRuntime:
         return RuntimeInference(
             ruling=ruling, raw_obj=raw_obj, provider=provider, model_backed=model_backed,
             fallback=not model_backed, trace=trace, endpoint_called=endpoint_called,
-            latency_ms=float(capture.get("latency_ms") or 0.0), attempts=int(capture.get("attempts") or 0),
+            latency_ms=float(capture.get("latency_ms") or capture.get("endpoint_latency_ms") or 0.0),
+            attempts=int(capture.get("attempts") or 0),
             tokens=(dict(usage) if isinstance(usage, dict) else None),
             endpoint_request_id=capture.get("endpoint_request_id"),
             response_status=capture.get("response_status"), served_model=pp.model_id,
             package_hash=pp.manifest["package_hash"], prompt_hash=pp.manifest["prompt_hash"],
-            forensic_captured=forensic_on(), fallback_from=fallback_from, rejected_codes=rejected)
+            forensic_captured=forensic_on(), fallback_from=fallback_from, rejected_codes=rejected,
+            endpoint_error=capture.get("endpoint_error"))
 
     # ------------------------------------------------------------------ #
     def _adjudicate(self, raw, gov_bundle, impl, floor_ruling, schema_prefilter, *,
