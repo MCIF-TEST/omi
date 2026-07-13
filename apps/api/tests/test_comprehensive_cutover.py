@@ -206,6 +206,27 @@ def test_accepted_response_persists_and_reads_back_through_the_api_contract():
     assert resp.assessment["headline"] == _SENTINEL_HEADLINE
 
 
+def test_endpoint_failure_self_reports_in_the_trace():
+    """When the endpoint returns no HTTP response (connection/timeout), the persisted trace now
+    records the exact failure (``endpoint_error`` + real latency) so a production DB read diagnoses
+    itself — timeout vs connection vs DNS/TLS — without needing the Render log. Fallback behaviour is
+    unchanged (model_backed=false, response_status stays null on a connection-level failure)."""
+    import urllib.error
+
+    def _boom(req, timeout=None):
+        raise urllib.error.URLError("[Errno 111] Connection refused")
+
+    with patch("app.reasoning.model_providers.remote.urllib.request.urlopen", _boom):
+        out = analyst.assess_payload(_PAYLOAD, ref="sub_boom", platform="youtube", settings=_settings())
+    tr = out["investigation_trace"]
+    assert tr["model_backed"] is False
+    assert tr["endpoint_called"] is True
+    assert tr["response_status"] is None                     # no HTTP response — not an HTTP error
+    # the transport wraps the network error in ProviderError; the exact class + message survive
+    assert tr["endpoint_error"] and "ProviderError" in tr["endpoint_error"]
+    assert "Connection refused" in tr["endpoint_error"]
+
+
 def test_repeated_generation_does_not_cause_multiple_inferences():
     """FOURTH — the browser cannot cause multiple Mistral inferences for one investigation by
     refreshing / reopening the panel: the durable on-row cache short-circuits every subsequent
