@@ -258,17 +258,25 @@ def test_repeated_generation_does_not_cause_multiple_inferences():
     assert calls["n"] == 1, f"expected exactly ONE endpoint request across reopens, got {calls['n']}"
 
 
-def test_malformed_comprehensive_section_is_surfaced_by_comprehensive_validation():
-    """(9) A malformed comprehensive section (missing 'assessment') is surfaced by comprehensive
-    validation as structurally invalid — while the core wrapper can still be model-backed."""
+def test_malformed_comprehensive_section_fails_canonical_validation_to_floor():
+    """(9) Phase 1 — the ONE canonical contract makes the six reasoning domains FIRST-CLASS and gating:
+    a malformed domain (missing 'assessment') fails canonical validation, so the whole comprehensive
+    output is not canonically valid → deterministic Floor (model_backed=false). The failure is explicit
+    and forensically observable (the malformed section is still surfaced in comprehensive_validation), and
+    no second inference is made to repair it."""
     sidecars = _six_sidecars()
     sidecars["account_reasoning"] = {"citations": ["A1"]}  # missing 'assessment' string
     model_obj = {**_valid_core_wrapper(), **sidecars}
     out, calls = _run(model_obj)
-    # core wrapper still model-backed + permit
-    assert "fallback" not in str(out["governance"]["provider"])
-    # comprehensive validation flags the malformed section
+    # canonical validation fails -> Floor (NOT served as model-backed)
+    assert "fallback" in str(out["governance"]["provider"]) or "deterministic" in str(out["governance"]["provider"])
+    assert out["investigation_trace"]["model_backed"] is False
+    # the model's wrapper sentinels do NOT survive — the Floor's wrapper is served
+    assert out["headline"] != _SENTINEL_HEADLINE
+    # the failure is forensically observable: the malformed section is still surfaced
     cval = out["comprehensive_validation"]
     assert cval["structurally_valid"] is False
     assert cval["sections"]["account_reasoning"]["shape_ok"] is False
+    # no repair inference — still exactly one endpoint request
     assert calls == 1
+    assert out["investigation_trace"]["inference_count"] == 1

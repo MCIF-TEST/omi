@@ -59,7 +59,11 @@ def _valid_analyst_json_for(payload) -> str:
     impl = analyst._impl()
     cfg = impl.load_analyst_config(repo_id="Andrewexiga/omi-analyst-v1", revision="sha1")
     bundle = analyst.build_bundle(payload, ref=analyst._ref("sub_audit"), platform="youtube", impl=impl)
-    return json.dumps(impl.DeterministicAnalystProvider().generate(bundle, cfg).response)
+    w = impl.DeterministicAnalystProvider().generate(bundle, cfg).response
+    w.update({k: {"assessment": "reasoning present", "citations": []} for k in (  # Phase 1: 6 domains
+        "comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+        "narrative_reasoning", "coordination_reasoning", "campaign_reasoning")})
+    return json.dumps(w)
 
 
 # --------------------------------------------------------------------------- #

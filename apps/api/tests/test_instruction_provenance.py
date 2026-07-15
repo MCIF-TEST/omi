@@ -159,7 +159,7 @@ def test_comprehensive_task_and_contract_reach_compiled_system():
     assert task[:80] in pp.system
     assert "LEAD INVESTIGATOR" in pp.system
     assert contract[:80] in pp.system
-    assert "Emit exactly one JSON object" in pp.system
+    assert "canonical comprehensive assessment schema" in pp.system  # schema-derived contract anchor
 
 
 def test_evidence_content_reaches_compiled_user():
@@ -171,20 +171,26 @@ def test_evidence_content_reaches_compiled_user():
     assert "A1" in pp.user
 
 
-def test_output_schema_json_is_metadata_only_and_documented_absent():
-    """HONEST DOCUMENTATION (prior audit C5): the analyst_response_schema.json body and the
-    compact output-schema descriptor are provenance-only — they DO NOT reach the model today.
-    This is asserted (not fixed) so the gap is a tracked, executable fact, not a surprise.
-    Repairing it is Phase 1, not Phase 0."""
+def test_canonical_output_contract_reaches_the_model():
+    """Phase 1 FLIP (was: schema metadata-only, C5). The authoritative canonical output contract now DOES
+    reach the model. The compiled system message carries the canonical schema_id, the
+    additionalProperties=false (no-extra-fields) constraint, and the six reasoning domains taught as
+    REQUIRED first-class fields — and the compiled OUTPUT CONTRACT IS the schema-derived contract (no
+    separate handwritten prose that could drift from the machine schema)."""
+    from app.reasoning.prompts.comprehensive_investigation_template import (
+        COMPREHENSIVE_ASSESSMENT_SCHEMA_ID,
+        comprehensive_investigation_response_contract,
+    )
     pp = build_comprehensive_investigation_prompt_package(_package())
-    whole = pp.system + pp.user
-    # descriptor identifiers (comprehensive_investigation_template.py:89-107) are NOT sent
-    assert "section_sidecars" not in whole
-    assert "comprehensive_investigation_v1" not in whole
-    assert "synthesis_wrapper_fields" not in whole
-    # raw JSON-Schema identifiers (ml/analyst/analyst_response_schema.json) are NOT sent
-    assert "analyst_response_v1" not in whole
-    assert "additionalProperties" not in whole
+    # the canonical schema identity + its authoritative constraint now reach the model
+    assert COMPREHENSIVE_ASSESSMENT_SCHEMA_ID in pp.system          # "comprehensive_assessment_v1"
+    assert "additionalProperties" in pp.system                     # no-extra-top-level-fields constraint
+    # the six reasoning domains are taught as REQUIRED first-class fields
+    for domain in ("comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+                   "narrative_reasoning", "coordination_reasoning", "campaign_reasoning"):
+        assert domain in pp.system
+    # the compiled contract IS the schema-derived contract (single source of truth, no drift)
+    assert comprehensive_investigation_response_contract() in pp.system
 
 
 # =========================================================================== #

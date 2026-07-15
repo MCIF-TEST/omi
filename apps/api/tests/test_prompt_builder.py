@@ -144,6 +144,11 @@ def test_field_provenance_contract():
     assert "verdict" in fp["model_generated"]                    # the model reasons the conclusions
     assert "assessment" in fp["model_generated"]
     assert "evidence_for" in fp["model_generated"]
-    assert set(fp["deterministic_echoed"]) == {"suspicion_probability", "suspicion_tier"}
+    # Phase 1 — the six per-domain reasoning sections are first-class model-generated analytical content
+    for domain in ("comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+                   "narrative_reasoning", "coordination_reasoning", "campaign_reasoning"):
+        assert domain in fp["model_generated"]
+    # the engine owns the echoed suspicion numbers AND the corroboration state (the model never moves them)
+    assert set(fp["deterministic_echoed"]) == {"suspicion_probability", "suspicion_tier", "corroboration"}
     # the two sets are disjoint — no field is both model-generated and deterministic
     assert not (set(fp["model_generated"]) & set(fp["deterministic_echoed"]))

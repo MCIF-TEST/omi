@@ -184,7 +184,11 @@ def test_smoke_test_surfaces_served_model_and_match():
                "video": {"clusters": [{"method": "co_engagement", "members": ["@a", "@b", "@c"]}]}}
     config = impl.load_analyst_config(repo_id="Andrewexiga/omi-analyst-v1", revision="sha123")
     bundle = analyst.build_bundle(payload, ref="smoke_subject", platform="youtube", impl=impl)
-    valid = json.dumps(impl.DeterministicAnalystProvider().generate(bundle, config).response)
+    _w = impl.DeterministicAnalystProvider().generate(bundle, config).response
+    _w.update({k: {"assessment": "reasoning present", "citations": []} for k in (  # Phase 1: 6 domains
+        "comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+        "narrative_reasoning", "coordination_reasoning", "campaign_reasoning")})
+    valid = json.dumps(_w)
     # chat completion carries BOTH the analyst JSON and the served-model field.
     reply = json.dumps({"model": MISTRAL, "choices": [{"message": {"content": valid}}]}).encode()
 

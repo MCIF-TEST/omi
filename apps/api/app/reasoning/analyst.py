@@ -241,8 +241,14 @@ _MODEL_GENERATED_FIELDS = (
     "verdict", "confidence_band", "confidence_rationale", "headline", "assessment",
     "evidence_for", "evidence_against", "uncertainty", "what_would_change_this",
     "limits_statement", "coordination_label", "legitimate_hypothesis", "supplemental_context",
+    # Phase 1 — the six per-domain reasoning sections are FIRST-CLASS model-generated analytical
+    # content in the ONE canonical comprehensive assessment (validated + persisted alongside the wrapper).
+    "comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+    "narrative_reasoning", "coordination_reasoning", "campaign_reasoning",
 )
-_DETERMINISTIC_ECHOED_FIELDS = ("suspicion_probability", "suspicion_tier")
+# The engine owns these — the model echoes them and OmiSphere overwrites/overlays from the deterministic
+# engine (never model-fabricated): the echoed suspicion numbers + the corroboration state.
+_DETERMINISTIC_ECHOED_FIELDS = ("suspicion_probability", "suspicion_tier", "corroboration")
 _SYSTEM_FIELDS = ("governance", "ai_package", "prompt_build", "metrics", "subject",
                   "analyst_version", "prompt_version", "schema_version", "model_revision")
 
@@ -435,7 +441,12 @@ def _assess_core(
         inference = run_stage_inference(
             pp, gov_bundle, settings=settings, config=config, floor_ruling=floor_response,
             schema_prefilter=True, require_hf_token=True, capture=capture,
-            adjudication="judge_then_floor")
+            adjudication="judge_then_floor",
+            # Phase 1 — the ONE canonical comprehensive contract: the model's full output (synthesis
+            # wrapper + six first-class reasoning domains) is validated against this schema; Omi-owned
+            # provenance/subject + engine corroboration are overlaid from the Floor AFTER validation, so
+            # the model never fabricates system-owned metadata.
+            canonical_output_schema=ci_assets.output_schema())
         model_ms = (time.perf_counter() - t_model0) * 1000.0
         reasoning_ms = (time.perf_counter() - t_run0) * 1000.0
 

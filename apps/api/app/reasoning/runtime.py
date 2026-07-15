@@ -104,6 +104,7 @@ class AIInvestigationRuntime:
         require_hf_token: bool = False,
         capture: dict | None = None,
         adjudication: str = "single_gate",
+        canonical_output_schema: dict | None = None,
     ) -> RuntimeInference:
         """Run exactly one inference for a prompt package: call the ONE transport once (capturing
         latency/attempts/request-id/status/tokens), then adjudicate via the MANDATORY Governor with
@@ -147,7 +148,8 @@ class AIInvestigationRuntime:
 
         ruling, raw_obj, provider, model_backed, trace, fallback_from, rejected = self._adjudicate(
             raw, gov_bundle, impl, floor_ruling, schema_prefilter,
-            model_path=model_path, adjudication=adjudication)
+            model_path=model_path, adjudication=adjudication,
+            canonical_output_schema=canonical_output_schema)
         usage = capture.get("usage")
         return RuntimeInference(
             ruling=ruling, raw_obj=raw_obj, provider=provider, model_backed=model_backed,
@@ -163,7 +165,8 @@ class AIInvestigationRuntime:
 
     # ------------------------------------------------------------------ #
     def _adjudicate(self, raw, gov_bundle, impl, floor_ruling, schema_prefilter, *,
-                    model_path: bool = False, adjudication: str = "single_gate"):
+                    model_path: bool = False, adjudication: str = "single_gate",
+                    canonical_output_schema: dict | None = None):
         """Parse → (optional schema pre-filter) → echo-guard → MANDATORY Governor. On any failure the
         deterministic Floor (``floor_ruling`` or the canonical FloorJudge assessment), itself
         Governor-validated. The ONE Governor invocation for every stage. Returns
@@ -174,26 +177,31 @@ class AIInvestigationRuntime:
 
         governor = Governor()
         hl = gov_bundle.headline()
+        floor = floor_ruling if floor_ruling is not None else build_ruling_assessment(gov_bundle)
         raw_obj = None
         candidate = None
         if raw:
             obj = extract_json(raw)
             if isinstance(obj, dict):
                 raw_obj = obj
-                # Registered stage sidecars (per-comment / per-commenter analyses AND the six
-                # comprehensive per-domain reasoning sections) ride ALONGSIDE the constitutional
-                # wrapper. Separate ONLY those registered keys BEFORE core schema validation — so a
-                # contract-following comprehensive response is validated on its CORE wrapper, while any
-                # UNKNOWN top-level field stays in ``core`` and still fails the schema allowlist. The
-                # Governor then validates the identical constitutional wrapper for every stage; the six
-                # sections are validated separately (``validate_comprehensive_sections``) downstream.
-                core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
-                if not (schema_prefilter and self._schema_errors(core, impl)):
-                    # Echo discipline — the model never moves the number.
-                    core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
-                    core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
-                    candidate = core
-        floor = floor_ruling if floor_ruling is not None else build_ruling_assessment(gov_bundle)
+                if canonical_output_schema is not None:
+                    # Phase 1 — the ONE canonical comprehensive contract: validate the model's FULL output
+                    # (synthesis wrapper + six first-class reasoning domains) against the canonical schema,
+                    # then build the governed wrapper by OVERLAYING Omi-owned provenance/subject + engine
+                    # corroboration from the always-valid Floor (the model never fabricates system metadata)
+                    # and forcing the echoed engine numbers. None on canonical-invalid output (-> Floor).
+                    candidate = self._canonical_candidate(obj, floor, hl, canonical_output_schema)
+                else:
+                    # Registered stage sidecars (per-comment / per-commenter analyses) ride ALONGSIDE the
+                    # constitutional wrapper. Separate ONLY those registered keys BEFORE core schema
+                    # validation — so any UNKNOWN top-level field stays in ``core`` and still fails the
+                    # schema allowlist. The Governor then validates the identical constitutional wrapper.
+                    core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
+                    if not (schema_prefilter and self._schema_errors(core, impl)):
+                        # Echo discipline — the model never moves the number.
+                        core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
+                        core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
+                        candidate = core
 
         if adjudication == "judge_then_floor":
             # Legacy council semantics (the investigation assessment): the candidate ruling is the
@@ -230,6 +238,39 @@ class AIInvestigationRuntime:
         return floor, raw_obj, provider, False, ftrace, None, ()
 
     @staticmethod
+    def _canonical_candidate(obj: dict, floor: dict, hl: dict, canonical_schema: dict) -> dict | None:
+        """Phase 1 — build the governed wrapper from a canonically-valid comprehensive MODEL output.
+
+        Validate ``obj`` (synthesis wrapper + six first-class reasoning domains) against the ONE canonical
+        schema. On success the candidate is the model's ANALYTICAL fields (wrapper, sidecars stripped for
+        the Governor) with the Omi-owned provenance/subject + engine corroboration OVERLAID from the
+        always-valid Floor (the model never supplies system-owned metadata — OmiSphere injects it here,
+        after validation) and the echoed engine numbers forced. Returns ``None`` (→ deterministic Floor)
+        if the model output is not canonically valid — no second inference, ever."""
+        from app.governor import validate_comprehensive_model_output
+        from app.reasoning.prompts.comprehensive_investigation_template import (
+            COMPREHENSIVE_OMI_OWNED_WRAPPER_FIELDS,
+            COMPREHENSIVE_SECTION_KEYS,
+        )
+
+        errs = validate_comprehensive_model_output(
+            obj, schema=canonical_schema, section_keys=COMPREHENSIVE_SECTION_KEYS)
+        if errs:
+            logger.warning("runtime: comprehensive model output failed canonical validation %s; Floor",
+                           errs[:5])
+            return None
+        core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
+        # OmiSphere owns provenance/subject + the engine corroboration state — overlay from the Floor
+        # (schema-valid, correct values), never the model's fabrication.
+        for k in COMPREHENSIVE_OMI_OWNED_WRAPPER_FIELDS:
+            if k in floor:
+                core[k] = floor[k]
+        # Echo discipline — the engine number is authoritative; the model never moves it.
+        core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
+        core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
+        return core
+
+    @staticmethod
     def _schema_errors(obj: dict, impl) -> list:
         try:
             from omi_analyst.schema_validate import validate_analyst_response
@@ -246,16 +287,21 @@ def run_stage_inference(
     pp: Any, gov_bundle: Any, *, settings: Settings | None = None, config: Any = None,
     floor_ruling: dict | None = None, schema_prefilter: bool = False,
     require_hf_token: bool = False, capture: dict | None = None,
-    adjudication: str = "single_gate",
+    adjudication: str = "single_gate", canonical_output_schema: dict | None = None,
 ) -> RuntimeInference:
     """The canonical per-stage inference entry — the ONE call a migrated reasoning stage makes to
     reach the model. Delegates to the shared runtime's :meth:`AIInvestigationRuntime.infer`, so the
     endpoint path, the capture, and the Governor invocation are owned by the runtime, never the
     stage. (Comment Analysis was the first stage to reason through this; the investigation
-    assessment reasons through it with ``adjudication="judge_then_floor"``.)"""
+    assessment reasons through it with ``adjudication="judge_then_floor"``.)
+
+    ``canonical_output_schema`` (the comprehensive investigation stage) switches adjudication to the ONE
+    canonical comprehensive contract: the model's full output is validated against that schema and the
+    Omi-owned metadata is overlaid from the Floor after validation (see :meth:`_canonical_candidate`)."""
     return _RUNTIME.infer(pp, gov_bundle, settings=settings, config=config, floor_ruling=floor_ruling,
                           schema_prefilter=schema_prefilter, require_hf_token=require_hf_token,
-                          capture=capture, adjudication=adjudication)
+                          capture=capture, adjudication=adjudication,
+                          canonical_output_schema=canonical_output_schema)
 
 
 def assess_investigation(
