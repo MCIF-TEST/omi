@@ -125,31 +125,39 @@ class AIInvestigationRuntime:
           validated AGAIN and served with ``fallback_from`` + ``rejected_codes`` bookkeeping (the
           exact legacy council semantics: two Governor validations on a reject)."""
         settings = settings or get_settings()
-        import os
         impl = _analyst._impl()
         capture = capture if capture is not None else {}
         endpoint = getattr(settings, "analyst_endpoint_url", None)
         enabled = _analyst.analyst_enabled(settings) and impl is not None
-        model_path = bool(enabled and endpoint)
-        token_ok = (not require_hf_token) or bool(
-            os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+        # Provider-aware readiness: HF needs the endpoint URL; OpenRouter needs a preset or model. Provider
+        # choice is the ONLY thing that varies here — the adjudication below is provider-agnostic.
+        if _analyst.reasoning_provider(settings) == "openrouter":
+            configured = bool(getattr(settings, "openrouter_preset", None)
+                              or getattr(settings, "openrouter_model", None))
+        else:
+            configured = bool(endpoint)
+        model_path = bool(enabled and configured)
+        token_ok = (not require_hf_token) or _analyst._provider_token_present(settings)
+        model_provider = _analyst.reasoning_provider_name(settings)
         raw: str | None = None
         endpoint_called = False
         if model_path and token_ok:
-            transport = _analyst._qwen_transport(
-                endpoint, timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
+            transport = _analyst._reasoning_transport(
+                settings, endpoint,
+                timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
                 max_retries=int(getattr(settings, "analyst_max_retries", 2) or 2),
                 revision=getattr(settings, "analyst_hf_revision", None),
                 api=str(getattr(settings, "analyst_endpoint_api", "generate") or "generate"),
                 model=pp.model_id, capture=capture,
-                prompt_hash=pp.manifest["prompt_hash"], package_hash=pp.manifest["package_hash"])
+                prompt_hash=pp.manifest["prompt_hash"], package_hash=pp.manifest["package_hash"],
+                canonical_schema=canonical_output_schema)
             endpoint_called = True
             raw = transport(pp.system, pp.user, config)  # THE ONE inference
 
         ruling, raw_obj, provider, model_backed, trace, fallback_from, rejected = self._adjudicate(
             raw, gov_bundle, impl, floor_ruling, schema_prefilter,
             model_path=model_path, adjudication=adjudication,
-            canonical_output_schema=canonical_output_schema)
+            canonical_output_schema=canonical_output_schema, model_provider=model_provider)
         usage = capture.get("usage")
         return RuntimeInference(
             ruling=ruling, raw_obj=raw_obj, provider=provider, model_backed=model_backed,
@@ -166,7 +174,8 @@ class AIInvestigationRuntime:
     # ------------------------------------------------------------------ #
     def _adjudicate(self, raw, gov_bundle, impl, floor_ruling, schema_prefilter, *,
                     model_path: bool = False, adjudication: str = "single_gate",
-                    canonical_output_schema: dict | None = None):
+                    canonical_output_schema: dict | None = None,
+                    model_provider: str = "qwen-omi-analyst-v1"):
         """Parse → (optional schema pre-filter) → echo-guard → MANDATORY Governor. On any failure the
         deterministic Floor (``floor_ruling`` or the canonical FloorJudge assessment), itself
         Governor-validated. The ONE Governor invocation for every stage. Returns
@@ -209,17 +218,17 @@ class AIInvestigationRuntime:
             # naming keyed off whether the model path was configured). On REJECT the Floor is
             # validated AGAIN and served with fallback bookkeeping — two Governor validations.
             if candidate is not None:
-                cand_ruling, cand_provider = candidate, "qwen-omi-analyst-v1"
+                cand_ruling, cand_provider = candidate, model_provider
             elif model_path:
                 cand_ruling = floor
-                cand_provider = "qwen-omi-analyst-v1->fallback:deterministic-analyst-v1"
+                cand_provider = f"{model_provider}->fallback:deterministic-analyst-v1"
             else:
                 cand_ruling, cand_provider = floor, "deterministic-analyst-v1"
             trace = governor.validate(cand_ruling, gov_bundle,
                                       corroboration=cand_ruling.get("corroboration"))
             if trace.permitted:
                 return (cand_ruling, raw_obj, cand_provider,
-                        cand_provider == "qwen-omi-analyst-v1", trace, None, ())
+                        cand_provider == model_provider, trace, None, ())
             logger.warning("runtime: candidate ruling REJECTED %s; Floor fallback", trace.violation_codes)
             ftrace = governor.validate(floor, gov_bundle, corroboration=floor.get("corroboration"))
             return (floor, raw_obj, "deterministic-floor", False, ftrace,
@@ -230,11 +239,11 @@ class AIInvestigationRuntime:
         if candidate is not None:
             trace = governor.validate(candidate, gov_bundle, corroboration=candidate.get("corroboration"))
             if trace.permitted:
-                return candidate, raw_obj, "qwen-omi-analyst-v1", True, trace, None, ()
+                return candidate, raw_obj, model_provider, True, trace, None, ()
             logger.warning("runtime: model ruling REJECTED %s; Floor fallback", trace.violation_codes)
         ftrace = governor.validate(floor, gov_bundle, corroboration=floor.get("corroboration"))
         provider = ("deterministic-analyst-v1" if not raw
-                    else "qwen-omi-analyst-v1->fallback:deterministic-analyst-v1")
+                    else f"{model_provider}->fallback:deterministic-analyst-v1")
         return floor, raw_obj, provider, False, ftrace, None, ()
 
     @staticmethod

@@ -18,12 +18,14 @@ from .base import (
 )
 from .config import build_remote_provider, provider_status
 from .mock import MockReasoningProvider
+from .openrouter import OPENROUTER_URL, OpenRouterReasoningProvider
 from .remote import RemoteReasoningProvider, assemble_stream, extract_json, strip_thinking
 
 __all__ = [
     "ReasoningProvider", "ReasoningRequest", "ReasoningResponse",
     "ProviderError", "ProviderUnavailable", "ProviderTimeout", "ProviderProtocolError",
     "RemoteReasoningProvider", "MockReasoningProvider",
+    "OpenRouterReasoningProvider", "OPENROUTER_URL",
     "assemble_stream", "extract_json", "strip_thinking",
     "build_remote_provider", "provider_status",
 ]

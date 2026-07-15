@@ -101,6 +101,102 @@ def _redact_endpoint(url: str | None) -> str:
         return url[:40]
 
 
+def reasoning_provider(settings: Settings | None = None) -> str:
+    """The configured reasoning provider — ``"huggingface"`` (default) or ``"openrouter"``. Selection is
+    configuration, not architecture: both satisfy the same ReasoningProvider seam."""
+    settings = settings or get_settings()
+    return str(getattr(settings, "analyst_provider", "huggingface") or "huggingface").lower()
+
+
+def reasoning_provider_name(settings: Settings | None = None) -> str:
+    """The model-backed provider label recorded on a governed ruling. HF keeps its historical label so
+    existing traces/tests are unchanged; OpenRouter records its own."""
+    return "openrouter-omi-analyst-v1" if reasoning_provider(settings) == "openrouter" else "qwen-omi-analyst-v1"
+
+
+def _provider_token_present(settings: Settings | None = None) -> bool:
+    """Whether the SELECTED provider's credential is present in the environment (never in settings). HF:
+    HF_TOKEN / HUGGINGFACE_HUB_TOKEN. OpenRouter: OPENROUTER_API_KEY."""
+    if reasoning_provider(settings) == "openrouter":
+        return bool(os.environ.get("OPENROUTER_API_KEY"))
+    return bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
+
+
+def _openrouter_transport(settings: Settings, *, timeout: float, max_retries: int,
+                          model: str | None = None, capture: dict | None = None,
+                          prompt_hash: str | None = None, package_hash: str | None = None,
+                          canonical_schema: dict | None = None):
+    """The ONE OpenRouter transport — build the configured ``OpenRouterReasoningProvider`` (preset or
+    direct mode) and return the same ``_call(system, user, config)`` closure shape the HF transport uses,
+    so the runtime is provider-agnostic. Returns raw generated text, or None on any failure (→ Floor).
+    Records the exact endpoint failure + latency into the forensic capture. Never resends the Master
+    Analyst Protocol in preset mode (the preset supplies the system prompt)."""
+    from app.reasoning.model_providers import OpenRouterReasoningProvider
+    from app.reasoning.model_providers.openrouter import OPENROUTER_URL
+
+    master_hash = None
+    try:
+        from app.reasoning.prompts.master_protocol import compile_master_analyst_protocol
+        master_hash = compile_master_analyst_protocol(getattr(settings, "analyst_model_id", None))["hash"]
+    except Exception:  # noqa: BLE001 — provenance is best-effort, never blocks the call
+        master_hash = None
+
+    provider = OpenRouterReasoningProvider(
+        base_url=str(getattr(settings, "openrouter_base_url", OPENROUTER_URL) or OPENROUTER_URL),
+        # OpenRouter's own model slug ONLY — never the HF ``pp.model_id``. In preset mode a null model
+        # means "use the preset's model" (model_ref -> "@preset/<slug>"); in direct mode it is required.
+        model=getattr(settings, "openrouter_model", None),
+        preset=getattr(settings, "openrouter_preset", None),
+        canonical_schema=canonical_schema,
+        structured_output=bool(getattr(settings, "openrouter_structured_output", True)),
+        referer=getattr(settings, "openrouter_referer", None),
+        title=getattr(settings, "openrouter_title", None),
+        timeout=timeout, max_retries=max_retries, capture=capture,
+        prompt_hash=prompt_hash, package_hash=package_hash, master_prompt_hash=master_hash)
+
+    def _call(system: str, user: str, config: Any) -> str | None:
+        from app.reasoning.model_providers import ReasoningRequest
+
+        t0 = time.perf_counter()
+        try:
+            resp = provider.complete(ReasoningRequest(
+                system=system, user=user, response_format="text",
+                temperature=getattr(config, "temperature", 0.2),
+                max_tokens=getattr(config, "max_new_tokens", 1024)))
+            dt = (time.perf_counter() - t0) * 1000.0
+            logger.info("analyst.model_call: OK provider=openrouter preset=%s model_ref=%s chars=%d "
+                        "latency_ms=%.0f", getattr(settings, "openrouter_preset", None) or "-",
+                        provider._model_ref(), len(resp.text or ""), dt)
+            return resp.text
+        except Exception as exc:  # noqa: BLE001 — provider failure -> deterministic fallback
+            dt = (time.perf_counter() - t0) * 1000.0
+            if capture is not None:
+                capture["endpoint_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+                capture["endpoint_latency_ms"] = round(dt, 2)
+            logger.warning("analyst.model_call: FAILED provider=openrouter preset=%s latency_ms=%.0f "
+                           "err=%s: %s -> deterministic fallback",
+                           getattr(settings, "openrouter_preset", None) or "-", dt,
+                           type(exc).__name__, str(exc)[:160])
+            return None
+
+    return _call
+
+
+def _reasoning_transport(settings: Settings, endpoint: str | None, *, timeout: float, max_retries: int,
+                         revision: str | None, api: str, model: str | None, capture: dict | None,
+                         prompt_hash: str | None, package_hash: str | None,
+                         canonical_schema: dict | None = None):
+    """Select the transport by ``analyst_provider`` and return a ``_call(system, user, config)`` closure.
+    ``huggingface`` (default) returns the existing HF transport UNCHANGED (byte-identical); ``openrouter``
+    returns the OpenRouter transport. The runtime calls this and never learns which gateway served."""
+    if reasoning_provider(settings) == "openrouter":
+        return _openrouter_transport(settings, timeout=timeout, max_retries=max_retries, model=model,
+                                     capture=capture, prompt_hash=prompt_hash, package_hash=package_hash,
+                                     canonical_schema=canonical_schema)
+    return _qwen_transport(endpoint, timeout=timeout, max_retries=max_retries, revision=revision, api=api,
+                           model=model, capture=capture, prompt_hash=prompt_hash, package_hash=package_hash)
+
+
 def _impl():
     """Lazily import the completed ``omi_analyst`` package. Cached; never raises."""
     global _impl_cache, _impl_failed
@@ -489,8 +585,36 @@ def _assess_core(
         # ``run_stage_inference`` call, so it is 1 when the endpoint was reached, else 0 (floor). It
         # makes a second inference for one investigation immediately visible. IDs/hashes/counts only —
         # no secrets, no tokens, no auth headers.
+        _provider = reasoning_provider(settings)
+        _usage = inference.tokens or {}          # round-trips through the runtime (cost + token counts)
+        if _provider == "openrouter":
+            _or_preset = getattr(settings, "openrouter_preset", None)
+            _or_model = getattr(settings, "openrouter_model", None)
+            _requested_model = (f"{_or_model}@preset/{_or_preset}" if (_or_preset and _or_model)
+                                else (f"@preset/{_or_preset}" if _or_preset else _or_model))
+        else:
+            _requested_model = inference.served_model
+        try:
+            from app.reasoning.prompts.comprehensive_investigation_template import (
+                COMPREHENSIVE_ASSESSMENT_SCHEMA_ID,
+            )
+            from app.reasoning.prompts.master_protocol import master_analyst_protocol_identity
+            _master = master_analyst_protocol_identity(getattr(settings, "analyst_model_id", None))
+            _schema_id = COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
+        except Exception:  # noqa: BLE001 — provenance is best-effort, never blocks a trace
+            _master, _schema_id = {}, None
         investigation_trace = {
             "ref": ref,
+            # Provider transport identity (Phase 2). Which gateway served the ONE inference + the
+            # deployment provenance for the OpenRouter Preset path. Secrets never appear here.
+            "provider": _provider,
+            "requested_model": _requested_model,
+            "openrouter_preset": (getattr(settings, "openrouter_preset", None)
+                                  if _provider == "openrouter" else None),
+            "master_prompt_version": _master.get("version"),
+            "master_prompt_hash": _master.get("hash"),
+            "canonical_schema_id": _schema_id,
+            "endpoint_cost_usd": _usage.get("cost"),
             "inference_count": 1 if inference.endpoint_called else 0,
             "endpoint_called": inference.endpoint_called,
             "model_backed": model_backed,

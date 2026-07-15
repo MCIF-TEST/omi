@@ -221,6 +221,33 @@ class Settings(BaseSettings):
     # Context Builder mode/budget for AI specialists ("raw" baseline | "structured").
     analyst_context_mode: str = "raw"
     analyst_context_budget: str = "standard"
+    # -----------------------------------------------------------------------
+    # Reasoning PROVIDER selection (Phase 2 — provider-independent boundary).
+    #   "huggingface" (default): the existing HF inference-endpoint path — byte-identical.
+    #   "openrouter": route the ONE comprehensive inference through OpenRouter, behind the same
+    #                 ReasoningProvider seam. The OPENROUTER_API_KEY secret is read from the
+    #                 environment (never a settings field / never persisted), exactly like HF_TOKEN.
+    # The runtime, Governor, canonical validation, Floor, persistence, and frontend are unchanged —
+    # only the transport differs. No provider switch changes Omi's evidence or output contract.
+    analyst_provider: str = "huggingface"
+    # The OpenRouter Preset that carries Omi's stable Master Analyst Protocol (system instructions +
+    # model + routing). When set, the per-investigation request references "@preset/<slug>" and sends
+    # ONLY the dynamic Investigation Package as the user message (the preset supplies the system
+    # prompt) — so the Master Analyst Protocol is NOT redundantly resent. The repository remains the
+    # source of truth: Omi records the local master-prompt version/hash it EXPECTS the preset to hold
+    # (it does not, and cannot, cryptographically verify the remote preset content).
+    openrouter_preset: str | None = None
+    # Optional model slug. In preset mode the preset defines the model; set this to intentionally
+    # override it (sent as a base model the preset layers onto). In non-preset mode it is required.
+    openrouter_model: str | None = None
+    openrouter_base_url: str = "https://openrouter.ai/api/v1/chat/completions"
+    # Send the canonical ComprehensiveAssessment schema as OpenRouter native structured output
+    # (response_format json_schema). Support varies by model; local canonical validation ALWAYS runs
+    # regardless, so this never weakens validation.
+    openrouter_structured_output: bool = True
+    # Optional OpenRouter dashboard attribution headers (HTTP-Referer / X-Title). Not secrets.
+    openrouter_referer: str | None = None
+    openrouter_title: str | None = None
     # P3.1.6 — the AI-native Comment Analysis cutover. OFF by default, so the production comment/
     # thread surface is byte-identical to before (the deterministic thread_scan). When ON, every
     # comprehensive investigation runs Comment Analysis through the AI Investigation Runtime and the
