@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| **Last updated** | 2026-07-15 — handoff refresh for a new session (post Phase 3A) |
+| **Last updated** | 2026-07-15 — handoff refresh + program context (north star, arc, method, decisions) for a new session (post Phase 3A) |
 | **Repo** | `mcif-test/omi` (FastAPI `apps/api` + Next.js `apps/web` + `ml/analyst/` package) |
 | **Working branch** | `claude/stoic-edison-2ueecx` |
 | **Current HEAD** | `50d4566` (working tree clean at handoff) |
@@ -28,6 +28,99 @@
 5. When you make any change: keep the backend suite green, commit to the branch, push, keep PR #82 current, and **update this file** (§Status, §Changelog, §Next step).
 
 ---
+
+## Why this matters — the north star
+
+**OmiSphere is a coordination-intelligence platform.** It detects **coordinated inauthentic behavior —
+campaigns, influence operations, artificial amplification — NOT merely "suspicious accounts."** A deterministic
+engine (detectors + scoring + coordination aggregation + OmiScore) *measures* the evidence. The **AI Analyst is
+the reasoning layer** that *interprets* that evidence into an explainable recommendation a human analyst can act
+on, cite, or overturn.
+
+**Main goal of this program:** a trustworthy, **provider-independent** AI Analyst where **Omi owns the
+intelligence doctrine and the model is replaceable.** One investigation → one comprehensive model inference →
+one validated, evidence-grounded **ComprehensiveAssessment** the website renders. The near-term destination is
+to deploy a stable **Master Analyst Protocol** through an **OpenRouter preset** and be able to swap/benchmark
+models **without changing** Omi's evidence, doctrine, output contract, Governor, persistence, or frontend.
+
+**Core trust principle (non-negotiable): evidence, not verdicts.** Surface observations, probabilities,
+confidence, evidence-for / evidence-against, and uncertainty — **never** a persisted "this IS a bot / IS a
+campaign." The **precision frontier is sacred**: legitimate coordination (newsrooms, on-message officials, fan
+communities, benign automation) must never be read as hostile. The UI must never show a strong conclusion
+without visible supporting evidence. This principle predates and outranks any single phase.
+
+## The arc so far (history & trajectory)
+
+This program sits on top of a large prior body of work (see `ml/analyst/OMI_*.md` and the completed task list):
+the **single-inference AI-native architecture** was designed, built, and certified before Phase 0 —
+`EvidenceRepository → Snapshot → InvestigationComposer → immutable InvestigationPackage → coverage-budgeted
+render → ONE comprehensive inference → Governor + deterministic Floor → persisted analyst_assessment_v1 →
+website (6 domain panels)`. The six-domain comprehensive response, the forensic trace, aliasing/dedup/coverage
+budgeting, and the website cutover all shipped earlier.
+
+Then **production reality** intervened: real investigations kept falling to the deterministic Floor. Root causes
+were found and fixed — a schema-prefilter ordering bug and a messages-API URL bug (PR #81, since merged to
+`main`) — and the trace was made self-diagnosing (`endpoint_error`, `response_status`).
+
+The **strategic pivot** that defines the current work: make the model **replaceable** via **OpenRouter as the
+primary gateway**, with Omi owning the instructions/doctrine/output contract. That produced the phase sequence:
+**Phase 0** (prove the compiled instruction text actually reaches the model) → **Phase 1** (ONE canonical output
+contract — which also fixed the real bug that was forcing every response to the Floor) → **Phase 2** (OpenRouter
+provider + preset seam) → **Phase 3A** (evidence-semantics audit) → **Phase 3B** (write Master Analyst Protocol
+v1) → **later** (deploy the preset, pick a model, production cutover, model benchmarking, eventually fine-tuning
+once doctrine + output contract + a labeled corpus are stable).
+
+**Where this is heading after 3B:** the human deploys the preset (system prompt = the compiled Master Analyst
+Protocol) and picks a model; then a controlled production cutover (flip `OMI_ANALYST_PROVIDER=openrouter`); then
+benchmarking the *same* Investigation Package + instructions + output contract across models (comparing evidence
+grounding, false-positive behavior, six-domain completeness, schema compliance, citation correctness, latency,
+tokens, and **per-investigation cost** — `endpoint_cost_usd` already makes cost measurable); then possibly
+fine-tuning. **None of that is authorized yet** — it is the map, not the next step.
+
+## How we work (method & quality bar)
+
+- **Audit before building.** Every phase begins by reading the *actual* code and reporting findings grounded in
+  `file:line`. **Never invent semantics** — if the code doesn't define a field's meaning, say
+  "SEMANTICS NOT SUFFICIENTLY DEFINED IN CURRENT CODE." That honesty is a deliverable, not a gap.
+- **Small, verified, reversible changes.** Additive wherever possible; the default (feature-off / Hugging Face)
+  path stays byte-identical until an explicit cutover. Prove behavior with tests, not assertions.
+- **Full-suite gate.** `cd apps/api && python -m pytest tests/ -q` must be green before every commit; **report the
+  real count.** Never commit on a red or uninspected suite. When a legit behavior change breaks an old test, update
+  the test to the new contract and say why.
+- **One phase at a time; stop and report.** Honor the user's explicit "Do NOT" lists exactly. Many phases are
+  audit-only. Do not drift into a later phase or touch frontend / Render / Supabase / canonical schema / Governor /
+  provider-architecture without explicit authorization.
+- **Honest reporting always.** Failing tests are reported with their output; skipped steps are stated; done-and-
+  verified is stated plainly without hedging. No fabricated progress or metrics.
+- **Provider-independence and one-inference are sacred.** Everything routes through the `ReasoningProvider` seam;
+  exactly one billable inference per investigation; adjudication/validation/Governor are provider-agnostic.
+- **The `omisphere-platform-guardian` skill** encodes the standing guardrails (coordination-first framing,
+  evidence-not-verdicts, SAVEPOINT-isolated best-effort writes, corroboration-gate precision discipline, test
+  gates, the PR workflow). It loads at session start — follow it.
+- **Reports are detailed and structured.** The user consumes long, tabular, `file:line`-cited markdown reports and
+  sometimes pastes them back or re-sends an authorization mid-turn. Density and precision beat brevity here.
+
+## Key decisions & rationale (decision log)
+
+- **Canonical schema is DERIVED from `analyst_response_schema.json`, not hand-copied** → one machine-readable
+  source of truth; prose contract + local validator + OpenRouter structured-output all reference it; cannot drift.
+- **Omi-owned fields are overlaid from the deterministic Floor AFTER canonical validation** → the model never
+  fabricates provenance/subject/echoed numbers/corroboration; the Floor already computes correct values.
+- **The six domains are GATING** (missing/empty/malformed → deterministic Floor) → "one canonical contract" is
+  all-or-nothing; stricter validity, but the *fallback policy* is unchanged (existing Floor, no repair inference).
+- **The Master Analyst Protocol == the compiled `pp.system`** (not a newly authored prompt) → the repository stays
+  the source of truth; the OpenRouter preset is *expected* to contain exactly this text (hash recorded, remote
+  content not — and cannot be — cryptographically verified).
+- **In preset mode the request sends only the Investigation Package** (no system message) → don't resend the master
+  prompt; verified against OpenRouter's preset shallow-merge behavior.
+- **The HF path (`remote.py`) is untouched and remains the default** → zero production risk until an explicit cutover.
+- **Provider label is threaded, not hardcoded** (`qwen-omi-analyst-v1` vs `openrouter-omi-analyst-v1`) → honest
+  forensics without breaking existing traces/tests.
+- **Planned for 3B: drop the council `framework` JSON from the compiled prompt** → it describes a 13-specialist
+  council the single-inference Lead Investigator doesn't use (identity contradiction + wasted tokens); keep it as
+  internal metadata only.
+- **Open item for 3B:** the user is separately designing the Master Analyst Protocol's final wording — v1 must
+  **not invent doctrine**; author it from the Phase 3A spec (§8), conservative on the ⚠ under-defined fields.
 
 ## 1. How this program operates (collaboration protocol)
 
@@ -390,6 +483,9 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-15 (context enrichment)** — Added program context for a smoother transition: "Why this matters —
+  north star" (goal + platform + evidence-not-verdicts), "The arc so far" (history & trajectory through eventual
+  benchmarking/fine-tuning), "How we work" (method & quality bar), and a "Key decisions & rationale" decision log.
 - **2026-07-15 (handoff refresh)** — Expanded this log to be fully self-sufficient for a new session: added the full
   Phase 3A evidence-semantics dictionary, provenance/citation map, six-domain + synthesis maps, the 22-section v1
   outline, environment/tooling, config/env-var reference, and a first-actions checklist. HEAD `50d4566`, suite 1318 passed.
