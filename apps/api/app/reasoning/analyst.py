@@ -487,6 +487,12 @@ def _assess_core(
             "snapshot_id": snapshot.snapshot_id,
             "investigation_package_id": package.package_id,
             "prompt_package_id": pp.prompt_package_id,
+            # Content address of the ACTUAL compiled system instructions delivered to the provider
+            # (sha of pp.system; stage_builder.py). Additive forensic identity — no prompt body is
+            # persisted — so a stored assessment can answer "what exact compiled Omi instruction set
+            # produced this?". Completes the trace chain: investigation_package_id -> prompt_package_id
+            # -> compiled_system_instruction_hash -> asset hashes (prompt/package) -> model.
+            "compiled_system_instruction_hash": pp.manifest.get("system_prompt_sha"),
             "prompt_hash": pp.manifest.get("prompt_hash"),
             "package_hash": pp.manifest.get("package_hash"),
             "evidence_coverage_mode": pp.manifest.get("evidence_coverage_mode"),
