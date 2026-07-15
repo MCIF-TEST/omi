@@ -58,6 +58,22 @@ class StagePromptSpec:
 _STAGE_REGISTRY: dict[str, StagePromptSpec] = {}
 
 
+def assemble_stage_system(lp, tmpl: dict) -> str:
+    """The ONE system-message assembly shared by every stage — the stable instruction hierarchy the
+    model receives: the omi_analyst base prompt + constitution + specialist framework + knowledge
+    library + the stage task + the stage output contract. Factored out so a caller that needs the
+    compiled system WITHOUT running an inference (e.g. the Master Analyst Protocol asset compiled for
+    an OpenRouter Preset) produces byte-identical text to what :func:`build_prompt` sends."""
+    return "\n\n".join([
+        lp.system_prompt,
+        "# REASONING & GOVERNANCE CONSTITUTION\n" + lp.constitution,
+        "# SPECIALIST INVESTIGATION FRAMEWORK\n" + json.dumps(lp.framework(), ensure_ascii=False, sort_keys=True),
+        "# KNOWLEDGE LIBRARY\n" + json.dumps(lp.knowledge()[:_KNOWLEDGE_LIMIT], ensure_ascii=False, sort_keys=True),
+        tmpl["system_task"],
+        "# OUTPUT CONTRACT\n" + tmpl["response_contract"],
+    ]).strip()
+
+
 def register_stage_prompt(spec: StagePromptSpec) -> None:
     """Register a stage's prompt spec. Called by each stage module at import time, so the builder
     core never imports a stage. Idempotent (re-registration overwrites with the same spec)."""
@@ -90,14 +106,7 @@ def build_prompt(
     tmpl = spec.template_of(a)
 
     # --- system message: identical assembly for every stage, from package assets only -------------
-    system = "\n\n".join([
-        lp.system_prompt,
-        "# REASONING & GOVERNANCE CONSTITUTION\n" + lp.constitution,
-        "# SPECIALIST INVESTIGATION FRAMEWORK\n" + json.dumps(lp.framework(), ensure_ascii=False, sort_keys=True),
-        "# KNOWLEDGE LIBRARY\n" + json.dumps(lp.knowledge()[:_KNOWLEDGE_LIMIT], ensure_ascii=False, sort_keys=True),
-        tmpl["system_task"],
-        "# OUTPUT CONTRACT\n" + tmpl["response_contract"],
-    ]).strip()
+    system = assemble_stage_system(lp, tmpl)
 
     # --- user message: the stage's evidence sections, each rendered as JSON data ------------------
     sections = spec.render_sections(bundle, ctx)
@@ -123,4 +132,5 @@ def build_prompt(
                          manifest=manifest, prompt_package_id=ppid)
 
 
-__all__ = ["StagePromptSpec", "register_stage_prompt", "registered_stages", "build_prompt"]
+__all__ = ["StagePromptSpec", "register_stage_prompt", "registered_stages", "build_prompt",
+           "assemble_stage_system"]

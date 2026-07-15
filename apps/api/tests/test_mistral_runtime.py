@@ -97,7 +97,11 @@ def test_e2e_governed_assessment_with_mistral_response():
                "video": {"clusters": [{"method": "co_engagement", "members": ["@a", "@b", "@c"]}]}}
     config = impl.load_analyst_config(repo_id="Andrewexiga/omi-analyst-v1", revision="msha1")
     bundle = analyst.build_bundle(payload, ref="sub_m", platform="youtube", impl=impl)
-    valid = json.dumps(impl.DeterministicAnalystProvider().generate(bundle, config).response)
+    _w = impl.DeterministicAnalystProvider().generate(bundle, config).response
+    _w.update({k: {"assessment": "reasoning present", "citations": []} for k in (  # Phase 1: 6 domains
+        "comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+        "narrative_reasoning", "coordination_reasoning", "campaign_reasoning")})
+    valid = json.dumps(_w)
     # Mistral emits the JSON directly — no thinking trace. The strip must be a no-op.
     reply = json.dumps({"choices": [{"message": {"content": valid}}]}).encode()
     settings = SimpleNamespace(

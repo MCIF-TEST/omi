@@ -60,11 +60,17 @@ def test_retired_stage_runners_do_not_import_or_call_inference():
 
 
 def test_only_the_runtime_reaches_the_transport_and_governor():
-    """No stage calls the ONE transport or constructs the Governor directly — those live in the runtime
-    (and the single production stage delegates through ``run_stage_inference``)."""
-    transport = _call_sites("_qwen_transport")
-    assert all(path == "reasoning/runtime.py" for path, _ in transport), \
-        f"_qwen_transport must be reached only via the runtime, got {transport}"
+    """No stage reaches the model transport directly. The runtime reaches the model ONLY through the
+    provider dispatcher ``_reasoning_transport`` (Phase 2), and the concrete provider transports (the HF
+    ``_qwen_transport`` and the ``_openrouter_transport``) are reached ONLY by that dispatcher — so there
+    is still a SINGLE funnel to the ONE inference no matter which provider serves it."""
+    dispatch = _call_sites("_reasoning_transport")
+    assert all(path == "reasoning/runtime.py" for path, _ in dispatch), \
+        f"_reasoning_transport must be reached only via the runtime, got {dispatch}"
+    for name in ("_qwen_transport", "_openrouter_transport"):
+        sites = _call_sites(name)
+        assert all(path == "reasoning/analyst.py" for path, _ in sites), \
+            f"{name} must be reached only via the provider dispatcher in analyst.py, got {sites}"
 
 
 def test_both_public_entries_funnel_into_the_single_core():

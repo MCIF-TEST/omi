@@ -169,7 +169,11 @@ def test_smoke_test_qwen_backed_end_to_end_in_messages_mode():
     # a schema-valid analyst response for the smoke bundle, returned by the mocked chat endpoint.
     config = impl.load_analyst_config(repo_id="Andrewexiga/omi-analyst-v1", revision="sha123")
     bundle = analyst.build_bundle(payload, ref="smoke_subject", platform="youtube", impl=impl)
-    valid = json.dumps(impl.DeterministicAnalystProvider().generate(bundle, config).response)
+    _w = impl.DeterministicAnalystProvider().generate(bundle, config).response
+    _w.update({k: {"assessment": "reasoning present", "citations": []} for k in (  # Phase 1: 6 domains
+        "comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+        "narrative_reasoning", "coordination_reasoning", "campaign_reasoning")})
+    valid = json.dumps(_w)
     reply = json.dumps({"choices": [{"message": {"content": "<think>weigh</think>\n" + valid}}]}).encode()
 
     settings = SimpleNamespace(
