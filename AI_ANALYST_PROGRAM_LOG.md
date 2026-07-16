@@ -177,7 +177,9 @@ also triggers `POST /v1/investigations/{slug}/analyst` on mount (safety-net gene
 | 4 (audit) | Canonical Response Integration — end-to-end data-flow audit (read-only) | ✅ done | this session |
 | **4A** | **Canonical Response Integration — Analyst Panel surfaces structured fields** | ✅ **done** | this session (frontend only) |
 | 4B | AI Experience Integration (account pages, VerdictWidget seeding, viewer) | ⬜ not started — planned, not authorized | — |
-| later | Deploy OpenRouter preset + select model + production cutover | ⬜ not started | — |
+| 5 (audit) | OpenRouter Production Integration — provider-layer audit (read-only) | ✅ done | this session |
+| **5A** | **OpenRouter operational readiness layer (provider-aware diagnostics)** | ✅ **done** | this session (backend only) |
+| 5B | Model selection + token-budget/structured-output validation + preset deploy + monitored cutover | ⬜ not started — planned, not authorized | — |
 | later | Model benchmarking (same package + instructions across models) | ⬜ not started | — |
 
 ---
@@ -545,6 +547,24 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-16 (Phase 5 audit + 5A)** — **Audit** (read-only): traced InvestigationPackage → Master
+  Analyst Protocol → OpenRouter provider → HTTP → response → canonical validation → Governor →
+  persistence → frontend across all 14 named dimensions. Finding: the OpenRouter *transport* path is
+  code-complete and provider-agnostic (`runtime.py:infer` is provider-aware; `require_hf_token` does NOT
+  block OpenRouter; `load_analyst_config` degrades to a bundled local mirror with no HF token — no hidden
+  HF dependency). Gaps were operational: HF-only readiness/status/integrity + logging, and missing
+  served-model provenance. **Phase 5A** (backend, observability only — no cutover, no preset, no key use,
+  no production request): made `runtime_status`/`runtime_path` (`analyst.py`), `system_health`/
+  `endpoint_health` (`trace.py`), and `provider_status` (`model_providers/config.py`) provider-aware —
+  OpenRouter readiness (preset/model + `OPENROUTER_API_KEY` **presence only**), `ready_for_live_model` /
+  `ready_for_live_openrouter` alongside the preserved `ready_for_live_qwen`; `endpoint_health` reports
+  OpenRouter config **without probing** (`reachable: None`). Provider-aware `_assess_core` logging. Recorded
+  the gateway-**served_model** in `investigation_trace` (capture-based; runtime.py untouched). Kept
+  `provider` = active provider (legacy semantics) and added `selected_provider` = config. New
+  `tests/test_openrouter_readiness.py` (7 tests: HF backward-compat, OpenRouter ready/blocked, no-network
+  guarantee, served_model provenance). **Full suite 1326 passed, 1 warning.** Provider behavior, inference,
+  schema, Governor, and frontend unchanged. Next: Phase 5B (model selection/validation + preset deploy +
+  monitored cutover — not authorized).
 - **2026-07-16 (Phase 4 audit + 4A)** — **Audit** (read-only): traced ComprehensiveAssessment → Governor →
   persistence → API → frontend. Finding: the backend already emits the FULL structured assessment
   (`payload_json.analyst_assessment_v1`, served via `AnalystResponse.assessment: dict` passthrough) with

@@ -423,6 +423,10 @@ def _assess_core(
     impl = _impl()
     if impl is None:
         return None
+    # Ensure a forensic capture sidecar exists so the ONE transport records the actually-served model
+    # (e.g. the model an OpenRouter preset routed to) for provenance. This changes no inference behavior
+    # — the runtime writes into this dict exactly as it already does for the trace/audit routes.
+    capture = {} if capture is None else capture
     try:
         from app.reasoning.prompts import default_registry
 
@@ -446,7 +450,21 @@ def _assess_core(
         prompt_mode = "stage:comprehensive_investigation"
 
         endpoint = getattr(settings, "analyst_endpoint_url", None)
-        if endpoint:
+        provider_sel = reasoning_provider(settings)
+        if provider_sel == "openrouter":
+            _or_preset = getattr(settings, "openrouter_preset", None)
+            _or_model = getattr(settings, "openrouter_model", None)
+            if _or_preset or _or_model:
+                logger.info("analyst.assess: OPENROUTER path selected ref=%s preset=%s model=%s "
+                            "key_present=%s prompt=%s(%s) assembly=%s -> model call will be made by the runtime",
+                            ref, _or_preset or "-", _or_model or "-",
+                            bool(os.environ.get("OPENROUTER_API_KEY")), spec.prompt_version,
+                            spec.prompt_hash, prompt_mode)
+            else:
+                logger.info("analyst.assess: provider=openrouter but no preset/model configured ref=%s -> "
+                            "deterministic floor (NO model call). Set OMI_OPENROUTER_PRESET or "
+                            "OMI_OPENROUTER_MODEL.", ref)
+        elif endpoint:
             logger.info("analyst.assess: REMOTE path selected ref=%s endpoint=%s api=%s model=%s "
                         "prompt=%s(%s) assembly=%s -> model call will be made by the runtime",
                         ref, _redact_endpoint(endpoint),
@@ -636,6 +654,10 @@ def _assess_core(
             "evidence_omitted_accounts": pp.manifest.get("evidence_omitted_accounts"),
             "evidence_deduplicated_comments": pp.manifest.get("evidence_deduplicated_comments"),
             "model_id": inference.served_model,
+            # The model the gateway ACTUALLY served (e.g. the model an OpenRouter preset routed to), when
+            # the provider reports one — distinct from the configured/requested model above. Provenance
+            # only; captured by the transport, never fabricated.
+            "served_model": capture.get("served_model"),
             "endpoint_request_id": inference.endpoint_request_id,
             "endpoint_attempts": inference.attempts,
             "endpoint_latency_ms": round(inference.latency_ms, 2),
@@ -690,19 +712,45 @@ def runtime_status(settings: Settings | None = None) -> dict:
     endpoint = getattr(settings, "analyst_endpoint_url", None)
     token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
     impl_ok: bool | None = (_impl() is not None) if enabled else None
-    provider = "qwen" if (enabled and endpoint) else "deterministic-floor"
+    provider_sel = reasoning_provider(settings)
+    # OpenRouter readiness — a preset OR a model, plus OPENROUTER_API_KEY (presence only, never the value).
+    or_preset = getattr(settings, "openrouter_preset", None)
+    or_model = getattr(settings, "openrouter_model", None)
+    or_configured = bool(or_preset or or_model)
+    or_key_present = bool(os.environ.get("OPENROUTER_API_KEY"))
+    ready_hf = bool(enabled and endpoint and token_present and impl_ok is True)
+    ready_or = bool(enabled and or_configured and or_key_present and impl_ok is True)
+    ready_for_live_model = ready_or if provider_sel == "openrouter" else ready_hf
+    active_provider = (
+        "openrouter" if (provider_sel == "openrouter" and enabled and or_configured)
+        else "qwen" if (enabled and endpoint) else "deterministic-floor")
     return {
         "enabled": enabled,
+        # ``provider`` keeps its historical meaning — the ACTIVE/effective provider ("qwen" |
+        # "openrouter" | "deterministic-floor"). ``selected_provider`` is the configured choice.
+        "provider": active_provider,
+        "selected_provider": provider_sel,
         "impl_importable": impl_ok,
+        # Hugging Face path
         "endpoint_configured": bool(endpoint),
         "hf_token_present": token_present,
         "model_repo": getattr(settings, "analyst_hf_repo", None),
         "model_revision": getattr(settings, "analyst_hf_revision", None),
         "timeout_seconds": float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
-        "provider": provider,
+        # OpenRouter path
+        "openrouter_preset_configured": bool(or_preset),
+        "openrouter_model_configured": bool(or_model),
+        "openrouter_configured": or_configured,
+        "openrouter_api_key_present": or_key_present,
+        "provider_token_present": _provider_token_present(settings),
+        "provider_label": reasoning_provider_name(settings),
         "governor": "mandatory",
         "deterministic_floor": "always-on",
-        "ready_for_live_qwen": bool(enabled and endpoint and token_present and impl_ok is True),
+        # ``ready_for_live_qwen`` is kept for backward compatibility (the HF path); the provider-aware
+        # answer is ``ready_for_live_model`` and the OpenRouter-specific ``ready_for_live_openrouter``.
+        "ready_for_live_qwen": ready_hf,
+        "ready_for_live_openrouter": ready_or,
+        "ready_for_live_model": ready_for_live_model,
     }
 
 
@@ -735,26 +783,62 @@ def runtime_path(settings: Settings | None = None) -> dict:
     except Exception:  # noqa: BLE001
         gov_detail = "mandatory"
 
-    nodes = [
+    common = [
         node("feature_flag", enabled, f"analyst_enabled={enabled}", operator=not enabled),
         node("analyst_impl", impl_ok is True,
              "ml/analyst importable" if impl_ok else ("import failed" if enabled else "not checked (flag off)"),
              operator=(impl_ok is None)),
         node("evidence_bundle", True, "app.evidence.Binder available"),
         prompt_node,
-        node("hf_endpoint", bool(endpoint), "configured" if endpoint else "analyst_endpoint_url unset",
-             operator=not endpoint),
-        node("hf_token", token_present,
-             "present" if token_present else "HF_TOKEN / HUGGINGFACE_HUB_TOKEN unset", operator=not token_present),
-        node("model", True,
-             f"{getattr(settings, 'analyst_hf_repo', None)}@{getattr(settings, 'analyst_hf_revision', None) or 'main'}"),
+    ]
+    # The transport links differ by provider — HF needs endpoint + HF token; OpenRouter needs a preset
+    # or model + OPENROUTER_API_KEY. Everything else (Governor, Floor) is provider-agnostic.
+    provider_sel = reasoning_provider(settings)
+    if provider_sel == "openrouter":
+        or_preset = getattr(settings, "openrouter_preset", None)
+        or_model = getattr(settings, "openrouter_model", None)
+        or_configured = bool(or_preset or or_model)
+        or_key_present = bool(os.environ.get("OPENROUTER_API_KEY"))
+        transport = [
+            node("openrouter_config", or_configured,
+                 f"preset={or_preset or '-'} model={or_model or '-'}" if or_configured
+                 else "OMI_OPENROUTER_PRESET / OMI_OPENROUTER_MODEL unset", operator=not or_configured),
+            node("openrouter_api_key", or_key_present,
+                 "OPENROUTER_API_KEY present" if or_key_present else "OPENROUTER_API_KEY unset",
+                 operator=not or_key_present),
+            node("model", True,
+                 f"openrouter {('@preset/' + or_preset) if or_preset else (or_model or '-')}"),
+        ]
+        configured_ok = or_configured and or_key_present
+    else:
+        transport = [
+            node("hf_endpoint", bool(endpoint), "configured" if endpoint else "analyst_endpoint_url unset",
+                 operator=not endpoint),
+            node("hf_token", token_present,
+                 "present" if token_present else "HF_TOKEN / HUGGINGFACE_HUB_TOKEN unset",
+                 operator=not token_present),
+            node("model", True,
+                 f"{getattr(settings, 'analyst_hf_repo', None)}@{getattr(settings, 'analyst_hf_revision', None) or 'main'}"),
+        ]
+        configured_ok = bool(endpoint) and token_present
+
+    nodes = common + transport + [
         node("governor", True, gov_detail),
         node("deterministic_floor", True, "always-on fallback"),
     ]
-    ready = bool(enabled and endpoint and token_present and impl_ok is True and prompt_node["status"] == "verified")
+    prompt_ok = prompt_node["status"] == "verified"
+    ready_hf = bool(enabled and endpoint and token_present and impl_ok is True and prompt_ok)
+    ready_model = bool(enabled and configured_ok and impl_ok is True and prompt_ok)
+    active_provider = (
+        "openrouter" if (provider_sel == "openrouter" and enabled
+                         and (getattr(settings, "openrouter_preset", None)
+                              or getattr(settings, "openrouter_model", None)))
+        else "qwen" if (enabled and endpoint) else "deterministic-floor")
     return {
-        "ready_for_live_qwen": ready,
-        "active_provider": "qwen" if (enabled and endpoint) else "deterministic-floor",
+        "selected_provider": provider_sel,
+        "ready_for_live_qwen": ready_hf,          # kept for backward compatibility (HF path)
+        "ready_for_live_model": ready_model,      # provider-aware readiness
+        "active_provider": active_provider,
         "nodes": nodes,
         "blockers": [n["step"] for n in nodes if n["status"] != "verified"],
         "governor": "mandatory",
