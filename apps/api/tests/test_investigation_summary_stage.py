@@ -104,12 +104,14 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     b = _bundle()
     pp = build_investigation_summary_prompt_package(b)
     # system: the shared package assets + the stage task + the output contract
-    for marker in ("REASONING & GOVERNANCE CONSTITUTION", "SPECIALIST INVESTIGATION FRAMEWORK",
+    for marker in ("REASONING & GOVERNANCE CONSTITUTION",
                    "KNOWLEDGE LIBRARY", "INVESTIGATION SUMMARY TASK", "OUTPUT CONTRACT"):
         assert marker in pp.system
+    # the specialist-council framework is NOT injected (single Lead Investigator, not a council)
+    assert "SPECIALIST INVESTIGATION FRAMEWORK" not in pp.system
     # the summary stage REUSES the existing analyst response schema (no new schema)
     assert pp.schema_ref == "schema/analyst_response_schema.json"
-    assert pp.manifest["package_hash"] == "pkg:ad831d952a4782f116a49e97"   # investigation package unchanged
+    assert pp.manifest["package_hash"] == "pkg:ff8791ad17b431c4befb6c5b"   # investigation package unchanged
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 

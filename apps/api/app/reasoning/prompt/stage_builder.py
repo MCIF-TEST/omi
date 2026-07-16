@@ -6,7 +6,7 @@ about any particular stage. A stage registers a small :class:`StagePromptSpec` �
 its evidence-section rendering, its schema ref, and its manifest fields — and the builder does the
 identical assembly for all of them:
 
-    system  = omi_analyst base + constitution + specialist framework + knowledge library
+    system  = omi_analyst base + constitution + knowledge library
               + the stage's task block + the stage's output contract        (all package assets)
     user    = the stage's evidence sections, each rendered as JSON data      (from the Evidence Bundle)
     manifest= content hashes of every asset + the bundle id + the stage schema ref
@@ -60,14 +60,19 @@ _STAGE_REGISTRY: dict[str, StagePromptSpec] = {}
 
 def assemble_stage_system(lp, tmpl: dict) -> str:
     """The ONE system-message assembly shared by every stage — the stable instruction hierarchy the
-    model receives: the omi_analyst base prompt + constitution + specialist framework + knowledge
-    library + the stage task + the stage output contract. Factored out so a caller that needs the
-    compiled system WITHOUT running an inference (e.g. the Master Analyst Protocol asset compiled for
-    an OpenRouter Preset) produces byte-identical text to what :func:`build_prompt` sends."""
+    model receives: the omi_analyst base prompt + constitution + knowledge library + the stage task +
+    the stage output contract. Factored out so a caller that needs the compiled system WITHOUT running
+    an inference (e.g. the Master Analyst Protocol asset compiled for an OpenRouter Preset) produces
+    byte-identical text to what :func:`build_prompt` sends.
+
+    The specialist-council framework is deliberately NOT injected into the model instructions: the
+    single-inference architecture has one Lead Investigator, not a 13-specialist council, so the
+    council catalog would contradict that identity and spend tokens on unused metadata. The framework
+    remains internal — still loaded, still content-hashed, and still recorded in the manifest
+    (``framework_hash``) — so provenance and drift protection are unchanged."""
     return "\n\n".join([
         lp.system_prompt,
         "# REASONING & GOVERNANCE CONSTITUTION\n" + lp.constitution,
-        "# SPECIALIST INVESTIGATION FRAMEWORK\n" + json.dumps(lp.framework(), ensure_ascii=False, sort_keys=True),
         "# KNOWLEDGE LIBRARY\n" + json.dumps(lp.knowledge()[:_KNOWLEDGE_LIMIT], ensure_ascii=False, sort_keys=True),
         tmpl["system_task"],
         "# OUTPUT CONTRACT\n" + tmpl["response_contract"],

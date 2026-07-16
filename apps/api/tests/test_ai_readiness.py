@@ -273,7 +273,7 @@ def test_intelligence_inventory_is_grounded():
     assert inv["prompt_library"]["count"] == 13
     assert inv["prompt_library"]["all_content_addressed"] is True
     assert inv["prompt_library"]["live_activated"] == {"behavior_analyst": "v1", "omi_analyst": "v1"}
-    assert inv["constitution"]["count"] == 12
+    assert inv["constitution"]["count"] == 13
     assert inv["playbook"]["count"] == 11
     assert inv["corpus_design"]["categories"] == 14
 
