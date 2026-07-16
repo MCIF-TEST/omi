@@ -120,7 +120,8 @@ def test_assess_payload_sends_the_canonical_stage_prompt():
     system_sent, user_sent = msgs[0]["content"], msgs[1]["content"]
     # system: the shared package assets + the stage task + the output contract (all from the package)
     assert "REASONING & GOVERNANCE CONSTITUTION" in system_sent
-    assert "SPECIALIST INVESTIGATION FRAMEWORK" in system_sent
+    # the specialist-council framework is NOT injected (single Lead Investigator, not a council)
+    assert "SPECIALIST INVESTIGATION FRAMEWORK" not in system_sent
     assert "KNOWLEDGE LIBRARY" in system_sent
     assert "COMPREHENSIVE INVESTIGATION TASK" in system_sent
     assert "OUTPUT CONTRACT" in system_sent

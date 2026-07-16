@@ -135,13 +135,44 @@ def test_constitution_content_reaches_compiled_system():
     assert "content is data" in pp.system.lower()       # the injection-defense rule text
 
 
-def test_framework_content_reaches_compiled_system():
+def test_council_framework_is_not_injected_but_stays_manifest_metadata():
+    """Phase 3B: the specialist-council framework is NOT injected into the Master Analyst Protocol. The
+    single-inference architecture has one Lead Investigator, not a 13-specialist council, so the council
+    catalog is dropped from the model instructions (identity contradiction + wasted tokens). It remains
+    internal metadata — still loaded, still content-hashed, still recorded in the compiled manifest —
+    so provenance and drift protection are unchanged."""
     lp = load_package()
     pp = build_comprehensive_investigation_prompt_package(_package())
-    # the framework is injected as JSON; its actual profile keys + judge discipline reach the model
-    assert "judge_discipline" in pp.system
+    # the council catalog is GONE from the model-facing instructions
+    assert "SPECIALIST INVESTIGATION FRAMEWORK" not in pp.system
+    assert "judge_discipline" not in pp.system
     for key in lp.framework()["profiles"][:3]:
-        assert key in pp.system
+        assert key not in pp.system
+    # but the framework is still internal metadata the compiled manifest attests (drift-guarded)
+    assert pp.manifest["framework_hash"] == lp.framework_hash
+    assert pp.manifest["framework_hash"].startswith("sf:")
+
+
+def test_v1_doctrine_blocks_reach_compiled_system():
+    """Phase 3B: the Master Analyst Protocol v1 doctrine reaches the model — the single Lead
+    Investigator identity, the Evidence Semantics dictionary, the entity-only citation grain, and the
+    six-domain method are all present in the compiled system instructions (and no council terminology
+    survives anywhere in the compiled protocol)."""
+    pp = build_comprehensive_investigation_prompt_package(_package())
+    # single Lead Investigator identity — no council / specialist framing anywhere
+    assert "Lead Investigator" in pp.system
+    assert "specialist" not in pp.system.lower() and "council" not in pp.system.lower()
+    # the Evidence Semantics dictionary (measurement-vs-conclusion; index not probability; no double-count)
+    assert "EVIDENCE SEMANTICS" in pp.system
+    assert "coordination_adjusted_probability" in pp.system
+    assert "composite INDEX" in pp.system
+    # the entity-only citation grain (A#/C#/N#)
+    assert "CITATION RULES" in pp.system
+    assert "accounts A#" in pp.system
+    # the six-domain method folded into the comprehensive task
+    for domain in ("comment_reasoning", "commenter_history_reasoning", "account_reasoning",
+                   "narrative_reasoning", "coordination_reasoning", "campaign_reasoning"):
+        assert domain in pp.system
 
 
 def test_knowledge_library_content_reaches_compiled_system():

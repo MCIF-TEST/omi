@@ -8,24 +8,25 @@
 
 | | |
 |---|---|
-| **Last updated** | 2026-07-15 — handoff refresh + program context (north star, arc, method, decisions) for a new session (post Phase 3A) |
+| **Last updated** | 2026-07-16 — **Phase 3B complete**: Master Analyst Protocol v1 authored & wired (this session) |
 | **Repo** | `mcif-test/omi` (FastAPI `apps/api` + Next.js `apps/web` + `ml/analyst/` package) |
-| **Working branch** | `claude/stoic-edison-2ueecx` |
-| **Current HEAD** | `50d4566` (working tree clean at handoff) |
-| **Pull request** | draft **PR #82**, base `main` — covers Phases 0–2 (+ this log) |
+| **Working branch** | `claude/master-analyst-protocol-v1-1u8tyk` (the live branch; already contains Phases 0–2 + this log — the earlier `claude/stoic-edison-2ueecx` work was folded in via a "PR #83" merge) |
+| **Current HEAD** | the Phase 3B commit on the working branch (advances with this change) |
+| **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` |
-| **Latest green suite** | **1318 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore) |
-| **Next step** | **Phase 3B — author & wire Master Analyst Protocol v1** (NOT started; awaiting user authorization) |
+| **Latest green suite** | **1319 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore) |
+| **Master Analyst Protocol v1** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:ea25de153d030eae9a5f7eea`**; version `map/prompt:v1+constitution:v2+framework:v1+template:citmpl-v3`; ~27,300 chars ≈ 6,825 tokens |
+| **Next step** | **later — deploy the OpenRouter preset** (system prompt = the compiled Master Analyst Protocol v1 above) + select a model + controlled production cutover. **NOT authorized yet.** |
 
 ---
 
 ## 0. First actions for a new session (do these in order)
 
-1. `git checkout claude/stoic-edison-2ueecx && git pull` — confirm HEAD is at/after `50d4566`.
-2. Read this whole file. It contains the full Phase 3A spec needed to write Phase 3B — you do **not** need the prior transcript.
-3. `cd apps/api && python -m pytest tests/ -q` — confirm the green baseline (~1318 passed). Full suite ≈ 3.5–4.5 min.
-4. Do **not** start implementing until the user issues the next phase authorization (see §1). Phase 3B is planned in §9 but **not authorized to build** yet.
-5. When you make any change: keep the backend suite green, commit to the branch, push, keep PR #82 current, and **update this file** (§Status, §Changelog, §Next step).
+1. `git checkout claude/master-analyst-protocol-v1-1u8tyk && git pull` — this branch already contains Phases 0–2 + 3B. (The log used to name `claude/stoic-edison-2ueecx`; that work was folded into this branch.)
+2. Read this whole file. It contains the full Phase 3A spec (§8) and the Phase 3B delivery record (§9).
+3. `cd apps/api && python -m pytest tests/ -q` — confirm the green baseline (**1319 passed**). Full suite ≈ 3.5–4.5 min.
+4. Do **not** start implementing until the user issues the next phase authorization (see §1). Phase 3B is **done**; the next step (deploy the OpenRouter preset + select a model + production cutover) is **not authorized to build** yet.
+5. When you make any change: keep the backend suite green, commit to the branch, push, keep the draft PR current, and **update this file** (§Status, §Changelog, §Next step).
 
 ---
 
@@ -172,7 +173,7 @@ also triggers `POST /v1/investigations/{slug}/analyst` on mount (safety-net gene
 | 1 | ONE canonical ComprehensiveAssessment output contract | ✅ done | `9b17401` |
 | 2 | OpenRouter preset-based ReasoningProvider (behind the seam) | ✅ done | `c6981ea` |
 | 3A | Master Analyst Protocol evidence-semantics audit (read-only) | ✅ done | this log |
-| **3B** | **Author & wire Master Analyst Protocol v1** | ⬜ **NOT STARTED — planned in §9** | — |
+| **3B** | **Author & wire Master Analyst Protocol v1** | ✅ **done** | this session (see §6, §9) |
 | later | Deploy OpenRouter preset + select model + production cutover | ⬜ not started | — |
 | later | Model benchmarking (same package + instructions across models) | ⬜ not started | — |
 
@@ -212,8 +213,9 @@ also triggers `POST /v1/investigations/{slug}/analyst` on mount (safety-net gene
 **Instruction assets (compile into the Master Analyst Protocol == `pp.system`)**
 - `apps/api/app/reasoning/prompts/_assets/omi_analyst_v1.txt` — base identity + 10 absolute rules.
 - `apps/api/app/reasoning/prompts/constitution.py` — 12 constitutional blocks.
-- `apps/api/app/reasoning/prompts/framework.py` — specialist-council catalog (injected as JSON; **candidate to
-  remove from the prompt** — Phase 3A §7).
+- `apps/api/app/reasoning/prompts/framework.py` — specialist-council catalog. **Phase 3B: no longer injected
+  into the compiled prompt** (removed from `assemble_stage_system`); retained as internal metadata only —
+  still loaded, content-hashed, and recorded in the manifest as `framework_hash`.
 - `apps/api/app/reasoning/knowledge/` — knowledge library (top 12 entries injected).
 - `apps/api/app/reasoning/prompts/comprehensive_investigation_template.py` — comprehensive `system_task`,
   **`comprehensive_investigation_canonical_schema()`**, schema-derived output contract, section keys.
@@ -275,6 +277,53 @@ structured output via the **same** Phase-1 schema; usage(tokens+cost)+generation
 (transient 5xx/429/connection only — never a post-generation timeout); API key in the `Authorization` header only.
 `master_protocol.py` makes the repository the source of truth for the preset content. HF `remote.py` untouched;
 Floor unchanged; ONE inference preserved.
+
+### Phase 3B — author & wire Master Analyst Protocol v1 (this session)
+Authored v1 as stable doctrine **from §8 only** (no invented semantics; conservative on the ⚠ under-defined
+fields; entity-only citation grain). **Content edits (4 files):**
+- `prompts/_assets/omi_analyst_v1.txt` — rewrote to the **single Lead Investigator at investigation grain**
+  (was account-grain "the subject"); kept the 10-rule spine + tone; Rule 10 now **defers to the canonical
+  schema** (no hand-listed fields that could drift) and names the Omi-injected fields the model must not
+  fabricate. Kept the test anchors (`You are OMI ANALYST`, `EVIDENCE, NOT VERDICT`); mirror
+  `ml/analyst/analyst_system_prompt_v1.md` fenced block updated to match (drift guard). Registry version
+  stays `v1` (in-place content revision; `prompt_hash` moves).
+- `prompts/constitution.py` — `_GLOBAL` reframed from "specialist inside a council" to the **single Lead
+  Investigator**; `_CITATION_RULES` rewritten to the **entity-only grain** (cite A#/C#/N# + omitted-entity
+  aliases; name detectors in prose, never as ids; never cite memory/manifest ids); **new
+  `_EVIDENCE_SEMANTICS` block** (universal §8.2 principles: measurement≠conclusion, OmiScore is an index not a
+  probability, correlated detectors count ~once / no double-count, `coordination_adjusted` already
+  coord-derived, campaign reuses clusters, structure≠intent, memory=background, coverage≠suspicion); swept
+  residual "specialist/council/ruling" wording; **`CONSTITUTION_VERSION` v1→v2** (13 blocks now).
+- `prompts/comprehensive_investigation_template.py` — folded the **§8.4 six-domain method** into
+  `system_task` (what each domain reads + strong-signal vs false-positive guard; ⚠ `spread_ratio` /
+  `inauthenticity_score` taught as "directional, read conservatively"); **template `citmpl-v2`→`citmpl-v3`**.
+  Canonical schema + `_render_output_contract` **untouched**.
+- `prompt/stage_builder.py` — **removed the `SPECIALIST INVESTIGATION FRAMEWORK` JSON block from
+  `assemble_stage_system`** (the compiled `pp.system`). The council catalog contradicted the single-inference
+  identity; it stays **internal metadata** (still loaded, still content-hashed, still in the manifest as
+  `framework_hash`). Only ~271 tokens (the audit §8.7 over-estimated: the compiled block was the *summary*,
+  not the full module). `template.py` / `builder.py` (the unwired legacy investigation builder) untouched, so
+  its drift-guarded mirror stays green.
+
+**Mirrors regenerated** via `python -m app.reasoning.prompts.export`: `prompt_manifest.json`,
+`prompt_catalog.json`, `comprehensive_investigation_prompt_template.json`, `SPECIALIST_FRAMEWORK.md`,
+`BEHAVIORAL_ANALYST.md` (the last two moved only by the `constitution v2` / `framework_hash` propagation —
+`framework_hash` embeds `constitution_hash`). Base-prompt `.md` mirror updated by hand.
+
+**Compiled Master Analyst Protocol v1:** hash **`map:ea25de153d030eae9a5f7eea`**, version
+`map/prompt:v1+constitution:v2+framework:v1+template:citmpl-v3`, ~27,300 chars ≈ **6,825 tokens** (from 6,040;
+within the ≲7–8k target). Vendor-neutral (no provider/model vendor names in the compiled text). **Zero
+changes** to: OpenRouter provider, canonical schema, Governor, runtime, Repository/Snapshot/Composer,
+persistence, frontend, deterministic/scoring engine, one-inference path.
+
+**Tests:** inverted `test_framework_content_reaches_compiled_system` →
+`test_council_framework_is_not_injected_but_stays_manifest_metadata` (framework absent from `pp.system`, still
+in the manifest); added `test_v1_doctrine_blocks_reach_compiled_system` (single-investigator identity +
+Evidence Semantics + entity citation grain + six-domain method all reach the model; no council terminology
+survives); flipped the two framework-marker assertions (`test_prompt_builder`,
+`test_investigation_summary_stage`) to assert **absence**; updated the hardcoded investigation `package_hash`
+(`pkg:ad831…`→`pkg:ff8791ad17b431c4befb6c5b`) and the constitution block count (12→13). **Full suite: 1319
+passed, 1 warning.**
 
 ---
 
@@ -413,7 +462,17 @@ sections. Target ≲ 7–8k tokens; do NOT duplicate the JSON schema in prose (m
 
 ---
 
-## 9. Phase 3B plan (planned; NOT authorized to build yet)
+## 9. Phase 3B plan — ✅ DELIVERED (this session; see §6 for the as-built record)
+
+> **Status: DONE.** The plan below is the authored record. Deviations from the plan, all within §8: (a) the
+> council `framework` block dropped from the compiled prompt was only **~271 tokens** (the summary), not the
+> §8.7-estimated 1.5–2.5k (that figure counted the whole `framework.py` module, which is *not* what was
+> injected); (b) the Evidence Semantics content was split — **universal principles** live in a new
+> constitution block, **field-level six-domain guidance** lives in the comprehensive `system_task` (its
+> fields only exist there) — rather than one monolithic block; (c) the base prompt kept **10 rules** and
+> **registry version `v1`** (in-place content revision; the content hash moves, and `test_ai_activation`
+> requires `prompt_version == "v1"`); (d) `template.py` / the legacy `builder.py` were left untouched (the
+> framework there is unwired legacy metadata), so only `assemble_stage_system` changed.
 
 **Goal:** author Master Analyst Protocol v1 as stable doctrine (from §8) and wire it. **Do NOT invent new doctrine**
 beyond §8; conservative on the ⚠ fields; teach the entity-only citation grain.
@@ -483,6 +542,14 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-16 (Phase 3B)** — Authored & wired the **Master Analyst Protocol v1** (hash
+  `map:ea25de153d030eae9a5f7eea`, ~6,825 tokens). Base prompt → single Lead Investigator at investigation
+  grain, Rule 10 defers to the canonical schema; constitution → single-investigator `_GLOBAL`, entity-only
+  citation grain, new Evidence Semantics block, `CONSTITUTION_VERSION` v1→v2; comprehensive `system_task` →
+  six-domain method (`citmpl-v3`); dropped the council `framework` JSON from the compiled `pp.system`
+  (`assemble_stage_system`), kept as manifest-only metadata. Regenerated the HF mirrors; updated/added tests.
+  **Full suite 1319 passed, 1 warning.** No changes to schema/Governor/runtime/provider/frontend/engine/
+  one-inference. Next: deploy the OpenRouter preset (not authorized).
 - **2026-07-15 (context enrichment)** — Added program context for a smoother transition: "Why this matters —
   north star" (goal + platform + evidence-not-verdicts), "The arc so far" (history & trajectory through eventual
   benchmarking/fine-tuning), "How we work" (method & quality bar), and a "Key decisions & rationale" decision log.
