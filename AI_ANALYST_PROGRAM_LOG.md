@@ -174,6 +174,9 @@ also triggers `POST /v1/investigations/{slug}/analyst` on mount (safety-net gene
 | 2 | OpenRouter preset-based ReasoningProvider (behind the seam) | ✅ done | `c6981ea` |
 | 3A | Master Analyst Protocol evidence-semantics audit (read-only) | ✅ done | this log |
 | **3B** | **Author & wire Master Analyst Protocol v1** | ✅ **done** | this session (see §6, §9) |
+| 4 (audit) | Canonical Response Integration — end-to-end data-flow audit (read-only) | ✅ done | this session |
+| **4A** | **Canonical Response Integration — Analyst Panel surfaces structured fields** | ✅ **done** | this session (frontend only) |
+| 4B | AI Experience Integration (account pages, VerdictWidget seeding, viewer) | ⬜ not started — planned, not authorized | — |
 | later | Deploy OpenRouter preset + select model + production cutover | ⬜ not started | — |
 | later | Model benchmarking (same package + instructions across models) | ⬜ not started | — |
 
@@ -542,6 +545,20 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-16 (Phase 4 audit + 4A)** — **Audit** (read-only): traced ComprehensiveAssessment → Governor →
+  persistence → API → frontend. Finding: the backend already emits the FULL structured assessment
+  (`payload_json.analyst_assessment_v1`, served via `AnalystResponse.assessment: dict` passthrough) with
+  nothing dropped; the gap is frontend under-consumption (one consumer, `analyst-panel.tsx`; 5 structured
+  fields unsurfaced; `corroboration` untyped). **Phase 4A** (frontend only): (Stage 1) added `corroboration`
+  + extended `comprehensive_validation` (per-section citation resolution) to `AnalystAssessment` in
+  `apps/web/lib/api.ts`; (Stage 2) surfaced the previously-unrendered structured fields in the Analyst Panel
+  — corroboration gate (discriminative methods + single-axis-cap + convergence), `coordination_label`,
+  `legitimate_hypothesis`, `supplemental_context`, and per-domain unresolved-citation marking; (Stage 3)
+  replaced plain-text numerics with existing primitives — `ProbabilityBar` for `suspicion_probability` and
+  per-evidence `impact`, real `direction` arrows (`TierBadge` already in use). `ConfidenceBand` deliberately
+  NOT used (the assessment carries `confidence_band` as an enum, not a numeric — feeding it would fabricate a
+  confidence %). No new viz systems, no layout/IA change; account pages / viewer / VerdictWidget untouched
+  (those are Phase 4B). Frontend `typecheck` clean; **23/23 frontend tests pass**. Backend untouched.
 - **2026-07-16 (Phase 3B)** — Authored & wired the **Master Analyst Protocol v1** (hash
   `map:ea25de153d030eae9a5f7eea`, ~6,825 tokens). Base prompt → single Lead Investigator at investigation
   grain, Rule 10 defers to the canonical schema; constitution → single-investigator `_GLOBAL`, entity-only

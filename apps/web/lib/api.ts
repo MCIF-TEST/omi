@@ -701,6 +701,14 @@ export interface AnalystAssessment {
   coordination_label?: string | null;
   legitimate_hypothesis?: string | null;
   supplemental_context?: { signal: string; note: string }[];
+  // The engine's corroboration state, echoed onto the assessment (overlaid from the deterministic
+  // Floor, never model-fabricated — apps/api runtime.py). It bounds the coordination read: a maximal
+  // 'coordinated' verdict requires >=1 discriminative method AND single_axis_capped === false.
+  corroboration?: {
+    discriminative_methods: string[];
+    single_axis_capped: boolean;
+    convergence: boolean;
+  };
   governance?: {
     verdict?: string;
     provider?: string;
@@ -711,9 +719,22 @@ export interface AnalystAssessment {
   // The six domain-reasoning sections of the single comprehensive Mistral response (present when the
   // comprehensive path produced them). Rendered as views over ONE inference — never fetched per panel.
   comprehensive_sections?: ComprehensiveSections;
+  // Structural + citation-resolution report for the six domain sidecars (apps/api
+  // governor/comprehensive.py:validate_comprehensive_sections). Per-section `resolved`/`unresolved`
+  // let the panel mark citations that don't resolve against the evidence universe.
   comprehensive_validation?: {
     structurally_valid?: boolean;
     unresolved_total?: number;
+    citation_universe_size?: number;
+    missing_sections?: string[];
+    sections?: Record<string, {
+      present: boolean;
+      shape_ok: boolean;
+      expected_shape?: string;
+      citation_count: number;
+      resolved: string[];
+      unresolved: string[];
+    }>;
   };
   // Whether Mistral actually authored this assessment (true) or the deterministic Floor stood in
   // (false). The UI must never present Floor prose as AI reasoning — it keys off this.
