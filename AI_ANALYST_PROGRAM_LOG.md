@@ -12,7 +12,7 @@
 | **Repo** | `mcif-test/omi` (FastAPI `apps/api` + Next.js `apps/web` + `ml/analyst/` package) |
 | **Working branch** | `claude/master-analyst-protocol-v1-1u8tyk` (the live branch; already contains Phases 0–2 + this log — the earlier `claude/stoic-edison-2ueecx` work was folded in via a "PR #83" merge) |
 | **Current HEAD** | the Phase 3B commit on the working branch (advances with this change) |
-| **Pull request** | draft PR for `claude/master-analyst-protocol-v1-1u8tyk`, base `main` — covers Phases 1–2 + 3B (+ this log); `main` itself still holds only Phase 0 |
+| **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` |
 | **Latest green suite** | **1319 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore) |
 | **Master Analyst Protocol v1** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:ea25de153d030eae9a5f7eea`**; version `map/prompt:v1+constitution:v2+framework:v1+template:citmpl-v3`; ~27,300 chars ≈ 6,825 tokens |
