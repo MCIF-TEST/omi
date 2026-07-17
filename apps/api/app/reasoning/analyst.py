@@ -633,8 +633,20 @@ def _assess_core(
             "master_prompt_hash": _master.get("hash"),
             "canonical_schema_id": _schema_id,
             "endpoint_cost_usd": _usage.get("cost"),
+            # Authoritative token usage reported by the gateway (OpenRouter `usage`), for production
+            # verification + cost transparency. None on the Floor path (no billed generation).
+            "input_tokens": _usage.get("prompt_tokens"),
+            "output_tokens": _usage.get("completion_tokens"),
+            "total_tokens": _usage.get("total_tokens"),
             "inference_count": 1 if inference.endpoint_called else 0,
             "endpoint_called": inference.endpoint_called,
+            # Crisp pipeline-stage flags for the verification surface (all derived from existing state):
+            # the request completed with a body, a JSON object was parsed, and it passed canonical
+            # validation + the Governor (i.e. the served assessment is the model's, not the Floor's).
+            "request_completed": bool(inference.endpoint_called and inference.response_status
+                                      and not inference.endpoint_error),
+            "json_received": inference.raw_obj is not None,
+            "validation_passed": bool(model_backed),
             "model_backed": model_backed,
             "fallback_reason": (inference.fallback_from or None),
             "snapshot_id": snapshot.snapshot_id,
@@ -682,6 +694,17 @@ def _assess_core(
                     investigation_trace["evidence_coverage_mode"], investigation_trace["evidence_tokens_est"],
                     m["total_reasoning_ms"], m["model_ms"], m["governor_and_assembly_ms"],
                     m["est_completion_tokens"])
+        # Concise production-verification summary (one line; no secrets). Answers "did this
+        # investigation come from the model, via which gateway/model, at what latency/cost?".
+        logger.info("analyst.verify: ref=%s transport=%s served_model=%s preset=%s request_id=%s "
+                    "json_received=%s validation_passed=%s model_backed=%s fallback=%s "
+                    "latency_ms=%.0f in_tok=%s out_tok=%s cost_usd=%s",
+                    ref, _provider, investigation_trace["served_model"],
+                    investigation_trace["openrouter_preset"], investigation_trace["endpoint_request_id"],
+                    investigation_trace["json_received"], investigation_trace["validation_passed"],
+                    model_backed, investigation_trace["fallback_reason"] or "-",
+                    investigation_trace["endpoint_latency_ms"], investigation_trace["input_tokens"],
+                    investigation_trace["output_tokens"], investigation_trace["endpoint_cost_usd"])
         return governed
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")

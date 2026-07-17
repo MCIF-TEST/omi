@@ -736,8 +736,11 @@ export interface AnalystAssessment {
       unresolved: string[];
     }>;
   };
-  // Whether Mistral actually authored this assessment (true) or the deterministic Floor stood in
-  // (false). The UI must never present Floor prose as AI reasoning — it keys off this.
+  // Forensic + production-verification trace for the ONE inference. `model_backed` gates whether the
+  // model authored this assessment (true) or the deterministic Floor stood in (false); the UI must
+  // never present Floor prose as AI reasoning — it keys off this. The remaining fields power the
+  // dev-only Production Verification panel (Phase 5C): they prove which gateway/model served the
+  // investigation, whether validation passed, and the latency/token/cost of the call. No secrets.
   investigation_trace?: {
     model_backed?: boolean;
     inference_count?: number;
@@ -745,6 +748,30 @@ export interface AnalystAssessment {
     evidence_coverage_mode?: string;
     evidence_represented_accounts?: number | null;
     evidence_omitted_accounts?: number | null;
+    // transport / model provenance
+    provider?: string;                    // "openrouter" | "huggingface"
+    requested_model?: string | null;      // e.g. "@preset/omi-master-v1"
+    served_model?: string | null;         // the model the gateway actually ran, e.g. "openai/gpt-5-mini"
+    openrouter_preset?: string | null;    // "omi-master-v1"
+    master_prompt_version?: string | null;
+    master_prompt_hash?: string | null;   // "map:…" — what Omi expects the preset to contain
+    canonical_schema_id?: string | null;
+    // pipeline-stage flags
+    request_completed?: boolean;
+    json_received?: boolean;
+    validation_passed?: boolean;
+    fallback_reason?: string | null;
+    governor_verdict?: string | null;
+    comprehensive_structurally_valid?: boolean;
+    // call metrics (authoritative gateway usage)
+    endpoint_request_id?: string | null;  // OpenRouter generation id
+    endpoint_latency_ms?: number | null;
+    endpoint_cost_usd?: number | null;
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    total_tokens?: number | null;
+    response_status?: number | null;
+    endpoint_error?: string | null;
   };
 }
 

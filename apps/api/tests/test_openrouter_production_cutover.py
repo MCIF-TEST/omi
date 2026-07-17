@@ -193,6 +193,12 @@ def test_forensic_trace_records_production_identity_and_served_model():
     assert tr["endpoint_request_id"] == "gen-prod-1"
     assert tr["endpoint_cost_usd"] == 0.0021
     assert tr["canonical_schema_id"] == COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
+    # Phase 5C production-verification metadata (authoritative gateway usage + pipeline-stage flags)
+    assert tr["input_tokens"] == 1800 and tr["output_tokens"] == 320 and tr["total_tokens"] == 2120
+    assert tr["request_completed"] is True
+    assert tr["json_received"] is True
+    assert tr["validation_passed"] is True
+    assert tr["master_prompt_version"] and tr["master_prompt_hash"].startswith("map:")
 
 
 def test_api_key_never_leaks_in_production_path():

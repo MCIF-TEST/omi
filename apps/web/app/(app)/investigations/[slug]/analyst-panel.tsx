@@ -20,6 +20,16 @@ import {
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLLS = 10;
 
+// Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
+// URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.
+// Purely a read-only diagnostic surface over the existing forensic trace — it changes no data.
+function verificationEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_OMI_VERIFY_MODE === '1') return true;
+  if (typeof window === 'undefined') return false;
+  const q = new URLSearchParams(window.location.search);
+  return q.has('verify') || q.has('debug');
+}
+
 /**
  * Minimum UI to exercise the Omi Analyst endpoint (Sprint 001).
  * POST -> 503 (disabled) | 202 (generating -> poll) | 200 (assessment).
@@ -29,6 +39,7 @@ const MAX_POLLS = 10;
 export function AnalystPanel({ slug }: { slug: string }) {
   const [assessment, setAssessment] = useState<AnalystAssessment | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [disabled, setDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +65,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
         if (r.status === 'ready' && r.assessment) {
           setAssessment(r.assessment);
           setProvider(r.provider ?? null);
+          setGeneratedAt(r.generated_at ?? null);
           setPending(false);
           return;
         }
@@ -121,6 +133,10 @@ export function AnalystPanel({ slug }: { slug: string }) {
         </p>
       ) : (
         <AssessmentView a={assessment} />
+      )}
+
+      {assessment && verificationEnabled() && (
+        <VerificationPanel a={assessment} provider={provider} generatedAt={generatedAt} />
       )}
 
       {error && (
@@ -235,6 +251,89 @@ function isModelBacked(a: AnalystAssessment): boolean {
   if (typeof a.investigation_trace?.model_backed === 'boolean') return a.investigation_trace.model_backed;
   const provider = a.governance?.provider ?? '';
   return provider.length > 0 && !/fallback|deterministic|floor/i.test(provider);
+}
+
+// ── Phase 5C: dev-only Production Verification panel ──────────────────────────────────────────────
+// A read-only diagnostic surface over the persisted forensic trace. It proves which gateway + model
+// served THIS investigation (or that the deterministic Floor stood in), whether validation passed, and
+// the latency/token/cost of the call. Gated by verificationEnabled(); never shown to normal users and
+// never alters any data. No secrets are present in the trace it reads.
+function fmtMs(v?: number | null): string {
+  return typeof v === 'number' ? `${Math.round(v)} ms` : '—';
+}
+function fmtCost(v?: number | null): string {
+  return typeof v === 'number' ? `$${v.toFixed(6)}` : '—';
+}
+function yn(v: boolean | undefined | null): string {
+  return v === true ? 'yes' : v === false ? 'no' : '—';
+}
+
+function VerificationPanel({
+  a, provider, generatedAt,
+}: { a: AnalystAssessment; provider: string | null; generatedAt: string | null }) {
+  const t = a.investigation_trace ?? {};
+  const aiBacked = t.model_backed === true;
+  const isOpenRouter = (t.provider ?? '').toLowerCase() === 'openrouter'
+    || /openrouter/i.test(provider ?? '');
+  const rows: [string, React.ReactNode][] = [
+    ['Provider', t.provider ?? provider ?? '—'],
+    ['Served model', t.served_model ?? t.requested_model ?? '—'],
+    ['Preset', t.openrouter_preset ?? '—'],
+    ['Protocol version', t.master_prompt_version ?? '—'],
+    ['Protocol hash', t.master_prompt_hash ?? '—'],
+    ['Schema id / version', `${t.canonical_schema_id ?? '—'} / v${(a as { schema_version?: number }).schema_version ?? '—'}`],
+    ['Model-backed', yn(t.model_backed)],
+    ['Request completed', yn(t.request_completed)],
+    ['JSON received', yn(t.json_received)],
+    ['Validation passed', yn(t.validation_passed)],
+    ['Governor verdict', t.governor_verdict ?? '—'],
+    ['Fallback used', yn(!aiBacked)],
+    ['Fallback reason', t.fallback_reason ?? '—'],
+    ['Latency', fmtMs(t.endpoint_latency_ms)],
+    ['Input tokens', t.input_tokens ?? '—'],
+    ['Output tokens', t.output_tokens ?? '—'],
+    ['Total tokens', t.total_tokens ?? '—'],
+    ['Estimated cost', fmtCost(t.endpoint_cost_usd)],
+    ['OpenRouter request id', t.endpoint_request_id ?? '—'],
+    ['HTTP status', t.response_status ?? '—'],
+    ['Endpoint error', t.endpoint_error ?? '—'],
+    ['Generated at', generatedAt ?? '—'],
+  ];
+  return (
+    <details className="mt-4 rounded-sm border border-dashed border-accent/40 bg-bg-elev-2/40 open:bg-bg-elev-2">
+      <summary className="cursor-pointer select-none list-none px-3 py-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2">
+          <span
+            className={`font-mono text-2xs tracking-wider uppercase rounded-full border px-2 py-0.5 ${
+              aiBacked
+                ? 'border-tier-low/50 text-tier-low bg-tier-low/10'
+                : 'border-tier-moderate/50 text-tier-moderate bg-tier-moderate/10'
+            }`}
+          >
+            {aiBacked
+              ? `🟢 AI Investigation (${isOpenRouter ? 'OpenRouter' : (t.provider ?? 'model')})`
+              : '🟡 Deterministic Floor'}
+          </span>
+          <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">
+            production verification
+          </span>
+        </span>
+        <span className="text-fg-faint text-2xs group-open:hidden">dev only</span>
+      </summary>
+      <div className="px-3 pb-3 overflow-x-auto">
+        <table className="w-full text-2xs font-mono">
+          <tbody>
+            {rows.map(([k, v]) => (
+              <tr key={k} className="border-t border-border-1/40">
+                <td className="py-1 pr-3 text-fg-mute uppercase tracking-wider whitespace-nowrap align-top">{k}</td>
+                <td className="py-1 text-fg-dim break-all">{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
 }
 
 function AssessmentView({ a }: { a: AnalystAssessment }) {

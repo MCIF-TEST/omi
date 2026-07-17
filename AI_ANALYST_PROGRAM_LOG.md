@@ -549,6 +549,19 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-17 (Phase 5C — Production Verification Mode)** — Minimal, dev-only instrumentation to prove a
+  rendered investigation came from OpenRouter + GPT-5 Mini (no redesign, no deploy). Backend: added the last
+  missing trace fields — `input_tokens` / `output_tokens` / `total_tokens` (authoritative OpenRouter usage)
+  and crisp pipeline-stage flags `request_completed` / `json_received` / `validation_passed` — everything
+  else (provider, served_model, preset, protocol version+hash, schema id, request id, cost, latency,
+  fallback_reason, governor_verdict) was already in `investigation_trace` and already reaches the UI via the
+  passthrough assessment dict. Added a one-line `analyst.verify:` production summary log (transport /
+  served_model / preset / request_id / json_received / validation_passed / fallback / latency / tokens /
+  cost — no secrets). Frontend: typed the trace fields; added a **dev-only `VerificationPanel`** in
+  `analyst-panel.tsx` (collapsible metadata table + 🟢 AI Investigation (OpenRouter) / 🟡 Deterministic Floor
+  badge), gated by `?verify=1` / `?debug=1` or `NEXT_PUBLIC_OMI_VERIFY_MODE=1` — invisible to normal users,
+  changes no data. Backend 1338 passed; frontend typecheck clean + 23 tests. No schema/architecture/API-route
+  change; provider behavior unchanged.
 - **2026-07-17 (V2 production-review pass on the doctrine)** — Engineering review of the compiled protocol;
   all fixes authored into the assets (preset stays == compiled text). Gaps found & closed: (1) knowledge
   library had NO framing — header now declares it reference doctrine, never evidence/citable/proof
