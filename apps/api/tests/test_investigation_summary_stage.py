@@ -111,7 +111,7 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     assert "SPECIALIST INVESTIGATION FRAMEWORK" not in pp.system
     # the summary stage REUSES the existing analyst response schema (no new schema)
     assert pp.schema_ref == "schema/analyst_response_schema.json"
-    assert pp.manifest["package_hash"] == "pkg:ff8791ad17b431c4befb6c5b"   # investigation package unchanged
+    assert pp.manifest["package_hash"] == "pkg:31054ebe7010ead3b5f31cb6"   # investigation package unchanged
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 

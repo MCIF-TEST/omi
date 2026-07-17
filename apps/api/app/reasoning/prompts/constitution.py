@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from app.evidence.bundle import digest
 
-CONSTITUTION_VERSION = "v2"
+CONSTITUTION_VERSION = "v3"
 
 
 @dataclass(frozen=True)
@@ -180,7 +180,10 @@ _COUNTER_EVIDENCE_RULES = ConstitutionBlock(
     "- An empty counter-evidence column is permitted ONLY when you explicitly state that no "
     "exculpatory signal was present; silence is not allowed.\n"
     "- The precision frontier is sacred: legitimate coordination (newsrooms on-message, "
-    "politicians, fan communities, benign scheduling automation) must never be read as hostile.",
+    "politicians, fan communities, benign scheduling automation) must never be read as hostile.\n"
+    "- Political stance, ideology, language or dialect, writing style, profile appearance, "
+    "username shape, and topic choice are never evidence of automation or inauthenticity — "
+    "singly or in combination. Only measured behavior is.",
 )
 
 _COORDINATION_RULES = ConstitutionBlock(
@@ -193,7 +196,11 @@ _COORDINATION_RULES = ConstitutionBlock(
     "- Coordination is not inherently hostile. Distinguish COORDINATED (accounts acting together) "
     "from INAUTHENTIC (deceptive identity/behavior). Legitimate groups coordinate openly.\n"
     "- Tie every coordination claim to the specific method(s) and members that fired, and state "
-    "whether member authenticity/history supports a hostile or benign reading.",
+    "whether member authenticity/history supports a hostile or benign reading.\n"
+    "- Organic communities also synchronize: shared triggers, fan rhythms, and news cycles produce "
+    "simultaneity with no campaign behind it. A campaign read requires structure organic behavior "
+    "cannot easily produce — repeated co-action across independent axes — never one-off timing "
+    "overlap.",
 )
 
 _OUTPUT_FORMATTING = ConstitutionBlock(
@@ -201,7 +208,8 @@ _OUTPUT_FORMATTING = ConstitutionBlock(
     "- Output exactly ONE JSON object and nothing else — no prose, no markdown, no code fences "
     "before or after it.\n"
     "- Emit only the fields the canonical output schema defines; do not add commentary keys "
-    "or restate the evidence.\n"
+    "or restate the evidence. Never explain, restate, or annotate the schema itself in the "
+    "output; populate it.\n"
     "- Every string field uses probabilistic, behavior-describing language and honors the banned- "
     "phrase rule (no 'is a bot', 'is fake', 'definitely', 'proven', etc.).\n"
     "- If you cannot produce a valid object, produce your minimal valid object with an explicit "

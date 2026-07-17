@@ -257,3 +257,32 @@ def test_degrade_connection_error():
     out = _run_raising(urllib.error.URLError("[Errno 111] Connection refused"))
     _assert_floored(out)
     assert "Connection refused" in str(out["investigation_trace"]["endpoint_error"])
+
+
+# =========================================================================== #
+# The committed paste-ready preset artifact == the compiled Master Analyst Protocol (drift guard)
+# =========================================================================== #
+def test_committed_preset_artifact_is_byte_identical_to_compiled_protocol():
+    """The operator pastes ml/analyst/omi_master_v1_preset.txt into the OpenRouter preset. It must be
+    BYTE-IDENTICAL to compile_master_analyst_protocol().text (the repo is the source of truth; the
+    trace records that hash as what it expects the preset to hold), and the companion manifest must
+    carry the matching identity. Any protocol change that forgets to regenerate the artifact fails here."""
+    from app.reasoning.prompts.export import (
+        MASTER_PRESET_MANIFEST_PATH,
+        MASTER_PRESET_PATH,
+        master_preset_matches_committed,
+    )
+    from app.reasoning.prompts.master_protocol import compile_master_analyst_protocol
+
+    assert master_preset_matches_committed() is True
+    p = compile_master_analyst_protocol()
+    assert MASTER_PRESET_PATH.read_text(encoding="utf-8") == p["text"]
+    manifest = json.loads(MASTER_PRESET_MANIFEST_PATH.read_text(encoding="utf-8"))
+    assert manifest["preset_name"] == "omi-master-v1"
+    assert manifest["protocol"]["hash"] == p["hash"]
+    assert manifest["protocol"]["chars"] == p["chars"]
+    # the pasted doctrine itself stays provider/vendor-neutral
+    low = p["text"].lower()
+    for vendor in ("openrouter", "openai", "gpt", "anthropic", "claude", "gemini", "qwen",
+                   "mistral", "hugging face", "huggingface"):
+        assert vendor not in low

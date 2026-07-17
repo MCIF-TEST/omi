@@ -592,6 +592,72 @@ def comprehensive_investigation_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Master Analyst Protocol preset artifact — the paste-ready OpenRouter preset (Phase 5B deploy)
+# --------------------------------------------------------------------------- #
+MASTER_PRESET_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "omi_master_v1_preset.txt"
+)
+MASTER_PRESET_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[5] / "ml" / "analyst" / "omi_master_v1_preset.json"
+)
+
+
+def master_preset_text() -> str:
+    """The EXACT text the ``omi-master-v1`` OpenRouter preset must contain as its system prompt —
+    byte-identical to the compiled Master Analyst Protocol (``compile_master_analyst_protocol().text``
+    == the comprehensive ``pp.system``). Generated, never hand-authored: the repository stays the
+    source of truth and the recorded ``master_prompt_hash`` stays honest."""
+    from app.reasoning.prompts.master_protocol import compile_master_analyst_protocol
+
+    return compile_master_analyst_protocol()["text"]
+
+
+def master_preset_manifest() -> dict:
+    """Deployment manifest for the ``omi-master-v1`` preset: the protocol identity (name / version /
+    content hash / size) the operator verifies after pasting, plus usage notes. Metadata only — the
+    protocol text itself stays vendor-neutral; the intended production model is deployment config."""
+    from app.reasoning.prompts.master_protocol import master_analyst_protocol_identity
+
+    return {
+        "manifest_version": "v1",
+        "generated_by": "app.reasoning.prompts.export.master_preset_manifest",
+        "source_of_truth": "app.reasoning.prompts.master_protocol.compile_master_analyst_protocol (do not hand-edit)",
+        "preset_name": "omi-master-v1",
+        "intended_model": "openai/gpt-5-mini",
+        "protocol": master_analyst_protocol_identity(),
+        "usage": ("Paste omi_master_v1_preset.txt VERBATIM as the preset's system prompt in the "
+                  "OpenRouter dashboard. In preset mode the per-investigation request sends ONLY the "
+                  "Investigation Package as the user message; the preset supplies these instructions. "
+                  "The trace records protocol.hash as the content Omi expects the preset to hold."),
+    }
+
+
+def render_master_preset_manifest_json() -> str:
+    return json.dumps(master_preset_manifest(), indent=2, sort_keys=True) + "\n"
+
+
+def write_master_preset(path: Path | None = None, manifest_path: Path | None = None) -> Path:
+    """Write the paste-ready preset artifact (exact protocol bytes, no additions) + its manifest."""
+    target = path or MASTER_PRESET_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(master_preset_text(), encoding="utf-8")
+    mtarget = manifest_path or MASTER_PRESET_MANIFEST_PATH
+    mtarget.write_text(render_master_preset_manifest_json(), encoding="utf-8")
+    return target
+
+
+def master_preset_matches_committed() -> bool:
+    """True when the committed preset artifact + manifest equal freshly generated ones (drift guard):
+    any protocol-content change forces the paste artifact and its recorded hash to move with it."""
+    try:
+        return (MASTER_PRESET_PATH.read_text(encoding="utf-8") == master_preset_text()
+                and MASTER_PRESET_MANIFEST_PATH.read_text(encoding="utf-8")
+                == render_master_preset_manifest_json())
+    except OSError:
+        return False
+
+
+# --------------------------------------------------------------------------- #
 # Specialist Framework handbook — GitHub-side contributor doc (Phase A1)
 # --------------------------------------------------------------------------- #
 HANDBOOK_PATH = (
@@ -665,6 +731,9 @@ __all__ = [
     "COMPREHENSIVE_INVESTIGATION_TEMPLATE_PATH", "comprehensive_investigation_template_manifest",
     "render_comprehensive_investigation_template_json", "write_comprehensive_investigation_template",
     "comprehensive_investigation_template_matches_committed",
+    "MASTER_PRESET_PATH", "MASTER_PRESET_MANIFEST_PATH", "master_preset_text",
+    "master_preset_manifest", "render_master_preset_manifest_json", "write_master_preset",
+    "master_preset_matches_committed",
     "HANDBOOK_PATH", "write_handbook", "handbook_matches_committed",
     "BEHAVIORAL_HANDBOOK_PATH", "write_behavioral_handbook", "behavioral_handbook_matches_committed",
 ]
@@ -679,5 +748,6 @@ if __name__ == "__main__":  # regenerate manifest + catalog + knowledge index + 
     print(f"wrote {write_commenter_history_template()}")
     print(f"wrote {write_investigation_summary_template()}")
     print(f"wrote {write_comprehensive_investigation_template()}")
+    print(f"wrote {write_master_preset()}")
     print(f"wrote {write_handbook()}")
     print(f"wrote {write_behavioral_handbook()}")
