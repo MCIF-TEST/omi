@@ -8,13 +8,13 @@
 
 | | |
 |---|---|
-| **Last updated** | 2026-07-16 — **Phases 3B, 4A, 5A, 5B complete** (this session): Master Analyst Protocol v1, canonical-response UI integration, OpenRouter readiness layer, and cutover verification |
+| **Last updated** | 2026-07-17 — **Phases 3B, 4A, 5A, 5B, 5C, 5D, 5E complete**: Master Analyst Protocol v1, canonical-response UI integration, OpenRouter readiness layer, cutover verification, dev-only verification mode, production infrastructure cutover (render.yaml/.env.example), and transport-level verification logging |
 | **Repo** | `mcif-test/omi` (FastAPI `apps/api` + Next.js `apps/web` + `ml/analyst/` package) |
 | **Working branch** | `claude/master-analyst-protocol-v1-1u8tyk` (the live branch; already contains Phases 0–2 — the earlier `claude/stoic-edison-2ueecx` work was folded in via a "PR #83" merge) |
 | **Current HEAD** | the Phase 5B commit on the working branch (advances with this change) |
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
-| **Latest green suite** | backend **1337 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
+| **Latest green suite** | backend **1348 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
 | **Master Analyst Protocol (production doctrine, V2 review pass)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:3cb7f337a1406b522865455a`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,007 chars ≈ 8,751 tokens; 14 constitution blocks. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
@@ -549,6 +549,25 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-17 (Phase 5E — OpenRouter transport verification)** — Transport-level instrumentation only; **no
+  redesign, no behavior change, no deploy**. Added a START / OK / FAIL log lifecycle around the ONE model
+  inference in `OpenRouterReasoningProvider.complete()` — START logs provider / endpoint / preset / model_ref
+  / request_bytes / structured_output; OK logs status / request_id / latency / bytes_received / attempts /
+  completion=success; FAIL logs a classified failure class + status + latency + exception type, then re-raises
+  unchanged (graceful-degradation path is untouched). New `classify_transport_failure(exc, status)` maps any
+  transport failure to a stable operational class: `authentication` (401/403), `rate_limit` (429),
+  `invalid_preset_or_model` (404), `invalid_request` (400), `http_error` (5xx), `timeout`, `invalid_json`
+  (`ProviderProtocolError`), `not_configured` (`ProviderUnavailable`), `transport` (connection/URLError),
+  `unexpected_response` (fallback). Captured `response_bytes` on the forensic record. **Logs carry sizes /
+  status / ids ONLY** — never the API key (rides in the Authorization header), the prompt, or the
+  investigation body (asserted by test). The JSON-parse step moved inside the timed try so an invalid-JSON
+  response is classified as a real transport failure rather than logging a false OK. New test
+  `tests/test_openrouter_transport_logging.py` (10 cases): classification taxonomy, START/OK emission +
+  `response_bytes` capture, per-failure-class FAIL logs, and no-secret-leak assertions on both success and
+  failure logs. Files: `apps/api/app/reasoning/model_providers/openrouter.py`,
+  `apps/api/tests/test_openrouter_transport_logging.py`. **Remaining transport blocker:** the only thing
+  standing between this instrumentation and a real observed request is the operator supplying a live
+  `OPENROUTER_API_KEY` in Render + creating the `omi-master-v1` preset — no code blocker remains.
 - **2026-07-17 (Phase 5D — production infrastructure cutover)** — Deployment config only; **no application
   logic changed**. Root cause of "zero OpenRouter requests" was the blueprint: `render.yaml` wired only the
   legacy Hugging Face path and hard-coded `OMI_ANALYST_ENABLED='false'`, and never set `OMI_ANALYST_PROVIDER`
