@@ -15,7 +15,8 @@
   "decoding": {
     "temperature": 0.2,
     "top_p": 0.9,
-    "max_new_tokens": 2048,
+    "max_new_tokens": 16000,
+    "max_new_tokens_note": "Output-token CAP the runtime sends as max_tokens. Sized for a reasoning model (e.g. GPT-5 Mini via OpenRouter): comfortably fits reasoning tokens + the full 7-section ComprehensiveAssessment JSON (~2.5k) with headroom we do not expect to reach. It is a ceiling, not a reservation — billing is on tokens actually generated — so a high value prevents truncation without waste.",
     "repetition_penalty": 1.0
   },
   "thinking": {

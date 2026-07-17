@@ -145,6 +145,9 @@ def test_production_preset_config_reaches_the_request_exactly():
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["name"] == COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
     assert body["stream"] is False
+    # The production output-token budget (analyst_config.json decoding.max_new_tokens) reaches the wire —
+    # comfortably high for GPT-5 Mini reasoning + the full 7-section JSON, so no truncation → Floor.
+    assert body["max_tokens"] >= 8000
     assert calls == 1                                              # exactly ONE inference
     # the Investigation Package evidence (normalized, aliased) reaches the provider as the user message
     assert "A1" in body["messages"][0]["content"]

@@ -16,7 +16,7 @@
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1337 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
 | **Master Analyst Protocol v1** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:ea25de153d030eae9a5f7eea`**; version `map/prompt:v1+constitution:v2+framework:v1+template:citmpl-v3`; ~27,300 chars ≈ 6,825 tokens |
-| **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**); resolve the `max_new_tokens=2048` token-budget decision first. Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
+| **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
 
@@ -548,6 +548,11 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-16 (token budget)** — Raised `analyst_config.json` `decoding.max_new_tokens` **2048 → 16000**
+  (the runtime sends it as the request `max_tokens`). Sized for GPT-5 Mini reasoning + the full 7-section
+  ComprehensiveAssessment JSON; a cap, not a reservation, so no cost waste. Resolves the Phase 5B top risk
+  (truncation → Floor). Added a wire-level assertion in `test_openrouter_production_cutover`. Full suite 1337
+  passed. No architecture/behavior change beyond the config value.
 - **2026-07-16 (Phase 5B — cutover readiness)** — Verified the OpenRouter production path end-to-end for
   preset `omi-master-v1` + GPT-5 Mini (`openai/gpt-5-mini`) WITHOUT deploying or sending a live call. Audit:
   the transport (provider/endpoint/auth/model/preset/parse/errors) is complete; the only remaining HF-active
@@ -649,9 +654,9 @@ means it fell to the Floor — read `investigation_trace.endpoint_error` / `resp
 
 **Rollback:** set `OMI_ANALYST_PROVIDER=huggingface` (or `OMI_ANALYST_ENABLED=false`) — instant, no redeploy of code.
 
-**Top risk (token budget):** the request sends `max_tokens` from `analyst_config.json` `decoding.max_new_tokens`
-(**currently 2048**), and OpenRouter shallow-merge lets the request value override the preset. GPT-5 Mini is a
-reasoning model whose reasoning tokens consume that budget, so 2048 may truncate the JSON → canonical-invalid →
-Floor. **Decision required before cutover:** raise `decoding.max_new_tokens` (e.g. 4096–8000) in
-`ml/analyst/hf_repo/config/analyst_config.json` (governs both paths; harmless for HF) — deliberately NOT changed
-here (Phase 5B constraint: no optimization/tuning), so it is an explicit operator/eng decision.
+**Token budget — RESOLVED.** `analyst_config.json` `decoding.max_new_tokens` is now **16000** (was 2048). The
+runtime sends this as the request `max_tokens`; it is a CAP (billing is on tokens actually generated, not the
+cap), sized to comfortably fit GPT-5 Mini reasoning tokens + the full 7-section ComprehensiveAssessment JSON
+(~2.5k) with headroom we do not expect to reach — so truncation → Floor is no longer a material risk. Governs
+both paths (harmless for HF). A wire-level test (`test_openrouter_production_cutover`) asserts the budget reaches
+the request.
