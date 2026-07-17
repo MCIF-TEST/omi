@@ -701,6 +701,14 @@ export interface AnalystAssessment {
   coordination_label?: string | null;
   legitimate_hypothesis?: string | null;
   supplemental_context?: { signal: string; note: string }[];
+  // The engine's corroboration state, echoed onto the assessment (overlaid from the deterministic
+  // Floor, never model-fabricated — apps/api runtime.py). It bounds the coordination read: a maximal
+  // 'coordinated' verdict requires >=1 discriminative method AND single_axis_capped === false.
+  corroboration?: {
+    discriminative_methods: string[];
+    single_axis_capped: boolean;
+    convergence: boolean;
+  };
   governance?: {
     verdict?: string;
     provider?: string;
@@ -711,12 +719,28 @@ export interface AnalystAssessment {
   // The six domain-reasoning sections of the single comprehensive Mistral response (present when the
   // comprehensive path produced them). Rendered as views over ONE inference — never fetched per panel.
   comprehensive_sections?: ComprehensiveSections;
+  // Structural + citation-resolution report for the six domain sidecars (apps/api
+  // governor/comprehensive.py:validate_comprehensive_sections). Per-section `resolved`/`unresolved`
+  // let the panel mark citations that don't resolve against the evidence universe.
   comprehensive_validation?: {
     structurally_valid?: boolean;
     unresolved_total?: number;
+    citation_universe_size?: number;
+    missing_sections?: string[];
+    sections?: Record<string, {
+      present: boolean;
+      shape_ok: boolean;
+      expected_shape?: string;
+      citation_count: number;
+      resolved: string[];
+      unresolved: string[];
+    }>;
   };
-  // Whether Mistral actually authored this assessment (true) or the deterministic Floor stood in
-  // (false). The UI must never present Floor prose as AI reasoning — it keys off this.
+  // Forensic + production-verification trace for the ONE inference. `model_backed` gates whether the
+  // model authored this assessment (true) or the deterministic Floor stood in (false); the UI must
+  // never present Floor prose as AI reasoning — it keys off this. The remaining fields power the
+  // dev-only Production Verification panel (Phase 5C): they prove which gateway/model served the
+  // investigation, whether validation passed, and the latency/token/cost of the call. No secrets.
   investigation_trace?: {
     model_backed?: boolean;
     inference_count?: number;
@@ -724,6 +748,30 @@ export interface AnalystAssessment {
     evidence_coverage_mode?: string;
     evidence_represented_accounts?: number | null;
     evidence_omitted_accounts?: number | null;
+    // transport / model provenance
+    provider?: string;                    // "openrouter" | "huggingface"
+    requested_model?: string | null;      // e.g. "@preset/omi-master-v1"
+    served_model?: string | null;         // the model the gateway actually ran, e.g. "openai/gpt-5-mini"
+    openrouter_preset?: string | null;    // "omi-master-v1"
+    master_prompt_version?: string | null;
+    master_prompt_hash?: string | null;   // "map:…" — what Omi expects the preset to contain
+    canonical_schema_id?: string | null;
+    // pipeline-stage flags
+    request_completed?: boolean;
+    json_received?: boolean;
+    validation_passed?: boolean;
+    fallback_reason?: string | null;
+    governor_verdict?: string | null;
+    comprehensive_structurally_valid?: boolean;
+    // call metrics (authoritative gateway usage)
+    endpoint_request_id?: string | null;  // OpenRouter generation id
+    endpoint_latency_ms?: number | null;
+    endpoint_cost_usd?: number | null;
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    total_tokens?: number | null;
+    response_status?: number | null;
+    endpoint_error?: string | null;
   };
 }
 

@@ -79,14 +79,56 @@ def _models_match(served: str | None, expected: str | None) -> bool | None:
     return True if s == e else (s.split("/")[-1] == e.split("/")[-1])
 
 
+def _openrouter_health(settings: Settings) -> dict:
+    """OpenRouter readiness snapshot — reports configuration WITHOUT probing the gateway. Phase 5A is
+    observability only: no production request is sent and ``OPENROUTER_API_KEY`` is never read as a
+    value (only its presence, as a boolean). The live smoke test that actually calls OpenRouter is an
+    operator step, not this diagnostic."""
+    preset = getattr(settings, "openrouter_preset", None)
+    model = getattr(settings, "openrouter_model", None)
+    key_present = bool(os.environ.get("OPENROUTER_API_KEY"))
+    configured = bool(preset or model)
+    if model and preset:
+        model_ref = f"{model}@preset/{preset}"
+    elif preset:
+        model_ref = f"@preset/{preset}"
+    else:
+        model_ref = model
+    ready = configured and key_present
+    return {
+        "status": "configured" if ready else "not_configured",
+        "provider": "openrouter",
+        "reachable": None,                     # deliberately NOT probed (no request, no key use)
+        "endpoint_api": "openrouter",
+        "openrouter_preset": preset,
+        "configured_model": model,
+        "model_ref": model_ref,
+        "openrouter_api_key_present": key_present,
+        "structured_output": bool(getattr(settings, "openrouter_structured_output", True)),
+        "expected_model": model,
+        "served_model": None,
+        "model_matches": None,
+        "detail": (
+            "openrouter configured (preset/model + OPENROUTER_API_KEY present); readiness reported "
+            "without sending a request"
+            if ready else
+            "set OMI_OPENROUTER_PRESET (or OMI_OPENROUTER_MODEL) + OPENROUTER_API_KEY to enable"),
+    }
+
+
 def endpoint_health(settings: Settings | None = None) -> dict:
     """Probe the configured Hugging Face inference endpoint with a minimal request and report
     reachability + latency **and the model it is actually serving**. Honors the configured serving
     API (``analyst_endpoint_api``) so a ``messages`` deployment is probed with the chat contract —
     never a ``generate``-shaped body that a chat endpoint would reject (which used to mis-report a
     healthy endpoint as unreachable). When no endpoint/token is configured, reports
-    ``not_configured`` — never an error. No secrets (token presence is a boolean)."""
+    ``not_configured`` — never an error. No secrets (token presence is a boolean).
+
+    When the OpenRouter provider is selected, delegates to :func:`_openrouter_health`, which reports
+    OpenRouter readiness WITHOUT probing (Phase 5A sends no production request)."""
     settings = settings or get_settings()
+    if str(getattr(settings, "analyst_provider", "huggingface") or "huggingface").lower() == "openrouter":
+        return _openrouter_health(settings)
     endpoint = getattr(settings, "analyst_endpoint_url", None)
     token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
     expected_model = getattr(settings, "analyst_model_id", None)
@@ -143,13 +185,28 @@ def system_health(settings: Settings | None = None) -> dict:
 
     enabled = bool(getattr(settings, "analyst_enabled", False))
     endpoint = getattr(settings, "analyst_endpoint_url", None)
+    provider_sel = str(getattr(settings, "analyst_provider", "huggingface") or "huggingface").lower()
+    if provider_sel == "openrouter":
+        preset = getattr(settings, "openrouter_preset", None)
+        or_model = getattr(settings, "openrouter_model", None)
+        configured = bool(preset or or_model)
+        active_provider = "openrouter-model" if (enabled and configured) else "deterministic-floor"
+        active_model = or_model or (f"@preset/{preset}" if preset else None)
+        model_revision = None                  # OpenRouter served model appears in the forensic trace
+        endpoint_api = "openrouter"
+    else:
+        active_provider = "remote-model" if (enabled and endpoint) else "deterministic-floor"
+        active_model = getattr(settings, "analyst_model_id", None)
+        model_revision = getattr(settings, "analyst_hf_revision", None)
+        endpoint_api = str(getattr(settings, "analyst_endpoint_api", "generate"))
     reg = default_registry()
     return {
-        "active_provider": "remote-model" if (enabled and endpoint) else "deterministic-floor",
-        "active_model": getattr(settings, "analyst_model_id", None),
+        "active_provider": active_provider,
+        "active_model": active_model,
+        "selected_provider": provider_sel,
         "endpoint": endpoint_health(settings),
-        "endpoint_api": str(getattr(settings, "analyst_endpoint_api", "generate")),
-        "model_revision": getattr(settings, "analyst_hf_revision", None),
+        "endpoint_api": endpoint_api,
+        "model_revision": model_revision,
         "prompt_registry": {
             "omi_analyst_active": reg.active_version("omi_analyst"),
             "behavior_analyst_active": reg.active_version("behavior_analyst"),

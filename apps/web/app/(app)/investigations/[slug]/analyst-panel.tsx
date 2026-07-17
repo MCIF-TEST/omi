@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Brain, Loader2, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
+import { ProbabilityBar } from '@/components/shared/probability-bar';
 import {
   apiClient,
   ApiError,
@@ -19,6 +20,16 @@ import {
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLLS = 10;
 
+// Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
+// URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.
+// Purely a read-only diagnostic surface over the existing forensic trace — it changes no data.
+function verificationEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_OMI_VERIFY_MODE === '1') return true;
+  if (typeof window === 'undefined') return false;
+  const q = new URLSearchParams(window.location.search);
+  return q.has('verify') || q.has('debug');
+}
+
 /**
  * Minimum UI to exercise the Omi Analyst endpoint (Sprint 001).
  * POST -> 503 (disabled) | 202 (generating -> poll) | 200 (assessment).
@@ -28,6 +39,7 @@ const MAX_POLLS = 10;
 export function AnalystPanel({ slug }: { slug: string }) {
   const [assessment, setAssessment] = useState<AnalystAssessment | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [disabled, setDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +65,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
         if (r.status === 'ready' && r.assessment) {
           setAssessment(r.assessment);
           setProvider(r.provider ?? null);
+          setGeneratedAt(r.generated_at ?? null);
           setPending(false);
           return;
         }
@@ -122,6 +135,10 @@ export function AnalystPanel({ slug }: { slug: string }) {
         <AssessmentView a={assessment} />
       )}
 
+      {assessment && verificationEnabled() && (
+        <VerificationPanel a={assessment} provider={provider} generatedAt={generatedAt} />
+      )}
+
       {error && (
         <p className="mt-3 text-xs text-danger bg-danger/10 border border-danger/40 rounded-sm px-3 py-2 font-mono">
           {error}
@@ -131,12 +148,100 @@ export function AnalystPanel({ slug }: { slug: string }) {
   );
 }
 
-function pct(x: number): string {
-  return `${Math.round((x ?? 0) * 100)}%`;
-}
-
 function verdictLabel(v: string): string {
   return (VERDICT_LABELS as Record<string, string>)[v] ?? v;
+}
+
+// The corroboration methods, and which of them are DISCRIMINATIVE of coordination (a maximal
+// 'coordinated' read requires >=1 discriminative method AND single_axis_capped === false). Mirrors
+// the backend gate — surfaced here so the panel shows WHY a coordinated read is (or isn't) permitted.
+const METHOD_LABELS: Record<string, string> = {
+  fingerprint_cluster: 'fingerprint',
+  co_engagement: 'co-engagement',
+  co_tag: 'co-tag',
+  temporal_semantic: 'temporal+semantic',
+  style_match: 'style match',
+  age_cohort: 'age cohort',
+  reply_pods: 'reply pods',
+};
+const DISCRIMINATIVE_METHODS = new Set(['fingerprint_cluster', 'co_engagement', 'co_tag']);
+
+// The engine's corroboration state (echoed onto the assessment). Rendered as structured chips — the
+// discriminative methods that fired, plus the single-axis-cap and convergence flags — so the reader
+// can see the coordination gate directly instead of inferring it from prose.
+function CorroborationStrip({ corr }: { corr?: AnalystAssessment['corroboration'] }) {
+  if (!corr) return null;
+  const methods = corr.discriminative_methods ?? [];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap font-mono text-2xs">
+      <span className="uppercase tracking-wider text-fg-mute">Corroboration</span>
+      {methods.length > 0 ? (
+        methods.map((m) => (
+          <span
+            key={m}
+            className={`rounded-full border px-1.5 py-0.5 ${
+              DISCRIMINATIVE_METHODS.has(m)
+                ? 'border-accent/50 text-accent'
+                : 'border-border-1/60 text-fg-mute'
+            }`}
+          >
+            {METHOD_LABELS[m] ?? m}
+          </span>
+        ))
+      ) : (
+        <span className="text-fg-faint">no discriminative method fired</span>
+      )}
+      {corr.single_axis_capped && (
+        <span
+          className="rounded-full border border-tier-moderate/40 text-tier-moderate px-1.5 py-0.5"
+          title="One axis carried the score; the coordinated read is capped."
+        >
+          single-axis capped
+        </span>
+      )}
+      {corr.convergence && (
+        <span
+          className="rounded-full border border-border-1/60 text-fg-mute px-1.5 py-0.5"
+          title="Two or more independent detectors converged."
+        >
+          convergence
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Supplemental signals (e.g. AI-writing) — reported as neutral context that carries ZERO suspicion
+// weight. Surfaced as its own labeled block so it can never be mistaken for incriminating evidence.
+function SupplementalContext({ items }: { items?: { signal: string; note: string }[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <CardLabel className="mb-2">Context · zero suspicion weight</CardLabel>
+      <ul className="space-y-1.5">
+        {items.map((it, i) => (
+          <li key={i} className="text-xs text-fg-dim flex gap-2 leading-relaxed">
+            <span className="text-fg-mute">◇</span>
+            <span>
+              <span className="text-fg-mute font-mono">{it.signal}</span> — {it.note}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// The explicit legitimate-coordination hypothesis the analyst considered (precision-frontier
+// discipline). Present for coordination reads; surfaced verbatim from the structured field.
+function LegitimateHypothesis({ text }: { text?: string | null }) {
+  if (!text) return null;
+  return (
+    <div>
+      <CardLabel className="mb-2">Legitimate-coordination hypothesis</CardLabel>
+      <p className="text-xs text-fg-dim leading-relaxed">{text}</p>
+    </div>
+  );
 }
 
 // Whether Mistral actually authored this assessment. Prefer the explicit trace flag; fall back to the
@@ -146,6 +251,89 @@ function isModelBacked(a: AnalystAssessment): boolean {
   if (typeof a.investigation_trace?.model_backed === 'boolean') return a.investigation_trace.model_backed;
   const provider = a.governance?.provider ?? '';
   return provider.length > 0 && !/fallback|deterministic|floor/i.test(provider);
+}
+
+// ── Phase 5C: dev-only Production Verification panel ──────────────────────────────────────────────
+// A read-only diagnostic surface over the persisted forensic trace. It proves which gateway + model
+// served THIS investigation (or that the deterministic Floor stood in), whether validation passed, and
+// the latency/token/cost of the call. Gated by verificationEnabled(); never shown to normal users and
+// never alters any data. No secrets are present in the trace it reads.
+function fmtMs(v?: number | null): string {
+  return typeof v === 'number' ? `${Math.round(v)} ms` : '—';
+}
+function fmtCost(v?: number | null): string {
+  return typeof v === 'number' ? `$${v.toFixed(6)}` : '—';
+}
+function yn(v: boolean | undefined | null): string {
+  return v === true ? 'yes' : v === false ? 'no' : '—';
+}
+
+function VerificationPanel({
+  a, provider, generatedAt,
+}: { a: AnalystAssessment; provider: string | null; generatedAt: string | null }) {
+  const t = a.investigation_trace ?? {};
+  const aiBacked = t.model_backed === true;
+  const isOpenRouter = (t.provider ?? '').toLowerCase() === 'openrouter'
+    || /openrouter/i.test(provider ?? '');
+  const rows: [string, React.ReactNode][] = [
+    ['Provider', t.provider ?? provider ?? '—'],
+    ['Served model', t.served_model ?? t.requested_model ?? '—'],
+    ['Preset', t.openrouter_preset ?? '—'],
+    ['Protocol version', t.master_prompt_version ?? '—'],
+    ['Protocol hash', t.master_prompt_hash ?? '—'],
+    ['Schema id / version', `${t.canonical_schema_id ?? '—'} / v${(a as { schema_version?: number }).schema_version ?? '—'}`],
+    ['Model-backed', yn(t.model_backed)],
+    ['Request completed', yn(t.request_completed)],
+    ['JSON received', yn(t.json_received)],
+    ['Validation passed', yn(t.validation_passed)],
+    ['Governor verdict', t.governor_verdict ?? '—'],
+    ['Fallback used', yn(!aiBacked)],
+    ['Fallback reason', t.fallback_reason ?? '—'],
+    ['Latency', fmtMs(t.endpoint_latency_ms)],
+    ['Input tokens', t.input_tokens ?? '—'],
+    ['Output tokens', t.output_tokens ?? '—'],
+    ['Total tokens', t.total_tokens ?? '—'],
+    ['Estimated cost', fmtCost(t.endpoint_cost_usd)],
+    ['OpenRouter request id', t.endpoint_request_id ?? '—'],
+    ['HTTP status', t.response_status ?? '—'],
+    ['Endpoint error', t.endpoint_error ?? '—'],
+    ['Generated at', generatedAt ?? '—'],
+  ];
+  return (
+    <details className="mt-4 rounded-sm border border-dashed border-accent/40 bg-bg-elev-2/40 open:bg-bg-elev-2">
+      <summary className="cursor-pointer select-none list-none px-3 py-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2">
+          <span
+            className={`font-mono text-2xs tracking-wider uppercase rounded-full border px-2 py-0.5 ${
+              aiBacked
+                ? 'border-tier-low/50 text-tier-low bg-tier-low/10'
+                : 'border-tier-moderate/50 text-tier-moderate bg-tier-moderate/10'
+            }`}
+          >
+            {aiBacked
+              ? `🟢 AI Investigation (${isOpenRouter ? 'OpenRouter' : (t.provider ?? 'model')})`
+              : '🟡 Deterministic Floor'}
+          </span>
+          <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">
+            production verification
+          </span>
+        </span>
+        <span className="text-fg-faint text-2xs group-open:hidden">dev only</span>
+      </summary>
+      <div className="px-3 pb-3 overflow-x-auto">
+        <table className="w-full text-2xs font-mono">
+          <tbody>
+            {rows.map(([k, v]) => (
+              <tr key={k} className="border-t border-border-1/40">
+                <td className="py-1 pr-3 text-fg-mute uppercase tracking-wider whitespace-nowrap align-top">{k}</td>
+                <td className="py-1 text-fg-dim break-all">{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
 }
 
 function AssessmentView({ a }: { a: AnalystAssessment }) {
@@ -164,9 +352,28 @@ function AssessmentView({ a }: { a: AnalystAssessment }) {
             {verdictLabel(a.verdict)} · recommended
           </span>
           <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-            {pct(a.suspicion_probability)} suspicion · {a.confidence_band} confidence
+            {a.confidence_band} confidence
           </span>
+          {a.coordination_label && (
+            <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-1/60 px-2.5 py-1 rounded-full bg-bg-elev-2">
+              coordination: {a.coordination_label}
+            </span>
+          )}
         </div>
+
+        {/* Suspicion probability — the echoed engine number, as a tier-colored bar (not bare text). */}
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute w-16 shrink-0">
+            suspicion
+          </span>
+          <ProbabilityBar
+            value={a.suspicion_probability}
+            tier={a.suspicion_tier as Tier}
+            className="flex-1"
+          />
+        </div>
+
+        <CorroborationStrip corr={a.corroboration} />
 
         {a.headline && <p className="text-sm text-fg leading-relaxed">{a.headline}</p>}
         {a.assessment && (
@@ -180,10 +387,15 @@ function AssessmentView({ a }: { a: AnalystAssessment }) {
 
         <PlainList label="Confidence & uncertainty" lead={a.confidence_rationale} items={a.uncertainty} />
         <PlainList label="What would change this" items={a.what_would_change_this} />
+        <SupplementalContext items={a.supplemental_context} />
+        <LegitimateHypothesis text={a.legitimate_hypothesis} />
       </div>
 
       {/* ── DOMAIN REASONING (six views over the ONE comprehensive response) ── */}
-      <DomainReasoning sections={a.comprehensive_sections} />
+      <DomainReasoning
+        sections={a.comprehensive_sections}
+        validation={a.comprehensive_validation}
+      />
 
       {a.governance && (
         <p className="text-2xs font-mono text-fg-mute flex items-center gap-1.5 flex-wrap">
@@ -234,7 +446,13 @@ const DOMAIN_PANELS: { key: keyof ComprehensiveSections; title: string }[] = [
 // The six per-domain reasoning sections of the single comprehensive Mistral response. Each panel is a
 // pure view over the already-loaded assessment — expanding a panel triggers NO request (no per-panel
 // inference). Sections the model left empty are shown as "no reasoning provided" rather than hidden.
-function DomainReasoning({ sections }: { sections?: ComprehensiveSections }) {
+function DomainReasoning({
+  sections,
+  validation,
+}: {
+  sections?: ComprehensiveSections;
+  validation?: AnalystAssessment['comprehensive_validation'];
+}) {
   const present = DOMAIN_PANELS.filter(({ key }) => sections?.[key] !== undefined);
   if (present.length === 0) return null;
   return (
@@ -244,16 +462,30 @@ function DomainReasoning({ sections }: { sections?: ComprehensiveSections }) {
       </CardLabel>
       <div className="space-y-1.5">
         {present.map(({ key, title }) => (
-          <DomainPanel key={key} title={title} section={sections?.[key]} />
+          <DomainPanel
+            key={key}
+            title={title}
+            section={sections?.[key]}
+            unresolved={validation?.sections?.[key]?.unresolved}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function DomainPanel({ title, section }: { title: string; section?: ComprehensiveSection }) {
+function DomainPanel({
+  title,
+  section,
+  unresolved,
+}: {
+  title: string;
+  section?: ComprehensiveSection;
+  unresolved?: string[];
+}) {
   const text = section?.assessment?.trim();
   const citations = section?.citations ?? [];
+  const unresolvedSet = new Set(unresolved ?? []);
   return (
     <details className="group rounded-sm border border-border-1/60 bg-bg-elev-2/40 open:bg-bg-elev-2">
       <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs font-mono uppercase tracking-wider text-fg-mute flex items-center justify-between gap-2">
@@ -269,16 +501,39 @@ function DomainPanel({ title, section }: { title: string; section?: Comprehensiv
         )}
         {citations.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {citations.map((c, i) => (
-              <span key={i} className="font-mono text-2xs text-fg-mute border border-border-1/60 rounded-full px-1.5 py-0.5">
-                {c}
-              </span>
-            ))}
+            {citations.map((c, i) => {
+              const bad = unresolvedSet.has(c);
+              return (
+                <span
+                  key={i}
+                  title={bad ? 'This citation does not resolve against the evidence.' : undefined}
+                  className={`font-mono text-2xs rounded-full border px-1.5 py-0.5 ${
+                    bad
+                      ? 'text-danger border-danger/50 line-through'
+                      : 'text-fg-mute border-border-1/60'
+                  }`}
+                >
+                  {c}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
     </details>
   );
+}
+
+// Direction is echoed from the detector contribution (raises / lowers / neutral). Prefer the
+// structured field; fall back to the column's tone only when the model omitted it.
+function directionMark(
+  direction: AnalystEvidenceItem['direction'],
+  tone: 'raise' | 'lower',
+): { sym: string; cls: string } {
+  const d = direction ?? (tone === 'raise' ? 'raises' : 'lowers');
+  if (d === 'raises') return { sym: '▲', cls: 'text-danger' };
+  if (d === 'lowers') return { sym: '▼', cls: 'text-accent' };
+  return { sym: '•', cls: 'text-fg-mute' };
 }
 
 function EvidenceList({
@@ -288,17 +543,26 @@ function EvidenceList({
     <div>
       <CardLabel className="mb-2">{label}</CardLabel>
       {items && items.length > 0 ? (
-        <ul className="space-y-1.5">
-          {items.map((it, i) => (
-            <li key={i} className="text-xs text-fg-dim flex gap-2 leading-relaxed">
-              <span className={tone === 'raise' ? 'text-danger' : 'text-accent'}>
-                {tone === 'raise' ? '▲' : '▼'}
-              </span>
-              <span>
-                <span className="text-fg-mute font-mono">{it.signal}</span> — {it.claim}
-              </span>
-            </li>
-          ))}
+        <ul className="space-y-2">
+          {items.map((it, i) => {
+            const mark = directionMark(it.direction, tone);
+            return (
+              <li key={i} className="text-xs text-fg-dim leading-relaxed">
+                <div className="flex gap-2">
+                  <span className={mark.cls}>{mark.sym}</span>
+                  <span>
+                    <span className="text-fg-mute font-mono">{it.signal}</span> — {it.claim}
+                  </span>
+                </div>
+                {/* impact = the detector's share of total score movement (echoed) — shown as a bar. */}
+                {typeof it.impact === 'number' && (
+                  <div className="mt-1 pl-5 max-w-[180px]">
+                    <ProbabilityBar value={it.impact} size="sm" />
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="text-xs text-fg-faint">None reported.</p>

@@ -8,15 +8,15 @@
 
 | | |
 |---|---|
-| **Last updated** | 2026-07-16 — **Phase 3B complete**: Master Analyst Protocol v1 authored & wired (this session) |
+| **Last updated** | 2026-07-16 — **Phases 3B, 4A, 5A, 5B complete** (this session): Master Analyst Protocol v1, canonical-response UI integration, OpenRouter readiness layer, and cutover verification |
 | **Repo** | `mcif-test/omi` (FastAPI `apps/api` + Next.js `apps/web` + `ml/analyst/` package) |
-| **Working branch** | `claude/master-analyst-protocol-v1-1u8tyk` (the live branch; already contains Phases 0–2 + this log — the earlier `claude/stoic-edison-2ueecx` work was folded in via a "PR #83" merge) |
-| **Current HEAD** | the Phase 3B commit on the working branch (advances with this change) |
-| **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B (+ this log); `main` itself still holds only Phase 0 |
-| **Verify command** | `cd apps/api && python -m pytest tests/ -q` |
-| **Latest green suite** | **1319 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore) |
-| **Master Analyst Protocol v1** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:ea25de153d030eae9a5f7eea`**; version `map/prompt:v1+constitution:v2+framework:v1+template:citmpl-v3`; ~27,300 chars ≈ 6,825 tokens |
-| **Next step** | **later — deploy the OpenRouter preset** (system prompt = the compiled Master Analyst Protocol v1 above) + select a model + controlled production cutover. **NOT authorized yet.** |
+| **Working branch** | `claude/master-analyst-protocol-v1-1u8tyk` (the live branch; already contains Phases 0–2 — the earlier `claude/stoic-edison-2ueecx` work was folded in via a "PR #83" merge) |
+| **Current HEAD** | the Phase 5B commit on the working branch (advances with this change) |
+| **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
+| **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
+| **Latest green suite** | backend **1337 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
+| **Master Analyst Protocol (production doctrine, V2 review pass)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:3cb7f337a1406b522865455a`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,007 chars ≈ 8,751 tokens; 14 constitution blocks. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text |
+| **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
 
@@ -174,7 +174,13 @@ also triggers `POST /v1/investigations/{slug}/analyst` on mount (safety-net gene
 | 2 | OpenRouter preset-based ReasoningProvider (behind the seam) | ✅ done | `c6981ea` |
 | 3A | Master Analyst Protocol evidence-semantics audit (read-only) | ✅ done | this log |
 | **3B** | **Author & wire Master Analyst Protocol v1** | ✅ **done** | this session (see §6, §9) |
-| later | Deploy OpenRouter preset + select model + production cutover | ⬜ not started | — |
+| 4 (audit) | Canonical Response Integration — end-to-end data-flow audit (read-only) | ✅ done | this session |
+| **4A** | **Canonical Response Integration — Analyst Panel surfaces structured fields** | ✅ **done** | this session (frontend only) |
+| 4B | AI Experience Integration (account pages, VerdictWidget seeding, viewer) | ⬜ not started — planned, not authorized | — |
+| 5 (audit) | OpenRouter Production Integration — provider-layer audit (read-only) | ✅ done | this session |
+| **5A** | **OpenRouter operational readiness layer (provider-aware diagnostics)** | ✅ **done** | this session (backend only) |
+| **5B** | **OpenRouter production cutover — code readiness + verification (NOT deployed)** | ✅ **done** | this session (§13 Render checklist) |
+| deploy | Operator: create preset `omi-master-v1`, set Render env, monitored cutover | ⬜ operator action — see §13 | — |
 | later | Model benchmarking (same package + instructions across models) | ⬜ not started | — |
 
 ---
@@ -310,7 +316,8 @@ fields; entity-only citation grain). **Content edits (4 files):**
 `BEHAVIORAL_ANALYST.md` (the last two moved only by the `constitution v2` / `framework_hash` propagation —
 `framework_hash` embeds `constitution_hash`). Base-prompt `.md` mirror updated by hand.
 
-**Compiled Master Analyst Protocol v1:** hash **`map:ea25de153d030eae9a5f7eea`**, version
+**Compiled Master Analyst Protocol v1 (as of Phase 3B — superseded by the final-doctrine pass, see header/§13):**
+hash **`map:ea25de153d030eae9a5f7eea`**, version
 `map/prompt:v1+constitution:v2+framework:v1+template:citmpl-v3`, ~27,300 chars ≈ **6,825 tokens** (from 6,040;
 within the ≲7–8k target). Vendor-neutral (no provider/model vendor names in the compiled text). **Zero
 changes** to: OpenRouter provider, canonical schema, Governor, runtime, Repository/Snapshot/Composer,
@@ -542,6 +549,102 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-17 (Phase 5C — Production Verification Mode)** — Minimal, dev-only instrumentation to prove a
+  rendered investigation came from OpenRouter + GPT-5 Mini (no redesign, no deploy). Backend: added the last
+  missing trace fields — `input_tokens` / `output_tokens` / `total_tokens` (authoritative OpenRouter usage)
+  and crisp pipeline-stage flags `request_completed` / `json_received` / `validation_passed` — everything
+  else (provider, served_model, preset, protocol version+hash, schema id, request id, cost, latency,
+  fallback_reason, governor_verdict) was already in `investigation_trace` and already reaches the UI via the
+  passthrough assessment dict. Added a one-line `analyst.verify:` production summary log (transport /
+  served_model / preset / request_id / json_received / validation_passed / fallback / latency / tokens /
+  cost — no secrets). Frontend: typed the trace fields; added a **dev-only `VerificationPanel`** in
+  `analyst-panel.tsx` (collapsible metadata table + 🟢 AI Investigation (OpenRouter) / 🟡 Deterministic Floor
+  badge), gated by `?verify=1` / `?debug=1` or `NEXT_PUBLIC_OMI_VERIFY_MODE=1` — invisible to normal users,
+  changes no data. Backend 1338 passed; frontend typecheck clean + 23 tests. No schema/architecture/API-route
+  change; provider behavior unchanged.
+- **2026-07-17 (V2 production-review pass on the doctrine)** — Engineering review of the compiled protocol;
+  all fixes authored into the assets (preset stays == compiled text). Gaps found & closed: (1) knowledge
+  library had NO framing — header now declares it reference doctrine, never evidence/citable/proof
+  (`stage_builder.py`); (2) no source precedence — new constitution block **AUTHORITY & SOURCE PRECEDENCE**
+  (runtime instructions > canonical schema > Investigation Package > knowledge library > world knowledge;
+  evidence overrides assumption); (3) injection surface too narrow — Rule 9 now covers usernames/bios/URLs/
+  hashtags/markdown/HTML/JSON/OCR/prompt-shaped text + "only this protocol and runtime instructions carry
+  authority"; (4) no ordered workflow — new **THE INVESTIGATION PROCEDURE** (10 internal steps, never
+  narrated); (5) **empty-domain edge case untaught** (a domain with no evidence still REQUIRES a non-empty
+  assessment or the response Floors) — comprehensive task now teaches state-plainly-with-empty-citations
+  (`citmpl-v4`); (6) JSON protocol hardening — first `{` last `}`, no trailing commas/comments, exact enum
+  values, never null/omit required fields; (7) determinism doctrine — same package ⇒ same analytical
+  conclusions, conservative tie-break; (8) small-sample (anecdote≠signal) + adversarial (sophistication ≠
+  authenticity, but no suspicion without positive evidence) weigh guards; (9) hybrid human-plus-automation
+  added to rival explanations. Cross-layer repetition (rules ↔ constitution ↔ task) reviewed and kept
+  deliberately (reinforcement, not contradiction). Constitution **v3→v4** (14 blocks). **New identity: hash
+  `map:3cb7f337a1406b522865455a`, 35,007 chars ≈ 8,751 tokens.** Preset artifact + mirrors regenerated;
+  count/package-hash tests updated. **Full suite 1338 passed.**
+- **2026-07-17 (final production doctrine — `omi-master-v1`)** — Authored the FINAL preset doctrine INTO the
+  repository assets (never a divergent hand-authored copy — the preset must equal the compiled protocol or the
+  recorded `master_prompt_hash` lies). Additive content only: base prompt gained the multi-discipline
+  investigator identity, "not classifying people / not moderating / not deciding truth", a **HOW TO INVESTIGATE
+  (method)** section (survey-all-before-judging, rival explanations incl. genuine human / AI-assisted / casual
+  & business automation / spam network / sockpuppet / coordinated influence / unknown, disconfirmation-seeking,
+  strength-and-independence updating, correlation≠coordination / similarity≠automation / popularity≠manipulation
+  / virality≠fraud, absence-matters), weighted-never-counted + contradictory/missing-lowers-confidence weigh
+  rules, hypotheses-are-lenses-not-output-values decide rule, and a **BEFORE YOU ANSWER** self-check. Constitution
+  **v2→v3**: counter-evidence gains "ideology/language/style/profile/username/topic never evidence of automation";
+  coordination gains organic-synchrony discipline; output-formatting gains "never explain the schema". Every
+  Phase-3B rule/anchor preserved; still vendor-neutral, zero council/specialist terms; ALL 10 absolute rules
+  intact. **New compiled identity: hash `map:a1f03d32e194c90796e695e7`, version constitution:v3, 30,733 chars ≈
+  7,683 tokens.** New paste-ready, drift-guarded artifact **`ml/analyst/omi_master_v1_preset.txt`** +
+  `omi_master_v1_preset.json` (generated by `prompts/export.py`; test-enforced byte-identical to the compiled
+  text). Mirrors regenerated; package_hash test updated. **Full suite 1338 passed, 1 warning.**
+- **2026-07-16 (token budget)** — Raised `analyst_config.json` `decoding.max_new_tokens` **2048 → 16000**
+  (the runtime sends it as the request `max_tokens`). Sized for GPT-5 Mini reasoning + the full 7-section
+  ComprehensiveAssessment JSON; a cap, not a reservation, so no cost waste. Resolves the Phase 5B top risk
+  (truncation → Floor). Added a wire-level assertion in `test_openrouter_production_cutover`. Full suite 1337
+  passed. No architecture/behavior change beyond the config value.
+- **2026-07-16 (Phase 5B — cutover readiness)** — Verified the OpenRouter production path end-to-end for
+  preset `omi-master-v1` + GPT-5 Mini (`openai/gpt-5-mini`) WITHOUT deploying or sending a live call. Audit:
+  the transport (provider/endpoint/auth/model/preset/parse/errors) is complete; the only remaining HF-active
+  assumption was a cosmetic log target in `analyst.maybe_autogenerate` — made provider-aware (task 2). New
+  `tests/test_openrouter_production_cutover.py` (11): production preset config reaches the request (model
+  `@preset/omi-master-v1`, user-only, `response_format` json_schema, ONE inference); GPT-5 Mini slug reaches
+  the request (direct + layered); valid response validates → persists in the exact UI-consumed shape;
+  forensic identity + served_model; API key never leaks; and graceful degradation to the Floor for malformed
+  JSON, invalid schema, empty response, timeout, HTTP 5xx, connection error (each forensically visible, no
+  repair inference). **Full suite 1337 passed, 1 warning.** No architecture/prompt/schema/frontend change.
+  Cutover is env-only (§13). **Top pre-cutover risk: the `max_new_tokens=2048` output budget vs GPT-5 Mini
+  reasoning+JSON (truncation → Floor)** — flagged for an operator token-budget decision + a monitored first run.
+- **2026-07-16 (Phase 5 audit + 5A)** — **Audit** (read-only): traced InvestigationPackage → Master
+  Analyst Protocol → OpenRouter provider → HTTP → response → canonical validation → Governor →
+  persistence → frontend across all 14 named dimensions. Finding: the OpenRouter *transport* path is
+  code-complete and provider-agnostic (`runtime.py:infer` is provider-aware; `require_hf_token` does NOT
+  block OpenRouter; `load_analyst_config` degrades to a bundled local mirror with no HF token — no hidden
+  HF dependency). Gaps were operational: HF-only readiness/status/integrity + logging, and missing
+  served-model provenance. **Phase 5A** (backend, observability only — no cutover, no preset, no key use,
+  no production request): made `runtime_status`/`runtime_path` (`analyst.py`), `system_health`/
+  `endpoint_health` (`trace.py`), and `provider_status` (`model_providers/config.py`) provider-aware —
+  OpenRouter readiness (preset/model + `OPENROUTER_API_KEY` **presence only**), `ready_for_live_model` /
+  `ready_for_live_openrouter` alongside the preserved `ready_for_live_qwen`; `endpoint_health` reports
+  OpenRouter config **without probing** (`reachable: None`). Provider-aware `_assess_core` logging. Recorded
+  the gateway-**served_model** in `investigation_trace` (capture-based; runtime.py untouched). Kept
+  `provider` = active provider (legacy semantics) and added `selected_provider` = config. New
+  `tests/test_openrouter_readiness.py` (7 tests: HF backward-compat, OpenRouter ready/blocked, no-network
+  guarantee, served_model provenance). **Full suite 1326 passed, 1 warning.** Provider behavior, inference,
+  schema, Governor, and frontend unchanged. Next: Phase 5B (model selection/validation + preset deploy +
+  monitored cutover — not authorized).
+- **2026-07-16 (Phase 4 audit + 4A)** — **Audit** (read-only): traced ComprehensiveAssessment → Governor →
+  persistence → API → frontend. Finding: the backend already emits the FULL structured assessment
+  (`payload_json.analyst_assessment_v1`, served via `AnalystResponse.assessment: dict` passthrough) with
+  nothing dropped; the gap is frontend under-consumption (one consumer, `analyst-panel.tsx`; 5 structured
+  fields unsurfaced; `corroboration` untyped). **Phase 4A** (frontend only): (Stage 1) added `corroboration`
+  + extended `comprehensive_validation` (per-section citation resolution) to `AnalystAssessment` in
+  `apps/web/lib/api.ts`; (Stage 2) surfaced the previously-unrendered structured fields in the Analyst Panel
+  — corroboration gate (discriminative methods + single-axis-cap + convergence), `coordination_label`,
+  `legitimate_hypothesis`, `supplemental_context`, and per-domain unresolved-citation marking; (Stage 3)
+  replaced plain-text numerics with existing primitives — `ProbabilityBar` for `suspicion_probability` and
+  per-evidence `impact`, real `direction` arrows (`TierBadge` already in use). `ConfidenceBand` deliberately
+  NOT used (the assessment carries `confidence_band` as an enum, not a numeric — feeding it would fabricate a
+  confidence %). No new viz systems, no layout/IA change; account pages / viewer / VerdictWidget untouched
+  (those are Phase 4B). Frontend `typecheck` clean; **23/23 frontend tests pass**. Backend untouched.
 - **2026-07-16 (Phase 3B)** — Authored & wired the **Master Analyst Protocol v1** (hash
   `map:ea25de153d030eae9a5f7eea`, ~6,825 tokens). Base prompt → single Lead Investigator at investigation
   grain, Rule 10 defers to the canonical schema; constitution → single-investigator `_GLOBAL`, entity-only
@@ -558,3 +661,53 @@ Canonical-schema obedience · 22 Final QC.
   outline, environment/tooling, config/env-var reference, and a first-actions checklist. HEAD `50d4566`, suite 1318 passed.
 - **2026-07-15** — Created the program log. Phases 0–2 complete and pushed (`19e8491`, `9b17401`, `c6981ea`). Phase 3A
   evidence-semantics audit complete (read-only). Next: Phase 3B (author Master Analyst Protocol v1) — awaiting authorization.
+
+---
+
+## 13. Phase 5B — Render production cutover checklist (operator; NOT executed by code)
+
+The code is cutover-ready and provider-agnostic; production activation is env configuration + one preset.
+Nothing here is applied automatically — an operator performs it in Render + the OpenRouter dashboard.
+
+**A. Create the OpenRouter preset `omi-master-v1`** (OpenRouter dashboard):
+- System prompt = paste **`ml/analyst/omi_master_v1_preset.txt`** VERBATIM (the committed, drift-guarded
+  artifact; byte-identical to `compile_master_analyst_protocol()['text']`). Expected hash
+  **`map:3cb7f337a1406b522865455a`** (see `ml/analyst/omi_master_v1_preset.json`) — Omi records this in every
+  trace; it cannot verify remote content. If a preset was already created from an earlier hash, replace its
+  system prompt with the current artifact.
+- Model = **GPT-5 Mini** (`openai/gpt-5-mini`).
+- Set the preset's output-token budget high enough for a full 7-section ComprehensiveAssessment **plus**
+  GPT-5 Mini reasoning tokens (see risk below).
+
+**B. Render environment variables** (backend service):
+
+| Variable | Value | Required |
+|---|---|---|
+| `OMI_ANALYST_ENABLED` | `true` | ✅ (else deterministic Floor only) |
+| `OMI_ANALYST_PROVIDER` | `openrouter` | ✅ (flips HF → OpenRouter) |
+| `OMI_OPENROUTER_PRESET` | `omi-master-v1` | ✅ (preset carries system prompt + model) |
+| `OPENROUTER_API_KEY` | *(secret)* | ✅ (env only — never a settings field/committed) |
+| `OMI_OPENROUTER_MODEL` | *(unset)* | ⬜ leave unset — the preset defines GPT-5 Mini; set only to override |
+| `OMI_OPENROUTER_STRUCTURED_OUTPUT` | `true` (default) | ⬜ set `false` only if GPT-5 Mini/OpenRouter rejects strict json_schema (local validation still runs) |
+| `OMI_OPENROUTER_BASE_URL` | default `https://openrouter.ai/api/v1/chat/completions` | ⬜ |
+| `OMI_OPENROUTER_REFERER` / `OMI_OPENROUTER_TITLE` | dashboard attribution | ⬜ optional |
+| `OMI_ANALYST_ENDPOINT_URL`, `HF_TOKEN` | — | ⬜ NOT needed on the OpenRouter path (safe to leave unset) |
+
+**C. Verify readiness (no live call):** `GET /v1/investigations/analyst/status` →
+`ready_for_live_model: true`, `active_provider: "openrouter"`, `runtime_path.blockers: []`;
+`GET /v1/investigations/analyst/integrity` → `system_health.active_provider: "openrouter-model"`,
+`endpoint.provider: "openrouter"` (`reachable: null` = not probed, expected).
+
+**D. Monitored first investigation:** run ONE real scan; confirm `investigation_trace.model_backed == true`,
+`provider == "openrouter"`, `served_model == "openai/gpt-5-mini"`, `governor_verdict == permit`,
+`comprehensive_structurally_valid == true`, and a non-null `endpoint_cost_usd`. A `model_backed: false`
+means it fell to the Floor — read `investigation_trace.endpoint_error` / `response_status`.
+
+**Rollback:** set `OMI_ANALYST_PROVIDER=huggingface` (or `OMI_ANALYST_ENABLED=false`) — instant, no redeploy of code.
+
+**Token budget — RESOLVED.** `analyst_config.json` `decoding.max_new_tokens` is now **16000** (was 2048). The
+runtime sends this as the request `max_tokens`; it is a CAP (billing is on tokens actually generated, not the
+cap), sized to comfortably fit GPT-5 Mini reasoning tokens + the full 7-section ComprehensiveAssessment JSON
+(~2.5k) with headroom we do not expect to reach — so truncation → Floor is no longer a material risk. Governs
+both paths (harmless for HF). A wire-level test (`test_openrouter_production_cutover`) asserts the budget reaches
+the request.

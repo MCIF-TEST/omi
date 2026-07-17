@@ -1,0 +1,14 @@
+{
+  "generated_by": "app.reasoning.prompts.export.master_preset_manifest",
+  "intended_model": "openai/gpt-5-mini",
+  "manifest_version": "v1",
+  "preset_name": "omi-master-v1",
+  "protocol": {
+    "chars": 35007,
+    "hash": "map:3cb7f337a1406b522865455a",
+    "name": "omi_master_analyst_protocol",
+    "version": "map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4"
+  },
+  "source_of_truth": "app.reasoning.prompts.master_protocol.compile_master_analyst_protocol (do not hand-edit)",
+  "usage": "Paste omi_master_v1_preset.txt VERBATIM as the preset's system prompt in the OpenRouter dashboard. In preset mode the per-investigation request sends ONLY the Investigation Package as the user message; the preset supplies these instructions. The trace records protocol.hash as the content Omi expects the preset to hold."
+}

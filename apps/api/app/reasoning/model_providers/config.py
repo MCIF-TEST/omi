@@ -45,8 +45,20 @@ def provider_status(settings: Any | None = None) -> dict:
     endpoint = getattr(settings, "analyst_endpoint_url", None)
     token_present = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
     enabled = bool(getattr(settings, "analyst_enabled", False))
+    # Provider-aware readiness. HF stays exactly as before (``ai_specialist_ready``); OpenRouter needs a
+    # preset OR model + OPENROUTER_API_KEY (presence only, never the value). ``model_provider_ready`` is
+    # the provider-aware answer for whichever provider is selected.
+    provider_sel = str(getattr(settings, "analyst_provider", "huggingface") or "huggingface").lower()
+    or_preset = getattr(settings, "openrouter_preset", None)
+    or_model = getattr(settings, "openrouter_model", None)
+    or_configured = bool(or_preset or or_model)
+    or_key_present = bool(os.environ.get("OPENROUTER_API_KEY"))
+    ai_specialist_ready = bool(enabled and endpoint and token_present)
+    openrouter_ready = bool(enabled and or_configured and or_key_present)
+    model_provider_ready = openrouter_ready if provider_sel == "openrouter" else ai_specialist_ready
     return {
         "analyst_enabled": enabled,
+        "selected_provider": provider_sel,
         "endpoint_configured": bool(endpoint),
         "hf_token_present": token_present,
         "model": getattr(settings, "analyst_model_id", None) or _DEFAULT_MODEL,
@@ -54,7 +66,13 @@ def provider_status(settings: Any | None = None) -> dict:
         "revision": getattr(settings, "analyst_hf_revision", None),
         "timeout_seconds": float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
         "max_retries": int(getattr(settings, "analyst_max_retries", 2) or 2),
-        "ai_specialist_ready": bool(enabled and endpoint and token_present),
+        "openrouter_configured": or_configured,
+        "openrouter_preset_configured": bool(or_preset),
+        "openrouter_model_configured": bool(or_model),
+        "openrouter_api_key_present": or_key_present,
+        "ai_specialist_ready": ai_specialist_ready,      # kept for backward compatibility (HF path)
+        "openrouter_ready": openrouter_ready,
+        "model_provider_ready": model_provider_ready,
         "governor": "mandatory",
         "deterministic_floor": "always-on",
     }
