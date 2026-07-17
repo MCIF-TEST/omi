@@ -267,6 +267,59 @@ def _components_from_payload(payload: dict, impl) -> list[dict]:
     return out
 
 
+def _commenters_by_author_ref(payload: dict) -> dict[str, dict]:
+    """Reverse map: the pseudonymous account ref the model reasons over (``_ref(handle)``) -> the real
+    commenter row. Lets an aliased per-account assessment be joined back to identity + the engine numbers
+    it must echo. Covers the video commenters + a focus account when present."""
+    out: dict[str, dict] = {}
+    video = payload.get("video") or {}
+    for c in (video.get("commenters") or []):
+        handle = c.get("handle")
+        if handle:
+            out[_ref(handle)] = c
+    focus = payload.get("focus_account") or video.get("focus_account")
+    if isinstance(focus, dict) and focus.get("handle"):
+        out.setdefault(_ref(focus["handle"]), focus)
+    return out
+
+
+def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
+    """Echo join: pair each model-authored per-account assessment (keyed by alias) with the account's
+    real identity + the deterministic engine's tier/probability (which the model NEVER emits). Aliases
+    are resolved through the reversible legend; an item whose alias does not resolve to a known commenter
+    is kept but marked ``resolved: False`` (never dropped — the presentation layer flags it)."""
+    items = (raw_obj or {}).get("commenter_assessments")
+    if not isinstance(items, list):
+        return []
+    accounts = legend.to_manifest().get("accounts", {})     # alias -> author_ref
+    by_ref = _commenters_by_author_ref(payload)
+    joined: list[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        alias = it.get("ref")
+        author_ref = accounts.get(alias) or (legend.resolve(alias) if alias else None)
+        commenter = by_ref.get(author_ref) if author_ref else None
+        row: dict = {
+            "ref": alias,
+            "assessment": it.get("assessment"),
+            "citations": it.get("citations") or [],
+            "resolved": commenter is not None,
+        }
+        if commenter is not None:
+            # Engine-owned, echoed (never model-fabricated) — identity + the authoritative suspicion read.
+            row["handle"] = commenter.get("handle")
+            row["external_id"] = commenter.get("external_id")
+            row["suspicion_tier"] = commenter.get("tier")
+            row["suspicion_probability"] = (
+                commenter.get("coordination_adjusted_probability")
+                if commenter.get("coordination_adjusted_probability") is not None
+                else commenter.get("overall_probability")
+            )
+        joined.append(row)
+    return joined
+
+
 def build_bundle(payload: dict, *, ref: str, platform: str, impl, prior_context: list | None = None) -> dict:
     scan = {
         "overall_probability": payload.get("overall_probability") or 0.0,
@@ -593,6 +646,11 @@ def _assess_core(
             k: v for k, v in (inference.raw_obj or {}).items() if k in ci_assets.section_keys
         }
         governed["comprehensive_validation"] = sections_report
+        # Per-account (per-commenter) reasoning: echo-join the model's aliased assessments back to real
+        # identity + the engine's tier/probability (the model never emits a per-account number). Overwrites
+        # the raw passthrough with the enriched, presentation-ready list. Empty when the model emitted none.
+        governed["commenter_assessments"] = _join_commenter_assessments(
+            inference.raw_obj, investigation_legend, payload)
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
         governed["ai_package"] = ai_package.provenance()

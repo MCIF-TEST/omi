@@ -50,6 +50,11 @@ COMPREHENSIVE_SECTION_KEYS: tuple[str, ...] = (
     "narrative_reasoning", "coordination_reasoning", "campaign_reasoning",
 )
 
+# Optional per-account (per-commenter) reasoning array: one item per account alias in the evidence.
+# Model-generated analytical content (like the domain sections), but OPTIONAL — absent for channel-only
+# investigations with no accounts. Stable key.
+COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY = "commenter_assessments"
+
 # OmiSphere owns these — the model must NOT fabricate them; OmiSphere injects them AFTER canonical
 # validation (provenance/subject) or overwrites them (the echoed engine numbers). They are therefore NOT
 # required from the model in the canonical schema.
@@ -88,6 +93,30 @@ _SECTION_SCHEMA: dict = {
     },
 }
 
+# One per-account (per-commenter) assessment item. Echo discipline: the model provides ONLY the account
+# alias, its bounded probabilistic reasoning, and citations — never a suspicion number. OmiSphere joins
+# the engine's tier/probability + real identity from the alias legend AFTER validation, so the model
+# never fabricates a per-account score. Keyed to the aliases in the evidence's alias legend.
+_COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["ref", "assessment"],
+    "properties": {
+        "ref": {
+            "type": "string", "minLength": 1,
+            "description": "the account alias (e.g. A1) this assessment is about; MUST resolve in the alias legend",
+        },
+        "assessment": {
+            "type": "string", "minLength": 1,
+            "description": "bounded, probabilistic per-account reasoning over this account's evidence; behavior not persons",
+        },
+        "citations": {
+            "type": "array", "items": {"type": "string"},
+            "description": "evidence ids / aliases substantiating this account's assessment",
+        },
+    },
+}
+
 
 def _load_wrapper_schema() -> dict:
     """The existing analyst response schema (the ONE wrapper source of truth). Read from disk so the
@@ -113,6 +142,18 @@ def comprehensive_investigation_canonical_schema() -> dict:
     properties = dict(base_props)  # keep ALL wrapper props allowed (optional); engine/Omi fields permitted
     for key in COMPREHENSIVE_SECTION_KEYS:
         properties[key] = json.loads(json.dumps(_SECTION_SCHEMA))  # fresh copy per key
+    # Optional per-account reasoning array (one item per assessed commenter). Optional so channel-only
+    # investigations with no commenters never fail validation; the model is instructed to emit one item
+    # per account alias present in the evidence when accounts ARE present (see the output contract).
+    properties[COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY] = {
+        "type": "array",
+        "description": (
+            "per-account reasoning: one item per account alias in the evidence. Each item carries the "
+            "alias ref, a bounded probabilistic assessment, and citations — never a suspicion number "
+            "(OmiSphere joins the engine's tier/probability from the alias legend)."
+        ),
+        "items": json.loads(json.dumps(_COMMENTER_ASSESSMENT_ITEM_SCHEMA)),
+    }
 
     return {
         "$schema": base.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
@@ -149,6 +190,20 @@ def _render_output_contract(schema: dict) -> str:
     wrapper_required = [k for k in required if k not in COMPREHENSIVE_SECTION_KEYS]
     omi_injected = list(schema.get("omi_injected_fields", COMPREHENSIVE_OMI_INJECTED_FIELDS))
     echoed = list(schema.get("echoes_engine", COMPREHENSIVE_ECHOED_FIELDS))
+    props = schema.get("properties", {})
+    # The optional per-account reasoning array — instruct the model to emit it only when the schema
+    # carries it, so the contract text stays derived from the schema (never a hand-written drift source).
+    commenter_clause = ""
+    if COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY in props:
+        commenter_clause = (
+            f"OPTIONAL per-account reasoning ('{COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY}'): when the "
+            f"evidence contains account aliases, ALSO emit this array with ONE item per account alias — "
+            f"each an object with the alias 'ref' (an alias present in the alias legend), a non-empty "
+            f"probabilistic 'assessment' of that account's behavior, and a 'citations' array of evidence "
+            f"ids/aliases. Do NOT include a per-account suspicion number — OmiSphere joins the engine's "
+            f"tier/probability from the legend. Omit the array entirely only when the evidence has no "
+            f"accounts.\n"
+        )
     return (
         f"Emit exactly ONE JSON object valid against the Omi canonical comprehensive assessment schema "
         f"(schema_id: {schema.get('schema_id', COMPREHENSIVE_ASSESSMENT_SCHEMA_ID)}). It MUST contain "
@@ -160,6 +215,7 @@ def _render_output_contract(schema: dict) -> str:
         f"empty ONLY if confidence_rationale states no exculpatory signal was present.\n"
         f"REQUIRED reasoning domains (six first-class sections, each an object with a non-empty "
         f"'assessment' string and a 'citations' array of evidence ids/aliases): {', '.join(domains)}.\n"
+        f"{commenter_clause}"
         f"Do NOT produce Omi-owned system/provenance fields — OmiSphere injects these after validation and "
         f"you must not fabricate them: {', '.join(omi_injected)}. You MAY echo {', '.join(echoed)} from the "
         f"evidence, but OmiSphere overwrites them from the deterministic engine (echo discipline), and the "
@@ -292,6 +348,7 @@ def comprehensive_investigation_schema_hash() -> str:
 __all__ = [
     "COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION", "COMPREHENSIVE_INVESTIGATION_SCHEMA_REF",
     "COMPREHENSIVE_ASSESSMENT_SCHEMA_ID", "COMPREHENSIVE_SECTION_KEYS",
+    "COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY",
     "COMPREHENSIVE_OMI_INJECTED_FIELDS", "COMPREHENSIVE_ECHOED_FIELDS",
     "COMPREHENSIVE_ENGINE_OVERLAID_FIELDS", "COMPREHENSIVE_OMI_OWNED_WRAPPER_FIELDS",
     "COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK", "COMPREHENSIVE_INVESTIGATION_RESPONSE_CONTRACT",

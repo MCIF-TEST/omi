@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Brain, Loader2, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Brain, Loader2, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
@@ -12,6 +12,7 @@ import {
   type AnalystResponse,
   type AnalystAssessment,
   type AnalystEvidenceItem,
+  type CommenterAssessment,
   type ComprehensiveSection,
   type ComprehensiveSections,
   type Tier,
@@ -132,7 +133,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
             : 'The Omi Analyst’s structured reading of this investigation will appear here. It interprets the evidence the engine already produced; it never recomputes a score.'}
         </p>
       ) : (
-        <AssessmentView a={assessment} />
+        <AssessmentView a={assessment} slug={slug} />
       )}
 
       {assessment && verificationEnabled() && (
@@ -336,7 +337,7 @@ function VerificationPanel({
   );
 }
 
-function AssessmentView({ a }: { a: AnalystAssessment }) {
+function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   // Product-cutover rule: only Mistral-authored assessments render as AI reasoning. If the model was
   // not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
   // headline / assessment / evidence as though Mistral wrote it.
@@ -390,6 +391,9 @@ function AssessmentView({ a }: { a: AnalystAssessment }) {
         <SupplementalContext items={a.supplemental_context} />
         <LegitimateHypothesis text={a.legitimate_hypothesis} />
       </div>
+
+      {/* ── PER-ACCOUNT ASSESSMENTS (one AI reading per commenter, over the ONE response) ── */}
+      <CommenterAssessments items={a.commenter_assessments} slug={slug} />
 
       {/* ── DOMAIN REASONING (six views over the ONE comprehensive response) ── */}
       <DomainReasoning
@@ -521,6 +525,73 @@ function DomainPanel({
         )}
       </div>
     </details>
+  );
+}
+
+// Per-account (per-commenter) AI assessments from the ONE comprehensive response. Each card pairs the
+// model's per-account reasoning with the engine's echoed tier/probability (joined server-side — the model
+// never emits a per-account number). When the model produced none, an honest empty state is shown instead
+// of any deterministic fallback. `resolved: false` items (alias didn't map to a known commenter) are
+// summarized as a count rather than shown as fabricated identities.
+function CommenterAssessments({ items }: { items?: CommenterAssessment[]; slug: string }) {
+  const rows = items ?? [];
+  const resolved = rows.filter((r) => r.resolved);
+  const unresolvedCount = rows.length - resolved.length;
+
+  return (
+    <div className="border-t border-border-1/60 pt-4 space-y-2">
+      <CardLabel className="flex items-center gap-1.5">
+        <Users size={11} /> Per-account assessments{resolved.length > 0 ? ` · ${resolved.length}` : ''}
+      </CardLabel>
+
+      {resolved.length === 0 ? (
+        <p className="text-xs text-fg-faint leading-relaxed flex items-start gap-2">
+          <TriangleAlert size={13} className="mt-0.5 shrink-0 text-fg-mute" />
+          The AI did not return a per-account reading for this investigation — a large investigation can
+          exceed a single response.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {resolved.map((r) => (
+            <div
+              key={r.external_id ?? r.ref}
+              className="rounded-sm border border-border-1/60 bg-bg-elev-2/40 p-3 space-y-2"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-fg break-all">{r.handle ?? r.ref}</span>
+                {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
+                {typeof r.suspicion_probability === 'number' && (
+                  <span className="font-mono text-2xs text-fg-mute">
+                    {Math.round(r.suspicion_probability * 100)}%
+                  </span>
+                )}
+              </div>
+              {typeof r.suspicion_probability === 'number' && (
+                <ProbabilityBar value={r.suspicion_probability} tier={r.suspicion_tier} size="sm" />
+              )}
+              {r.assessment && (
+                <p className="text-xs text-fg-dim leading-relaxed whitespace-pre-line">{r.assessment}</p>
+              )}
+              {r.citations.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {r.citations.map((c, i) => (
+                    <span key={i} className="font-mono text-2xs rounded-full border border-border-1/60 text-fg-mute px-1.5 py-0.5">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {unresolvedCount > 0 && (
+            <p className="text-2xs text-fg-faint leading-relaxed">
+              {unresolvedCount} per-account assessment{unresolvedCount === 1 ? '' : 's'} referenced an
+              account alias that didn&apos;t resolve to a scanned commenter and {unresolvedCount === 1 ? 'was' : 'were'} omitted.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

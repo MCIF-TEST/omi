@@ -15,7 +15,7 @@
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1348 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
-| **Master Analyst Protocol (production doctrine, V2 review pass)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:3cb7f337a1406b522865455a`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,007 chars ≈ 8,751 tokens; 14 constitution blocks. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text |
+| **Master Analyst Protocol (production doctrine)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:751c0893993feabf3d85e479`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,531 chars; 14 constitution blocks. Now also instructs the optional per-account `commenter_assessments` array. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard for per-account output to take effect.** |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
@@ -549,6 +549,32 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-17 (Investigation UI → AI-only + per-account AI assessments)** — Two linked changes so the
+  saved-investigation page shows the OpenRouter reading, not the deterministic engine's presentation.
+  (1) **AI-only page** — removed the `SavedInvestigationViewer` (deterministic synthesis, commenter
+  list/detail, coordination rings, insights rail) + the hero's engine tier/probability; deleted the
+  orphaned `viewer.tsx`. The detection engine still runs underneath (it feeds the model the evidence +
+  the numbers the assessment echoes); only its UI is hidden. The live-scan `workspace.tsx` still uses
+  those components — untouched. (2) **Per-account AI assessments** — added an OPTIONAL
+  `commenter_assessments` array to the canonical `comprehensive_assessment_v1` schema (echo discipline:
+  the model emits only `ref` alias + `assessment` + `citations`; NEVER a per-account number). The output
+  contract now instructs it, so the compiled Master Analyst Protocol changed → **new preset hash
+  `map:751c0893993feabf3d85e479` (35,531 chars); the regenerated `omi_master_v1_preset.txt`/`.json` +
+  the HF template mirror were rebuilt and the operator must re-paste the preset into the OpenRouter
+  dashboard**. Backend: passthrough is automatic (the field is now schema-valid); `analyst.py` echo-joins
+  each aliased assessment back to the real commenter identity + the engine's tier/probability via the
+  reversible alias legend (`_join_commenter_assessments`), marking unresolved aliases `resolved:false`
+  rather than dropping them. Frontend: `CommenterAssessment` type + a per-account cards section in
+  `analyst-panel.tsx` (reuses `TierBadge`/`ProbabilityBar`) with an honest empty state when the model
+  returns none — no deterministic fallback. Verified with a mocked-transport capture (no live call):
+  the array validates, survives to the served assessment, and joins correctly; a response WITHOUT it
+  still validates (optional). Tests: `tests/test_commenter_assessments.py` (5), all drift/mirror/preset
+  tests green, frontend typecheck + 23 tests + lint clean. **Still pending (next increment):** a
+  per-account rescan-with-credits action to fill missing per-account assessments; expanding the evidence
+  budget so more commenters reach the one inference. Files: `apps/api/app/reasoning/prompts/
+  comprehensive_investigation_template.py`, `apps/api/app/reasoning/analyst.py`, `ml/analyst/
+  omi_master_v1_preset.{txt,json}`, `ml/analyst/hf_repo/prompts/comprehensive_investigation_prompt_template.json`,
+  `apps/web/lib/api.ts`, `apps/web/app/(app)/investigations/[slug]/{page.tsx,analyst-panel.tsx}` (+ deleted `viewer.tsx`).
 - **2026-07-17 (Phase 5E — OpenRouter transport verification)** — Transport-level instrumentation only; **no
   redesign, no behavior change, no deploy**. Added a START / OK / FAIL log lifecycle around the ONE model
   inference in `OpenRouterReasoningProvider.complete()` — START logs provider / endpoint / preset / model_ref

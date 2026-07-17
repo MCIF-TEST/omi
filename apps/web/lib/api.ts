@@ -685,6 +685,19 @@ export interface ComprehensiveSections {
   campaign_reasoning?: ComprehensiveSection;
 }
 
+// One per-account reasoning row from the comprehensive response, after the backend echo-join. `ref` is
+// the account alias the model cited; identity + engine numbers are joined server-side (echo discipline).
+export interface CommenterAssessment {
+  ref: string;
+  assessment: string;
+  citations: string[];
+  resolved: boolean;
+  handle?: string;
+  external_id?: string;
+  suspicion_tier?: Tier;
+  suspicion_probability?: number;
+}
+
 export interface AnalystAssessment {
   verdict: string;
   suspicion_tier: string;
@@ -716,6 +729,12 @@ export interface AnalystAssessment {
     model_revision?: string | null;
     trace_id?: string;
   };
+  // Per-account (per-commenter) reasoning from the ONE comprehensive response: the model authors the
+  // `assessment` + `citations` keyed by an account alias; OmiSphere echo-joins the real identity
+  // (`handle`, `external_id`) and the engine's `suspicion_tier`/`suspicion_probability` (never
+  // model-fabricated). `resolved` is false when the model cited an alias that didn't map to a known
+  // commenter — surfaced with a flag, never dropped. Empty/absent when the model produced none.
+  commenter_assessments?: CommenterAssessment[];
   // The six domain-reasoning sections of the single comprehensive Mistral response (present when the
   // comprehensive path produced them). Rendered as views over ONE inference — never fetched per panel.
   comprehensive_sections?: ComprehensiveSections;
