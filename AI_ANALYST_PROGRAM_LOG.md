@@ -549,6 +549,20 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-17 (Phase 5D — production infrastructure cutover)** — Deployment config only; **no application
+  logic changed**. Root cause of "zero OpenRouter requests" was the blueprint: `render.yaml` wired only the
+  legacy Hugging Face path and hard-coded `OMI_ANALYST_ENABLED='false'`, and never set `OMI_ANALYST_PROVIDER`
+  — so a fresh deploy defaulted to `huggingface` (`analyst.py:108`) and never dispatched OpenRouter
+  (`runtime.py:134`, `analyst.py:192`). Fixed the blueprint: API service now provisions
+  `OMI_ANALYST_ENABLED=true`, `OMI_ANALYST_PROVIDER=openrouter`, `OMI_OPENROUTER_PRESET=omi-master-v1`, and an
+  `OPENROUTER_API_KEY` secret placeholder (`sync:false`, no value); `OMI_OPENROUTER_MODEL` intentionally unset
+  (the preset selects GPT-5 Mini); the HF vars are demoted to a clearly-deprecated fallback (still present as
+  `sync:false` placeholders, no longer the default). `.env.example` gained the matching Omi Analyst
+  (OpenRouter) section. Validated (no deploy): `render.yaml` parses; with these values + a key,
+  `reasoning_provider()` → `openrouter`, `runtime_path` → `active_provider: openrouter`,
+  `ready_for_live_model: true`, `blockers: []`. Operator still supplies `OPENROUTER_API_KEY` in the dashboard
+  and creates the `omi-master-v1` preset (hash `map:3cb7f337a1406b522865455a`). Files: `render.yaml`,
+  `.env.example`.
 - **2026-07-17 (Phase 5C — Production Verification Mode)** — Minimal, dev-only instrumentation to prove a
   rendered investigation came from OpenRouter + GPT-5 Mini (no redesign, no deploy). Backend: added the last
   missing trace fields — `input_tokens` / `output_tokens` / `total_tokens` (authoritative OpenRouter usage)
