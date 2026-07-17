@@ -8,15 +8,15 @@
 
 | | |
 |---|---|
-| **Last updated** | 2026-07-16 — **Phase 3B complete**: Master Analyst Protocol v1 authored & wired (this session) |
+| **Last updated** | 2026-07-16 — **Phases 3B, 4A, 5A, 5B complete** (this session): Master Analyst Protocol v1, canonical-response UI integration, OpenRouter readiness layer, and cutover verification |
 | **Repo** | `mcif-test/omi` (FastAPI `apps/api` + Next.js `apps/web` + `ml/analyst/` package) |
-| **Working branch** | `claude/master-analyst-protocol-v1-1u8tyk` (the live branch; already contains Phases 0–2 + this log — the earlier `claude/stoic-edison-2ueecx` work was folded in via a "PR #83" merge) |
-| **Current HEAD** | the Phase 3B commit on the working branch (advances with this change) |
-| **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B (+ this log); `main` itself still holds only Phase 0 |
-| **Verify command** | `cd apps/api && python -m pytest tests/ -q` |
-| **Latest green suite** | **1319 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore) |
+| **Working branch** | `claude/master-analyst-protocol-v1-1u8tyk` (the live branch; already contains Phases 0–2 — the earlier `claude/stoic-edison-2ueecx` work was folded in via a "PR #83" merge) |
+| **Current HEAD** | the Phase 5B commit on the working branch (advances with this change) |
+| **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
+| **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
+| **Latest green suite** | backend **1337 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
 | **Master Analyst Protocol v1** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:ea25de153d030eae9a5f7eea`**; version `map/prompt:v1+constitution:v2+framework:v1+template:citmpl-v3`; ~27,300 chars ≈ 6,825 tokens |
-| **Next step** | **later — deploy the OpenRouter preset** (system prompt = the compiled Master Analyst Protocol v1 above) + select a model + controlled production cutover. **NOT authorized yet.** |
+| **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**); resolve the `max_new_tokens=2048` token-budget decision first. Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
 
@@ -179,7 +179,8 @@ also triggers `POST /v1/investigations/{slug}/analyst` on mount (safety-net gene
 | 4B | AI Experience Integration (account pages, VerdictWidget seeding, viewer) | ⬜ not started — planned, not authorized | — |
 | 5 (audit) | OpenRouter Production Integration — provider-layer audit (read-only) | ✅ done | this session |
 | **5A** | **OpenRouter operational readiness layer (provider-aware diagnostics)** | ✅ **done** | this session (backend only) |
-| 5B | Model selection + token-budget/structured-output validation + preset deploy + monitored cutover | ⬜ not started — planned, not authorized | — |
+| **5B** | **OpenRouter production cutover — code readiness + verification (NOT deployed)** | ✅ **done** | this session (§13 Render checklist) |
+| deploy | Operator: create preset `omi-master-v1`, set Render env, monitored cutover | ⬜ operator action — see §13 | — |
 | later | Model benchmarking (same package + instructions across models) | ⬜ not started | — |
 
 ---
@@ -547,6 +548,18 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-16 (Phase 5B — cutover readiness)** — Verified the OpenRouter production path end-to-end for
+  preset `omi-master-v1` + GPT-5 Mini (`openai/gpt-5-mini`) WITHOUT deploying or sending a live call. Audit:
+  the transport (provider/endpoint/auth/model/preset/parse/errors) is complete; the only remaining HF-active
+  assumption was a cosmetic log target in `analyst.maybe_autogenerate` — made provider-aware (task 2). New
+  `tests/test_openrouter_production_cutover.py` (11): production preset config reaches the request (model
+  `@preset/omi-master-v1`, user-only, `response_format` json_schema, ONE inference); GPT-5 Mini slug reaches
+  the request (direct + layered); valid response validates → persists in the exact UI-consumed shape;
+  forensic identity + served_model; API key never leaks; and graceful degradation to the Floor for malformed
+  JSON, invalid schema, empty response, timeout, HTTP 5xx, connection error (each forensically visible, no
+  repair inference). **Full suite 1337 passed, 1 warning.** No architecture/prompt/schema/frontend change.
+  Cutover is env-only (§13). **Top pre-cutover risk: the `max_new_tokens=2048` output budget vs GPT-5 Mini
+  reasoning+JSON (truncation → Floor)** — flagged for an operator token-budget decision + a monitored first run.
 - **2026-07-16 (Phase 5 audit + 5A)** — **Audit** (read-only): traced InvestigationPackage → Master
   Analyst Protocol → OpenRouter provider → HTTP → response → canonical validation → Governor →
   persistence → frontend across all 14 named dimensions. Finding: the OpenRouter *transport* path is
@@ -595,3 +608,50 @@ Canonical-schema obedience · 22 Final QC.
   outline, environment/tooling, config/env-var reference, and a first-actions checklist. HEAD `50d4566`, suite 1318 passed.
 - **2026-07-15** — Created the program log. Phases 0–2 complete and pushed (`19e8491`, `9b17401`, `c6981ea`). Phase 3A
   evidence-semantics audit complete (read-only). Next: Phase 3B (author Master Analyst Protocol v1) — awaiting authorization.
+
+---
+
+## 13. Phase 5B — Render production cutover checklist (operator; NOT executed by code)
+
+The code is cutover-ready and provider-agnostic; production activation is env configuration + one preset.
+Nothing here is applied automatically — an operator performs it in Render + the OpenRouter dashboard.
+
+**A. Create the OpenRouter preset `omi-master-v1`** (OpenRouter dashboard):
+- System prompt = the EXACT compiled Master Analyst Protocol: `compile_master_analyst_protocol()['text']`
+  (expected hash **`map:ea25de153d030eae9a5f7eea`** — Omi records this; it cannot verify remote content).
+- Model = **GPT-5 Mini** (`openai/gpt-5-mini`).
+- Set the preset's output-token budget high enough for a full 7-section ComprehensiveAssessment **plus**
+  GPT-5 Mini reasoning tokens (see risk below).
+
+**B. Render environment variables** (backend service):
+
+| Variable | Value | Required |
+|---|---|---|
+| `OMI_ANALYST_ENABLED` | `true` | ✅ (else deterministic Floor only) |
+| `OMI_ANALYST_PROVIDER` | `openrouter` | ✅ (flips HF → OpenRouter) |
+| `OMI_OPENROUTER_PRESET` | `omi-master-v1` | ✅ (preset carries system prompt + model) |
+| `OPENROUTER_API_KEY` | *(secret)* | ✅ (env only — never a settings field/committed) |
+| `OMI_OPENROUTER_MODEL` | *(unset)* | ⬜ leave unset — the preset defines GPT-5 Mini; set only to override |
+| `OMI_OPENROUTER_STRUCTURED_OUTPUT` | `true` (default) | ⬜ set `false` only if GPT-5 Mini/OpenRouter rejects strict json_schema (local validation still runs) |
+| `OMI_OPENROUTER_BASE_URL` | default `https://openrouter.ai/api/v1/chat/completions` | ⬜ |
+| `OMI_OPENROUTER_REFERER` / `OMI_OPENROUTER_TITLE` | dashboard attribution | ⬜ optional |
+| `OMI_ANALYST_ENDPOINT_URL`, `HF_TOKEN` | — | ⬜ NOT needed on the OpenRouter path (safe to leave unset) |
+
+**C. Verify readiness (no live call):** `GET /v1/investigations/analyst/status` →
+`ready_for_live_model: true`, `active_provider: "openrouter"`, `runtime_path.blockers: []`;
+`GET /v1/investigations/analyst/integrity` → `system_health.active_provider: "openrouter-model"`,
+`endpoint.provider: "openrouter"` (`reachable: null` = not probed, expected).
+
+**D. Monitored first investigation:** run ONE real scan; confirm `investigation_trace.model_backed == true`,
+`provider == "openrouter"`, `served_model == "openai/gpt-5-mini"`, `governor_verdict == permit`,
+`comprehensive_structurally_valid == true`, and a non-null `endpoint_cost_usd`. A `model_backed: false`
+means it fell to the Floor — read `investigation_trace.endpoint_error` / `response_status`.
+
+**Rollback:** set `OMI_ANALYST_PROVIDER=huggingface` (or `OMI_ANALYST_ENABLED=false`) — instant, no redeploy of code.
+
+**Top risk (token budget):** the request sends `max_tokens` from `analyst_config.json` `decoding.max_new_tokens`
+(**currently 2048**), and OpenRouter shallow-merge lets the request value override the preset. GPT-5 Mini is a
+reasoning model whose reasoning tokens consume that budget, so 2048 may truncate the JSON → canonical-invalid →
+Floor. **Decision required before cutover:** raise `decoding.max_new_tokens` (e.g. 4096–8000) in
+`ml/analyst/hf_repo/config/analyst_config.json` (governs both paths; harmless for HF) — deliberately NOT changed
+here (Phase 5B constraint: no optimization/tuning), so it is an explicit operator/eng decision.

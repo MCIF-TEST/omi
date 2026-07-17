@@ -942,7 +942,13 @@ def maybe_autogenerate(slug: str, user_id: int | None) -> bool:
         from app.core import background
         fut = background.submit(generate_and_persist, slug, user_id, False)
         scheduled = fut is not None
-        target = "remote-model" if getattr(settings, "analyst_endpoint_url", None) else "deterministic-floor"
+        # Provider-aware target — HF needs the endpoint; OpenRouter needs a preset or model. Log only.
+        if reasoning_provider(settings) == "openrouter":
+            _or_ok = bool(getattr(settings, "openrouter_preset", None)
+                          or getattr(settings, "openrouter_model", None))
+            target = "openrouter-model" if _or_ok else "deterministic-floor"
+        else:
+            target = "remote-model" if getattr(settings, "analyst_endpoint_url", None) else "deterministic-floor"
         logger.info("analyst.autogenerate: %s assessment for investigation slug=%s (target=%s)",
                     "scheduled" if scheduled else "could not schedule", slug, target)
         return scheduled
