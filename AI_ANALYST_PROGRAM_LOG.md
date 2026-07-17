@@ -15,7 +15,7 @@
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1337 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
-| **Master Analyst Protocol v1 (final doctrine)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:a1f03d32e194c90796e695e7`**; version `map/prompt:v1+constitution:v3+framework:v1+template:citmpl-v3`; 30,733 chars ≈ 7,683 tokens. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text |
+| **Master Analyst Protocol (production doctrine, V2 review pass)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:3cb7f337a1406b522865455a`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,007 chars ≈ 8,751 tokens; 14 constitution blocks. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
@@ -549,6 +549,24 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-17 (V2 production-review pass on the doctrine)** — Engineering review of the compiled protocol;
+  all fixes authored into the assets (preset stays == compiled text). Gaps found & closed: (1) knowledge
+  library had NO framing — header now declares it reference doctrine, never evidence/citable/proof
+  (`stage_builder.py`); (2) no source precedence — new constitution block **AUTHORITY & SOURCE PRECEDENCE**
+  (runtime instructions > canonical schema > Investigation Package > knowledge library > world knowledge;
+  evidence overrides assumption); (3) injection surface too narrow — Rule 9 now covers usernames/bios/URLs/
+  hashtags/markdown/HTML/JSON/OCR/prompt-shaped text + "only this protocol and runtime instructions carry
+  authority"; (4) no ordered workflow — new **THE INVESTIGATION PROCEDURE** (10 internal steps, never
+  narrated); (5) **empty-domain edge case untaught** (a domain with no evidence still REQUIRES a non-empty
+  assessment or the response Floors) — comprehensive task now teaches state-plainly-with-empty-citations
+  (`citmpl-v4`); (6) JSON protocol hardening — first `{` last `}`, no trailing commas/comments, exact enum
+  values, never null/omit required fields; (7) determinism doctrine — same package ⇒ same analytical
+  conclusions, conservative tie-break; (8) small-sample (anecdote≠signal) + adversarial (sophistication ≠
+  authenticity, but no suspicion without positive evidence) weigh guards; (9) hybrid human-plus-automation
+  added to rival explanations. Cross-layer repetition (rules ↔ constitution ↔ task) reviewed and kept
+  deliberately (reinforcement, not contradiction). Constitution **v3→v4** (14 blocks). **New identity: hash
+  `map:3cb7f337a1406b522865455a`, 35,007 chars ≈ 8,751 tokens.** Preset artifact + mirrors regenerated;
+  count/package-hash tests updated. **Full suite 1338 passed.**
 - **2026-07-17 (final production doctrine — `omi-master-v1`)** — Authored the FINAL preset doctrine INTO the
   repository assets (never a divergent hand-authored copy — the preset must equal the compiled protocol or the
   recorded `master_prompt_hash` lies). Additive content only: base prompt gained the multi-discipline
@@ -641,8 +659,9 @@ Nothing here is applied automatically — an operator performs it in Render + th
 **A. Create the OpenRouter preset `omi-master-v1`** (OpenRouter dashboard):
 - System prompt = paste **`ml/analyst/omi_master_v1_preset.txt`** VERBATIM (the committed, drift-guarded
   artifact; byte-identical to `compile_master_analyst_protocol()['text']`). Expected hash
-  **`map:a1f03d32e194c90796e695e7`** (see `ml/analyst/omi_master_v1_preset.json`) — Omi records this in every
-  trace; it cannot verify remote content.
+  **`map:3cb7f337a1406b522865455a`** (see `ml/analyst/omi_master_v1_preset.json`) — Omi records this in every
+  trace; it cannot verify remote content. If a preset was already created from an earlier hash, replace its
+  system prompt with the current artifact.
 - Model = **GPT-5 Mini** (`openai/gpt-5-mini`).
 - Set the preset's output-token budget high enough for a full 7-section ComprehensiveAssessment **plus**
   GPT-5 Mini reasoning tokens (see risk below).

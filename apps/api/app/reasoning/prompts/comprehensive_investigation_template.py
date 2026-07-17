@@ -35,7 +35,7 @@ from pathlib import Path
 
 from app.evidence.bundle import digest
 
-COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v3"
+COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v4"
 
 # The Lead-Investigator synthesis wrapper is DERIVED from the EXISTING analyst response schema — the one
 # wrapper source of truth — so the website response, the Governor validation, and the deterministic Floor
@@ -204,6 +204,10 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "rigor, named uncertainty, what would change the read, and a recommended verdict. Weight by "
     "evidence strength × corroboration; raise confidence only on INDEPENDENT cross-domain convergence; "
     "insufficient evidence is itself a valid conclusion.\n"
+    "ALL SIX reasoning domains are REQUIRED in every response — even when a domain has no evidence in "
+    "this investigation. For an evidence-less domain, state plainly in its 'assessment' that no evidence "
+    "of that kind was collected (or that it is insufficient to reason over) and leave its 'citations' "
+    "empty; never invent evidence to fill a domain and never omit the section.\n"
     "Accounts are referenced by aliases A1, A2, … and clusters by C1, C2, … (narratives N1, …); an "
     "alias legend resolves them, and you cite only those aliases. Some very large investigations are "
     "represented by evidence COVERAGE — a subset disclosed by structure (graph degree, bridges, cluster "

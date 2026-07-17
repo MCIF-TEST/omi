@@ -1,8 +1,8 @@
 {
   "catalog_version": "v1",
   "constitution": {
-    "hash": "cx:38c2b4c41ecaa7f418eb6381d8c8b3c2",
-    "version": "v3"
+    "hash": "cx:1daba783736e3274d4e8c4936e6baf94",
+    "version": "v4"
   },
   "counts": {
     "production_prompts": 1,
@@ -13,14 +13,14 @@
       "floor",
       "governor"
     ],
-    "hash": "sf:b912fa34289e0c8a239d3a8b1d852371",
+    "hash": "sf:ebd3eba0643393072e8329378c5fb91f",
     "note": "every specialist inherits the Specialist Intelligence Framework; governor + floor are code-backed (never prompt- or model-driven)",
     "profiles": 15,
     "version": "v1"
   },
   "generated_by": "app.reasoning.prompts.export.prompt_catalog",
   "production_prompt": {
-    "constitution_version": "v3",
+    "constitution_version": "v4",
     "constraints": [
       "evidence, not verdict \u2014 every claim traces to a provided evidence item; never fabricate",
       "probabilistic language only; never assert a verdict or move the engine number",
@@ -34,7 +34,7 @@
     "expected_output_contract": "analyst_assessment",
     "json_schema": "schema/analyst_response_schema.json",
     "key": "omi_analyst",
-    "prompt_hash": "ph:60b08fde29d986ff30d874fab85bd334",
+    "prompt_hash": "ph:1e8d50a7354ff628f31b48fe57434fb7",
     "published_asset": "prompts/analyst_system_prompt_v1.md",
     "reasoning_objectives": [
       "interpret detection evidence into a cited, probabilistic recommendation",
@@ -54,7 +54,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -64,7 +64,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Feed the Coordination and Temporal analysts raw behavioral context; they corroborate across accounts.",
           "Your findings are challenged by the Counter-Evidence analyst and weighed by the Judge."
@@ -180,7 +180,7 @@
       "mission": "Interpret a subject's behavioral signals into cited, probabilistic findings \u2014 what the behavior is consistent with, weighed both ways \u2014 without ever asserting a verdict.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:3e2c932059c9df6c3ca96d02a56d3129",
+      "prompt_hash": "ph:aaa985337e04746c1b1e4b0c07113c9b",
       "reasoning_rules": {
         "allowed": [
           "Map a signal's direction/impact to a probabilistic behavioral claim.",
@@ -200,7 +200,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "adjust confidence only; never move the number, verdict, or claims",
         "high confidence requires discriminative, non-single-axis corroboration",
@@ -209,7 +209,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Advises the Judge on the final confidence band.",
           "Cross-checks every Tier-1 specialist's confidence claims."
@@ -298,7 +298,7 @@
       "mission": "Audit the council's confidence. Ensure stated confidence matches evidence strength and quantity \u2014 flagging both over-confidence and under-confidence.",
       "output_kind": "critique",
       "outputs": "One JSON object: {\"critiques\":[{\"target\":\"<claim/overall>\",\"challenge\":\"<over- or under-confidence and why>\",\"recommended_band\":\"insufficient|low|moderate|high\",\"direction\":\"neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:6ed37f239e2bf238a126a84f883c8a8e",
+      "prompt_hash": "ph:efe65028f4cf11f95a002becbc9e59dd",
       "reasoning_rules": {
         "allowed": [
           "Map corroboration + quantity to an evidence-justified confidence band.",
@@ -316,7 +316,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -327,7 +327,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Builds on the Coordination analyst's cluster read and the Network analyst's structure.",
           "The Counter-Evidence analyst stress-tests the benign hypothesis; the Judge sets the label."
@@ -420,7 +420,7 @@
       "mission": "Assess a materialized campaign (a persisted cluster of accounts acting together) and test the legitimate-coordination hypothesis before any hostile conclusion.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:f616e94c23b0a144ff13de8a9c59d628",
+      "prompt_hash": "ph:dba945d01c20477909d44333bd339d15",
       "reasoning_rules": {
         "allowed": [
           "Treat high mean member authenticity as strong counter-evidence.",
@@ -439,7 +439,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -450,7 +450,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Consumes Behavior/Temporal/Language/Network findings as corroborating axes.",
           "Feeds the Campaign analyst (materialized clusters) and the Judge (coordination label)."
@@ -546,7 +546,7 @@
       "mission": "Determine whether accounts are acting together, and whether that coordination is inauthentic \u2014 the platform's core question \u2014 strictly through the corroboration gate.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:dce98c09f985eeeed63ce4f1756d1471",
+      "prompt_hash": "ph:6f7fb16a0a14190d1cc93235a4168c75",
       "reasoning_rules": {
         "allowed": [
           "Require a discriminative, non-single-axis method before any 'coordinated' reading.",
@@ -566,7 +566,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "counter-evidence is mandatory, not optional",
@@ -575,7 +575,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Directly critiques Behavior, Coordination, Narrative, Language, Network, and Campaign findings.",
           "The Judge must weigh your critiques before ruling; unrebutted critiques lower the verdict."
@@ -670,7 +670,7 @@
       "mission": "Be the council's devil's advocate. Actively build the strongest benign case for the subject and challenge every incriminating finding that the evidence does not uniquely support.",
       "output_kind": "critique",
       "outputs": "One JSON object: {\"critiques\":[{\"target\":\"<finding/claim challenged>\",\"challenge\":\"<why the evidence does not uniquely support it, or the benign alternative>\",\"direction\":\"lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:8c6723ceb00b1d0b02a5b4c90ed4ce10",
+      "prompt_hash": "ph:171364f77c46e92477c58c1b78d6e867",
       "reasoning_rules": {
         "allowed": [
           "Argue the benign explanation the evidence is equally consistent with.",
@@ -689,7 +689,7 @@
     {
       "citation_rules": "Every evidence_for / evidence_against item cites >=1 resolvable bundle id. A fabricated citation invalidates the ruling and ships the deterministic floor.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "echo the engine number; never recompute or move the score",
         "assign only the coordination label the corroboration gate permits",
@@ -700,7 +700,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Consumes and adjudicates every other specialist; the Counter-Evidence, Risk, and Calibration critiques directly shape verdict and confidence.",
           "Your ruling is the council's output and is validated by the mandatory Governor; the deterministic floor replaces you on any violation."
@@ -800,7 +800,7 @@
       "mission": "Adjudicate. Synthesize every specialist finding and critique into ONE cited, probabilistic, schema-valid ruling a human analyst can act on, cite, or overturn \u2014 echoing the engine number and honoring the corroboration gate.",
       "output_kind": "ruling",
       "outputs": "One schema-valid Omi Analyst assessment object (subject, verdict, suspicion_tier, suspicion_probability [echoed], confidence_band, confidence_rationale, headline, assessment, evidence_for[], evidence_against[], uncertainty[], what_would_change_this[], corroboration, and \u2014 off the account grain \u2014 coordination_label + legitimate_hypothesis). No prose outside the JSON object.",
-      "prompt_hash": "ph:23b99e89f480d3c28e68b3a291114a60",
+      "prompt_hash": "ph:5ae7a434c523d191bb5a074d2416b202",
       "reasoning_rules": {
         "allowed": [
           "Assign the strongest coordination label the corroboration gate permits \u2014 and no higher.",
@@ -820,7 +820,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -830,7 +830,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Corroborates the Narrative analyst on templated spread and the Coordination analyst on style_match clusters.",
           "The Counter-Evidence analyst will challenge weak style-only claims \u2014 pre-empt by gating."
@@ -925,7 +925,7 @@
       "mission": "Interpret linguistic and stylometric evidence \u2014 shared phrasing, templated text, copypasta, style matches \u2014 while respecting that style similarity is weak on its own.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:72b820d2d8324c1a5a6ccaacae816ea3",
+      "prompt_hash": "ph:c263e8fcb51b32e530935b5df382ba3f",
       "reasoning_rules": {
         "allowed": [
           "Assess whether phrasing overlap is coincidental (common phrases) or engineered (rare verbatim templates across many accounts).",
@@ -944,7 +944,7 @@
     {
       "citation_rules": "Emit NO evidence_refs. Memory has no citable id by design; that is the boundary that keeps the past from laundering into present proof.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "prior context is background, never proof, never cited",
         "emit no evidence ids \u2014 the memory boundary",
@@ -953,7 +953,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Orients every Tier-1 specialist and, especially, the Counter-Evidence and Campaign analysts (legitimate-coordination priors).",
           "The Judge treats your priors as context that calibrates, never as evidence that decides."
@@ -1042,7 +1042,7 @@
       "mission": "Retrieve and present relevant institutional memory as labeled background context \u2014 orienting the council without ever becoming proof.",
       "output_kind": "memory",
       "outputs": "One JSON object: {\"priors\":[{\"type\":\"<archetype/prior>\",\"label\":\"<short>\",\"influence\":\"supports|contradicts|neutral\",\"stability\":0.0,\"note\":\"institutional memory \u2014 background, never proof\"}],\"uncertainty\":[\"...\"]}. Emit no evidence_refs. Output only the JSON object.",
-      "prompt_hash": "ph:1680bf3b323ebacd6974d32b026735d0",
+      "prompt_hash": "ph:8741669e31d348b911bcf696fc3878dd",
       "reasoning_rules": {
         "allowed": [
           "Match the subject's signature to stored priors and rank by relevance and stability.",
@@ -1061,7 +1061,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -1071,7 +1071,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Feeds the Temporal analyst (creation timing) and Coordination analyst (age_cohort clusters).",
           "Long verified history is handed to the Counter-Evidence analyst as exculpatory."
@@ -1160,7 +1160,7 @@
       "mission": "Interpret account-metadata signals \u2014 creation timing, age cohorts, handle patterns, profile completeness, verification \u2014 as weak, corroborating context.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:6b9ba89f250bac854cf42d6c0934846e",
+      "prompt_hash": "ph:463dca796134ee3bab4e0f29ebb3b11f",
       "reasoning_rules": {
         "allowed": [
           "Flag synchronized account-creation bursts as a raising signal to be corroborated.",
@@ -1179,7 +1179,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -1189,7 +1189,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Hands the Language analyst templated-text evidence for stylometric corroboration.",
           "Shares the coordination picture with the Coordination and Campaign analysts."
@@ -1281,7 +1281,7 @@
       "mission": "Assess whether a message/narrative is spreading organically or being coordinated and amplified \u2014 reasoning over the narrative (message) grain, not the account grain.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:775557854898fdf675b1eb67919ba012",
+      "prompt_hash": "ph:fbf9d1ddea01ae545dd7ca5f57cb4cb3",
       "reasoning_rules": {
         "allowed": [
           "Weigh author breadth against templated repetition to gauge organic vs coordinated spread.",
@@ -1300,7 +1300,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -1310,7 +1310,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Supplies structure to the Coordination and Campaign analysts.",
           "The Temporal analyst adds timing to the graph edges."
@@ -1401,7 +1401,7 @@
       "mission": "Analyze the interaction graph between accounts \u2014 co-engagement, co-tagging, reply pods, fingerprint clusters \u2014 to reveal structure that single-account views miss.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:8f6ced833484e403fa87f828d23e50d9",
+      "prompt_hash": "ph:a54e9a8b6882d56f2b13ef79ad481f8a",
       "reasoning_rules": {
         "allowed": [
           "Weigh density, independence, and discriminative-method backing of the structure.",
@@ -1419,7 +1419,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "never move the engine number or verdict",
         "risk may only counsel caution / lower a read",
@@ -1428,7 +1428,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Advises the Judge on how much corroboration the consequence demands.",
           "Reinforces the Counter-Evidence analyst on the precision frontier."
@@ -1519,7 +1519,7 @@
       "mission": "Assess the decision risk around the read \u2014 the cost of a false positive vs a false negative, and the harm surface \u2014 WITHOUT inflating suspicion to justify caution.",
       "output_kind": "critique",
       "outputs": "One JSON object: {\"critiques\":[{\"target\":\"<the read/decision>\",\"challenge\":\"<risk consideration>\",\"direction\":\"neutral|lowers\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:928332a2b0d349d97bead07d4c5dfb13",
+      "prompt_hash": "ph:e396363c9f42049b5c59e684513aa5d1",
       "reasoning_rules": {
         "allowed": [
           "Argue that a high-stakes read (prominent legitimate group) requires more discriminative evidence.",
@@ -1537,7 +1537,7 @@
     {
       "citation_rules": "Cite only evidence ids present in the bundle (ev:/ko:/b:), copied exactly. Every claim carries >=1 resolvable evidence_ref. A fabricated id invalidates your whole output and hands the case to the deterministic floor. Never cite prior context.",
       "composes_constitution": true,
-      "constitution_version": "v3",
+      "constitution_version": "v4",
       "constraints": [
         "cite only provided bundle evidence ids; never fabricate",
         "prior context is background, never proof, never cited",
@@ -1547,7 +1547,7 @@
       ],
       "context_rules": "Structured evidence arrives as the projected Evidence Bundle (project_investigation_bundle); institutional memory arrives as prior_context (background, never proof, no citable id). Read both; cite only bundle evidence ids.",
       "dependencies": {
-        "constitution": "v3 (cx:38c2b4c41ecaa7f418eb6381d8c8b3c2)",
+        "constitution": "v4 (cx:1daba783736e3274d4e8c4936e6baf94)",
         "interacts_with": [
           "Adds timing to the Network analyst's edges and the Coordination analyst's clusters.",
           "Hands the Counter-Evidence analyst the event-driven benign explanation."
@@ -1639,7 +1639,7 @@
       "mission": "Interpret timing evidence \u2014 posting cadence, burst synchrony, scheduling regularity \u2014 and separate botnet-like synchronization from benign automation and organic bursts.",
       "output_kind": "finding",
       "outputs": "One JSON object: {\"findings\":[{\"signal\":\"<name>\",\"claim\":\"<probabilistic sentence>\",\"direction\":\"raises|lowers|neutral\",\"evidence_refs\":[\"ev:...\"]}],\"uncertainty\":[\"...\"]}. Output only the JSON object.",
-      "prompt_hash": "ph:8c05bd02e7b88da21c30e2084a790414",
+      "prompt_hash": "ph:2bee51e683eda7d5f36f37f8e5a23f15",
       "reasoning_rules": {
         "allowed": [
           "Treat tight synchrony across independent accounts as a raising signal to corroborate.",

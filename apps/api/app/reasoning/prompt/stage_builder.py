@@ -73,7 +73,9 @@ def assemble_stage_system(lp, tmpl: dict) -> str:
     return "\n\n".join([
         lp.system_prompt,
         "# REASONING & GOVERNANCE CONSTITUTION\n" + lp.constitution,
-        "# KNOWLEDGE LIBRARY\n" + json.dumps(lp.knowledge()[:_KNOWLEDGE_LIMIT], ensure_ascii=False, sort_keys=True),
+        "# KNOWLEDGE LIBRARY (reference doctrine — concepts, terminology, investigative context; "
+        "never evidence, never citable, never proof)\n"
+        + json.dumps(lp.knowledge()[:_KNOWLEDGE_LIMIT], ensure_ascii=False, sort_keys=True),
         tmpl["system_task"],
         "# OUTPUT CONTRACT\n" + tmpl["response_contract"],
     ]).strip()
