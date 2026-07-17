@@ -26,6 +26,7 @@ log, or the forensic capture.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import time
@@ -43,11 +44,43 @@ from .base import (
 )
 from .remote import _extract_message, extract_json, forensic_on, strip_thinking
 
+logger = logging.getLogger(__name__)
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 def _is_timeout(exc: BaseException | None) -> bool:
     return isinstance(exc, (TimeoutError, socket.timeout)) or "timed out" in str(exc or "").lower()
+
+
+def classify_transport_failure(exc: BaseException, status: int | None) -> str:
+    """Map a transport failure to one of the operational failure classes (Phase 5E). Derived from the
+    typed error + the HTTP status; never inspects response bodies for secrets."""
+    if isinstance(exc, ProviderTimeout):
+        return "timeout"
+    if isinstance(exc, ProviderProtocolError):
+        return "invalid_json"
+    if isinstance(exc, ProviderUnavailable):
+        return "not_configured"
+    if isinstance(status, int):
+        if status in (401, 403):
+            return "authentication"
+        if status == 429:
+            return "rate_limit"
+        if status == 404:
+            return "invalid_preset_or_model"
+        if status == 400:
+            return "invalid_request"
+        if 500 <= status < 600:
+            return "http_error"
+    msg = str(exc).lower()
+    if _is_timeout(exc):
+        return "timeout"
+    if "unreachable" in msg or "connection" in msg or "urlerror" in msg:
+        return "transport"
+    if "http" in msg:
+        return "http_error"
+    return "unexpected_response"
 
 
 @dataclass
@@ -147,6 +180,7 @@ class OpenRouterReasoningProvider:
         if self.capture is None:
             return
         self.capture["response_status"] = status
+        self.capture["response_bytes"] = len(raw)
         try:
             obj = json.loads(raw.decode("utf-8", "replace"))
         except Exception:  # noqa: BLE001
@@ -212,18 +246,44 @@ class OpenRouterReasoningProvider:
         headers = self._headers(token)
         self._capture_request(body, request)
 
+        # Transport-lifecycle logging (Phase 5E). Sizes/status/ids ONLY — never the API key
+        # (rides in the Authorization header, never logged), the prompt, or the investigation body.
+        structured_output = bool(self._response_format() is not None)
+        logger.info(
+            "openrouter.transport START provider=%s endpoint=%s preset=%s model_ref=%s "
+            "request_bytes=%d structured_output=%s",
+            self.name, self.base_url, self.preset, self._model_ref(), len(body), structured_output,
+        )
+
         t0 = time.perf_counter()
-        text, attempts = self._fetch(body, headers)
+        try:
+            text, attempts = self._fetch(body, headers)
+            if self.capture is not None:
+                self.capture["raw_text_pre_processing"] = (text or "")[:12000]
+            text = strip_thinking(text)
+            structured = extract_json(text) if request.response_format == "json" else None
+            if request.response_format == "json" and structured is None:
+                raise ProviderProtocolError("openrouter response was not a valid JSON object")
+        except BaseException as exc:  # noqa: BLE001 — classify + log, then re-raise unchanged
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            status = (self.capture or {}).get("response_status") if self.capture else None
+            logger.warning(
+                "openrouter.transport FAIL class=%s status=%s latency_ms=%.2f detail=%s",
+                classify_transport_failure(exc, status), status, latency_ms, type(exc).__name__,
+            )
+            raise
         latency_ms = (time.perf_counter() - t0) * 1000.0
+        cap = self.capture or {}
+        logger.info(
+            "openrouter.transport OK status=%s request_id=%s latency_ms=%.2f bytes_received=%s "
+            "attempts=%d completion=success",
+            cap.get("response_status"), cap.get("endpoint_request_id"), latency_ms,
+            cap.get("response_bytes"), attempts,
+        )
         if self.capture is not None:
-            self.capture["raw_text_pre_processing"] = (text or "")[:12000]
             self.capture["attempts"] = attempts
             self.capture["latency_ms"] = round(latency_ms, 2)
 
-        text = strip_thinking(text)
-        structured = extract_json(text) if request.response_format == "json" else None
-        if request.response_format == "json" and structured is None:
-            raise ProviderProtocolError("openrouter response was not a valid JSON object")
         served = (self.capture or {}).get("served_model") if self.capture else None
         return ReasoningResponse(
             text=text, model=served or self._model_ref(), revision=self.revision_of(),

@@ -78,23 +78,41 @@ services:
       - key: OMI_STRIPE_PRICE_ID
         sync: false
       # ---------------------------------------------------------------
-      # Omi Analyst — the reasoning layer (OFF by default).
+      # Omi Analyst — the reasoning layer. PRODUCTION DEFAULT: OpenRouter.
       # Interprets evidence the engine already produced; never touches
-      # detection / scoring / OmiScore. With the flag off (or no endpoint
-      # configured) the API still works: the /analyst route returns 503 and
-      # the in-process deterministic Floor backs every assessment.
+      # detection / scoring / OmiScore. If the ONE model inference cannot be
+      # made (API key missing, provider error, or invalid output) the API
+      # still works: the in-process deterministic Floor backs every
+      # assessment (graceful fallback — never an error).
       #
-      # To enable the Qwen-backed reasoning path:
-      #   1. Deploy an HF Inference Endpoint serving
-      #      Andrewexiga/omi-analyst-v1 (base Qwen/Qwen3-4B-Thinking-2507-FP8).
-      #   2. Set OMI_ANALYST_ENDPOINT_URL to that endpoint URL.
-      #   3. Set HF_TOKEN to a token with read access to the repo/endpoint.
-      #   4. Flip OMI_ANALYST_ENABLED to 'true'.
-      # If the endpoint is unset or unreachable the provider degrades to the
-      # deterministic Floor automatically (graceful fallback — never an error).
+      # Production path (OpenRouter): the comprehensive inference is routed
+      # through the `omi-master-v1` OpenRouter preset, which carries the
+      # compiled Master Analyst Protocol as its system prompt AND selects the
+      # model (currently GPT-5 Mini). The repository is the source of truth
+      # for the preset content; the preset is created once in the OpenRouter
+      # dashboard. To go live, supply OPENROUTER_API_KEY (secret; set the
+      # value in the dashboard, never committed). Then verify with
+      # GET /v1/investigations/analyst/status -> active_provider: openrouter,
+      # ready_for_live_model: true, blockers: [].
       # ---------------------------------------------------------------
       - key: OMI_ANALYST_ENABLED
-        value: 'false'
+        value: 'true'
+      - key: OMI_ANALYST_PROVIDER
+        value: 'openrouter'
+      - key: OMI_OPENROUTER_PRESET
+        value: 'omi-master-v1'
+      # Secret — set the value in the Render dashboard, never in this file.
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # OMI_OPENROUTER_MODEL is intentionally UNSET: the omi-master-v1 preset
+      # determines the model. Set it only to intentionally override the preset.
+      #
+      # --- Legacy Hugging Face path (DEPRECATED — no longer the default) ---
+      # Still supported as a fallback provider: to use it instead of
+      # OpenRouter, set OMI_ANALYST_PROVIDER=huggingface and provide
+      # OMI_ANALYST_ENDPOINT_URL + HF_TOKEN. These remain as unset
+      # (sync:false) placeholders and have NO effect while the provider is
+      # openrouter (the default above).
       - key: OMI_ANALYST_ENDPOINT_URL
         sync: false
       - key: OMI_ANALYST_HF_REVISION
