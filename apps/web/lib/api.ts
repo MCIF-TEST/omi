@@ -698,6 +698,24 @@ export interface CommenterAssessment {
   suspicion_probability?: number;
 }
 
+// Full-investigation completion status (Phase 5H): whether the AI reasoned over every commenter, and if
+// not, why + how much remains. Backend-computed (never model-generated); surfaced so the user always
+// knows whether the investigation is complete. `incomplete_kind`: truncated_output | missing_assessments
+// | omitted_input | null.
+export interface CompletionStatus {
+  complete: boolean;
+  finish_reason: string | null;
+  represented_commenters: number;
+  assessed_commenters: number;
+  missing_commenters: number;
+  omitted_input_commenters: number;
+  max_output_tokens: number | null;
+  output_tokens: number | null;
+  incomplete_kind: 'truncated_output' | 'missing_assessments' | 'omitted_input' | null;
+  reason: string;
+  estimated_remaining_commenters: number;
+}
+
 export interface AnalystAssessment {
   verdict: string;
   suspicion_tier: string;
@@ -735,6 +753,8 @@ export interface AnalystAssessment {
   // model-fabricated). `resolved` is false when the model cited an alias that didn't map to a known
   // commenter — surfaced with a flag, never dropped. Empty/absent when the model produced none.
   commenter_assessments?: CommenterAssessment[];
+  // Full-investigation completion status (Phase 5H): whether every commenter received AI reasoning.
+  completion?: CompletionStatus;
   // The six domain-reasoning sections of the single comprehensive Mistral response (present when the
   // comprehensive path produced them). Rendered as views over ONE inference — never fetched per panel.
   comprehensive_sections?: ComprehensiveSections;

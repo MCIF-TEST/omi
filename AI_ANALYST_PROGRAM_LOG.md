@@ -15,7 +15,7 @@
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1348 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
-| **Master Analyst Protocol (production doctrine)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:751c0893993feabf3d85e479`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,531 chars; 14 constitution blocks. Now also instructs the optional per-account `commenter_assessments` array. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard for per-account output to take effect.** |
+| **Master Analyst Protocol (production doctrine)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:5226c1bd2259be9caa5260fe`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,699 chars; 14 constitution blocks. Instructs COMPLETE per-account coverage: one CONCISE `commenter_assessments` item for EVERY account alias (no sampling). Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard for the new output contract to take effect.** |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
@@ -549,6 +549,37 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (Phase 5H — Full Investigation AI Coverage)** — Product philosophy shift: **investigation
+  quality over API cost**. The AI now reasons over the COMPLETE investigation — every commenter is
+  eligible, none sampled or silently omitted. Four mechanisms: **(1) Full evidence coverage** — raised the
+  upstream account ceiling `_MAX_ACCOUNTS 60→250` (+ `_MAX_COMMENT_SAMPLES 60→250`) and the model-facing
+  evidence budget (`BudgetConfig(total_tokens=120000)` for the comprehensive render), so every commenter
+  (up to ~150, with headroom) is carried into the evidence — `select_accounts` only spends what real rows
+  cost, so small investigations are unaffected. **(2) Dynamic completion budget** (`app/reasoning/
+  completion.py`) — replaces the fixed `max_new_tokens=16000` with `completion_budget(n) = clamp(base +
+  per_commenter·n, [floor, ceiling])` (3000 + 160·n, clamped [4000, 40000]); overrides
+  `config.decoding.max_new_tokens` per investigation → `ReasoningRequest.max_tokens`. Linear, so 300/500/
+  1000 need only a higher ceiling — no redesign. **(3) Completion verification** — captured OpenRouter
+  `finish_reason`; `verify_completion(...)` decides explicitly whether every shown commenter was assessed
+  and, if not, WHY (`truncated_output` when finish_reason=length | `missing_assessments` | `omitted_input`)
+  + estimated remaining work. Persisted as `assessment.completion` + trace fields (`finish_reason`,
+  `max_output_tokens`, `commenters_total`/`commenters_assessed`, `completion_complete`/`_incomplete_kind`).
+  **(4) No silent truncation** — an over-run investigation is MARKED incomplete with the reason + remaining,
+  never dropped; the per-account join is gated on `model_backed` so rejected model content never leaks.
+  Output structure: per-account `assessment` is CONCISE (schema `maxLength:600`) + the contract instructs
+  "one item for EVERY account alias, the narrative belongs in the executive/domain sections" → compiled
+  protocol changed, **new preset hash `map:5226c1bd2259be9caa5260fe` (35,699 chars); preset + HF mirror
+  regenerated; operator must re-paste**. Frontend: `CompletionStatus` type + a completion banner in the
+  per-account section (Complete · N assessed / Incomplete · reason + remaining). Verified (mocked transport,
+  no live call): 10 / 50 / 150 commenters → all represented (evidence_omitted=0) + all assessed + complete;
+  finish_reason=length → truncated_output with remaining; normal-stop-with-gap → missing_assessments; Floor
+  → no per-account leak + not-applicable. Tests: `tests/test_full_investigation_coverage.py` (13). Files:
+  `apps/api/app/reasoning/completion.py` (new), `analyst.py`, `comprehensive_investigation_analysis.py`,
+  `context/investigation.py`, `model_providers/openrouter.py`, `prompts/comprehensive_investigation_template.py`,
+  `ml/analyst/omi_master_v1_preset.{txt,json}` + HF mirror, `apps/web/lib/api.ts`,
+  `apps/web/app/(app)/investigations/[slug]/analyst-panel.tsx`. **Not yet implemented (by design):**
+  continuation for investigations beyond the single-inference ceiling (architecture leaves room — the
+  completion metadata records remaining work); per-account rescan-with-credits.
 - **2026-07-17 (Investigation UI → AI-only + per-account AI assessments)** — Two linked changes so the
   saved-investigation page shows the OpenRouter reading, not the deterministic engine's presentation.
   (1) **AI-only page** — removed the `SavedInvestigationViewer` (deterministic synthesis, commenter

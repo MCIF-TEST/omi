@@ -107,8 +107,10 @@ _COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
             "description": "the account alias (e.g. A1) this assessment is about; MUST resolve in the alias legend",
         },
         "assessment": {
-            "type": "string", "minLength": 1,
-            "description": "bounded, probabilistic per-account reasoning over this account's evidence; behavior not persons",
+            "type": "string", "minLength": 1, "maxLength": 600,
+            "description": "CONCISE (1-3 sentences), information-dense probabilistic reasoning over THIS "
+                           "account's evidence; behavior not persons. The detailed investigation narrative "
+                           "belongs in the executive assessment + domain sections, never repeated per account",
         },
         "citations": {
             "type": "array", "items": {"type": "string"},
@@ -196,13 +198,14 @@ def _render_output_contract(schema: dict) -> str:
     commenter_clause = ""
     if COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY in props:
         commenter_clause = (
-            f"OPTIONAL per-account reasoning ('{COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY}'): when the "
-            f"evidence contains account aliases, ALSO emit this array with ONE item per account alias — "
-            f"each an object with the alias 'ref' (an alias present in the alias legend), a non-empty "
-            f"probabilistic 'assessment' of that account's behavior, and a 'citations' array of evidence "
-            f"ids/aliases. Do NOT include a per-account suspicion number — OmiSphere joins the engine's "
-            f"tier/probability from the legend. Omit the array entirely only when the evidence has no "
-            f"accounts.\n"
+            f"COMPLETE per-account reasoning ('{COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY}'): when the "
+            f"evidence contains account aliases, emit this array with ONE item for EVERY account alias in "
+            f"the evidence — do not sample, rank, or omit accounts. Each item is an object with the alias "
+            f"'ref' (present in the alias legend), a CONCISE, information-dense probabilistic 'assessment' "
+            f"(1-3 sentences — the detailed narrative belongs in the executive assessment and domain "
+            f"sections, NOT repeated per account), and a 'citations' array of evidence ids/aliases. Do NOT "
+            f"include a per-account suspicion number — OmiSphere joins the engine's tier/probability from "
+            f"the legend. Omit the array entirely only when the evidence has no accounts.\n"
         )
     return (
         f"Emit exactly ONE JSON object valid against the Omi canonical comprehensive assessment schema "

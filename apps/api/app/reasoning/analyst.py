@@ -486,6 +486,15 @@ def _assess_core(
         config = impl.load_analyst_config(
             repo_id=settings.analyst_hf_repo, revision=settings.analyst_hf_revision,
         )
+        # Phase 5H — dynamic completion budget. Replace the fixed output-token cap with a value sized from
+        # THIS investigation: enough to give every commenter a concise per-account assessment plus the
+        # executive synthesis, clamped to a safe ceiling. Small investigations request little; a
+        # ~150-commenter investigation requests enough to finish. Overrides decoding.max_new_tokens without
+        # mutating the shared config dict (fresh copy on the instance).
+        from app.reasoning.completion import completion_budget
+        _commenter_count = len(((payload.get("video") or {}).get("commenters")) or [])
+        _completion_max_tokens = completion_budget(_commenter_count)
+        config.decoding = {**(config.decoding or {}), "max_new_tokens": _completion_max_tokens}
         spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,
                        "hash": spec.prompt_hash, "source": "registry"}
@@ -649,10 +658,31 @@ def _assess_core(
         # Per-account (per-commenter) reasoning: echo-join the model's aliased assessments back to real
         # identity + the engine's tier/probability (the model never emits a per-account number). Overwrites
         # the raw passthrough with the enriched, presentation-ready list. Empty when the model emitted none.
-        governed["commenter_assessments"] = _join_commenter_assessments(
-            inference.raw_obj, investigation_legend, payload)
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
+        # Only surface the model's per-account reasoning when the model output was ACCEPTED (not the Floor):
+        # a rejected candidate's raw_obj must never leak its per-account assessments to the UI.
+        governed["commenter_assessments"] = (
+            _join_commenter_assessments(inference.raw_obj, investigation_legend, payload)
+            if model_backed else [])
+        # Phase 5H — completion verification. Decide explicitly whether the AI reasoned over the COMPLETE
+        # investigation: did generation stop normally (vs hit the token ceiling), did every commenter shown
+        # to the model receive an assessment, was any commenter omitted upstream. Nothing is silently
+        # truncated — an incomplete investigation is MARKED incomplete, with the reason + remaining work.
+        from app.reasoning.completion import verify_completion
+        _total_commenters = len(((payload.get("video") or {}).get("commenters")) or [])
+        # Accounts actually SHOWN to the model (carried into the evidence package). Anything the upstream
+        # evidence budget could not carry is honestly counted as omitted input — never silently dropped.
+        _represented = int(pp.manifest.get("evidence_represented_accounts") or _total_commenters)
+        _represented = min(_represented, _total_commenters) if _total_commenters else _represented
+        _omitted_input = max(0, _total_commenters - _represented)
+        _assessed = sum(1 for r in governed["commenter_assessments"] if r.get("resolved"))
+        _completion = verify_completion(
+            model_backed=model_backed, finish_reason=capture.get("finish_reason"),
+            represented_commenters=_represented, assessed_commenters=_assessed,
+            omitted_input_commenters=_omitted_input, max_output_tokens=_completion_max_tokens,
+            output_tokens=(inference.tokens or {}).get("completion_tokens"))
+        governed["completion"] = _completion.to_dict()
         governed["ai_package"] = ai_package.provenance()
         governed["prompt_build"] = prompt_build
         # One correlated production trace for the single comprehensive investigation inference — reuses
@@ -690,6 +720,13 @@ def _assess_core(
             "master_prompt_version": _master.get("version"),
             "master_prompt_hash": _master.get("hash"),
             "canonical_schema_id": _schema_id,
+            # Phase 5H — completion budgeting + verification (full-investigation coverage).
+            "finish_reason": capture.get("finish_reason"),
+            "max_output_tokens": _completion_max_tokens,
+            "commenters_total": _total_commenters,
+            "commenters_assessed": _assessed,
+            "completion_complete": _completion.complete,
+            "completion_incomplete_kind": _completion.incomplete_kind,
             "endpoint_cost_usd": _usage.get("cost"),
             # Authoritative token usage reported by the gateway (OpenRouter `usage`), for production
             # verification + cost transparency. None on the Floor path (no billed generation).

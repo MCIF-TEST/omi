@@ -145,9 +145,11 @@ def test_production_preset_config_reaches_the_request_exactly():
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["name"] == COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
     assert body["stream"] is False
-    # The production output-token budget (analyst_config.json decoding.max_new_tokens) reaches the wire —
-    # comfortably high for GPT-5 Mini reasoning + the full 7-section JSON, so no truncation → Floor.
-    assert body["max_tokens"] >= 8000
+    # Phase 5H — the DYNAMIC completion budget reaches the wire: sized from this investigation's commenter
+    # count (2 here → the floor budget), enough to give every commenter a concise assessment + the full
+    # 7-section synthesis without truncation. Replaces the old fixed cap.
+    from app.reasoning.completion import completion_budget
+    assert body["max_tokens"] == completion_budget(len(_PAYLOAD["video"]["commenters"]))
     assert calls == 1                                              # exactly ONE inference
     # the Investigation Package evidence (normalized, aliased) reaches the provider as the user message
     assert "A1" in body["messages"][0]["content"]

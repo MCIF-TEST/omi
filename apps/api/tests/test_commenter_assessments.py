@@ -114,7 +114,7 @@ def test_schema_carries_optional_commenter_assessments_array():
 def test_output_contract_instructs_the_array():
     c = comprehensive_investigation_response_contract()
     assert COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY in c
-    assert "one item per account alias" in c.lower()
+    assert "every account alias" in c.lower()          # complete coverage — one item per account, no sampling
 
 
 # =========================================================================== #

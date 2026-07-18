@@ -13,6 +13,7 @@ import {
   type AnalystAssessment,
   type AnalystEvidenceItem,
   type CommenterAssessment,
+  type CompletionStatus,
   type ComprehensiveSection,
   type ComprehensiveSections,
   type Tier,
@@ -393,7 +394,7 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
       </div>
 
       {/* ── PER-ACCOUNT ASSESSMENTS (one AI reading per commenter, over the ONE response) ── */}
-      <CommenterAssessments items={a.commenter_assessments} slug={slug} />
+      <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
 
       {/* ── DOMAIN REASONING (six views over the ONE comprehensive response) ── */}
       <DomainReasoning
@@ -533,7 +534,37 @@ function DomainPanel({
 // never emits a per-account number). When the model produced none, an honest empty state is shown instead
 // of any deterministic fallback. `resolved: false` items (alias didn't map to a known commenter) are
 // summarized as a count rather than shown as fabricated identities.
-function CommenterAssessments({ items }: { items?: CommenterAssessment[]; slug: string }) {
+function CompletionBanner({ c }: { c?: CompletionStatus }) {
+  if (!c) return null;
+  if (c.complete) {
+    return (
+      <p className="text-2xs font-mono uppercase tracking-wider text-tier-low flex items-center gap-1.5">
+        <ShieldCheck size={11} className="shrink-0" />
+        Complete · all {c.assessed_commenters} commenter{c.assessed_commenters === 1 ? '' : 's'} assessed
+      </p>
+    );
+  }
+  return (
+    <div className="rounded-sm border border-tier-moderate/40 bg-tier-moderate/[0.07] px-3 py-2 flex items-start gap-2">
+      <TriangleAlert size={13} className="mt-0.5 shrink-0 text-tier-moderate" />
+      <div className="min-w-0">
+        <p className="text-2xs font-mono uppercase tracking-wider text-tier-moderate mb-0.5">
+          Incomplete · {c.assessed_commenters} of {c.represented_commenters + c.omitted_input_commenters} commenters assessed
+        </p>
+        <p className="text-xs text-fg-dim leading-relaxed">{c.reason}</p>
+        {c.estimated_remaining_commenters > 0 && (
+          <p className="text-2xs text-fg-faint mt-0.5">
+            ~{c.estimated_remaining_commenters} commenter{c.estimated_remaining_commenters === 1 ? '' : 's'} remaining.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CommenterAssessments({
+  items, completion,
+}: { items?: CommenterAssessment[]; completion?: CompletionStatus; slug: string }) {
   const rows = items ?? [];
   const resolved = rows.filter((r) => r.resolved);
   const unresolvedCount = rows.length - resolved.length;
@@ -543,6 +574,8 @@ function CommenterAssessments({ items }: { items?: CommenterAssessment[]; slug: 
       <CardLabel className="flex items-center gap-1.5">
         <Users size={11} /> Per-account assessments{resolved.length > 0 ? ` · ${resolved.length}` : ''}
       </CardLabel>
+
+      <CompletionBanner c={completion} />
 
       {resolved.length === 0 ? (
         <p className="text-xs text-fg-faint leading-relaxed flex items-start gap-2">
