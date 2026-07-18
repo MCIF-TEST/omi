@@ -15,7 +15,7 @@
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1348 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
-| **Master Analyst Protocol (production doctrine, AI-first + OMI score, contradiction-free)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:bc44b8a6876f1834550ad34b`**; **44,390 chars**; version `map/prompt:v1+constitution:v5+framework:v1+template:citmpl-v4`. Fully consistent AI-first doctrine end to end — the constitution (v5) and comprehensive task were aligned: NO echo language, NO Governor language anywhere in the compiled text (swept: 0 hits for governor/echo/never-recompute). The analyst produces its OWN single **OMI score** (`omi_score` 0–100) + tier. **Wire discipline: in preset mode only the evidence bundle (user message) is sent — the protocol lives in the OpenRouter preset; the compiled text exists locally only for the drift hash.** Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard.** |
+| **Master Analyst Protocol (production doctrine, AI-first + OMI score, contradiction-free)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:f1891bb057540e9929472133`**; **47,938 chars**; version `map/prompt:v1+constitution:v5+framework:v1+template:citmpl-v4`. Fully consistent AI-first doctrine end to end — the constitution (v5) and comprehensive task were aligned: NO echo language, NO Governor language anywhere in the compiled text (swept: 0 hits for governor/echo/never-recompute). The analyst produces its OWN single **OMI score** (`omi_score` 0–100) + tier. **Wire discipline: in preset mode only the evidence bundle (user message) is sent — the protocol lives in the OpenRouter preset; the compiled text exists locally only for the drift hash.** Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard.** |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
@@ -549,6 +549,32 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (AI-only scan flow + zero-request diagnosis)** — User report: a scan produced results but
+  zero OpenRouter requests. Diagnosis: (a) the "results" were the WORKSPACE's client-side heuristic
+  panels (the analyst runs in background and only shows on the investigation page); (b) the dispatch gate
+  needs THREE live env values (`OMI_ANALYST_ENABLED=true`, `OMI_ANALYST_PROVIDER=openrouter`,
+  `OPENROUTER_API_KEY`) — code defaults are enabled=False/provider=huggingface, so a service whose env
+  predates the blueprint change (or only has the key set) makes zero requests by design. Verify live via
+  `GET /v1/investigations/analyst/status`. Fixes: the scan workspace no longer renders ANY heuristic
+  results — it collects input, shows real job progress, and on completion redirects to the AI-only
+  investigation page (if you see results, they came from OpenRouter). Deleted the now-orphaned
+  `synthesis.tsx` / `commenter-list.tsx` / `commenter-detail.tsx` / `insights-rail.tsx`. AnalystPanel
+  poll window 20s → ~4min (the user lands mid-inference on large investigations). Drive-bys: fixed the
+  missing comma in `OMI_SUPER_ADMIN_EMAILS` (render.yaml, would have cost two admins their access);
+  branch rebased onto merged main (PRs #84–#87 merged by owner). Note: workspace batch continuation
+  ("Scan next N") was part of the removed heuristic panel — follow-up if wanted on the investigation page.
+
+- **2026-07-18 (Protocol: teach the input format + evidence→output mapping)** — Final tweak pass on
+  the base prompt: the model was never TOLD what the evidence package looks like. Added three sections:
+  **THE INVESTIGATION PACKAGE** (the nine titled sections of the ONE user message, in wire order, with
+  what each carries; empty section = reason about the absence, never invent); **HOW TO READ THE COMPACT
+  TABLES** (columns declared once, positional rows, nested signal/contribution tables, null = not
+  measured — never zero); **MAPPING EVIDENCE TO OUTPUT** (each section → its output field; one
+  commenter_assessments item per account ROW — aligned with the completion checker's
+  represented-accounts semantics; omitted accounts citable but need no item; emit wrapper → domains →
+  commenter_assessments last). Contract clause aligned (per-row, not per-alias). Preset + all mirrors +
+  md + manifests regenerated → **new hash `map:f1891bb057540e9929472133` (47,938 chars)**; sweep still
+  0 contradictions; pkg hash → `pkg:1978a6064c30374e49e61f8f`. Operator pastes this version.
 - **2026-07-18 (Contract polish — supplemental routing + anti-boilerplate)** — Two output-contract
   additions found on a final review pass: (1) supplemental signals (e.g. ai_writing) are now explicitly
   routed ONLY to `supplemental_context` (signal + neutral note; never evidence_for, never raising the
