@@ -15,7 +15,7 @@
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1348 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
-| **Master Analyst Protocol (production doctrine, V2 review pass)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:3cb7f337a1406b522865455a`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,007 chars ≈ 8,751 tokens; 14 constitution blocks. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text |
+| **Master Analyst Protocol (production doctrine, AI-first + OMI score, contradiction-free)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:bc44b8a6876f1834550ad34b`**; **44,390 chars**; version `map/prompt:v1+constitution:v5+framework:v1+template:citmpl-v4`. Fully consistent AI-first doctrine end to end — the constitution (v5) and comprehensive task were aligned: NO echo language, NO Governor language anywhere in the compiled text (swept: 0 hits for governor/echo/never-recompute). The analyst produces its OWN single **OMI score** (`omi_score` 0–100) + tier. **Wire discipline: in preset mode only the evidence bundle (user message) is sent — the protocol lives in the OpenRouter preset; the compiled text exists locally only for the drift hash.** Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard.** |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
@@ -549,6 +549,164 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (Contract polish — supplemental routing + anti-boilerplate)** — Two output-contract
+  additions found on a final review pass: (1) supplemental signals (e.g. ai_writing) are now explicitly
+  routed ONLY to `supplemental_context` (signal + neutral note; never evidence_for, never raising the
+  OMI score); (2) per-account assessments must be grounded in THAT account's specific evidence — never a
+  boilerplate sentence repeated across accounts. Preset + mirrors + manifests regenerated → **new hash
+  `map:bc44b8a6876f1834550ad34b` (44,390 chars)**; contradiction sweep still 0 hits; operator pastes this
+  version.
+- **2026-07-18 (Contradiction-free protocol + wire-discipline verification)** — Two asks. **(1) Verified
+  the master prompt is NOT sent to the API in preset mode** (already the architecture, now proven
+  directly + by test): `OpenRouterReasoningProvider._request_body` in preset mode sends ONLY the evidence
+  bundle as one user message (`model=@preset/omi-master-v1`; roles on the wire == ["user"]; the protocol
+  text never appears in the body). The compiled protocol is used locally ONLY to compute the
+  `master_prompt_hash` drift record. No code change needed. **(2) Regenerated the protocol
+  contradiction-free**: the constitution (bumped **v4 → v5**) and the comprehensive task still carried
+  the OLD echo/Governor doctrine alongside the new AI-first text — fixed at the source:
+  `global_constitution` rewritten (Governor preamble → structural validation; "ECHO THE ENGINE NUMBER" →
+  "YOU OWN THE OMI SCORE"); `evidence_semantics` echo bullets → engine measurements are INPUTS to weigh
+  (+ disambiguated the per-account engine omiscore column from the output `omi_score`);
+  `citation_rules` Governor-enforcement claim removed (discipline kept); `calibration_rules` anchor→weigh;
+  `governor_constraints` block retitled **STRUCTURAL VALIDATION** with a structural-only body (id kept
+  stable for the shadow-council composition); `output_formatting_rules` gained "completeness over
+  brevity — finish the entire object regardless of size". Comprehensive task section 7 (ECHO → assign
+  YOUR OMI score), section 3 (omiscore column disambiguation), and `_EVIDENCE_INSTRUCTION` (echo phrase →
+  YOUR omi_score) fixed. Contradiction sweep over the compiled preset: **0 hits** for governor / echo /
+  never-recompute. Tests updated: `test_ai_readiness` ×2 (ECHO → YOU OWN THE OMI SCORE + STRUCTURAL
+  VALIDATION), `test_investigation_summary_stage` pkg hash → `pkg:584c7d83403b565f006d5a35`. All mirrors +
+  manifests + preset regenerated. **New preset hash `map:2b37a903580594322767d47c` (44,024 chars,
+  constitution v5); operator must re-paste.**
+- **2026-07-18 (Master protocol regenerated + single OMI score, AI-first)** — Regenerated the whole Master
+  Analyst Protocol and consolidated the investigation to ONE analyst-produced score. **Base prompt
+  (`omi_analyst_v1.txt`) rewritten**: AI-first framing (the analyst IS the investigator; echo-discipline +
+  Governor language removed), a detailed **bot & coordination detection methodology** across six evidence
+  families (temporal, content/linguistic, network/coordination, profile/metadata, engagement/amplification,
+  narrative) grounded in the public research/practitioner literature (Botometer/BotOrNot feature families,
+  DARPA bot-detection challenge, Stanford Internet Observatory / EU DisinfoLab CIB frameworks, platform CIB
+  takedown methodology — cited as methodology, never as evidence), and the **OMI SCORE** doctrine.
+  **Schema (`analyst_response_schema.json` / `comprehensive_assessment_v1`)**: added required
+  analyst-produced **`omi_score`** (integer 0–100, the single composite authenticity-risk score; bands
+  0-24/25-49/50-74/75-100); `suspicion_tier` is its band (now model-produced); the legacy
+  `suspicion_probability` (the "inauthenticity score") is **DEPRECATED/optional** and dropped from the UI.
+  **Echo removed** (`COMPREHENSIVE_ECHOED_FIELDS=()`, echo overwrite deleted from `runtime._canonical_candidate`,
+  `analyst._DETERMINISTIC_ECHOED_FIELDS=("corroboration",)`, `_MODEL_GENERATED_FIELDS` gains omi_score +
+  suspicion_tier). **Output contract** now instructs the OMI score + carries a complete worked JSON
+  **EXAMPLE**. The deterministic Floor + the `omi_analyst` DeterministicAnalystProvider now also emit
+  `omi_score` (= overall_probability × 100) so the Floor path stays schema-valid. **New preset hash
+  `map:8d344b1b6f34a3485f0e4749` (43,149 chars); preset + HF mirror + `analyst_system_prompt_v1.md` +
+  manifests regenerated; operator must re-paste**. **Frontend**: `AnalystAssessment.omi_score`; the
+  investigation panel now shows the big **OMI score (0–100) + tier bar** in place of the inauthenticity
+  probability. Full backend suite driven back to green (23 test files' model-output helpers / assertions
+  migrated to omi_score); frontend typecheck + 23 tests + lint clean.
+- **2026-07-18 (End-to-end flow verification — YouTube/X → OpenRouter → UI)** — Added
+  `tests/test_end_to_end_openrouter_flow.py` (4 cases): proves (mocked transport, no live call) the whole
+  production path for BOTH platforms. A comprehensive scan payload (YouTube OR X — each platform's
+  commenters ride in the `video` container, read platform-agnostically) → evidence bundle → dispatched to
+  the `omi-master-v1` preset **only when `OPENROUTER_API_KEY` is present** (the Render variable; the ONE
+  outbound gate is `model_path AND token_ok` where `token_ok = bool(os.environ["OPENROUTER_API_KEY"])` for
+  the openrouter provider) → response parsed + structurally validated + model-backed → the exact UI fields
+  present (verdict / suspicion_tier / suspicion_probability / confidence_band / evidence_for/against /
+  comprehensive_sections / commenter_assessments / completion) with the platform preserved on
+  `subject.platform` and per-account AI results echo-joined to real handles. Key ABSENT → the gate does not
+  fire (0 requests) and the deterministic Floor backs the assessment gracefully. No secret leaks into the
+  served assessment. Verification only — no source change.
+- **2026-07-18 (AI-First refactor — Stage 1: investigation verdict path is structural-only)** — Product
+  pivot: OmiSphere is an AI-powered Social Authenticity Investigation Platform — the AI IS the
+  investigator; deterministic code prepares objective evidence. **Owner decisions (via AskUserQuestion):**
+  (1) Governor → **full removal, structural JSON validation only** — I flagged that this removes the
+  precision-frontier + anti-injection safety net (raw AI verdicts about real named accounts reach users
+  unchecked; prompt-injection via comment/bio text is no longer caught); proceeding per explicit
+  direction. (2) Deterministic scores → **hybrid**: judgments deleted from the investigation VERDICT path,
+  but still COMPUTED as evidence/priors + for other live features (account pages, campaigns, narratives,
+  OmiScore, benchmarks, ML) so those capabilities aren't gutted. Staged (each stage green): **Stage 1
+  (this)** — added a `schema_only` adjudication in `runtime.py`: the investigation's model output is
+  validated STRUCTURALLY (canonical schema + required fields + additionalProperties, already run in
+  `_canonical_candidate`) and accepted VERBATIM — no interpretive Governor gate (echo-guard S4 /
+  corroboration gate S5 / confidence S7 / policy/banned-phrase). Floor stands in only on a STRUCTURAL
+  fallback (no model output / schema-invalid). `analyst.py` investigation call switched
+  `judge_then_floor → schema_only`; a lightweight structural permit `ValidationTrace` keeps the
+  persistence/forensic plumbing intact. Echo of the engine number is KEPT for Stage 1 (removed in Stage 2).
+  Updated the 3 tests that encoded the removed Governor-gates-the-investigation invariant
+  (`test_analyst_runtime`, `test_runtime_convergence` ×2) to assert the AI-first behavior (investigation is
+  NOT interpretively gated; rich Floor preserved on structural fallback). Full backend suite **1366
+  passed**. **Remaining stages:** 2 = remove echo (AI owns suspicion; preset/schema tweak); 3 = Evidence
+  Compiler seam; 4 = physically delete the now-inert Governor module + its investigation tests (still used
+  by comment-analysis / commenter-history stages — those get structural checks too); 5 = confirm the
+  canonical AI JSON fully drives the UI, retire `governance`/`corroboration` display. Files:
+  `apps/api/app/reasoning/runtime.py`, `apps/api/app/reasoning/analyst.py`,
+  `apps/api/tests/{test_analyst_runtime,test_runtime_convergence}.py`.
+- **2026-07-18 (5H tuning — completion ceiling 40k → 100k)** — Raised `COMPLETION_CEILING_TOKENS`
+  40000 → 100000 (`app/reasoning/completion.py`) to observe REAL per-investigation output cost on live
+  runs before tuning down. Single-inference commenter capacity ~231 → ~606. It is a CEILING, not a
+  reservation — billing is on tokens actually generated — so this cannot raise cost on an investigation
+  that finishes early. `completion_budget(n)` still scales linearly (150→27000 unchanged; the ceiling now
+  binds only past ~606 commenters). Tests reference the constant symbolically (all green). Lower once real
+  cost data is in.
+- **2026-07-18 (Phase 5H — Full Investigation AI Coverage)** — Product philosophy shift: **investigation
+  quality over API cost**. The AI now reasons over the COMPLETE investigation — every commenter is
+  eligible, none sampled or silently omitted. Four mechanisms: **(1) Full evidence coverage** — raised the
+  upstream account ceiling `_MAX_ACCOUNTS 60→250` (+ `_MAX_COMMENT_SAMPLES 60→250`) and the model-facing
+  evidence budget (`BudgetConfig(total_tokens=120000)` for the comprehensive render), so every commenter
+  (up to ~150, with headroom) is carried into the evidence — `select_accounts` only spends what real rows
+  cost, so small investigations are unaffected. **(2) Dynamic completion budget** (`app/reasoning/
+  completion.py`) — replaces the fixed `max_new_tokens=16000` with `completion_budget(n) = clamp(base +
+  per_commenter·n, [floor, ceiling])` (3000 + 160·n, clamped [4000, 40000]); overrides
+  `config.decoding.max_new_tokens` per investigation → `ReasoningRequest.max_tokens`. Linear, so 300/500/
+  1000 need only a higher ceiling — no redesign. **(3) Completion verification** — captured OpenRouter
+  `finish_reason`; `verify_completion(...)` decides explicitly whether every shown commenter was assessed
+  and, if not, WHY (`truncated_output` when finish_reason=length | `missing_assessments` | `omitted_input`)
+  + estimated remaining work. Persisted as `assessment.completion` + trace fields (`finish_reason`,
+  `max_output_tokens`, `commenters_total`/`commenters_assessed`, `completion_complete`/`_incomplete_kind`).
+  Self-certification (expanded spec): `completion` also carries `stopped_on_token_limit`, `json_complete`
+  (structured JSON received AND not truncated), `schema_valid`, `governor_valid` — a `complete` verdict
+  requires all three plus zero coverage gap. **Performance metadata** (input/output tokens, completion
+  budget vs actual output size, latency, estimated cost, commenters analyzed/expected, completion status,
+  Governor result, schema result) is fully persisted in `investigation_trace` for diagnostics.
+  **(4) No silent truncation** — an over-run investigation is MARKED incomplete with the reason + remaining,
+  never dropped; the per-account join is gated on `model_backed` so rejected model content never leaks.
+  Output structure: per-account `assessment` is CONCISE (schema `maxLength:600`) + the contract instructs
+  "one item for EVERY account alias, the narrative belongs in the executive/domain sections" → compiled
+  protocol changed, **new preset hash `map:5226c1bd2259be9caa5260fe` (35,699 chars); preset + HF mirror
+  regenerated; operator must re-paste**. Frontend: `CompletionStatus` type + a completion banner exposing
+  every required state (Complete / Partial AI coverage + reason + remaining / AI still processing) with
+  completion statistics (analyzed/expected · budget vs actual output tokens · finish_reason), and the full
+  completion certification in the dev VerificationPanel. Verified (mocked transport,
+  no live call): 10 / 50 / 150 commenters → all represented (evidence_omitted=0) + all assessed + complete;
+  finish_reason=length → truncated_output with remaining; normal-stop-with-gap → missing_assessments; Floor
+  → no per-account leak + not-applicable. Tests: `tests/test_full_investigation_coverage.py` (13). Files:
+  `apps/api/app/reasoning/completion.py` (new), `analyst.py`, `comprehensive_investigation_analysis.py`,
+  `context/investigation.py`, `model_providers/openrouter.py`, `prompts/comprehensive_investigation_template.py`,
+  `ml/analyst/omi_master_v1_preset.{txt,json}` + HF mirror, `apps/web/lib/api.ts`,
+  `apps/web/app/(app)/investigations/[slug]/analyst-panel.tsx`. **Not yet implemented (by design):**
+  continuation for investigations beyond the single-inference ceiling (architecture leaves room — the
+  completion metadata records remaining work); per-account rescan-with-credits.
+- **2026-07-17 (Investigation UI → AI-only + per-account AI assessments)** — Two linked changes so the
+  saved-investigation page shows the OpenRouter reading, not the deterministic engine's presentation.
+  (1) **AI-only page** — removed the `SavedInvestigationViewer` (deterministic synthesis, commenter
+  list/detail, coordination rings, insights rail) + the hero's engine tier/probability; deleted the
+  orphaned `viewer.tsx`. The detection engine still runs underneath (it feeds the model the evidence +
+  the numbers the assessment echoes); only its UI is hidden. The live-scan `workspace.tsx` still uses
+  those components — untouched. (2) **Per-account AI assessments** — added an OPTIONAL
+  `commenter_assessments` array to the canonical `comprehensive_assessment_v1` schema (echo discipline:
+  the model emits only `ref` alias + `assessment` + `citations`; NEVER a per-account number). The output
+  contract now instructs it, so the compiled Master Analyst Protocol changed → **new preset hash
+  `map:751c0893993feabf3d85e479` (35,531 chars); the regenerated `omi_master_v1_preset.txt`/`.json` +
+  the HF template mirror were rebuilt and the operator must re-paste the preset into the OpenRouter
+  dashboard**. Backend: passthrough is automatic (the field is now schema-valid); `analyst.py` echo-joins
+  each aliased assessment back to the real commenter identity + the engine's tier/probability via the
+  reversible alias legend (`_join_commenter_assessments`), marking unresolved aliases `resolved:false`
+  rather than dropping them. Frontend: `CommenterAssessment` type + a per-account cards section in
+  `analyst-panel.tsx` (reuses `TierBadge`/`ProbabilityBar`) with an honest empty state when the model
+  returns none — no deterministic fallback. Verified with a mocked-transport capture (no live call):
+  the array validates, survives to the served assessment, and joins correctly; a response WITHOUT it
+  still validates (optional). Tests: `tests/test_commenter_assessments.py` (5), all drift/mirror/preset
+  tests green, frontend typecheck + 23 tests + lint clean. **Still pending (next increment):** a
+  per-account rescan-with-credits action to fill missing per-account assessments; expanding the evidence
+  budget so more commenters reach the one inference. Files: `apps/api/app/reasoning/prompts/
+  comprehensive_investigation_template.py`, `apps/api/app/reasoning/analyst.py`, `ml/analyst/
+  omi_master_v1_preset.{txt,json}`, `ml/analyst/hf_repo/prompts/comprehensive_investigation_prompt_template.json`,
+  `apps/web/lib/api.ts`, `apps/web/app/(app)/investigations/[slug]/{page.tsx,analyst-panel.tsx}` (+ deleted `viewer.tsx`).
 - **2026-07-17 (Phase 5E — OpenRouter transport verification)** — Transport-level instrumentation only; **no
   redesign, no behavior change, no deploy**. Added a START / OK / FAIL log lifecycle around the ONE model
   inference in `OpenRouterReasoningProvider.complete()` — START logs provider / endpoint / preset / model_ref

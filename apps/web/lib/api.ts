@@ -685,10 +685,49 @@ export interface ComprehensiveSections {
   campaign_reasoning?: ComprehensiveSection;
 }
 
+// One per-account reasoning row from the comprehensive response, after the backend echo-join. `ref` is
+// the account alias the model cited; identity + engine numbers are joined server-side (echo discipline).
+export interface CommenterAssessment {
+  ref: string;
+  assessment: string;
+  citations: string[];
+  resolved: boolean;
+  handle?: string;
+  external_id?: string;
+  suspicion_tier?: Tier;
+  suspicion_probability?: number;
+}
+
+// Full-investigation completion status (Phase 5H): whether the AI reasoned over every commenter, and if
+// not, why + how much remains. Backend-computed (never model-generated); surfaced so the user always
+// knows whether the investigation is complete. `incomplete_kind`: truncated_output | missing_assessments
+// | omitted_input | null.
+export interface CompletionStatus {
+  complete: boolean;
+  finish_reason: string | null;
+  stopped_on_token_limit: boolean;
+  json_complete: boolean;
+  schema_valid: boolean;
+  governor_valid: boolean;
+  represented_commenters: number;   // expected (shown to the model)
+  assessed_commenters: number;      // returned (actually assessed)
+  missing_commenters: number;
+  omitted_input_commenters: number;
+  max_output_tokens: number | null; // completion budget requested
+  output_tokens: number | null;     // actual completion size
+  incomplete_kind: 'truncated_output' | 'missing_assessments' | 'omitted_input' | null;
+  reason: string;
+  estimated_remaining_commenters: number;
+}
+
 export interface AnalystAssessment {
   verdict: string;
+  /** THE OMI SCORE — the analyst's single composite authenticity-risk score, 0–100 (higher = stronger
+   *  evidence of inauthentic/coordinated behavior). The only investigation score. */
+  omi_score: number;
   suspicion_tier: string;
-  suspicion_probability: number;
+  /** DEPRECATED — the legacy 0–1 inauthenticity probability. Superseded by omi_score; may be absent. */
+  suspicion_probability?: number;
   confidence_band: string;
   confidence_rationale: string;
   headline: string;
@@ -716,6 +755,14 @@ export interface AnalystAssessment {
     model_revision?: string | null;
     trace_id?: string;
   };
+  // Per-account (per-commenter) reasoning from the ONE comprehensive response: the model authors the
+  // `assessment` + `citations` keyed by an account alias; OmiSphere echo-joins the real identity
+  // (`handle`, `external_id`) and the engine's `suspicion_tier`/`suspicion_probability` (never
+  // model-fabricated). `resolved` is false when the model cited an alias that didn't map to a known
+  // commenter — surfaced with a flag, never dropped. Empty/absent when the model produced none.
+  commenter_assessments?: CommenterAssessment[];
+  // Full-investigation completion status (Phase 5H): whether every commenter received AI reasoning.
+  completion?: CompletionStatus;
   // The six domain-reasoning sections of the single comprehensive Mistral response (present when the
   // comprehensive path produced them). Rendered as views over ONE inference — never fetched per panel.
   comprehensive_sections?: ComprehensiveSections;
@@ -772,6 +819,13 @@ export interface AnalystAssessment {
     total_tokens?: number | null;
     response_status?: number | null;
     endpoint_error?: string | null;
+    // Phase 5H — full-investigation completion (also on `completion`, mirrored here for the trace panel)
+    finish_reason?: string | null;
+    max_output_tokens?: number | null;
+    commenters_total?: number | null;
+    commenters_assessed?: number | null;
+    completion_complete?: boolean;
+    completion_incomplete_kind?: string | null;
   };
 }
 

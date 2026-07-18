@@ -212,6 +212,20 @@ class AIInvestigationRuntime:
                         core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
                         candidate = core
 
+        if adjudication == "schema_only":
+            # AI-first investigation (architecture refactor): the model IS the investigator. Structural
+            # schema validation already ran in ``_canonical_candidate`` (canonical schema + required fields
+            # + additionalProperties). A structurally-valid model output is accepted VERBATIM — no
+            # interpretive Governor gate (no echo-guard / corroboration gate / confidence / policy review of
+            # the AI's reasoning). On structural failure the deterministic Floor stands in. The trace is a
+            # structural permit so the persistence/forensic plumbing is unchanged.
+            if candidate is not None:
+                return (candidate, raw_obj, model_provider, True,
+                        self._structural_trace(gov_bundle), None, ())
+            provider = ("deterministic-analyst-v1" if not raw
+                        else f"{model_provider}->fallback:deterministic-analyst-v1")
+            return floor, raw_obj, provider, False, self._structural_trace(gov_bundle), None, ()
+
         if adjudication == "judge_then_floor":
             # Legacy council semantics (the investigation assessment): the candidate ruling is the
             # model's when valid, else the Floor STANDING IN as the judge (with the legacy provider
@@ -247,6 +261,20 @@ class AIInvestigationRuntime:
         return floor, raw_obj, provider, False, ftrace, None, ()
 
     @staticmethod
+    def _structural_trace(gov_bundle: Any):
+        """A structural-only permit trace (AI-first path): schema validity already decided upstream, so the
+        served ruling passes with no interpretive violation codes. Keeps the ValidationTrace plumbing that
+        persistence + the forensic trace expect, without the interpretive Governor."""
+        from app.governor.audit import ValidationTrace
+        return ValidationTrace(
+            verdict="permit", violation_codes=[],
+            stage_results=[{"id": "structural", "name": "schema_validation", "passed": True}],
+            version_binding={**getattr(gov_bundle, "version_binding", {}),
+                             "validation": "structural_schema_only"},
+            input_digest="", bundle_id=getattr(gov_bundle, "bundle_id", ""), fallback_path="none",
+        )
+
+    @staticmethod
     def _canonical_candidate(obj: dict, floor: dict, hl: dict, canonical_schema: dict) -> dict | None:
         """Phase 1 — build the governed wrapper from a canonically-valid comprehensive MODEL output.
 
@@ -269,14 +297,12 @@ class AIInvestigationRuntime:
                            errs[:5])
             return None
         core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
-        # OmiSphere owns provenance/subject + the engine corroboration state — overlay from the Floor
-        # (schema-valid, correct values), never the model's fabrication.
+        # OmiSphere injects only provenance/subject + the factual engine corroboration state (which
+        # discriminative methods fired) — overlay from the Floor (schema-valid, correct values). AI-first:
+        # the analyst OWNS its scores (omi_score + suspicion_tier); nothing is echoed/overwritten.
         for k in COMPREHENSIVE_OMI_OWNED_WRAPPER_FIELDS:
             if k in floor:
                 core[k] = floor[k]
-        # Echo discipline — the engine number is authoritative; the model never moves it.
-        core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
-        core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
         return core
 
     @staticmethod

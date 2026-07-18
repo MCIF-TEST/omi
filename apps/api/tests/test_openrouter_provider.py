@@ -86,7 +86,7 @@ def _valid_model_output() -> dict:
     """A canonically-valid comprehensive MODEL output — analytical wrapper + six domains, NO Omi-owned
     provenance/subject/echo."""
     return {
-        "verdict": "mixed", "confidence_band": "moderate",
+        "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal signal over thin data",
         "headline": "OPENROUTER-MODEL-HEADLINE cadence is unusually regular.",
         "assessment": ("The evidence is consistent with mechanical posting regularity; a single-axis "

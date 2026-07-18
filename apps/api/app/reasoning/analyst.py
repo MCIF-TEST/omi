@@ -267,6 +267,59 @@ def _components_from_payload(payload: dict, impl) -> list[dict]:
     return out
 
 
+def _commenters_by_author_ref(payload: dict) -> dict[str, dict]:
+    """Reverse map: the pseudonymous account ref the model reasons over (``_ref(handle)``) -> the real
+    commenter row. Lets an aliased per-account assessment be joined back to identity + the engine numbers
+    it must echo. Covers the video commenters + a focus account when present."""
+    out: dict[str, dict] = {}
+    video = payload.get("video") or {}
+    for c in (video.get("commenters") or []):
+        handle = c.get("handle")
+        if handle:
+            out[_ref(handle)] = c
+    focus = payload.get("focus_account") or video.get("focus_account")
+    if isinstance(focus, dict) and focus.get("handle"):
+        out.setdefault(_ref(focus["handle"]), focus)
+    return out
+
+
+def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
+    """Echo join: pair each model-authored per-account assessment (keyed by alias) with the account's
+    real identity + the deterministic engine's tier/probability (which the model NEVER emits). Aliases
+    are resolved through the reversible legend; an item whose alias does not resolve to a known commenter
+    is kept but marked ``resolved: False`` (never dropped — the presentation layer flags it)."""
+    items = (raw_obj or {}).get("commenter_assessments")
+    if not isinstance(items, list):
+        return []
+    accounts = legend.to_manifest().get("accounts", {})     # alias -> author_ref
+    by_ref = _commenters_by_author_ref(payload)
+    joined: list[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        alias = it.get("ref")
+        author_ref = accounts.get(alias) or (legend.resolve(alias) if alias else None)
+        commenter = by_ref.get(author_ref) if author_ref else None
+        row: dict = {
+            "ref": alias,
+            "assessment": it.get("assessment"),
+            "citations": it.get("citations") or [],
+            "resolved": commenter is not None,
+        }
+        if commenter is not None:
+            # Engine-owned, echoed (never model-fabricated) — identity + the authoritative suspicion read.
+            row["handle"] = commenter.get("handle")
+            row["external_id"] = commenter.get("external_id")
+            row["suspicion_tier"] = commenter.get("tier")
+            row["suspicion_probability"] = (
+                commenter.get("coordination_adjusted_probability")
+                if commenter.get("coordination_adjusted_probability") is not None
+                else commenter.get("overall_probability")
+            )
+        joined.append(row)
+    return joined
+
+
 def build_bundle(payload: dict, *, ref: str, platform: str, impl, prior_context: list | None = None) -> dict:
     scan = {
         "overall_probability": payload.get("overall_probability") or 0.0,
@@ -334,6 +387,8 @@ _cache_stats = {"served_from_cache": 0, "generated": 0}
 # which the model ECHOES and must never override (echo discipline). This map is the architectural
 # contract surfaced in the forensic audit (items 8 & 9).
 _MODEL_GENERATED_FIELDS = (
+    # AI-first: the analyst produces its OWN scores — the OMI score + its tier band.
+    "omi_score", "suspicion_tier",
     "verdict", "confidence_band", "confidence_rationale", "headline", "assessment",
     "evidence_for", "evidence_against", "uncertainty", "what_would_change_this",
     "limits_statement", "coordination_label", "legitimate_hypothesis", "supplemental_context",
@@ -344,7 +399,9 @@ _MODEL_GENERATED_FIELDS = (
 )
 # The engine owns these — the model echoes them and OmiSphere overwrites/overlays from the deterministic
 # engine (never model-fabricated): the echoed suspicion numbers + the corroboration state.
-_DETERMINISTIC_ECHOED_FIELDS = ("suspicion_probability", "suspicion_tier", "corroboration")
+# AI-first: nothing is echoed/overwritten anymore. Only the factual engine 'corroboration' state
+# (which discriminative methods fired) is overlaid from the deterministic evidence.
+_DETERMINISTIC_ECHOED_FIELDS = ("corroboration",)
 _SYSTEM_FIELDS = ("governance", "ai_package", "prompt_build", "metrics", "subject",
                   "analyst_version", "prompt_version", "schema_version", "model_revision")
 
@@ -433,6 +490,15 @@ def _assess_core(
         config = impl.load_analyst_config(
             repo_id=settings.analyst_hf_repo, revision=settings.analyst_hf_revision,
         )
+        # Phase 5H — dynamic completion budget. Replace the fixed output-token cap with a value sized from
+        # THIS investigation: enough to give every commenter a concise per-account assessment plus the
+        # executive synthesis, clamped to a safe ceiling. Small investigations request little; a
+        # ~150-commenter investigation requests enough to finish. Overrides decoding.max_new_tokens without
+        # mutating the shared config dict (fresh copy on the instance).
+        from app.reasoning.completion import completion_budget
+        _commenter_count = len(((payload.get("video") or {}).get("commenters")) or [])
+        _completion_max_tokens = completion_budget(_commenter_count)
+        config.decoding = {**(config.decoding or {}), "max_new_tokens": _completion_max_tokens}
         spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,
                        "hash": spec.prompt_hash, "source": "registry"}
@@ -555,7 +621,10 @@ def _assess_core(
         inference = run_stage_inference(
             pp, gov_bundle, settings=settings, config=config, floor_ruling=floor_response,
             schema_prefilter=True, require_hf_token=True, capture=capture,
-            adjudication="judge_then_floor",
+            # AI-first investigation refactor: the model IS the investigator. Its schema-valid output is
+            # accepted verbatim — structural validation only, no interpretive Governor gate on the AI's
+            # reasoning. Floor stands in on schema-invalid output.
+            adjudication="schema_only",
             # Phase 1 — the ONE canonical comprehensive contract: the model's full output (synthesis
             # wrapper + six first-class reasoning domains) is validated against this schema; Omi-owned
             # provenance/subject + engine corroboration are overlaid from the Floor AFTER validation, so
@@ -593,8 +662,38 @@ def _assess_core(
             k: v for k, v in (inference.raw_obj or {}).items() if k in ci_assets.section_keys
         }
         governed["comprehensive_validation"] = sections_report
+        # Per-account (per-commenter) reasoning: echo-join the model's aliased assessments back to real
+        # identity + the engine's tier/probability (the model never emits a per-account number). Overwrites
+        # the raw passthrough with the enriched, presentation-ready list. Empty when the model emitted none.
         prov = str(gov.get("provider", "?"))
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
+        # Only surface the model's per-account reasoning when the model output was ACCEPTED (not the Floor):
+        # a rejected candidate's raw_obj must never leak its per-account assessments to the UI.
+        governed["commenter_assessments"] = (
+            _join_commenter_assessments(inference.raw_obj, investigation_legend, payload)
+            if model_backed else [])
+        # Phase 5H — completion verification. Decide explicitly whether the AI reasoned over the COMPLETE
+        # investigation: did generation stop normally (vs hit the token ceiling), did every commenter shown
+        # to the model receive an assessment, was any commenter omitted upstream. Nothing is silently
+        # truncated — an incomplete investigation is MARKED incomplete, with the reason + remaining work.
+        from app.reasoning.completion import verify_completion
+        _total_commenters = len(((payload.get("video") or {}).get("commenters")) or [])
+        # Accounts actually SHOWN to the model (carried into the evidence package). Anything the upstream
+        # evidence budget could not carry is honestly counted as omitted input — never silently dropped.
+        _represented = int(pp.manifest.get("evidence_represented_accounts") or _total_commenters)
+        _represented = min(_represented, _total_commenters) if _total_commenters else _represented
+        _omitted_input = max(0, _total_commenters - _represented)
+        _assessed = sum(1 for r in governed["commenter_assessments"] if r.get("resolved"))
+        _completion = verify_completion(
+            model_backed=model_backed, finish_reason=capture.get("finish_reason"),
+            represented_commenters=_represented, assessed_commenters=_assessed,
+            omitted_input_commenters=_omitted_input, max_output_tokens=_completion_max_tokens,
+            output_tokens=(inference.tokens or {}).get("completion_tokens"),
+            json_received=(inference.raw_obj is not None),
+            # A model-backed result passed BOTH canonical-schema validation and the Governor (that is what
+            # makes it model-backed) — certify them explicitly. On the Floor path both are False.
+            schema_valid=model_backed, governor_valid=bool(inference.trace.permitted))
+        governed["completion"] = _completion.to_dict()
         governed["ai_package"] = ai_package.provenance()
         governed["prompt_build"] = prompt_build
         # One correlated production trace for the single comprehensive investigation inference — reuses
@@ -632,6 +731,13 @@ def _assess_core(
             "master_prompt_version": _master.get("version"),
             "master_prompt_hash": _master.get("hash"),
             "canonical_schema_id": _schema_id,
+            # Phase 5H — completion budgeting + verification (full-investigation coverage).
+            "finish_reason": capture.get("finish_reason"),
+            "max_output_tokens": _completion_max_tokens,
+            "commenters_total": _total_commenters,
+            "commenters_assessed": _assessed,
+            "completion_complete": _completion.complete,
+            "completion_incomplete_kind": _completion.incomplete_kind,
             "endpoint_cost_usd": _usage.get("cost"),
             # Authoritative token usage reported by the gateway (OpenRouter `usage`), for production
             # verification + cost transparency. None on the Floor path (no billed generation).

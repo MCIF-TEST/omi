@@ -12,8 +12,8 @@
     "model_revision",
     "subject",
     "verdict",
+    "omi_score",
     "suspicion_tier",
-    "suspicion_probability",
     "confidence_band",
     "confidence_rationale",
     "headline",
@@ -78,9 +78,15 @@
         "inconclusive"
       ]
     },
+    "omi_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "THE OMI SCORE — the analyst's single composite authenticity-risk score for the primary subject, 0-100 (higher = stronger evidence of inauthentic/coordinated behavior). Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. The analyst's reasoned synthesis of the evidence (not an average of detector numbers); consistent with verdict + suspicion_tier + confidence. This is the ONLY investigation score."
+    },
     "suspicion_tier": {
       "type": "string",
-      "description": "The engine's 4-level Tier, ECHOED (not recomputed) from the evidence bundle. The analyst may recommend a lower verdict but must report the engine's tier faithfully.",
+      "description": "The categorical band of the OMI score (low 0-24 / moderate 25-49 / elevated 50-74 / high 75-100), produced by the analyst consistently with omi_score.",
       "enum": ["low", "moderate", "elevated", "high"]
     },
     "coordination_label": {
@@ -99,7 +105,7 @@
       "type": "number",
       "minimum": 0.0,
       "maximum": 1.0,
-      "description": "Echoes the engine's overall_probability for the subject. The analyst MUST NOT recompute or alter this value (failure mode F8)."
+      "description": "DEPRECATED / OPTIONAL — the legacy 0-1 inauthenticity probability, retained for back-compat only. The OMI score (omi_score, 0-100) is the single investigation score; do not rely on this field."
     },
     "confidence_band": {
       "type": "string",

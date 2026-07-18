@@ -190,6 +190,11 @@ class OpenRouterReasoningProvider:
             if obj.get("id"):
                 self.capture["endpoint_request_id"] = obj.get("id")   # OpenRouter generation id (gen-...)
             self.capture["served_model"] = obj.get("model")
+            # finish_reason (Phase 5H completion verification): "stop" = generation completed normally;
+            # "length" = the model hit the output-token ceiling (truncated). Provenance only; no secret.
+            choices = obj.get("choices")
+            if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+                self.capture["finish_reason"] = choices[0].get("finish_reason")
             usage = obj.get("usage")
             if isinstance(usage, dict):
                 self.capture["usage"] = {

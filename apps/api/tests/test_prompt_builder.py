@@ -149,7 +149,9 @@ def test_field_provenance_contract():
     for domain in ("comment_reasoning", "commenter_history_reasoning", "account_reasoning",
                    "narrative_reasoning", "coordination_reasoning", "campaign_reasoning"):
         assert domain in fp["model_generated"]
-    # the engine owns the echoed suspicion numbers AND the corroboration state (the model never moves them)
-    assert set(fp["deterministic_echoed"]) == {"suspicion_probability", "suspicion_tier", "corroboration"}
+    # AI-first: the analyst produces its OWN scores (the OMI score + its tier band).
+    assert "omi_score" in fp["model_generated"] and "suspicion_tier" in fp["model_generated"]
+    # nothing is echoed anymore — only the factual engine corroboration state is overlaid.
+    assert set(fp["deterministic_echoed"]) == {"corroboration"}
     # the two sets are disjoint — no field is both model-generated and deterministic
     assert not (set(fp["model_generated"]) & set(fp["deterministic_echoed"]))

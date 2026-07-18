@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Brain, Loader2, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Brain, Loader2, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
@@ -12,6 +12,8 @@ import {
   type AnalystResponse,
   type AnalystAssessment,
   type AnalystEvidenceItem,
+  type CommenterAssessment,
+  type CompletionStatus,
   type ComprehensiveSection,
   type ComprehensiveSections,
   type Tier,
@@ -132,7 +134,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
             : 'The Omi Analyst’s structured reading of this investigation will appear here. It interprets the evidence the engine already produced; it never recomputes a score.'}
         </p>
       ) : (
-        <AssessmentView a={assessment} />
+        <AssessmentView a={assessment} slug={slug} />
       )}
 
       {assessment && verificationEnabled() && (
@@ -272,6 +274,7 @@ function VerificationPanel({
   a, provider, generatedAt,
 }: { a: AnalystAssessment; provider: string | null; generatedAt: string | null }) {
   const t = a.investigation_trace ?? {};
+  const c = a.completion;
   const aiBacked = t.model_backed === true;
   const isOpenRouter = (t.provider ?? '').toLowerCase() === 'openrouter'
     || /openrouter/i.test(provider ?? '');
@@ -298,6 +301,18 @@ function VerificationPanel({
     ['HTTP status', t.response_status ?? '—'],
     ['Endpoint error', t.endpoint_error ?? '—'],
     ['Generated at', generatedAt ?? '—'],
+    // Phase 5H — full-investigation completion certification
+    ['— completion —', ''],
+    ['Completion', c ? (c.complete ? 'complete' : `incomplete: ${c.incomplete_kind ?? '—'}`) : '—'],
+    ['Commenters analyzed / expected',
+      c ? `${c.assessed_commenters} / ${c.represented_commenters + c.omitted_input_commenters}` : '—'],
+    ['Stopped on token limit', yn(c?.stopped_on_token_limit)],
+    ['JSON complete', yn(c?.json_complete)],
+    ['Schema valid', yn(c?.schema_valid)],
+    ['Governor valid', yn(c?.governor_valid)],
+    ['Completion budget', c?.max_output_tokens ?? t.max_output_tokens ?? '—'],
+    ['Actual output size', c?.output_tokens ?? '—'],
+    ['Est. remaining commenters', c?.estimated_remaining_commenters ?? '—'],
   ];
   return (
     <details className="mt-4 rounded-sm border border-dashed border-accent/40 bg-bg-elev-2/40 open:bg-bg-elev-2">
@@ -336,7 +351,25 @@ function VerificationPanel({
   );
 }
 
-function AssessmentView({ a }: { a: AnalystAssessment }) {
+// THE OMI SCORE — the single composite authenticity-risk score (0–100), the investigation's headline
+// figure. Higher = stronger evidence of inauthentic/coordinated behavior. Rendered as the number plus a
+// tier-colored bar (score/100). This is the only investigation score; the legacy inauthenticity
+// probability is retired.
+function OmiScore({ score, tier }: { score: number; tier: Tier }) {
+  const s = Math.max(0, Math.min(100, Math.round(score ?? 0)));
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-baseline gap-1 shrink-0" title="OMI score — composite authenticity-risk, 0–100.">
+        <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute mr-1">OMI</span>
+        <span className="stat-value text-2xl font-semibold text-fg tabular-nums">{s}</span>
+        <span className="font-mono text-2xs text-fg-mute">/100</span>
+      </div>
+      <ProbabilityBar value={s / 100} tier={tier} className="flex-1" showLabel={false} />
+    </div>
+  );
+}
+
+function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   // Product-cutover rule: only Mistral-authored assessments render as AI reasoning. If the model was
   // not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
   // headline / assessment / evidence as though Mistral wrote it.
@@ -361,17 +394,10 @@ function AssessmentView({ a }: { a: AnalystAssessment }) {
           )}
         </div>
 
-        {/* Suspicion probability — the echoed engine number, as a tier-colored bar (not bare text). */}
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute w-16 shrink-0">
-            suspicion
-          </span>
-          <ProbabilityBar
-            value={a.suspicion_probability}
-            tier={a.suspicion_tier as Tier}
-            className="flex-1"
-          />
-        </div>
+        {/* THE OMI SCORE — the analyst's single composite authenticity-risk score (0–100), the headline
+            figure. Replaces the legacy inauthenticity probability. Rendered as the big number + a
+            tier-colored bar. */}
+        <OmiScore score={a.omi_score} tier={a.suspicion_tier as Tier} />
 
         <CorroborationStrip corr={a.corroboration} />
 
@@ -390,6 +416,9 @@ function AssessmentView({ a }: { a: AnalystAssessment }) {
         <SupplementalContext items={a.supplemental_context} />
         <LegitimateHypothesis text={a.legitimate_hypothesis} />
       </div>
+
+      {/* ── PER-ACCOUNT ASSESSMENTS (one AI reading per commenter, over the ONE response) ── */}
+      <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
 
       {/* ── DOMAIN REASONING (six views over the ONE comprehensive response) ── */}
       <DomainReasoning
@@ -521,6 +550,120 @@ function DomainPanel({
         )}
       </div>
     </details>
+  );
+}
+
+// Per-account (per-commenter) AI assessments from the ONE comprehensive response. Each card pairs the
+// model's per-account reasoning with the engine's echoed tier/probability (joined server-side — the model
+// never emits a per-account number). When the model produced none, an honest empty state is shown instead
+// of any deterministic fallback. `resolved: false` items (alias didn't map to a known commenter) are
+// summarized as a count rather than shown as fabricated identities.
+// Completion statistics — always shown so the user knows the AI coverage of THIS investigation
+// (expected vs analyzed, the dynamic budget, actual output). Never hides an incomplete investigation.
+function CompletionStats({ c }: { c: CompletionStatus }) {
+  const expected = c.represented_commenters + c.omitted_input_commenters;
+  const bits: string[] = [`${c.assessed_commenters}/${expected} analyzed`];
+  if (typeof c.output_tokens === 'number' && c.max_output_tokens)
+    bits.push(`${c.output_tokens.toLocaleString()}/${c.max_output_tokens.toLocaleString()} out tokens`);
+  if (c.finish_reason) bits.push(`stop: ${c.finish_reason}`);
+  return <p className="text-2xs font-mono text-fg-faint mt-0.5">{bits.join(' · ')}</p>;
+}
+
+function CompletionBanner({ c }: { c?: CompletionStatus }) {
+  if (!c) return null;
+  if (c.complete) {
+    return (
+      <div className="space-y-0.5">
+        <p className="text-2xs font-mono uppercase tracking-wider text-tier-low flex items-center gap-1.5">
+          <ShieldCheck size={11} className="shrink-0" />
+          Complete · all {c.assessed_commenters} commenter{c.assessed_commenters === 1 ? '' : 's'} assessed
+        </p>
+        <CompletionStats c={c} />
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-sm border border-tier-moderate/40 bg-tier-moderate/[0.07] px-3 py-2 flex items-start gap-2">
+      <TriangleAlert size={13} className="mt-0.5 shrink-0 text-tier-moderate" />
+      <div className="min-w-0">
+        <p className="text-2xs font-mono uppercase tracking-wider text-tier-moderate mb-0.5">
+          Partial AI coverage · {c.assessed_commenters} of {c.represented_commenters + c.omitted_input_commenters} commenters assessed
+        </p>
+        <p className="text-xs text-fg-dim leading-relaxed">{c.reason}</p>
+        {c.estimated_remaining_commenters > 0 && (
+          <p className="text-2xs text-fg-faint mt-0.5">
+            ~{c.estimated_remaining_commenters} commenter{c.estimated_remaining_commenters === 1 ? '' : 's'} remaining.
+          </p>
+        )}
+        <CompletionStats c={c} />
+      </div>
+    </div>
+  );
+}
+
+function CommenterAssessments({
+  items, completion,
+}: { items?: CommenterAssessment[]; completion?: CompletionStatus; slug: string }) {
+  const rows = items ?? [];
+  const resolved = rows.filter((r) => r.resolved);
+  const unresolvedCount = rows.length - resolved.length;
+
+  return (
+    <div className="border-t border-border-1/60 pt-4 space-y-2">
+      <CardLabel className="flex items-center gap-1.5">
+        <Users size={11} /> Per-account assessments{resolved.length > 0 ? ` · ${resolved.length}` : ''}
+      </CardLabel>
+
+      <CompletionBanner c={completion} />
+
+      {resolved.length === 0 ? (
+        <p className="text-xs text-fg-faint leading-relaxed flex items-start gap-2">
+          <TriangleAlert size={13} className="mt-0.5 shrink-0 text-fg-mute" />
+          The AI did not return a per-account reading for this investigation — a large investigation can
+          exceed a single response.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {resolved.map((r) => (
+            <div
+              key={r.external_id ?? r.ref}
+              className="rounded-sm border border-border-1/60 bg-bg-elev-2/40 p-3 space-y-2"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-fg break-all">{r.handle ?? r.ref}</span>
+                {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
+                {typeof r.suspicion_probability === 'number' && (
+                  <span className="font-mono text-2xs text-fg-mute">
+                    {Math.round(r.suspicion_probability * 100)}%
+                  </span>
+                )}
+              </div>
+              {typeof r.suspicion_probability === 'number' && (
+                <ProbabilityBar value={r.suspicion_probability} tier={r.suspicion_tier} size="sm" />
+              )}
+              {r.assessment && (
+                <p className="text-xs text-fg-dim leading-relaxed whitespace-pre-line">{r.assessment}</p>
+              )}
+              {r.citations.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {r.citations.map((c, i) => (
+                    <span key={i} className="font-mono text-2xs rounded-full border border-border-1/60 text-fg-mute px-1.5 py-0.5">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {unresolvedCount > 0 && (
+            <p className="text-2xs text-fg-faint leading-relaxed">
+              {unresolvedCount} per-account assessment{unresolvedCount === 1 ? '' : 's'} referenced an
+              account alias that didn&apos;t resolve to a scanned commenter and {unresolvedCount === 1 ? 'was' : 'were'} omitted.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

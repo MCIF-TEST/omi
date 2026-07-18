@@ -38,8 +38,13 @@ from app.evidence.bundle import DISCRIMINATIVE_METHODS, digest
 INVESTIGATION_CONTEXT_VERSION = "ictx-v1"
 
 # Bounds keep the assembled object finite regardless of scan size (mirrors the Binder's member cap).
-_MAX_ACCOUNTS = 60
-_MAX_COMMENT_SAMPLES = 60
+# Phase 5H — full-investigation coverage. OmiSphere optimizes for investigation QUALITY over API cost, so
+# the account/commenter ceiling is raised to carry EVERY commenter of a normal investigation (up to ~150,
+# with headroom) into the evidence the AI reasons over — no upstream sampling. This is the single knob that
+# governs how many commenters reach the model; raising it further (300/500/1000) needs no other change, and
+# any residual overflow beyond the ceiling stays DISCLOSED via the sampling manifest (never silent).
+_MAX_ACCOUNTS = 250
+_MAX_COMMENT_SAMPLES = 250
 _MAX_PER_ACCOUNT_SAMPLES = 4
 _MAX_CLUSTERS = 40
 _MAX_CROSS_LINKS = 40

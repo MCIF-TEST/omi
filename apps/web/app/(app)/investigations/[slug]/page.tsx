@@ -4,8 +4,6 @@ import { ArrowLeft } from 'lucide-react';
 import { ApiError, type InvestigationDetailResponse, VERDICT_LABELS } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { Card, CardLabel } from '@/components/ui/card';
-import { TierBadge } from '@/components/shared/tier-badge';
-import { SavedInvestigationViewer } from './viewer';
 import { ShareBlock } from './share-block';
 import { AnalystPanel } from './analyst-panel';
 import { VerdictWidget } from './verdict-widget';
@@ -48,36 +46,23 @@ export default async function InvestigationPage({ params }: { params: { slug: st
             <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mb-1.5 mt-3 line-clamp-2 break-words">{inv.label}</h1>
             <p className="font-mono text-xs text-fg-faint truncate">{inv.input_url}</p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {inv.verdict && inv.verdict !== 'pending' && (
+          {inv.verdict && inv.verdict !== 'pending' && (
+            <div className="flex items-center gap-3 shrink-0">
               <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-hot px-2.5 py-1 rounded-full bg-bg-elev-2">
                 {VERDICT_LABELS[inv.verdict]}
               </span>
-            )}
-            <TierBadge tier={inv.overall_tier} size="lg" />
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Inline metadata strip */}
-        <div className="relative mt-6 pt-5 border-t border-border-1/60 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
-          <Row label="Probability" value={`${Math.round(inv.overall_probability * 100)}%`} />
+        {/* Inline metadata strip — run identity only. The suspicion read now lives
+            in the Omi Analyst assessment below (the deterministic engine still runs
+            underneath to supply the evidence the model reasons over). */}
+        <div className="relative mt-6 pt-5 border-t border-border-1/60 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
           <Row label="Batches"     value={String(inv.batch_count)} />
           <Row label="YT quota"    value={`${inv.quota_used} units`} />
           <Row label="Created"     value={new Date(inv.created_at).toLocaleString()} />
         </div>
-
-        {/* E2 — reproducibility note. Scores can legitimately move between runs
-            as cross-scan memory accumulates; frame it as evidence sharpening,
-            not unreliability, and point at the indicators that show what changed. */}
-        <p className="relative mt-4 text-2xs leading-relaxed text-fg-faint border-t border-border-1/60 pt-4">
-          Scores can shift if you re-run this investigation: Omi&apos;s cross-scan
-          memory accumulates evidence over time, so a network that keeps acting
-          together scores more confidently on a later pass. The per-account{' '}
-          <span className="text-fg-mute">cached</span> and{' '}
-          <span className="text-fg-mute">prior neighbors</span> indicators show
-          which inputs changed — this is evidence evolving, not a different answer
-          to the same question.
-        </p>
       </header>
 
       {/* Analyst verdict + notes */}
@@ -103,8 +88,6 @@ export default async function InvestigationPage({ params }: { params: { slug: st
         initialToken={inv.share_token}
         publicBaseUrl={env.PUBLIC_BASE_URL}
       />
-
-      <SavedInvestigationViewer payload={inv.payload} />
     </div>
   );
 }

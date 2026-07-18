@@ -74,7 +74,7 @@ def _valid_model_output() -> dict:
     domains = {k: {"assessment": "reasoning present for this domain", "citations": ["A1"]}
                for k in COMPREHENSIVE_SECTION_KEYS}
     return {
-        "verdict": "mixed", "confidence_band": "moderate",
+        "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal signal over thin data",
         "headline": "GPT5MINI-PROD-HEADLINE cadence is unusually regular.",
         "assessment": ("Consistent with mechanical posting regularity; a single-axis result. These "
@@ -145,9 +145,11 @@ def test_production_preset_config_reaches_the_request_exactly():
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["name"] == COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
     assert body["stream"] is False
-    # The production output-token budget (analyst_config.json decoding.max_new_tokens) reaches the wire —
-    # comfortably high for GPT-5 Mini reasoning + the full 7-section JSON, so no truncation → Floor.
-    assert body["max_tokens"] >= 8000
+    # Phase 5H — the DYNAMIC completion budget reaches the wire: sized from this investigation's commenter
+    # count (2 here → the floor budget), enough to give every commenter a concise assessment + the full
+    # 7-section synthesis without truncation. Replaces the old fixed cap.
+    from app.reasoning.completion import completion_budget
+    assert body["max_tokens"] == completion_budget(len(_PAYLOAD["video"]["commenters"]))
     assert calls == 1                                              # exactly ONE inference
     # the Investigation Package evidence (normalized, aliased) reaches the provider as the user message
     assert "A1" in body["messages"][0]["content"]
@@ -175,9 +177,10 @@ def test_valid_production_assessment_validates_persists_in_ui_shape():
     assert out["headline"].startswith("GPT5MINI-PROD-HEADLINE")
     assert set(out["comprehensive_sections"]) == set(COMPREHENSIVE_SECTION_KEYS)
     # the exact structured fields the React UI consumes (Phase 4A) are present + provider-labeled
-    for f in ("verdict", "suspicion_tier", "suspicion_probability", "confidence_band",
+    for f in ("verdict", "omi_score", "suspicion_tier", "confidence_band",
               "evidence_for", "evidence_against", "corroboration", "governance"):
         assert f in out
+    assert out["omi_score"] == 68             # the analyst's OWN OMI score (AI-first, not echoed)
     assert out["governance"]["provider"] == "openrouter-omi-analyst-v1"
     # Omi-owned metadata overlaid AFTER validation (never model-fabricated)
     assert isinstance(out["subject"], dict) and out["subject"]["platform"] == "youtube"

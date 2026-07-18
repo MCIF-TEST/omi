@@ -186,7 +186,7 @@ def _valid_model_output() -> dict:
     domains = {k: {"assessment": "reasoning present for this domain", "citations": ["A1"]}
                for k in COMPREHENSIVE_SECTION_KEYS}
     return {
-        "verdict": "mixed", "confidence_band": "moderate",
+        "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal signal over thin data",
         "headline": "cadence is unusually regular.",
         "assessment": ("Consistent with mechanical posting regularity; a single-axis result. These "

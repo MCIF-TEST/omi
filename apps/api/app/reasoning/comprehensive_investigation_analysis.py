@@ -20,12 +20,21 @@ import logging
 from typing import Any
 
 from app.reasoning.investigation_render import RenderedEvidence, render_investigation_evidence
+from app.reasoning.investigation_render.budget import BudgetConfig
 from app.reasoning.package_loader import load_comprehensive_investigation_assets
 from app.reasoning.prompt import PromptPackage, StagePromptSpec, build_prompt, register_stage_prompt
 
 logger = logging.getLogger("omi.reasoning.comprehensive_investigation_analysis")
 
 COMPREHENSIVE_INVESTIGATION_STAGE = "comprehensive_investigation"
+
+# Phase 5H — full-investigation coverage. OmiSphere prioritizes investigation QUALITY over API cost: the
+# model-facing evidence budget is raised so EVERY commenter (up to ~150, and well beyond) is represented
+# in full rather than coverage-sampled. `select_accounts` only spends what the real rows cost, so small
+# investigations are unaffected — this lifts the omission cap, it does not pad small prompts. Raising this
+# is the ONLY change needed to represent larger investigations; the coverage manifest still discloses any
+# omission that remains (e.g. a future 1000-commenter case), so nothing is ever silently dropped.
+FULL_INVESTIGATION_EVIDENCE_TOKENS = 120000
 
 # Content-addressed 1-entry memo so the single render is shared between ``render_sections`` and
 # ``manifest_extra`` within one ``build_prompt`` call. Keyed by ``package_id`` (a content hash), so it
@@ -37,7 +46,8 @@ def _rendered(package: Any) -> RenderedEvidence:
     pid = getattr(package, "package_id", "")
     memo = _RENDER_MEMO.get(pid)
     if memo is None:
-        memo = render_investigation_evidence(package)
+        memo = render_investigation_evidence(
+            package, config=BudgetConfig(total_tokens=FULL_INVESTIGATION_EVIDENCE_TOKENS))
         _RENDER_MEMO.clear()          # keep only the most recent (investigations are one-shot)
         _RENDER_MEMO[pid] = memo
     return memo
