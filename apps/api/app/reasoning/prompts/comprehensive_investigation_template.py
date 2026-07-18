@@ -244,8 +244,10 @@ def _render_output_contract(schema: dict) -> str:
     if COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY in props:
         commenter_clause = (
             f"COMPLETE per-account reasoning ('{COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY}'): when the "
-            f"evidence contains account aliases, emit this array with ONE item for EVERY account alias in "
-            f"the evidence — do not sample, rank, or omit accounts. Each item is an object with the alias "
+            f"evidence contains account aliases, emit this array with ONE item for EVERY account alias "
+            f"that carries a row in the Accounts table — do not sample, rank, or omit any of them "
+            f"(accounts disclosed as omitted by the coverage manifest carry no rows and need no item; "
+            f"they remain citable). Each item is an object with the alias "
             f"'ref' (present in the alias legend), a CONCISE, information-dense probabilistic 'assessment' "
             f"(1-3 sentences grounded in THAT account's specific evidence — never a boilerplate sentence "
             f"repeated across accounts; the detailed narrative belongs in the executive assessment and "
