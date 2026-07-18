@@ -212,6 +212,20 @@ class AIInvestigationRuntime:
                         core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
                         candidate = core
 
+        if adjudication == "schema_only":
+            # AI-first investigation (architecture refactor): the model IS the investigator. Structural
+            # schema validation already ran in ``_canonical_candidate`` (canonical schema + required fields
+            # + additionalProperties). A structurally-valid model output is accepted VERBATIM — no
+            # interpretive Governor gate (no echo-guard / corroboration gate / confidence / policy review of
+            # the AI's reasoning). On structural failure the deterministic Floor stands in. The trace is a
+            # structural permit so the persistence/forensic plumbing is unchanged.
+            if candidate is not None:
+                return (candidate, raw_obj, model_provider, True,
+                        self._structural_trace(gov_bundle), None, ())
+            provider = ("deterministic-analyst-v1" if not raw
+                        else f"{model_provider}->fallback:deterministic-analyst-v1")
+            return floor, raw_obj, provider, False, self._structural_trace(gov_bundle), None, ()
+
         if adjudication == "judge_then_floor":
             # Legacy council semantics (the investigation assessment): the candidate ruling is the
             # model's when valid, else the Floor STANDING IN as the judge (with the legacy provider
@@ -245,6 +259,20 @@ class AIInvestigationRuntime:
         provider = ("deterministic-analyst-v1" if not raw
                     else f"{model_provider}->fallback:deterministic-analyst-v1")
         return floor, raw_obj, provider, False, ftrace, None, ()
+
+    @staticmethod
+    def _structural_trace(gov_bundle: Any):
+        """A structural-only permit trace (AI-first path): schema validity already decided upstream, so the
+        served ruling passes with no interpretive violation codes. Keeps the ValidationTrace plumbing that
+        persistence + the forensic trace expect, without the interpretive Governor."""
+        from app.governor.audit import ValidationTrace
+        return ValidationTrace(
+            verdict="permit", violation_codes=[],
+            stage_results=[{"id": "structural", "name": "schema_validation", "passed": True}],
+            version_binding={**getattr(gov_bundle, "version_binding", {}),
+                             "validation": "structural_schema_only"},
+            input_digest="", bundle_id=getattr(gov_bundle, "bundle_id", ""), fallback_path="none",
+        )
 
     @staticmethod
     def _canonical_candidate(obj: dict, floor: dict, hl: dict, canonical_schema: dict) -> dict | None:

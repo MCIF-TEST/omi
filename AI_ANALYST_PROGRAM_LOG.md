@@ -549,6 +549,31 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (AI-First refactor — Stage 1: investigation verdict path is structural-only)** — Product
+  pivot: OmiSphere is an AI-powered Social Authenticity Investigation Platform — the AI IS the
+  investigator; deterministic code prepares objective evidence. **Owner decisions (via AskUserQuestion):**
+  (1) Governor → **full removal, structural JSON validation only** — I flagged that this removes the
+  precision-frontier + anti-injection safety net (raw AI verdicts about real named accounts reach users
+  unchecked; prompt-injection via comment/bio text is no longer caught); proceeding per explicit
+  direction. (2) Deterministic scores → **hybrid**: judgments deleted from the investigation VERDICT path,
+  but still COMPUTED as evidence/priors + for other live features (account pages, campaigns, narratives,
+  OmiScore, benchmarks, ML) so those capabilities aren't gutted. Staged (each stage green): **Stage 1
+  (this)** — added a `schema_only` adjudication in `runtime.py`: the investigation's model output is
+  validated STRUCTURALLY (canonical schema + required fields + additionalProperties, already run in
+  `_canonical_candidate`) and accepted VERBATIM — no interpretive Governor gate (echo-guard S4 /
+  corroboration gate S5 / confidence S7 / policy/banned-phrase). Floor stands in only on a STRUCTURAL
+  fallback (no model output / schema-invalid). `analyst.py` investigation call switched
+  `judge_then_floor → schema_only`; a lightweight structural permit `ValidationTrace` keeps the
+  persistence/forensic plumbing intact. Echo of the engine number is KEPT for Stage 1 (removed in Stage 2).
+  Updated the 3 tests that encoded the removed Governor-gates-the-investigation invariant
+  (`test_analyst_runtime`, `test_runtime_convergence` ×2) to assert the AI-first behavior (investigation is
+  NOT interpretively gated; rich Floor preserved on structural fallback). Full backend suite **1366
+  passed**. **Remaining stages:** 2 = remove echo (AI owns suspicion; preset/schema tweak); 3 = Evidence
+  Compiler seam; 4 = physically delete the now-inert Governor module + its investigation tests (still used
+  by comment-analysis / commenter-history stages — those get structural checks too); 5 = confirm the
+  canonical AI JSON fully drives the UI, retire `governance`/`corroboration` display. Files:
+  `apps/api/app/reasoning/runtime.py`, `apps/api/app/reasoning/analyst.py`,
+  `apps/api/tests/{test_analyst_runtime,test_runtime_convergence}.py`.
 - **2026-07-18 (5H tuning — completion ceiling 40k → 100k)** — Raised `COMPLETION_CEILING_TOKENS`
   40000 → 100000 (`app/reasoning/completion.py`) to observe REAL per-investigation output cost on live
   runs before tuning down. Single-inference commenter capacity ~231 → ~606. It is a CEILING, not a

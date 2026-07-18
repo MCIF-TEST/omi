@@ -63,34 +63,31 @@ def test_assess_payload_attaches_governance_on_permit(monkeypatch):
 
 
 # --- Governor reject -> deterministic Floor fallback ------------------------ #
-def test_governor_reject_falls_back_to_floor(monkeypatch):
+def test_investigation_is_not_interpretively_governor_gated(monkeypatch):
+    """AI-first refactor: the investigation verdict path validates structurally (canonical schema) ONLY —
+    the interpretive Governor no longer gates the AI's reasoning. Governor.validate is never invoked for an
+    investigation, so patching it to reject has NO effect; the served governance carries a structural
+    permit. (The deterministic Floor still stands in on a structural fallback, as elsewhere.)"""
     _enable(monkeypatch)
     from app.governor import Governor
     from app.governor.audit import ValidationTrace
 
-    real = Governor.validate
     calls = {"n": 0}
 
-    def fake(self, ruling, bundle, *, corroboration=None):
+    def _reject_everything(self, ruling, bundle, *, corroboration=None):
         calls["n"] += 1
-        t = real(self, ruling, bundle, corroboration=corroboration)
-        if calls["n"] == 1:  # reject the first (provider) assessment
-            return ValidationTrace(
-                verdict="reject", violation_codes=["gate_breach"],
-                stage_results=t.stage_results, version_binding=t.version_binding,
-                input_digest=t.input_digest, bundle_id=t.bundle_id, fallback_path="floor",
-            )
-        return t  # permit the regenerated Floor
+        return ValidationTrace(verdict="reject", violation_codes=["gate_breach"], stage_results=[],
+                               version_binding={}, input_digest="in:x", bundle_id=bundle.bundle_id(),
+                               fallback_path="floor")
 
-    monkeypatch.setattr(Governor, "validate", fake)
+    monkeypatch.setattr(Governor, "validate", _reject_everything)
     out = analyst.assess_payload(_payload(), ref="sub_x", platform="youtube")
     assert out is not None
+    assert calls["n"] == 0                    # the interpretive Governor is NOT invoked on the investigation
     gov = out["governance"]
-    assert gov["provider"] == "deterministic-floor"
-    assert gov["fallback_from"]              # the rejected provider is recorded
-    assert gov["rejected_codes"] == ["gate_breach"]
-    assert gov["verdict"] == "permit"        # the Floor passed on re-validation
-    assert calls["n"] == 2                   # validated twice: reject -> Floor permit
+    assert gov["verdict"] == "permit"         # structural permit — the interpretive reject never fires
+    assert gov["trace_id"].startswith("vt:")
+    assert not gov.get("rejected_codes")      # no interpretive rejection on the investigation path
 
 
 # --- runtime status diagnostic ---------------------------------------------- #

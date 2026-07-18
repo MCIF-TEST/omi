@@ -65,39 +65,25 @@ def test_production_executes_through_the_canonical_runtime(monkeypatch):
                         lambda self, *a, **k: orchestrator_runs.append(1))
     out = analyst.assess_payload(_payload(), ref="sub_x", platform="youtube")
     assert out is not None
-    # ONE runtime inference with the legacy judge-then-floor semantics; NO council orchestration.
-    assert infer_calls == [{"adjudication": "judge_then_floor", "schema_prefilter": True}]
+    # ONE runtime inference with the AI-first structural-only adjudication; NO council orchestration.
+    assert infer_calls == [{"adjudication": "schema_only", "schema_prefilter": True}]
     assert orchestrator_runs == []
-    # the mandatory Governor stamped the result, and the engine number was echoed (OmiScore intact).
+    # the served result carries a structural permit trace, and the engine number is still echoed (Stage 1).
     assert out["governance"]["verdict"] == "permit"
     assert out["governance"]["trace_id"].startswith("vt:")
     assert out["suspicion_probability"] == 0.72
 
 
 def test_reject_falls_back_to_rich_analyst_floor_not_lean_ruling(monkeypatch):
-    """On Governor REJECT the converged path serves the RICH analyst floor (schema-shaped), so the
-    response contract is preserved — never the lean council ``build_ruling_assessment`` shape."""
+    """When the model is not served (no endpoint / structural fallback), the RICH analyst floor
+    (schema-shaped) is served — never the lean council ``build_ruling_assessment`` shape — so the response
+    contract is preserved. AI-first refactor: the investigation is no longer interpretively Governor-gated;
+    the Floor stands in only on a STRUCTURAL fallback (no model output / schema-invalid)."""
     _enable(monkeypatch)
-    from app.governor import Governor
-    from app.governor.audit import ValidationTrace
-
-    real = Governor.validate
-    calls = {"n": 0}
-
-    def _reject_first(self, ruling, bundle, **kw):
-        calls["n"] += 1
-        if calls["n"] == 1:  # reject the judge's assessment, permit the floor
-            return ValidationTrace(verdict="reject", violation_codes=["S9"], stage_results=[],
-                                   version_binding={}, input_digest="in:x", bundle_id=bundle.bundle_id(),
-                                   fallback_path="floor")
-        return real(self, ruling, bundle, **kw)
-
-    monkeypatch.setattr(Governor, "validate", _reject_first)
     out = analyst.assess_payload(_payload(), ref="sub_x", platform="youtube")
     assert out is not None
     gov = out["governance"]
-    assert gov["provider"] == "deterministic-floor" and gov["rejected_codes"] == ["S9"]
-    assert gov["fallback_from"]                         # the analyst provider that was rejected
+    assert "deterministic" in gov["provider"]           # floor served (no model endpoint configured)
     # RICH schema preserved on the floor path (fields the lean council ruling does not carry).
     for field in ("confidence_rationale", "what_would_change_this", "limits_statement", "subject"):
         assert field in out

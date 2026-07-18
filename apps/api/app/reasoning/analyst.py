@@ -617,7 +617,10 @@ def _assess_core(
         inference = run_stage_inference(
             pp, gov_bundle, settings=settings, config=config, floor_ruling=floor_response,
             schema_prefilter=True, require_hf_token=True, capture=capture,
-            adjudication="judge_then_floor",
+            # AI-first investigation refactor: the model IS the investigator. Its schema-valid output is
+            # accepted verbatim — structural validation only, no interpretive Governor gate on the AI's
+            # reasoning. Floor stands in on schema-invalid output.
+            adjudication="schema_only",
             # Phase 1 — the ONE canonical comprehensive contract: the model's full output (synthesis
             # wrapper + six first-class reasoning domains) is validated against this schema; Omi-owned
             # provenance/subject + engine corroboration are overlaid from the Floor AFTER validation, so
