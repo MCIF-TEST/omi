@@ -294,7 +294,8 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "  3. account_reasoning — per-account authenticity from the detector table: weigh the DETECTOR "
     "DISAGREEMENT (each account carries several detectors with their own probability/confidence and a "
     "signed contribution); when detectors disagree, say so and weigh it — never average it away. "
-    "Supplemental signals carry zero suspicion weight; omi_score is an index, not a probability.\n"
+    "Supplemental signals carry zero suspicion weight; an account row's engine omiscore column is a "
+    "background index for that account, distinct from the omi_score you output for the investigation.\n"
     "  4. narrative_reasoning — message-cluster spread and authorship from member_count and "
     "distinct_authors; treat spread_ratio and inauthenticity_score as directional engine signals and "
     "read them conservatively (more distinct authors is broader participation, not itself proof of "
@@ -308,11 +309,11 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "  6. campaign_reasoning — which corroboration-gated clusters are campaign CANDIDATES. A candidate "
     "is not an established campaign; 'confirmed' would need a human or platform anchor the evidence "
     "does not contain.\n"
-    "  7. the LEAD-INVESTIGATOR SYNTHESIS (the response wrapper) — ECHO the engine's "
-    "suspicion_probability / suspicion_tier (never recompute), give evidence FOR and AGAINST with equal "
-    "rigor, named uncertainty, what would change the read, and a recommended verdict. Weight by "
-    "evidence strength × corroboration; raise confidence only on INDEPENDENT cross-domain convergence; "
-    "insufficient evidence is itself a valid conclusion.\n"
+    "  7. the LEAD-INVESTIGATOR SYNTHESIS (the response wrapper) — assign YOUR OMI score (omi_score, "
+    "an integer 0-100) and its tier band from the whole body of evidence, give evidence FOR and AGAINST "
+    "with equal rigor, named uncertainty, what would change the read, and a recommended verdict. Weight "
+    "by evidence strength × corroboration; raise confidence only on INDEPENDENT cross-domain "
+    "convergence; insufficient evidence is itself a valid conclusion.\n"
     "ALL SIX reasoning domains are REQUIRED in every response — even when a domain has no evidence in "
     "this investigation. For an evidence-less domain, state plainly in its 'assessment' that no evidence "
     "of that kind was collected (or that it is insufficient to reason over) and leave its 'citations' "
@@ -354,9 +355,10 @@ _EVIDENCE_SECTIONS: tuple[dict, ...] = (
 )
 _EVIDENCE_INSTRUCTION = (
     "Produce ONE JSON object valid against the canonical comprehensive assessment schema: the "
-    "Lead-Investigator synthesis (echoing the engine's suspicion_probability/suspicion_tier) PLUS the six "
-    "first-class per-domain reasoning sections. Weigh detector disagreement; treat coverage-sampled "
-    "evidence as disclosed, not hidden. Cite only evidence ids/aliases. Output only the JSON."
+    "Lead-Investigator synthesis (with YOUR omi_score and its tier band) PLUS the six first-class "
+    "per-domain reasoning sections and one commenter_assessments item per account alias. Weigh detector "
+    "disagreement; treat coverage-sampled evidence as disclosed, not hidden. Cite only evidence "
+    "ids/aliases. Output only the JSON."
 )
 
 

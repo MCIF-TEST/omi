@@ -15,7 +15,7 @@
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1348 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
-| **Master Analyst Protocol (production doctrine, AI-first + OMI score)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:8d344b1b6f34a3485f0e4749`**; **43,149 chars** (regenerated: detailed sourced bot-detection methodology, the OMI score doctrine, a complete worked JSON EXAMPLE, AI-first framing — echo/Governor language removed). The analyst produces its OWN single **OMI score** (`omi_score` 0–100) + tier; no echo. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard for the new contract to take effect.** |
+| **Master Analyst Protocol (production doctrine, AI-first + OMI score, contradiction-free)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:2b37a903580594322767d47c`**; **44,024 chars**; version `map/prompt:v1+constitution:v5+framework:v1+template:citmpl-v4`. Fully consistent AI-first doctrine end to end — the constitution (v5) and comprehensive task were aligned: NO echo language, NO Governor language anywhere in the compiled text (swept: 0 hits for governor/echo/never-recompute). The analyst produces its OWN single **OMI score** (`omi_score` 0–100) + tier. **Wire discipline: in preset mode only the evidence bundle (user message) is sent — the protocol lives in the OpenRouter preset; the compiled text exists locally only for the drift hash.** Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard.** |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
@@ -549,6 +549,27 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (Contradiction-free protocol + wire-discipline verification)** — Two asks. **(1) Verified
+  the master prompt is NOT sent to the API in preset mode** (already the architecture, now proven
+  directly + by test): `OpenRouterReasoningProvider._request_body` in preset mode sends ONLY the evidence
+  bundle as one user message (`model=@preset/omi-master-v1`; roles on the wire == ["user"]; the protocol
+  text never appears in the body). The compiled protocol is used locally ONLY to compute the
+  `master_prompt_hash` drift record. No code change needed. **(2) Regenerated the protocol
+  contradiction-free**: the constitution (bumped **v4 → v5**) and the comprehensive task still carried
+  the OLD echo/Governor doctrine alongside the new AI-first text — fixed at the source:
+  `global_constitution` rewritten (Governor preamble → structural validation; "ECHO THE ENGINE NUMBER" →
+  "YOU OWN THE OMI SCORE"); `evidence_semantics` echo bullets → engine measurements are INPUTS to weigh
+  (+ disambiguated the per-account engine omiscore column from the output `omi_score`);
+  `citation_rules` Governor-enforcement claim removed (discipline kept); `calibration_rules` anchor→weigh;
+  `governor_constraints` block retitled **STRUCTURAL VALIDATION** with a structural-only body (id kept
+  stable for the shadow-council composition); `output_formatting_rules` gained "completeness over
+  brevity — finish the entire object regardless of size". Comprehensive task section 7 (ECHO → assign
+  YOUR OMI score), section 3 (omiscore column disambiguation), and `_EVIDENCE_INSTRUCTION` (echo phrase →
+  YOUR omi_score) fixed. Contradiction sweep over the compiled preset: **0 hits** for governor / echo /
+  never-recompute. Tests updated: `test_ai_readiness` ×2 (ECHO → YOU OWN THE OMI SCORE + STRUCTURAL
+  VALIDATION), `test_investigation_summary_stage` pkg hash → `pkg:584c7d83403b565f006d5a35`. All mirrors +
+  manifests + preset regenerated. **New preset hash `map:2b37a903580594322767d47c` (44,024 chars,
+  constitution v5); operator must re-paste.**
 - **2026-07-18 (Master protocol regenerated + single OMI score, AI-first)** — Regenerated the whole Master
   Analyst Protocol and consolidated the investigation to ONE analyst-produced score. **Base prompt
   (`omi_analyst_v1.txt`) rewritten**: AI-first framing (the analyst IS the investigator; echo-discipline +
