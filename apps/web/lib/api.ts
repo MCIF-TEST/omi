@@ -705,12 +705,16 @@ export interface CommenterAssessment {
 export interface CompletionStatus {
   complete: boolean;
   finish_reason: string | null;
-  represented_commenters: number;
-  assessed_commenters: number;
+  stopped_on_token_limit: boolean;
+  json_complete: boolean;
+  schema_valid: boolean;
+  governor_valid: boolean;
+  represented_commenters: number;   // expected (shown to the model)
+  assessed_commenters: number;      // returned (actually assessed)
   missing_commenters: number;
   omitted_input_commenters: number;
-  max_output_tokens: number | null;
-  output_tokens: number | null;
+  max_output_tokens: number | null; // completion budget requested
+  output_tokens: number | null;     // actual completion size
   incomplete_kind: 'truncated_output' | 'missing_assessments' | 'omitted_input' | null;
   reason: string;
   estimated_remaining_commenters: number;
@@ -811,6 +815,13 @@ export interface AnalystAssessment {
     total_tokens?: number | null;
     response_status?: number | null;
     endpoint_error?: string | null;
+    // Phase 5H — full-investigation completion (also on `completion`, mirrored here for the trace panel)
+    finish_reason?: string | null;
+    max_output_tokens?: number | null;
+    commenters_total?: number | null;
+    commenters_assessed?: number | null;
+    completion_complete?: boolean;
+    completion_incomplete_kind?: string | null;
   };
 }
 

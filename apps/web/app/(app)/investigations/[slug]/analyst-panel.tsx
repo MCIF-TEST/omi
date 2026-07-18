@@ -274,6 +274,7 @@ function VerificationPanel({
   a, provider, generatedAt,
 }: { a: AnalystAssessment; provider: string | null; generatedAt: string | null }) {
   const t = a.investigation_trace ?? {};
+  const c = a.completion;
   const aiBacked = t.model_backed === true;
   const isOpenRouter = (t.provider ?? '').toLowerCase() === 'openrouter'
     || /openrouter/i.test(provider ?? '');
@@ -300,6 +301,18 @@ function VerificationPanel({
     ['HTTP status', t.response_status ?? '—'],
     ['Endpoint error', t.endpoint_error ?? '—'],
     ['Generated at', generatedAt ?? '—'],
+    // Phase 5H — full-investigation completion certification
+    ['— completion —', ''],
+    ['Completion', c ? (c.complete ? 'complete' : `incomplete: ${c.incomplete_kind ?? '—'}`) : '—'],
+    ['Commenters analyzed / expected',
+      c ? `${c.assessed_commenters} / ${c.represented_commenters + c.omitted_input_commenters}` : '—'],
+    ['Stopped on token limit', yn(c?.stopped_on_token_limit)],
+    ['JSON complete', yn(c?.json_complete)],
+    ['Schema valid', yn(c?.schema_valid)],
+    ['Governor valid', yn(c?.governor_valid)],
+    ['Completion budget', c?.max_output_tokens ?? t.max_output_tokens ?? '—'],
+    ['Actual output size', c?.output_tokens ?? '—'],
+    ['Est. remaining commenters', c?.estimated_remaining_commenters ?? '—'],
   ];
   return (
     <details className="mt-4 rounded-sm border border-dashed border-accent/40 bg-bg-elev-2/40 open:bg-bg-elev-2">
@@ -534,14 +547,28 @@ function DomainPanel({
 // never emits a per-account number). When the model produced none, an honest empty state is shown instead
 // of any deterministic fallback. `resolved: false` items (alias didn't map to a known commenter) are
 // summarized as a count rather than shown as fabricated identities.
+// Completion statistics — always shown so the user knows the AI coverage of THIS investigation
+// (expected vs analyzed, the dynamic budget, actual output). Never hides an incomplete investigation.
+function CompletionStats({ c }: { c: CompletionStatus }) {
+  const expected = c.represented_commenters + c.omitted_input_commenters;
+  const bits: string[] = [`${c.assessed_commenters}/${expected} analyzed`];
+  if (typeof c.output_tokens === 'number' && c.max_output_tokens)
+    bits.push(`${c.output_tokens.toLocaleString()}/${c.max_output_tokens.toLocaleString()} out tokens`);
+  if (c.finish_reason) bits.push(`stop: ${c.finish_reason}`);
+  return <p className="text-2xs font-mono text-fg-faint mt-0.5">{bits.join(' · ')}</p>;
+}
+
 function CompletionBanner({ c }: { c?: CompletionStatus }) {
   if (!c) return null;
   if (c.complete) {
     return (
-      <p className="text-2xs font-mono uppercase tracking-wider text-tier-low flex items-center gap-1.5">
-        <ShieldCheck size={11} className="shrink-0" />
-        Complete · all {c.assessed_commenters} commenter{c.assessed_commenters === 1 ? '' : 's'} assessed
-      </p>
+      <div className="space-y-0.5">
+        <p className="text-2xs font-mono uppercase tracking-wider text-tier-low flex items-center gap-1.5">
+          <ShieldCheck size={11} className="shrink-0" />
+          Complete · all {c.assessed_commenters} commenter{c.assessed_commenters === 1 ? '' : 's'} assessed
+        </p>
+        <CompletionStats c={c} />
+      </div>
     );
   }
   return (
@@ -549,7 +576,7 @@ function CompletionBanner({ c }: { c?: CompletionStatus }) {
       <TriangleAlert size={13} className="mt-0.5 shrink-0 text-tier-moderate" />
       <div className="min-w-0">
         <p className="text-2xs font-mono uppercase tracking-wider text-tier-moderate mb-0.5">
-          Incomplete · {c.assessed_commenters} of {c.represented_commenters + c.omitted_input_commenters} commenters assessed
+          Partial AI coverage · {c.assessed_commenters} of {c.represented_commenters + c.omitted_input_commenters} commenters assessed
         </p>
         <p className="text-xs text-fg-dim leading-relaxed">{c.reason}</p>
         {c.estimated_remaining_commenters > 0 && (
@@ -557,6 +584,7 @@ function CompletionBanner({ c }: { c?: CompletionStatus }) {
             ~{c.estimated_remaining_commenters} commenter{c.estimated_remaining_commenters === 1 ? '' : 's'} remaining.
           </p>
         )}
+        <CompletionStats c={c} />
       </div>
     </div>
   );

@@ -167,6 +167,9 @@ def test_every_commenter_receives_reasoning(n):
     # dynamic budget was sized for THIS investigation
     assert comp["max_output_tokens"] == completion_budget(n)
     assert len([r for r in out["commenter_assessments"] if r["resolved"]]) == n
+    # self-certification: schema + Governor + structured-JSON all certified on a complete run
+    assert comp["schema_valid"] is True and comp["governor_valid"] is True
+    assert comp["json_complete"] is True and comp["stopped_on_token_limit"] is False
 
 
 def test_truncation_is_marked_not_silently_dropped():
@@ -177,6 +180,8 @@ def test_truncation_is_marked_not_silently_dropped():
     assert comp["assessed_commenters"] == 100
     assert comp["estimated_remaining_commenters"] == 50
     assert out["investigation_trace"]["finish_reason"] == "length"
+    # certification: the token-limit stop + incomplete JSON are recorded explicitly
+    assert comp["stopped_on_token_limit"] is True and comp["json_complete"] is False
 
 
 def test_normal_stop_with_missing_is_marked():

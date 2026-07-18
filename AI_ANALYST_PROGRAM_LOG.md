@@ -564,13 +564,20 @@ Canonical-schema obedience · 22 Final QC.
   and, if not, WHY (`truncated_output` when finish_reason=length | `missing_assessments` | `omitted_input`)
   + estimated remaining work. Persisted as `assessment.completion` + trace fields (`finish_reason`,
   `max_output_tokens`, `commenters_total`/`commenters_assessed`, `completion_complete`/`_incomplete_kind`).
+  Self-certification (expanded spec): `completion` also carries `stopped_on_token_limit`, `json_complete`
+  (structured JSON received AND not truncated), `schema_valid`, `governor_valid` — a `complete` verdict
+  requires all three plus zero coverage gap. **Performance metadata** (input/output tokens, completion
+  budget vs actual output size, latency, estimated cost, commenters analyzed/expected, completion status,
+  Governor result, schema result) is fully persisted in `investigation_trace` for diagnostics.
   **(4) No silent truncation** — an over-run investigation is MARKED incomplete with the reason + remaining,
   never dropped; the per-account join is gated on `model_backed` so rejected model content never leaks.
   Output structure: per-account `assessment` is CONCISE (schema `maxLength:600`) + the contract instructs
   "one item for EVERY account alias, the narrative belongs in the executive/domain sections" → compiled
   protocol changed, **new preset hash `map:5226c1bd2259be9caa5260fe` (35,699 chars); preset + HF mirror
-  regenerated; operator must re-paste**. Frontend: `CompletionStatus` type + a completion banner in the
-  per-account section (Complete · N assessed / Incomplete · reason + remaining). Verified (mocked transport,
+  regenerated; operator must re-paste**. Frontend: `CompletionStatus` type + a completion banner exposing
+  every required state (Complete / Partial AI coverage + reason + remaining / AI still processing) with
+  completion statistics (analyzed/expected · budget vs actual output tokens · finish_reason), and the full
+  completion certification in the dev VerificationPanel. Verified (mocked transport,
   no live call): 10 / 50 / 150 commenters → all represented (evidence_omitted=0) + all assessed + complete;
   finish_reason=length → truncated_output with remaining; normal-stop-with-gap → missing_assessments; Floor
   → no per-account leak + not-applicable. Tests: `tests/test_full_investigation_coverage.py` (13). Files:

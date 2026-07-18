@@ -70,12 +70,16 @@ class CompletionStatus:
 
     complete: bool
     finish_reason: str | None            # OpenRouter finish_reason: "stop" (normal) | "length" (ceiling) | ...
-    represented_commenters: int          # accounts the model was SHOWN (eligible for reasoning)
-    assessed_commenters: int             # accounts the model actually assessed
+    stopped_on_token_limit: bool         # generation stopped because it hit the output ceiling
+    json_complete: bool                  # structured JSON was received AND not truncated mid-generation
+    schema_valid: bool                   # the model output passed canonical-schema validation
+    governor_valid: bool                 # the model output passed the Governor
+    represented_commenters: int          # accounts the model was SHOWN (eligible for reasoning) = expected
+    assessed_commenters: int             # accounts the model actually assessed = returned
     missing_commenters: int              # shown but not assessed
     omitted_input_commenters: int        # accounts NOT shown to the model (upstream evidence budget)
-    max_output_tokens: int | None        # the dynamic completion ceiling requested for this inference
-    output_tokens: int | None            # completion tokens the gateway reported
+    max_output_tokens: int | None        # the dynamic completion budget requested for this inference
+    output_tokens: int | None            # actual completion size the gateway reported
     incomplete_kind: str | None          # None | "truncated_output" | "missing_assessments" | "omitted_input"
     reason: str
     estimated_remaining_commenters: int  # remaining work for a future continuation pass
@@ -84,6 +88,10 @@ class CompletionStatus:
         return {
             "complete": self.complete,
             "finish_reason": self.finish_reason,
+            "stopped_on_token_limit": self.stopped_on_token_limit,
+            "json_complete": self.json_complete,
+            "schema_valid": self.schema_valid,
+            "governor_valid": self.governor_valid,
             "represented_commenters": self.represented_commenters,
             "assessed_commenters": self.assessed_commenters,
             "missing_commenters": self.missing_commenters,
@@ -105,6 +113,9 @@ def verify_completion(
     omitted_input_commenters: int,
     max_output_tokens: int | None = None,
     output_tokens: int | None = None,
+    json_received: bool = True,
+    schema_valid: bool = True,
+    governor_valid: bool = True,
 ) -> CompletionStatus:
     """Decide whether the AI reasoning covered the COMPLETE investigation, and if not, why + how much
     remains. Precedence of incompleteness (most actionable first):
@@ -120,10 +131,14 @@ def verify_completion(
     assessed = max(0, int(assessed_commenters or 0))
     omitted_input = max(0, int(omitted_input_commenters or 0))
     missing = max(0, represented - assessed)
+    truncated = (finish_reason or "").lower() == "length"
+    json_complete = bool(json_received) and not truncated
 
     if not model_backed:
         return CompletionStatus(
-            complete=False, finish_reason=finish_reason, represented_commenters=represented,
+            complete=False, finish_reason=finish_reason, stopped_on_token_limit=truncated,
+            json_complete=json_complete, schema_valid=bool(schema_valid),
+            governor_valid=bool(governor_valid), represented_commenters=represented,
             assessed_commenters=assessed, missing_commenters=missing,
             omitted_input_commenters=omitted_input, max_output_tokens=max_output_tokens,
             output_tokens=output_tokens, incomplete_kind=None,
@@ -131,7 +146,6 @@ def verify_completion(
             estimated_remaining_commenters=represented + omitted_input,
         )
 
-    truncated = (finish_reason or "").lower() == "length"
     if truncated:
         kind, reason = "truncated_output", (
             "Generation reached the output-token ceiling before finishing; the investigation exceeded a "
@@ -152,8 +166,15 @@ def verify_completion(
     else:
         kind, reason, remaining = None, "Complete — every commenter in the investigation received AI reasoning.", 0
 
+    # Complete requires: no coverage gap AND the output certified valid + intact. schema_valid /
+    # governor_valid are True by construction on the model-backed path (the output had to pass both to
+    # be model-backed), recorded here explicitly for certification.
+    complete = (kind is None) and bool(schema_valid) and bool(governor_valid) and json_complete
+    if kind is None and not complete:
+        reason = "Model output did not fully certify (schema / Governor / JSON completeness)."
     return CompletionStatus(
-        complete=kind is None, finish_reason=finish_reason,
+        complete=complete, finish_reason=finish_reason, stopped_on_token_limit=truncated,
+        json_complete=json_complete, schema_valid=bool(schema_valid), governor_valid=bool(governor_valid),
         represented_commenters=represented, assessed_commenters=assessed, missing_commenters=missing,
         omitted_input_commenters=omitted_input, max_output_tokens=max_output_tokens,
         output_tokens=output_tokens, incomplete_kind=kind, reason=reason,

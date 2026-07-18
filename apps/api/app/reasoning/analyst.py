@@ -681,7 +681,11 @@ def _assess_core(
             model_backed=model_backed, finish_reason=capture.get("finish_reason"),
             represented_commenters=_represented, assessed_commenters=_assessed,
             omitted_input_commenters=_omitted_input, max_output_tokens=_completion_max_tokens,
-            output_tokens=(inference.tokens or {}).get("completion_tokens"))
+            output_tokens=(inference.tokens or {}).get("completion_tokens"),
+            json_received=(inference.raw_obj is not None),
+            # A model-backed result passed BOTH canonical-schema validation and the Governor (that is what
+            # makes it model-backed) — certify them explicitly. On the Floor path both are False.
+            schema_valid=model_backed, governor_valid=bool(inference.trace.permitted))
         governed["completion"] = _completion.to_dict()
         governed["ai_package"] = ai_package.provenance()
         governed["prompt_build"] = prompt_build
