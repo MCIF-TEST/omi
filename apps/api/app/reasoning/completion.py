@@ -32,7 +32,11 @@ from dataclasses import dataclass
 COMPLETION_BASE_TOKENS = 3000
 COMPLETION_PER_COMMENTER_TOKENS = 160
 COMPLETION_FLOOR_TOKENS = 4000          # even a 0-commenter investigation needs the full synthesis
-COMPLETION_CEILING_TOKENS = 40000       # ~ (40000-3000)/160 ≈ 231 commenters before the ceiling binds
+COMPLETION_CEILING_TOKENS = 100000      # ~ (100000-3000)/160 ≈ 606 commenters before the ceiling binds.
+# NOTE (2026-07-18): raised 40000 → 100000 deliberately, to observe REAL per-investigation output cost on
+# live runs before tuning down. It is a CEILING, not a reservation — billing is on tokens actually
+# generated, so a large investigation that finishes early still costs only what it produced. Lower this
+# once real cost data is in.
 
 
 def completion_budget(

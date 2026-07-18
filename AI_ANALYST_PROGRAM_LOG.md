@@ -549,6 +549,13 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (5H tuning — completion ceiling 40k → 100k)** — Raised `COMPLETION_CEILING_TOKENS`
+  40000 → 100000 (`app/reasoning/completion.py`) to observe REAL per-investigation output cost on live
+  runs before tuning down. Single-inference commenter capacity ~231 → ~606. It is a CEILING, not a
+  reservation — billing is on tokens actually generated — so this cannot raise cost on an investigation
+  that finishes early. `completion_budget(n)` still scales linearly (150→27000 unchanged; the ceiling now
+  binds only past ~606 commenters). Tests reference the constant symbolically (all green). Lower once real
+  cost data is in.
 - **2026-07-18 (Phase 5H — Full Investigation AI Coverage)** — Product philosophy shift: **investigation
   quality over API cost**. The AI now reasons over the COMPLETE investigation — every commenter is
   eligible, none sampled or silently omitted. Four mechanisms: **(1) Full evidence coverage** — raised the
