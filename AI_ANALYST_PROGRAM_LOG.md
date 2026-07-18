@@ -549,6 +549,18 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (End-to-end flow verification — YouTube/X → OpenRouter → UI)** — Added
+  `tests/test_end_to_end_openrouter_flow.py` (4 cases): proves (mocked transport, no live call) the whole
+  production path for BOTH platforms. A comprehensive scan payload (YouTube OR X — each platform's
+  commenters ride in the `video` container, read platform-agnostically) → evidence bundle → dispatched to
+  the `omi-master-v1` preset **only when `OPENROUTER_API_KEY` is present** (the Render variable; the ONE
+  outbound gate is `model_path AND token_ok` where `token_ok = bool(os.environ["OPENROUTER_API_KEY"])` for
+  the openrouter provider) → response parsed + structurally validated + model-backed → the exact UI fields
+  present (verdict / suspicion_tier / suspicion_probability / confidence_band / evidence_for/against /
+  comprehensive_sections / commenter_assessments / completion) with the platform preserved on
+  `subject.platform` and per-account AI results echo-joined to real handles. Key ABSENT → the gate does not
+  fire (0 requests) and the deterministic Floor backs the assessment gracefully. No secret leaks into the
+  served assessment. Verification only — no source change.
 - **2026-07-18 (AI-First refactor — Stage 1: investigation verdict path is structural-only)** — Product
   pivot: OmiSphere is an AI-powered Social Authenticity Investigation Platform — the AI IS the
   investigator; deterministic code prepares objective evidence. **Owner decisions (via AskUserQuestion):**
