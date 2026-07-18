@@ -15,7 +15,7 @@
 | **Pull request** | draft **PR #84**, base `main`, head `claude/master-analyst-protocol-v1-1u8tyk` — covers Phases 1–2 + 3B + 4A + 5A + 5B (+ this log); `main` itself still holds only Phase 0 |
 | **Verify command** | `cd apps/api && python -m pytest tests/ -q` (backend) · `cd apps/web && npm run typecheck && npm run test` (frontend) |
 | **Latest green suite** | backend **1348 passed, 1 warning** (pre-existing Starlette/httpx deprecation — unrelated, ignore); frontend typecheck clean + 23 tests |
-| **Master Analyst Protocol (production doctrine)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:5226c1bd2259be9caa5260fe`**; version `map/prompt:v1+constitution:v4+framework:v1+template:citmpl-v4`; 35,699 chars; 14 constitution blocks. Instructs COMPLETE per-account coverage: one CONCISE `commenter_assessments` item for EVERY account alias (no sampling). Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard for the new output contract to take effect.** |
+| **Master Analyst Protocol (production doctrine, AI-first + OMI score)** | compiled `pp.system` == `compile_master_analyst_protocol().text`; **hash `map:8d344b1b6f34a3485f0e4749`**; **43,149 chars** (regenerated: detailed sourced bot-detection methodology, the OMI score doctrine, a complete worked JSON EXAMPLE, AI-first framing — echo/Governor language removed). The analyst produces its OWN single **OMI score** (`omi_score` 0–100) + tier; no echo. Paste-ready artifact: **`ml/analyst/omi_master_v1_preset.txt`** (+ `.json` manifest), drift-guarded byte-identical to the compiled text. **Operator must re-paste the regenerated preset into the OpenRouter dashboard for the new contract to take effect.** |
 | **Next step** | **Operator: OpenRouter production cutover** — create preset `omi-master-v1` + set Render env (see **§13 checklist**). Token budget resolved (`max_new_tokens=16000`). Then optional **Phase 4B** (AI experience integration). Code is cutover-ready; deployment is not authorized to execute from here. |
 
 ---
@@ -549,6 +549,28 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (Master protocol regenerated + single OMI score, AI-first)** — Regenerated the whole Master
+  Analyst Protocol and consolidated the investigation to ONE analyst-produced score. **Base prompt
+  (`omi_analyst_v1.txt`) rewritten**: AI-first framing (the analyst IS the investigator; echo-discipline +
+  Governor language removed), a detailed **bot & coordination detection methodology** across six evidence
+  families (temporal, content/linguistic, network/coordination, profile/metadata, engagement/amplification,
+  narrative) grounded in the public research/practitioner literature (Botometer/BotOrNot feature families,
+  DARPA bot-detection challenge, Stanford Internet Observatory / EU DisinfoLab CIB frameworks, platform CIB
+  takedown methodology — cited as methodology, never as evidence), and the **OMI SCORE** doctrine.
+  **Schema (`analyst_response_schema.json` / `comprehensive_assessment_v1`)**: added required
+  analyst-produced **`omi_score`** (integer 0–100, the single composite authenticity-risk score; bands
+  0-24/25-49/50-74/75-100); `suspicion_tier` is its band (now model-produced); the legacy
+  `suspicion_probability` (the "inauthenticity score") is **DEPRECATED/optional** and dropped from the UI.
+  **Echo removed** (`COMPREHENSIVE_ECHOED_FIELDS=()`, echo overwrite deleted from `runtime._canonical_candidate`,
+  `analyst._DETERMINISTIC_ECHOED_FIELDS=("corroboration",)`, `_MODEL_GENERATED_FIELDS` gains omi_score +
+  suspicion_tier). **Output contract** now instructs the OMI score + carries a complete worked JSON
+  **EXAMPLE**. The deterministic Floor + the `omi_analyst` DeterministicAnalystProvider now also emit
+  `omi_score` (= overall_probability × 100) so the Floor path stays schema-valid. **New preset hash
+  `map:8d344b1b6f34a3485f0e4749` (43,149 chars); preset + HF mirror + `analyst_system_prompt_v1.md` +
+  manifests regenerated; operator must re-paste**. **Frontend**: `AnalystAssessment.omi_score`; the
+  investigation panel now shows the big **OMI score (0–100) + tier bar** in place of the inauthenticity
+  probability. Full backend suite driven back to green (23 test files' model-output helpers / assertions
+  migrated to omi_score); frontend typecheck + 23 tests + lint clean.
 - **2026-07-18 (End-to-end flow verification — YouTube/X → OpenRouter → UI)** — Added
   `tests/test_end_to_end_openrouter_flow.py` (4 cases): proves (mocked transport, no live call) the whole
   production path for BOTH platforms. A comprehensive scan payload (YouTube OR X — each platform's

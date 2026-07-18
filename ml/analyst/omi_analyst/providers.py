@@ -424,6 +424,7 @@ class DeterministicAnalystProvider:
             "model_revision": config.model_revision or "local-mirror",
             "subject": subject,
             "verdict": verdict,
+            "omi_score": int(round(prob * 100)),
             "suspicion_tier": tier,
             "suspicion_probability": round(prob, 6),
             "confidence_band": band,

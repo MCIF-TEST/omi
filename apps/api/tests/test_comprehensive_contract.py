@@ -105,6 +105,8 @@ def _valid_model_output() -> dict:
     proving the model is not required to fabricate system-owned metadata."""
     return {
         "verdict": "mixed",
+        "omi_score": 62,
+        "suspicion_tier": "elevated",
         "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal signal over thin data; no corroborating detector",
         "headline": "Posting cadence is unusually regular, but the read rests on one signal.",
@@ -262,7 +264,9 @@ def test_omi_owned_metadata_is_not_required_from_the_model():
     """The model output that carries NONE of the Omi-owned provenance/subject fields is still valid —
     Omi injects those after validation; the model must never be asked to fabricate them."""
     obj = _valid_model_output()
-    for f in COMPREHENSIVE_OMI_INJECTED_FIELDS + ("suspicion_probability", "suspicion_tier", "corroboration"):
+    # AI-first: the model OWNS omi_score + suspicion_tier (they ARE in the output). Only the provenance/
+    # subject + the factual corroboration state are Omi-owned and absent from the model output.
+    for f in COMPREHENSIVE_OMI_INJECTED_FIELDS + ("corroboration",):
         assert f not in obj
     errs = validate_comprehensive_model_output(
         obj, schema=comprehensive_investigation_canonical_schema(),
@@ -298,7 +302,7 @@ def test_persisted_shape_stays_frontend_compatible():
     (verdict / suspicion_probability / confidence_band / evidence_for) + the six comprehensive_sections +
     governance — so no frontend change is required (compatibility projection = identity here)."""
     out, _ = _run(_valid_model_output())
-    for field in ("verdict", "suspicion_probability", "confidence_band", "evidence_for",
+    for field in ("verdict", "omi_score", "suspicion_tier", "confidence_band", "evidence_for",
                   "evidence_against", "headline", "assessment", "uncertainty", "governance"):
         assert field in out, f"frontend-facing field {field} missing"
     assert set(out["comprehensive_sections"]) == set(COMPREHENSIVE_SECTION_KEYS)

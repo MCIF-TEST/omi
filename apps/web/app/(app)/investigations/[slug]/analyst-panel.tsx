@@ -351,6 +351,24 @@ function VerificationPanel({
   );
 }
 
+// THE OMI SCORE — the single composite authenticity-risk score (0–100), the investigation's headline
+// figure. Higher = stronger evidence of inauthentic/coordinated behavior. Rendered as the number plus a
+// tier-colored bar (score/100). This is the only investigation score; the legacy inauthenticity
+// probability is retired.
+function OmiScore({ score, tier }: { score: number; tier: Tier }) {
+  const s = Math.max(0, Math.min(100, Math.round(score ?? 0)));
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-baseline gap-1 shrink-0" title="OMI score — composite authenticity-risk, 0–100.">
+        <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute mr-1">OMI</span>
+        <span className="stat-value text-2xl font-semibold text-fg tabular-nums">{s}</span>
+        <span className="font-mono text-2xs text-fg-mute">/100</span>
+      </div>
+      <ProbabilityBar value={s / 100} tier={tier} className="flex-1" showLabel={false} />
+    </div>
+  );
+}
+
 function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   // Product-cutover rule: only Mistral-authored assessments render as AI reasoning. If the model was
   // not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
@@ -376,17 +394,10 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
           )}
         </div>
 
-        {/* Suspicion probability — the echoed engine number, as a tier-colored bar (not bare text). */}
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute w-16 shrink-0">
-            suspicion
-          </span>
-          <ProbabilityBar
-            value={a.suspicion_probability}
-            tier={a.suspicion_tier as Tier}
-            className="flex-1"
-          />
-        </div>
+        {/* THE OMI SCORE — the analyst's single composite authenticity-risk score (0–100), the headline
+            figure. Replaces the legacy inauthenticity probability. Rendered as the big number + a
+            tier-colored bar. */}
+        <OmiScore score={a.omi_score} tier={a.suspicion_tier as Tier} />
 
         <CorroborationStrip corr={a.corroboration} />
 

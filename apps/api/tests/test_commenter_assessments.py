@@ -64,7 +64,7 @@ def _prod_settings():
 def _model_output(commenter_assessments):
     domains = {k: {"assessment": "reasoning present", "citations": ["A1"]} for k in COMPREHENSIVE_SECTION_KEYS}
     out = {
-        "verdict": "mixed", "confidence_band": "moderate",
+        "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal over thin data",
         "headline": "Cadence unusually regular.",
         "assessment": "Consistent with mechanical regularity. Probabilistic; the analyst decides.",

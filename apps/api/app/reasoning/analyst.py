@@ -387,6 +387,8 @@ _cache_stats = {"served_from_cache": 0, "generated": 0}
 # which the model ECHOES and must never override (echo discipline). This map is the architectural
 # contract surfaced in the forensic audit (items 8 & 9).
 _MODEL_GENERATED_FIELDS = (
+    # AI-first: the analyst produces its OWN scores — the OMI score + its tier band.
+    "omi_score", "suspicion_tier",
     "verdict", "confidence_band", "confidence_rationale", "headline", "assessment",
     "evidence_for", "evidence_against", "uncertainty", "what_would_change_this",
     "limits_statement", "coordination_label", "legitimate_hypothesis", "supplemental_context",
@@ -397,7 +399,9 @@ _MODEL_GENERATED_FIELDS = (
 )
 # The engine owns these — the model echoes them and OmiSphere overwrites/overlays from the deterministic
 # engine (never model-fabricated): the echoed suspicion numbers + the corroboration state.
-_DETERMINISTIC_ECHOED_FIELDS = ("suspicion_probability", "suspicion_tier", "corroboration")
+# AI-first: nothing is echoed/overwritten anymore. Only the factual engine 'corroboration' state
+# (which discriminative methods fired) is overlaid from the deterministic evidence.
+_DETERMINISTIC_ECHOED_FIELDS = ("corroboration",)
 _SYSTEM_FIELDS = ("governance", "ai_package", "prompt_build", "metrics", "subject",
                   "analyst_version", "prompt_version", "schema_version", "model_revision")
 

@@ -74,7 +74,7 @@ def _valid_model_output() -> dict:
     domains = {k: {"assessment": "reasoning present for this domain", "citations": ["A1"]}
                for k in COMPREHENSIVE_SECTION_KEYS}
     return {
-        "verdict": "mixed", "confidence_band": "moderate",
+        "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal signal over thin data",
         "headline": "GPT5MINI-PROD-HEADLINE cadence is unusually regular.",
         "assessment": ("Consistent with mechanical posting regularity; a single-axis result. These "
@@ -177,9 +177,10 @@ def test_valid_production_assessment_validates_persists_in_ui_shape():
     assert out["headline"].startswith("GPT5MINI-PROD-HEADLINE")
     assert set(out["comprehensive_sections"]) == set(COMPREHENSIVE_SECTION_KEYS)
     # the exact structured fields the React UI consumes (Phase 4A) are present + provider-labeled
-    for f in ("verdict", "suspicion_tier", "suspicion_probability", "confidence_band",
+    for f in ("verdict", "omi_score", "suspicion_tier", "confidence_band",
               "evidence_for", "evidence_against", "corroboration", "governance"):
         assert f in out
+    assert out["omi_score"] == 68             # the analyst's OWN OMI score (AI-first, not echoed)
     assert out["governance"]["provider"] == "openrouter-omi-analyst-v1"
     # Omi-owned metadata overlaid AFTER validation (never model-fabricated)
     assert isinstance(out["subject"], dict) and out["subject"]["platform"] == "youtube"

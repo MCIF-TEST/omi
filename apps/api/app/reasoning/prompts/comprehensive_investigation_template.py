@@ -61,9 +61,12 @@ COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY = "commenter_assessments"
 COMPREHENSIVE_OMI_INJECTED_FIELDS: tuple[str, ...] = (
     "analyst_version", "prompt_version", "schema_version", "model_revision", "subject",
 )
-COMPREHENSIVE_ECHOED_FIELDS: tuple[str, ...] = ("suspicion_probability", "suspicion_tier")
-# The engine owns the corroboration state; the model echoes it, so OmiSphere overlays it from the
-# deterministic evidence and it is not required from the model either.
+# AI-first refactor: the analyst is the investigator — it produces its OWN scores (the OMI score
+# `omi_score` + `suspicion_tier`). Nothing is echoed/overwritten from the deterministic engine anymore.
+COMPREHENSIVE_ECHOED_FIELDS: tuple[str, ...] = ()
+# The engine's corroboration state is factual evidence (which discriminative methods fired,
+# single-axis-capped) — OmiSphere still overlays it from the deterministic evidence, so it is not required
+# from the model.
 COMPREHENSIVE_ENGINE_OVERLAID_FIELDS: tuple[str, ...] = ("corroboration",)
 
 # The full set OmiSphere injects/overlays onto the model's analytical output to form the governed wrapper.
@@ -183,6 +186,48 @@ def comprehensive_investigation_canonical_schema() -> dict:
     }
 
 
+# A complete, schema-valid worked EXAMPLE of the output JSON — teaches the exact shape (the OMI score,
+# the synthesis wrapper, the six domain sections, and one concise per-account assessment per alias).
+# Illustrative values only; the model fills every field from the ACTUAL evidence of its investigation.
+_OUTPUT_EXAMPLE = (
+    "EXAMPLE of a valid output object (illustrative values — reason from the real evidence):\n"
+    '{"omi_score": 68, "suspicion_tier": "elevated", "verdict": "mixed", "confidence_band": "low", '
+    '"confidence_rationale": "The elevated read rests on a single discriminative axis (co-engagement '
+    'among A1,A2,A3 in C1) over thin history; no independent axis corroborates it.", '
+    '"headline": "A tight co-engagement cluster is present, but the read rests on one axis over thin '
+    'data.", "assessment": "Three accounts co-engaged on the same content within a narrow window (C1) '
+    "— the strongest single signal. Cadence is within human range and histories are thin, so most "
+    "detectors abstained; an established footprint on A2 lowers the read. This is consistent with either "
+    "a small coordinated pod or a fan community reacting to the same event, and the evidence does not yet "
+    'distinguish them. Findings are probabilistic; the human analyst sets the verdict.", '
+    '"evidence_for": [{"signal": "co_engagement", "claim": "A1, A2 and A3 co-engaged on the same content '
+    'within a tight window.", "evidence_refs": ["C1"], "direction": "raises", "impact": 0.55}], '
+    '"evidence_against": [{"signal": "community", "claim": "A2 shows an established interaction footprint '
+    'more consistent with an organic account.", "evidence_refs": ["A2"], "direction": "lowers", '
+    '"impact": 0.18}], "uncertainty": ["Thin per-account history — temporal/content detectors '
+    'abstained.", "Single discriminative axis; no independent corroboration."], '
+    '"what_would_change_this": ["A shared behavioral fingerprint or coordinated tagging across the same '
+    'accounts would raise the read.", "Ground-truth that the cluster is a known fan community would lower '
+    'it."], "coordination_label": "mixed", "legitimate_hypothesis": "The cluster is equally consistent '
+    'with a fan community reacting to the same post; the evidence does not distinguish hostile from benign '
+    'coordination.", "limits_statement": "This is a probabilistic assessment; the human analyst sets the '
+    'final verdict.", "comment_reasoning": {"assessment": "Two near-duplicate praise comments appear but '
+    'the group is small and templated praise is a benign explanation.", "citations": ["C1"]}, '
+    '"commenter_history_reasoning": {"assessment": "Histories are thin; A2 alone carries enough footprint '
+    'to weigh.", "citations": ["A2"]}, "account_reasoning": {"assessment": "Detectors mostly abstained on '
+    'A1/A3; A2 community signal lowers its read.", "citations": ["A1", "A2", "A3"]}, '
+    '"narrative_reasoning": {"assessment": "No distinct narrative cluster was collected.", "citations": '
+    '[]}, "coordination_reasoning": {"assessment": "C1 is a single discriminative co-engagement cluster; '
+    'without a second independent axis the coordinated read is capped.", "citations": ["C1"]}, '
+    '"campaign_reasoning": {"assessment": "C1 is a campaign candidate, not an established campaign — no '
+    'ground-truth anchor is present.", "citations": ["C1"]}, "commenter_assessments": [{"ref": "A1", '
+    '"assessment": "Regular cadence and C1 co-engagement; thin history caps confidence.", "citations": '
+    '["C1"]}, {"ref": "A2", "assessment": "Established footprint makes an organic read at least as likely '
+    'despite C1 membership.", "citations": ["A2"]}, {"ref": "A3", "assessment": "Minimal independent '
+    'signal beyond C1 co-engagement.", "citations": ["C1"]}]}'
+)
+
+
 def _render_output_contract(schema: dict) -> str:
     """Render the model-facing OUTPUT CONTRACT text DETERMINISTICALLY from the canonical schema, so the
     schema, the contract the model receives, and the parser can never say three different things. Changing
@@ -219,10 +264,15 @@ def _render_output_contract(schema: dict) -> str:
         f"REQUIRED reasoning domains (six first-class sections, each an object with a non-empty "
         f"'assessment' string and a 'citations' array of evidence ids/aliases): {', '.join(domains)}.\n"
         f"{commenter_clause}"
-        f"Do NOT produce Omi-owned system/provenance fields — OmiSphere injects these after validation and "
-        f"you must not fabricate them: {', '.join(omi_injected)}. You MAY echo {', '.join(echoed)} from the "
-        f"evidence, but OmiSphere overwrites them from the deterministic engine (echo discipline), and the "
-        f"corroboration state is likewise supplied by OmiSphere. Output only the JSON."
+        f"THE OMI SCORE: 'omi_score' is your single composite authenticity-risk score, an INTEGER 0-100 "
+        f"(0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high) — your reasoned synthesis of the whole "
+        f"body of evidence, not an average of detector numbers. 'suspicion_tier' is its categorical band and "
+        f"MUST agree with omi_score. This is the ONLY investigation score — do NOT output a separate "
+        f"inauthenticity probability.\n"
+        f"Do NOT produce Omi-owned system/provenance fields — OmiSphere injects these after you respond and "
+        f"you must not fabricate them: {', '.join(omi_injected)}. The engine's factual 'corroboration' state "
+        f"is likewise supplied by OmiSphere. Output ONLY the JSON object — no prose before or after.\n"
+        f"{_OUTPUT_EXAMPLE}"
     )
 
 

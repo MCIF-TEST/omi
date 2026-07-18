@@ -75,7 +75,7 @@ def _valid_model_output() -> dict:
     domains = {k: {"assessment": "reasoning present for this domain", "citations": ["A1"]}
                for k in COMPREHENSIVE_SECTION_KEYS}
     return {
-        "verdict": "mixed", "confidence_band": "moderate",
+        "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal over thin data; no exculpatory signal was present.",
         "headline": "E2E-HEADLINE cadence is unusually regular.",
         "assessment": "Consistent with mechanical regularity; a single-axis result. Probabilistic; the "
@@ -154,10 +154,11 @@ def test_platform_flow_reaches_openrouter_and_returns_ui_shape(platform, monkeyp
     assert out["headline"].startswith("E2E-HEADLINE")
 
     # 4) the exact fields the React UI consumes are present, with the platform preserved
-    for f in ("verdict", "suspicion_tier", "suspicion_probability", "confidence_band",
+    for f in ("verdict", "omi_score", "suspicion_tier", "confidence_band",
               "evidence_for", "evidence_against", "comprehensive_sections", "commenter_assessments",
               "completion"):
         assert f in out
+    assert out["omi_score"] == 68            # the analyst's OWN OMI score survives (AI-first, not echoed)
     assert out["subject"]["platform"] == platform
     # per-account AI results joined back to real identity (echo)
     handles = {r.get("handle") for r in out["commenter_assessments"] if r.get("resolved")}

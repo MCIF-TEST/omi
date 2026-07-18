@@ -110,7 +110,7 @@ def _model_output(num_assessments: int) -> dict:
     ca = [{"ref": f"A{i + 1}", "assessment": f"Account A{i + 1} concise read.", "citations": []}
           for i in range(num_assessments)]
     return {
-        "verdict": "mixed", "confidence_band": "moderate",
+        "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
         "confidence_rationale": "single-axis temporal over thin data; no exculpatory signal was present.",
         "headline": "Investigation-level read.", "assessment": "Executive synthesis. Probabilistic.",
         "evidence_for": [{"signal": "temporal", "claim": "low variance", "evidence_refs": ["A1"]}],

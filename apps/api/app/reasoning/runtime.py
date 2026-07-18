@@ -297,14 +297,12 @@ class AIInvestigationRuntime:
                            errs[:5])
             return None
         core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
-        # OmiSphere owns provenance/subject + the engine corroboration state — overlay from the Floor
-        # (schema-valid, correct values), never the model's fabrication.
+        # OmiSphere injects only provenance/subject + the factual engine corroboration state (which
+        # discriminative methods fired) — overlay from the Floor (schema-valid, correct values). AI-first:
+        # the analyst OWNS its scores (omi_score + suspicion_tier); nothing is echoed/overwritten.
         for k in COMPREHENSIVE_OMI_OWNED_WRAPPER_FIELDS:
             if k in floor:
                 core[k] = floor[k]
-        # Echo discipline — the engine number is authoritative; the model never moves it.
-        core["suspicion_probability"] = round(float(hl.get("overall_probability") or 0.0), 6)
-        core["suspicion_tier"] = hl.get("tier") or core.get("suspicion_tier")
         return core
 
     @staticmethod

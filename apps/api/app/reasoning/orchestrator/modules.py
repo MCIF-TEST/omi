@@ -350,6 +350,9 @@ def build_ruling_assessment(
     pct = round(prob * 100)
     return {
         "verdict": verdict,
+        # OMI score — on the deterministic Floor path it is the engine's composite risk (overall
+        # probability × 100). On the AI path the analyst produces its own omi_score. Single score either way.
+        "omi_score": int(pct),
         "suspicion_tier": tier,
         "suspicion_probability": round(prob, 6),
         "confidence_band": band,

@@ -722,8 +722,12 @@ export interface CompletionStatus {
 
 export interface AnalystAssessment {
   verdict: string;
+  /** THE OMI SCORE — the analyst's single composite authenticity-risk score, 0–100 (higher = stronger
+   *  evidence of inauthentic/coordinated behavior). The only investigation score. */
+  omi_score: number;
   suspicion_tier: string;
-  suspicion_probability: number;
+  /** DEPRECATED — the legacy 0–1 inauthenticity probability. Superseded by omi_score; may be absent. */
+  suspicion_probability?: number;
   confidence_band: string;
   confidence_rationale: string;
   headline: string;
