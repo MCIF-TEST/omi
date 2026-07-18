@@ -20,7 +20,10 @@ import {
 } from '@/lib/api';
 
 const POLL_INTERVAL_MS = 2000;
-const MAX_POLLS = 10;
+// The user lands here straight from a completed scan while the ONE model inference may still be
+// running — a large investigation (150 commenters, full per-account output) can take a couple of
+// minutes. Poll for up to ~4 minutes before declaring it slow.
+const MAX_POLLS = 120;
 
 // Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
 // URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.

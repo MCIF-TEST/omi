@@ -549,6 +549,21 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-18 (AI-only scan flow + zero-request diagnosis)** — User report: a scan produced results but
+  zero OpenRouter requests. Diagnosis: (a) the "results" were the WORKSPACE's client-side heuristic
+  panels (the analyst runs in background and only shows on the investigation page); (b) the dispatch gate
+  needs THREE live env values (`OMI_ANALYST_ENABLED=true`, `OMI_ANALYST_PROVIDER=openrouter`,
+  `OPENROUTER_API_KEY`) — code defaults are enabled=False/provider=huggingface, so a service whose env
+  predates the blueprint change (or only has the key set) makes zero requests by design. Verify live via
+  `GET /v1/investigations/analyst/status`. Fixes: the scan workspace no longer renders ANY heuristic
+  results — it collects input, shows real job progress, and on completion redirects to the AI-only
+  investigation page (if you see results, they came from OpenRouter). Deleted the now-orphaned
+  `synthesis.tsx` / `commenter-list.tsx` / `commenter-detail.tsx` / `insights-rail.tsx`. AnalystPanel
+  poll window 20s → ~4min (the user lands mid-inference on large investigations). Drive-bys: fixed the
+  missing comma in `OMI_SUPER_ADMIN_EMAILS` (render.yaml, would have cost two admins their access);
+  branch rebased onto merged main (PRs #84–#87 merged by owner). Note: workspace batch continuation
+  ("Scan next N") was part of the removed heuristic panel — follow-up if wanted on the investigation page.
+
 - **2026-07-18 (Protocol: teach the input format + evidence→output mapping)** — Final tweak pass on
   the base prompt: the model was never TOLD what the evidence package looks like. Added three sections:
   **THE INVESTIGATION PACKAGE** (the nine titled sections of the ONE user message, in wire order, with
