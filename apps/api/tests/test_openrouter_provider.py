@@ -19,7 +19,6 @@ from app.reasoning.model_providers import OpenRouterReasoningProvider, Reasoning
 from app.reasoning.prompts.comprehensive_investigation_template import (
     COMPREHENSIVE_ASSESSMENT_SCHEMA_ID,
     COMPREHENSIVE_SECTION_KEYS,
-    comprehensive_investigation_canonical_schema,
 )
 from app.reasoning.prompts.master_protocol import compile_master_analyst_protocol
 from app.storage.db import reset_db_for_tests
@@ -170,15 +169,19 @@ def test_master_analyst_protocol_is_not_resent_in_preset_mode():
 
 
 # =========================================================================== #
-# 6-7. The ONE Phase-1 schema is the native structured-output schema (no 2nd schema)
+# 6-7. Structured output uses OpenAI-compatible JSON mode (not strict json_schema)
 # =========================================================================== #
-def test_native_structured_output_uses_the_one_canonical_phase1_schema():
+def test_structured_output_uses_json_object_mode_not_strict_schema():
     _, captured, _ = _run(_valid_model_output())
     rf = captured["body"]["response_format"]
-    assert rf["type"] == "json_schema"
-    assert rf["json_schema"]["name"] == COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
-    # byte-identical to the Phase-1 canonical schema — no second, OpenRouter-specific schema
-    assert rf["json_schema"]["schema"] == comprehensive_investigation_canonical_schema()
+    # JSON mode: the gateway must return a JSON object. We do NOT send a strict json_schema response
+    # format — the canonical schema is AI-first/permissive (optional properties + additionalProperties:
+    # false), a shape GPT-5-class strict mode rejects with HTTP 400. The exact object shape is specified
+    # by the preset/protocol; the local canonical validator enforces it downstream.
+    assert rf == {"type": "json_object"}
+    # the canonical schema is NOT leaked onto the wire as a strict structured-output schema
+    assert "json_schema" not in rf
+    assert COMPREHENSIVE_ASSESSMENT_SCHEMA_ID not in json.dumps(captured["body"])
 
 
 def test_structured_output_can_be_disabled_without_a_second_schema():

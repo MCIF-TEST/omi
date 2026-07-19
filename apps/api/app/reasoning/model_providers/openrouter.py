@@ -14,9 +14,12 @@ Two modes, chosen by configuration:
   and cannot, verify the remote preset content).
 * **Direct mode** — no preset; the request sends the compiled system + user messages and an explicit model.
 
-Structured output: when a canonical schema is supplied (the ONE Phase-1 ComprehensiveAssessment schema) the
-request carries ``response_format={"type":"json_schema", ...}`` — the SAME schema the local validator uses.
-Local canonical validation ALWAYS runs downstream regardless, so native structured output never weakens it.
+Structured output: the request carries ``response_format={"type":"json_object"}`` (OpenAI-compatible JSON
+mode) so the gateway returns syntactically valid JSON. We deliberately do NOT send a strict ``json_schema``
+response format — the canonical ComprehensiveAssessment schema is AI-first and permissive (many optional
+properties, ``additionalProperties:false``), a shape GPT-5-class strict structured-output mode rejects with
+HTTP 400. The exact object shape is specified by the Master Analyst Protocol/preset (with a worked example),
+and the local canonical validator ALWAYS runs downstream, so structural correctness is enforced there.
 
 Stdlib-only (``urllib``); typed failures (``ProviderUnavailable`` / ``ProviderTimeout`` /
 ``ProviderProtocolError`` / ``ProviderError``) so the runtime degrades to the deterministic Floor and never
@@ -124,11 +127,23 @@ class OpenRouterReasoningProvider:
         return self.model or ""
 
     def _response_format(self) -> dict | None:
-        if not (self.structured_output and isinstance(self.canonical_schema, dict)):
+        """Ask the gateway for a JSON object, not free text.
+
+        We use OpenAI-compatible **JSON mode** (``{"type": "json_object"}``) rather than a strict
+        ``json_schema`` response format. The Master Analyst Protocol is AI-first: the model owns the OMI
+        score and the full assessment, and the canonical schema is deliberately permissive — many
+        properties are optional (the model fills what the evidence supports) while ``additionalProperties``
+        is ``false``. OpenAI/GPT-5-class strict structured-output mode rejects exactly that shape (it
+        requires EVERY property to appear in ``required``), returning HTTP 400 and forcing every
+        investigation onto the deterministic Floor ("AI reasoning is not available").
+
+        JSON mode guarantees syntactically valid JSON without imposing the strict-mode constraint, and the
+        preset/protocol already specifies the exact object shape with a worked example. The local canonical
+        validator ALWAYS runs downstream (``adjudication="schema_only"``), so structural correctness is
+        enforced there regardless of what the gateway does — JSON mode never weakens it."""
+        if not self.structured_output:
             return None
-        schema = self.canonical_schema
-        name = schema.get("schema_id") or "comprehensive_assessment_v1"
-        return {"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": schema}}
+        return {"type": "json_object"}
 
     def _request_body(self, request: ReasoningRequest) -> bytes:
         # Preset mode: the preset supplies the system prompt, so send ONLY the dynamic user message — the

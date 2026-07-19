@@ -549,6 +549,27 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Fix "AI reasoning not available" — strict json_schema was floorng every scan)** — User
+  ran a scan and got the `AiUnavailable` state (enabled-but-floored). Root cause found in code, not env:
+  `openrouter.py._response_format()` sent `response_format={"type":"json_schema", "json_schema":{"strict":
+  true, "schema":<canonical>}}`, but the canonical ComprehensiveAssessment schema is AI-first/permissive —
+  29 properties, only 18 in `required`, with `additionalProperties:false`. OpenAI/GPT-5-class **strict**
+  structured-output mode rejects exactly that shape (it requires EVERY property in `required`) with HTTP
+  400, so every OpenRouter request failed → deterministic Floor → "AI reasoning is not available". Fix:
+  switched to OpenAI-compatible **JSON mode** (`response_format={"type":"json_object"}`) — guarantees valid
+  JSON without the strict-mode constraint. Safe because the architecture is already AI-first: the
+  preset/protocol specify the exact object shape (with a worked example) and the local canonical validator
+  ALWAYS runs downstream (`adjudication="schema_only"`), so structural correctness is still enforced.
+  Updated the three wire-level tests (`test_openrouter_provider`, `test_openrouter_production_cutover`,
+  `test_end_to_end_openrouter_flow`) to assert `{"type":"json_object"}`. Frontend: rewrote `AiUnavailable`
+  — fixed the stale "Mistral" copy → Omi Analyst (OpenRouter) and now surfaces the real forensic diagnostic
+  (provider, fallback_reason, HTTP status, endpoint_error, requested_model) so a floored scan is
+  debuggable from the page; scrubbed remaining "Mistral" labels in the panel. Backend suite: 1369 pass, 1
+  pre-existing unrelated failure (`test_accuracy_gate_no_regression`: detection-engine Brier 0.0321 vs gate
+  0.032 — the detection/evaluation tree is byte-identical to `origin/main`, so this is an environmental
+  hashing-embedder drift that predates and is independent of this change; left the accuracy ratchet
+  untouched rather than loosen it as a side effect). Frontend typecheck clean; 23 web tests pass.
+
 - **2026-07-18 (AI-only scan flow + zero-request diagnosis)** — User report: a scan produced results but
   zero OpenRouter requests. Diagnosis: (a) the "results" were the WORKSPACE's client-side heuristic
   panels (the analyst runs in background and only shows on the investigation page); (b) the dispatch gate
@@ -905,7 +926,7 @@ Nothing here is applied automatically — an operator performs it in Render + th
 | `OMI_OPENROUTER_PRESET` | `omi-master-v1` | ✅ (preset carries system prompt + model) |
 | `OPENROUTER_API_KEY` | *(secret)* | ✅ (env only — never a settings field/committed) |
 | `OMI_OPENROUTER_MODEL` | *(unset)* | ⬜ leave unset — the preset defines GPT-5 Mini; set only to override |
-| `OMI_OPENROUTER_STRUCTURED_OUTPUT` | `true` (default) | ⬜ set `false` only if GPT-5 Mini/OpenRouter rejects strict json_schema (local validation still runs) |
+| `OMI_OPENROUTER_STRUCTURED_OUTPUT` | `true` (default) | ⬜ sends `response_format={"type":"json_object"}` (JSON mode, NOT strict json_schema — that shape is rejected by GPT-5-class strict mode → 400 → Floor). Set `false` to omit entirely; local validation still runs either way |
 | `OMI_OPENROUTER_BASE_URL` | default `https://openrouter.ai/api/v1/chat/completions` | ⬜ |
 | `OMI_OPENROUTER_REFERER` / `OMI_OPENROUTER_TITLE` | dashboard attribution | ⬜ optional |
 | `OMI_ANALYST_ENDPOINT_URL`, `HF_TOKEN` | — | ⬜ NOT needed on the OpenRouter path (safe to leave unset) |

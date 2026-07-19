@@ -18,7 +18,6 @@ import pytest
 
 from app.reasoning import analyst
 from app.reasoning.prompts.comprehensive_investigation_template import (
-    COMPREHENSIVE_ASSESSMENT_SCHEMA_ID,
     COMPREHENSIVE_SECTION_KEYS,
 )
 from app.storage.db import reset_db_for_tests
@@ -141,10 +140,10 @@ def test_platform_flow_reaches_openrouter_and_returns_ui_shape(platform, monkeyp
     assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert captured["headers"].get("authorization") == f"Bearer {_API_KEY}"
 
-    # 2) it used the production preset + the canonical schema, and carried THIS investigation's evidence
+    # 2) it used the production preset + JSON mode, and carried THIS investigation's evidence
     body = captured["body"]
     assert body["model"] == f"@preset/{_PRESET}"
-    assert body["response_format"]["json_schema"]["name"] == COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
+    assert body["response_format"] == {"type": "json_object"}   # JSON mode, not strict json_schema
     assert "A1" in body["messages"][0]["content"]          # the aliased commenter evidence reached the model
 
     # 3) the model result was parsed + structurally validated + is model-backed
