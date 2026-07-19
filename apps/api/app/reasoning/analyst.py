@@ -788,6 +788,9 @@ def _assess_core(
             "governor_verdict": gov.get("verdict"),
             "comprehensive_structurally_valid": sections_report.get("structurally_valid"),
             "comprehensive_unresolved_citations": sections_report.get("unresolved_total"),
+            # Why a successful (HTTP 200) model response was rejected by canonical validation and fell to the
+            # Floor — the exact schema errors, so a floored-after-success scan is self-explaining on the page.
+            "canonical_validation_errors": capture.get("canonical_validation_errors"),
         }
         governed["investigation_trace"] = investigation_trace
         governed["metrics"] = _assessment_metrics(

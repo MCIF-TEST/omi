@@ -810,6 +810,7 @@ export interface AnalystAssessment {
     fallback_reason?: string | null;
     governor_verdict?: string | null;
     comprehensive_structurally_valid?: boolean;
+    canonical_validation_errors?: string[] | null;  // why a 200 model response failed schema → Floor
     // call metrics (authoritative gateway usage)
     endpoint_request_id?: string | null;  // OpenRouter generation id
     endpoint_latency_ms?: number | null;

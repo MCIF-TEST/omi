@@ -137,7 +137,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
             : 'The Omi Analyst’s structured reading of this investigation will appear here. It interprets the evidence the engine already produced; it never recomputes a score.'}
         </p>
       ) : (
-        <AssessmentView a={assessment} slug={slug} />
+        <AssessmentView a={assessment} slug={slug} onRetry={() => run(true)} retrying={pending} />
       )}
 
       {assessment && verificationEnabled() && (
@@ -372,11 +372,14 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
   );
 }
 
-function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
+function AssessmentView(
+  { a, slug, onRetry, retrying }:
+  { a: AnalystAssessment; slug: string; onRetry?: () => void; retrying?: boolean },
+) {
   // Product-cutover rule: only AI-authored (OpenRouter) assessments render as AI reasoning. If the model
   // was not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
   // headline / assessment / evidence as though the AI wrote it.
-  if (!isModelBacked(a)) return <AiUnavailable a={a} />;
+  if (!isModelBacked(a)) return <AiUnavailable a={a} onRetry={onRetry} retrying={retrying} />;
 
   return (
     <div className="space-y-5">
@@ -449,13 +452,23 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
 // reached (not enabled, no API key, or the gateway returned an error), so the deterministic Floor stood
 // in. We surface an HONEST notice with the real diagnostic from the forensic trace and DO NOT render the
 // Floor's synthesized verdict/headline/assessment as AI.
-function AiUnavailable({ a }: { a: AnalystAssessment }) {
+function AiUnavailable(
+  { a, onRetry, retrying }: { a: AnalystAssessment; onRetry?: () => void; retrying?: boolean },
+) {
   const t = a.investigation_trace ?? {};
   // Prefer the most specific machine reason available, in order of usefulness to whoever is debugging.
   const status = typeof t.response_status === 'number' ? t.response_status : null;
+  const ok2xx = status !== null && status >= 200 && status < 300;
+  const schemaErrs = t.canonical_validation_errors ?? [];
   const reason =
     t.fallback_reason
     ?? (t.endpoint_called === false ? 'endpoint not called (analyst disabled or no API key)'
+      // A 2xx that still floored is NOT a gateway rejection — the model replied but its JSON failed
+      // OmiSphere's schema validation (or arrived empty/truncated).
+      : ok2xx ? (schemaErrs.length
+          ? 'model replied, but its output failed schema validation'
+          : t.json_received === false ? 'model replied, but no JSON object was parsed from it'
+          : 'model replied, but its output was not usable')
       : status !== null ? `gateway rejected the request (HTTP ${status})`
       : t.endpoint_error ? 'gateway error'
       : 'unknown');
@@ -465,14 +478,21 @@ function AiUnavailable({ a }: { a: AnalystAssessment }) {
     ...(status !== null ? [['http status', String(status)] as [string, string]] : []),
     ...(t.endpoint_error ? [['error', t.endpoint_error] as [string, string]] : []),
     ...(t.requested_model ? [['requested', t.requested_model] as [string, string]] : []),
+    ...(t.served_model ? [['served', t.served_model] as [string, string]] : []),
+    ...(t.finish_reason ? [['finish', t.finish_reason] as [string, string]] : []),
   ];
+  // The headline adapts: a 2xx that floored means the model WAS reached — don't claim otherwise.
+  const headline = ok2xx
+    ? 'The Omi Analyst (OpenRouter) model replied, but its output couldn’t be used, so no AI ' +
+      'assessment was produced. This is a response-shape problem, not a connection problem.'
+    : 'AI reasoning is not available for this investigation yet — the Omi Analyst (OpenRouter) model ' +
+      'wasn’t reached, so no AI assessment could be produced. Confirm the analyst is enabled and the ' +
+      'OpenRouter API key is configured, then re-run the scan.';
   return (
     <div className="text-sm text-fg-dim flex items-start gap-2">
       <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
       <span>
-        AI reasoning is not available for this investigation yet — the Omi Analyst (OpenRouter) model
-        wasn’t reached, so no AI assessment could be produced. Confirm the analyst is enabled and the
-        OpenRouter API key is configured, then re-run the scan.
+        {headline}
         <span className="block mt-1.5 text-2xs font-mono text-fg-faint">
           {diagnostics.map(([k, v]) => (
             <span key={k} className="mr-3 whitespace-nowrap">
@@ -480,6 +500,35 @@ function AiUnavailable({ a }: { a: AnalystAssessment }) {
             </span>
           ))}
         </span>
+        {schemaErrs.length > 0 && (
+          <span className="block mt-1.5 text-2xs font-mono text-fg-faint">
+            schema errors:
+            <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
+              {schemaErrs.slice(0, 8).map((e, i) => (
+                <li key={i} className="text-fg-mute break-all">{e}</li>
+              ))}
+            </ul>
+          </span>
+        )}
+        {onRetry && (
+          <span className="block mt-2.5">
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={retrying}
+              className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase
+                rounded-full border border-accent/40 text-accent px-3 py-1 hover:bg-accent/[0.08]
+                disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Loader2 size={11} className={retrying ? 'animate-spin' : ''} />
+              {retrying ? 'Re-running…' : 'Re-run AI (fresh model call)'}
+            </button>
+            <span className="block mt-1 text-2xs text-fg-faint">
+              This page shows the last saved result. Re-running forces a new OpenRouter call instead of
+              reusing the cached assessment.
+            </span>
+          </span>
+        )}
       </span>
     </div>
   );
