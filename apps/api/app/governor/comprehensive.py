@@ -103,6 +103,18 @@ def _domain_shape_errors(obj: dict, section_keys: Sequence[str]) -> list[str]:
     return errors
 
 
+# A representative OMI score for each verdict, used ONLY as a fallback when the model commits to a verdict
+# but omits the numeric omi_score. Each value sits squarely inside the verdict's tier band so the derived
+# score and any derived tier agree with the model's own categorical call.
+_VERDICT_TO_SCORE = {
+    "confirmed_bot_ring": 90,
+    "likely_inauthentic": 72,
+    "mixed": 50,
+    "inconclusive": 40,
+    "likely_authentic": 12,
+}
+
+
 def _tier_for_score(score: int) -> str:
     """The canonical omi_score→suspicion_tier bands (mirrors the engine cutoffs 0.25/0.50/0.75)."""
     if score < 25:
@@ -194,7 +206,15 @@ def coerce_comprehensive_model_output(
         try:
             out["omi_score"] = max(0, min(100, int(round(float(out["omi_score"])))))
         except (TypeError, ValueError):
-            pass
+            out.pop("omi_score", None)                            # non-numeric → treat as absent (derive below)
+    # If the model omitted the numeric OMI score but DID commit to a verdict, derive a representative score
+    # from ITS OWN verdict (not the deterministic engine) so a complete, verdict-bearing reply still renders
+    # instead of floorng. Some models reliably produce the categorical verdict + prose but drop the number;
+    # this keeps the score AI-consistent rather than inventing an unrelated value.
+    if not isinstance(out.get("omi_score"), int):
+        derived = _VERDICT_TO_SCORE.get(str(out.get("verdict", "")).strip().lower())
+        if derived is not None:
+            out["omi_score"] = derived
     tier_enum = props.get("suspicion_tier", {}).get("enum", [])
     if isinstance(out.get("omi_score"), int) and out.get("suspicion_tier") not in tier_enum:
         out["suspicion_tier"] = _tier_for_score(out["omi_score"])
