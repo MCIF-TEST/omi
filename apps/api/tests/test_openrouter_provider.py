@@ -149,6 +149,26 @@ def test_configured_preset_reaches_the_request_exactly():
     assert captured["body"]["model"] == f"@preset/{_PRESET}"
 
 
+# ── _model_ref hardening: a bad OMI_OPENROUTER_MODEL can't brick the preset path ──────────────────
+def test_model_ref_preset_only_when_no_model():
+    p = OpenRouterReasoningProvider(preset="omi-master-v1", model=None)
+    assert p._model_ref() == "@preset/omi-master-v1"
+
+
+def test_model_ref_layers_a_real_slug_onto_the_preset():
+    p = OpenRouterReasoningProvider(preset="omi-master-v1", model="openai/gpt-5-mini")
+    assert p._model_ref() == "openai/gpt-5-mini@preset/omi-master-v1"
+
+
+def test_model_ref_ignores_a_display_name_and_falls_back_to_preset_only():
+    # A human display name ("GPT-5 Mini") is NOT a slug — layering it would produce the invalid ref
+    # "GPT-5 Mini@preset/omi-master-v1" that OpenRouter rejects with HTTP 400, floorng every scan.
+    p = OpenRouterReasoningProvider(preset="omi-master-v1", model="GPT-5 Mini")
+    assert p._model_ref() == "@preset/omi-master-v1"
+    # direct mode (no preset) still passes the model through verbatim — that path has no fallback
+    assert OpenRouterReasoningProvider(preset=None, model="GPT-5 Mini")._model_ref() == "GPT-5 Mini"
+
+
 def test_dynamic_investigation_package_reaches_the_provider():
     _, captured, _ = _run(_valid_model_output())
     user_msg = captured["body"]["messages"][-1]["content"]

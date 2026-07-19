@@ -453,9 +453,15 @@ function AiUnavailable({ a }: { a: AnalystAssessment }) {
   const t = a.investigation_trace ?? {};
   // Prefer the most specific machine reason available, in order of usefulness to whoever is debugging.
   const status = typeof t.response_status === 'number' ? t.response_status : null;
+  const reason =
+    t.fallback_reason
+    ?? (t.endpoint_called === false ? 'endpoint not called (analyst disabled or no API key)'
+      : status !== null ? `gateway rejected the request (HTTP ${status})`
+      : t.endpoint_error ? 'gateway error'
+      : 'unknown');
   const diagnostics: [string, string][] = [
     ['provider', t.provider ?? a.governance?.provider ?? '—'],
-    ['reason', t.fallback_reason ?? (t.endpoint_called === false ? 'endpoint not called' : 'unknown') ],
+    ['reason', reason],
     ...(status !== null ? [['http status', String(status)] as [string, string]] : []),
     ...(t.endpoint_error ? [['error', t.endpoint_error] as [string, string]] : []),
     ...(t.requested_model ? [['requested', t.requested_model] as [string, string]] : []),

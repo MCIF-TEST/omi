@@ -549,6 +549,22 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Fix "AI reasoning not available" pt.2 — a display-name model ref floored every scan)** —
+  After the json_schema→json_object fix reached the deploy, the new on-page diagnostic exposed the NEXT
+  failure: HTTP 400 with `requested: GPT-5 Mini@preset/omi-master-v1`. Cause: `OMI_OPENROUTER_MODEL` was
+  set to the display name `GPT-5 Mini` (not a slug). The transport layers a base model onto the preset as
+  `<model>@preset/<name>`, so a non-slug value produces the invalid reference `GPT-5 Mini@preset/…` that
+  OpenRouter rejects with 400 → every scan Floors. Operator fix: **unset `OMI_OPENROUTER_MODEL`** (the
+  preset already defines `openai/gpt-5-mini`) or set it to the exact slug. Code hardening so one bad env
+  var can't brick the whole AI path: `_model_ref()` now only layers `model` onto a preset when it *looks
+  like a slug* (`provider/name`, no whitespace); otherwise it ignores it, falls back to preset-only, and
+  logs a warning (`_looks_like_slug`). The trace's `requested_model` now reflects the model ref actually
+  put on the wire (`capture["model_ref"]`), not the raw configured concatenation, so the forensic record
+  stays honest. Frontend: `AiUnavailable` reason no longer shows a bare "unknown" — it derives a friendly
+  reason from the HTTP status / endpoint state ("gateway rejected the request (HTTP 400)"). Tests: 3 new
+  `_model_ref` unit tests (preset-only, real-slug layering, display-name ignored). Affected suites green;
+  frontend typecheck clean.
+
 - **2026-07-19 (Fix "AI reasoning not available" — strict json_schema was floorng every scan)** — User
   ran a scan and got the `AiUnavailable` state (enabled-but-floored). Root cause found in code, not env:
   `openrouter.py._response_format()` sent `response_format={"type":"json_schema", "json_schema":{"strict":
@@ -925,7 +941,7 @@ Nothing here is applied automatically — an operator performs it in Render + th
 | `OMI_ANALYST_PROVIDER` | `openrouter` | ✅ (flips HF → OpenRouter) |
 | `OMI_OPENROUTER_PRESET` | `omi-master-v1` | ✅ (preset carries system prompt + model) |
 | `OPENROUTER_API_KEY` | *(secret)* | ✅ (env only — never a settings field/committed) |
-| `OMI_OPENROUTER_MODEL` | *(unset)* | ⬜ leave unset — the preset defines GPT-5 Mini; set only to override |
+| `OMI_OPENROUTER_MODEL` | *(unset)* | ⬜ leave unset — the preset defines GPT-5 Mini. If overriding, use the exact OpenRouter **slug** `openai/gpt-5-mini` — NEVER a display name like `GPT-5 Mini` (it gets layered onto the preset as `<model>@preset/<name>`; a non-slug value like `GPT-5 Mini@preset/omi-master-v1` is rejected with HTTP 400 → Floor). The transport now ignores a non-slug value and warns, so a typo can't brick the AI path. |
 | `OMI_OPENROUTER_STRUCTURED_OUTPUT` | `true` (default) | ⬜ sends `response_format={"type":"json_object"}` (JSON mode, NOT strict json_schema — that shape is rejected by GPT-5-class strict mode → 400 → Floor). Set `false` to omit entirely; local validation still runs either way |
 | `OMI_OPENROUTER_BASE_URL` | default `https://openrouter.ai/api/v1/chat/completions` | ⬜ |
 | `OMI_OPENROUTER_REFERER` / `OMI_OPENROUTER_TITLE` | dashboard attribution | ⬜ optional |

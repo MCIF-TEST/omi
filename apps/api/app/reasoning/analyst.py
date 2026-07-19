@@ -707,8 +707,12 @@ def _assess_core(
         if _provider == "openrouter":
             _or_preset = getattr(settings, "openrouter_preset", None)
             _or_model = getattr(settings, "openrouter_model", None)
-            _requested_model = (f"{_or_model}@preset/{_or_preset}" if (_or_preset and _or_model)
-                                else (f"@preset/{_or_preset}" if _or_preset else _or_model))
+            # Prefer the model reference the transport ACTUALLY put on the wire (it drops a misconfigured
+            # display-name model and falls back to preset-only), so the trace matches reality rather than
+            # the raw configured concatenation. Fall back to the computed value if the wire never fired.
+            _requested_model = capture.get("model_ref") or (
+                f"{_or_model}@preset/{_or_preset}" if (_or_preset and _or_model)
+                else (f"@preset/{_or_preset}" if _or_preset else _or_model))
         else:
             _requested_model = inference.served_model
         try:
