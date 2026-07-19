@@ -149,6 +149,25 @@ def test_configured_preset_reaches_the_request_exactly():
     assert captured["body"]["model"] == f"@preset/{_PRESET}"
 
 
+# ── OpenRouter-first auto-preference: key + preset present overrides the huggingface default ─────
+def test_provider_auto_prefers_openrouter_when_configured_but_provider_left_default(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", _API_KEY)
+    s = SimpleNamespace(analyst_provider="huggingface", openrouter_preset=_PRESET, openrouter_model=None)
+    assert analyst.reasoning_provider(s) == "openrouter"          # key + preset ⇒ OpenRouter, despite default
+
+
+def test_provider_stays_huggingface_without_openrouter_config(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", _API_KEY)            # key alone is not enough…
+    s = SimpleNamespace(analyst_provider="huggingface", openrouter_preset=None, openrouter_model=None)
+    assert analyst.reasoning_provider(s) == "huggingface"         # …no preset/model ⇒ still HF
+
+
+def test_provider_auto_preference_requires_the_key(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    s = SimpleNamespace(analyst_provider="huggingface", openrouter_preset=_PRESET, openrouter_model=None)
+    assert analyst.reasoning_provider(s) == "huggingface"         # preset but no key ⇒ do not switch
+
+
 # ── _model_ref hardening: a bad OMI_OPENROUTER_MODEL can't brick the preset path ──────────────────
 def test_model_ref_preset_only_when_no_model():
     p = OpenRouterReasoningProvider(preset="omi-master-v1", model=None)
