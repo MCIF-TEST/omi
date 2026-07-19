@@ -249,7 +249,7 @@ function LegitimateHypothesis({ text }: { text?: string | null }) {
   );
 }
 
-// Whether Mistral actually authored this assessment. Prefer the explicit trace flag; fall back to the
+// Whether the AI (OpenRouter) actually authored this assessment. Prefer the explicit trace flag; fall back to the
 // governance provider string for assessments persisted before the trace existed. When false, the
 // synthesis prose is the deterministic Floor's — it must NEVER be shown as AI reasoning.
 function isModelBacked(a: AnalystAssessment): boolean {
@@ -373,14 +373,14 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
 }
 
 function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
-  // Product-cutover rule: only Mistral-authored assessments render as AI reasoning. If the model was
-  // not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
-  // headline / assessment / evidence as though Mistral wrote it.
+  // Product-cutover rule: only AI-authored (OpenRouter) assessments render as AI reasoning. If the model
+  // was not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
+  // headline / assessment / evidence as though the AI wrote it.
   if (!isModelBacked(a)) return <AiUnavailable a={a} />;
 
   return (
     <div className="space-y-5">
-      {/* ── LEAD INVESTIGATOR SYNTHESIS (Mistral) ─────────────────────────── */}
+      {/* ── LEAD INVESTIGATOR SYNTHESIS (Omi Analyst · OpenRouter) ─────────── */}
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <TierBadge tier={a.suspicion_tier as Tier} />
@@ -445,22 +445,35 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   );
 }
 
-// AI reasoning was not produced by Mistral (endpoint unreachable / not enabled). We surface an honest
-// notice and DO NOT render the deterministic Floor's synthesized verdict/headline/assessment/evidence
-// as AI. The deterministic evidence + measurements remain available elsewhere on the page.
+// The AI (Omi Analyst, via OpenRouter) did not author this assessment — the reasoning model wasn't
+// reached (not enabled, no API key, or the gateway returned an error), so the deterministic Floor stood
+// in. We surface an HONEST notice with the real diagnostic from the forensic trace and DO NOT render the
+// Floor's synthesized verdict/headline/assessment as AI.
 function AiUnavailable({ a }: { a: AnalystAssessment }) {
+  const t = a.investigation_trace ?? {};
+  // Prefer the most specific machine reason available, in order of usefulness to whoever is debugging.
+  const status = typeof t.response_status === 'number' ? t.response_status : null;
+  const diagnostics: [string, string][] = [
+    ['provider', t.provider ?? a.governance?.provider ?? '—'],
+    ['reason', t.fallback_reason ?? (t.endpoint_called === false ? 'endpoint not called' : 'unknown') ],
+    ...(status !== null ? [['http status', String(status)] as [string, string]] : []),
+    ...(t.endpoint_error ? [['error', t.endpoint_error] as [string, string]] : []),
+    ...(t.requested_model ? [['requested', t.requested_model] as [string, string]] : []),
+  ];
   return (
     <div className="text-sm text-fg-dim flex items-start gap-2">
       <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
       <span>
-        AI reasoning is not available for this investigation yet — the reasoning model wasn’t reached,
-        so Mistral’s interpretation could not be produced. The deterministic evidence and measurements
-        on this page are unaffected.
-        {a.governance?.provider && (
-          <span className="block mt-1 text-2xs font-mono text-fg-faint">
-            provider: {a.governance.provider}
-          </span>
-        )}
+        AI reasoning is not available for this investigation yet — the Omi Analyst (OpenRouter) model
+        wasn’t reached, so no AI assessment could be produced. Confirm the analyst is enabled and the
+        OpenRouter API key is configured, then re-run the scan.
+        <span className="block mt-1.5 text-2xs font-mono text-fg-faint">
+          {diagnostics.map(([k, v]) => (
+            <span key={k} className="mr-3 whitespace-nowrap">
+              {k}: <span className="text-fg-mute">{v}</span>
+            </span>
+          ))}
+        </span>
       </span>
     </div>
   );
@@ -475,7 +488,7 @@ const DOMAIN_PANELS: { key: keyof ComprehensiveSections; title: string }[] = [
   { key: 'campaign_reasoning', title: 'Campaign analysis' },
 ];
 
-// The six per-domain reasoning sections of the single comprehensive Mistral response. Each panel is a
+// The six per-domain reasoning sections of the single comprehensive AI response. Each panel is a
 // pure view over the already-loaded assessment — expanding a panel triggers NO request (no per-panel
 // inference). Sections the model left empty are shown as "no reasoning provided" rather than hidden.
 function DomainReasoning({

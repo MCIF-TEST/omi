@@ -139,11 +139,11 @@ def test_production_preset_config_reaches_the_request_exactly():
     out, captured, calls = _run(_or_body(_valid_model_output()))
     body = captured["body"]
     # preset mode: model references the production preset, ONLY the user message is sent (preset holds
-    # the system prompt), and the canonical schema is requested as native structured output.
+    # the system prompt), and JSON mode is requested (not strict json_schema — that shape is rejected by
+    # GPT-5-class strict structured-output mode; the local validator enforces the schema downstream).
     assert body["model"] == f"@preset/{_PRESET}"
     assert [m["role"] for m in body["messages"]] == ["user"]
-    assert body["response_format"]["type"] == "json_schema"
-    assert body["response_format"]["json_schema"]["name"] == COMPREHENSIVE_ASSESSMENT_SCHEMA_ID
+    assert body["response_format"] == {"type": "json_object"}
     assert body["stream"] is False
     # Phase 5H — the DYNAMIC completion budget reaches the wire: sized from this investigation's commenter
     # count (2 here → the floor budget), enough to give every commenter a concise assessment + the full
