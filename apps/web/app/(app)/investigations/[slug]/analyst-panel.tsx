@@ -372,6 +372,37 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
   );
 }
 
+// Which gateway + model actually produced this assessment — shown to everyone (not dev-only) so the
+// question "is this really from OpenRouter?" is answerable at a glance. When the provider is not
+// "openrouter", the reading came from another gateway (e.g. the deprecated HuggingFace path) and no
+// OpenRouter request was made — the fix is the OMI_ANALYST_PROVIDER / OPENROUTER_API_KEY env config.
+function Provenance({ a }: { a: AnalystAssessment }) {
+  const t = a.investigation_trace ?? {};
+  const provider = (t.provider ?? '').toLowerCase();
+  if (!provider && !t.served_model) return null;
+  const isOpenRouter = provider === 'openrouter';
+  const served = t.served_model ?? t.requested_model ?? null;
+  return (
+    <p className="font-mono text-2xs tracking-wide text-fg-faint flex items-center gap-1.5 flex-wrap">
+      <span
+        className={`rounded-full px-2 py-0.5 border ${
+          isOpenRouter
+            ? 'border-accent/40 text-accent bg-accent/[0.06]'
+            : 'border-tier-moderate/40 text-tier-moderate bg-tier-moderate/[0.06]'
+        }`}
+      >
+        served by {provider || 'unknown'}
+      </span>
+      {served && <span className="text-fg-mute">model: {served}</span>}
+      {!isOpenRouter && provider && (
+        <span className="text-tier-moderate">
+          — not OpenRouter; no OpenRouter request was made for this assessment
+        </span>
+      )}
+    </p>
+  );
+}
+
 function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   // Product-cutover rule: only AI-authored (OpenRouter) assessments render as AI reasoning. If the model
   // was not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
@@ -396,6 +427,10 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
             </span>
           )}
         </div>
+
+        {/* Provenance — always visible so it is unambiguous WHICH gateway + model produced this reading.
+            If this does not say "openrouter", the request never went to OpenRouter (check the provider env). */}
+        <Provenance a={a} />
 
         {/* THE OMI SCORE — the analyst's single composite authenticity-risk score (0–100), the headline
             figure. Replaces the legacy inauthenticity probability. Rendered as the big number + a

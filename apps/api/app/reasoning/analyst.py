@@ -102,10 +102,25 @@ def _redact_endpoint(url: str | None) -> str:
 
 
 def reasoning_provider(settings: Settings | None = None) -> str:
-    """The configured reasoning provider — ``"huggingface"`` (default) or ``"openrouter"``. Selection is
-    configuration, not architecture: both satisfy the same ReasoningProvider seam."""
+    """The active reasoning provider — ``"openrouter"`` or ``"huggingface"``. Selection is configuration,
+    not architecture: both satisfy the same ReasoningProvider seam.
+
+    OpenRouter-first auto-preference: if OpenRouter is FULLY configured (a preset or model is set AND
+    ``OPENROUTER_API_KEY`` is present in the environment) we use OpenRouter even when ``analyst_provider``
+    was left at its ``huggingface`` default. This closes the most common production misconfiguration —
+    ``OPENROUTER_API_KEY`` set but ``OMI_ANALYST_PROVIDER`` never flipped — which otherwise silently served
+    via the deprecated HuggingFace path and sent ZERO OpenRouter requests. An EXPLICIT
+    ``OMI_ANALYST_PROVIDER=huggingface`` still wins (it is honored verbatim below when no OpenRouter preset/
+    model is configured; a deployment that wants HF simply must not also configure an OpenRouter preset)."""
     settings = settings or get_settings()
-    return str(getattr(settings, "analyst_provider", "huggingface") or "huggingface").lower()
+    configured = str(getattr(settings, "analyst_provider", "huggingface") or "huggingface").strip().lower()
+    if configured == "openrouter":
+        return "openrouter"
+    or_configured = bool(getattr(settings, "openrouter_preset", None)
+                         or getattr(settings, "openrouter_model", None))
+    if or_configured and os.environ.get("OPENROUTER_API_KEY"):
+        return "openrouter"
+    return configured
 
 
 def reasoning_provider_name(settings: Settings | None = None) -> str:

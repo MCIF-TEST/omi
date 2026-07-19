@@ -549,6 +549,24 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 ("No OpenRouter request" root cause — HF was serving; auto-prefer OpenRouter + provenance)** —
+  User: still zero OpenRouter requests, and a "Partial AI coverage · 0 of 25 commenters assessed" banner.
+  That banner ONLY renders in the model-backed branch of `AssessmentView` — so an assessment WAS produced,
+  just with no per-account content. Model-backed + zero OpenRouter traffic ⇒ **another gateway served it**:
+  `reasoning_provider()` defaults to `"huggingface"`, so a deployment with `OPENROUTER_API_KEY` set but
+  `OMI_ANALYST_PROVIDER` never flipped silently served via the deprecated HF path (and its model doesn't
+  emit `commenter_assessments`, hence 0/25). Fixes:
+  • **OpenRouter-first auto-preference** (`analyst.reasoning_provider`): when OpenRouter is fully configured
+    (a preset or model set AND `OPENROUTER_API_KEY` present) we use OpenRouter even if the provider was left
+    at the huggingface default. Closes the most common production misconfig. Guarded: no preset/model or no
+    key ⇒ unchanged (HF still works). 3 new tests.
+  • **Always-visible provenance** (`Provenance` in analyst-panel): every rendered assessment now shows
+    "served by <provider> · model: <served_model>", and flags in amber "— not OpenRouter; no OpenRouter
+    request was made" when the gateway isn't OpenRouter. The "is this really from OpenRouter?" question is
+    now answerable at a glance without ?verify=1.
+  Operator note: definitive live check is `GET /v1/investigations/analyst/status` → `active_provider`.
+  Cached investigations still need a fresh scan to re-serve via the now-preferred OpenRouter path.
+
 - **2026-07-19 ("Works the first time" — liberal acceptance of the model output + removed Re-run button)** —
   User: make the FIRST scan render OpenRouter output; remove the Re-run button. The strict canonical
   validator was floorng good-faith GPT-5 Mini replies on harmless deviations — the top reasons: an extra
