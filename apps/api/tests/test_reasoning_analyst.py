@@ -156,6 +156,59 @@ def test_refresh_triggers_regeneration(monkeypatch):
         assert captured  # a regeneration job was submitted
 
 
+def test_floored_cache_auto_regenerates_once_when_a_live_model_is_ready(monkeypatch):
+    """A cached FLOOR self-heals: when a live model call is possible, viewing a floored investigation
+    auto-triggers ONE fresh generation (a real OpenRouter call) instead of serving the stale Floor forever
+    — and it does so at most once, so a persistent floor can't hammer the gateway on every poll."""
+    _enable(monkeypatch)
+    _seed(slug="inv_floor")
+    # Persist a FLOORED assessment (model_backed=False) directly into the cache.
+    monkeypatch.setattr(analyst, "runtime_status", lambda settings=None: {"ready_for_live_model": True})
+    floored = {"assessment": {"verdict": "inconclusive",
+                              "investigation_trace": {"model_backed": False, "provider": "openrouter"}},
+               "provider": "openrouter->fallback:deterministic-analyst-v1",
+               "generated_at": "2026-07-19T00:00:00Z"}
+    with get_session() as session:
+        inv = session.query(Investigation).filter_by(slug="inv_floor").one()
+        inv.payload_json = {**(inv.payload_json or {}), analyst.CACHE_KEY: floored}
+        session.add(inv)
+    analyst._floor_autorefreshed.discard("inv_floor")            # fresh process state for the assertion
+    captured: list = []
+    monkeypatch.setattr(background, "submit", lambda fn, *a, **k: captured.append((fn, a)))
+    with TestClient(app) as tc:
+        # first view of the floored cache → auto-regenerate (202), a fresh model call is submitted
+        r1 = tc.post("/v1/investigations/inv_floor/analyst")
+        assert r1.status_code == 202, r1.text
+        assert captured and captured[0][0] is analyst.generate_and_persist
+        assert captured[0][1][2] is True                        # refresh=True was forced
+        # second view → already retried this slug → serve the honest Floor (200), no second call
+        r2 = tc.post("/v1/investigations/inv_floor/analyst")
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["assessment"]["investigation_trace"]["model_backed"] is False
+        assert len(captured) == 1                               # NOT re-submitted
+
+
+def test_floored_cache_is_served_as_is_when_no_live_model(monkeypatch):
+    """Without a live model configured, floorng is expected and permanent — the floored cache is served
+    as 200 (no auto-refresh churn)."""
+    _enable(monkeypatch)
+    _seed(slug="inv_floor2")
+    monkeypatch.setattr(analyst, "runtime_status", lambda settings=None: {"ready_for_live_model": False})
+    floored = {"assessment": {"verdict": "inconclusive",
+                              "investigation_trace": {"model_backed": False}},
+               "provider": "deterministic-analyst-v1", "generated_at": "2026-07-19T00:00:00Z"}
+    with get_session() as session:
+        inv = session.query(Investigation).filter_by(slug="inv_floor2").one()
+        inv.payload_json = {**(inv.payload_json or {}), analyst.CACHE_KEY: floored}
+        session.add(inv)
+    captured: list = []
+    monkeypatch.setattr(background, "submit", lambda fn, *a, **k: captured.append((fn, a)))
+    with TestClient(app) as tc:
+        r = tc.post("/v1/investigations/inv_floor2/analyst")
+        assert r.status_code == 200
+        assert not captured                                     # no regeneration attempted
+
+
 # --- guardrail: disabled assess never raises / never touches scoring -------- #
 def test_assess_payload_never_raises_on_garbage(monkeypatch):
     _enable(monkeypatch)

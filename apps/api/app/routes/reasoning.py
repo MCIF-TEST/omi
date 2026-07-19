@@ -121,11 +121,35 @@ def generate_analyst_assessment(
 
         entry = analyst.cached_assessment(inv)
         if entry and not refresh:
-            return AnalystResponse(
-                slug=inv.slug, enabled=True, status="ready", cached=True,
-                assessment=entry["assessment"], provider=entry.get("provider"),
-                generated_at=entry.get("generated_at"),
-            )
+            if analyst.entry_is_model_backed(entry):
+                return AnalystResponse(
+                    slug=inv.slug, enabled=True, status="ready", cached=True,
+                    assessment=entry["assessment"], provider=entry.get("provider"),
+                    generated_at=entry.get("generated_at"),
+                )
+            # The cached assessment is the deterministic Floor (the model wasn't reached, or its output
+            # failed validation). Auto-regenerate ONCE — a fresh model call — so a stale Floor self-heals
+            # without the user doing anything. While that fresh attempt runs we keep the client polling
+            # (202); if we've already retried this investigation, serve the honest Floor with its diagnostic.
+            # Only when a live model call is actually POSSIBLE (provider + credential configured) — otherwise
+            # floorng is expected and permanent, and re-triggering would just churn.
+            if not analyst.runtime_status(settings).get("ready_for_live_model"):
+                return AnalystResponse(
+                    slug=inv.slug, enabled=True, status="ready", cached=True,
+                    assessment=entry["assessment"], provider=entry.get("provider"),
+                    generated_at=entry.get("generated_at"),
+                )
+            if analyst.is_generation_inflight(inv.slug):
+                response.status_code = status.HTTP_202_ACCEPTED
+                return AnalystResponse(slug=inv.slug, enabled=True, status="generating", cached=False)
+            if analyst.claim_floor_autorefresh(inv.slug):
+                refresh = True
+            else:
+                return AnalystResponse(
+                    slug=inv.slug, enabled=True, status="ready", cached=True,
+                    assessment=entry["assessment"], provider=entry.get("provider"),
+                    generated_at=entry.get("generated_at"),
+                )
 
         # Async: generate off the request hot path; client polls for the result.
         background.submit(

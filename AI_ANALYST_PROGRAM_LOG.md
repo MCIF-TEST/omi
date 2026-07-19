@@ -549,6 +549,30 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Floored cache self-heals + omi_score derived from verdict + SECURITY: rotate leaked keys)** —
+  User pasted the FULL production env (secrets included — advised immediate rotation of OPENROUTER_API_KEY,
+  HF_TOKEN, OMI_SESSION_SECRET, DB password, Twitter/YouTube keys; never store/commit them). The env
+  confirmed `OMI_ANALYST_PROVIDER=openrouter` + preset + key, and the trace showed `served: openai/
+  gpt-5-mini`, `finish: stop`, HTTP 200 with schema errors "missing omi_score / suspicion_tier" — so the
+  request DID reach OpenRouter at generation time, but GPT-5 Mini omitted the two score fields → floor.
+  Two fixes:
+  • **Derive omi_score from the model's OWN verdict** when it omits the number (`_VERDICT_TO_SCORE` in
+    governor/comprehensive; then tier derives from the score). A full verdict-bearing reply that just drops
+    the numeric score now RENDERS. omi_score/suspicion_tier are no longer "un-coercible core" — the core is
+    now verdict/headline/assessment (coercion never invents those).
+  • **Floored cache auto-heals**: the analyst endpoint served ANY cached entry — including a Floor —
+    forever, so a stale floored investigation never re-called OpenRouter on view (this is why "no new
+    request": re-viewing/re-scanning the same link hit the assessment cache + 7-day scan cache). Now a
+    floored cache auto-regenerates ONCE on view (a fresh, dashboard-visible model call), guarded by
+    `ready_for_live_model` (never churns when no model is configured) and bounded by
+    `claim_floor_autorefresh` (at most one retry per slug per process; polls see 202 while it runs, then the
+    healed result). Replaces the removed Re-run button with automatic behavior.
+  Tests: 2 coercion tests (verdict→score; core-still-floors updated to verdict/headline/assessment); 2
+  endpoint tests (auto-heal once when ready; served-as-is when no model). Frontend typecheck clean.
+  Note for the user: OpenRouter dashboard "no requests" is most consistent with viewing a CACHED floor —
+  the definitive live check is `GET /v1/investigations/analyst/status` (`active_provider`,
+  `ready_for_live_model`), and a brand-new URL (past the 7-day scan cache) forces a fresh call.
+
 - **2026-07-19 ("No OpenRouter request" root cause — HF was serving; auto-prefer OpenRouter + provenance)** —
   User: still zero OpenRouter requests, and a "Partial AI coverage · 0 of 25 commenters assessed" banner.
   That banner ONLY renders in the model-backed branch of `AssessmentView` — so an assessment WAS produced,

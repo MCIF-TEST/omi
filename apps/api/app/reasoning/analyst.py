@@ -1008,6 +1008,42 @@ def cached_assessment(inv) -> dict | None:
     return None
 
 
+def entry_is_model_backed(entry: dict | None) -> bool:
+    """Whether a CACHED analyst entry is a real model-backed assessment (vs the deterministic Floor).
+    Prefer the explicit trace flag; fall back to the provider label for entries persisted before it."""
+    if not isinstance(entry, dict):
+        return False
+    a = entry.get("assessment") or {}
+    tr = a.get("investigation_trace") or {}
+    if isinstance(tr.get("model_backed"), bool):
+        return tr["model_backed"]
+    prov = str(entry.get("provider") or "")
+    return bool(prov) and "fallback" not in prov and "deterministic" not in prov
+
+
+# Slugs whose FLOORED cache we've already auto-regenerated once this process. Bounds the auto-refresh to a
+# single fresh model call per investigation (per process) so a stale Floor self-heals WITHOUT a poll loop
+# hammering the gateway. Cleared on restart (one more attempt after a deploy is fine).
+_floor_autorefreshed: set[str] = set()
+_floor_autorefresh_lock = threading.Lock()
+
+
+def claim_floor_autorefresh(slug: str) -> bool:
+    """Return True exactly once per slug — the caller may trigger ONE automatic regeneration of a floored
+    cache. Subsequent calls return False (serve the floored result instead of re-calling forever)."""
+    with _floor_autorefresh_lock:
+        if slug in _floor_autorefreshed:
+            return False
+        _floor_autorefreshed.add(slug)
+        return True
+
+
+def is_generation_inflight(slug: str) -> bool:
+    """Whether a background generation for this investigation is currently running (the in-flight guard)."""
+    with _autogen_lock:
+        return slug in _autogen_inflight
+
+
 def persist_assessment(session, inv, assessment: dict, provider: str) -> dict:
     """Cache the assessment inside payload_json. SAVEPOINT-isolated so a write hiccup
     can never corrupt the surrounding transaction (Platform Guardian §4)."""

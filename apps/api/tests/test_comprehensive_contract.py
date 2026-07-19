@@ -309,6 +309,18 @@ def test_coercion_derives_tier_and_clamps_score():
     assert _valid_after_coercion(obj) == []
 
 
+def test_coercion_derives_omi_score_from_verdict_when_omitted():
+    # The exact production case: GPT-5 Mini returns a full assessment (verdict + prose + domains) but
+    # omits the numeric omi_score and suspicion_tier. We derive both from ITS OWN verdict so it renders.
+    obj = _valid_model_output()
+    obj["verdict"] = "likely_inauthentic"
+    del obj["omi_score"]
+    del obj["suspicion_tier"]
+    coerced = _coerce(obj)
+    assert coerced["omi_score"] == 72 and coerced["suspicion_tier"] == "elevated"
+    assert _valid_after_coercion(obj) == []
+
+
 def test_coercion_drops_malformed_evidence_items():
     obj = _valid_model_output()
     obj["evidence_for"] = [
@@ -322,8 +334,9 @@ def test_coercion_drops_malformed_evidence_items():
 
 
 def test_coercion_still_floors_when_core_substance_is_missing():
-    # The model must supply the substance it alone can produce — coercion never invents it.
-    for core in ("verdict", "omi_score", "headline", "assessment"):
+    # The model must supply the substance it alone can produce — coercion never invents it. omi_score /
+    # suspicion_tier are NOT in this set: they are derivable from the model's own verdict.
+    for core in ("verdict", "headline", "assessment"):
         obj = _valid_model_output()
         del obj[core]
         assert _valid_after_coercion(obj), f"expected floor when {core} is missing"
