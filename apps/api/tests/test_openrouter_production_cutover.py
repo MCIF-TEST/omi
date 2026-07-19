@@ -240,6 +240,13 @@ def test_degrade_invalid_schema():
     out, _, calls = _run(_or_body(bad))
     _assert_floored(out)
     assert calls == 1                                             # no repair inference
+    # A 200 response that fails canonical validation records WHY (the schema errors) so a
+    # floored-after-success scan is self-explaining on the page — not a bare "unknown".
+    tr = out["investigation_trace"]
+    assert tr["response_status"] == 200                          # the model DID reply (not a transport error)
+    assert not tr["endpoint_error"]                              # no transport failure — this is a shape floor
+    errs = tr["canonical_validation_errors"]
+    assert errs and any("campaign_reasoning" in e for e in errs)
 
 
 def test_degrade_empty_response():

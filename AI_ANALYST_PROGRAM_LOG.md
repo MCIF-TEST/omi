@@ -549,6 +549,29 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Fix "AI reasoning not available" pt.3 — cached Floor + self-explaining floored state)** —
+  User: a scan shows a floored assessment with `http status: 200` yet **OpenRouter received no request**.
+  Two distinct facts reconciled: (1) **the panel serves the CACHED assessment.** `POST /{slug}/analyst`
+  returns the persisted entry when one exists (`reasoning.py:122`); the panel loads WITHOUT `refresh`, so
+  once any assessment (even a Floor) is persisted, re-viewing the page NEVER makes a new OpenRouter call —
+  the stale trace shows forever. (2) A 200 that still Floors is NOT a gateway rejection — the model replied
+  but its JSON failed OmiSphere's **canonical schema validation** (`_canonical_candidate` →
+  `validate_comprehensive_model_output` → errs → Floor); the errors were only in server logs. Fixes:
+  • **Capture the schema errors** — threaded `capture` through `_adjudicate` → `_canonical_candidate`;
+    the exact validation errors now ride the forensic trace (`canonical_validation_errors`) and render on
+    the page, so a floored-after-success scan says WHICH fields were wrong instead of "unknown".
+  • **Honest floored copy** — a 2xx no longer reads "model wasn't reached / gateway rejected"; it reads
+    "the model replied, but its output couldn't be used … a response-shape problem, not a connection
+    problem", and the diagnostics add `served`, `finish`, and the schema-error list.
+  • **Re-run button** — the floored state now has a "Re-run AI (fresh model call)" action that POSTs with
+    `refresh=true`, bypassing the cache so the user can force a real OpenRouter call from the UI (the
+    missing escape hatch from the cache trap). Copy: "This page shows the last saved result."
+  Tests: extended `test_degrade_invalid_schema` (200 + no endpoint_error + `canonical_validation_errors`
+  names the missing domain); targeted runtime/openrouter/trace suites green; frontend typecheck + 23 tests
+  green. NOTE for the operator: because the assessment is cached, deploying a backend fix does NOT
+  retroactively fix already-floored investigations — use the Re-run button (or `?refresh=true`) on each, or
+  run a fresh scan. To see the live config without a scan: `GET /v1/investigations/analyst/status`.
+
 - **2026-07-19 (Fix "AI reasoning not available" pt.2 — a display-name model ref floored every scan)** —
   After the json_schema→json_object fix reached the deploy, the new on-page diagnostic exposed the NEXT
   failure: HTTP 400 with `requested: GPT-5 Mini@preset/omi-master-v1`. Cause: `OMI_OPENROUTER_MODEL` was

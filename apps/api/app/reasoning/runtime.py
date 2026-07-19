@@ -157,7 +157,8 @@ class AIInvestigationRuntime:
         ruling, raw_obj, provider, model_backed, trace, fallback_from, rejected = self._adjudicate(
             raw, gov_bundle, impl, floor_ruling, schema_prefilter,
             model_path=model_path, adjudication=adjudication,
-            canonical_output_schema=canonical_output_schema, model_provider=model_provider)
+            canonical_output_schema=canonical_output_schema, model_provider=model_provider,
+            capture=capture)
         usage = capture.get("usage")
         return RuntimeInference(
             ruling=ruling, raw_obj=raw_obj, provider=provider, model_backed=model_backed,
@@ -175,7 +176,8 @@ class AIInvestigationRuntime:
     def _adjudicate(self, raw, gov_bundle, impl, floor_ruling, schema_prefilter, *,
                     model_path: bool = False, adjudication: str = "single_gate",
                     canonical_output_schema: dict | None = None,
-                    model_provider: str = "qwen-omi-analyst-v1"):
+                    model_provider: str = "qwen-omi-analyst-v1",
+                    capture: dict | None = None):
         """Parse → (optional schema pre-filter) → echo-guard → MANDATORY Governor. On any failure the
         deterministic Floor (``floor_ruling`` or the canonical FloorJudge assessment), itself
         Governor-validated. The ONE Governor invocation for every stage. Returns
@@ -199,7 +201,8 @@ class AIInvestigationRuntime:
                     # then build the governed wrapper by OVERLAYING Omi-owned provenance/subject + engine
                     # corroboration from the always-valid Floor (the model never fabricates system metadata)
                     # and forcing the echoed engine numbers. None on canonical-invalid output (-> Floor).
-                    candidate = self._canonical_candidate(obj, floor, hl, canonical_output_schema)
+                    candidate = self._canonical_candidate(obj, floor, hl, canonical_output_schema,
+                                                          capture=capture)
                 else:
                     # Registered stage sidecars (per-comment / per-commenter analyses) ride ALONGSIDE the
                     # constitutional wrapper. Separate ONLY those registered keys BEFORE core schema
@@ -275,7 +278,8 @@ class AIInvestigationRuntime:
         )
 
     @staticmethod
-    def _canonical_candidate(obj: dict, floor: dict, hl: dict, canonical_schema: dict) -> dict | None:
+    def _canonical_candidate(obj: dict, floor: dict, hl: dict, canonical_schema: dict,
+                             capture: dict | None = None) -> dict | None:
         """Phase 1 — build the governed wrapper from a canonically-valid comprehensive MODEL output.
 
         Validate ``obj`` (synthesis wrapper + six first-class reasoning domains) against the ONE canonical
@@ -295,6 +299,10 @@ class AIInvestigationRuntime:
         if errs:
             logger.warning("runtime: comprehensive model output failed canonical validation %s; Floor",
                            errs[:5])
+            # Record WHY the model's 200 response was rejected, so the forensic trace/UI can explain a
+            # floored-after-success scan (schema mismatch) instead of a bare "unknown". No secret, no body.
+            if capture is not None:
+                capture["canonical_validation_errors"] = [str(e) for e in errs[:8]]
             return None
         core = {k: v for k, v in obj.items() if k not in _STAGE_SIDECAR_KEYS}
         # OmiSphere injects only provenance/subject + the factual engine corroboration state (which
