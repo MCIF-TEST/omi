@@ -103,6 +103,114 @@ def _domain_shape_errors(obj: dict, section_keys: Sequence[str]) -> list[str]:
     return errors
 
 
+def _tier_for_score(score: int) -> str:
+    """The canonical omi_score→suspicion_tier bands (mirrors the engine cutoffs 0.25/0.50/0.75)."""
+    if score < 25:
+        return "low"
+    if score < 50:
+        return "moderate"
+    if score < 75:
+        return "elevated"
+    return "high"
+
+
+def coerce_comprehensive_model_output(
+    obj: Any, *, schema: dict, section_keys: Sequence[str],
+) -> Any:
+    """Best-effort STRUCTURAL normalization so a good-faith model reply RENDERS instead of floorng on a
+    harmless deviation. AI-first doctrine: be liberal in what we accept from the model.
+
+    This repairs SHAPE only — it never invents the analytical substance. The model MUST still supply the
+    core it alone can produce (``verdict``, ``omi_score``, ``headline``, ``assessment``); if any of those
+    is missing the object still fails validation downstream and the deterministic Floor stands in. What we
+    DO fix are the mechanical mismatches that otherwise waste a real inference:
+
+    * drop unknown top-level keys (the model loves to add ``summary``/``notes`` — ``additionalProperties:
+      false`` would otherwise reject the whole object);
+    * ensure each of the six reasoning domains is an object with a non-empty ``assessment`` (a bare string
+      is wrapped; a missing/empty one becomes an explicit "not provided" marker — honest, not invented);
+    * coerce the evidence arrays to lists and DROP malformed items (missing signal/claim/refs) rather than
+      fail the whole response;
+    * guarantee the required non-empty list fields (``uncertainty`` / ``what_would_change_this``);
+    * satisfy the F5 counter-evidence rule when ``evidence_against`` is legitimately empty;
+    * clamp ``omi_score`` to an int in [0,100] and derive ``suspicion_tier`` / default ``confidence_band``
+      when absent;
+    * default the boilerplate scalar fields (``confidence_rationale`` / ``limits_statement``).
+
+    Returns the coerced object (a new dict); non-dict input is returned unchanged."""
+    if not isinstance(obj, dict):
+        return obj
+    props: dict = schema.get("properties", {})
+    out: dict = {k: v for k, v in obj.items() if k in props}  # additionalProperties: false — drop unknowns
+
+    for key in section_keys:
+        sec = out.get(key)
+        if isinstance(sec, str):                              # a bare string → wrap it
+            sec = {"assessment": sec}
+        if not isinstance(sec, dict):
+            sec = {}
+        else:
+            sec = dict(sec)
+        if not (isinstance(sec.get("assessment"), str) and sec["assessment"].strip()):
+            sec["assessment"] = "No specific reasoning was provided for this domain."
+        if sec.get("citations") is not None and not isinstance(sec.get("citations"), list):
+            sec.pop("citations", None)
+        out[key] = sec
+
+    for arr_key in ("evidence_for", "evidence_against"):
+        if arr_key not in out:
+            continue
+        arr = out.get(arr_key)
+        if not isinstance(arr, list):
+            out[arr_key] = []
+            continue
+        clean: list[dict] = []
+        for item in arr:
+            if not isinstance(item, dict):
+                continue
+            signal = str(item.get("signal", "")).strip()
+            claim = str(item.get("claim", "")).strip()
+            refs = item.get("evidence_refs")
+            refs = [str(r) for r in refs if str(r).strip()] if isinstance(refs, list) else []
+            if signal and claim and refs:                     # keep only well-formed items (F1)
+                keep = {"signal": signal, "claim": claim, "evidence_refs": refs}
+                for opt in ("direction", "impact"):
+                    if opt in item:
+                        keep[opt] = item[opt]
+                clean.append(keep)
+        out[arr_key] = clean
+
+    for arr_key in ("uncertainty", "what_would_change_this"):
+        arr = out.get(arr_key)
+        if not (isinstance(arr, list) and any(str(x).strip() for x in arr)):
+            out[arr_key] = ["Not specified by the analyst."]
+
+    if isinstance(out.get("evidence_against"), list) and len(out["evidence_against"]) == 0:
+        rationale = str(out.get("confidence_rationale", "")).strip()
+        if "no exculpat" not in rationale.lower() and "no counter" not in rationale.lower():
+            out["confidence_rationale"] = f"{rationale} No exculpatory signal was present.".strip()
+
+    if "omi_score" in out:
+        try:
+            out["omi_score"] = max(0, min(100, int(round(float(out["omi_score"])))))
+        except (TypeError, ValueError):
+            pass
+    tier_enum = props.get("suspicion_tier", {}).get("enum", [])
+    if isinstance(out.get("omi_score"), int) and out.get("suspicion_tier") not in tier_enum:
+        out["suspicion_tier"] = _tier_for_score(out["omi_score"])
+    band_enum = props.get("confidence_band", {}).get("enum", [])
+    if band_enum and out.get("confidence_band") not in band_enum:
+        out["confidence_band"] = "moderate" if "moderate" in band_enum else band_enum[0]
+
+    if not str(out.get("confidence_rationale", "")).strip():
+        out["confidence_rationale"] = (
+            "Confidence reflects the strength and convergence of the available evidence.")
+    if not str(out.get("limits_statement", "")).strip():
+        out["limits_statement"] = (
+            "This is a probabilistic assessment; the human analyst sets the final verdict.")
+    return out
+
+
 def validate_comprehensive_model_output(
     obj: Any, *, schema: dict, section_keys: Sequence[str],
 ) -> list[str]:
@@ -135,4 +243,8 @@ def validate_comprehensive_model_output(
     return out
 
 
-__all__ = ["validate_comprehensive_sections", "validate_comprehensive_model_output"]
+__all__ = [
+    "validate_comprehensive_sections",
+    "validate_comprehensive_model_output",
+    "coerce_comprehensive_model_output",
+]

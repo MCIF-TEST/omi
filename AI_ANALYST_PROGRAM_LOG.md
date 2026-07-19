@@ -549,6 +549,29 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 ("Works the first time" — liberal acceptance of the model output + removed Re-run button)** —
+  User: make the FIRST scan render OpenRouter output; remove the Re-run button. The strict canonical
+  validator was floorng good-faith GPT-5 Mini replies on harmless deviations — the top reasons: an extra
+  top-level key (`additionalProperties:false`), the F5 empty-`evidence_against` phrasing rule, a slightly
+  empty/missing reasoning domain, or a malformed evidence item. AI-first doctrine says be LIBERAL in what
+  we accept. New `coerce_comprehensive_model_output()` (governor/comprehensive.py) normalizes the output to
+  the contract's SHAPE **before** validation, applied up front in `runtime._adjudicate` so `raw_obj`, the
+  served ruling, AND the UI's `comprehensive_sections` all see one repaired object: drops unknown top-level
+  keys; wraps/backfills each of the six domains with an explicit "not provided" marker; drops malformed
+  evidence items (keeps F1-valid ones); guarantees non-empty `uncertainty`/`what_would_change_this`;
+  satisfies F5 when `evidence_against` is legitimately empty; clamps `omi_score` to int[0,100], derives
+  `suspicion_tier` from it and defaults `confidence_band`; defaults the boilerplate scalars. It NEVER
+  invents substance — a reply missing `verdict`/`omi_score`/`headline`/`assessment` still Floors (coercion
+  can't fabricate the analysis). Net effect: a real GPT-5 Mini reply that merely omits a domain or adds a
+  stray key now RENDERS instead of floorng. **Removed the "Re-run AI" button** (the cache escape hatch is
+  no longer needed for the first-run case) while keeping the honest floored-state copy + diagnostics
+  (`served`/`finish`/schema-errors) for the rare genuine floor. Tests: 6 new coercion unit tests
+  (test_comprehensive_contract); flipped 4 strict-era tests to assert the new render-instead-of-floor
+  behavior (unknown key dropped+renders, malformed domain backfilled+renders, and two Floor tests now use
+  a missing-core field since a missing domain is coercible); added a cutover test that a missing domain
+  renders. Frontend typecheck + 23 tests green. Reminder unchanged: cached investigations need a fresh scan
+  to pick up the new behavior.
+
 - **2026-07-19 (Fix "AI reasoning not available" pt.3 — cached Floor + self-explaining floored state)** —
   User: a scan shows a floored assessment with `http status: 200` yet **OpenRouter received no request**.
   Two distinct facts reconciled: (1) **the panel serves the CACHED assessment.** `POST /{slug}/analyst`

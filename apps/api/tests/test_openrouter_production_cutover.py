@@ -235,18 +235,32 @@ def test_degrade_malformed_json():
 
 
 def test_degrade_invalid_schema():
+    # AI-first coercion repairs harmless SHAPE deviations (missing domains, stray keys) so they render.
+    # A floor only happens when the model omits the analytical SUBSTANCE it alone can produce — here the
+    # verdict — which coercion never invents.
     bad = _valid_model_output()
-    del bad["campaign_reasoning"]                                  # missing a required reasoning domain
+    del bad["verdict"]                                            # core substance missing → un-coercible
     out, _, calls = _run(_or_body(bad))
     _assert_floored(out)
     assert calls == 1                                             # no repair inference
-    # A 200 response that fails canonical validation records WHY (the schema errors) so a
+    # A 200 response that still fails canonical validation records WHY (the schema errors) so a
     # floored-after-success scan is self-explaining on the page — not a bare "unknown".
     tr = out["investigation_trace"]
     assert tr["response_status"] == 200                          # the model DID reply (not a transport error)
     assert not tr["endpoint_error"]                              # no transport failure — this is a shape floor
     errs = tr["canonical_validation_errors"]
-    assert errs and any("campaign_reasoning" in e for e in errs)
+    assert errs and any("verdict" in e for e in errs)
+
+
+def test_missing_reasoning_domain_now_renders_via_coercion():
+    """A good-faith reply that merely omits one reasoning domain must RENDER (coercion backfills an honest
+    'not provided' marker) — it is no longer floored. This is the 'works the first time' guarantee."""
+    obj = _valid_model_output()
+    del obj["campaign_reasoning"]
+    out, _, calls = _run(_or_body(obj))
+    assert calls == 1
+    assert out["investigation_trace"]["model_backed"] is True    # rendered, not floored
+    assert out["comprehensive_sections"]["campaign_reasoning"]   # backfilled section is present
 
 
 def test_degrade_empty_response():

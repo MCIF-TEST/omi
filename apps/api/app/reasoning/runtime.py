@@ -194,13 +194,25 @@ class AIInvestigationRuntime:
         if raw:
             obj = extract_json(raw)
             if isinstance(obj, dict):
+                if canonical_output_schema is not None:
+                    # AI-first: coerce the model output to the contract's SHAPE up front (drop unknown keys,
+                    # backfill structural gaps, derive tier, drop malformed evidence) so the WHOLE downstream
+                    # pipeline — the served ruling AND the per-domain `comprehensive_sections` the UI reads —
+                    # sees one repaired object. A good-faith reply renders instead of floorng on a harmless
+                    # deviation; the substance (verdict/omi_score/headline/assessment) is never invented.
+                    from app.governor import coerce_comprehensive_model_output
+                    from app.reasoning.prompts.comprehensive_investigation_template import (
+                        COMPREHENSIVE_SECTION_KEYS,
+                    )
+                    obj = coerce_comprehensive_model_output(
+                        obj, schema=canonical_output_schema, section_keys=COMPREHENSIVE_SECTION_KEYS)
                 raw_obj = obj
                 if canonical_output_schema is not None:
-                    # Phase 1 — the ONE canonical comprehensive contract: validate the model's FULL output
+                    # Phase 1 — the ONE canonical comprehensive contract: validate the (coerced) model output
                     # (synthesis wrapper + six first-class reasoning domains) against the canonical schema,
                     # then build the governed wrapper by OVERLAYING Omi-owned provenance/subject + engine
-                    # corroboration from the always-valid Floor (the model never fabricates system metadata)
-                    # and forcing the echoed engine numbers. None on canonical-invalid output (-> Floor).
+                    # corroboration from the always-valid Floor (the model never fabricates system metadata).
+                    # None on canonical-invalid output (-> Floor).
                     candidate = self._canonical_candidate(obj, floor, hl, canonical_output_schema,
                                                           capture=capture)
                 else:
@@ -294,6 +306,9 @@ class AIInvestigationRuntime:
             COMPREHENSIVE_SECTION_KEYS,
         )
 
+        # NOTE: `obj` has ALREADY been structurally coerced upstream in `_adjudicate` (so raw_obj and the
+        # UI's comprehensive_sections see the same repaired object). This validates the coerced output; on
+        # any remaining (substantive) failure the deterministic Floor stands in.
         errs = validate_comprehensive_model_output(
             obj, schema=canonical_schema, section_keys=COMPREHENSIVE_SECTION_KEYS)
         if errs:

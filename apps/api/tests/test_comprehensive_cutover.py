@@ -129,18 +129,16 @@ def test_valid_comprehensive_response_is_model_backed_and_survives():
     assert out["investigation_trace"]["inference_count"] == 1
 
 
-def test_unknown_top_level_field_is_still_rejected_to_floor():
-    """(7) An unknown top-level field (NOT a registered sidecar) must still fail core schema validation
-    → the model candidate is discarded → deterministic Floor. Unknown fields are never silently
-    accepted."""
+def test_unknown_top_level_field_is_dropped_and_the_response_renders():
+    """(7) AI-first: an unknown top-level field is a harmless deviation — coercion DROPS it (it is never
+    persisted) and the model's assessment RENDERS, rather than floorng the whole response. The model owns
+    its analysis; a stray key the model tacked on must not cost the user a real inference."""
     model_obj = {**_valid_core_wrapper(), **_six_sidecars(),
                  "fabricated_reasoning_section": {"assessment": "smuggled", "citations": []}}
     out, calls = _run(model_obj)
-    prov = str(out["governance"]["provider"])
-    assert "fallback" in prov or "deterministic" in prov, "unknown top-level field must reject to Floor"
-    assert out["investigation_trace"]["model_backed"] is False
-    # the Floor's wrapper is served — the model sentinels do NOT survive
-    assert out["headline"] != _SENTINEL_HEADLINE
+    assert out["investigation_trace"]["model_backed"] is True
+    assert out["headline"] == _SENTINEL_HEADLINE                 # the MODEL's wrapper survived
+    assert "fabricated_reasoning_section" not in out            # the unknown field was dropped, not persisted
     assert calls == 1  # still exactly one endpoint request
 
 
@@ -258,25 +256,19 @@ def test_repeated_generation_does_not_cause_multiple_inferences():
     assert calls["n"] == 1, f"expected exactly ONE endpoint request across reopens, got {calls['n']}"
 
 
-def test_malformed_comprehensive_section_fails_canonical_validation_to_floor():
-    """(9) Phase 1 — the ONE canonical contract makes the six reasoning domains FIRST-CLASS and gating:
-    a malformed domain (missing 'assessment') fails canonical validation, so the whole comprehensive
-    output is not canonically valid → deterministic Floor (model_backed=false). The failure is explicit
-    and forensically observable (the malformed section is still surfaced in comprehensive_validation), and
-    no second inference is made to repair it."""
+def test_malformed_comprehensive_section_is_backfilled_and_the_response_renders():
+    """(9) AI-first: a single malformed reasoning domain (missing 'assessment') is a harmless SHAPE
+    deviation — coercion backfills an explicit, honest 'not provided' marker for that one domain and the
+    model's assessment RENDERS. One imperfect section must not discard the whole investigation. The other
+    five domains and the model's synthesis wrapper survive intact; no repair inference is made."""
     sidecars = _six_sidecars()
     sidecars["account_reasoning"] = {"citations": ["A1"]}  # missing 'assessment' string
     model_obj = {**_valid_core_wrapper(), **sidecars}
     out, calls = _run(model_obj)
-    # canonical validation fails -> Floor (NOT served as model-backed)
-    assert "fallback" in str(out["governance"]["provider"]) or "deterministic" in str(out["governance"]["provider"])
-    assert out["investigation_trace"]["model_backed"] is False
-    # the model's wrapper sentinels do NOT survive — the Floor's wrapper is served
-    assert out["headline"] != _SENTINEL_HEADLINE
-    # the failure is forensically observable: the malformed section is still surfaced
-    cval = out["comprehensive_validation"]
-    assert cval["structurally_valid"] is False
-    assert cval["sections"]["account_reasoning"]["shape_ok"] is False
-    # no repair inference — still exactly one endpoint request
-    assert calls == 1
+    assert out["investigation_trace"]["model_backed"] is True
+    assert out["headline"] == _SENTINEL_HEADLINE                 # the MODEL's wrapper survived
+    # the backfilled domain is present and well-formed after coercion
+    assert out["comprehensive_sections"]["account_reasoning"]["assessment"].strip()
+    assert out["comprehensive_validation"]["structurally_valid"] is True
+    assert calls == 1  # no repair inference — still exactly one endpoint request
     assert out["investigation_trace"]["inference_count"] == 1

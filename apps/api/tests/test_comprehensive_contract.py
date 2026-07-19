@@ -260,6 +260,75 @@ def test_forbidden_extra_top_level_field_fails_validation():
     assert any("smuggled_section" in e for e in errs)
 
 
+# =========================================================================== #
+# Coercion: a good-faith reply RENDERS instead of floorng on a harmless deviation (works first time)
+# =========================================================================== #
+def _coerce(obj: dict) -> dict:
+    from app.governor import coerce_comprehensive_model_output
+    return coerce_comprehensive_model_output(
+        obj, schema=comprehensive_investigation_canonical_schema(),
+        section_keys=COMPREHENSIVE_SECTION_KEYS)
+
+
+def _valid_after_coercion(obj: dict) -> list[str]:
+    return validate_comprehensive_model_output(
+        _coerce(obj), schema=comprehensive_investigation_canonical_schema(),
+        section_keys=COMPREHENSIVE_SECTION_KEYS)
+
+
+def test_coercion_drops_unknown_top_level_key_and_validates():
+    obj = _valid_model_output()
+    obj["summary"] = "a stray field the model liked to add"      # additionalProperties:false would reject
+    obj["notes"] = ["another one"]
+    coerced = _coerce(obj)
+    assert "summary" not in coerced and "notes" not in coerced
+    assert _valid_after_coercion(obj) == []
+
+
+def test_coercion_backfills_a_missing_reasoning_domain():
+    obj = _valid_model_output()
+    del obj["campaign_reasoning"]
+    coerced = _coerce(obj)
+    assert coerced["campaign_reasoning"]["assessment"].strip()   # honest "not provided" marker
+    assert _valid_after_coercion(obj) == []
+
+
+def test_coercion_satisfies_f5_when_evidence_against_is_empty():
+    obj = _valid_model_output()
+    obj["evidence_against"] = []
+    obj["confidence_rationale"] = "strong convergent signal"      # lacks the F5 exculpation phrasing
+    assert _valid_after_coercion(obj) == []
+
+
+def test_coercion_derives_tier_and_clamps_score():
+    obj = _valid_model_output()
+    obj["omi_score"] = 130.7                                      # out of range + float
+    del obj["suspicion_tier"]                                     # let it be derived
+    coerced = _coerce(obj)
+    assert coerced["omi_score"] == 100 and coerced["suspicion_tier"] == "high"
+    assert _valid_after_coercion(obj) == []
+
+
+def test_coercion_drops_malformed_evidence_items():
+    obj = _valid_model_output()
+    obj["evidence_for"] = [
+        {"signal": "temporal", "claim": "low variance", "evidence_refs": ["A1"]},  # good
+        {"signal": "temporal", "claim": "missing refs"},                            # bad → dropped
+        "not even an object",                                                        # bad → dropped
+    ]
+    coerced = _coerce(obj)
+    assert len(coerced["evidence_for"]) == 1
+    assert _valid_after_coercion(obj) == []
+
+
+def test_coercion_still_floors_when_core_substance_is_missing():
+    # The model must supply the substance it alone can produce — coercion never invents it.
+    for core in ("verdict", "omi_score", "headline", "assessment"):
+        obj = _valid_model_output()
+        del obj[core]
+        assert _valid_after_coercion(obj), f"expected floor when {core} is missing"
+
+
 def test_omi_owned_metadata_is_not_required_from_the_model():
     """The model output that carries NONE of the Omi-owned provenance/subject fields is still valid —
     Omi injects those after validation; the model must never be asked to fabricate them."""
