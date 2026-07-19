@@ -118,11 +118,32 @@ class OpenRouterReasoningProvider:
                 return val
         return None
 
+    @staticmethod
+    def _looks_like_slug(model: str) -> bool:
+        """A valid OpenRouter model slug is ``provider/name`` (e.g. ``openai/gpt-5-mini``) — it always
+        contains a ``/`` and never whitespace. A human display name like ``GPT-5 Mini`` is NOT a slug and
+        must never be sent to the gateway."""
+        return "/" in model and not any(c.isspace() for c in model)
+
     def _model_ref(self) -> str:
         """The ``model`` field: a preset reference in preset mode (optionally layering a base model), or the
-        explicit model slug in direct mode."""
+        explicit model slug in direct mode.
+
+        In preset mode the preset is self-sufficient (it defines the model), so ``model`` is only layered
+        on as ``<slug>@preset/<name>`` when it's a REAL slug. A misconfigured display name (e.g. someone
+        sets ``OMI_OPENROUTER_MODEL=GPT-5 Mini``) would otherwise produce the invalid model reference
+        ``GPT-5 Mini@preset/omi-master-v1`` and OpenRouter would reject EVERY request with HTTP 400 →
+        deterministic Floor. We ignore such a value (falling back to preset-only) and warn, so one bad env
+        var can't brick the whole AI path."""
         if self.preset:
             slug = self.preset if self.preset.startswith("@preset/") else f"@preset/{self.preset}"
+            if self.model and not self._looks_like_slug(self.model):
+                logger.warning(
+                    "openrouter: ignoring OMI_OPENROUTER_MODEL=%r — not a valid model slug (expected "
+                    "'provider/name', e.g. 'openai/gpt-5-mini'); using preset %s alone, which already "
+                    "defines the model. Unset the variable to silence this.", self.model, slug,
+                )
+                return slug
             return f"{self.model}{slug}" if self.model else slug
         return self.model or ""
 
