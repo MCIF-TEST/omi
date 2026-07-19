@@ -193,9 +193,11 @@ def test_normal_stop_with_missing_is_marked():
 
 def test_floor_surfaces_no_per_account_content():
     # A response that fails canonical validation floors; per-account content must NOT leak, and completion
-    # is reported as not-applicable.
+    # is reported as not-applicable. AI-first coercion repairs harmless shape gaps (a missing domain would
+    # be backfilled and render), so we force the Floor with a missing CORE field the model alone can
+    # produce (verdict) — coercion never invents substance.
     bad = _model_output(50)
-    del bad["campaign_reasoning"]                     # missing a required domain → Floor
+    del bad["verdict"]                                # missing core substance → un-coercible → Floor
     reset_db_for_tests("sqlite:///:memory:")
     with patch("app.reasoning.model_providers.openrouter.urllib.request.urlopen",
                lambda req, timeout=None: _Resp(_or_body(bad))):

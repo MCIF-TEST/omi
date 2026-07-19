@@ -223,8 +223,10 @@ def test_valid_output_follows_the_existing_canonical_validation_path():
 
 
 def test_invalid_output_falls_to_the_existing_floor_path():
+    # AI-first coercion repairs harmless shape gaps; a Floor now requires missing CORE substance the model
+    # alone produces (coercion never invents it) — here the verdict.
     bad = _valid_model_output()
-    del bad["campaign_reasoning"]                                 # missing required domain
+    del bad["verdict"]                                           # missing core substance → un-coercible
     out, _, calls = _run(bad)
     assert out["investigation_trace"]["model_backed"] is False
     assert "fallback" in str(out["governance"]["provider"]) or "deterministic" in str(out["governance"]["provider"])
