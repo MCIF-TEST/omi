@@ -300,10 +300,12 @@ def _commenters_by_author_ref(payload: dict) -> dict[str, dict]:
 
 
 def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
-    """Echo join: pair each model-authored per-account assessment (keyed by alias) with the account's
-    real identity + the deterministic engine's tier/probability (which the model NEVER emits). Aliases
-    are resolved through the reversible legend; an item whose alias does not resolve to a known commenter
-    is kept but marked ``resolved: False`` (never dropped — the presentation layer flags it)."""
+    """Join each model-authored per-account assessment (keyed by alias) with the account's real identity.
+    AI-first: the per-account OMI score + tier are the MODEL'S (it reasons them from that account's raw
+    evidence); OmiSphere supplies only identity (handle/external_id) from the metadata. The engine's own
+    probability is carried as a secondary reference (``engine_probability``) when present, never as the
+    account's score. Aliases resolve through the reversible legend; an item whose alias does not resolve is
+    kept but marked ``resolved: False`` (never dropped — the presentation layer flags it)."""
     items = (raw_obj or {}).get("commenter_assessments")
     if not isinstance(items, list):
         return []
@@ -316,22 +318,30 @@ def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> 
         alias = it.get("ref")
         author_ref = accounts.get(alias) or (legend.resolve(alias) if alias else None)
         commenter = by_ref.get(author_ref) if author_ref else None
+        # The account's OMI score + tier are MODEL-produced (clamped/normalized for safety).
+        omi_score = it.get("omi_score")
+        try:
+            omi_score = max(0, min(100, int(round(float(omi_score))))) if omi_score is not None else None
+        except (TypeError, ValueError):
+            omi_score = None
         row: dict = {
             "ref": alias,
+            "omi_score": omi_score,
+            "suspicion_tier": it.get("suspicion_tier"),
             "assessment": it.get("assessment"),
             "citations": it.get("citations") or [],
             "resolved": commenter is not None,
         }
         if commenter is not None:
-            # Engine-owned, echoed (never model-fabricated) — identity + the authoritative suspicion read.
+            # Identity only (from metadata) — never a score. The engine's probability rides along as a
+            # secondary reference for operators, distinct from the account's model-produced OMI score.
             row["handle"] = commenter.get("handle")
             row["external_id"] = commenter.get("external_id")
-            row["suspicion_tier"] = commenter.get("tier")
-            row["suspicion_probability"] = (
-                commenter.get("coordination_adjusted_probability")
-                if commenter.get("coordination_adjusted_probability") is not None
-                else commenter.get("overall_probability")
-            )
+            _eng = (commenter.get("coordination_adjusted_probability")
+                    if commenter.get("coordination_adjusted_probability") is not None
+                    else commenter.get("overall_probability"))
+            if _eng is not None:
+                row["engine_probability"] = _eng
         joined.append(row)
     return joined
 

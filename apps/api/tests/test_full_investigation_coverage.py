@@ -120,7 +120,8 @@ def _payload(n: int) -> dict:
 
 def _model_output(num_assessments: int) -> dict:
     domains = {k: {"assessment": "domain reasoning", "citations": []} for k in COMPREHENSIVE_SECTION_KEYS}
-    ca = [{"ref": f"A{i + 1}", "assessment": f"Account A{i + 1} concise read.", "citations": []}
+    ca = [{"ref": f"A{i + 1}", "omi_score": 55, "suspicion_tier": "elevated",
+           "assessment": f"Account A{i + 1} concise read.", "citations": []}
           for i in range(num_assessments)]
     return {
         "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",

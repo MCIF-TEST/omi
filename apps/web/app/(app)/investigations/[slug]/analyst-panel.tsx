@@ -681,14 +681,22 @@ function CommenterAssessments({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-fg break-all">{r.handle ?? r.ref}</span>
                 {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
-                {typeof r.suspicion_probability === 'number' && (
-                  <span className="font-mono text-2xs text-fg-mute">
-                    {Math.round(r.suspicion_probability * 100)}%
+                {typeof r.omi_score === 'number' && (
+                  <span className="flex items-baseline gap-1 ml-auto" title="This account's OMI score (0–100).">
+                    <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">OMI</span>
+                    <span className="stat-value text-base font-semibold text-fg tabular-nums">
+                      {Math.max(0, Math.min(100, Math.round(r.omi_score)))}
+                    </span>
+                    <span className="font-mono text-2xs text-fg-mute">/100</span>
                   </span>
                 )}
               </div>
-              {typeof r.suspicion_probability === 'number' && (
-                <ProbabilityBar value={r.suspicion_probability} tier={r.suspicion_tier} size="sm" />
+              {typeof r.omi_score === 'number' && (
+                <ProbabilityBar
+                  value={Math.max(0, Math.min(100, Math.round(r.omi_score))) / 100}
+                  tier={r.suspicion_tier}
+                  size="sm"
+                />
               )}
               {r.assessment && (
                 <p className="text-xs text-fg-dim leading-relaxed whitespace-pre-line">{r.assessment}</p>

@@ -84,8 +84,10 @@ def _valid_model_output() -> dict:
         "what_would_change_this": ["more posts to corroborate the cadence"],
         "limits_statement": "This is a probabilistic assessment; the human analyst sets the final verdict.",
         "commenter_assessments": [
-            {"ref": "A1", "assessment": "A1 posts on a mechanically regular cadence.", "citations": ["A1"]},
-            {"ref": "A2", "assessment": "A2 shows a lighter footprint.", "citations": ["A2"]}],
+            {"ref": "A1", "omi_score": 64, "suspicion_tier": "elevated",
+             "assessment": "A1 posts on a mechanically regular cadence.", "citations": ["A1"]},
+            {"ref": "A2", "omi_score": 33, "suspicion_tier": "moderate",
+             "assessment": "A2 shows a lighter footprint.", "citations": ["A2"]}],
         **domains,
     }
 

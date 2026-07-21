@@ -549,6 +549,28 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Per-account OMI score — dual-level scoring; preset regenerated)** —
+  Architecture decision (user): the OMI score is PER ACCOUNT, not just per investigation, and BOTH levels
+  are AI-produced. Increment 1 (this change) makes the dual-score contract real end-to-end; the "pure raw
+  metadata" evidence-bundle strip (removing detector tables/scores from what the AI sees) + the "Scan next
+  25 fresh score" continuation are the next increment. Changes:
+  • **Schema**: each `commenter_assessments` item now REQUIRES `omi_score` (int 0-100) + `suspicion_tier`
+    (enum), both AI-produced from THAT account's evidence; the wrapper `omi_score` is redefined as the
+    OVERALL bundle aggregate consistent with the per-account scores (analyst_response_schema.json updated).
+  • **Contract + worked example + base prompt + constitution + system_task**: instruct the two score
+    levels (per-account primary, overall aggregate), "score each account on its own evidence" (two accounts
+    in a cluster can differ), and "each scan judged independently → fresh scores per batch".
+  • **Join** (`_join_commenter_assessments`): carries the MODEL's per-account omi_score + tier as the
+    account's score; identity (handle/external_id) from metadata; the engine probability demoted to a
+    secondary `engine_probability` reference (never the score).
+  • **Coercion**: normalizes per-account items (clamp score, derive tier↔score, drop un-scoreable/ref-less
+    items) so a good-faith reply renders every account without floorng.
+  • **UI**: each per-account card shows its own OMI score (0-100) + tier bar; the overall OMI score stays
+    the bundle headline.
+  Preset recompiled → **new hash `map:ad2a439cba5dddb85773fdf9` (50,277 chars)**; pkg hash →
+  `pkg:a5f11ef93e7c4764cacfdc49`; md/JSON mirrors + drift guards regenerated. Full suite 1393 pass
+  (pre-existing Brier aside); frontend typecheck + 23 tests green. Operator re-pastes this preset version.
+
 - **2026-07-19 (Production cost guardrails + large-scan reliability — launch hardening)** —
   With paid acquisition + scale imminent, hardened the launch-critical cost/reliability surface (per-user
   cost was already bounded by credits charged up front + the 1/IP/day demo cap; this bounds PER-SCAN cost

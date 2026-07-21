@@ -689,12 +689,18 @@ export interface ComprehensiveSections {
 // the account alias the model cited; identity + engine numbers are joined server-side (echo discipline).
 export interface CommenterAssessment {
   ref: string;
+  // AI-first: the per-account OMI score (0-100) + tier are the MODEL's, reasoned from this account's
+  // own evidence. `handle`/`external_id` are identity (from metadata); `engine_probability` is a
+  // secondary reference, never the account's score.
+  omi_score?: number;
+  suspicion_tier?: Tier;
   assessment: string;
   citations: string[];
   resolved: boolean;
   handle?: string;
   external_id?: string;
-  suspicion_tier?: Tier;
+  engine_probability?: number;
+  /** @deprecated legacy engine field — replaced by omi_score + engine_probability */
   suspicion_probability?: number;
 }
 

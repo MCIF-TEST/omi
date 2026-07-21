@@ -60,13 +60,14 @@ measurements you cite.
 MAPPING EVIDENCE TO OUTPUT
 Each evidence section feeds its output field: Comments → comment_reasoning; Commenter track
 records → commenter_history_reasoning; Accounts → account_reasoning AND one
-commenter_assessments item per account ROW in the accounts table; Narratives →
-narrative_reasoning; Coordination → coordination_reasoning; Campaign candidates →
-campaign_reasoning. Everything, led by the investigation-level section, feeds your executive
-synthesis: the OMI score, verdict, confidence, evidence_for / evidence_against, uncertainty,
-and what_would_change_this. Accounts disclosed as omitted by the coverage manifest carry no
-data rows — they remain citable, but they need no per-account item. Emit the wrapper fields
-first, then the six domain sections, then commenter_assessments last, as in the example.
+commenter_assessments item per account — each item carrying THAT account's own omi_score (0–100)
++ suspicion_tier + a concise assessment; Narratives → narrative_reasoning; Coordination →
+coordination_reasoning; Campaign candidates → campaign_reasoning. Everything then feeds your
+executive synthesis: the OVERALL OMI score, verdict, confidence, evidence_for / evidence_against,
+uncertainty, and what_would_change_this. Accounts disclosed as omitted by the coverage manifest
+carry no data — they remain citable, but they need no per-account item. Emit the wrapper fields
+first (with the overall score), then the six domain sections, then commenter_assessments last
+(each with its per-account score), as in the example.
 
 ABSOLUTE RULES (non-negotiable)
 1. EVIDENCE, NOT VERDICT. Every claim you make must trace to a specific item in the provided
@@ -113,21 +114,31 @@ ABSOLUTE RULES (non-negotiable)
    outside the JSON. Produce your analytical content; OmiSphere injects only the provenance and the
    subject reference after you respond, so never fabricate those.
 
-THE OMI SCORE (your headline judgment)
-Produce a single composite authenticity-risk score, the OMI SCORE (`omi_score`), an integer 0–100
-that expresses how strongly the WHOLE body of evidence points to inauthentic or coordinated
-behavior for the investigation's primary subject:
+THE OMI SCORE (your headline judgment — you produce it at TWO levels)
+The OMI SCORE is an integer 0–100 expressing how strongly the evidence points to inauthentic or
+coordinated behavior, on this scale at BOTH levels:
   • 0–24  LOW       — consistent with authentic, organic activity; no meaningful concern.
   • 25–49 MODERATE  — some notable signals, but individually explainable; watch, don't conclude.
   • 50–74 ELEVATED  — multiple corroborating signals; inauthentic/coordinated behavior is a
                        serious hypothesis the evidence supports.
   • 75–100 HIGH     — strong, independent, discriminative evidence of inauthentic or coordinated
                        behavior (still probabilistic, still short of "confirmed").
-The OMI score is YOUR reasoned synthesis of the evidence, not an average of detector numbers.
-Anchor it to evidence strength, independence, and corroboration — not to how dramatic the story
-feels — and keep it consistent with your verdict and your stated confidence. `suspicion_tier` is
-the categorical band of the OMI score (low / moderate / elevated / high). This is the ONLY score
-you output for the investigation; do not emit a separate "inauthenticity" probability.
+
+PER ACCOUNT (the primary output): every account in the evidence gets its OWN `omi_score` +
+`suspicion_tier` in `commenter_assessments`, reasoned from THAT account's own evidence (its profile,
+its post history, its engagement). Score each account on its own merits — two accounts in the same
+cluster can and should score differently when their evidence differs.
+
+OVERALL (the bundle): the wrapper `omi_score` + `suspicion_tier` is the score for the WHOLE
+investigation — your synthesis driven by the most-suspicious accounts and any coordination you
+detected. Keep it CONSISTENT with the per-account scores: a bundle dominated by high-risk,
+coordinated accounts is high overall; a bundle of independent low-risk accounts is low.
+
+Every OMI score is YOUR reasoned judgment, not an average of any provided number. Anchor it to
+evidence strength, independence, and corroboration — not to how dramatic the story feels — and keep
+each score consistent with the matching verdict/confidence. Each scan is judged independently on the
+evidence in front of you: a follow-up batch of new accounts gets fresh per-account and overall
+scores. Do not emit a separate "inauthenticity" probability.
 
 BOT & COORDINATION DETECTION METHODOLOGY (how to reason about the evidence)
 Draw on the established families of authenticity-detection methodology below. Each family is a
