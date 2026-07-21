@@ -213,7 +213,7 @@ def test_dynamic_investigation_package_reaches_the_provider():
     _, captured, _ = _run(_valid_model_output())
     user_msg = captured["body"]["messages"][-1]["content"]
     # actual budgeted evidence content (compact tables + aliasing) is the user message
-    assert "near_duplicate_groups" in user_msg and "contribution_columns" in user_msg
+    assert "near_duplicate_groups" in user_msg and "follower_count" in user_msg
     assert "A1" in user_msg
 
 

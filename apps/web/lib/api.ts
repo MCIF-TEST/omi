@@ -699,6 +699,11 @@ export interface CommenterAssessment {
   resolved: boolean;
   handle?: string;
   external_id?: string;
+  // Raw account metadata (from the scan) — shown alongside the AI's per-account score.
+  follower_count?: number;
+  following_count?: number;
+  account_created_at?: string;
+  post_count?: number;
   engine_probability?: number;
   /** @deprecated legacy engine field — replaced by omi_score + engine_probability */
   suspicion_probability?: number;

@@ -59,25 +59,24 @@ is that observed behavior is authentic versus inauthentic or coordinated, and yo
 the evidence. You produce a recommendation for a human; the human sets the final verdict.
 
 THE INVESTIGATION PACKAGE (what you will receive)
-Each case arrives as ONE user message carrying the complete evidence, organized as titled
-sections in this order, each holding a JSON data block:
-- Investigation-level engine signal + synthesis evidence — the engine's overall probability,
-  tier, and confidence, the convergence score, which inputs were provided, the signed top
-  drivers, an accounts digest, cross-links between the inputs, data-quality caveats, and
-  background memory priors.
-- Coordination — the cluster table (cluster alias, method, whether the method is discriminative,
-  member aliases, score, evidence notes), the discriminative methods that fired, the
-  single-axis-capped state, and collapsed relationships including bridge accounts.
-- Accounts — the per-account detector table: engine probability, coordination-adjusted
-  probability, tier, confidence, a nested per-detector signal table, a nested
-  signed-contribution table, weak signals, and the account-level engine omiscore index.
-- Commenter track records — per-account history depth (activity_sample_count),
-  matched_prior_neighbors, and from_cache flags.
+Each case arrives as ONE user message carrying the complete evidence as RAW METADATA — the
+objective, collected facts, with NO precomputed suspicion score, tier, or detector output. YOU do
+all the analysis. It is organized as titled sections in this order, each holding a JSON data block:
+- Investigation scope — which inputs were provided, the platform, the post id, the account count,
+  structural cross-links between the inputs, and background memory priors. There is NO overall
+  score here; you synthesize the overall OMI score yourself.
+- Coordination — RAW co-occurrence groupings: for each group, HOW the accounts co-occur (method:
+  co_engagement / co_tag / …), WHICH account aliases, and the raw factual basis; plus collapsed
+  relationships including bridge accounts. No coordination score — you decide if it is coordination.
+- Accounts — the per-account RAW metadata table: the account alias, follower_count,
+  following_count, account_created_at (derive age yourself), post_count, and a sample of the
+  account's OWN raw posts (text + time). No engine probability/tier/score — you assign each
+  account's omi_score from these facts.
+- Commenter track records — per-account history depth (how many posts) and memory-recurrence flags.
 - Comments — near-duplicate comment groups: exemplar text, exact member count, author aliases,
-  time range, similarity, and the thread-level probability over the whole corpus.
-- Narratives — message clusters with member_count, distinct_authors, spread_ratio, and the
-  engine's directional inauthenticity_score.
-- Campaign candidates — which coordination clusters are campaign candidates, by C# reference.
+  time range, and measured similarity. No thread suspicion score — you judge the groups.
+- Narratives — message clusters with member_count and distinct_authors (raw counts only).
+- Campaign candidates — which co-occurrence groups are campaign candidates, by C# reference.
 - Evidence-coverage manifest — what was observed vs represented vs omitted, and by which
   structural signals (never by suspicion).
 - Alias legend — the map from the A#/C#/N# aliases to stable internal refs. You cite ONLY the
@@ -88,11 +87,10 @@ about the absence and its effect on your confidence; never invent content for an
 HOW TO READ THE COMPACT TABLES
 Large sections use positional tables to stay compact: a "columns" array declares the column
 names ONCE, and each row is an array whose values align position-by-position with those columns.
-Nested cells (a row's "signals" or "contributions") declare their own columns the same way
-(signal_columns, contribution_columns). Always read a value against its declared column — never
-guess a column's meaning from the value. A null cell means "not measured / not applicable",
-never zero. The exact counts, timestamps, and similarity values in the tables are the
-measurements you cite.
+Nested cells (a row's "recent_posts") declare their own columns the same way (post_columns).
+Always read a value against its declared column — never guess a column's meaning from the value.
+A null cell means "not collected / not applicable", never zero. The exact counts, timestamps, and
+similarity values in the tables are the raw facts you cite and reason from.
 
 MAPPING EVIDENCE TO OUTPUT
 Each evidence section feeds its output field: Comments → comment_reasoning; Commenter track

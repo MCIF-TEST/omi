@@ -1,6 +1,6 @@
 {
   "constitution": {
-    "hash": "cx:65afc21be85f25aa39830e4274beecce",
+    "hash": "cx:28c9e540a5bfc056b9afaed09aa538c3",
     "version": "v5"
   },
   "counts": {
@@ -12,7 +12,7 @@
   "production_prompt": {
     "active_version": "v1",
     "analyst": "omi_analyst",
-    "prompt_hash": "ph:5dde890b91ea438d00665c7a5a830e8a",
+    "prompt_hash": "ph:5bc54a0886d56462ee37bab47ec21f42",
     "published_asset": "prompts/analyst_system_prompt_v1.md"
   },
   "prompts": [
@@ -26,7 +26,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:c019fa395e75ec20f908fc5909b3f542",
+      "prompt_hash": "ph:cf530e851035fa342b0ddeef32fe4331",
       "version": "lib-v1"
     },
     {
@@ -39,7 +39,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:17b1c2d0c48d890415ad9fa892b3239f",
+      "prompt_hash": "ph:397d8a972ad502f6d3f0cd838d3f0bb9",
       "version": "lib-v2"
     },
     {
@@ -78,7 +78,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:4723df52ee32784ce10378c0701d9ac5",
+      "prompt_hash": "ph:ce898c6205a1d03f2caedd86e4ca34ae",
       "version": "lib-v1"
     },
     {
@@ -91,7 +91,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:57da795c588b6f7207c037004ef2ee3c",
+      "prompt_hash": "ph:19032fac80413d29a6c4311eafbca79e",
       "version": "lib-v1"
     },
     {
@@ -104,7 +104,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:ec0ec7db5f843cdbe5fb5ff768c09588",
+      "prompt_hash": "ph:c0177636229c059f41ed7bc4da0ae334",
       "version": "lib-v1"
     },
     {
@@ -117,7 +117,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:7ed414e62c69628b18e16bd640de2bdd",
+      "prompt_hash": "ph:62221c843d2339dac5f49847b9584249",
       "version": "lib-v1"
     },
     {
@@ -130,7 +130,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:5356b779cb07569075f2943eedfbe85f",
+      "prompt_hash": "ph:93102689f3f92ac2380223811ad1ee34",
       "version": "lib-v1"
     },
     {
@@ -143,7 +143,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:9da119eb19f9192b578f2d48e411a053",
+      "prompt_hash": "ph:d3d82f471006ee6896334efb4288c2bb",
       "version": "lib-v1"
     },
     {
@@ -156,7 +156,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:5fd4c38de13e4aca890995f40c286519",
+      "prompt_hash": "ph:76c78065a6f4fe4ed5a7c8f3ff0c5334",
       "version": "lib-v1"
     },
     {
@@ -169,7 +169,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:f80ad8535f3a21016c3c022fcad4db0b",
+      "prompt_hash": "ph:95c06cfed36a29188fc7d1edd38481d0",
       "version": "lib-v1"
     },
     {
@@ -182,7 +182,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:36899e24205985001b386d4a3c8f5ad0",
+      "prompt_hash": "ph:c16ade3fb248d46689ff88987ee18bda",
       "version": "lib-v1"
     },
     {
@@ -195,7 +195,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:b2fb3a430ebefac0e06df30d2b73fbe4",
+      "prompt_hash": "ph:8ddc9356478b2edf137f3796812f04a9",
       "version": "lib-v1"
     },
     {
@@ -208,7 +208,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:5dde890b91ea438d00665c7a5a830e8a",
+      "prompt_hash": "ph:5bc54a0886d56462ee37bab47ec21f42",
       "version": "v1"
     },
     {
@@ -221,7 +221,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:a53e07491258cb44b40bc794c1a80709",
+      "prompt_hash": "ph:dd0f73d3e317ee8a359405a7b4575c59",
       "version": "lib-v1"
     },
     {
@@ -234,7 +234,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:1bea2f4913b43069673b77a91b7832a9",
+      "prompt_hash": "ph:eaf3002e4aca77ac41e30c8626eefc64",
       "version": "lib-v1"
     }
   ],

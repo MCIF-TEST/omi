@@ -650,6 +650,25 @@ function CompletionBanner({ c }: { c?: CompletionStatus }) {
   );
 }
 
+// Compact raw-metadata line for one account — the objective facts (followers, age, posts) the AI
+// scored from, shown beside its OMI score. Only renders the facts that were collected.
+function accountAgeDays(iso?: string): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
+}
+function AccountMetadata({ r }: { r: CommenterAssessment }) {
+  const bits: string[] = [];
+  if (typeof r.follower_count === 'number') bits.push(`${r.follower_count.toLocaleString()} followers`);
+  if (typeof r.following_count === 'number') bits.push(`${r.following_count.toLocaleString()} following`);
+  const age = accountAgeDays(r.account_created_at);
+  if (age !== null) bits.push(age < 365 ? `${age}d old` : `${(age / 365).toFixed(1)}y old`);
+  if (typeof r.post_count === 'number') bits.push(`${r.post_count.toLocaleString()} posts`);
+  if (bits.length === 0) return null;
+  return <p className="font-mono text-2xs text-fg-faint">{bits.join(' · ')}</p>;
+}
+
 function CommenterAssessments({
   items, completion,
 }: { items?: CommenterAssessment[]; completion?: CompletionStatus; slug: string }) {
@@ -698,6 +717,7 @@ function CommenterAssessments({
                   size="sm"
                 />
               )}
+              <AccountMetadata r={r} />
               {r.assessment && (
                 <p className="text-xs text-fg-dim leading-relaxed whitespace-pre-line">{r.assessment}</p>
               )}

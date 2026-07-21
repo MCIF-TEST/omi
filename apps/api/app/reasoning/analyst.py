@@ -333,10 +333,17 @@ def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> 
             "resolved": commenter is not None,
         }
         if commenter is not None:
-            # Identity only (from metadata) — never a score. The engine's probability rides along as a
-            # secondary reference for operators, distinct from the account's model-produced OMI score.
+            # Identity + the RAW metadata (from the scan, never a score) so the UI can show each account's
+            # objective facts alongside the AI's per-account OMI score. The engine's probability rides
+            # along as a secondary reference, distinct from the account's model-produced OMI score.
             row["handle"] = commenter.get("handle")
             row["external_id"] = commenter.get("external_id")
+            for fld in ("follower_count", "following_count", "account_created_at"):
+                if commenter.get(fld) is not None:
+                    row[fld] = commenter.get(fld)
+            _posts = commenter.get("recent_activity") or []
+            if _posts:
+                row["post_count"] = commenter.get("history_size") or len(_posts)
             _eng = (commenter.get("coordination_adjusted_probability")
                     if commenter.get("coordination_adjusted_probability") is not None
                     else commenter.get("overall_probability"))

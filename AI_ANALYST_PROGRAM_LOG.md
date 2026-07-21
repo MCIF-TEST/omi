@@ -549,6 +549,29 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Pure raw-metadata evidence bundle — the AI does ALL the analysis; preset regenerated)** —
+  Architecture decision (user): "pure raw metadata only" — the Evidence Compiler gathers RAW metadata and
+  the AI produces every judgment (per-account + overall scores AND coordination detection). Threaded the
+  raw profile facts (follower_count, following_count, account_created_at, post_count, the account's own raw
+  posts) that the scan already collects but the bundle previously dropped: `AccountEvidence` +
+  `AccountItem` gained raw fields (context/investigation.py, evidence_bundles.py) populated from the
+  payload. Rewrote the render layer (investigation_render/render.py) so the model-facing sections carry NO
+  computed scores: account_analysis = raw metadata table (alias, followers, following, created_at,
+  post_count, recent_posts) — removed overall_probability / coordination_adjusted_probability / tier /
+  confidence / detector signals / contributions / omiscore; comments dropped thread_probability;
+  coordination dropped coordination_score / discriminative / single_axis_capped (now raw co-occurrence
+  groupings the AI judges); narrative dropped spread_ratio / inauthenticity_score; summary dropped ALL
+  echoed engine numbers + drivers + digest (scope + structural cross-links + memory only). The engine
+  still COMPUTES these for other features (alerts/campaigns) — they're just no longer shown to the model.
+  Prompt rewritten to match: system_task + base prompt (THE INVESTIGATION PACKAGE / HOW TO READ) + the
+  constitution's EVIDENCE RULES / EVIDENCE SEMANTICS / CITATION RULES now describe raw metadata + AI-owned
+  coordination detection (no detector/omiscore/decorrelation language). Join carries the raw metadata to
+  the UI; each per-account card shows followers/age/posts beside the AI's OMI score. Preset recompiled →
+  **hash `map:21f9838608f137962ba62ac6` (50,555 chars)**; pkg hash → `pkg:9d081ede53d30c8bbc1d6a66`;
+  mirrors + drift guards regenerated. Test fallout fixed across render/stage/provenance/prompt-builder/
+  commenter/coverage suites. Full suite green (pre-existing Brier aside); frontend typecheck + 23 tests
+  green. Operator re-pastes this preset version.
+
 - **2026-07-19 (Per-account OMI score — dual-level scoring; preset regenerated)** —
   Architecture decision (user): the OMI score is PER ACCOUNT, not just per investigation, and BOTH levels
   are AI-produced. Increment 1 (this change) makes the dual-score contract real end-to-end; the "pure raw
