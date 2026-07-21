@@ -549,6 +549,20 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Clean consumer UX — no diagnostic buttons; server-key auto-call verified end-to-end)** —
+  Product direction restated: millions of end users, zero technical clutter, NO re-run/probe buttons; the
+  server's Render-configured `OPENROUTER_API_KEY` is called automatically — paste link → scan → results.
+  Changes: removed the always-visible provenance line and the AI-unavailable technical diagnostics from the
+  consumer view (both now live ONLY behind `?verify=1`); the AI-unavailable notice is a single friendly
+  sentence for users. Confirmed the fully automatic call chain end-to-end: a NEW scan creates the
+  investigation and `maybe_autogenerate` (scan.py:1665) schedules the ONE OpenRouter call at scan time; a
+  CACHED scan that returns a floored investigation self-heals on view (auto-refresh-once). Kept the
+  admin-only backend probe endpoint `POST /v1/investigations/analyst/probe` — INVISIBLE to users, off the
+  product path — as the definitive one-shot connectivity check (makes a real minimal OpenRouter call with
+  the deployed key/preset; returns reached/status/served_model/generation_id; never echoes the key). 2 new
+  probe tests (reaches OpenRouter with the configured key in the Authorization header; admin-only 403).
+  Full suite 1387 pass (only the pre-existing Brier benchmark fails); frontend typecheck + 23 tests green.
+
 - **2026-07-19 (Floored cache self-heals + omi_score derived from verdict + SECURITY: rotate leaked keys)** —
   User pasted the FULL production env (secrets included — advised immediate rotation of OPENROUTER_API_KEY,
   HF_TOKEN, OMI_SESSION_SECRET, DB password, Twitter/YouTube keys; never store/commit them). The env
