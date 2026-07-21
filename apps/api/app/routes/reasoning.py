@@ -193,6 +193,78 @@ def analyst_integrity(current: CurrentUser = Depends(require_user)) -> dict:
             "ai_package": load_ai_package(getattr(settings, "analyst_model_id", None)).provenance()}
 
 
+@router.post("/analyst/probe")
+def analyst_openrouter_probe(current: CurrentUser = Depends(require_user)) -> dict:
+    """Make ONE real, minimal OpenRouter call with the CONFIGURED key + base URL + preset, and report
+    exactly what happened — a definitive connectivity check that is independent of the investigation
+    pipeline, the caches, and the schema validation. Admin only (it spends a trivial amount on the key).
+
+    Use this to answer 'does the deployed service actually reach OpenRouter with my key?': a success here
+    appears on your OpenRouter dashboard (cross-reference ``generation_id``); a failure returns the exact
+    HTTP status / error class. No secret is ever returned — the key rides in the Authorization header only.
+    """
+    if not current.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
+    import os
+
+    from app.reasoning.model_providers import OpenRouterReasoningProvider, ReasoningRequest
+    from app.reasoning.model_providers.openrouter import OPENROUTER_URL, classify_transport_failure
+
+    settings = get_settings()
+    provider_sel = analyst.reasoning_provider(settings)
+    preset = getattr(settings, "openrouter_preset", None)
+    model = getattr(settings, "openrouter_model", None)
+    key_present = bool(os.environ.get("OPENROUTER_API_KEY"))
+    base_url = str(getattr(settings, "openrouter_base_url", OPENROUTER_URL) or OPENROUTER_URL)
+
+    result: dict = {
+        "active_provider": provider_sel,
+        "openrouter_preset": preset,
+        "openrouter_model": model,
+        "openrouter_api_key_present": key_present,       # boolean only — never the value
+        "base_url": base_url,
+        "reached_openrouter": False,
+    }
+    if provider_sel != "openrouter":
+        result["error"] = (f"active provider is '{provider_sel}', not 'openrouter' — set "
+                           "OMI_ANALYST_PROVIDER=openrouter (and configure a preset).")
+        return result
+    if not (preset or model):
+        result["error"] = "no OpenRouter preset or model configured (OMI_OPENROUTER_PRESET)."
+        return result
+    if not key_present:
+        result["error"] = "OPENROUTER_API_KEY is not set in the environment."
+        return result
+
+    capture: dict = {}
+    provider = OpenRouterReasoningProvider(
+        base_url=base_url, model=model, preset=preset,
+        structured_output=False,                         # a plain ping — no schema, minimal tokens
+        referer=getattr(settings, "openrouter_referer", None),
+        title=getattr(settings, "openrouter_title", None),
+        timeout=float(getattr(settings, "analyst_timeout_seconds", 30.0) or 30.0),
+        max_retries=0, capture=capture)
+    try:
+        resp = provider.complete(ReasoningRequest(
+            system="", user="Reply with the single word: pong.",
+            response_format="text", temperature=0.0, max_tokens=8))
+        result["reached_openrouter"] = True
+        result["http_status"] = capture.get("response_status")
+        result["served_model"] = capture.get("served_model") or resp.model
+        result["generation_id"] = capture.get("endpoint_request_id")   # cross-reference on the dashboard
+        result["usage"] = capture.get("usage")
+        result["latency_ms"] = capture.get("latency_ms")
+        result["reply_excerpt"] = (resp.text or "")[:120]
+    except Exception as exc:  # noqa: BLE001 — report the failure, never raise
+        st = capture.get("response_status")
+        result["reached_openrouter"] = bool(st)          # an HTTP status means the request reached the API
+        result["http_status"] = st
+        result["failure_class"] = classify_transport_failure(exc, st if isinstance(st, int) else None)
+        result["error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+        result["generation_id"] = capture.get("endpoint_request_id")
+    return result
+
+
 @router.post("/{slug}/analyst/trace")
 def analyst_trace(slug: str, current: CurrentUser = Depends(require_user)) -> dict:
     """Execute the production AI pipeline over a REAL stored investigation and return the ordered,

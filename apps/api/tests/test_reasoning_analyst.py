@@ -7,6 +7,7 @@ SAVEPOINT-isolated persistence, and that nothing here touches detection/scoring/
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -186,6 +187,66 @@ def test_floored_cache_auto_regenerates_once_when_a_live_model_is_ready(monkeypa
         assert r2.status_code == 200, r2.text
         assert r2.json()["assessment"]["investigation_trace"]["model_backed"] is False
         assert len(captured) == 1                               # NOT re-submitted
+
+
+def test_openrouter_probe_reports_a_real_call(monkeypatch):
+    """The admin probe makes ONE real minimal OpenRouter call with the configured key/preset and reports
+    connectivity — the definitive 'does it reach OpenRouter?' check, independent of the pipeline/cache."""
+    import json as _json
+
+    from app.core.config import get_settings
+    monkeypatch.setenv("OMI_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("OMI_SESSION_SECRET", "x" * 64)
+    monkeypatch.setenv("OMI_SUPER_ADMIN_EMAILS", "admin@x.com")
+    monkeypatch.setenv("OMI_ANALYST_ENABLED", "true")
+    monkeypatch.setenv("OMI_ANALYST_PROVIDER", "openrouter")
+    monkeypatch.setenv("OMI_OPENROUTER_PRESET", "omi-master-v1")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-SECRET-probe-do-not-leak")
+    get_settings.cache_clear()
+
+    class _Resp:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self):
+            return _json.dumps({"id": "gen-probe-1", "model": "openai/gpt-5-mini",
+                                "choices": [{"message": {"role": "assistant", "content": "pong"}}],
+                                "usage": {"total_tokens": 12, "cost": 0.00001}}).encode()
+
+    captured: dict = {}
+    def _fake(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["auth"] = dict(req.headers).get("Authorization")
+        return _Resp()
+
+    with TestClient(app) as tc:
+        tc.post("/v1/auth/signup", json={"email": "admin@x.com", "password": "12345678"})
+        with patch("app.reasoning.model_providers.openrouter.urllib.request.urlopen", _fake):
+            r = tc.post("/v1/investigations/analyst/probe")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["reached_openrouter"] is True
+        assert body["active_provider"] == "openrouter"
+        assert body["http_status"] == 200
+        assert body["served_model"] == "openai/gpt-5-mini"
+        assert body["generation_id"] == "gen-probe-1"
+        assert "SECRET" not in _json.dumps(body)               # the key is NEVER echoed back
+    # the call actually went to OpenRouter with the configured key in the Authorization header
+    assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert captured["auth"] == "Bearer sk-or-v1-SECRET-probe-do-not-leak"
+    get_settings.cache_clear()
+
+
+def test_openrouter_probe_is_admin_only(monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv("OMI_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("OMI_SESSION_SECRET", "x" * 64)
+    monkeypatch.setenv("OMI_SUPER_ADMIN_EMAILS", "admin@x.com")
+    get_settings.cache_clear()
+    with TestClient(app) as tc:
+        tc.post("/v1/auth/signup", json={"email": "pleb@x.com", "password": "12345678"})
+        assert tc.post("/v1/investigations/analyst/probe").status_code == 403
+    get_settings.cache_clear()
 
 
 def test_floored_cache_is_served_as_is_when_no_live_model(monkeypatch):

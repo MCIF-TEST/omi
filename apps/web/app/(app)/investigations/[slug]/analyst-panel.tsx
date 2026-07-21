@@ -372,37 +372,6 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
   );
 }
 
-// Which gateway + model actually produced this assessment — shown to everyone (not dev-only) so the
-// question "is this really from OpenRouter?" is answerable at a glance. When the provider is not
-// "openrouter", the reading came from another gateway (e.g. the deprecated HuggingFace path) and no
-// OpenRouter request was made — the fix is the OMI_ANALYST_PROVIDER / OPENROUTER_API_KEY env config.
-function Provenance({ a }: { a: AnalystAssessment }) {
-  const t = a.investigation_trace ?? {};
-  const provider = (t.provider ?? '').toLowerCase();
-  if (!provider && !t.served_model) return null;
-  const isOpenRouter = provider === 'openrouter';
-  const served = t.served_model ?? t.requested_model ?? null;
-  return (
-    <p className="font-mono text-2xs tracking-wide text-fg-faint flex items-center gap-1.5 flex-wrap">
-      <span
-        className={`rounded-full px-2 py-0.5 border ${
-          isOpenRouter
-            ? 'border-accent/40 text-accent bg-accent/[0.06]'
-            : 'border-tier-moderate/40 text-tier-moderate bg-tier-moderate/[0.06]'
-        }`}
-      >
-        served by {provider || 'unknown'}
-      </span>
-      {served && <span className="text-fg-mute">model: {served}</span>}
-      {!isOpenRouter && provider && (
-        <span className="text-tier-moderate">
-          — not OpenRouter; no OpenRouter request was made for this assessment
-        </span>
-      )}
-    </p>
-  );
-}
-
 function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   // Product-cutover rule: only AI-authored (OpenRouter) assessments render as AI reasoning. If the model
   // was not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
@@ -427,10 +396,6 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
             </span>
           )}
         </div>
-
-        {/* Provenance — always visible so it is unambiguous WHICH gateway + model produced this reading.
-            If this does not say "openrouter", the request never went to OpenRouter (check the provider env). */}
-        <Provenance a={a} />
 
         {/* THE OMI SCORE — the analyst's single composite authenticity-risk score (0–100), the headline
             figure. Replaces the legacy inauthenticity probability. Rendered as the big number + a
@@ -480,21 +445,34 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   );
 }
 
-// The AI (Omi Analyst, via OpenRouter) did not author this assessment — the reasoning model wasn't
-// reached (not enabled, no API key, or the gateway returned an error), so the deterministic Floor stood
-// in. We surface an HONEST notice with the real diagnostic from the forensic trace and DO NOT render the
-// Floor's synthesized verdict/headline/assessment as AI.
+// The AI analysis couldn't be produced for this investigation (rare — the pipeline auto-retries a fresh
+// model call once). Users see a clean, friendly notice; the technical forensic diagnostic is shown ONLY
+// in dev/verification mode. We never present the deterministic Floor's synthesis as if the AI wrote it.
 function AiUnavailable({ a }: { a: AnalystAssessment }) {
   const t = a.investigation_trace ?? {};
-  // Prefer the most specific machine reason available, in order of usefulness to whoever is debugging.
+  const verbose = verificationEnabled();
+  return (
+    <div className="text-sm text-fg-dim flex items-start gap-2">
+      <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
+      <span>
+        The AI analysis for this investigation isn’t ready yet. It runs automatically — please check back
+        in a moment or scan again shortly.
+        {verbose && <AiUnavailableDiagnostics t={t} governanceProvider={a.governance?.provider} />}
+      </span>
+    </div>
+  );
+}
+
+// Dev-only forensic detail behind the AI-unavailable notice (shown with ?verify=1). Never shown to users.
+function AiUnavailableDiagnostics(
+  { t, governanceProvider }: { t: NonNullable<AnalystAssessment['investigation_trace']>; governanceProvider?: string },
+) {
   const status = typeof t.response_status === 'number' ? t.response_status : null;
   const ok2xx = status !== null && status >= 200 && status < 300;
   const schemaErrs = t.canonical_validation_errors ?? [];
   const reason =
     t.fallback_reason
     ?? (t.endpoint_called === false ? 'endpoint not called (analyst disabled or no API key)'
-      // A 2xx that still floored is NOT a gateway rejection — the model replied but its JSON failed
-      // OmiSphere's schema validation (or arrived empty/truncated).
       : ok2xx ? (schemaErrs.length
           ? 'model replied, but its output failed schema validation'
           : t.json_received === false ? 'model replied, but no JSON object was parsed from it'
@@ -503,7 +481,7 @@ function AiUnavailable({ a }: { a: AnalystAssessment }) {
       : t.endpoint_error ? 'gateway error'
       : 'unknown');
   const diagnostics: [string, string][] = [
-    ['provider', t.provider ?? a.governance?.provider ?? '—'],
+    ['provider', t.provider ?? governanceProvider ?? '—'],
     ['reason', reason],
     ...(status !== null ? [['http status', String(status)] as [string, string]] : []),
     ...(t.endpoint_error ? [['error', t.endpoint_error] as [string, string]] : []),
@@ -511,37 +489,26 @@ function AiUnavailable({ a }: { a: AnalystAssessment }) {
     ...(t.served_model ? [['served', t.served_model] as [string, string]] : []),
     ...(t.finish_reason ? [['finish', t.finish_reason] as [string, string]] : []),
   ];
-  // The headline adapts: a 2xx that floored means the model WAS reached — don't claim otherwise.
-  const headline = ok2xx
-    ? 'The Omi Analyst (OpenRouter) model replied, but its output couldn’t be used, so no AI ' +
-      'assessment was produced. This is a response-shape problem, not a connection problem.'
-    : 'AI reasoning is not available for this investigation yet — the Omi Analyst (OpenRouter) model ' +
-      'wasn’t reached, so no AI assessment could be produced. Confirm the analyst is enabled and the ' +
-      'OpenRouter API key is configured, then re-run the scan.';
   return (
-    <div className="text-sm text-fg-dim flex items-start gap-2">
-      <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
-      <span>
-        {headline}
-        <span className="block mt-1.5 text-2xs font-mono text-fg-faint">
-          {diagnostics.map(([k, v]) => (
-            <span key={k} className="mr-3 whitespace-nowrap">
-              {k}: <span className="text-fg-mute">{v}</span>
-            </span>
-          ))}
-        </span>
-        {schemaErrs.length > 0 && (
-          <span className="block mt-1.5 text-2xs font-mono text-fg-faint">
-            schema errors:
-            <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
-              {schemaErrs.slice(0, 8).map((e, i) => (
-                <li key={i} className="text-fg-mute break-all">{e}</li>
-              ))}
-            </ul>
+    <>
+      <span className="block mt-1.5 text-2xs font-mono text-fg-faint">
+        {diagnostics.map(([k, v]) => (
+          <span key={k} className="mr-3 whitespace-nowrap">
+            {k}: <span className="text-fg-mute">{v}</span>
           </span>
-        )}
+        ))}
       </span>
-    </div>
+      {schemaErrs.length > 0 && (
+        <span className="block mt-1.5 text-2xs font-mono text-fg-faint">
+          schema errors:
+          <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
+            {schemaErrs.slice(0, 8).map((e, i) => (
+              <li key={i} className="text-fg-mute break-all">{e}</li>
+            ))}
+          </ul>
+        </span>
+      )}
+    </>
   );
 }
 
