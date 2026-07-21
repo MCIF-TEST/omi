@@ -149,6 +149,27 @@ def test_configured_preset_reaches_the_request_exactly():
     assert captured["body"]["model"] == f"@preset/{_PRESET}"
 
 
+# ── Cost guardrail: reasoning-effort lever on the wire ────────────────────────────────────────────
+def _probe_body(provider: OpenRouterReasoningProvider) -> dict:
+    from app.reasoning.model_providers import ReasoningRequest
+    raw = provider._request_body(ReasoningRequest(system="", user="u", response_format="json", max_tokens=100))
+    return json.loads(raw.decode())
+
+
+def test_reasoning_effort_is_sent_when_configured():
+    body = _probe_body(OpenRouterReasoningProvider(preset="p", reasoning_effort="low"))
+    assert body["reasoning"] == {"effort": "low"}
+
+
+def test_reasoning_effort_absent_by_default():
+    assert "reasoning" not in _probe_body(OpenRouterReasoningProvider(preset="p"))
+
+
+def test_reasoning_effort_ignores_a_bad_value():
+    # a typo must never 400 the request — an unrecognized effort is simply not sent
+    assert "reasoning" not in _probe_body(OpenRouterReasoningProvider(preset="p", reasoning_effort="turbo"))
+
+
 # ── OpenRouter-first auto-preference: key + preset present overrides the huggingface default ─────
 def test_provider_auto_prefers_openrouter_when_configured_but_provider_left_default(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", _API_KEY)

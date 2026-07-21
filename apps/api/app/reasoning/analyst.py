@@ -166,6 +166,7 @@ def _openrouter_transport(settings: Settings, *, timeout: float, max_retries: in
         structured_output=bool(getattr(settings, "openrouter_structured_output", True)),
         referer=getattr(settings, "openrouter_referer", None),
         title=getattr(settings, "openrouter_title", None),
+        reasoning_effort=getattr(settings, "openrouter_reasoning_effort", None),
         timeout=timeout, max_retries=max_retries, capture=capture,
         prompt_hash=prompt_hash, package_hash=package_hash, master_prompt_hash=master_hash)
 
@@ -510,9 +511,24 @@ def _assess_core(
         # executive synthesis, clamped to a safe ceiling. Small investigations request little; a
         # ~150-commenter investigation requests enough to finish. Overrides decoding.max_new_tokens without
         # mutating the shared config dict (fresh copy on the instance).
-        from app.reasoning.completion import completion_budget
+        from app.reasoning.completion import (
+            COMPLETION_BASE_TOKENS,
+            COMPLETION_CEILING_TOKENS,
+            COMPLETION_FLOOR_TOKENS,
+            COMPLETION_PER_COMMENTER_TOKENS,
+            completion_budget,
+        )
         _commenter_count = len(((payload.get("video") or {}).get("commenters")) or [])
-        _completion_max_tokens = completion_budget(_commenter_count)
+        # Cost guardrail: the budget knobs are env-overridable (OMI_ANALYST_COMPLETION_*), so per-scan
+        # OpenRouter spend can be tuned WITHOUT a code deploy. The ceiling caps any single inference.
+        _completion_max_tokens = completion_budget(
+            _commenter_count,
+            base=int(getattr(settings, "analyst_completion_base_tokens", COMPLETION_BASE_TOKENS)),
+            per_commenter=int(getattr(settings, "analyst_completion_per_commenter_tokens",
+                                     COMPLETION_PER_COMMENTER_TOKENS)),
+            floor=int(getattr(settings, "analyst_completion_floor_tokens", COMPLETION_FLOOR_TOKENS)),
+            ceiling=int(getattr(settings, "analyst_completion_ceiling_tokens", COMPLETION_CEILING_TOKENS)),
+        )
         config.decoding = {**(config.decoding or {}), "max_new_tokens": _completion_max_tokens}
         spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,

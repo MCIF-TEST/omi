@@ -549,6 +549,26 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Production cost guardrails + large-scan reliability — launch hardening)** —
+  With paid acquisition + scale imminent, hardened the launch-critical cost/reliability surface (per-user
+  cost was already bounded by credits charged up front + the 1/IP/day demo cap; this bounds PER-SCAN cost
+  and makes large scans reliable). Changes:
+  • **Per-scan output-token ceiling 100k → 32k** (default), and made the WHOLE completion budget
+    env-tunable — `OMI_ANALYST_COMPLETION_{BASE,PER_COMMENTER,FLOOR,CEILING}_TOKENS` — so OpenRouter spend
+    can be tuned WITHOUT a code deploy. 32k finishes a full 150-commenter scan (~27k) with headroom while
+    capping any single inference (a runaway can no longer request 100k output tokens). `completion_budget`
+    now reads the settings knobs in analyst.py.
+  • **GPT-5 reasoning-effort cost lever** — `OMI_OPENROUTER_REASONING_EFFORT` (minimal|low|medium|high);
+    when set, the request carries `reasoning:{effort}`. Reasoning tokens bill as output, so this is the
+    other big spend knob. Unset by default (preset decides); a bad value is ignored (never 400s).
+  • **Timeout 30s → 90s** (default, env-overridable) — the analyst runs in a background worker off the
+    request path and the UI polls ~4 min, so 30s was needlessly timing large full-coverage generations out
+    to the Floor. 90s accommodates a full GPT-5 generation.
+  • **Cost observability** already present: the `analyst.verify` log line reports per-investigation
+    `cost_usd` + in/out tokens + latency + served_model — monitor spend straight from logs.
+  render.yaml documents the three tunables. Tests: reasoning-effort on/off/bad-value; configurable-ceiling
+  + cost-safe default that still covers a full scan. Full suite green (pre-existing Brier aside).
+
 - **2026-07-19 (Clean consumer UX — no diagnostic buttons; server-key auto-call verified end-to-end)** —
   Product direction restated: millions of end users, zero technical clutter, NO re-run/probe buttons; the
   server's Render-configured `OPENROUTER_API_KEY` is called automatically — paste link → scan → results.

@@ -198,7 +198,11 @@ class Settings(BaseSettings):
     # registry (prompt/schema/config), not the model.
     analyst_model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"
     analyst_endpoint_url: str | None = None
-    analyst_timeout_seconds: float = 30.0
+    # The analyst runs in a background worker (off the request hot path) and the UI polls for ~4 min, so
+    # this bounds ONE model generation, not a user request. 90s accommodates a full-investigation GPT-5
+    # generation (up to the completion budget + reasoning tokens); a short value would time large scans out
+    # to the Floor. Env-overridable (OMI_ANALYST_TIMEOUT_SECONDS).
+    analyst_timeout_seconds: float = 90.0
     analyst_max_retries: int = 2
     # Serving API the deployed endpoint speaks. "generate" (default) posts the raw
     # TGI text-generation body (existing behavior, byte-identical). "messages" posts
@@ -248,6 +252,21 @@ class Settings(BaseSettings):
     # Optional OpenRouter dashboard attribution headers (HTTP-Referer / X-Title). Not secrets.
     openrouter_referer: str | None = None
     openrouter_title: str | None = None
+    # --- Cost guardrails (production, tunable WITHOUT a code deploy) -------------------------------- #
+    # The per-investigation output-token budget = base + per_commenter × commenters, clamped to
+    # [floor, ceiling]. This is the single biggest lever on OpenRouter spend. The ceiling is the hard
+    # per-scan cap: at the default scan size (≤150 commenters) the formula needs ~27k, so 32k finishes a
+    # full scan with headroom while capping any single inference. Raise the ceiling only if you also raise
+    # OMI_SCAN_MAX_COMMENTERS. All four are env-overridable: OMI_ANALYST_COMPLETION_*.
+    analyst_completion_base_tokens: int = 3000
+    analyst_completion_per_commenter_tokens: int = 160
+    analyst_completion_floor_tokens: int = 4000
+    analyst_completion_ceiling_tokens: int = 32000
+    # GPT-5-class reasoning effort. Reasoning tokens are billed as output and are the other big cost/latency
+    # lever. Leave unset to let the OpenRouter preset decide; set "minimal" | "low" | "medium" | "high"
+    # (OMI_OPENROUTER_REASONING_EFFORT) to bound reasoning cost per scan. "low" roughly halves reasoning
+    # spend vs "high" for this structured analysis task.
+    openrouter_reasoning_effort: str | None = None
     # P3.1.6 — the AI-native Comment Analysis cutover. OFF by default, so the production comment/
     # thread surface is byte-identical to before (the deterministic thread_scan). When ON, every
     # comprehensive investigation runs Comment Analysis through the AI Investigation Runtime and the
