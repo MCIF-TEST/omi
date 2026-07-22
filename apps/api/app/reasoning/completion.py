@@ -29,10 +29,10 @@ from dataclasses import dataclass
 # assessment object (ref + a short probabilistic assessment + a few citations, with JSON overhead). The
 # ceiling is the hard upper bound for a single inference; raising it (config) is the ONLY change needed to
 # support larger investigations — the formula itself never changes.
-COMPLETION_BASE_TOKENS = 3000
-COMPLETION_PER_COMMENTER_TOKENS = 160
-COMPLETION_FLOOR_TOKENS = 4000          # even a 0-commenter investigation needs the full synthesis
-COMPLETION_CEILING_TOKENS = 32000       # ~ (32000-3000)/160 ≈ 181 commenters before the ceiling binds.
+COMPLETION_BASE_TOKENS = 4500           # the 7-section synthesis wrapper runs larger than first sized
+COMPLETION_PER_COMMENTER_TOKENS = 180
+COMPLETION_FLOOR_TOKENS = 5000          # even a 0-commenter investigation needs the full synthesis
+COMPLETION_CEILING_TOKENS = 32000       # ~ (32000-4500)/180 ≈ 152 commenters before the ceiling binds.
 # NOTE (2026-07-19): default lowered 100000 → 32000 for production cost safety. At the default scan cap
 # (≤150 commenters) the formula asks ~27k, so 32k finishes a full scan with headroom while capping any
 # single inference — a runaway can no longer request 100k output tokens. These are DEFAULTS: all four

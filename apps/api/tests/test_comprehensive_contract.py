@@ -335,17 +335,19 @@ def test_coercion_drops_malformed_evidence_items():
 
 def test_coercion_normalizes_per_account_items():
     obj = _valid_model_output()
+    obj["omi_score"] = 62                                                            # overall read (fallback)
     obj["commenter_assessments"] = [
         {"ref": "A1", "omi_score": 130, "assessment": "over-range, tier omitted"},   # clamp + derive tier
         {"ref": "A2", "suspicion_tier": "high", "assessment": "score omitted"},        # derive score from tier
-        {"ref": "A3", "assessment": "no score, no tier"},                              # un-scoreable → dropped
+        {"ref": "A3", "assessment": "no score, no tier"},                              # KEEP → inherit overall
         {"assessment": "no ref"},                                                      # no ref → dropped
     ]
     coerced = _coerce(obj)
     ca = {i["ref"]: i for i in coerced["commenter_assessments"]}
-    assert set(ca) == {"A1", "A2"}                                # A3 + the ref-less item are dropped
+    assert set(ca) == {"A1", "A2", "A3"}                          # only the ref-less item is dropped
     assert ca["A1"]["omi_score"] == 100 and ca["A1"]["suspicion_tier"] == "high"
     assert ca["A2"]["omi_score"] == 87 and ca["A2"]["suspicion_tier"] == "high"   # high-band midpoint
+    assert ca["A3"]["omi_score"] == 62 and ca["A3"]["suspicion_tier"] == "elevated"  # inherited overall
     assert _valid_after_coercion(obj) == []
 
 

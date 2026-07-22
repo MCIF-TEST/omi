@@ -42,10 +42,12 @@ def _env(monkeypatch):
 def test_completion_budget_scales_and_clamps():
     assert completion_budget(0) == COMPLETION_FLOOR_TOKENS         # even 0 commenters gets the full synthesis
     assert completion_budget(10) < completion_budget(50) < completion_budget(150)  # monotonic
-    assert completion_budget(10) == max(COMPLETION_FLOOR_TOKENS, 3000 + 160 * 10)
+    from app.reasoning.completion import COMPLETION_BASE_TOKENS, COMPLETION_PER_COMMENTER_TOKENS
+    assert completion_budget(10) == max(
+        COMPLETION_FLOOR_TOKENS, COMPLETION_BASE_TOKENS + COMPLETION_PER_COMMENTER_TOKENS * 10)
     assert completion_budget(10**9) == COMPLETION_CEILING_TOKENS   # ceiling binds on the huge case
     # small investigations don't get an excessive budget
-    assert completion_budget(10) <= 6000
+    assert completion_budget(10) <= 7000
 
 
 def test_commenter_capacity_matches_ceiling():

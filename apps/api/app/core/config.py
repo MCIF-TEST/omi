@@ -258,9 +258,9 @@ class Settings(BaseSettings):
     # per-scan cap: at the default scan size (≤150 commenters) the formula needs ~27k, so 32k finishes a
     # full scan with headroom while capping any single inference. Raise the ceiling only if you also raise
     # OMI_SCAN_MAX_COMMENTERS. All four are env-overridable: OMI_ANALYST_COMPLETION_*.
-    analyst_completion_base_tokens: int = 3000
-    analyst_completion_per_commenter_tokens: int = 160
-    analyst_completion_floor_tokens: int = 4000
+    analyst_completion_base_tokens: int = 4500
+    analyst_completion_per_commenter_tokens: int = 180
+    analyst_completion_floor_tokens: int = 5000
     analyst_completion_ceiling_tokens: int = 32000
     # GPT-5-class reasoning effort. Reasoning tokens are billed as output and are the other big cost/latency
     # lever. Leave unset to let the OpenRouter preset decide; set "minimal" | "low" | "medium" | "high"
