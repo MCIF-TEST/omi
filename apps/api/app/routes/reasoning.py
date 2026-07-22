@@ -151,6 +151,14 @@ def generate_analyst_assessment(
                     generated_at=entry.get("generated_at"),
                 )
 
+        # A generation is already running for this investigation (e.g. auto-scheduled at scan time) —
+        # keep the client polling WITHOUT re-submitting a background job on every poll. The in-flight
+        # guard would skip a duplicate anyway; short-circuiting here avoids the per-poll churn seen in the
+        # logs while a slow model call is in flight.
+        if analyst.is_generation_inflight(inv.slug) and not refresh:
+            response.status_code = status.HTTP_202_ACCEPTED
+            return AnalystResponse(slug=inv.slug, enabled=True, status="generating", cached=False)
+
         # Async: generate off the request hot path; client polls for the result.
         background.submit(
             analyst.generate_and_persist, inv.slug,

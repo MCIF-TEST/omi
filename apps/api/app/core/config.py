@@ -262,7 +262,7 @@ class Settings(BaseSettings):
     analyst_completion_base_tokens: int = 4500
     analyst_completion_per_commenter_tokens: int = 180
     analyst_completion_floor_tokens: int = 5000
-    analyst_completion_ceiling_tokens: int = 32000
+    analyst_completion_ceiling_tokens: int = 150000   # TEMP high cap to measure real scan cost; tune down later
     # GPT-5-class reasoning effort. Reasoning tokens are billed as output and are the other big cost/latency
     # lever. Leave unset to let the OpenRouter preset decide; set "minimal" | "low" | "medium" | "high"
     # (OMI_OPENROUTER_REASONING_EFFORT) to bound reasoning cost per scan. "low" roughly halves reasoning

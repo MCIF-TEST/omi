@@ -56,11 +56,11 @@ def test_commenter_capacity_matches_ceiling():
     assert cap > 150                                                # a single inference comfortably covers ~150
 
 
-def test_default_ceiling_is_cost_safe_but_covers_a_full_scan():
-    # Cost guardrail: the default per-scan output cap is bounded, yet a full 150-commenter scan (the
-    # default OMI_SCAN_MAX_COMMENTERS) still fits without truncation.
-    assert COMPLETION_CEILING_TOKENS <= 32000
+def test_default_ceiling_covers_a_full_scan_without_truncation():
+    # A full 150-commenter scan (the default OMI_SCAN_MAX_COMMENTERS) fits under the ceiling with no
+    # truncation. (The ceiling is temporarily high while measuring real per-scan cost.)
     assert completion_budget(150) <= COMPLETION_CEILING_TOKENS
+    assert completion_budget(150) < completion_budget(10**9)      # 150 accounts do not hit the cap
 
 
 def test_completion_budget_honors_a_custom_ceiling():

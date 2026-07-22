@@ -549,6 +549,27 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-22 (Live-log diagnosis: OpenRouter call HANGS on un-deployed strict-schema; cost-measure cap)** —
+  Render logs from a live scan RESOLVED the "no OpenRouter request" saga: the backend DOES dispatch
+  (`analyst.assess: OPENROUTER path selected …` then `openrouter.transport START … endpoint=https://
+  openrouter.ai/… request_bytes=8792`), but there was NO `OK`/`FAIL` for 2+ minutes — the request STARTs
+  and never returns (hangs), while the client polls and every poll re-submits a background job that the
+  in-flight guard skips. Two tells that the deployed code is PRE-#89 (the fixes aren't live): the old
+  token budget (7000 = 3000+160×25) and no `key_fp` in the START line — so it still sends STRICT
+  `json_schema`, which GPT-5 Mini stalls on (same root as the earlier 400s). Fixes:
+  • **Timeout 90 → 150s** (config + render.yaml): fits a slow full GPT-5 generation yet fails a genuinely
+    stalled call within the UI's ~4-min poll window instead of hanging indefinitely.
+  • **Endpoint churn**: the analyst route no longer re-submits a background generation on every poll while
+    one is in flight — it short-circuits to 202 (removes the `already in flight … skipping` log spam +
+    background-pool churn).
+  • **Token ceiling 32000 → 150000** (completion.py + config + render.yaml), TEMPORARY: per the owner, run
+    with a generous cap to MEASURE real per-scan cost (logged in `analyst.verify … cost_usd=`) with no
+    truncation, then tune down. It's a cap not a reservation — a 25-account scan still asks only ~9k.
+  THE deploy action: PR #89 (json_object mode + all of the above) must be deployed — the hang is the
+  strict-schema path that #89 replaces. Diagnostics added earlier this session: `key_fp` (sha256 prefix of
+  the deployed key, to confirm which OpenRouter account bills) + the admin probe endpoint. Full suite green
+  (pre-existing Brier aside).
+
 - **2026-07-19 (Pure raw-metadata evidence bundle — the AI does ALL the analysis; preset regenerated)** —
   Architecture decision (user): "pure raw metadata only" — the Evidence Compiler gathers RAW metadata and
   the AI produces every judgment (per-account + overall scores AND coordination detection). Threaded the

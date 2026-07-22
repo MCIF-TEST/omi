@@ -109,11 +109,11 @@ services:
       #
       # --- Cost guardrails (tune WITHOUT a code deploy) ---
       # Per-scan output-token ceiling — the single biggest lever on OpenRouter
-      # spend. Default 32000 finishes a full 150-commenter scan with headroom
-      # while capping any single inference. Lower to cut cost; raise only if you
-      # also raise OMI_SCAN_MAX_COMMENTERS.
+      # spend. TEMPORARILY high (150000) to MEASURE real per-scan cost with no
+      # truncation; lower it once cost data is in. It is a cap, not a
+      # reservation — billing is on tokens actually generated.
       - key: OMI_ANALYST_COMPLETION_CEILING_TOKENS
-        value: '32000'
+        value: '150000'
       # GPT-5 reasoning effort (reasoning tokens bill as output). Unset lets the
       # preset decide; set minimal|low|medium|high to bound reasoning cost.
       # 'low' roughly halves reasoning spend vs 'high' for this task.

@@ -32,12 +32,13 @@ from dataclasses import dataclass
 COMPLETION_BASE_TOKENS = 4500           # the 7-section synthesis wrapper runs larger than first sized
 COMPLETION_PER_COMMENTER_TOKENS = 180
 COMPLETION_FLOOR_TOKENS = 5000          # even a 0-commenter investigation needs the full synthesis
-COMPLETION_CEILING_TOKENS = 32000       # ~ (32000-4500)/180 ≈ 152 commenters before the ceiling binds.
-# NOTE (2026-07-19): default lowered 100000 → 32000 for production cost safety. At the default scan cap
-# (≤150 commenters) the formula asks ~27k, so 32k finishes a full scan with headroom while capping any
-# single inference — a runaway can no longer request 100k output tokens. These are DEFAULTS: all four
-# knobs are overridable per-deploy via OMI_ANALYST_COMPLETION_* (see config.py) so cost can be tuned
-# WITHOUT a code deploy. It is a CEILING, not a reservation — billing is on tokens actually generated.
+COMPLETION_CEILING_TOKENS = 150000      # generous cap while we MEASURE real per-scan cost (temporary).
+# NOTE (2026-07-22): ceiling raised 32000 → 150000 DELIBERATELY and TEMPORARILY, to observe the true
+# per-investigation output cost on live runs with no truncation, before tuning it back down once real
+# cost data is in. It is a CEILING, not a reservation — billing is on tokens actually generated, so a
+# scan that finishes early still costs only what it produced (the per-account budget formula still asks
+# only ~base + 180×commenters, e.g. ~9k for 25 accounts). All four knobs are overridable per-deploy via
+# OMI_ANALYST_COMPLETION_* (see config.py) so the cap can be lowered WITHOUT a code deploy.
 
 
 def completion_budget(
