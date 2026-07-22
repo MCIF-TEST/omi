@@ -295,11 +295,16 @@ class OpenRouterReasoningProvider:
 
         # Transport-lifecycle logging (Phase 5E). Sizes/status/ids ONLY — never the API key
         # (rides in the Authorization header, never logged), the prompt, or the investigation body.
+        # key_fp is a NON-reversible fingerprint (first 12 hex of sha256) of the deployed key — NOT the
+        # key — so the operator can confirm WHICH OpenRouter account the request bills without ever
+        # exposing the secret. Compute sha256 of your own key and compare the first 12 hex chars.
+        import hashlib
+        key_fp = hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
         structured_output = bool(self._response_format() is not None)
         logger.info(
             "openrouter.transport START provider=%s endpoint=%s preset=%s model_ref=%s "
-            "request_bytes=%d structured_output=%s",
-            self.name, self.base_url, self.preset, self._model_ref(), len(body), structured_output,
+            "request_bytes=%d structured_output=%s key_fp=%s",
+            self.name, self.base_url, self.preset, self._model_ref(), len(body), structured_output, key_fp,
         )
 
         t0 = time.perf_counter()
