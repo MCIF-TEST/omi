@@ -107,6 +107,16 @@ services:
       # OMI_OPENROUTER_MODEL is intentionally UNSET: the omi-master-v1 preset
       # determines the model. Set it only to intentionally override the preset.
       #
+      # The model we EXPECT the preset to serve. NOT sent on the wire (so a bad
+      # value can never brick the AI path) — after each scan the code compares
+      # it against the model OpenRouter reports serving and records
+      # served_model_verified on the trace, so every investigation PROVES its
+      # assessments + OMI scores came from GPT-5 Mini; a silent model swap is
+      # logged loudly (analyst.verify SERVED-MODEL MISMATCH). Prefix-tolerant, so
+      # a dated snapshot still verifies. Set to '' to disable the check.
+      - key: OMI_OPENROUTER_EXPECTED_MODEL
+        value: 'openai/gpt-5-mini'
+      #
       # --- Cost guardrails (tune WITHOUT a code deploy) ---
       # Per-scan output-token ceiling — the single biggest lever on OpenRouter
       # spend. TEMPORARILY high (150000) to MEASURE real per-scan cost with no

@@ -245,6 +245,14 @@ class Settings(BaseSettings):
     # Optional model slug. In preset mode the preset defines the model; set this to intentionally
     # override it (sent as a base model the preset layers onto). In non-preset mode it is required.
     openrouter_model: str | None = None
+    # The model we EXPECT OpenRouter to serve (the omi-master-v1 preset routes to GPT-5 Mini). This is a
+    # VERIFICATION expectation, NOT a routing directive: we never send it on the wire, so it can never
+    # brick the AI path with a bad slug. After each generation we compare it against the model OpenRouter
+    # ACTUALLY reports serving (the response `model` field) and record served_model_verified on the trace,
+    # so every scan proves its assessments/OMI scores came from GPT-5 Mini and a silent model swap is
+    # flagged loudly. Matching is prefix-tolerant so a dated snapshot (openai/gpt-5-mini-2025-xx-xx) still
+    # verifies. Set OMI_OPENROUTER_EXPECTED_MODEL to change the expected model, or "" to disable the check.
+    openrouter_expected_model: str | None = "openai/gpt-5-mini"
     openrouter_base_url: str = "https://openrouter.ai/api/v1/chat/completions"
     # Send the canonical ComprehensiveAssessment schema as OpenRouter native structured output
     # (response_format json_schema). Support varies by model; local canonical validation ALWAYS runs

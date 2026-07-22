@@ -810,6 +810,8 @@ export interface AnalystAssessment {
     provider?: string;                    // "openrouter" | "huggingface"
     requested_model?: string | null;      // e.g. "@preset/omi-master-v1"
     served_model?: string | null;         // the model the gateway actually ran, e.g. "openai/gpt-5-mini"
+    served_model_expected?: string | null;   // the model we expect OpenRouter to serve (GPT-5 Mini)
+    served_model_verified?: boolean | null;  // true = served model IS the expected one; false = swapped; null = n/a
     openrouter_preset?: string | null;    // "omi-master-v1"
     master_prompt_version?: string | null;
     master_prompt_hash?: string | null;   // "map:…" — what Omi expects the preset to contain

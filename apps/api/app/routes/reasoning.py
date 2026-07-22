@@ -259,6 +259,11 @@ def analyst_openrouter_probe(current: CurrentUser = Depends(require_user)) -> di
         result["reached_openrouter"] = True
         result["http_status"] = capture.get("response_status")
         result["served_model"] = capture.get("served_model") or resp.model
+        # Verify the served model IS the expected one (GPT-5 Mini) so the probe answers "which model?"
+        # definitively, not just "reachable?". None when no expectation is configured.
+        _expected = getattr(settings, "openrouter_expected_model", None)
+        result["expected_model"] = _expected or None
+        result["served_model_verified"] = analyst._served_model_matches(result["served_model"], _expected)
         result["generation_id"] = capture.get("endpoint_request_id")   # cross-reference on the dashboard
         result["usage"] = capture.get("usage")
         result["latency_ms"] = capture.get("latency_ms")
