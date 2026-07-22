@@ -107,7 +107,11 @@ def test_schema_carries_optional_commenter_assessments_array():
     assert COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY in s["properties"]
     assert COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY not in s["required"]   # optional — channel-only never fails
     item = s["properties"][COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY]["items"]
-    assert item["required"] == ["ref", "assessment"]                     # echo discipline: no suspicion number
+    # AI-first per-account scoring: each account carries its OWN omi_score + tier (the AI produces them)
+    assert item["required"] == ["ref", "omi_score", "suspicion_tier", "assessment"]
+    assert item["properties"]["omi_score"]["type"] == "integer"
+    assert item["properties"]["omi_score"]["maximum"] == 100
+    assert item["properties"]["suspicion_tier"]["enum"] == ["low", "moderate", "elevated", "high"]
     assert "suspicion_probability" not in item["properties"]
 
 
@@ -122,8 +126,10 @@ def test_output_contract_instructs_the_array():
 # =========================================================================== #
 def test_commenter_assessments_survive_and_are_echo_joined():
     out = _run(_model_output([
-        {"ref": "A1", "assessment": "A1 posts on a mechanically regular cadence.", "citations": ["A1"]},
-        {"ref": "A2", "assessment": "A2 has a lighter footprint; weaker signal.", "citations": ["A2"]},
+        {"ref": "A1", "omi_score": 82, "suspicion_tier": "high",
+         "assessment": "A1 posts on a mechanically regular cadence.", "citations": ["A1"]},
+        {"ref": "A2", "omi_score": 40, "suspicion_tier": "moderate",
+         "assessment": "A2 has a lighter footprint; weaker signal.", "citations": ["A2"]},
     ]))
     assert out["investigation_trace"]["model_backed"] is True
     rows = out["commenter_assessments"]
@@ -132,24 +138,29 @@ def test_commenter_assessments_survive_and_are_echo_joined():
     assert set(by_handle) == {"@a", "@b"}
     # model prose survived
     assert "mechanically regular" in by_handle["@a"]["assessment"]
-    # engine numbers were JOINED (never emitted by the model): @a echoes overall, @b echoes the
-    # coordination-adjusted probability.
-    assert by_handle["@a"]["suspicion_tier"] == "high"
-    assert by_handle["@a"]["suspicion_probability"] == 0.8
-    assert by_handle["@b"]["suspicion_probability"] == 0.62
+    # AI-first: the per-account OMI score + tier are the MODEL'S (not the engine's), scored per account
+    assert by_handle["@a"]["omi_score"] == 82 and by_handle["@a"]["suspicion_tier"] == "high"
+    assert by_handle["@b"]["omi_score"] == 40 and by_handle["@b"]["suspicion_tier"] == "moderate"
+    # the engine probability rides along ONLY as a secondary reference, never as the account's score
+    assert by_handle["@a"]["engine_probability"] == 0.8
+    assert by_handle["@b"]["engine_probability"] == 0.62
     assert all(r["resolved"] is True for r in rows)
 
 
 def test_unresolved_alias_is_kept_but_flagged():
     out = _run(_model_output([
-        {"ref": "A1", "assessment": "A1 regular cadence.", "citations": ["A1"]},
-        {"ref": "A99", "assessment": "phantom account not in the legend.", "citations": []},
+        {"ref": "A1", "omi_score": 55, "suspicion_tier": "elevated",
+         "assessment": "A1 regular cadence.", "citations": ["A1"]},
+        {"ref": "A99", "omi_score": 70, "suspicion_tier": "elevated",
+         "assessment": "phantom account not in the legend.", "citations": []},
     ]))
     rows = out["commenter_assessments"]
     assert len(rows) == 2                                                # never dropped
     bad = next(r for r in rows if r["ref"] == "A99")
     assert bad["resolved"] is False
-    assert "handle" not in bad                                          # no fabricated identity/number
+    assert bad["omi_score"] == 70                                       # the model's per-account score survives
+    assert "handle" not in bad                                          # no fabricated identity
+    assert "engine_probability" not in bad                             # unresolved → no engine number
 
 
 def test_response_without_the_array_still_validates():

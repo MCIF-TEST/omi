@@ -99,6 +99,7 @@ class OpenRouterReasoningProvider:
     structured_output: bool = True           # send response_format json_schema when a schema is present
     referer: str | None = None               # optional HTTP-Referer (dashboard attribution) — not a secret
     title: str | None = None                 # optional X-Title (dashboard attribution) — not a secret
+    reasoning_effort: str | None = None       # GPT-5-class reasoning effort cost lever (minimal|low|medium|high)
     timeout: float = 30.0
     max_retries: int = 2
     token_env: tuple[str, ...] = ("OPENROUTER_API_KEY",)
@@ -184,6 +185,11 @@ class OpenRouterReasoningProvider:
         rf = self._response_format()
         if rf is not None:
             body["response_format"] = rf
+        # Cost guardrail: cap GPT-5-class reasoning effort when configured (reasoning tokens bill as output).
+        # Only a recognized effort level is sent; anything else is ignored so a typo can't 400 the request.
+        effort = (self.reasoning_effort or "").strip().lower()
+        if effort in ("minimal", "low", "medium", "high"):
+            body["reasoning"] = {"effort": effort}
         return json.dumps(body).encode("utf-8")
 
     def _headers(self, token: str) -> dict:

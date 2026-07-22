@@ -115,6 +115,11 @@ _VERDICT_TO_SCORE = {
 }
 
 
+# A representative score inside each tier band — used only to backfill a per-account omi_score when the
+# model gave the tier but not the number.
+_TIER_MIDPOINT = {"low": 12, "moderate": 37, "elevated": 62, "high": 87}
+
+
 def _tier_for_score(score: int) -> str:
     """The canonical omi_score→suspicion_tier bands (mirrors the engine cutoffs 0.25/0.50/0.75)."""
     if score < 25:
@@ -191,6 +196,40 @@ def coerce_comprehensive_model_output(
                         keep[opt] = item[opt]
                 clean.append(keep)
         out[arr_key] = clean
+
+    # Per-account items: each needs a ref, an omi_score (0-100), a tier, and an assessment. Coerce the
+    # shape so a good-faith reply renders every account: clamp the score; derive tier↔score when one is
+    # missing; drop an item only when it has neither a usable ref nor any way to score (never fabricate a
+    # per-account judgment out of nothing). commenter_assessments is optional, so this never floors.
+    ca = out.get("commenter_assessments")
+    if isinstance(ca, list):
+        clean_ca: list[dict] = []
+        for item in ca:
+            if not isinstance(item, dict):
+                continue
+            ref = str(item.get("ref", "")).strip()
+            if not ref:
+                continue
+            score = item.get("omi_score")
+            try:
+                score = max(0, min(100, int(round(float(score))))) if score is not None else None
+            except (TypeError, ValueError):
+                score = None
+            tier = item.get("suspicion_tier")
+            if score is None and tier in _TIER_MIDPOINT:
+                score = _TIER_MIDPOINT[tier]
+            if score is None:
+                continue                                          # no ref-less/scoreless per-account judgment
+            if tier not in ("low", "moderate", "elevated", "high"):
+                tier = _tier_for_score(score)
+            assessment = item.get("assessment")
+            if not (isinstance(assessment, str) and assessment.strip()):
+                assessment = "No account-specific reasoning was provided."
+            keep = {"ref": ref, "omi_score": score, "suspicion_tier": tier, "assessment": assessment}
+            if isinstance(item.get("citations"), list):
+                keep["citations"] = item["citations"]
+            clean_ca.append(keep)
+        out["commenter_assessments"] = clean_ca
 
     for arr_key in ("uncertainty", "what_would_change_this"):
         arr = out.get(arr_key)

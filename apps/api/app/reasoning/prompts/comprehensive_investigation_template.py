@@ -103,17 +103,31 @@ _SECTION_SCHEMA: dict = {
 _COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["ref", "assessment"],
+    "required": ["ref", "omi_score", "suspicion_tier", "assessment"],
     "properties": {
         "ref": {
             "type": "string", "minLength": 1,
             "description": "the account alias (e.g. A1) this assessment is about; MUST resolve in the alias legend",
         },
+        "omi_score": {
+            "type": "integer", "minimum": 0, "maximum": 100,
+            "description": "THIS ACCOUNT'S OMI score — YOUR authenticity-risk score for this single account, "
+                           "an INTEGER 0-100 (higher = stronger evidence this account is inauthentic / "
+                           "coordinated). Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. "
+                           "YOU reason it from THIS account's raw evidence (profile, history, engagement) "
+                           "— it is NOT provided to you and is NOT an average of detector numbers.",
+        },
+        "suspicion_tier": {
+            "type": "string", "enum": ["low", "moderate", "elevated", "high"],
+            "description": "this account's tier band; MUST agree with its omi_score "
+                           "(0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high).",
+        },
         "assessment": {
             "type": "string", "minLength": 1, "maxLength": 600,
             "description": "CONCISE (1-3 sentences), information-dense probabilistic reasoning over THIS "
-                           "account's evidence; behavior not persons. The detailed investigation narrative "
-                           "belongs in the executive assessment + domain sections, never repeated per account",
+                           "account's raw evidence that justifies its omi_score; behavior not persons. The "
+                           "detailed investigation narrative belongs in the executive assessment + domain "
+                           "sections, never repeated per account",
         },
         "citations": {
             "type": "array", "items": {"type": "string"},
@@ -153,9 +167,10 @@ def comprehensive_investigation_canonical_schema() -> dict:
     properties[COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY] = {
         "type": "array",
         "description": (
-            "per-account reasoning: one item per account alias in the evidence. Each item carries the "
-            "alias ref, a bounded probabilistic assessment, and citations — never a suspicion number "
-            "(OmiSphere joins the engine's tier/probability from the alias legend)."
+            "per-account reasoning: EXACTLY one item per account alias present in the evidence. Each item "
+            "carries the alias ref, THIS ACCOUNT'S OWN omi_score (0-100) + suspicion_tier that YOU reason "
+            "from its raw evidence, a concise assessment, and citations. The per-account omi_score is the "
+            "primary per-account output; the wrapper omi_score is the OVERALL bundle score."
         ),
         "items": json.loads(json.dumps(_COMMENTER_ASSESSMENT_ITEM_SCHEMA)),
     }
@@ -196,16 +211,16 @@ _OUTPUT_EXAMPLE = (
     'among A1,A2,A3 in C1) over thin history; no independent axis corroborates it.", '
     '"headline": "A tight co-engagement cluster is present, but the read rests on one axis over thin '
     'data.", "assessment": "Three accounts co-engaged on the same content within a narrow window (C1) '
-    "— the strongest single signal. Cadence is within human range and histories are thin, so most "
-    "detectors abstained; an established footprint on A2 lowers the read. This is consistent with either "
+    "— the strongest single signal. Cadence is within human range and histories are thin, so no "
+    "independent axis corroborates it; an established footprint on A2 lowers the read. This is consistent with either "
     "a small coordinated pod or a fan community reacting to the same event, and the evidence does not yet "
     'distinguish them. Findings are probabilistic; the human analyst sets the verdict.", '
     '"evidence_for": [{"signal": "co_engagement", "claim": "A1, A2 and A3 co-engaged on the same content '
     'within a tight window.", "evidence_refs": ["C1"], "direction": "raises", "impact": 0.55}], '
     '"evidence_against": [{"signal": "community", "claim": "A2 shows an established interaction footprint '
     'more consistent with an organic account.", "evidence_refs": ["A2"], "direction": "lowers", '
-    '"impact": 0.18}], "uncertainty": ["Thin per-account history — temporal/content detectors '
-    'abstained.", "Single discriminative axis; no independent corroboration."], '
+    '"impact": 0.18}], "uncertainty": ["Thin per-account history — too little raw activity to read '
+    'cadence or content reliably.", "Single discriminative axis; no independent corroboration."], '
     '"what_would_change_this": ["A shared behavioral fingerprint or coordinated tagging across the same '
     'accounts would raise the read.", "Ground-truth that the cluster is a known fan community would lower '
     'it."], "coordination_label": "mixed", "legitimate_hypothesis": "The cluster is equally consistent '
@@ -221,10 +236,12 @@ _OUTPUT_EXAMPLE = (
     'without a second independent axis the coordinated read is capped.", "citations": ["C1"]}, '
     '"campaign_reasoning": {"assessment": "C1 is a campaign candidate, not an established campaign — no '
     'ground-truth anchor is present.", "citations": ["C1"]}, "commenter_assessments": [{"ref": "A1", '
-    '"assessment": "Regular cadence and C1 co-engagement; thin history caps confidence.", "citations": '
-    '["C1"]}, {"ref": "A2", "assessment": "Established footprint makes an organic read at least as likely '
-    'despite C1 membership.", "citations": ["A2"]}, {"ref": "A3", "assessment": "Minimal independent '
-    'signal beyond C1 co-engagement.", "citations": ["C1"]}]}'
+    '"omi_score": 58, "suspicion_tier": "elevated", "assessment": "Regular cadence and C1 co-engagement; '
+    'thin history caps confidence, but the co-engagement raises the read.", "citations": ["C1"]}, '
+    '{"ref": "A2", "omi_score": 30, "suspicion_tier": "moderate", "assessment": "Established multi-year '
+    'footprint makes an organic read at least as likely despite C1 membership.", "citations": ["A2"]}, '
+    '{"ref": "A3", "omi_score": 47, "suspicion_tier": "moderate", "assessment": "Minimal independent '
+    'signal beyond C1 co-engagement; scored on its own thin evidence.", "citations": ["C1"]}]}'
 )
 
 
@@ -243,17 +260,19 @@ def _render_output_contract(schema: dict) -> str:
     commenter_clause = ""
     if COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY in props:
         commenter_clause = (
-            f"COMPLETE per-account reasoning ('{COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY}'): when the "
-            f"evidence contains account aliases, emit this array with ONE item for EVERY account alias "
-            f"that carries a row in the Accounts table — do not sample, rank, or omit any of them "
-            f"(accounts disclosed as omitted by the coverage manifest carry no rows and need no item; "
-            f"they remain citable). Each item is an object with the alias "
-            f"'ref' (present in the alias legend), a CONCISE, information-dense probabilistic 'assessment' "
-            f"(1-3 sentences grounded in THAT account's specific evidence — never a boilerplate sentence "
-            f"repeated across accounts; the detailed narrative belongs in the executive assessment and "
-            f"domain sections), and a 'citations' array of evidence ids/aliases. Do NOT include a "
-            f"per-account suspicion number — OmiSphere joins the engine's tier/probability from the "
-            f"legend. Omit the array entirely only when the evidence has no accounts.\n"
+            f"COMPLETE per-account reasoning ('{COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY}') — THE PRIMARY "
+            f"PER-ACCOUNT OUTPUT: when the evidence contains account aliases, emit this array with ONE item "
+            f"for EVERY account alias present in the evidence — do not sample, rank, or omit any of them "
+            f"(accounts disclosed as omitted by the coverage manifest carry no raw evidence and need no "
+            f"item; they remain citable). Each item is an object with: the alias 'ref' (present in the "
+            f"alias legend); THIS ACCOUNT'S OWN 'omi_score' — an INTEGER 0-100 you reason from THAT "
+            f"account's raw evidence (profile, post history, engagement); its 'suspicion_tier' band that "
+            f"MUST agree with the score (0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high); a CONCISE, "
+            f"information-dense 'assessment' (1-3 sentences grounded in THAT account's specific evidence "
+            f"that justifies its score — never a boilerplate sentence repeated across accounts); and a "
+            f"'citations' array of evidence ids/aliases. Score each account on ITS OWN evidence; two "
+            f"accounts in the same cluster can have different scores. Omit the array entirely only when the "
+            f"evidence has no accounts.\n"
         )
     return (
         f"Emit exactly ONE JSON object valid against the Omi canonical comprehensive assessment schema "
@@ -271,11 +290,17 @@ def _render_output_contract(schema: dict) -> str:
         f"in 'supplemental_context' (each item an object with 'signal' and a neutral 'note' making clear "
         f"it carries no suspicion weight) — never in evidence_for and never as a reason to raise the OMI "
         f"score.\n"
-        f"THE OMI SCORE: 'omi_score' is your single composite authenticity-risk score, an INTEGER 0-100 "
-        f"(0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high) — your reasoned synthesis of the whole "
-        f"body of evidence, not an average of detector numbers. 'suspicion_tier' is its categorical band and "
-        f"MUST agree with omi_score. This is the ONLY investigation score — do NOT output a separate "
-        f"inauthenticity probability.\n"
+        f"THE OMI SCORES — you produce TWO levels, both INTEGERS 0-100 (0-24 low, 25-49 moderate, 50-74 "
+        f"elevated, 75-100 high), each YOUR reasoned judgment (never an average of any provided number):\n"
+        f"  • PER ACCOUNT — every commenter_assessments item carries its OWN 'omi_score' + 'suspicion_tier', "
+        f"reasoned from THAT account's raw evidence. This is the primary per-account result.\n"
+        f"  • OVERALL — the wrapper 'omi_score' + 'suspicion_tier' is the score for the WHOLE bundle: your "
+        f"synthesis driven by the most-suspicious accounts and any coordination you detected. It must be "
+        f"consistent with the per-account scores (an investigation dominated by high-risk, coordinated "
+        f"accounts is high overall; a bundle of independent low-risk accounts is low). Do NOT output a "
+        f"separate inauthenticity probability.\n"
+        f"Each scan is assessed independently on the raw evidence in front of you: a follow-up batch of new "
+        f"accounts gets its own fresh per-account and overall scores.\n"
         f"Do NOT produce Omi-owned system/provenance fields — OmiSphere injects these after you respond and "
         f"you must not fabricate them: {', '.join(omi_injected)}. The engine's factual 'corroboration' state "
         f"is likewise supplied by OmiSphere. Output ONLY the JSON object — no prose before or after.\n"
@@ -286,41 +311,49 @@ def _render_output_contract(schema: dict) -> str:
 COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "# COMPREHENSIVE INVESTIGATION TASK\n"
     "You are the LEAD INVESTIGATOR. In ONE response you produce the COMPLETE investigation over the "
-    "evidence below: the deterministic engine has already MEASURED the evidence; you REASON over it and "
-    "return SEVEN sections in one JSON object. Each per-domain section is a bounded, probabilistic "
-    "'assessment' plus the aliases that substantiate it; reason within a domain's own grain and join "
-    "grains only through the explicit cross-links.\n"
+    "evidence below. The evidence is RAW METADATA — the objective, collected facts (account profiles, "
+    "post histories, comment text, co-occurrence groupings). It carries NO precomputed suspicion score, "
+    "tier, or detector output: YOU do all the analysis and produce every judgment and score. Return SEVEN "
+    "sections in one JSON object; reason within a domain's own grain and join grains only through the "
+    "explicit cross-links.\n"
     "  1. comment_reasoning — read the near-duplicate groups (each carries an exemplar, exact member "
-    "count, time-range, and similarity) and the thread-level probability. A large verbatim / "
+    "count, time-range, and measured similarity) and the raw comment text. A large verbatim / "
     "high-similarity group posted in a tight window is a coordination signal; templated praise, "
     "catchphrases, and shared subculture are the benign explanation — say which the evidence "
     "supports.\n"
-    "  2. commenter_history_reasoning — weigh each commenter's track record: activity_sample_count "
-    "(thin history is low confidence, not guilt), matched_prior_neighbors and from_cache (memory "
-    "recurrence is background, never shared control).\n"
-    "  3. account_reasoning — per-account authenticity from the detector table: weigh the DETECTOR "
-    "DISAGREEMENT (each account carries several detectors with their own probability/confidence and a "
-    "signed contribution); when detectors disagree, say so and weigh it — never average it away. "
-    "Supplemental signals carry zero suspicion weight; an account row's engine omiscore column is a "
-    "background index for that account, distinct from the omi_score you output for the investigation.\n"
-    "  4. narrative_reasoning — message-cluster spread and authorship from member_count and "
-    "distinct_authors; treat spread_ratio and inauthenticity_score as directional engine signals and "
-    "read them conservatively (more distinct authors is broader participation, not itself proof of "
-    "coordination or of a synthetic narrative).\n"
-    "  5. coordination_reasoning — the cross-account structure: clusters (method, whether "
-    "discriminative, score, members), the discriminative_methods that fired, and relationships / bridge "
-    "accounts that tie clusters together (an account may bridge clusters even at LOW individual "
-    "suspicion — a structural observation, not a verdict). A maximal coordinated read requires a "
-    "discriminative method (fingerprint_cluster, co_engagement, co_tag) or ≥2 independent axes AND a "
-    "score that is not single-axis-capped; otherwise cap the read.\n"
-    "  6. campaign_reasoning — which corroboration-gated clusters are campaign CANDIDATES. A candidate "
-    "is not an established campaign; 'confirmed' would need a human or platform anchor the evidence "
-    "does not contain.\n"
-    "  7. the LEAD-INVESTIGATOR SYNTHESIS (the response wrapper) — assign YOUR OMI score (omi_score, "
-    "an integer 0-100) and its tier band from the whole body of evidence, give evidence FOR and AGAINST "
-    "with equal rigor, named uncertainty, what would change the read, and a recommended verdict. Weight "
-    "by evidence strength × corroboration; raise confidence only on INDEPENDENT cross-domain "
-    "convergence; insufficient evidence is itself a valid conclusion.\n"
+    "  2. commenter_history_reasoning — weigh each commenter's track record from the RAW facts: how many "
+    "posts they have (thin history is low confidence, not guilt) and memory recurrence (background, "
+    "never shared control).\n"
+    "  3. account_reasoning — per-account authenticity from each account's OWN evidence (profile, post "
+    "history, engagement). This is where you SCORE EACH ACCOUNT: every account gets its own omi_score "
+    "(0-100) + suspicion_tier in commenter_assessments, reasoned from THAT account's evidence — two "
+    "accounts in the same cluster can score differently. Weigh the whole picture and where signals "
+    "disagree say so — never average it away. Supplemental signals (e.g. ai_writing) carry zero suspicion "
+    "weight. account_reasoning is your cross-account summary of this domain; the numeric per-account "
+    "scores live in commenter_assessments.\n"
+    "  4. narrative_reasoning — read the message-cluster structure from the RAW counts: how many messages "
+    "(member_count) and how many distinct authors carried each. More distinct authors is broader "
+    "participation, NOT itself proof of coordination or a synthetic narrative — YOU judge it; there is no "
+    "engine narrative score to lean on.\n"
+    "  5. coordination_reasoning — DETECT coordination yourself from the raw co-occurrence groupings: each "
+    "group lists HOW the accounts co-occur (method: co_engagement / co_tag / …), WHICH accounts, and the "
+    "raw factual basis; relationships/bridge accounts tie groups together (an account may bridge groups "
+    "even when its own behavior looks ordinary — a structural observation, not a conclusion). A strong "
+    "coordinated read wants a discriminative pattern (shared fingerprint, co_engagement, co_tag) or ≥2 "
+    "independent axes; a single axis over thin evidence is weak — cap the read. Weigh the benign "
+    "explanation (fan community, same event) equally.\n"
+    "  6. campaign_reasoning — which co-occurrence groups are campaign CANDIDATES. A candidate is not an "
+    "established campaign; 'confirmed' would need a human or platform anchor the evidence does not "
+    "contain.\n"
+    "  7. the LEAD-INVESTIGATOR SYNTHESIS (the response wrapper) — assign the OVERALL OMI score "
+    "(omi_score, an integer 0-100) and its tier band for the WHOLE bundle, driven by the most-suspicious "
+    "accounts and any coordination you detected and CONSISTENT with the per-account omi_scores (a bundle "
+    "dominated by high-risk coordinated accounts is high overall; a bundle of independent low-risk "
+    "accounts is low). Give evidence FOR and AGAINST with equal rigor, named uncertainty, what would "
+    "change the read, and a recommended verdict. Weight by evidence strength × corroboration; raise "
+    "confidence only on INDEPENDENT cross-domain convergence; insufficient evidence is itself a valid "
+    "conclusion. You output TWO levels of OMI score: one per account (commenter_assessments) and this one "
+    "overall.\n"
     "ALL SIX reasoning domains are REQUIRED in every response — even when a domain has no evidence in "
     "this investigation. For an evidence-less domain, state plainly in its 'assessment' that no evidence "
     "of that kind was collected (or that it is insufficient to reason over) and leave its 'citations' "

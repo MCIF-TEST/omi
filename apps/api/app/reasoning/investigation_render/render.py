@@ -40,26 +40,24 @@ class RenderedEvidence:
 # --------------------------------------------------------------------------- #
 # Compact per-domain renderers (positional rows — column headers declared once)
 # --------------------------------------------------------------------------- #
-_ACCOUNT_COLUMNS = ["account", "overall_probability", "coordination_adjusted_probability", "tier",
-                    "confidence", "signals", "contributions", "weak_signals", "omiscore"]
-_SIGNAL_COLUMNS = ["detector", "probability", "confidence", "supplemental", "evidence"]
-_CONTRIBUTION_COLUMNS = ["detector", "impact", "direction", "logit_delta", "decorrelation_factor",
-                         "evidence"]
+# AI-first (raw metadata only): the account row carries the objective, collected facts about the account —
+# NO engine probability / tier / detector score. The model reasons its OWN per-account omi_score from these.
+_ACCOUNT_COLUMNS = ["account", "follower_count", "following_count", "account_created_at",
+                    "post_count", "recent_posts"]
+_POST_COLUMNS = ["text", "created_at"]
 
 
 def _account_row(a, alias: AliasLegend) -> list:
-    """One compact, positional account row — preserves every detector value (identity / probability /
-    confidence / evidence / signed contribution / logit_delta / decorrelation_factor) so disagreement
-    survives, without repeating a single JSON key."""
+    """One compact, positional account row of RAW metadata: the alias, the objective profile counts, the
+    account creation time (the model derives age itself), how many posts the account has, and a raw sample
+    of its own posts (text + time). No computed score — the AI judges the account from these facts."""
     return [
-        alias.account_alias(a.author_ref), a.overall_probability,
-        a.coordination_adjusted_probability, a.tier, a.confidence,
-        [[s.name, s.probability, s.confidence, s.supplemental, " | ".join(s.evidence)]
-         for s in a.signals],
-        [[k.name, k.impact, k.direction, k.logit_delta, k.decorrelation_factor, k.evidence]
-         for k in a.contributions],
-        list(a.weak_signals),
-        ([a.omiscore.omi_score, a.omiscore.authenticity_score] if a.omiscore else None),
+        alias.account_alias(a.author_ref),
+        a.follower_count,
+        a.following_count,
+        a.account_created_at,
+        a.post_count,
+        [[p.text, p.created_at] for p in getattr(a, "recent_posts", ())],
     ]
 
 
@@ -70,9 +68,10 @@ def _render_accounts(package, alias, budget_tokens) -> tuple[dict, int, dict, tu
     sel = select_accounts(package, cost_of, budget_tokens)
     rows = [_account_row(by_ref[r], alias) for r in sel.represented]
     section = {
-        "columns": _ACCOUNT_COLUMNS, "signal_columns": _SIGNAL_COLUMNS,
-        "contribution_columns": _CONTRIBUTION_COLUMNS, "omiscore_columns": ["omi_score",
-                                                                            "authenticity_score"],
+        "columns": _ACCOUNT_COLUMNS, "post_columns": _POST_COLUMNS,
+        "note": ("RAW per-account metadata — objective facts only, no engine score. Derive account age "
+                 "from account_created_at vs the post times; weigh follower/following ratio, history "
+                 "depth, and the actual posts. YOU assign each account's omi_score."),
         "rows": rows,
         "memory_priors": [[p.type, p.label, p.confidence, p.influence_class, p.epistemic_status]
                           for p in b.account.memory_priors],
@@ -100,7 +99,8 @@ def _render_comments(package, alias, budget_tokens) -> tuple[dict, int, dict]:
     section = {
         "columns": ["exemplar", "count", "author_refs", "earliest", "latest", "similarity",
                     "is_duplicate_group"],
-        "thread_probability": b.comment.thread_probability, "thread_tier": b.comment.thread_tier,
+        # RAW comment structure only (exemplar text, how many copies, which accounts, time window).
+        # No thread suspicion score — YOU judge whether a group is coordinated or benign.
         "comment_count": b.comment.comment_count,
         "near_duplicate_groups": rows,
         "omitted_group_count": len(sel.omitted),
@@ -128,17 +128,19 @@ def _render_coordination(package, alias) -> dict:
     (clusters are few and structurally load-bearing); relationships collapsed losslessly."""
     b = package.bundles
     co = b.coordination
+    # RAW co-occurrence structure only: how accounts are grouped by shared behavior (which accounts
+    # engaged/tagged together, on what) + the raw factual justification. NO coordination score, NO
+    # discriminative/single-axis flags — YOU judge whether the co-occurrence is hostile coordination or a
+    # benign shared reaction (fan community, same event) and detect coordination from these raw groupings.
     clusters = [[alias.cluster_alias(cl.cluster_ref), cl.method,
-                 [alias.account_alias(m) for m in cl.member_refs], cl.members_count, cl.score,
-                 cl.discriminative, list(cl.evidence)]
+                 [alias.account_alias(m) for m in cl.member_refs], cl.members_count, list(cl.evidence)]
                 for cl in co.clusters]
     rels = collapse_relationships(co.graph_edges, alias)
     return {
-        "coordination_score": co.coordination_score, "coordination_tier": co.coordination_tier,
-        "single_axis_capped": co.single_axis_capped,
-        "discriminative_methods": list(co.discriminative_methods),
-        "cluster_columns": ["cluster", "method", "members", "members_count", "score",
-                            "discriminative", "evidence"],
+        "note": ("RAW co-occurrence groupings (shared-behavior structure), not a coordination conclusion. "
+                 "'method' is HOW the accounts co-occur (co_engagement / co_tag / …); 'members' are the "
+                 "accounts; 'evidence' is the raw factual basis. You decide if it is coordination."),
+        "cluster_columns": ["group", "method", "members", "members_count", "evidence"],
         "clusters": clusters,
         "relationship_columns": ["type", "from", "to", "count"],
         "relationships": [[r.type, r.from_ref, r.to_ref, r.count] for r in rels],
@@ -156,43 +158,34 @@ def _render_campaign(package, alias) -> dict:
 
 def _render_narrative(package, alias) -> dict:
     b = package.bundles
-    rows = [[alias.narrative_alias(n.narrative_ref), n.member_count, n.distinct_authors,
-             n.spread_ratio, n.inauthenticity_score] for n in b.narrative.narratives]
+    # RAW narrative structure only: how many messages in the cluster and how many distinct authors carried
+    # it. No spread_ratio / inauthenticity score — more distinct authors is broader participation, not
+    # itself proof of a synthetic narrative; YOU judge it.
+    rows = [[alias.narrative_alias(n.narrative_ref), n.member_count, n.distinct_authors]
+            for n in b.narrative.narratives]
     return {
-        "columns": ["narrative", "member_count", "distinct_authors", "spread_ratio",
-                    "inauthenticity_score"],
+        "columns": ["narrative", "member_count", "distinct_authors"],
         "rows": rows, "count": b.narrative.count,
     }
 
 
 def _render_summary(package, alias) -> dict:
-    """The investigation-level synthesis EVIDENCE (echoed numbers, coordination digest, signed drivers,
-    account roll-up, cross-links, data-quality caveats, memory). Cross-link refs aliased."""
+    """The investigation-level STRUCTURAL context (AI-first: NO echoed engine scores/probabilities/tiers,
+    no signed drivers, no digest numbers — the model produces the overall omi_score itself). Kept: the
+    factual scope (platform, what was scanned, how many accounts) and structural cross-links that tie
+    entities across domains + background memory priors. Cross-link refs aliased."""
     sm = package.summary_bundle()
-    coord = sm.coordination
     acct = sm.accounts_digest
     return {
-        "overall_probability": sm.overall_probability, "overall_tier": sm.overall_tier,
-        "confidence": sm.confidence, "convergence_score": sm.convergence_score,
+        "note": ("Scope + structure only. There is NO precomputed score here — YOU synthesize the overall "
+                 "omi_score from the per-account raw metadata, comment structure, and co-occurrence."),
         "inputs_provided": list(sm.inputs_provided), "platform": sm.platform,
         "post_content_id": sm.post_content_id,
-        "coordination_digest": ({
-            "coordination_score": coord.coordination_score, "coordination_tier": coord.coordination_tier,
-            "single_axis_capped": coord.single_axis_capped,
-            "discriminative_methods": list(coord.discriminative_methods),
-            "cluster_count": coord.cluster_count} if coord else {}),
-        "drivers": [[c.name, c.impact, c.direction, c.logit_delta, c.decorrelation_factor, c.evidence]
-                    for c in sm.contributions],
-        "driver_columns": _CONTRIBUTION_COLUMNS,
-        "accounts_digest": ({
-            "count": acct.count, "flagged_count": acct.flagged_count, "high_count": acct.high_count,
-            "max_probability": acct.max_probability, "mean_probability": acct.mean_probability}
-            if acct else {}),
-        "cross_links": [[l.kind, l.severity, list(l.evidence),
-                         [alias.account_alias(r) for r in l.related_refs]] for l in sm.cross_links],
-        "cross_link_columns": ["kind", "severity", "evidence", "related_refs"],
-        "weak_signals": list(sm.weak_signals),
-        "memory": [[p.type, p.label, p.confidence, p.influence_class, p.epistemic_status]
+        "account_count": (acct.count if acct else 0),
+        "cross_links": [[l.kind, list(l.evidence), [alias.account_alias(r) for r in l.related_refs]]
+                        for l in sm.cross_links],
+        "cross_link_columns": ["kind", "evidence", "related_refs"],
+        "memory": [[p.type, p.label, p.influence_class, p.epistemic_status]
                    for p in sm.memory_priors],
     }
 

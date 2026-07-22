@@ -54,6 +54,19 @@ def test_commenter_capacity_matches_ceiling():
     assert cap > 150                                                # a single inference comfortably covers ~150
 
 
+def test_default_ceiling_is_cost_safe_but_covers_a_full_scan():
+    # Cost guardrail: the default per-scan output cap is bounded, yet a full 150-commenter scan (the
+    # default OMI_SCAN_MAX_COMMENTERS) still fits without truncation.
+    assert COMPLETION_CEILING_TOKENS <= 32000
+    assert completion_budget(150) <= COMPLETION_CEILING_TOKENS
+
+
+def test_completion_budget_honors_a_custom_ceiling():
+    # The knobs are env-overridable (OMI_ANALYST_COMPLETION_*): a lower ceiling caps spend immediately.
+    assert completion_budget(150, ceiling=8000) == 8000            # clamps down to the tighter cap
+    assert completion_budget(1, base=1000, per_commenter=10, floor=500, ceiling=9000) == 1010
+
+
 # =========================================================================== #
 # Completion verification (pure)
 # =========================================================================== #
@@ -107,7 +120,8 @@ def _payload(n: int) -> dict:
 
 def _model_output(num_assessments: int) -> dict:
     domains = {k: {"assessment": "domain reasoning", "citations": []} for k in COMPREHENSIVE_SECTION_KEYS}
-    ca = [{"ref": f"A{i + 1}", "assessment": f"Account A{i + 1} concise read.", "citations": []}
+    ca = [{"ref": f"A{i + 1}", "omi_score": 55, "suspicion_tier": "elevated",
+           "assessment": f"Account A{i + 1} concise read.", "citations": []}
           for i in range(num_assessments)]
     return {
         "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",

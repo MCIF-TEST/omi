@@ -107,6 +107,22 @@ services:
       # OMI_OPENROUTER_MODEL is intentionally UNSET: the omi-master-v1 preset
       # determines the model. Set it only to intentionally override the preset.
       #
+      # --- Cost guardrails (tune WITHOUT a code deploy) ---
+      # Per-scan output-token ceiling — the single biggest lever on OpenRouter
+      # spend. Default 32000 finishes a full 150-commenter scan with headroom
+      # while capping any single inference. Lower to cut cost; raise only if you
+      # also raise OMI_SCAN_MAX_COMMENTERS.
+      - key: OMI_ANALYST_COMPLETION_CEILING_TOKENS
+        value: '32000'
+      # GPT-5 reasoning effort (reasoning tokens bill as output). Unset lets the
+      # preset decide; set minimal|low|medium|high to bound reasoning cost.
+      # 'low' roughly halves reasoning spend vs 'high' for this task.
+      - key: OMI_OPENROUTER_REASONING_EFFORT
+        sync: false
+      # One model generation timeout (background worker, not a user request).
+      - key: OMI_ANALYST_TIMEOUT_SECONDS
+        value: '90'
+      #
       # --- Legacy Hugging Face path (DEPRECATED — no longer the default) ---
       # Still supported as a fallback provider: to use it instead of
       # OpenRouter, set OMI_ANALYST_PROVIDER=huggingface and provide

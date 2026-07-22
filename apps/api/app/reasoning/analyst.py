@@ -166,6 +166,7 @@ def _openrouter_transport(settings: Settings, *, timeout: float, max_retries: in
         structured_output=bool(getattr(settings, "openrouter_structured_output", True)),
         referer=getattr(settings, "openrouter_referer", None),
         title=getattr(settings, "openrouter_title", None),
+        reasoning_effort=getattr(settings, "openrouter_reasoning_effort", None),
         timeout=timeout, max_retries=max_retries, capture=capture,
         prompt_hash=prompt_hash, package_hash=package_hash, master_prompt_hash=master_hash)
 
@@ -299,10 +300,12 @@ def _commenters_by_author_ref(payload: dict) -> dict[str, dict]:
 
 
 def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
-    """Echo join: pair each model-authored per-account assessment (keyed by alias) with the account's
-    real identity + the deterministic engine's tier/probability (which the model NEVER emits). Aliases
-    are resolved through the reversible legend; an item whose alias does not resolve to a known commenter
-    is kept but marked ``resolved: False`` (never dropped — the presentation layer flags it)."""
+    """Join each model-authored per-account assessment (keyed by alias) with the account's real identity.
+    AI-first: the per-account OMI score + tier are the MODEL'S (it reasons them from that account's raw
+    evidence); OmiSphere supplies only identity (handle/external_id) from the metadata. The engine's own
+    probability is carried as a secondary reference (``engine_probability``) when present, never as the
+    account's score. Aliases resolve through the reversible legend; an item whose alias does not resolve is
+    kept but marked ``resolved: False`` (never dropped — the presentation layer flags it)."""
     items = (raw_obj or {}).get("commenter_assessments")
     if not isinstance(items, list):
         return []
@@ -315,22 +318,37 @@ def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> 
         alias = it.get("ref")
         author_ref = accounts.get(alias) or (legend.resolve(alias) if alias else None)
         commenter = by_ref.get(author_ref) if author_ref else None
+        # The account's OMI score + tier are MODEL-produced (clamped/normalized for safety).
+        omi_score = it.get("omi_score")
+        try:
+            omi_score = max(0, min(100, int(round(float(omi_score))))) if omi_score is not None else None
+        except (TypeError, ValueError):
+            omi_score = None
         row: dict = {
             "ref": alias,
+            "omi_score": omi_score,
+            "suspicion_tier": it.get("suspicion_tier"),
             "assessment": it.get("assessment"),
             "citations": it.get("citations") or [],
             "resolved": commenter is not None,
         }
         if commenter is not None:
-            # Engine-owned, echoed (never model-fabricated) — identity + the authoritative suspicion read.
+            # Identity + the RAW metadata (from the scan, never a score) so the UI can show each account's
+            # objective facts alongside the AI's per-account OMI score. The engine's probability rides
+            # along as a secondary reference, distinct from the account's model-produced OMI score.
             row["handle"] = commenter.get("handle")
             row["external_id"] = commenter.get("external_id")
-            row["suspicion_tier"] = commenter.get("tier")
-            row["suspicion_probability"] = (
-                commenter.get("coordination_adjusted_probability")
-                if commenter.get("coordination_adjusted_probability") is not None
-                else commenter.get("overall_probability")
-            )
+            for fld in ("follower_count", "following_count", "account_created_at"):
+                if commenter.get(fld) is not None:
+                    row[fld] = commenter.get(fld)
+            _posts = commenter.get("recent_activity") or []
+            if _posts:
+                row["post_count"] = commenter.get("history_size") or len(_posts)
+            _eng = (commenter.get("coordination_adjusted_probability")
+                    if commenter.get("coordination_adjusted_probability") is not None
+                    else commenter.get("overall_probability"))
+            if _eng is not None:
+                row["engine_probability"] = _eng
         joined.append(row)
     return joined
 
@@ -510,9 +528,24 @@ def _assess_core(
         # executive synthesis, clamped to a safe ceiling. Small investigations request little; a
         # ~150-commenter investigation requests enough to finish. Overrides decoding.max_new_tokens without
         # mutating the shared config dict (fresh copy on the instance).
-        from app.reasoning.completion import completion_budget
+        from app.reasoning.completion import (
+            COMPLETION_BASE_TOKENS,
+            COMPLETION_CEILING_TOKENS,
+            COMPLETION_FLOOR_TOKENS,
+            COMPLETION_PER_COMMENTER_TOKENS,
+            completion_budget,
+        )
         _commenter_count = len(((payload.get("video") or {}).get("commenters")) or [])
-        _completion_max_tokens = completion_budget(_commenter_count)
+        # Cost guardrail: the budget knobs are env-overridable (OMI_ANALYST_COMPLETION_*), so per-scan
+        # OpenRouter spend can be tuned WITHOUT a code deploy. The ceiling caps any single inference.
+        _completion_max_tokens = completion_budget(
+            _commenter_count,
+            base=int(getattr(settings, "analyst_completion_base_tokens", COMPLETION_BASE_TOKENS)),
+            per_commenter=int(getattr(settings, "analyst_completion_per_commenter_tokens",
+                                     COMPLETION_PER_COMMENTER_TOKENS)),
+            floor=int(getattr(settings, "analyst_completion_floor_tokens", COMPLETION_FLOOR_TOKENS)),
+            ceiling=int(getattr(settings, "analyst_completion_ceiling_tokens", COMPLETION_CEILING_TOKENS)),
+        )
         config.decoding = {**(config.decoding or {}), "max_new_tokens": _completion_max_tokens}
         spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,

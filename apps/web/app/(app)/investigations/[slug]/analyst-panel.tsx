@@ -650,6 +650,25 @@ function CompletionBanner({ c }: { c?: CompletionStatus }) {
   );
 }
 
+// Compact raw-metadata line for one account — the objective facts (followers, age, posts) the AI
+// scored from, shown beside its OMI score. Only renders the facts that were collected.
+function accountAgeDays(iso?: string): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
+}
+function AccountMetadata({ r }: { r: CommenterAssessment }) {
+  const bits: string[] = [];
+  if (typeof r.follower_count === 'number') bits.push(`${r.follower_count.toLocaleString()} followers`);
+  if (typeof r.following_count === 'number') bits.push(`${r.following_count.toLocaleString()} following`);
+  const age = accountAgeDays(r.account_created_at);
+  if (age !== null) bits.push(age < 365 ? `${age}d old` : `${(age / 365).toFixed(1)}y old`);
+  if (typeof r.post_count === 'number') bits.push(`${r.post_count.toLocaleString()} posts`);
+  if (bits.length === 0) return null;
+  return <p className="font-mono text-2xs text-fg-faint">{bits.join(' · ')}</p>;
+}
+
 function CommenterAssessments({
   items, completion,
 }: { items?: CommenterAssessment[]; completion?: CompletionStatus; slug: string }) {
@@ -681,15 +700,24 @@ function CommenterAssessments({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-fg break-all">{r.handle ?? r.ref}</span>
                 {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
-                {typeof r.suspicion_probability === 'number' && (
-                  <span className="font-mono text-2xs text-fg-mute">
-                    {Math.round(r.suspicion_probability * 100)}%
+                {typeof r.omi_score === 'number' && (
+                  <span className="flex items-baseline gap-1 ml-auto" title="This account's OMI score (0–100).">
+                    <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">OMI</span>
+                    <span className="stat-value text-base font-semibold text-fg tabular-nums">
+                      {Math.max(0, Math.min(100, Math.round(r.omi_score)))}
+                    </span>
+                    <span className="font-mono text-2xs text-fg-mute">/100</span>
                   </span>
                 )}
               </div>
-              {typeof r.suspicion_probability === 'number' && (
-                <ProbabilityBar value={r.suspicion_probability} tier={r.suspicion_tier} size="sm" />
+              {typeof r.omi_score === 'number' && (
+                <ProbabilityBar
+                  value={Math.max(0, Math.min(100, Math.round(r.omi_score))) / 100}
+                  tier={r.suspicion_tier}
+                  size="sm"
+                />
               )}
+              <AccountMetadata r={r} />
               {r.assessment && (
                 <p className="text-xs text-fg-dim leading-relaxed whitespace-pre-line">{r.assessment}</p>
               )}

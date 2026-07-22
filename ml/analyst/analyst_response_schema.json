@@ -82,7 +82,7 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 100,
-      "description": "THE OMI SCORE — the analyst's single composite authenticity-risk score for the primary subject, 0-100 (higher = stronger evidence of inauthentic/coordinated behavior). Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. The analyst's reasoned synthesis of the evidence (not an average of detector numbers); consistent with verdict + suspicion_tier + confidence. This is the ONLY investigation score."
+      "description": "THE OVERALL OMI SCORE — the analyst's composite authenticity-risk score for the WHOLE bundle/investigation, 0-100 (higher = stronger evidence of inauthentic/coordinated behavior). Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. It is the analyst's reasoned synthesis of the bundle (driven by the most-suspicious accounts and any coordination the analyst detected), consistent with verdict + suspicion_tier + confidence and with the per-account omi_scores. NOT an average of detector numbers. This is the OVERALL score; each account additionally carries its OWN omi_score in commenter_assessments."
     },
     "suspicion_tier": {
       "type": "string",

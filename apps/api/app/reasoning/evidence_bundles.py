@@ -95,13 +95,27 @@ class OmiScoreItem:
 
 
 @dataclass(frozen=True)
+class RawPostItem:
+    """One raw post/comment by an account — text + time only, the model reads the actual content."""
+    text: str = ""
+    created_at: str | None = None
+
+
+@dataclass(frozen=True)
 class AccountItem:
     author_ref: str
+    # --- RAW METADATA (AI-first): the objective collected facts the model reasons from. No score. ---
+    follower_count: int | None = None
+    following_count: int | None = None
+    account_created_at: str | None = None
+    post_count: int | None = None
+    recent_posts: tuple[RawPostItem, ...] = ()
+    # --- COMPUTED engine fields: retained for OTHER features (alerts/campaigns) but NOT rendered to the
+    #     model — the AI produces its own per-account score from the raw metadata above. ---
     overall_probability: float = 0.0
     coordination_adjusted_probability: float | None = None
     tier: str = "low"
     confidence: float = 0.0
-    # Ruling 3: suspected_intent removed — a heuristic interpretation is not evidence.
     signals: tuple[SignalItem, ...] = ()
     contributions: tuple[ContributionItem, ...] = ()
     weak_signals: tuple[str, ...] = ()
@@ -332,7 +346,11 @@ def build_account_bundle(ctx: InvestigationContext) -> AccountEvidenceBundle:
     for a in ctx.accounts.accounts:
         o = omi_by_ref.get(a.ref)
         accounts.append(AccountItem(
-            author_ref=a.ref, overall_probability=a.overall_probability,
+            author_ref=a.ref,
+            follower_count=a.follower_count, following_count=a.following_count,
+            account_created_at=a.account_created_at, post_count=a.post_count,
+            recent_posts=tuple(RawPostItem(text=p.text, created_at=p.created_at) for p in a.recent_posts),
+            overall_probability=a.overall_probability,
             coordination_adjusted_probability=a.coordination_adjusted_probability,
             tier=a.tier, confidence=a.confidence,
             signals=tuple(SignalItem(name=s.name, probability=s.probability, confidence=s.confidence,

@@ -87,12 +87,14 @@ def test_prompt_input_is_the_investigation_package_complete_evidence_is_model_fa
     assert "COMPREHENSIVE INVESTIGATION TASK" in pp.system
     assert "REASONING & GOVERNANCE CONSTITUTION" in pp.system and "KNOWLEDGE LIBRARY" in pp.system
     assert "OUTPUT CONTRACT" in pp.system
-    # user: the COMPLETE budgeted package evidence — the compact account table (with detector columns),
-    # near-duplicate comment groups, coordination clusters, the coverage manifest, and the alias legend
+    # user: the COMPLETE budgeted package evidence — AI-first RAW metadata (no computed scores): the
+    # per-account raw profile table, near-duplicate comment groups, co-occurrence groupings, the coverage
+    # manifest, and the alias legend
     u = pp.user
-    assert "signal_columns" in u and "contribution_columns" in u   # compact account table
+    assert "follower_count" in u and "recent_posts" in u          # raw per-account metadata table
+    assert "signal_columns" not in u and "overall_probability" not in u  # no computed detector scores
     assert "near_duplicate_groups" in u                            # comment dedup
-    assert "cluster_columns" in u                                  # coordination
+    assert "cluster_columns" in u                                  # co-occurrence groupings
     assert "evidence-coverage" in u.lower() or "coverage" in u.lower()
     assert '"A1"' in u or "A1" in u                                # aliasing
     # manifest records the package identity + coverage + the six sidecar keys
@@ -199,9 +201,9 @@ def test_production_path_sends_one_request_with_the_complete_package():
                                      settings=_settings())
     # EXACTLY ONE endpoint request for the whole investigation
     assert calls["n"] == 1, "the comprehensive investigation must be ONE endpoint request"
-    # that request carried the complete budgeted package evidence (compact account table etc.)
+    # that request carried the complete budgeted package evidence (raw account metadata table etc.)
     user_sent = captured["body"]["messages"][1]["content"]
-    assert "signal_columns" in user_sent and "near_duplicate_groups" in user_sent
+    assert "follower_count" in user_sent and "near_duplicate_groups" in user_sent
     # provenance records the comprehensive single-inference assembly
     assert out["prompt_build"]["mode"] == "stage:comprehensive_investigation"
     assert out["prompt_build"]["investigation_package_id"].startswith("ipkg:")

@@ -47,6 +47,7 @@ def _small_payload() -> dict:
             "commenters": [
                 {"external_id": "a", "handle": "@a", "overall_probability": 0.8, "tier": "high",
                  "confidence": 0.6, "from_cache": False, "matched_prior_neighbors": 2,
+                 "follower_count": 12, "following_count": 900, "account_created_at": "2025-12-20T00:00:00Z",
                  "recent_activity": [{"text": "great video!!", "created_at": "2026-01-01T00:00:00Z"}],
                  "signals": [{"name": "temporal", "probability": 0.8, "confidence": 0.7,
                               "evidence": ["low variance"]},
@@ -56,6 +57,7 @@ def _small_payload() -> dict:
                                     "evidence": "burst 3s"}]},
                 {"external_id": "b", "handle": "@b", "overall_probability": 0.55, "tier": "elevated",
                  "confidence": 0.4, "from_cache": True,
+                 "follower_count": 3400, "following_count": 210, "account_created_at": "2019-03-01T00:00:00Z",
                  "recent_activity": [{"text": "great video!!", "created_at": "2026-01-01T00:00:30Z"}],
                  "signals": [{"name": "temporal", "probability": 0.5}]},
             ]},
@@ -78,17 +80,23 @@ def test_aliasing_is_reversible_and_evidence_neutral():
     assert all(a.startswith("A") for a in man["accounts"])
 
 
-def test_compact_rows_preserve_every_detector_value_and_disagreement():
+def test_account_rows_carry_raw_metadata_not_computed_scores():
+    """AI-first: the account row is RAW metadata — profile counts, creation time, post count, and the
+    account's own raw posts. NO engine probability / tier / detector score reaches the model."""
     rv = render_investigation_evidence(_package(_small_payload()))
     acct = rv.sections["account_analysis"]
-    assert acct["columns"][0] == "account" and "signals" in acct["columns"]
-    # find A1's row; its two detectors disagree (0.8 vs 0.18) and BOTH survive with full provenance
+    assert acct["columns"] == ["account", "follower_count", "following_count", "account_created_at",
+                               "post_count", "recent_posts"]
+    # no computed columns anywhere in the account section
+    for banned in ("signals", "contributions", "overall_probability", "tier", "confidence", "omiscore"):
+        assert banned not in acct["columns"]
     row = next(r for r in acct["rows"] if r[0] == "A1")
-    signals = {s[0]: s for s in row[5]}      # column 5 = signals: [detector, prob, conf, suppl, evidence]
-    assert signals["temporal"][1] == 0.8 and signals["community"][1] == 0.18
-    assert signals["temporal"][4] == "low variance"
-    contrib = row[6][0]                        # [detector, impact, direction, logit_delta, decorr, ev]
-    assert contrib[3] == 0.9 and contrib[4] == 0.8 and contrib[5] == "burst 3s"
+    assert row[1] == 12 and row[2] == 900                    # follower / following (raw)
+    assert row[3] == "2025-12-20T00:00:00Z"                  # account_created_at (model derives age)
+    assert row[5][0] == ["great video!!", "2026-01-01T00:00:00Z"]   # the account's own raw post (text+time)
+    # the row carries NO numeric suspicion score
+    dump = json.dumps(row)
+    assert "0.8" not in dump and "high" not in dump
 
 
 def test_near_duplicate_grouping_is_lossless():
@@ -135,11 +143,16 @@ def _large_payload() -> dict:
                        "tier": "low", "signals": [{"name": "temporal", "probability": 0.05}]})
     commenters.append({"external_id": "bridge2", "handle": "@bridge2", "overall_probability": 0.06,
                        "tier": "low", "signals": [{"name": "temporal", "probability": 0.06}]})
-    # 38 high-probability, single-cluster accounts with long repetitive detector text (to burn budget)
+    # 38 high-probability, single-cluster accounts with long RAW post text (to burn the account budget)
     for i in range(38):
         commenters.append({
             "external_id": f"hi{i}", "handle": f"@high_probability_account_{i}",
-            "overall_probability": 0.97, "tier": "high",
+            "overall_probability": 0.97, "tier": "high", "follower_count": 4, "following_count": 5000,
+            "recent_activity": [
+                {"text": "a very long raw post that this account actually wrote " * 4,
+                 "created_at": "2026-01-01T00:00:00Z"},
+                {"text": "another long raw post from the same account to burn budget " * 4,
+                 "created_at": "2026-01-01T00:00:05Z"}],
             "signals": [{"name": "temporal", "probability": 0.97, "confidence": 0.9,
                          "evidence": ["a very long detector justification line " * 3]},
                         {"name": "fingerprint", "probability": 0.96, "confidence": 0.9,

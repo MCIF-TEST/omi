@@ -174,21 +174,34 @@ class ContributionEvidence(Section):
 
 
 @dataclass(frozen=True)
+class RawPostSample(Section):
+    """One raw post/comment by this account — the model reads the actual text + time (never a score)."""
+    text: str = ""
+    created_at: str | None = None
+
+
+@dataclass(frozen=True)
 class AccountEvidence(Section):
     ref: str = ""
     platform: str = "unknown"
+    # --- RAW METADATA (AI-first): the objective, collected facts the model reasons from. No score. ---
+    follower_count: int | None = None
+    following_count: int | None = None
+    account_created_at: str | None = None       # ISO timestamp — the model derives account age itself
+    post_count: int | None = None               # size of this account's activity history
+    recent_posts: tuple[RawPostSample, ...] = ()  # raw sample of this account's own posts (text + time)
+    activity_sample_count: int = 0
+    from_cache: bool = False
+    matched_prior_neighbors: int = 0
+    # --- COMPUTED engine fields (retained on the object for OTHER features — alerts/campaigns — but NO
+    #     longer rendered to the model; the AI produces its own scores from the raw metadata above). ---
     overall_probability: float = 0.0
     coordination_adjusted_probability: float | None = None
     tier: str = "low"
     confidence: float = 0.0
-    from_cache: bool = False
-    matched_prior_neighbors: int = 0
-    # Ruling 3: intent_label / suspected_intent / reasons removed — heuristic interpretations are not
-    # evidence. weak_signals / coordination_evidence / score_adjustments below are OBSERVATIONS (kept).
     weak_signals: tuple[str, ...] = ()
     coordination_evidence: tuple[str, ...] = ()
     score_adjustments: tuple[str, ...] = ()
-    activity_sample_count: int = 0
     signals: tuple[SignalEvidence, ...] = ()
     contributions: tuple[ContributionEvidence, ...] = ()
 
@@ -488,23 +501,47 @@ def _cluster_evidence(cl: dict, idmap: dict[str, str] | None = None) -> ClusterE
     )
 
 
+def _int_or_none(v) -> int | None:
+    try:
+        return int(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _account_evidence(c: dict, platform: str) -> AccountEvidence:
     ident = c.get("handle") or c.get("external_id") or ""
     signals = tuple(_signal(s) for s in (c.get("signals") or []) if isinstance(s, dict))
     contribs = tuple(_contribution(x) for x in (c.get("contributions") or []) if isinstance(x, dict))
     adj = c.get("coordination_adjusted_probability")
+    activity = c.get("recent_activity") or []
+    # RAW behavioral samples for THIS account (text + time only — the model reads the actual posts).
+    posts = tuple(
+        RawPostSample(present=True, text=str(a.get("text") or "").strip()[:400],
+                      created_at=(str(a.get("created_at")) if a.get("created_at") else None))
+        for a in activity[:_MAX_PER_ACCOUNT_SAMPLES]
+        if isinstance(a, dict) and str(a.get("text") or "").strip()
+    )
+    post_count = c.get("history_size")
+    if post_count is None:
+        post_count = len(activity)
     return AccountEvidence(
         present=True, ref=_pseudo(str(ident)), platform=str(c.get("platform") or platform),
+        # RAW metadata the AI reasons from — no computed score.
+        follower_count=_int_or_none(c.get("follower_count")),
+        following_count=_int_or_none(c.get("following_count")),
+        account_created_at=(str(c.get("account_created_at")) if c.get("account_created_at") else None),
+        post_count=_int_or_none(post_count),
+        recent_posts=posts,
+        activity_sample_count=len(activity),
+        from_cache=bool(c.get("from_cache", False)),
+        matched_prior_neighbors=int(_f(c.get("matched_prior_neighbors"))),
+        # Computed engine fields retained on the object for OTHER features; NOT rendered to the model.
         overall_probability=_f(c.get("overall_probability")),
         coordination_adjusted_probability=(None if adj is None else _f(adj)),
         tier=str(c.get("tier") or "low"), confidence=_f(c.get("confidence")),
-        from_cache=bool(c.get("from_cache", False)),
-        matched_prior_neighbors=int(_f(c.get("matched_prior_neighbors"))),
-        # Ruling 3: the engine's intent_label / suspected_intent / reasons are NOT projected as evidence.
         weak_signals=tuple(str(w) for w in (c.get("weak_signals") or [])[:8]),
         coordination_evidence=tuple(str(e) for e in (c.get("coordination_evidence") or [])[:8]),
         score_adjustments=tuple(str(a) for a in (c.get("score_adjustments") or [])[:8]),
-        activity_sample_count=len(c.get("recent_activity") or []),
         signals=signals, contributions=contribs,
     )
 

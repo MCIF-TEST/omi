@@ -549,6 +549,71 @@ Canonical-schema obedience · 22 Final QC.
 
 ## 12. Changelog
 
+- **2026-07-19 (Pure raw-metadata evidence bundle — the AI does ALL the analysis; preset regenerated)** —
+  Architecture decision (user): "pure raw metadata only" — the Evidence Compiler gathers RAW metadata and
+  the AI produces every judgment (per-account + overall scores AND coordination detection). Threaded the
+  raw profile facts (follower_count, following_count, account_created_at, post_count, the account's own raw
+  posts) that the scan already collects but the bundle previously dropped: `AccountEvidence` +
+  `AccountItem` gained raw fields (context/investigation.py, evidence_bundles.py) populated from the
+  payload. Rewrote the render layer (investigation_render/render.py) so the model-facing sections carry NO
+  computed scores: account_analysis = raw metadata table (alias, followers, following, created_at,
+  post_count, recent_posts) — removed overall_probability / coordination_adjusted_probability / tier /
+  confidence / detector signals / contributions / omiscore; comments dropped thread_probability;
+  coordination dropped coordination_score / discriminative / single_axis_capped (now raw co-occurrence
+  groupings the AI judges); narrative dropped spread_ratio / inauthenticity_score; summary dropped ALL
+  echoed engine numbers + drivers + digest (scope + structural cross-links + memory only). The engine
+  still COMPUTES these for other features (alerts/campaigns) — they're just no longer shown to the model.
+  Prompt rewritten to match: system_task + base prompt (THE INVESTIGATION PACKAGE / HOW TO READ) + the
+  constitution's EVIDENCE RULES / EVIDENCE SEMANTICS / CITATION RULES now describe raw metadata + AI-owned
+  coordination detection (no detector/omiscore/decorrelation language). Join carries the raw metadata to
+  the UI; each per-account card shows followers/age/posts beside the AI's OMI score. Preset recompiled →
+  **hash `map:21f9838608f137962ba62ac6` (50,555 chars)**; pkg hash → `pkg:9d081ede53d30c8bbc1d6a66`;
+  mirrors + drift guards regenerated. Test fallout fixed across render/stage/provenance/prompt-builder/
+  commenter/coverage suites. Full suite green (pre-existing Brier aside); frontend typecheck + 23 tests
+  green. Operator re-pastes this preset version.
+
+- **2026-07-19 (Per-account OMI score — dual-level scoring; preset regenerated)** —
+  Architecture decision (user): the OMI score is PER ACCOUNT, not just per investigation, and BOTH levels
+  are AI-produced. Increment 1 (this change) makes the dual-score contract real end-to-end; the "pure raw
+  metadata" evidence-bundle strip (removing detector tables/scores from what the AI sees) + the "Scan next
+  25 fresh score" continuation are the next increment. Changes:
+  • **Schema**: each `commenter_assessments` item now REQUIRES `omi_score` (int 0-100) + `suspicion_tier`
+    (enum), both AI-produced from THAT account's evidence; the wrapper `omi_score` is redefined as the
+    OVERALL bundle aggregate consistent with the per-account scores (analyst_response_schema.json updated).
+  • **Contract + worked example + base prompt + constitution + system_task**: instruct the two score
+    levels (per-account primary, overall aggregate), "score each account on its own evidence" (two accounts
+    in a cluster can differ), and "each scan judged independently → fresh scores per batch".
+  • **Join** (`_join_commenter_assessments`): carries the MODEL's per-account omi_score + tier as the
+    account's score; identity (handle/external_id) from metadata; the engine probability demoted to a
+    secondary `engine_probability` reference (never the score).
+  • **Coercion**: normalizes per-account items (clamp score, derive tier↔score, drop un-scoreable/ref-less
+    items) so a good-faith reply renders every account without floorng.
+  • **UI**: each per-account card shows its own OMI score (0-100) + tier bar; the overall OMI score stays
+    the bundle headline.
+  Preset recompiled → **new hash `map:ad2a439cba5dddb85773fdf9` (50,277 chars)**; pkg hash →
+  `pkg:a5f11ef93e7c4764cacfdc49`; md/JSON mirrors + drift guards regenerated. Full suite 1393 pass
+  (pre-existing Brier aside); frontend typecheck + 23 tests green. Operator re-pastes this preset version.
+
+- **2026-07-19 (Production cost guardrails + large-scan reliability — launch hardening)** —
+  With paid acquisition + scale imminent, hardened the launch-critical cost/reliability surface (per-user
+  cost was already bounded by credits charged up front + the 1/IP/day demo cap; this bounds PER-SCAN cost
+  and makes large scans reliable). Changes:
+  • **Per-scan output-token ceiling 100k → 32k** (default), and made the WHOLE completion budget
+    env-tunable — `OMI_ANALYST_COMPLETION_{BASE,PER_COMMENTER,FLOOR,CEILING}_TOKENS` — so OpenRouter spend
+    can be tuned WITHOUT a code deploy. 32k finishes a full 150-commenter scan (~27k) with headroom while
+    capping any single inference (a runaway can no longer request 100k output tokens). `completion_budget`
+    now reads the settings knobs in analyst.py.
+  • **GPT-5 reasoning-effort cost lever** — `OMI_OPENROUTER_REASONING_EFFORT` (minimal|low|medium|high);
+    when set, the request carries `reasoning:{effort}`. Reasoning tokens bill as output, so this is the
+    other big spend knob. Unset by default (preset decides); a bad value is ignored (never 400s).
+  • **Timeout 30s → 90s** (default, env-overridable) — the analyst runs in a background worker off the
+    request path and the UI polls ~4 min, so 30s was needlessly timing large full-coverage generations out
+    to the Floor. 90s accommodates a full GPT-5 generation.
+  • **Cost observability** already present: the `analyst.verify` log line reports per-investigation
+    `cost_usd` + in/out tokens + latency + served_model — monitor spend straight from logs.
+  render.yaml documents the three tunables. Tests: reasoning-effort on/off/bad-value; configurable-ceiling
+  + cost-safe default that still covers a full scan. Full suite green (pre-existing Brier aside).
+
 - **2026-07-19 (Clean consumer UX — no diagnostic buttons; server-key auto-call verified end-to-end)** —
   Product direction restated: millions of end users, zero technical clutter, NO re-run/probe buttons; the
   server's Render-configured `OPENROUTER_API_KEY` is called automatically — paste link → scan → results.

@@ -129,7 +129,7 @@ def test_assess_payload_sends_the_canonical_stage_prompt():
     # legacy raw lossy JSON dump; the account domain is a compact table with detector columns.
     assert "Investigation-level engine signal" in user_sent
     assert "Coordination (clusters" in user_sent
-    assert "signal_columns" in user_sent            # the compact account table
+    assert "follower_count" in user_sent            # the raw per-account metadata table
     assert '"grain": "comment_section"' not in user_sent
     # provenance records the canonical comprehensive stage assembly (mode + system sha + knowledge window)
     assert out["prompt_build"]["mode"] == "stage:comprehensive_investigation"

@@ -162,10 +162,11 @@ def test_v1_doctrine_blocks_reach_compiled_system():
     # single Lead Investigator identity — no council / specialist framing anywhere
     assert "Lead Investigator" in pp.system
     assert "specialist" not in pp.system.lower() and "council" not in pp.system.lower()
-    # the Evidence Semantics dictionary (measurement-vs-conclusion; index not probability; no double-count)
+    # the Evidence Semantics dictionary (AI-first: RAW metadata, no precomputed scores; the analyst does
+    # all the analysis and derives account age / weighs the raw counts itself)
     assert "EVIDENCE SEMANTICS" in pp.system
-    assert "coordination_adjusted_probability" in pp.system
-    assert "composite INDEX" in pp.system
+    assert "RAW METADATA" in pp.system
+    assert "follower_count" in pp.system and "account_created_at" in pp.system
     # the entity-only citation grain (A#/C#/N#)
     assert "CITATION RULES" in pp.system
     assert "accounts A#" in pp.system
@@ -196,7 +197,7 @@ def test_comprehensive_task_and_contract_reach_compiled_system():
 def test_evidence_content_reaches_compiled_user():
     pp = build_comprehensive_investigation_prompt_package(_package())
     # actual rendered evidence (compact tables + aliasing + coverage disclosure) reaches the USER msg
-    assert "contribution_columns" in pp.user
+    assert "follower_count" in pp.user   # raw per-account metadata
     assert "near_duplicate_groups" in pp.user
     assert "coverage" in pp.user.lower()
     assert "A1" in pp.user
