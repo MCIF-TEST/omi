@@ -35,7 +35,7 @@ from pathlib import Path
 
 from app.evidence.bundle import digest
 
-COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v4"
+COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v5"
 
 # The Lead-Investigator synthesis wrapper is DERIVED from the EXISTING analyst response schema — the one
 # wrapper source of truth — so the website response, the Governor validation, and the deterministic Floor
@@ -112,10 +112,12 @@ _COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
         "omi_score": {
             "type": "integer", "minimum": 0, "maximum": 100,
             "description": "THIS ACCOUNT'S OMI score — YOUR authenticity-risk score for this single account, "
-                           "an INTEGER 0-100 (higher = stronger evidence this account is inauthentic / "
-                           "coordinated). Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. "
-                           "YOU reason it from THIS account's raw evidence (profile, history, engagement) "
-                           "— it is NOT provided to you and is NOT an average of detector numbers.",
+                           "an INTEGER 0-100 (higher = stronger evidence this account is inauthentic). "
+                           "Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. Reason it "
+                           "PRIMARILY from THIS account's OWN evidence — how old the account is, its "
+                           "follower/following balance, how much and what it has posted, and the content "
+                           "itself. A link to another account may nudge the score but should not be what "
+                           "carries it. It is NOT provided to you and is NOT an average of any numbers.",
         },
         "suspicion_tier": {
             "type": "string", "enum": ["low", "moderate", "elevated", "high"],
@@ -124,10 +126,15 @@ _COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
         },
         "assessment": {
             "type": "string", "minLength": 1, "maxLength": 600,
-            "description": "CONCISE (1-3 sentences), information-dense probabilistic reasoning over THIS "
-                           "account's raw evidence that justifies its omi_score; behavior not persons. The "
-                           "detailed investigation narrative belongs in the executive assessment + domain "
-                           "sections, never repeated per account",
+            "description": "CONCISE (1-3 sentences) of PLAIN ENGLISH a non-technical reader understands, "
+                           "saying in everyday words WHY this account got its omi_score. LEAD WITH THIS "
+                           "ACCOUNT'S OWN facts (how old it is, its follower/following balance, how much "
+                           "and what it posts) and what they suggest — the everyday reasons a person would "
+                           "find it suspicious or reassuring. Mention another account only briefly and only "
+                           "when the link is strong (a short alias in parentheses is fine as a reference). "
+                           "Describe behavior, not persons; explain the concept, not the jargon; never a "
+                           "boilerplate sentence repeated across accounts. The detailed investigation "
+                           "narrative belongs in the executive assessment + domain sections",
         },
         "citations": {
             "type": "array", "items": {"type": "string"},
@@ -203,45 +210,63 @@ def comprehensive_investigation_canonical_schema() -> dict:
 
 # A complete, schema-valid worked EXAMPLE of the output JSON — teaches the exact shape (the OMI score,
 # the synthesis wrapper, the six domain sections, and one concise per-account assessment per alias).
-# Illustrative values only; the model fills every field from the ACTUAL evidence of its investigation.
+# The per-account assessments lead with EACH ACCOUNT'S OWN evidence in plain English (account age,
+# follower/following balance, posting history, content); a link to another account is mentioned only
+# briefly, and only when it is strong. Illustrative values only; the model fills every field from the
+# ACTUAL evidence of its investigation.
 _OUTPUT_EXAMPLE = (
-    "EXAMPLE of a valid output object (illustrative values — reason from the real evidence):\n"
-    '{"omi_score": 68, "suspicion_tier": "elevated", "verdict": "mixed", "confidence_band": "low", '
-    '"confidence_rationale": "The elevated read rests on a single discriminative axis (co-engagement '
-    'among A1,A2,A3 in C1) over thin history; no independent axis corroborates it.", '
-    '"headline": "A tight co-engagement cluster is present, but the read rests on one axis over thin '
-    'data.", "assessment": "Three accounts co-engaged on the same content within a narrow window (C1) '
-    "— the strongest single signal. Cadence is within human range and histories are thin, so no "
-    "independent axis corroborates it; an established footprint on A2 lowers the read. This is consistent with either "
-    "a small coordinated pod or a fan community reacting to the same event, and the evidence does not yet "
-    'distinguish them. Findings are probabilistic; the human analyst sets the verdict.", '
-    '"evidence_for": [{"signal": "co_engagement", "claim": "A1, A2 and A3 co-engaged on the same content '
-    'within a tight window.", "evidence_refs": ["C1"], "direction": "raises", "impact": 0.55}], '
-    '"evidence_against": [{"signal": "community", "claim": "A2 shows an established interaction footprint '
-    'more consistent with an organic account.", "evidence_refs": ["A2"], "direction": "lowers", '
-    '"impact": 0.18}], "uncertainty": ["Thin per-account history — too little raw activity to read '
-    'cadence or content reliably.", "Single discriminative axis; no independent corroboration."], '
-    '"what_would_change_this": ["A shared behavioral fingerprint or coordinated tagging across the same '
-    'accounts would raise the read.", "Ground-truth that the cluster is a known fan community would lower '
-    'it."], "coordination_label": "mixed", "legitimate_hypothesis": "The cluster is equally consistent '
-    'with a fan community reacting to the same post; the evidence does not distinguish hostile from benign '
-    'coordination.", "limits_statement": "This is a probabilistic assessment; the human analyst sets the '
-    'final verdict.", "comment_reasoning": {"assessment": "Two near-duplicate praise comments appear but '
-    'the group is small and templated praise is a benign explanation.", "citations": ["C1"]}, '
-    '"commenter_history_reasoning": {"assessment": "Histories are thin; A2 alone carries enough footprint '
-    'to weigh.", "citations": ["A2"]}, "account_reasoning": {"assessment": "Detectors mostly abstained on '
-    'A1/A3; A2 community signal lowers its read.", "citations": ["A1", "A2", "A3"]}, '
-    '"narrative_reasoning": {"assessment": "No distinct narrative cluster was collected.", "citations": '
-    '[]}, "coordination_reasoning": {"assessment": "C1 is a single discriminative co-engagement cluster; '
-    'without a second independent axis the coordinated read is capped.", "citations": ["C1"]}, '
-    '"campaign_reasoning": {"assessment": "C1 is a campaign candidate, not an established campaign — no '
-    'ground-truth anchor is present.", "citations": ["C1"]}, "commenter_assessments": [{"ref": "A1", '
-    '"omi_score": 58, "suspicion_tier": "elevated", "assessment": "Regular cadence and C1 co-engagement; '
-    'thin history caps confidence, but the co-engagement raises the read.", "citations": ["C1"]}, '
-    '{"ref": "A2", "omi_score": 30, "suspicion_tier": "moderate", "assessment": "Established multi-year '
-    'footprint makes an organic read at least as likely despite C1 membership.", "citations": ["A2"]}, '
-    '{"ref": "A3", "omi_score": 47, "suspicion_tier": "moderate", "assessment": "Minimal independent '
-    'signal beyond C1 co-engagement; scored on its own thin evidence.", "citations": ["C1"]}]}'
+    "EXAMPLE of a valid output object (illustrative values — reason from the real evidence). Notice that "
+    "each account is explained by ITS OWN evidence in plain words, and links to other accounts are kept "
+    "brief and secondary:\n"
+    '{"omi_score": 61, "suspicion_tier": "elevated", "verdict": "mixed", "confidence_band": "moderate", '
+    '"confidence_rationale": "One account (A2) shows a strong amplifier profile on its own metadata — '
+    "brand-new, following thousands while almost no one follows it back, with no real posting history — "
+    'and that carries the read. The other accounts are weaker and are judged on their own evidence.", '
+    '"headline": "One brand-new account looks like a promotional amplifier; the other accounts read '
+    'closer to ordinary users.", "assessment": "The clearest finding is A2: an account created only days '
+    "before it posted, following several thousand accounts while almost no one follows it back, and with "
+    "no posting history beyond two near-identical promotional replies — a profile far more consistent "
+    "with an amplifier than an ordinary user. A1 looks like a genuine person: a years-old account with a "
+    "normal balance of followers and a varied posting history. A3 is a weaker middle case — fairly new "
+    "with a thin history and one promotional-sounding reply — judged on its own limited evidence; its "
+    "wording loosely resembles A2's, which nudges the read up slightly but does not carry it. Findings "
+    'are probabilistic; the human analyst sets the verdict.", '
+    '"evidence_for": [{"signal": "amplifier_profile", "claim": "A2 is brand-new, follows thousands while '
+    'almost no one follows it back, and has no real posting history.", "evidence_refs": ["A2"], '
+    '"direction": "raises", "impact": 0.6}], '
+    '"evidence_against": [{"signal": "established_account", "claim": "A1 is a multi-year account with a '
+    'balanced following and a varied, human posting history.", "evidence_refs": ["A1"], "direction": '
+    '"lowers", "impact": 0.3}], "uncertainty": ["A3 has too little posting history to read its cadence '
+    'or content reliably.", "Whether A2 and A3 are actually linked, or just independently posted similar '
+    'promotional text, is not resolved by the evidence."], '
+    '"what_would_change_this": ["A longer, varied posting history on A2 would lower its read.", "A shared '
+    'posting fingerprint tying A2 and A3 together would raise the read to a coordinated one."], '
+    '"coordination_label": "mixed", "legitimate_hypothesis": "A2 and A3 may simply be two low-effort '
+    'promotional accounts posting similar text independently, rather than a coordinated pair.", '
+    '"limits_statement": "This is a probabilistic assessment; the human analyst sets the final '
+    'verdict.", "comment_reasoning": {"assessment": "Two near-identical promotional replies appear (from '
+    "A2 and A3), but a two-member group is small and could be independent low-effort promotion.\", "
+    '"citations": ["A2", "A3"]}, "commenter_history_reasoning": {"assessment": "A1 has a deep, varied '
+    "history; A2 and A3 have almost none, which lowers confidence in reading them either way.\", "
+    '"citations": ["A1", "A2", "A3"]}, "account_reasoning": {"assessment": "A2\'s own profile is the '
+    "strongest signal — new account, thousands followed, no followers, no history. A1's profile reads "
+    "organic. A3 is thin and judged on its own limited evidence.\", \"citations\": [\"A1\", \"A2\", "
+    '"A3"]}, "narrative_reasoning": {"assessment": "No distinct narrative cluster was collected.", '
+    '"citations": []}, "coordination_reasoning": {"assessment": "The only cross-account link is two '
+    "similar promotional replies (A2, A3) — a single weak axis over thin history, so any coordinated "
+    'read is capped; it informs the overall score only lightly.", "citations": ["A2", "A3"]}, '
+    '"campaign_reasoning": {"assessment": "No established campaign — at most two low-effort promotional '
+    'accounts, with no ground-truth anchor.", "citations": ["A2", "A3"]}, "commenter_assessments": '
+    '[{"ref": "A1", "omi_score": 12, "suspicion_tier": "low", "assessment": "A years-old account with a '
+    "normal balance of followers to following and a varied, everyday posting history — it reads like a "
+    'genuine person.", "citations": ["A1"]}, {"ref": "A2", "omi_score": 82, "suspicion_tier": "high", '
+    '"assessment": "A brand-new account that follows several thousand others while almost no one follows '
+    "it back, with no real posting history beyond a couple of near-identical promotional replies — a "
+    'profile much more consistent with a promotional amplifier than an ordinary user.", "citations": '
+    '["A2"]}, {"ref": "A3", "omi_score": 55, "suspicion_tier": "elevated", "assessment": "A fairly new '
+    "account with very little posting history and one promotional-sounding reply, so it is hard to read "
+    "confidently; its wording loosely echoes another promotional account (A2), which nudges the score up "
+    'a little, but it is judged mainly on its own thin evidence.", "citations": ["A3"]}]}'
 )
 
 
@@ -273,13 +298,16 @@ def _render_output_contract(schema: dict) -> str:
             f"account's raw evidence (follower/following counts, account age, post history); its "
             f"'suspicion_tier' that MUST agree with the score (0-24 low, 25-49 moderate, 50-74 elevated, "
             f"75-100 high); a CONCISE 'assessment' — 1-3 sentences of PLAIN ENGLISH that a non-technical "
-            f"reader understands, saying in everyday words WHY this account got this score (explain the "
-            f"concept, not the jargon: 'writes in a strikingly similar style to another account' not "
-            f"'style_match axis'; a short alias in parentheses is fine as a reference) — grounded in THAT "
-            f"account's specific evidence, never boilerplate; and a 'citations' array. "
-            f"Score each account on ITS OWN evidence; two accounts in the same cluster can differ. Accounts "
-            f"disclosed as omitted by the coverage manifest carry no rows and need no item. Omit the array "
-            f"entirely ONLY when there are no account rows at all.\n"
+            f"reader understands, saying in everyday words WHY this account got this score. LEAD WITH THIS "
+            f"ACCOUNT'S OWN evidence — how old the account is, its follower/following balance, how much and "
+            f"what it has posted — and what those facts suggest. Mention another account only briefly, and "
+            f"only when the link is strong; the score must rest on the account's own evidence, not on its "
+            f"relationship to other accounts. Explain the concept, not the jargon ('writes in a strikingly "
+            f"similar style to another account', not 'style_match axis'; a short alias in parentheses is "
+            f"fine as a reference) — grounded in THAT account's specific evidence, never boilerplate; and a "
+            f"'citations' array. Score each account on ITS OWN evidence; two accounts in the same cluster "
+            f"can differ. Accounts disclosed as omitted by the coverage manifest carry no rows and need no "
+            f"item. Omit the array entirely ONLY when there are no account rows at all.\n"
         )
     return (
         f"Emit exactly ONE JSON object valid against the Omi canonical comprehensive assessment schema "
@@ -331,24 +359,31 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "  2. commenter_history_reasoning — weigh each commenter's track record from the RAW facts: how many "
     "posts they have (thin history is low confidence, not guilt) and memory recurrence (background, "
     "never shared control).\n"
-    "  3. account_reasoning — per-account authenticity from each account's OWN evidence (profile, post "
-    "history, engagement). This is where you SCORE EACH ACCOUNT: every account gets its own omi_score "
-    "(0-100) + suspicion_tier in commenter_assessments, reasoned from THAT account's evidence — two "
-    "accounts in the same cluster can score differently. Weigh the whole picture and where signals "
-    "disagree say so — never average it away. Supplemental signals (e.g. ai_writing) carry zero suspicion "
-    "weight. account_reasoning is your cross-account summary of this domain; the numeric per-account "
-    "scores live in commenter_assessments.\n"
+    "  3. account_reasoning — per-account authenticity from each account's OWN evidence. This is where you "
+    "SCORE EACH ACCOUNT, and the score rests PRIMARILY on that account's own facts: how old the account is "
+    "(compare account_created_at to the post times), its follower/following balance (a brand-new account "
+    "following thousands with almost no followers back is a classic amplifier profile; a small new account "
+    "may simply be new), how much it has posted (thin history is LOW CONFIDENCE, not guilt), and the "
+    "content and cadence of its actual posts. Every account gets its own omi_score (0-100) + suspicion_tier "
+    "in commenter_assessments, reasoned from THAT account's evidence — two accounts that posted together "
+    "can score very differently because each is judged on its own profile. A link to another account may "
+    "nudge a score but must not be what carries it. Weigh the whole picture and where signals disagree say "
+    "so — never average it away. Supplemental signals (e.g. ai_writing) carry zero suspicion weight. "
+    "account_reasoning is your cross-account summary of this domain; the numeric per-account scores live "
+    "in commenter_assessments.\n"
     "  4. narrative_reasoning — read the message-cluster structure from the RAW counts: how many messages "
     "(member_count) and how many distinct authors carried each. More distinct authors is broader "
     "participation, NOT itself proof of coordination or a synthetic narrative — YOU judge it; there is no "
     "engine narrative score to lean on.\n"
     "  5. coordination_reasoning — DETECT coordination yourself from the raw co-occurrence groupings: each "
     "group lists HOW the accounts co-occur (method: co_engagement / co_tag / …), WHICH accounts, and the "
-    "raw factual basis; relationships/bridge accounts tie groups together (an account may bridge groups "
-    "even when its own behavior looks ordinary — a structural observation, not a conclusion). A strong "
+    "raw factual basis. This domain is mainly how you judge the OVERALL bundle, NOT the primary driver of "
+    "any single account's score — an account is scored on its own evidence first, and a coordination link "
+    "is a secondary factor that only nudges a per-account score, and only when it is strong. A strong "
     "coordinated read wants a discriminative pattern (shared fingerprint, co_engagement, co_tag) or ≥2 "
-    "independent axes; a single axis over thin evidence is weak — cap the read. Weigh the benign "
-    "explanation (fan community, same event) equally.\n"
+    "independent axes; a single axis over thin evidence is weak — cap the read. An account may tie groups "
+    "together even when its own behavior looks ordinary (a structural observation, not a conclusion). Weigh "
+    "the benign explanation (fan community, same event) equally, and describe any link in plain English.\n"
     "  6. campaign_reasoning — which co-occurrence groups are campaign CANDIDATES. A candidate is not an "
     "established campaign; 'confirmed' would need a human or platform anchor the evidence does not "
     "contain.\n"

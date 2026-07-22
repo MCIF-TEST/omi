@@ -1,6 +1,6 @@
 # OMI Specialist Intelligence Framework — Handbook
 
-> GENERATED from `app.reasoning.prompts.framework` (framework v1, `sf:253d00d97c661beae2841cbac02a9b8f`, constitution v5). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`.
+> GENERATED from `app.reasoning.prompts.framework` (framework v1, `sf:39caeaf323f6b28538bce78bd16666a2`, constitution v6). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`.
 
 Every AI specialist inherits this framework. Authored content lives in ONE place (the specialist's `SpecialistSpec` — its thirteen prompt sections); the framework derives identity, reasoning workflow, governance, technical, quality, validation, and documentation dimensions from it. GitHub is the single source of truth; Hugging Face receives the synchronized catalog through the existing publish workflow.
 
@@ -30,7 +30,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Interpret a subject's behavioral signals into cited, probabilistic findings — what the behavior is consistent with, weighed both ways — without ever asserting a verdict.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:2f83ff5b1a684f5b45f64a69fbdc3903`
+- **Prompt:** lib-v1 `ph:e1a8d3cb870bcac6fbcb01f7f761dd8d`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('behavior_analyst') (13 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -43,7 +43,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Audit the council's confidence. Ensure stated confidence matches evidence strength and quantity — flagging both over-confidence and under-confidence.
 - **Authority:** challenge, calibrate, and advise; may lower or bound a read, never raise the number
 - **Output:** One JSON object: {"critiques":[{"target":"<claim/overall>","challenge":"<over- or under-confidence and why>","recommended_band":"insufficient|low|moderate|high"
-- **Prompt:** lib-v1 `ph:75c0345fd079108972a0c801e38f6f57`
+- **Prompt:** lib-v1 `ph:c3d5dc635e51c21be004701dc7afbde3`
 - **Schema:** council critique artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('calibration_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -56,7 +56,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Assess a materialized campaign (a persisted cluster of accounts acting together) and test the legitimate-coordination hypothesis before any hostile conclusion.
 - **Authority:** challenge, calibrate, and advise; may lower or bound a read, never raise the number
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:73f43d6ac4d3dce61c2eb561f7ff60ea`
+- **Prompt:** lib-v1 `ph:14e997b07bf1854280fcbc9d5c1a4fc9`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('campaign_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -69,7 +69,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Determine whether accounts are acting together, and whether that coordination is inauthentic — the platform's core question — strictly through the corroboration gate.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:4bc5026fea7a322c1eb1971d0571fc5c`
+- **Prompt:** lib-v1 `ph:b13869aa60517a06a8e56f777a10c7b2`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('coordination_analyst') (8 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -82,7 +82,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Be the council's devil's advocate. Actively build the strongest benign case for the subject and challenge every incriminating finding that the evidence does not uniquely support.
 - **Authority:** challenge, calibrate, and advise; may lower or bound a read, never raise the number
 - **Output:** One JSON object: {"critiques":[{"target":"<finding/claim challenged>","challenge":"<why the evidence does not uniquely support it, or the benign alternative>","
-- **Prompt:** lib-v1 `ph:5eb6586549035fc8bdad4a04fe2400f2`
+- **Prompt:** lib-v1 `ph:ce19e3d369dd982889df21c123d68621`
 - **Schema:** council critique artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('counter_evidence_analyst') (8 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -121,7 +121,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Adjudicate. Synthesize every specialist finding and critique into ONE cited, probabilistic, schema-valid ruling a human analyst can act on, cite, or overturn — echoing the engine number and honoring the corroboration gate.
 - **Authority:** adjudicate (Judge) / validate (Governor) / guarantee (Floor); the only tier that rules
 - **Output:** One schema-valid Omi Analyst assessment object (subject, verdict, suspicion_tier, suspicion_probability [echoed], confidence_band, confidence_rationale, headlin
-- **Prompt:** lib-v1 `ph:f12efece84b8911cef23c3a41b6d0437`
+- **Prompt:** lib-v1 `ph:4d8f147e73610e4e90feb922ff000cc8`
 - **Schema:** schema/analyst_response_schema.json · **Token budget:** 2048
 - **Retrieval:** KnowledgeIndex.for_specialist('judge') (7 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -134,7 +134,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Interpret linguistic and stylometric evidence — shared phrasing, templated text, copypasta, style matches — while respecting that style similarity is weak on its own.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:f55ac17f0a9d2ca2f679bbee6ce1e103`
+- **Prompt:** lib-v1 `ph:dcee80fd12f9a7e2db69c4b59d87d37e`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('language_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -147,7 +147,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Retrieve and present relevant institutional memory as labeled background context — orienting the council without ever becoming proof.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"priors":[{"type":"<archetype/prior>","label":"<short>","influence":"supports|contradicts|neutral","stability":0.0,"note":"institutional memor
-- **Prompt:** lib-v1 `ph:240abb3ee1ff77eeabfb9958e6f6fa4b`
+- **Prompt:** lib-v1 `ph:c38dbaa60ca4f70fc653c0baf58b8bdc`
 - **Schema:** council memory artifact contract · **Token budget:** 512
 - **Retrieval:** KnowledgeIndex.for_specialist('memory_analyst') (2 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -160,7 +160,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Interpret account-metadata signals — creation timing, age cohorts, handle patterns, profile completeness, verification — as weak, corroborating context.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:8b369ead67f11db608ba40c30aa1388c`
+- **Prompt:** lib-v1 `ph:bfd1172ad7138c6827e6f7ce4b9bc0fb`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('metadata_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -173,7 +173,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Assess whether a message/narrative is spreading organically or being coordinated and amplified — reasoning over the narrative (message) grain, not the account grain.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:79505d77e970081ddad3ae9d6d71a4fa`
+- **Prompt:** lib-v1 `ph:71d2ad8bf42a0c897c07a6b284ba29d7`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('narrative_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -186,7 +186,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Analyze the interaction graph between accounts — co-engagement, co-tagging, reply pods, fingerprint clusters — to reveal structure that single-account views miss.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:8ab9d00e9b2c50a2d5981f77b753c991`
+- **Prompt:** lib-v1 `ph:a41004e4283cd71285df35749740d62e`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('network_analyst') (6 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -199,7 +199,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Assess the decision risk around the read — the cost of a false positive vs a false negative, and the harm surface — WITHOUT inflating suspicion to justify caution.
 - **Authority:** challenge, calibrate, and advise; may lower or bound a read, never raise the number
 - **Output:** One JSON object: {"critiques":[{"target":"<the read/decision>","challenge":"<risk consideration>","direction":"neutral|lowers","evidence_refs":["ev:..."]}],"unc
-- **Prompt:** lib-v1 `ph:5853542c27c3ef5b25d871c766b491ce`
+- **Prompt:** lib-v1 `ph:682240c74b144071b92b9708e77ed1c6`
 - **Schema:** council critique artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('risk_analyst') (4 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
@@ -212,7 +212,7 @@ A worked example lives in `framework.example_investigation_planner()` (inert). C
 - **Mission:** Interpret timing evidence — posting cadence, burst synchrony, scheduling regularity — and separate botnet-like synchronization from benign automation and organic bursts.
 - **Authority:** interpret evidence into cited artifacts; no verdicts, no score movement
 - **Output:** One JSON object: {"findings":[{"signal":"<name>","claim":"<probabilistic sentence>","direction":"raises|lowers|neutral","evidence_refs":["ev:..."]}],"uncertaint
-- **Prompt:** lib-v1 `ph:274dac75f4a8b57e5db2f6758551d66f`
+- **Prompt:** lib-v1 `ph:5e488d645f4de80d86e5bd58e7959fc1`
 - **Schema:** council finding artifact contract · **Token budget:** 1024
 - **Retrieval:** KnowledgeIndex.for_specialist('temporal_analyst') (5 entries) + memory retrieve() PriorContext; both constant-time, off the hot path
 - **Escalation:** surface ambiguity to the Judge as explicit uncertainty — never force a call; a Governor REJECT escalates to the deterministic Floor
