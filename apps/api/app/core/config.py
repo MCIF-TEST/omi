@@ -199,10 +199,11 @@ class Settings(BaseSettings):
     analyst_model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"
     analyst_endpoint_url: str | None = None
     # The analyst runs in a background worker (off the request hot path) and the UI polls for ~4 min, so
-    # this bounds ONE model generation, not a user request. 90s accommodates a full-investigation GPT-5
-    # generation (up to the completion budget + reasoning tokens); a short value would time large scans out
-    # to the Floor. Env-overridable (OMI_ANALYST_TIMEOUT_SECONDS).
-    analyst_timeout_seconds: float = 90.0
+    # this bounds ONE model generation, not a user request. 150s accommodates a full-investigation GPT-5
+    # generation (up to the completion budget + reasoning tokens) yet still fails a genuinely STALLED
+    # OpenRouter call within the UI's ~4-min poll window, instead of hanging indefinitely (which shows up
+    # as a request that STARTs but never returns OK/FAIL). Env-overridable (OMI_ANALYST_TIMEOUT_SECONDS).
+    analyst_timeout_seconds: float = 150.0
     analyst_max_retries: int = 2
     # Serving API the deployed endpoint speaks. "generate" (default) posts the raw
     # TGI text-generation body (existing behavior, byte-identical). "messages" posts
@@ -258,9 +259,9 @@ class Settings(BaseSettings):
     # per-scan cap: at the default scan size (≤150 commenters) the formula needs ~27k, so 32k finishes a
     # full scan with headroom while capping any single inference. Raise the ceiling only if you also raise
     # OMI_SCAN_MAX_COMMENTERS. All four are env-overridable: OMI_ANALYST_COMPLETION_*.
-    analyst_completion_base_tokens: int = 3000
-    analyst_completion_per_commenter_tokens: int = 160
-    analyst_completion_floor_tokens: int = 4000
+    analyst_completion_base_tokens: int = 4500
+    analyst_completion_per_commenter_tokens: int = 180
+    analyst_completion_floor_tokens: int = 5000
     analyst_completion_ceiling_tokens: int = 32000
     # GPT-5-class reasoning effort. Reasoning tokens are billed as output and are the other big cost/latency
     # lever. Leave unset to let the OpenRouter preset decide; set "minimal" | "low" | "medium" | "high"

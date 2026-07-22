@@ -198,9 +198,16 @@ def coerce_comprehensive_model_output(
         out[arr_key] = clean
 
     # Per-account items: each needs a ref, an omi_score (0-100), a tier, and an assessment. Coerce the
-    # shape so a good-faith reply renders every account: clamp the score; derive tier↔score when one is
-    # missing; drop an item only when it has neither a usable ref nor any way to score (never fabricate a
-    # per-account judgment out of nothing). commenter_assessments is optional, so this never floors.
+    # shape so a good-faith reply renders EVERY account it named: clamp the score; derive tier↔score when
+    # one is missing; and when the model gave a per-account item with a ref + assessment but no usable
+    # number, KEEP it and backfill the score from the overall read (a per-account judgment the model
+    # actually wrote should never be silently dropped — that showed up as "0 of N assessed"). Only an item
+    # with no usable ref is discarded. commenter_assessments is optional, so this never floors.
+    _overall = out.get("omi_score")
+    try:
+        _overall = max(0, min(100, int(round(float(_overall))))) if _overall is not None else None
+    except (TypeError, ValueError):
+        _overall = None
     ca = out.get("commenter_assessments")
     if isinstance(ca, list):
         clean_ca: list[dict] = []
@@ -218,8 +225,8 @@ def coerce_comprehensive_model_output(
             tier = item.get("suspicion_tier")
             if score is None and tier in _TIER_MIDPOINT:
                 score = _TIER_MIDPOINT[tier]
-            if score is None:
-                continue                                          # no ref-less/scoreless per-account judgment
+            if score is None:                                     # keep the account; inherit the overall read
+                score = _overall if _overall is not None else 40
             if tier not in ("low", "moderate", "elevated", "high"):
                 tier = _tier_for_score(score)
             assessment = item.get("assessment")

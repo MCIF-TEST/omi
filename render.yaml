@@ -119,9 +119,10 @@ services:
       # 'low' roughly halves reasoning spend vs 'high' for this task.
       - key: OMI_OPENROUTER_REASONING_EFFORT
         sync: false
-      # One model generation timeout (background worker, not a user request).
+      # One model generation timeout (background worker, not a user request). 150s fits a slow GPT-5
+      # generation yet fails a genuinely stalled call instead of hanging.
       - key: OMI_ANALYST_TIMEOUT_SECONDS
-        value: '90'
+        value: '150'
       #
       # --- Legacy Hugging Face path (DEPRECATED — no longer the default) ---
       # Still supported as a fallback provider: to use it instead of
