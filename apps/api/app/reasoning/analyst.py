@@ -299,6 +299,19 @@ def _commenters_by_author_ref(payload: dict) -> dict[str, dict]:
     return out
 
 
+def _served_model_matches(served: str | None, expected: str | None) -> bool | None:
+    """Whether the model OpenRouter ACTUALLY served matches the one we expect (GPT-5 Mini). Returns None
+    when the check is not applicable — no expectation configured, or no served model reported (e.g. the
+    Floor path) — so "unknown" is never conflated with "mismatch". Matching normalizes case/whitespace and
+    is prefix-tolerant in BOTH directions, so a dated snapshot (``openai/gpt-5-mini-2025-08-07``) verifies
+    against the base slug ``openai/gpt-5-mini`` and vice-versa."""
+    exp = (expected or "").strip().lower()
+    got = (served or "").strip().lower()
+    if not exp or not got:
+        return None
+    return got == exp or got.startswith(exp) or exp.startswith(got)
+
+
 def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
     """Join each model-authored per-account assessment (keyed by alias) with the account's real identity.
     AI-first: the per-account OMI score + tier are the MODEL'S (it reasons them from that account's raw
@@ -828,6 +841,16 @@ def _assess_core(
             # the provider reports one — distinct from the configured/requested model above. Provenance
             # only; captured by the transport, never fabricated.
             "served_model": capture.get("served_model"),
+            # Verification (not routing): the model we EXPECT (GPT-5 Mini) and whether the model OpenRouter
+            # reported serving matches it. True proves this investigation's assessments + OMI scores came
+            # from GPT-5 Mini; False means the gateway routed to a different model (surfaced + logged so a
+            # silent swap can't hide); None when not applicable (no expectation set, or the Floor path).
+            "served_model_expected": (getattr(settings, "openrouter_expected_model", None) or None
+                                      if _provider == "openrouter" else None),
+            "served_model_verified": (
+                _served_model_matches(capture.get("served_model"),
+                                      getattr(settings, "openrouter_expected_model", None))
+                if _provider == "openrouter" else None),
             "endpoint_request_id": inference.endpoint_request_id,
             "endpoint_attempts": inference.attempts,
             "endpoint_latency_ms": round(inference.latency_ms, 2),
@@ -857,15 +880,26 @@ def _assess_core(
                     m["est_completion_tokens"])
         # Concise production-verification summary (one line; no secrets). Answers "did this
         # investigation come from the model, via which gateway/model, at what latency/cost?".
-        logger.info("analyst.verify: ref=%s transport=%s served_model=%s preset=%s request_id=%s "
-                    "json_received=%s validation_passed=%s model_backed=%s fallback=%s "
-                    "latency_ms=%.0f in_tok=%s out_tok=%s cost_usd=%s",
+        logger.info("analyst.verify: ref=%s transport=%s served_model=%s expected=%s served_verified=%s "
+                    "preset=%s request_id=%s json_received=%s validation_passed=%s model_backed=%s "
+                    "fallback=%s latency_ms=%.0f in_tok=%s out_tok=%s cost_usd=%s",
                     ref, _provider, investigation_trace["served_model"],
+                    investigation_trace["served_model_expected"],
+                    investigation_trace["served_model_verified"],
                     investigation_trace["openrouter_preset"], investigation_trace["endpoint_request_id"],
                     investigation_trace["json_received"], investigation_trace["validation_passed"],
                     model_backed, investigation_trace["fallback_reason"] or "-",
                     investigation_trace["endpoint_latency_ms"], investigation_trace["input_tokens"],
                     investigation_trace["output_tokens"], investigation_trace["endpoint_cost_usd"])
+        # Loud, explicit alert when OpenRouter served a DIFFERENT model than expected: the assessments +
+        # OMI scores were produced, but NOT by GPT-5 Mini. Never blocks the result (the model still
+        # reasoned) — it makes a silent gateway/preset model swap impossible to miss in production logs.
+        if investigation_trace["served_model_verified"] is False:
+            logger.warning("analyst.verify: SERVED-MODEL MISMATCH ref=%s expected=%s served=%s preset=%s "
+                           "— assessments/OMI scores did NOT come from the expected model; check the "
+                           "OpenRouter preset's model selection.",
+                           ref, investigation_trace["served_model_expected"],
+                           investigation_trace["served_model"], investigation_trace["openrouter_preset"])
         return governed
     except Exception:  # noqa: BLE001 — never let the analyst break a caller
         logger.exception("omi_analyst assessment failed")

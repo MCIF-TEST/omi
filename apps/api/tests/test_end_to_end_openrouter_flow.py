@@ -39,7 +39,8 @@ def _prod_settings():
     """Production cutover config — provider=openrouter, the omi-master-v1 preset, no HF endpoint."""
     return SimpleNamespace(
         analyst_enabled=True, analyst_provider="openrouter", openrouter_preset=_PRESET,
-        openrouter_model=None, openrouter_base_url="https://openrouter.ai/api/v1/chat/completions",
+        openrouter_model=None, openrouter_expected_model=_GPT5_MINI,
+        openrouter_base_url="https://openrouter.ai/api/v1/chat/completions",
         openrouter_structured_output=True, openrouter_referer=None, openrouter_title=None,
         analyst_endpoint_url=None, analyst_hf_repo="Andrewexiga/omi-analyst-v1", analyst_hf_revision=None,
         analyst_prompt_version=None, analyst_model_id="mistralai/Mistral-7B-Instruct-v0.3",
@@ -152,6 +153,9 @@ def test_platform_flow_reaches_openrouter_and_returns_ui_shape(platform, monkeyp
     tr = out["investigation_trace"]
     assert tr["model_backed"] is True and tr["provider"] == "openrouter"
     assert tr["served_model"] == _GPT5_MINI
+    # the served model is VERIFIED to be the expected GPT-5 Mini — proof the OMI scores came from it
+    assert tr["served_model_expected"] == _GPT5_MINI
+    assert tr["served_model_verified"] is True
     assert out["headline"].startswith("E2E-HEADLINE")
 
     # 4) the exact fields the React UI consumes are present, with the platform preserved
@@ -166,6 +170,45 @@ def test_platform_flow_reaches_openrouter_and_returns_ui_shape(platform, monkeyp
     assert handles == {"@a", "@b"}
     # secrets never leak into the served assessment
     assert _API_KEY not in json.dumps(out)
+
+
+# =========================================================================== #
+# Served-model verification: a gateway model SWAP is caught, never silent
+# =========================================================================== #
+def test_served_model_mismatch_is_flagged_not_silent(monkeypatch):
+    """If OpenRouter routes the preset to a DIFFERENT model than expected, the result is still served
+    (the model reasoned) but served_model_verified is False so the swap is impossible to miss."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", _API_KEY)
+
+    def _fake(req, timeout=None):
+        body = json.dumps({
+            "id": "gen-swap-1", "model": "anthropic/claude-3-haiku",   # NOT the expected GPT-5 Mini
+            "choices": [{"message": {"role": "assistant",
+                                     "content": json.dumps(_valid_model_output())},
+                         "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1800, "completion_tokens": 420, "total_tokens": 2220, "cost": 0.0},
+        }).encode()
+        return _Resp(body)
+
+    with patch("app.reasoning.model_providers.openrouter.urllib.request.urlopen", _fake):
+        out = analyst.assess_payload(_payload("youtube"), ref="sub_swap", platform="youtube",
+                                     settings=_prod_settings())
+    tr = out["investigation_trace"]
+    assert tr["served_model"] == "anthropic/claude-3-haiku"
+    assert tr["served_model_expected"] == _GPT5_MINI
+    assert tr["served_model_verified"] is False           # the swap is caught
+
+
+def test_served_model_matcher_is_prefix_tolerant_and_tristate():
+    """The matcher normalizes case/whitespace, tolerates a dated snapshot in either direction, and returns
+    None (not False) when it cannot judge — so "unknown" is never conflated with "mismatch"."""
+    m = analyst._served_model_matches
+    assert m("openai/gpt-5-mini", "openai/gpt-5-mini") is True
+    assert m("openai/gpt-5-mini-2025-08-07", "openai/gpt-5-mini") is True     # dated snapshot verifies
+    assert m("OpenAI/GPT-5-Mini ", "openai/gpt-5-mini") is True               # case/whitespace normalized
+    assert m("anthropic/claude-3-haiku", "openai/gpt-5-mini") is False        # a real swap
+    assert m(None, "openai/gpt-5-mini") is None                               # Floor path — not applicable
+    assert m("openai/gpt-5-mini", "") is None                                 # check disabled
 
 
 # =========================================================================== #

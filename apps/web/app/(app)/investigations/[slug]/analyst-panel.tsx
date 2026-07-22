@@ -284,6 +284,11 @@ function VerificationPanel({
   const rows: [string, React.ReactNode][] = [
     ['Provider', t.provider ?? provider ?? '—'],
     ['Served model', t.served_model ?? t.requested_model ?? '—'],
+    ['Served model verified', t.served_model_verified == null
+      ? '—'
+      : t.served_model_verified
+        ? `yes — ${t.served_model_expected ?? 'expected model'}`
+        : `NO — expected ${t.served_model_expected ?? '?'}, served ${t.served_model ?? '?'}`],
     ['Preset', t.openrouter_preset ?? '—'],
     ['Protocol version', t.master_prompt_version ?? '—'],
     ['Protocol hash', t.master_prompt_hash ?? '—'],
