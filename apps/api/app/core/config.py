@@ -199,10 +199,11 @@ class Settings(BaseSettings):
     analyst_model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"
     analyst_endpoint_url: str | None = None
     # The analyst runs in a background worker (off the request hot path) and the UI polls for ~4 min, so
-    # this bounds ONE model generation, not a user request. 90s accommodates a full-investigation GPT-5
-    # generation (up to the completion budget + reasoning tokens); a short value would time large scans out
-    # to the Floor. Env-overridable (OMI_ANALYST_TIMEOUT_SECONDS).
-    analyst_timeout_seconds: float = 90.0
+    # this bounds ONE model generation, not a user request. 150s accommodates a full-investigation GPT-5
+    # generation (up to the completion budget + reasoning tokens) yet still fails a genuinely STALLED
+    # OpenRouter call within the UI's ~4-min poll window, instead of hanging indefinitely (which shows up
+    # as a request that STARTs but never returns OK/FAIL). Env-overridable (OMI_ANALYST_TIMEOUT_SECONDS).
+    analyst_timeout_seconds: float = 150.0
     analyst_max_retries: int = 2
     # Serving API the deployed endpoint speaks. "generate" (default) posts the raw
     # TGI text-generation body (existing behavior, byte-identical). "messages" posts
