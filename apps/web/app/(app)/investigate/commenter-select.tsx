@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckSquare, Loader2, Plus, Search, Square, Radar, ScanLine } from 'lucide-react';
+import { AlertTriangle, CheckSquare, Loader2, Plus, Search, Square, Radar, ScanLine } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
@@ -26,6 +26,45 @@ function readScan(): ActiveScan | null {
     const raw = sessionStorage.getItem(ACTIVE_SCAN_KEY);
     return raw ? (JSON.parse(raw) as ActiveScan) : null;
   } catch { return null; }
+}
+
+/**
+ * Turn any failure into a clear, actionable line — a compile/scan must never look like it silently
+ * "cut out". Maps every HTTP status the backend can return (and a dropped network) to plain English.
+ */
+function friendlyError(e: unknown, action: 'compile' | 'scan'): string {
+  if (e instanceof ApiError) {
+    switch (e.status) {
+      case 400:
+        return e.message || 'Paste a full YouTube video or X (Twitter) post link.';
+      case 401:
+        return 'Your session expired. Log in again, then retry.';
+      case 402:
+        return 'Out of credits. Visit Settings → Billing to top up.';
+      case 403:
+        return 'This account is not allowed to run scans. Contact support if that is unexpected.';
+      case 404:
+        return 'The scanning service is unavailable or still updating. Give it a minute, then try again.';
+      case 429:
+        return 'Too many requests right now. Wait a few seconds and try again.';
+      case 502:
+      case 503:
+        // Backend sends a specific reason (missing key, provider down, private post) — surface it.
+        return e.message || 'The scanning service is temporarily unavailable. Please try again shortly.';
+      case 504:
+        return 'The request took too long. It may still be working — try again in a moment.';
+      default:
+        return e.message || `Something went wrong (${e.status}). Please try again.`;
+    }
+  }
+  // fetch() rejects with a TypeError when the network/API is unreachable.
+  if (e instanceof TypeError) {
+    return 'Could not reach the server. Check your connection and try again.';
+  }
+  if (e instanceof Error && e.message) return e.message;
+  return action === 'compile'
+    ? 'Could not read this post. Check the link and try again.'
+    : 'The scan failed. Please try again.';
 }
 
 /**
@@ -70,8 +109,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
       setSweepKey((k) => k + 1);
       setPhase('list');
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Could not read this post. Check the link and try again.';
-      setError(msg);
+      setError(friendlyError(e, 'compile'));
       if (firstLoad) setPhase('idle');
     } finally {
       setBusy(false);
@@ -109,12 +147,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
     } catch (e) {
       if (e instanceof ScanCancelledError || runRef.current !== runId) return;
       clearScan();
-      const msg =
-        e instanceof ApiError
-          ? e.status === 402 ? 'Out of credits. Visit Settings to top up.' : e.message
-          : e instanceof Error ? e.message
-          : 'The scan failed. Please try again.';
-      setError(msg);
+      setError(friendlyError(e, 'scan'));
       setPhase((p) => (p === 'scanning' ? (rowsRef.current > 0 ? 'list' : 'idle') : p));
     }
   }, [router]);
@@ -131,11 +164,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
       job = await scoreSelection(url.trim(), ids);
     } catch (e) {
       if (runRef.current !== runId) return;
-      const msg =
-        e instanceof ApiError
-          ? e.status === 402 ? 'Out of credits. Visit Settings to top up.' : e.message
-          : 'The scan could not start. Please try again.';
-      setError(msg);
+      setError(friendlyError(e, 'scan'));
       setPhase('list');
       return;
     }
@@ -214,8 +243,15 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
       </Card>
 
       {error && (
-        <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger font-mono">
-          {error}
+        <div
+          role="alert"
+          className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 flex items-start gap-2.5"
+        >
+          <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="font-mono text-2xs tracking-[0.16em] uppercase text-danger">Request failed</p>
+            <p className="text-sm text-fg-dim leading-relaxed mt-0.5">{error}</p>
+          </div>
         </div>
       )}
 
