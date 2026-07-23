@@ -32,7 +32,7 @@ export function AnalystLoading({
         <span className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-violet-2 animate-pulse-dot" />
           <span className="font-mono text-2xs tracking-[0.16em] uppercase text-violet-2">
-            {retrying ? 'AI analyst · retrying' : 'AI analyst · running'}
+            {retrying ? 'Omi analyst · retrying' : 'Omi analyst · running'}
           </span>
         </span>
         <span className="font-mono text-2xs text-fg-mute tabular-nums">{elapsedSec}s</span>
@@ -45,7 +45,7 @@ export function AnalystLoading({
           </span>
           <div className="min-w-0">
             <p className="text-sm text-fg leading-relaxed">
-              GPT-5 Mini is reading this investigation and scoring every account on its own evidence.
+              Omi is reading this investigation and scoring every account on its own evidence.
             </p>
             <p className="text-xs text-fg-mute leading-relaxed mt-0.5">
               It writes each verdict in plain English. A full read can take up to a couple of minutes.

@@ -7,7 +7,6 @@ import { ApiError } from '@/lib/api';
 import { runLinkScanJob, resumeLinkScanJob, ScanCancelledError, type LinkScanJob } from '@/lib/scan-job';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { ScanInput } from './scan-input';
-import { LoadingOverlay } from './loading-overlay';
 
 // AI-first investigation flow: the workspace only collects the input and runs the scan job. The
 // deterministic engine works as the Evidence Compiler in the background; when the job completes the
@@ -151,13 +150,22 @@ export function Workspace({ initialUrl }: { initialUrl: string }) {
         </div>
       )}
 
-      <LoadingOverlay active={state.pending} status={jobStatus} />
-
+      {/* Compact inline scan status — the ONE full loading screen is the Omi analyst screen on the
+          investigation page, which this flow lands on when the evidence is collected. */}
       {state.pending && (
-        <p className="text-center font-mono text-2xs tracking-wider uppercase text-fg-mute">
-          Collecting evidence… when it&apos;s ready you&apos;ll be taken to the AI investigation.
-          This scan keeps running if you leave the page — the result is saved to your Investigations.
-        </p>
+        <div className="rounded-lg border border-border-1 bg-bg-elev/60 px-4 py-3 flex items-start gap-3">
+          <span className="mt-1 w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot shrink-0" />
+          <div className="min-w-0">
+            <p className="font-mono text-2xs tracking-[0.16em] uppercase text-accent">
+              {jobStatus === 'queued' ? 'Queued' : 'Collecting evidence'}
+            </p>
+            <p className="text-xs text-fg-mute leading-relaxed mt-0.5">
+              Fetching the accounts and running the detection engine. You&apos;ll be taken to the Omi
+              investigation the moment it&apos;s ready. The scan keeps running if you leave — the result
+              is saved to your Investigations.
+            </p>
+          </div>
+        </div>
       )}
 
       {!state.pending && (
