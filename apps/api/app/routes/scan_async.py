@@ -56,6 +56,20 @@ log = logging.getLogger("omi.scan")
 router = APIRouter(prefix="/v1/scan", tags=["scan"])
 
 
+def _json_default(o):
+    """JSON encoder fallback: the source's comment dicts carry ``created_at`` as a real ``datetime``
+    (``_iso_or_none`` -> ``isoparse``), which ``json.dumps`` cannot serialize. Emit ISO-8601 so the
+    cached comment round-trips back into a ``Post`` at score time."""
+    if isinstance(o, datetime):
+        return o.isoformat()
+    return str(o)
+
+
+def _dumps(obj) -> str:
+    """datetime-safe ``json.dumps`` for caching commenter meta + comments."""
+    return json.dumps(obj, default=_json_default)
+
+
 class LinkScanJobOut(BaseModel):
     """Async single-link scan job, returned by ``/link/start`` and
     ``/link/status/{job_id}``. ``status`` is the job lifecycle state; the other
@@ -226,7 +240,7 @@ def list_commenters(
                     list_id=cl.id, external_id=ext, handle=meta.get("handle"),
                     avatar_url=meta.get("avatar_url"), comment_text=exemplar,
                     comment_count=max(1, len(cmts)), seq=next_seq,
-                    meta_json=json.dumps(meta), comments_json=json.dumps(cmts),
+                    meta_json=_dumps(meta), comments_json=_dumps(cmts),
                 ))
                 seen.add(ext)
                 next_seq += 1
@@ -625,9 +639,14 @@ def score_selection(
             selected_ids.append(r.external_id)
             if r.comments_json:
                 try:
-                    injected_comments.extend(json.loads(r.comments_json))
+                    parsed = json.loads(r.comments_json)
                 except (TypeError, ValueError):
-                    pass
+                    parsed = []
+                # The evidence compiler builds a Post per comment and REQUIRES a timestamp; drop any
+                # cached comment missing one so a single bad row can never crash the whole scan.
+                injected_comments.extend(
+                    c for c in parsed if isinstance(c, dict) and c.get("created_at")
+                )
         cl_id = cl.id
         existing_slug = cl.investigation_slug
         content_url = cl.content_url or url

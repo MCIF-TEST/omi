@@ -429,16 +429,20 @@ def scan_video_full(
     )
 
     # --- Phase 2: thread-level scan (treat all comments as one corpus) ---
-    thread_posts = [
-        Post(
-            id=item["comment_id"],
-            author_handle=item["author_external_id"],
-            text=item["text"],
-            created_at=item["created_at"],
-            parent_id=video_id,
-        )
-        for item in all_comments_under_video
-    ]
+    # A single malformed comment (missing id/author/timestamp — possible from a cached compile that
+    # round-tripped through JSON) must not crash the whole scan; skip it and keep the rest.
+    thread_posts: list[Post] = []
+    for item in all_comments_under_video:
+        try:
+            thread_posts.append(Post(
+                id=item["comment_id"],
+                author_handle=item["author_external_id"],
+                text=item.get("text", "") or "",
+                created_at=item["created_at"],
+                parent_id=video_id,
+            ))
+        except (KeyError, TypeError, ValueError) as _e:
+            _log.warning("skipping malformed comment in thread corpus: %s", _e)
     thread_scan = analyze_comments(thread_posts)
 
     # --- Phase 2.5/9: narrative ingestion offloaded to a background thread.
