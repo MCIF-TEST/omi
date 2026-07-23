@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Target, ArrowRight, Clock, Gauge } from 'lucide-react';
+import { Target, ArrowRight, Clock, Gauge, MessageSquarePlus } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getCurrentUser } from '@/lib/auth';
@@ -90,6 +90,21 @@ export default async function SettingsPage() {
         <Card>
           <CardLabel>Admin</CardLabel>
           <div className="space-y-2">
+            <Link
+              href="/settings/feedback"
+              className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border-1 card-interactive"
+            >
+              <div className="flex items-center gap-3">
+                <MessageSquarePlus size={16} className="text-accent" />
+                <div>
+                  <div className="text-fg font-medium">Feedback queue</div>
+                  <div className="text-xs text-fg-dim mt-0.5">
+                    Everything users have sent — searchable by keyword or email.
+                  </div>
+                </div>
+              </div>
+              <ArrowRight size={14} className="text-fg-mute" />
+            </Link>
             <Link
               href="/settings/engine"
               className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border-1 card-interactive"
