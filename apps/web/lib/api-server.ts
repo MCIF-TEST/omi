@@ -13,6 +13,7 @@
 // (which is how we caught the original `lib/api.ts` bug).
 
 import { cookies } from 'next/headers';
+import { auth } from '@clerk/nextjs/server';
 import { ApiError, _parse } from './api';
 import { env } from './env';
 
@@ -20,7 +21,17 @@ export async function apiServer<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  // Forward the user's session cookie so FastAPI can resolve the user.
+  // Primary auth: forward the Clerk session token as a Bearer so FastAPI can verify + resolve the
+  // user. (Legacy cookie forwarding stays as a fallback during the auth migration.)
+  let bearer: string | undefined;
+  try {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (token) bearer = `Bearer ${token}`;
+  } catch {
+    /* not signed in / Clerk not configured — fall back to the cookie below */
+  }
+
   const cookieHeader = cookies()
     .getAll()
     .map((c) => `${c.name}=${c.value}`)
@@ -30,6 +41,7 @@ export async function apiServer<T>(
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(bearer ? { authorization: bearer } : {}),
       ...(cookieHeader ? { cookie: cookieHeader } : {}),
       ...init.headers,
     },

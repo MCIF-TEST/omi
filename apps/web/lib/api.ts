@@ -49,15 +49,25 @@ function _tryJson(s: string): JsonParse {
   try { return { ok: true, value: JSON.parse(s) }; } catch { return { ok: false }; }
 }
 
-/** Browser-side fetch. Uses /api/* rewrite for same-origin cookies. */
+/** Browser-side fetch. Sends the Clerk session token so FastAPI can resolve the user; also keeps
+ *  same-origin cookies as a fallback during the auth migration. */
 export async function apiClient<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  let authHeader: Record<string, string> = {};
+  try {
+    const clerk = (globalThis as { Clerk?: { session?: { getToken?: () => Promise<string | null> } } }).Clerk;
+    const token = await clerk?.session?.getToken?.();
+    if (token) authHeader = { authorization: `Bearer ${token}` };
+  } catch {
+    /* Clerk not ready / signed out — fall back to the cookie */
+  }
   const res = await fetch(`/api${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...authHeader,
       ...init.headers,
     },
     credentials: 'same-origin',

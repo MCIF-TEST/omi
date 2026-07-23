@@ -173,6 +173,11 @@ class User(Base):
     # bumped by one-off purchases). Each comprehensive scan costs one credit.
     credits_remaining: Mapped[int] = mapped_column(Integer, default=3)  # 3 free trial credits
 
+    # Clerk identity linkage (auth provider). Set when a user signs in via Clerk; the local row still
+    # owns credits/subscription/investigations, keyed to the Clerk user by this id (linked by email on
+    # first Clerk sign-in so existing accounts keep their data).
+    clerk_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
+
     # Stripe linkage
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

@@ -1,41 +1,34 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 /**
- * Gate authenticated routes — /(app)/* group — by checking for the
- * omi_session cookie. We don't decode it here (that would need the
- * session secret); we just check it exists. The FastAPI service is the
- * final authority and will reject invalid sessions.
+ * Clerk authentication middleware.
  *
- * Marketing + auth routes pass through unauthenticated.
+ * Protects the authenticated app group — /(app)/* routes — with Clerk: an unauthenticated visitor
+ * is redirected to the sign-in page. Marketing + auth routes pass through. The `/api/*` path is the
+ * rewrite to the FastAPI service and is deliberately excluded from the matcher — that service does
+ * its own auth (it verifies the Clerk session token the browser sends), so Clerk middleware never
+ * needs to run on it.
  *
- * Deliberately ONE-DIRECTIONAL: cookie existence may only ever gate
- * (redirect toward /login), never assert authentication. Bouncing
- * /login -> /dashboard off mere cookie existence contradicted the app
- * layout's validated check whenever the session was stale (server DB
- * reset, rotated session secret, expired uid) and produced an infinite
- * 307 loop (/login <-> /dashboard, ERR_TOO_MANY_REDIRECTS) that locked
- * users out of the login form entirely. The "already logged in" redirect
- * now lives on the login/signup pages, which validate the session
- * against the API before redirecting.
+ * Only the PUBLISHABLE key is involved at the edge; the CLERK_SECRET_KEY is read server-side by
+ * Clerk and never exposed to the client.
  */
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  const hasSession = req.cookies.has('omi_session');
+const isAppRoute = createRouteMatcher([
+  '/dashboard(.*)', '/investigate(.*)', '/investigations(.*)', '/accounts(.*)', '/graph(.*)',
+  '/narratives(.*)', '/content(.*)', '/channels(.*)', '/monitoring(.*)', '/search(.*)',
+  '/bulk(.*)', '/reports(.*)', '/settings(.*)',
+]);
 
-  const isAppRoute = /^\/(dashboard|investigate|investigations|accounts|graph|narratives|content|channels|monitoring|search|bulk|reports|settings)(\/|$)/.test(pathname);
-  if (isAppRoute && !hasSession) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
+export default clerkMiddleware(async (auth, req) => {
+  if (isAppRoute(req)) {
+    await auth.protect();
   }
-  return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: [
-    // Run middleware on everything except next internals, static files,
-    // and the API rewrite (which is just a passthrough to FastAPI).
+    // Everything except Next internals, static files, and the FastAPI /api rewrite…
     '/((?!_next/|api/|favicon.ico|.*\\..*).*)',
+    // …plus Clerk's auto-proxy path.
+    '/__clerk/:path*',
   ],
 };

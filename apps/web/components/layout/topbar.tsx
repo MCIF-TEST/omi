@@ -2,8 +2,8 @@
 
 import { useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Bell, LogOut, Search, Zap } from 'lucide-react';
+import { Bell, Search, Zap } from 'lucide-react';
+import { UserButton } from '@clerk/nextjs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/logo';
@@ -24,18 +24,9 @@ interface TopbarProps {
 }
 
 export function Topbar({ user, engineStatus }: TopbarProps) {
-  const router = useRouter();
   const credits = user.credits_remaining;
   const creditTone =
     credits === 0 ? 'danger' : credits <= 3 ? 'warn' : 'accent';
-
-  const onLogout = async () => {
-    try {
-      await apiClient('/v1/auth/logout', { method: 'POST' });
-    } catch { /* ignore */ }
-    router.refresh();
-    router.push('/login');
-  };
 
   const alerts = usePolling<AlertsResponse>(
     useCallback(() => apiClient<AlertsResponse>('/v1/monitoring/alerts?unread=true&limit=1'), []),
@@ -120,11 +111,11 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
           {user.email}
         </span>
 
-        {/* Logout */}
-        <Button variant="ghost" size="sm" onClick={onLogout} aria-label="Log out" className="gap-1.5">
-          <LogOut size={13} />
-          <span className="hidden sm:block">Out</span>
-        </Button>
+        {/* Account — Clerk manages the session (profile, sign out, connected accounts). */}
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{ elements: { avatarBox: 'w-8 h-8' } }}
+        />
       </div>
     </header>
   );

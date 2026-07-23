@@ -142,6 +142,8 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     # Watchlist platform-awareness — route History links + re-scans correctly.
     # Existing rows backfill to "youtube" (the only platform they could be).
     ("watchlists", "platform", "VARCHAR(32) DEFAULT 'youtube'"),
+    # Clerk auth linkage — maps a local account to its Clerk user (linked by email on first sign-in).
+    ("users", "clerk_user_id", "VARCHAR(64)"),
 ]
 
 

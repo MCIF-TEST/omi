@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
 import {
   LayoutDashboard, Search, Network, Bell, Menu, Megaphone,
   Folder, MessageSquareText, Database, Settings, LogOut, X,
@@ -50,7 +51,7 @@ const NEW_USER_MORE = new Set(['/campaigns', '/settings']);
 
 export function MobileNav({ email, isNewUser = false }: { email: string; isNewUser?: boolean }) {
   const pathname = usePathname() || '';
-  const router = useRouter();
+  const { signOut } = useClerk();
   const [sheetOpen, setSheetOpen] = useState(false);
   const moreLinks = isNewUser
     ? MORE_LINKS.filter((l) => NEW_USER_MORE.has(l.href))
@@ -76,9 +77,8 @@ export function MobileNav({ email, isNewUser = false }: { email: string; isNewUs
   const moreActive = moreLinks.some((l) => routeActive(pathname, l.href));
 
   const onLogout = async () => {
-    try { await apiClient('/v1/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
-    router.refresh();
-    router.push('/login');
+    // Clerk owns the session now — sign out through Clerk and land on the marketing home.
+    try { await signOut({ redirectUrl: '/' }); } catch { /* ignore */ }
   };
 
   return (
