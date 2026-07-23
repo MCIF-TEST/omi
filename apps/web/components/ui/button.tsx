@@ -10,10 +10,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /**
- * Omi Noir buttons are machined objects, not painted rectangles: light enters
- * from above (inset top edge), the base sits in shade, and a press travels a
- * real pixel while the top-light leaves the edge. Materials live in globals
- * (.btn-lamp / .btn-slab) so raw <button>s can wear them too.
+ * Buttons are flat and quiet: a solid fill for intent, a hairline for the rest,
+ * and one real pixel of travel on press so the control feels like it heard you.
+ * Primary (blue) and secondary materials live in globals (.btn-lamp / .btn-slab)
+ * so raw <button>s wear them too. Transitions name exact properties, never `all`.
  */
 const variantClasses: Record<Variant, string> = {
   primary:
@@ -22,11 +22,12 @@ const variantClasses: Record<Variant, string> = {
     'btn-slab text-fg disabled:opacity-50 disabled:cursor-not-allowed',
   ghost:
     'bg-transparent text-fg-dim hover:text-fg hover:bg-bg-elev active:bg-bg-elev-2 ' +
-    'border border-transparent disabled:opacity-50 transition-colors duration-150',
+    'active:translate-y-px border border-transparent disabled:opacity-50 ' +
+    'transition-[color,background-color,transform] duration-150',
   danger:
-    'bg-tier-high/10 text-tier-high hover:bg-tier-high/20 border border-tier-high/40 ' +
-    'shadow-[inset_0_1px_0_rgba(244,63,104,0.12)] active:translate-y-px ' +
-    'transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed',
+    'bg-danger/10 text-danger hover:bg-danger/[0.16] border border-danger/40 ' +
+    'shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] active:translate-y-px ' +
+    'transition-[background-color,transform] duration-150 disabled:opacity-50 disabled:cursor-not-allowed',
 };
 
 const sizeClasses: Record<Size, string> = {
