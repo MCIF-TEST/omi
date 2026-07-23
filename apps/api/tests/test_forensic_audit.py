@@ -80,7 +80,7 @@ def test_audit_trusted_endpoint_all_six_proven():
     # 1 — exact final prompt sent (single-inference: assembled by the canonical comprehensive stage
     # builder over the COMPLETE InvestigationPackage)
     assert it["1_final_prompt_sent"]["status"] == "PROVEN"
-    assert "COMPREHENSIVE INVESTIGATION TASK" in it["1_final_prompt_sent"]["system_prompt"]
+    assert "ARE THESE ACCOUNTS BOUGHT OR REAL" in it["1_final_prompt_sent"]["system_prompt"]
     assert "INVESTIGATION EVIDENCE" in it["1_final_prompt_sent"]["user_message"]
     # 2 — prompt version/hash from the package
     assert it["2_prompt_version_hash"]["status"] == "PROVEN"

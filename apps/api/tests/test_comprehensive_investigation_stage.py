@@ -84,7 +84,7 @@ def test_comprehensive_stage_is_registered_with_the_one_builder():
 def test_prompt_input_is_the_investigation_package_complete_evidence_is_model_facing():
     pp = build_comprehensive_investigation_prompt_package(_package())
     # system: shared package assets + the comprehensive task + output contract
-    assert "COMPREHENSIVE INVESTIGATION TASK" in pp.system
+    assert "ARE THESE ACCOUNTS BOUGHT OR REAL" in pp.system
     assert "REASONING & GOVERNANCE CONSTITUTION" in pp.system and "KNOWLEDGE LIBRARY" in pp.system
     assert "OUTPUT CONTRACT" in pp.system
     # user: the COMPLETE budgeted package evidence — AI-first RAW metadata (no computed scores): the
@@ -108,7 +108,7 @@ def test_stage_embeds_zero_prompt_text():
     import app.reasoning.comprehensive_investigation_analysis as mod
     src = inspect.getsource(mod)
     # no task/contract prose is embedded here — it all comes from the package asset
-    assert "COMPREHENSIVE INVESTIGATION TASK" not in src
+    assert "ARE THESE ACCOUNTS BOUGHT OR REAL" not in src
     assert "Emit exactly one JSON object" not in src
 
 

@@ -35,7 +35,7 @@ from pathlib import Path
 
 from app.evidence.bundle import digest
 
-COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v6"
+COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v7"
 
 # The Lead-Investigator synthesis wrapper is DERIVED from the EXISTING analyst response schema — the one
 # wrapper source of truth — so the website response, the Governor validation, and the deterministic Floor
@@ -111,13 +111,16 @@ _COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
         },
         "omi_score": {
             "type": "integer", "minimum": 0, "maximum": 100,
-            "description": "THIS ACCOUNT'S OMI score — YOUR authenticity-risk score for this single account, "
-                           "an INTEGER 0-100 (higher = stronger evidence this account is inauthentic). "
-                           "Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. Reason it "
-                           "PRIMARILY from THIS account's OWN evidence — how old the account is, its "
-                           "follower/following balance, how much and what it has posted, and the content "
-                           "itself. A link to another account may nudge the score but should not be what "
-                           "carries it. It is NOT provided to you and is NOT an average of any numbers.",
+            "description": "THIS ACCOUNT'S OMI score — YOUR estimate of how likely THIS single account is "
+                           "BOUGHT OR INAUTHENTIC (fake, farmed, automated, spam/scam, paid-engagement) "
+                           "rather than a genuine person, an INTEGER 0-100 (higher = more likely bought). "
+                           "Bands: 0-24 low, 25-49 moderate, 50-74 elevated, 75-100 high. Reason it ONLY "
+                           "from THIS account's OWN evidence — its age, its follower/following balance, and "
+                           "how much and what it has actually posted. Do NOT raise it because the account "
+                           "appears in the same comment section as others (co-occurrence is expected, not "
+                           "evidence). A genuine-looking account scores low; a thin-history account scores "
+                           "low with a 'not enough data' note. It is NOT provided to you and is NOT an "
+                           "average of any numbers.",
         },
         "suspicion_tier": {
             "type": "string", "enum": ["low", "moderate", "elevated", "high"],
@@ -126,15 +129,18 @@ _COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
         },
         "assessment": {
             "type": "string", "minLength": 1, "maxLength": 600,
-            "description": "CONCISE (1-3 sentences) of PLAIN ENGLISH a non-technical reader understands, "
-                           "saying in everyday words WHY this account got its omi_score. LEAD WITH THIS "
-                           "ACCOUNT'S OWN facts (how old it is, its follower/following balance, how much "
-                           "and what it posts) and what they suggest — the everyday reasons a person would "
-                           "find it suspicious or reassuring. Mention another account only briefly and only "
-                           "when the link is strong (a short alias in parentheses is fine as a reference). "
-                           "Describe behavior, not persons; explain the concept, not the jargon; never a "
-                           "boilerplate sentence repeated across accounts. The detailed investigation "
-                           "narrative belongs in the executive assessment + domain sections",
+            "description": "CONCISE (1-3 sentences) of PLAIN ENGLISH a non-technical creator understands, "
+                           "saying in everyday words WHY this account got its omi_score and whether it "
+                           "looks bought or genuine. LEAD WITH THIS ACCOUNT'S OWN facts — how old it is, "
+                           "its follower/following balance, and what its posts/comments actually look like "
+                           "(e.g. 'nothing but one-line praise', 'follows thousands while almost no one "
+                           "follows back', 'a years-old account with a varied, human history') — and what "
+                           "they suggest. Be probabilistic ('much more consistent with a bought account', "
+                           "'leans genuine', 'too little history to say'), never a bare yes/no or a lone "
+                           "number. Explain the concept, not the jargon; describe behavior, not persons; "
+                           "never a boilerplate sentence repeated across accounts. Do not cite co-"
+                           "occurrence as a reason. The broader narrative belongs in the executive "
+                           "assessment.",
         },
         "citations": {
             "type": "array", "items": {"type": "string"},
@@ -255,8 +261,9 @@ _OUTPUT_EXAMPLE = (
     '"citations": []}, "coordination_reasoning": {"assessment": "The only cross-account link is two '
     "similar promotional replies (A2, A3) — a single weak axis over thin history, so any coordinated "
     'read is capped; it informs the overall score only lightly.", "citations": ["A2", "A3"]}, '
-    '"campaign_reasoning": {"assessment": "No established campaign — at most two low-effort promotional '
-    'accounts, with no ground-truth anchor.", "citations": ["A2", "A3"]}, "commenter_assessments": '
+    '"campaign_reasoning": {"assessment": "No established campaign, and cross-post coordination is out of '
+    'scope here — at most two low-effort promotional accounts, judged on their own profiles.", '
+    '"citations": ["A2", "A3"]}, "commenter_assessments": '
     '[{"ref": "A1", "omi_score": 12, "suspicion_tier": "low", "assessment": "A years-old account with a '
     "normal balance of followers to following and a varied, everyday posting history — it reads like a "
     'genuine person.", "citations": ["A1"]}, {"ref": "A2", "omi_score": 82, "suspicion_tier": "high", '
@@ -347,70 +354,56 @@ def _render_output_contract(schema: dict) -> str:
 
 
 COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
-    "# COMPREHENSIVE INVESTIGATION TASK\n"
-    "You are the LEAD INVESTIGATOR. In ONE response you produce the COMPLETE investigation over the "
-    "evidence below. The evidence is RAW METADATA — the objective, collected facts (account profiles, "
-    "post histories, comment text, co-occurrence groupings). It carries NO precomputed suspicion score, "
-    "tier, or detector output: YOU do all the analysis and produce every judgment and score. Return SEVEN "
-    "sections in one JSON object; reason within a domain's own grain and join grains only through the "
-    "explicit cross-links.\n"
-    "  1. comment_reasoning — read the near-duplicate groups (each carries an exemplar, exact member "
-    "count, time-range, and measured similarity) and the raw comment text. A large verbatim / "
-    "high-similarity group posted in a tight window is a coordination signal; templated praise, "
-    "catchphrases, and shared subculture are the benign explanation — say which the evidence "
-    "supports.\n"
-    "  2. commenter_history_reasoning — weigh each commenter's track record from the RAW facts: how many "
-    "posts they have (thin history is low confidence, not guilt) and memory recurrence (background, "
-    "never shared control).\n"
-    "  3. account_reasoning — per-account authenticity from each account's OWN evidence. This is where you "
-    "SCORE EACH ACCOUNT, and the score rests PRIMARILY on that account's own facts: how old the account is "
-    "(compare account_created_at to the post times), its follower/following balance (a brand-new account "
-    "following thousands with almost no followers back is a classic amplifier profile; a small new account "
-    "may simply be new), how much it has posted (thin history is LOW CONFIDENCE, not guilt), and the "
-    "content and cadence of its actual posts. Every account gets its own omi_score (0-100) + suspicion_tier "
-    "in commenter_assessments, reasoned from THAT account's evidence — two accounts that posted together "
-    "can score very differently because each is judged on its own profile. A link to another account may "
-    "nudge a score but must not be what carries it. Weigh the whole picture and where signals disagree say "
-    "so — never average it away. Supplemental signals (e.g. ai_writing) carry zero suspicion weight. "
-    "account_reasoning is your cross-account summary of this domain; the numeric per-account scores live "
-    "in commenter_assessments.\n"
-    "  4. narrative_reasoning — read the message-cluster structure from the RAW counts: how many messages "
-    "(member_count) and how many distinct authors carried each. More distinct authors is broader "
-    "participation, NOT itself proof of coordination or a synthetic narrative — YOU judge it; there is no "
-    "engine narrative score to lean on.\n"
-    "  5. coordination_reasoning — DETECT coordination yourself from the raw co-occurrence groupings: each "
-    "group lists HOW the accounts co-occur (method: co_engagement / co_tag / …), WHICH accounts, and the "
-    "raw factual basis. This domain is mainly how you judge the OVERALL bundle, NOT the primary driver of "
-    "any single account's score — an account is scored on its own evidence first, and a coordination link "
-    "is a secondary factor that only nudges a per-account score, and only when it is strong. A strong "
-    "coordinated read wants a discriminative pattern (shared fingerprint, co_engagement, co_tag) or ≥2 "
-    "independent axes; a single axis over thin evidence is weak — cap the read. An account may tie groups "
-    "together even when its own behavior looks ordinary (a structural observation, not a conclusion). Weigh "
-    "the benign explanation (fan community, same event) equally, and describe any link in plain English.\n"
-    "  6. campaign_reasoning — which co-occurrence groups are campaign CANDIDATES. A candidate is not an "
-    "established campaign; 'confirmed' would need a human or platform anchor the evidence does not "
-    "contain.\n"
+    "# INVESTIGATION TASK — ARE THESE ACCOUNTS BOUGHT OR REAL?\n"
+    "You are the LEAD INVESTIGATOR. Your ONE job: for EACH account below, estimate how likely it is "
+    "BOUGHT OR INAUTHENTIC (fake, farmed, automated, spam/scam, or paid-engagement) rather than a "
+    "genuine person, judged on THAT account's OWN evidence, and explain WHY in plain English. The "
+    "evidence is RAW METADATA — objective collected facts (account profiles, post histories, comment "
+    "text) with NO precomputed score: YOU do all the analysis. Return SEVEN sections in one JSON object. "
+    "The per-account judgment is the product; the other domains are brief context.\n"
+    "  ★ account_reasoning + commenter_assessments — THE MISSION. For EACH account, derive its age "
+    "(compare account_created_at to the post times), read its follower/following balance (following a "
+    "very large number while almost none follow back — following ≫ followers — is a classic bought/"
+    "amplifier shape, strongest on a young account with little content; a small new account may simply "
+    "be new), and READ its actual posts and comment(s): an empty or engagement-only history (nothing but "
+    "one-line praise/emoji/reactions), templated or verbatim-repeated content, and spam/scam/promo intent "
+    "('link in bio', 'DM to earn', 'follow for follow', giveaway/crypto pitches) are STRONG bought tells; "
+    "a varied, original, lived-in history leans genuine. Every account gets its own omi_score (0-100) + "
+    "suspicion_tier in commenter_assessments, reasoned from ITS OWN evidence — two accounts that "
+    "commented on the same post can score very differently. Thin history is LOW CONFIDENCE, not guilt: "
+    "score a sparse account low with an explicit 'not enough history to tell' note. account_reasoning is "
+    "your short cross-account summary; the numeric per-account scores live in commenter_assessments.\n"
+    "  ★ comment_reasoning — read the comment text and near-duplicate groups. Content an account REUSES "
+    "across its OWN history is a strong per-account tell. The same phrase across DIFFERENT accounts is "
+    "only minor context (templated praise/catchphrases are ordinary) and does not make any account "
+    "bought.\n"
+    "  · commenter_history_reasoning — each account's track-record depth from the RAW facts: how many "
+    "posts it has (thin history is low confidence, not guilt) and memory recurrence (background only).\n"
+    "  · coordination_reasoning — SECONDARY / OUT OF SCOPE for per-account scoring. Every account here "
+    "commented on the same post, so co-occurrence, shared timing, and same-topic commenting are EXPECTED "
+    "and NEVER raise a per-account score. Real cross-post campaigns are a SEPARATE OmiSphere system's "
+    "job. Fill this briefly as context; at most an exceptionally strong, discriminative link (verbatim-"
+    "identical text across accounts, a shared fingerprint) may LIGHTLY nudge the OVERALL bundle read.\n"
+    "  · narrative_reasoning — message-cluster counts (member_count, distinct authors). More distinct "
+    "authors is broader participation, not proof of anything. Brief context.\n"
+    "  · campaign_reasoning — which co-occurrence groups are campaign CANDIDATES (not established "
+    "campaigns; 'confirmed' needs ground truth you do not have). Brief context; not a score driver.\n"
     "  7. the LEAD-INVESTIGATOR SYNTHESIS (the response wrapper) — assign the OVERALL OMI score "
-    "(omi_score, an integer 0-100) and its tier band for the WHOLE bundle, driven by the most-suspicious "
-    "accounts and any coordination you detected and CONSISTENT with the per-account omi_scores (a bundle "
-    "dominated by high-risk coordinated accounts is high overall; a bundle of independent low-risk "
-    "accounts is low). Give evidence FOR and AGAINST with equal rigor, named uncertainty, what would "
-    "change the read, and a recommended verdict. Weight by evidence strength × corroboration; raise "
-    "confidence only on INDEPENDENT cross-domain convergence; insufficient evidence is itself a valid "
-    "conclusion. You output TWO levels of OMI score: one per account (commenter_assessments) and this one "
-    "overall.\n"
-    "ALL SIX reasoning domains are REQUIRED in every response — even when a domain has no evidence in "
-    "this investigation. For an evidence-less domain, state plainly in its 'assessment' that no evidence "
-    "of that kind was collected (or that it is insufficient to reason over) and leave its 'citations' "
-    "empty; never invent evidence to fill a domain and never omit the section.\n"
-    "Accounts are referenced by aliases A1, A2, … and clusters by C1, C2, … (narratives N1, …); an "
-    "alias legend resolves them, and you cite only those aliases. Some very large investigations are "
-    "represented by evidence COVERAGE — a subset disclosed by structure (graph degree, bridges, cluster "
-    "coverage, detector disagreement, duplicate-group size), NEVER by suspicion; the coverage manifest "
-    "discloses what was sampled, and omitted entities remain citable. Describe behavior, not people; "
-    "use probabilistic language; coordinated legitimate behavior (newsrooms, on-message officials, fan "
-    "communities) and benign automation are NOT hostile — weigh the legitimate hypothesis. The human "
-    "analyst sets the final verdict."
+    "(omi_score, integer 0-100) + tier for the WHOLE selection, driven by HOW MANY of the accounts look "
+    "bought and HOW STRONGLY (NOT by within-post coordination), and CONSISTENT with the per-account "
+    "omi_scores (mostly bought-looking accounts → high overall; mostly genuine-looking → low). Give "
+    "evidence FOR and AGAINST with equal rigor, named uncertainty, what would change the read, and a "
+    "recommended verdict. Raise confidence only on strong, independent per-account evidence; insufficient "
+    "evidence is itself a valid conclusion. You output TWO levels of OMI score: one per account "
+    "(commenter_assessments) and this one overall.\n"
+    "ALL SIX reasoning domains are REQUIRED in every response — even when a domain has no evidence. For "
+    "an evidence-less domain, state plainly in its 'assessment' that no evidence of that kind was "
+    "collected and leave its 'citations' empty; never invent evidence and never omit the section.\n"
+    "Accounts are referenced by aliases A1, A2, … (clusters C1, …; narratives N1, …); an alias legend "
+    "resolves them and you cite only those aliases. Very large investigations may be represented by "
+    "evidence COVERAGE disclosed by structure, never by suspicion; omitted entities remain citable. "
+    "Describe behavior, not people; use probabilistic language; a genuine-looking account scores low. "
+    "The human analyst sets the final verdict."
 )
 
 # The model-facing OUTPUT CONTRACT — rendered deterministically from the ONE canonical schema (no
