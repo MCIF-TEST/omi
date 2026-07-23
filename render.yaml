@@ -49,12 +49,14 @@ services:
       - key: OMI_MONTHLY_CREDIT_GRANT
         value: '20'
       # Clerk auth — the API verifies Clerk session JWTs (see app/core/clerk_auth.py).
-      # These are set in the Render dashboard, NEVER committed. The secret key is
-      # server-only; the publishable key (public) is used only to derive the JWKS/issuer.
+      # The SECRET key is server-only and set in the Render dashboard, NEVER committed.
+      # The publishable key is PUBLIC (it ships in the browser bundle by design) and is
+      # used here only to derive the JWKS/issuer, so it's safe to commit as a value —
+      # this guarantees the API can verify tokens even before the dashboard is filled in.
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
-        sync: false
+        value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
       # Validation-window trial: 25 credits = two X batch investigations (10
       # each) + change, so a first real user can run their own case AND return
       # for a second one. Abuse stays bounded: repeat signups from an IP that
@@ -207,11 +209,13 @@ services:
         value: '20'
       - key: OMI_PUBLIC_BASE_URL
         sync: false
-      # Clerk auth (frontend). The publishable key is public (ships in the browser
-      # bundle by design); the secret key is server-only. Both are set in the Render
-      # dashboard, NEVER committed. NEXT_PUBLIC_* must exist at build time.
+      # Clerk auth (frontend). The publishable key is PUBLIC (ships in the browser
+      # bundle by design) and MUST exist at build time or the static prerender throws
+      # "Missing publishableKey" — so we commit it as a value here rather than leaving
+      # it as a dashboard-only sync:false (which is empty during Render's build step).
+      # The secret key is server-only and stays in the dashboard, NEVER committed.
       - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-        sync: false
+        value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
       - key: CLERK_SECRET_KEY
         sync: false
       - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL

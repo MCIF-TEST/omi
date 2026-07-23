@@ -54,8 +54,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="font-sans">
-        <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>
+        <ClerkGate>{children}</ClerkGate>
       </body>
     </html>
+  );
+}
+
+// Only mount ClerkProvider when a publishable key is configured. Clerk throws hard if the key is
+// missing, which would fail the whole static build (marketing pages included) whenever the env var
+// isn't set at build time. Gating it keeps the build resilient — with the key present (the normal
+// case) Clerk works exactly as before; without it, the app still builds and static pages render.
+function ClerkGate({ children }: { children: React.ReactNode }) {
+  const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  if (!pk) return <>{children}</>;
+  return (
+    <ClerkProvider publishableKey={pk} appearance={clerkAppearance}>
+      {children}
+    </ClerkProvider>
   );
 }
