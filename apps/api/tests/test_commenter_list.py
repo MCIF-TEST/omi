@@ -7,6 +7,8 @@ from the saved cursor and dedupes. These pin that behaviour with a stubbed Sourc
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -43,17 +45,22 @@ class _FakeSource:
         return page
 
 
+# Real sources emit created_at as a datetime object (youtube _iso_or_none -> isoparse); the compile
+# cache must serialize it without crashing, so the fixture uses datetimes, not None.
+_TS = datetime(2024, 6, 1, tzinfo=timezone.utc)
+
+
 def _pages():
     page1 = (
         [{"channel_id": "alice", "handle": "alice"}, {"channel_id": "bob", "handle": "bob"}],
-        [{"comment_id": "c1", "author_external_id": "alice", "text": "great post", "created_at": None},
-         {"comment_id": "c2", "author_external_id": "bob", "text": "agreed", "created_at": None}],
+        [{"comment_id": "c1", "author_external_id": "alice", "text": "great post", "created_at": _TS},
+         {"comment_id": "c2", "author_external_id": "bob", "text": "agreed", "created_at": _TS}],
         "cursor-1",
     )
     page2 = (
         [{"channel_id": "bob", "handle": "bob"},          # duplicate — must be deduped
          {"channel_id": "carol", "handle": "carol"}],
-        [{"comment_id": "c3", "author_external_id": "carol", "text": "nice", "created_at": None}],
+        [{"comment_id": "c3", "author_external_id": "carol", "text": "nice", "created_at": _TS}],
         None,                                             # no cursor → exhausted
     )
     return [page1, page2]
