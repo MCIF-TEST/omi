@@ -73,7 +73,7 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
       >
         <Search size={14} className="text-fg-mute group-hover:text-fg-dim transition-colors" />
         <span className="flex-1 text-sm text-fg-mute truncate">
-          Search accounts, campaigns, narratives…
+          Search accounts & narratives…
         </span>
         <span className="kbd">⌘K</span>
       </Link>

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import {
-  Search, Network, Bell, Menu, Megaphone,
+  Search, Network, Bell, Menu,
   Folder, MessageSquareText, Database, Settings, LogOut, X,
   type LucideIcon,
 } from 'lucide-react';
@@ -35,8 +35,7 @@ const TABS: Tab[] = [
 ];
 
 const MORE_LINKS: { href: string; label: string; icon: LucideIcon; desc: string }[] = [
-  { href: '/campaigns',  label: 'Campaigns',  icon: Megaphone,         desc: 'Durable coordinated-account groups' },
-  { href: '/narratives', label: 'Narratives', icon: MessageSquareText, desc: 'Cross-scan message clusters' },
+  { href: '/campaigns',  label: 'Narratives', icon: MessageSquareText, desc: 'Durable coordinated-account clusters' },
   { href: '/graph',      label: 'Graph',      icon: Network,           desc: 'Coordination network graphs' },
   { href: '/content',    label: 'Content DB', icon: Database,          desc: 'Every scanned video' },
   { href: '/search',     label: 'Search',     icon: Search,            desc: 'Find any account or channel' },
