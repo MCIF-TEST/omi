@@ -22,17 +22,28 @@ export async function apiServer<T>(
   init: RequestInit = {},
 ): Promise<T> {
   // Primary auth: forward the Clerk session token as a Bearer so FastAPI can verify + resolve the
-  // user. (Legacy cookie forwarding stays as a fallback during the auth migration.)
+  // user. FastAPI verifies the JWT against Clerk's public JWKS (RS256) — no Clerk secret needed here.
+  //
+  // Two ways to obtain that token, tried in order, so this never depends on the Edge middleware:
+  //   1. auth().getToken() — works when clerkMiddleware populated the request context.
+  //   2. the `__session` cookie — Clerk stores the session JWT here; readable server-side even when
+  //      the middleware degraded (e.g. the secret couldn't reach the Edge runtime). This is what
+  //      keeps auth working regardless of the middleware/secret situation.
+  const jar = cookies();
   let bearer: string | undefined;
   try {
     const { getToken } = await auth();
     const token = await getToken();
     if (token) bearer = `Bearer ${token}`;
   } catch {
-    /* not signed in / Clerk not configured — fall back to the cookie below */
+    /* middleware didn't run / not signed in — the __session fallback below covers it */
+  }
+  if (!bearer) {
+    const sessionJwt = jar.get('__session')?.value;
+    if (sessionJwt) bearer = `Bearer ${sessionJwt}`;
   }
 
-  const cookieHeader = cookies()
+  const cookieHeader = jar
     .getAll()
     .map((c) => `${c.name}=${c.value}`)
     .join('; ');
