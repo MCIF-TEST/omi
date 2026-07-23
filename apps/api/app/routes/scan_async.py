@@ -25,6 +25,7 @@ stay byte-for-byte consistent.
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -48,7 +49,7 @@ from app.integrations.twitter_errors import TwitterClientError
 from app.integrations.youtube_errors import YouTubeClientError
 from app.schemas import ComprehensiveScanRequest, Tier
 from app.storage.db import get_session
-from app.storage.models import ScanJob
+from app.storage.models import CandidateList, CommenterCandidate, ScanJob
 
 log = logging.getLogger("omi.scan")
 
@@ -83,6 +84,158 @@ class ScanEstimateOut(BaseModel):
     effective_max_commenters: int  # after the server-side cap
     max_commenters_cap: int
     credits: int | None  # None when the link isn't a recognizable target
+
+
+# --------------------------------------------------------------------------- #
+# Select-then-scan — the FREE "compile" step: list + cache a post's commenters.
+# --------------------------------------------------------------------------- #
+class CommenterCandidateOut(BaseModel):
+    external_id: str
+    handle: str | None = None
+    comment: str | None = None
+    comment_count: int = 1
+    avatar_url: str | None = None
+    scanned: bool = False
+
+
+class CommenterListOut(BaseModel):
+    platform: str
+    content_id: str
+    url: str | None = None
+    commenters: list[CommenterCandidateOut]
+    total: int
+    has_more: bool          # more commenters can still be pulled ("add 25/50 more")
+    fetched_now: int = 0     # how many NEW commenters this call added
+
+
+def _source_for_platform(platform: str, settings: Settings) -> Source:
+    """Build the platform Source using the SAME client factories the scan routes use (so a test override
+    or a missing-key 503 behaves identically to a real scan)."""
+    if platform == "x":
+        factory = scan_mod._twitter_client_factory_override or (lambda: scan_mod._resolve_twitter_client(settings))
+        return TwitterSource(factory())
+    factory = scan_mod._client_factory_override or (lambda: scan_mod._resolve_client(settings))
+    return YouTubeSource(factory())
+
+
+@router.post("/link/commenters", response_model=CommenterListOut)
+def list_commenters(
+    payload: dict,
+    settings: Settings = Depends(get_settings),
+    current: CurrentUser = Depends(require_user),
+) -> CommenterListOut:
+    """FREE compile step of the select-then-scan flow: fetch (and cache) the commenters on a post so the
+    user can pick which to actually scan. NO histories, NO detection, NO AI, NO credits.
+
+    Re-opening a post returns its cached list instantly. Pass ``fetch`` > 0 to pull the NEXT page of
+    commenters ("add 25/50 more"); it continues from the saved pagination cursor. ``refresh`` rebuilds
+    the list from scratch. The commenter's raw ``commenters_meta`` + comments are cached so the later
+    score step can run on ONLY the selected accounts without re-fetching the list."""
+    url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
+    if not url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url is required.")
+    classification = classify_link(url)
+    platform = classification.get("platform", "unknown")
+    content_id = classification.get("tweet_id") or classification.get("video_id")
+    if platform == "unknown" or not content_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Paste a YouTube video or an X (Twitter) post URL to list its commenters.",
+        )
+    refresh = bool(payload.get("refresh"))
+    uid = current.id if current.id != 0 else None
+    cap = settings.scan_max_commenters
+
+    with get_session() as session:
+        cond = [CandidateList.platform == platform, CandidateList.content_id == content_id]
+        cond.append(CandidateList.user_id.is_(None) if uid is None else CandidateList.user_id == uid)
+        cl = session.execute(select(CandidateList).where(*cond)).scalar_one_or_none()
+        if cl is None:
+            cl = CandidateList(user_id=uid, platform=platform, content_id=content_id, content_url=url)
+            session.add(cl)
+            session.flush()
+
+        existing = list(session.execute(
+            select(CommenterCandidate)
+            .where(CommenterCandidate.list_id == cl.id)
+            .order_by(CommenterCandidate.seq)
+        ).scalars().all())
+
+        if refresh and existing:
+            for row in existing:
+                session.delete(row)
+            existing = []
+            cl.next_cursor = None
+            cl.exhausted = False
+            session.flush()
+
+        # How many NEW commenters to pull on THIS call: default to a first page when the list is empty,
+        # otherwise fetch only when the client explicitly asks ("add more").
+        raw_fetch = payload.get("fetch")
+        if raw_fetch is None:
+            fetch_n = 0 if existing else 25
+        else:
+            try:
+                fetch_n = max(0, min(int(raw_fetch), cap))
+            except (TypeError, ValueError):
+                fetch_n = 25
+
+        fetched_now = 0
+        if fetch_n > 0 and not cl.exhausted:
+            source = _source_for_platform(platform, settings)
+            try:
+                commenters_meta, all_comments, next_cursor = source.fetch_content_engagers(
+                    content_id, max_commenters=fetch_n, max_comments=fetch_n * 3,
+                    start_page_token=cl.next_cursor,
+                )
+            except (TwitterClientError, YouTubeClientError) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Could not fetch the commenters: {exc}",
+                ) from exc
+
+            comments_by_author: dict[str, list[dict]] = {}
+            for c in all_comments:
+                comments_by_author.setdefault(str(c.get("author_external_id") or ""), []).append(c)
+
+            seen = {row.external_id for row in existing}
+            next_seq = (max((row.seq for row in existing), default=-1) + 1)
+            for meta in commenters_meta:
+                ext = str(meta.get("channel_id") or meta.get("handle") or "").strip()
+                if not ext or ext in seen:
+                    continue
+                cmts = comments_by_author.get(ext, [])
+                exemplar = next((str(c.get("text")) for c in cmts if c.get("text")), None)
+                session.add(CommenterCandidate(
+                    list_id=cl.id, external_id=ext, handle=meta.get("handle"),
+                    avatar_url=meta.get("avatar_url"), comment_text=exemplar,
+                    comment_count=max(1, len(cmts)), seq=next_seq,
+                    meta_json=json.dumps(meta), comments_json=json.dumps(cmts),
+                ))
+                seen.add(ext)
+                next_seq += 1
+                fetched_now += 1
+            cl.next_cursor = next_cursor
+            cl.exhausted = not next_cursor
+            session.flush()
+
+        rows = list(session.execute(
+            select(CommenterCandidate)
+            .where(CommenterCandidate.list_id == cl.id)
+            .order_by(CommenterCandidate.seq)
+        ).scalars().all())
+        commenters = [
+            CommenterCandidateOut(
+                external_id=r.external_id, handle=r.handle, comment=r.comment_text,
+                comment_count=r.comment_count, avatar_url=r.avatar_url, scanned=r.scanned,
+            )
+            for r in rows
+        ]
+        return CommenterListOut(
+            platform=platform, content_id=content_id, url=cl.content_url or url,
+            commenters=commenters, total=len(commenters),
+            has_more=not cl.exhausted, fetched_now=fetched_now,
+        )
 
 
 @router.post("/estimate", response_model=ScanEstimateOut)
