@@ -21,16 +21,12 @@ import {
 } from '@/lib/api';
 
 const POLL_INTERVAL_MS = 2500;
-// The user lands here straight from a completed scan while the ONE model inference may still be
-// running — a large investigation (150 commenters, full per-account output) can take a couple of
-// minutes. Wait patiently: keep the loading screen up through the whole generation rather than
-// dropping to the fallback. ~7 minutes of polling covers a slow OpenRouter call plus a retry.
-const MAX_POLLS = 170;
-// If a completed result comes back as the deterministic Floor (the model wasn't reached, or its
-// output failed validation) we give OpenRouter another genuine attempt before ever showing the
-// fallback — the user asked to WAIT for the real response, not fall back early. Bounded so a
-// permanently-floored server can't loop or run up cost.
-const MAX_FLOOR_RETRIES = 2;
+// Opening an investigation loads its SAVED assessment: a model-backed result shows immediately (no
+// re-run), and while a generation is still in flight — the one scheduled at scan time, or the
+// backend's one-shot auto-heal of an inconclusive/floored result — we hold the loading screen and
+// poll until it lands. We never force a re-run from here. ~520s of polling matches the server's
+// 500s generation timeout, so the wait ends when the real result does.
+const MAX_POLLS = 210;
 
 // Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
 // URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.
@@ -53,7 +49,6 @@ export function AnalystPanel({ slug }: { slug: string }) {
   const [provider, setProvider] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [retrying, setRetrying] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [disabled, setDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,35 +76,26 @@ export function AnalystPanel({ slug }: { slug: string }) {
   const run = async (refresh: boolean) => {
     setError(null);
     setDisabled(false);
-    setRetrying(false);
     setElapsedSec(0);
     startRef.current = Date.now();
     setPending(true);
     let polls = 0;
-    let floorRetries = 0;
 
     const step = async (doRefresh: boolean): Promise<void> => {
       try {
         const r = await post(doRefresh);
+        // A SAVED assessment (model-backed, or the deterministic floor) is the previous result — show
+        // it as-is. We never force a re-run on open; the backend alone decides when an inconclusive
+        // (floored) result is worth regenerating, and does so exactly once, returning 202 while it runs.
         if (r.status === 'ready' && r.assessment) {
-          // A model-backed result is the real thing — show it. A floored result means the model
-          // wasn't reached this pass; give OpenRouter another genuine attempt (bounded) before we
-          // ever fall back, keeping the loading screen up in the meantime.
-          if (isModelBacked(r.assessment) || floorRetries >= MAX_FLOOR_RETRIES) {
-            setAssessment(r.assessment);
-            setProvider(r.provider ?? null);
-            setGeneratedAt(r.generated_at ?? null);
-            setPending(false);
-            setRetrying(false);
-            return;
-          }
-          floorRetries += 1;
-          setRetrying(true);
-          if (polls++ >= MAX_POLLS) { setPending(false); setAssessment(r.assessment); return; }
-          pollRef.current = setTimeout(() => { void step(true); }, POLL_INTERVAL_MS);
+          setAssessment(r.assessment);
+          setProvider(r.provider ?? null);
+          setGeneratedAt(r.generated_at ?? null);
+          setPending(false);
           return;
         }
-        // Still generating off the request hot path — keep waiting (no new job) until ready.
+        // 202 generating — a scan-time generation or the backend's one-shot auto-heal is in flight.
+        // Hold the loading screen and poll until it lands.
         if (polls++ >= MAX_POLLS) {
           setError('The AI analysis is taking longer than usual. It keeps running on the server — reload in a moment to pick it up.');
           setPending(false);
@@ -165,7 +151,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
       ) : pending ? (
         // The analyst runs automatically for every investigation. Hold a real loading screen while
         // the OpenRouter response is on its way — it fills in the moment the result lands.
-        <AnalystLoading elapsedSec={elapsedSec} retrying={retrying} />
+        <AnalystLoading elapsedSec={elapsedSec} />
       ) : !assessment ? (
         <p className="text-sm text-fg-dim flex items-start gap-2">
           <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
