@@ -55,7 +55,9 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
   const compile = useCallback(async (opts: { fetch?: number; refresh?: boolean } = {}) => {
     if (!url.trim()) return;
     setError(null);
-    const firstLoad = opts.refresh || phase === 'idle';
+    // First load = a from-scratch compile (refresh, or no list yet). Only then do we swap to the
+    // full compiling screen; "add more" on an existing list keeps the list up and shows inline busy.
+    const firstLoad = opts.refresh || rows.length === 0;
     if (firstLoad) setPhase('compiling');
     setBusy(true);
     try {
@@ -74,7 +76,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
     } finally {
       setBusy(false);
     }
-  }, [url, phase, rows.length]);
+  }, [url, rows.length]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -318,6 +320,27 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
               Scan {selCount > 0 ? `${selCount} ` : ''}selected
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Compile succeeded but the post has no listable commenters — say so instead of going blank. */}
+      {phase === 'list' && rows.length === 0 && (
+        <div className="rounded-xl border border-border-1 bg-bg-elev p-8 text-center">
+          <span className="mx-auto mb-4 grid place-items-center w-11 h-11 rounded-full bg-bg-elev-2 border border-border-1">
+            <Radar size={19} className="text-fg-mute" />
+          </span>
+          <p className="text-sm text-fg font-medium">No commenters found on this post</p>
+          <p className="text-sm text-fg-mute mt-1 max-w-md mx-auto leading-relaxed">
+            It may have comments turned off, no replies yet, or the link points to something without a
+            public comment thread. Check the link and try again.
+          </p>
+          <button
+            onClick={() => void compile({ refresh: true })}
+            disabled={busy}
+            className="btn-slab mt-4 h-9 px-4 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
+          >
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />} Re-read post
+          </button>
         </div>
       )}
 
