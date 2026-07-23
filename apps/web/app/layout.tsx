@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0a0908',
+  themeColor: '#09111f',
   // Extend under the notch / home indicator so our safe-area padding can
   // place the tab bar flush against the device edge.
   viewportFit: 'cover' as const,
@@ -22,19 +22,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* Body — Inter (variable, optical) */}
+        {/* Interface + display — Inter (variable, optical). One typeface; the
+            scale carries the hierarchy. */}
         <link rel="preconnect" href="https://rsms.me/" />
         <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
-        {/* Display — Instrument Serif (the dossier voice) · Mono — JetBrains Mono
-            (the evidence voice). Intentional CDN <link> (alongside rsms.me/inter
-            above): these three external font sources are loaded globally from the
-            root layout, so the next/font page-scoping warning doesn't apply. */}
+        {/* Evidence voice — JetBrains Mono (ids, numbers, handles, raw data).
+            Loaded globally from the root layout, so the next/font page-scoping
+            warning doesn't apply. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
         />
       </head>
       <body className="font-sans">{children}</body>
