@@ -66,6 +66,58 @@ export async function apiClient<T>(
 }
 
 // ---------------------------------------------------------------------------
+// Select-then-scan — the compile (free list) + score (paid selection) flow.
+// ---------------------------------------------------------------------------
+export interface CommenterCandidate {
+  external_id: string;
+  handle: string | null;
+  comment: string | null;
+  comment_count: number;
+  avatar_url?: string | null;
+  scanned: boolean;
+}
+
+export interface CommenterListResponse {
+  platform: string;
+  content_id: string;
+  url: string | null;
+  commenters: CommenterCandidate[];
+  total: number;
+  has_more: boolean;     // more commenters can still be pulled ("add 25/50 more")
+  fetched_now: number;   // how many NEW commenters this call added
+}
+
+export interface ScoreJob {
+  job_id: string;
+  status: string;
+  platform: string;
+  url: string;
+  investigation_slug: string;
+}
+
+/** FREE: list (and cache) a post's commenters. `fetch` > 0 pulls the next page; `refresh` rebuilds. */
+export function listCommenters(
+  url: string,
+  opts: { fetch?: number; refresh?: boolean } = {},
+): Promise<CommenterListResponse> {
+  const body: Record<string, unknown> = { url };
+  if (opts.fetch != null) body.fetch = opts.fetch;
+  if (opts.refresh) body.refresh = true;
+  return apiClient<CommenterListResponse>('/v1/scan/link/commenters', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** PAID: score only the selected commenters. Returns a job; poll /scan/link/status/{job_id}. */
+export function scoreSelection(url: string, selected: string[]): Promise<ScoreJob> {
+  return apiClient<ScoreJob>('/v1/scan/link/score', {
+    method: 'POST',
+    body: JSON.stringify({ url, selected }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Shared response types (mirror app/schemas.py — kept thin until Phase 1.5
 // generates types from OpenAPI directly).
 // ---------------------------------------------------------------------------

@@ -728,6 +728,68 @@ class ContentComment(Base):
 
 
 # ============================================================================
+# Select-then-scan — the FREE "compile" step caches the commenters found on a
+# piece of content so the user can pick which to actually scan + score.
+# ============================================================================
+
+class CandidateList(Base):
+    """A cached list of the commenters found on one piece of content, per user — the free 'compile' step
+    of the select-then-scan flow. Rows are :class:`CommenterCandidate`. Persists the platform pagination
+    cursor so 'add 25/50 more' continues past what is already cached; ``exhausted`` marks the end."""
+
+    __tablename__ = "candidate_lists"
+    __table_args__ = (
+        UniqueConstraint("user_id", "platform", "content_id", name="uq_candidate_list"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    content_id: Mapped[str] = mapped_column(String(255), index=True)
+    content_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # The investigation this post's scored batches grow into (set on the first scored selection); later
+    # selections continue into the SAME investigation so the overall OMI recomputes over everyone scored.
+    investigation_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # The platform pagination cursor for the NEXT page of commenters (null once exhausted).
+    next_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    exhausted: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+
+class CommenterCandidate(Base):
+    """One commenter found on the content, cached for selection (NOT scored yet). Deduplicated per
+    ``(list_id, external_id)``; ``seq`` preserves fetch order for a stable list. ``meta_json`` is the
+    exact ``commenters_meta`` entry and ``comments_json`` the raw comments by this author, so the score
+    step can reconstruct the scan input for the SELECTED accounts without re-fetching."""
+
+    __tablename__ = "commenter_candidates"
+    __table_args__ = (
+        UniqueConstraint("list_id", "external_id", name="uq_commenter_candidate"),
+        Index("ix_candidate_list_seq", "list_id", "seq"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    list_id: Mapped[int] = mapped_column(
+        ForeignKey("candidate_lists.id", ondelete="CASCADE"), index=True,
+    )
+    external_id: Mapped[str] = mapped_column(String(255), index=True)
+    handle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    comment_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    comment_count: Mapped[int] = mapped_column(Integer, default=1)
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    meta_json: Mapped[str] = mapped_column(Text)
+    comments_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scanned: Mapped[bool] = mapped_column(Boolean, default=False)   # set true once scored, for the UI
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+# ============================================================================
 # Phase 12 — Ground-truth labeling for calibration
 # ============================================================================
 

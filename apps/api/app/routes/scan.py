@@ -1389,6 +1389,8 @@ def _run_comprehensive(
                 force_refresh=req.force_refresh,
                 source=source,
                 start_page_token=req.start_page_token,
+                injected_commenters=req.injected_commenters,
+                injected_comments=req.injected_comments,
             )
     except YouTubeClientError as e:
         # Refund + map here ONLY when this endpoint owns the charge. When called

@@ -1,4 +1,4 @@
-import { Workspace } from './workspace';
+import { CommenterSelect } from './commenter-select';
 
 export const metadata = { title: 'Investigate — OMISPHERE' };
 
@@ -7,5 +7,5 @@ export default function InvestigatePage({
 }: {
   searchParams: { url?: string };
 }) {
-  return <Workspace initialUrl={searchParams.url || ''} />;
+  return <CommenterSelect initialUrl={searchParams.url || ''} />;
 }

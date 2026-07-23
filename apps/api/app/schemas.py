@@ -327,6 +327,12 @@ class ComprehensiveScanRequest(BaseModel):
     # supplied, OMI resumes the YouTube commentThreads pagination from there
     # so the user can scan the next batch of commenters on a long video.
     start_page_token: str | None = None
+    # Select-then-scan: a PRE-SELECTED set of commenters to score (from the cached compile step). When
+    # provided the orchestrator scores exactly these instead of fetching the content's commenters, so the
+    # user only pays for and analyzes the accounts she picked. Shapes mirror fetch_content_engagers'
+    # output: injected_commenters = commenters_meta entries; injected_comments = the raw comment items.
+    injected_commenters: list[dict] | None = None
+    injected_comments: list[dict] | None = None
 
 
 class AccountScanOut(BaseModel):

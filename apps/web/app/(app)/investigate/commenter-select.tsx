@@ -1,0 +1,424 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { CheckSquare, Loader2, Plus, Search, Square, Radar, ScanLine } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
+import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
+
+type Phase = 'idle' | 'compiling' | 'list' | 'scanning';
+
+// A score job runs on the backend's pool and saves its investigation regardless of the UI.
+// Persisting the in-flight job (per tab) lets this page re-attach after the user navigates
+// away and back, so the redirect still happens instead of the scan looking cancelled.
+const ACTIVE_SCAN_KEY = 'omi.investigate.activeScan';
+type ActiveScan = { url: string; jobId: string; count: number; ts: number };
+
+function persistScan(v: ActiveScan): void {
+  try { sessionStorage.setItem(ACTIVE_SCAN_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+}
+function clearScan(): void {
+  try { sessionStorage.removeItem(ACTIVE_SCAN_KEY); } catch { /* ignore */ }
+}
+function readScan(): ActiveScan | null {
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_SCAN_KEY);
+    return raw ? (JSON.parse(raw) as ActiveScan) : null;
+  } catch { return null; }
+}
+
+/**
+ * Select-then-scan workspace. Paste a post → COMPILE the commenter list (free) → pick who to scan →
+ * SCORE only the selection (paid). Blue compiles; purple runs the intelligence. The scanner-sweep +
+ * staggered row reveal make the compile feel like an instrument reading the post, not a spinner.
+ */
+export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
+  const router = useRouter();
+  const [url, setUrl] = useState(initialUrl);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [rows, setRows] = useState<CommenterCandidate[]>([]);
+  const [platform, setPlatform] = useState<string>('');
+  const [hasMore, setHasMore] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);          // add-more / compile in flight
+  const [revealFrom, setRevealFrom] = useState(0);  // rows at/after this index animate in
+  const [sweepKey, setSweepKey] = useState(0);      // retriggers the scanner sweep
+  const [scanningCount, setScanningCount] = useState(0); // accounts in the in-flight score job
+  const runRef = useRef(0);
+
+  const unscanned = useMemo(() => rows.filter((r) => !r.scanned), [rows]);
+  const selectableCount = unscanned.length;
+  const allSelected = selectableCount > 0 && unscanned.every((r) => selected.has(r.external_id));
+
+  const compile = useCallback(async (opts: { fetch?: number; refresh?: boolean } = {}) => {
+    if (!url.trim()) return;
+    setError(null);
+    const firstLoad = opts.refresh || phase === 'idle';
+    if (firstLoad) setPhase('compiling');
+    setBusy(true);
+    try {
+      const prevTotal = opts.refresh ? 0 : rows.length;
+      const res = await listCommenters(url.trim(), opts);
+      setPlatform(res.platform);
+      setRows(res.commenters);
+      setHasMore(res.has_more);
+      setRevealFrom(prevTotal);
+      setSweepKey((k) => k + 1);
+      setPhase('list');
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Could not read this post. Check the link and try again.';
+      setError(msg);
+      if (firstLoad) setPhase('idle');
+    } finally {
+      setBusy(false);
+    }
+  }, [url, phase, rows.length]);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelected((prev) => {
+      if (allSelected) return new Set();
+      return new Set(unscanned.map((r) => r.external_id));
+    });
+
+  const rowsRef = useRef(0);
+  rowsRef.current = rows.length;
+
+  // Poll a (new or resumed) score job to completion, then go to the saved investigation.
+  const pollToInvestigation = useCallback(async (jobId: string, runId: number, fallbackSlug: string | null) => {
+    try {
+      const done = await resumeLinkScanJob(jobId, () => runRef.current === runId, () => {});
+      if (runRef.current !== runId) return;
+      const slug = done.investigation_slug || fallbackSlug;
+      if (done.status !== 'done' || !slug) {
+        throw new Error(done.error || 'The scan finished but produced no investigation. Your credits were refunded — try again.');
+      }
+      clearScan();
+      router.push(`/investigations/${slug}`);
+    } catch (e) {
+      if (e instanceof ScanCancelledError || runRef.current !== runId) return;
+      clearScan();
+      const msg =
+        e instanceof ApiError
+          ? e.status === 402 ? 'Out of credits. Visit Settings to top up.' : e.message
+          : e instanceof Error ? e.message
+          : 'The scan failed. Please try again.';
+      setError(msg);
+      setPhase((p) => (p === 'scanning' ? (rowsRef.current > 0 ? 'list' : 'idle') : p));
+    }
+  }, [router]);
+
+  const scan = useCallback(async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setError(null);
+    setPhase('scanning');
+    setScanningCount(ids.length);
+    const runId = ++runRef.current;
+    let job;
+    try {
+      job = await scoreSelection(url.trim(), ids);
+    } catch (e) {
+      if (runRef.current !== runId) return;
+      const msg =
+        e instanceof ApiError
+          ? e.status === 402 ? 'Out of credits. Visit Settings to top up.' : e.message
+          : 'The scan could not start. Please try again.';
+      setError(msg);
+      setPhase('list');
+      return;
+    }
+    persistScan({ url: url.trim(), jobId: job.job_id, count: ids.length, ts: Date.now() });
+    await pollToInvestigation(job.job_id, runId, job.investigation_slug);
+  }, [selected, url, pollToInvestigation]);
+
+  // On mount: re-attach to an in-flight score job the user navigated away from (the backend kept
+  // running and saved its investigation, so resuming the poll restores the redirect). Otherwise,
+  // arriving with a URL (e.g. "Scan more commenters" on an investigation) compiles immediately —
+  // the list is cached server-side, so it comes back instantly and costs nothing.
+  useEffect(() => {
+    const saved = readScan();
+    if (saved?.jobId && Date.now() - (saved.ts || 0) <= 9 * 60 * 1000) {
+      const runId = ++runRef.current;
+      setUrl(saved.url);
+      setScanningCount(saved.count);
+      setPhase('scanning');
+      void pollToInvestigation(saved.jobId, runId, null);
+      return;
+    }
+    if (saved) clearScan(); // stale or malformed
+    if (initialUrl.trim()) void compile();
+    // Mount-only: one re-attach or one auto-compile.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selCount = selected.size;
+
+  return (
+    <div className="space-y-5 -mt-2">
+      <header className="flex items-baseline justify-between flex-wrap gap-3">
+        <div>
+          <span className="section-label">Intelligence · Workspace</span>
+          <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-2">Investigate</h1>
+        </div>
+        {platform && (
+          <span className="font-mono text-2xs tracking-[0.16em] uppercase text-fg-mute">
+            source · {platform === 'x' ? 'X / Twitter' : platform}
+          </span>
+        )}
+      </header>
+
+      {/* ── Input ─────────────────────────────────────────────────────────── */}
+      <Card>
+        <form
+          onSubmit={(e) => { e.preventDefault(); void compile({ refresh: rows.length > 0 }); }}
+          className="flex flex-col sm:flex-row gap-3"
+        >
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none" />
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste a YouTube video or X (Twitter) post…"
+              aria-label="Post link"
+              className="h-12 w-full pl-10 pr-3 text-base rounded-lg bg-bg-inset border border-border-2 text-fg
+                         placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!url.trim() || busy || phase === 'scanning'}
+            className="btn-lamp h-12 px-6 rounded-lg font-semibold inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+          >
+            {phase === 'compiling'
+              ? <><Loader2 size={16} className="animate-spin" /> Reading…</>
+              : rows.length > 0
+                ? <><ScanLine size={16} /> Re-read</>
+                : <><ScanLine size={16} /> Compile commenters</>}
+          </button>
+        </form>
+        <p className="mt-2.5 font-mono text-2xs tracking-wider text-fg-faint">
+          Listing the commenters is free — no scoring, no credits. You choose who to scan next.
+        </p>
+      </Card>
+
+      {error && (
+        <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger font-mono">
+          {error}
+        </div>
+      )}
+
+      {phase === 'compiling' && <CompilingState />}
+
+      {/* ── The commenter list ────────────────────────────────────────────── */}
+      {phase === 'list' && rows.length > 0 && (
+        <div className="rounded-xl border border-border-1 bg-bg-elev overflow-hidden">
+          {/* HUD header */}
+          <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-b border-divider bg-bg/60">
+            <span className="flex items-center gap-2 font-mono text-2xs tracking-[0.16em] uppercase text-accent-text">
+              <Radar size={13} className="text-accent" />
+              {rows.length} commenter{rows.length === 1 ? '' : 's'} found
+            </span>
+            <span className="font-mono text-2xs tracking-[0.16em] uppercase text-violet-2">
+              {selCount} selected
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={toggleAll}
+                disabled={selectableCount === 0}
+                className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
+              >
+                {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
+                {allSelected ? 'Clear' : 'Select all'}
+              </button>
+              <button
+                onClick={() => void compile({ fetch: 25 })}
+                disabled={!hasMore || busy}
+                className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
+              >
+                {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Add 25
+              </button>
+              <button
+                onClick={() => void compile({ fetch: 50 })}
+                disabled={!hasMore || busy}
+                className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
+              >
+                <Plus size={13} /> 50
+              </button>
+            </div>
+          </div>
+
+          {/* rows + the scanner sweep */}
+          <div className="scan-shell relative max-h-[62vh] overflow-y-auto">
+            <span key={sweepKey} className="scan-beam" aria-hidden />
+            <ul>
+              {rows.map((r, i) => {
+                const isSel = selected.has(r.external_id);
+                const fresh = i >= revealFrom;
+                return (
+                  <li
+                    key={r.external_id}
+                    className={`commenter-row ${fresh ? 'reveal' : ''}`}
+                    style={fresh ? ({ ['--i' as string]: Math.min(i - revealFrom, 18) }) : undefined}
+                  >
+                    <button
+                      type="button"
+                      disabled={r.scanned}
+                      onClick={() => toggle(r.external_id)}
+                      aria-pressed={isSel}
+                      className={`row-btn w-full text-left flex items-start gap-3 px-4 py-3 border-b border-divider
+                        ${isSel ? 'is-selected' : ''} ${r.scanned ? 'is-scanned' : ''}`}
+                    >
+                      <span className={`box ${isSel ? 'box-on' : ''}`} aria-hidden>
+                        {isSel && <CheckSquare size={13} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm text-fg break-all">{r.handle ?? r.external_id}</span>
+                          {r.scanned && (
+                            <span className="font-mono text-[0.6rem] tracking-wider uppercase text-tier-low border border-tier-low/40 rounded px-1.5 py-0.5">
+                              scanned
+                            </span>
+                          )}
+                          {r.comment_count > 1 && (
+                            <span className="font-mono text-[0.6rem] text-fg-faint">×{r.comment_count}</span>
+                          )}
+                        </span>
+                        {r.comment && (
+                          <span className="block text-sm text-fg-dim leading-snug mt-0.5 line-clamp-2">{r.comment}</span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {/* action bar */}
+          <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-divider bg-bg/60">
+            <p className="font-mono text-2xs tracking-wider text-fg-faint">
+              {hasMore ? 'More commenters available — add another page any time.' : 'Full commenter list loaded.'}
+            </p>
+            <button
+              onClick={() => void scan()}
+              disabled={selCount === 0}
+              className="btn-ai ml-auto h-10 px-5 rounded-lg font-semibold inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Radar size={15} />
+              Scan {selCount > 0 ? `${selCount} ` : ''}selected
+            </button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'scanning' && <ScanningState count={scanningCount} />}
+
+      <style jsx>{`
+        .scan-shell { scrollbar-width: thin; }
+        .scan-beam {
+          position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 2; pointer-events: none;
+          background: linear-gradient(90deg, transparent, var(--accent) 20%, var(--accent-2) 50%, var(--accent) 80%, transparent);
+          box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent);
+          opacity: 0;
+          animation: beam 720ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+        /* Sweeps the visible list region (shell is max-h-[62vh]); vh keeps it on the GPU. */
+        @keyframes beam {
+          0% { transform: translateY(0); opacity: 0; }
+          8% { opacity: 0.9; }
+          92% { opacity: 0.9; }
+          100% { transform: translateY(62vh); opacity: 0; }
+        }
+        .commenter-row.reveal {
+          opacity: 0;
+          animation: row-in 300ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+          animation-delay: calc(var(--i) * 32ms);
+        }
+        @keyframes row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        .row-btn { transition: background-color 140ms ease, box-shadow 140ms ease, transform 120ms ease-out; }
+        /* Hover gated: touch taps fire a false :hover that would stick the tint on mobile. */
+        @media (hover: hover) and (pointer: fine) {
+          .row-btn:hover:not(:disabled) { background: var(--bg-elev-2); }
+        }
+        .row-btn:active:not(:disabled) { transform: translateY(1px); }
+        .row-btn.is-selected { background: color-mix(in oklab, var(--violet-solid) 12%, var(--bg-elev)); box-shadow: inset 2px 0 0 var(--violet-2); }
+        .row-btn.is-scanned { opacity: 0.55; cursor: default; }
+        .box {
+          margin-top: 1px; width: 18px; height: 18px; flex: none; border-radius: 5px;
+          border: 1.5px solid var(--border-hot); display: grid; place-items: center; color: #fff;
+          transition: background 120ms ease, border-color 120ms ease;
+        }
+        /* Selection fires many times a session — a subtle pop, not a carnival bounce. */
+        .box-on { background: var(--violet-solid); border-color: var(--violet-solid); animation: pop 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+        @keyframes pop { 0% { transform: scale(0.9); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }
+        @media (prefers-reduced-motion: reduce) {
+          .scan-beam, .commenter-row.reveal, .box-on { animation: none !important; }
+          .commenter-row.reveal { opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// The compile placeholder — a calm scanning indicator while the list is read.
+function CompilingState() {
+  return (
+    <div className="rounded-xl border border-border-1 bg-bg-elev-2/50 p-8 flex items-center gap-4">
+      <span className="relative grid place-items-center w-10 h-10 shrink-0">
+        <Radar size={20} className="text-accent radar-spin" />
+      </span>
+      <div>
+        <p className="text-sm text-fg">Reading the post…</p>
+        <p className="text-xs text-fg-mute mt-0.5">Collecting the commenters and their comments. No scoring yet.</p>
+      </div>
+      <style jsx>{`
+        .radar-spin { animation: spin 1.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .radar-spin { animation: none; } }
+      `}</style>
+    </div>
+  );
+}
+
+// The scan-in-progress state — the intelligence step is running on the selection.
+function ScanningState({ count }: { count: number }) {
+  return (
+    <div className="rounded-xl border border-violet-solid/40 bg-violet-solid/[0.06] p-8">
+      <div className="flex items-center gap-4">
+        <span className="relative grid place-items-center w-12 h-12 shrink-0">
+          <span className="ring" aria-hidden />
+          <Radar size={22} className="text-violet-2 radar-spin" />
+        </span>
+        <div>
+          <p className="text-sm text-fg font-medium">
+            Analyzing {count} account{count === 1 ? '' : 's'}…
+          </p>
+          <p className="text-xs text-fg-mute mt-0.5">
+            Pulling each account&apos;s history, detecting coordination, then Omi writes the verdict. This can take a
+            couple of minutes — you&apos;ll be taken to the investigation when it&apos;s ready.
+          </p>
+        </div>
+      </div>
+      <style jsx>{`
+        .radar-spin { animation: spin 1.6s linear infinite; }
+        .ring {
+          position: absolute; inset: 0; border-radius: 999px;
+          border: 1.5px solid color-mix(in oklab, var(--violet-solid) 45%, transparent);
+          border-top-color: var(--violet-2); animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .radar-spin, .ring { animation: none; } }
+      `}</style>
+    </div>
+  );
+}
