@@ -100,6 +100,33 @@ def test_refresh_rebuilds_the_list_from_scratch(monkeypatch):
         assert b["fetched_now"] == 2
 
 
+def test_compile_with_no_commenters_returns_empty_ok(monkeypatch):
+    """A post with comments off / no replies must return a clean empty list (total 0), NOT an error and
+    NOT a blank — the UI renders an explicit "no commenters" state off this."""
+    empty = _FakeSource([([], [], None)])
+    monkeypatch.setattr(scan_async, "_source_for_platform", lambda platform, settings: empty)
+    with TestClient(app) as tc:
+        r = tc.post("/v1/scan/link/commenters", json={"url": _URL})
+        assert r.status_code == 200, r.text
+        b = r.json()
+        assert b["commenters"] == [] and b["total"] == 0
+        assert b["has_more"] is False and b["fetched_now"] == 0
+
+
+def test_compile_fetch_error_is_a_clean_502_not_a_raw_500(monkeypatch):
+    """Any unexpected error from the platform fetch is wrapped into a clean 502 with a helpful message,
+    so the compile step never surfaces an opaque 500 (which the UI reads as "loads then cuts out")."""
+    class _Boom:
+        def fetch_content_engagers(self, *a, **k):
+            raise RuntimeError("provider exploded")
+
+    monkeypatch.setattr(scan_async, "_source_for_platform", lambda platform, settings: _Boom())
+    with TestClient(app) as tc:
+        r = tc.post("/v1/scan/link/commenters", json={"url": _URL})
+        assert r.status_code == 502, r.text
+        assert "try again" in r.json()["detail"].lower()
+
+
 def test_missing_and_unrecognized_urls_are_rejected(monkeypatch):
     with TestClient(app) as tc:
         assert tc.post("/v1/scan/link/commenters", json={}).status_code == 400

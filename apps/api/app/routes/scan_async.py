@@ -182,6 +182,8 @@ def list_commenters(
 
         fetched_now = 0
         if fetch_n > 0 and not cl.exhausted:
+            # _source_for_platform raises HTTPException(503) when a platform key is missing — let that
+            # through unchanged so the UI shows the real "key not configured" message.
             source = _source_for_platform(platform, settings)
             try:
                 commenters_meta, all_comments, next_cursor = source.fetch_content_engagers(
@@ -192,6 +194,20 @@ def list_commenters(
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"Could not fetch the commenters: {exc}",
+                ) from exc
+            except HTTPException:
+                raise
+            except Exception as exc:  # noqa: BLE001 — never surface a raw 500 to the compile step
+                log.warning(
+                    "list_commenters fetch failed platform=%s content_id=%s: %s",
+                    platform, content_id, exc,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        "Could not read this post's commenters. The source may be rate-limiting, or "
+                        "the post may be private or unavailable — please try again in a moment."
+                    ),
                 ) from exc
 
             comments_by_author: dict[str, list[dict]] = {}
