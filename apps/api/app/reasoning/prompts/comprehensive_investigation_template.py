@@ -35,7 +35,7 @@ from pathlib import Path
 
 from app.evidence.bundle import digest
 
-COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v5"
+COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v6"
 
 # The Lead-Investigator synthesis wrapper is DERIVED from the EXISTING analyst response schema — the one
 # wrapper source of truth — so the website response, the Governor validation, and the deterministic Floor
@@ -292,8 +292,10 @@ def _render_output_contract(schema: dict) -> str:
             f"account because its evidence is thin: a sparse account (few or no recent posts) still gets an "
             f"item — score it LOW with an explicit note that its history is too thin to read, and move on. "
             f"An empty or partial array when accounts are present is a CONTRACT VIOLATION. This per-account "
-            f"array is more important than a long executive narrative — keep the prose sections tight so you "
-            f"have the budget to score EVERY account. Each item is an object with: the alias 'ref' (present "
+            f"array AND the executive wrapper are BOTH mandatory — you must emit every wrapper field "
+            f"(verdict, omi_score, suspicion_tier, headline, assessment) AND one item per account; never "
+            f"drop the wrapper to save room. Keep the executive prose tight and concise, but always present. "
+            f"Each item is an object with: the alias 'ref' (present "
             f"in the alias legend); THIS ACCOUNT'S OWN 'omi_score' — an INTEGER 0-100 you reason from THAT "
             f"account's raw evidence (follower/following counts, account age, post history); its "
             f"'suspicion_tier' that MUST agree with the score (0-24 low, 25-49 moderate, 50-74 elevated, "
@@ -314,7 +316,8 @@ def _render_output_contract(schema: dict) -> str:
         f"(schema_id: {schema.get('schema_id', COMPREHENSIVE_ASSESSMENT_SCHEMA_ID)}). It MUST contain "
         f"every REQUIRED top-level field and NO additional top-level fields (additionalProperties is "
         f"false).\n"
-        f"REQUIRED Lead-Investigator synthesis fields (the wrapper): {', '.join(wrapper_required)}. "
+        f"REQUIRED Lead-Investigator synthesis fields (the wrapper) — EVERY ONE is mandatory in EVERY "
+        f"response; never omit them, and never nest them under another key: {', '.join(wrapper_required)}. "
         f"evidence_for / evidence_against are arrays of items, each with a 'claim' and >=1 "
         f"'evidence_refs' citing only evidence ids/aliases present in the evidence; evidence_against is "
         f"empty ONLY if confidence_rationale states no exculpatory signal was present.\n"

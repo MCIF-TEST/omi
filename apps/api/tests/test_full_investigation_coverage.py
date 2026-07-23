@@ -209,12 +209,14 @@ def test_normal_stop_with_missing_is_marked():
 
 
 def test_floor_surfaces_no_per_account_content():
-    # A response that fails canonical validation floors; per-account content must NOT leak, and completion
-    # is reported as not-applicable. AI-first coercion repairs harmless shape gaps (a missing domain would
-    # be backfilled and render), so we force the Floor with a missing CORE field the model alone can
-    # produce (verdict) — coercion never invents substance.
+    # A response with NOTHING salvageable floors; per-account content must NOT leak, and completion is
+    # reported as not-applicable. Coercion repairs harmless shape gaps, and a wrapper omitted while
+    # per-account results ARE present is now salvaged from those results (see
+    # test_wrapper_is_salvaged_from_per_account_results_...). To force a genuine Floor we remove the core
+    # verdict AND leave no per-account results to derive an overall read from.
     bad = _model_output(50)
-    del bad["verdict"]                                # missing core substance → un-coercible → Floor
+    del bad["verdict"]                                # missing core substance
+    bad["commenter_assessments"] = []                # nothing to salvage a wrapper from → genuine Floor
     reset_db_for_tests("sqlite:///:memory:")
     with patch("app.reasoning.model_providers.openrouter.urllib.request.urlopen",
                lambda req, timeout=None: _Resp(_or_body(bad))):

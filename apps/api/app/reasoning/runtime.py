@@ -194,6 +194,11 @@ class AIInvestigationRuntime:
         if raw:
             obj = extract_json(raw)
             if isinstance(obj, dict):
+                # Diagnostic: record the model's RAW top-level keys (names only, no values/secrets) so a
+                # floored-after-success scan tells us WHAT shape the model produced vs. what the contract
+                # expects — the fastest way to spot a stale OpenRouter preset or an envelope wrapper.
+                if capture is not None:
+                    capture["model_output_keys"] = sorted(obj.keys())[:40]
                 if canonical_output_schema is not None:
                     # AI-first: coerce the model output to the contract's SHAPE up front (drop unknown keys,
                     # backfill structural gaps, derive tier, drop malformed evidence) so the WHOLE downstream
@@ -312,8 +317,9 @@ class AIInvestigationRuntime:
         errs = validate_comprehensive_model_output(
             obj, schema=canonical_schema, section_keys=COMPREHENSIVE_SECTION_KEYS)
         if errs:
-            logger.warning("runtime: comprehensive model output failed canonical validation %s; Floor",
-                           errs[:5])
+            logger.warning("runtime: comprehensive model output failed canonical validation %s; "
+                           "model_output_keys=%s; Floor",
+                           errs[:5], (capture or {}).get("model_output_keys"))
             # Record WHY the model's 200 response was rejected, so the forensic trace/UI can explain a
             # floored-after-success scan (schema mismatch) instead of a bare "unknown". No secret, no body.
             if capture is not None:
