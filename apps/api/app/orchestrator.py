@@ -746,6 +746,8 @@ def scan_comprehensive(
     force_refresh: bool,
     source: Source,
     start_page_token: str | None = None,
+    injected_commenters: list[dict] | None = None,
+    injected_comments: list[dict] | None = None,
 ) -> ComprehensiveOutput:
     """Run whatever the user supplied + cross-link the results.
 
@@ -839,12 +841,20 @@ def scan_comprehensive(
         video_id = source.parse_content_id(video_url_or_id)
         if video_id:
             resolved_video_id = video_id
-            commenters_meta, all_comments, next_page_token = source.fetch_content_engagers(
-                video_id,
-                max_commenters=max_commenters,
-                max_comments=max_commenters * 3,
-                start_page_token=start_page_token,
-            )
+            if injected_commenters is not None:
+                # Select-then-scan: score EXACTLY the commenters the user picked from the cached compile
+                # step — do NOT re-fetch the content's commenters. The list was already gathered (and
+                # paid for with nothing); scoring runs only on this selection.
+                commenters_meta = injected_commenters
+                all_comments = injected_comments or []
+                next_page_token = None
+            else:
+                commenters_meta, all_comments, next_page_token = source.fetch_content_engagers(
+                    video_id,
+                    max_commenters=max_commenters,
+                    max_comments=max_commenters * 3,
+                    start_page_token=start_page_token,
+                )
 
             video_output = scan_video_full(
                 session,

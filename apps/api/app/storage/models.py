@@ -749,6 +749,9 @@ class CandidateList(Base):
     platform: Mapped[str] = mapped_column(String(32), index=True)
     content_id: Mapped[str] = mapped_column(String(255), index=True)
     content_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # The investigation this post's scored batches grow into (set on the first scored selection); later
+    # selections continue into the SAME investigation so the overall OMI recomputes over everyone scored.
+    investigation_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # The platform pagination cursor for the NEXT page of commenters (null once exhausted).
     next_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
     exhausted: Mapped[bool] = mapped_column(Boolean, default=False)

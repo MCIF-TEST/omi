@@ -107,3 +107,44 @@ def test_missing_and_unrecognized_urls_are_rejected(monkeypatch):
                             lambda url: {"platform": "unknown", "kind": "unknown"})
         r = tc.post("/v1/scan/link/commenters", json={"url": "not a link"})
         assert r.status_code == 400
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2 — the paid score step runs on ONLY the selected commenters.
+# --------------------------------------------------------------------------- #
+def test_score_charges_per_selected_and_injects_only_the_selection(monkeypatch):
+    from app.core.auth import compute_scan_credits
+    from app.core.config import get_settings
+
+    fake = _FakeSource(_pages())
+    monkeypatch.setattr(scan_async, "_source_for_platform", lambda platform, settings: fake)
+    captured: dict = {}
+    monkeypatch.setattr(scan_async.background, "submit",
+                        lambda fn, **kw: (captured.update(kw), object())[1])
+    charged: dict = {}
+    monkeypatch.setattr(scan_async, "consume_credits",
+                        lambda uid, cost, **kw: charged.update({"cost": cost}))
+
+    with TestClient(app) as tc:
+        tc.post("/v1/scan/link/commenters", json={"url": _URL})           # compile → alice, bob
+        r = tc.post("/v1/scan/link/score", json={"url": _URL, "selected": ["alice"]})
+        assert r.status_code == 202, r.text
+        body = r.json()
+        assert body["status"] == "queued" and body["investigation_slug"]
+
+        creq = captured["creq"]
+        assert [m["channel_id"] for m in creq.injected_commenters] == ["alice"]   # ONLY the selection
+        assert captured["selected_ids"] == ["alice"]
+        assert captured["candidate_list_id"]
+        # paid for 1 selected commenter, not the whole cached list
+        assert charged["cost"] == compute_scan_credits("x", 1, get_settings())
+        # the free list step never triggered the per-commenter scoring source
+        assert fake.calls == 1   # only the compile fetch
+
+
+def test_score_requires_a_selection_and_a_compiled_list(monkeypatch):
+    with TestClient(app) as tc:
+        assert tc.post("/v1/scan/link/score", json={"url": _URL, "selected": []}).status_code == 400
+        # a real selection but no compiled list yet
+        assert tc.post("/v1/scan/link/score",
+                       json={"url": _URL, "selected": ["alice"]}).status_code == 400
