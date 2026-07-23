@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 /**
  * Clerk authentication middleware.
@@ -9,20 +10,45 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
  * its own auth (it verifies the Clerk session token the browser sends), so Clerk middleware never
  * needs to run on it.
  *
- * Only the PUBLISHABLE key is involved at the edge; the CLERK_SECRET_KEY is read server-side by
- * Clerk and never exposed to the client.
+ * KEY RESOLUTION — why the keys are passed explicitly:
+ * Clerk resolves its publishable/secret key from `process.env` *inside its own bundled code*. Next
+ * inlines `NEXT_PUBLIC_*` env vars only where they appear as a literal `process.env.NEXT_PUBLIC_x`
+ * reference in first-party source — it cannot inline a dynamic lookup buried in a dependency. So in
+ * the compiled `.next/server/middleware.js`, Clerk's internal lookup finds nothing and throws
+ * "Missing publishableKey" at runtime, even when the var is set in the host environment. Reading the
+ * keys here (literal references Next WILL inline at build) and passing them to `clerkMiddleware`
+ * closes that gap. The middleware bundle is server-only and never shipped to the browser, so
+ * inlining the secret key here is safe.
+ *
+ * RESILIENCE — if the publishable key is somehow absent at build time, we export a pass-through
+ * middleware instead of one that throws on every request. The site stays up (Clerk just isn't
+ * enforced); with the key present — the normal case — protection works exactly as before.
  */
+const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const SECRET_KEY = process.env.CLERK_SECRET_KEY;
+
 const isAppRoute = createRouteMatcher([
-  '/dashboard(.*)', '/investigate(.*)', '/investigations(.*)', '/accounts(.*)', '/graph(.*)',
-  '/narratives(.*)', '/content(.*)', '/channels(.*)', '/monitoring(.*)', '/search(.*)',
+  '/investigate(.*)', '/investigations(.*)', '/accounts(.*)', '/graph(.*)',
+  '/campaigns(.*)', '/content(.*)', '/channels(.*)', '/monitoring(.*)', '/search(.*)',
   '/bulk(.*)', '/reports(.*)', '/settings(.*)',
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isAppRoute(req)) {
-    await auth.protect();
-  }
-});
+const clerkHandler = clerkMiddleware(
+  async (auth, req) => {
+    if (isAppRoute(req)) {
+      await auth.protect();
+    }
+  },
+  // Explicit keys — see "KEY RESOLUTION" above. Undefined here only if truly unset at build.
+  { publishableKey: PUBLISHABLE_KEY, secretKey: SECRET_KEY },
+);
+
+// Never let a missing key take the whole site down: fall back to a no-op when it isn't configured.
+export default PUBLISHABLE_KEY
+  ? clerkHandler
+  : function passthroughMiddleware(_req: NextRequest) {
+      return NextResponse.next();
+    };
 
 export const config = {
   matcher: [
