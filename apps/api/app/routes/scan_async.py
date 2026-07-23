@@ -283,6 +283,19 @@ def list_commenters(
             cl.exhausted = not next_cursor
             session.flush()
 
+        # Always record this post in the content DB — even if the user never scans it. Every X post /
+        # YouTube video that the system loads is persisted, not just the selected ones. Idempotent +
+        # best-effort: a failure here never affects the free commenter list.
+        try:
+            from app.content.service import ContentIntelligenceService
+            ContentIntelligenceService(session).get_or_create_entity(
+                platform=platform, content_id=content_id,
+                kind=("video" if platform == "youtube" else "post"),
+                title=cl.content_title, canonical_url=cl.content_url or url,
+            )
+        except Exception:  # noqa: BLE001 — content bookkeeping must never break the list
+            pass
+
         rows = list(session.execute(
             select(CommenterCandidate)
             .where(CommenterCandidate.list_id == cl.id)
