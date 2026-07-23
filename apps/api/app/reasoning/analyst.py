@@ -172,28 +172,45 @@ def _openrouter_transport(settings: Settings, *, timeout: float, max_retries: in
 
     def _call(system: str, user: str, config: Any) -> str | None:
         from app.reasoning.model_providers import ReasoningRequest
+        from app.reasoning.model_providers.remote import extract_json
 
-        t0 = time.perf_counter()
-        try:
-            resp = provider.complete(ReasoningRequest(
-                system=system, user=user, response_format="text",
-                temperature=getattr(config, "temperature", 0.2),
-                max_tokens=getattr(config, "max_new_tokens", 1024)))
-            dt = (time.perf_counter() - t0) * 1000.0
-            logger.info("analyst.model_call: OK provider=openrouter preset=%s model_ref=%s chars=%d "
-                        "latency_ms=%.0f", getattr(settings, "openrouter_preset", None) or "-",
-                        provider._model_ref(), len(resp.text or ""), dt)
-            return resp.text
-        except Exception as exc:  # noqa: BLE001 — provider failure -> deterministic fallback
-            dt = (time.perf_counter() - t0) * 1000.0
-            if capture is not None:
-                capture["endpoint_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
-                capture["endpoint_latency_ms"] = round(dt, 2)
-            logger.warning("analyst.model_call: FAILED provider=openrouter preset=%s latency_ms=%.0f "
-                           "err=%s: %s -> deterministic fallback",
-                           getattr(settings, "openrouter_preset", None) or "-", dt,
-                           type(exc).__name__, str(exc)[:160])
-            return None
+        req = ReasoningRequest(
+            system=system, user=user, response_format="text",
+            temperature=getattr(config, "temperature", 0.2),
+            max_tokens=getattr(config, "max_new_tokens", 1024))
+        preset_label = getattr(settings, "openrouter_preset", None) or "-"
+        text: str | None = None
+        # One extra attempt as a SAFEGUARD: if a 200 reply yields no usable JSON (a rare empty/garbled
+        # response), try once more. We do NOT retry a TRUNCATED reply (finish_reason=length) — the
+        # extractor already salvaged what arrived and a retry would just truncate again at the same cap.
+        for attempt in range(2):
+            t0 = time.perf_counter()
+            try:
+                resp = provider.complete(req)
+                dt = (time.perf_counter() - t0) * 1000.0
+                text = resp.text
+                parsed_ok = extract_json(text or "") is not None
+                logger.info("analyst.model_call: OK provider=openrouter preset=%s model_ref=%s chars=%d "
+                            "latency_ms=%.0f parsed=%s attempt=%d", preset_label,
+                            provider._model_ref(), len(text or ""), dt, parsed_ok, attempt + 1)
+                if parsed_ok:
+                    return text
+                truncated = (capture or {}).get("finish_reason") == "length"
+                if truncated or attempt == 1:
+                    return text  # let the extractor's salvage / the Floor take it from here
+                logger.warning("analyst.model_call: 200 with no parseable JSON (finish=%s) — retrying once",
+                               (capture or {}).get("finish_reason"))
+                continue
+            except Exception as exc:  # noqa: BLE001 — provider failure -> deterministic fallback
+                dt = (time.perf_counter() - t0) * 1000.0
+                if capture is not None:
+                    capture["endpoint_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+                    capture["endpoint_latency_ms"] = round(dt, 2)
+                logger.warning("analyst.model_call: FAILED provider=openrouter preset=%s latency_ms=%.0f "
+                               "err=%s: %s -> deterministic fallback", preset_label, dt,
+                               type(exc).__name__, str(exc)[:160])
+                return None
+        return text
 
     return _call
 

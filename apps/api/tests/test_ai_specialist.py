@@ -212,6 +212,31 @@ def test_extract_json_strips_thinking_trace():
     assert extract_json("no json here") is None
 
 
+def test_extract_json_strips_markdown_fence_and_trailing_prose():
+    assert extract_json('```json\n{"omi_score": 40}\n```') == {"omi_score": 40}
+    assert extract_json('{"omi_score": 40}\n\nHope this helps!') == {"omi_score": 40}
+
+
+def test_extract_json_salvages_a_truncated_response():
+    """A response cut off at the output-token cap must not lose every per-account result it produced —
+    the extractor salvages the accounts that DID arrive rather than returning nothing."""
+    import json as _json
+    full = _json.dumps({
+        "omi_score": 40, "suspicion_tier": "elevated", "verdict": "mixed",
+        "commenter_assessments": [
+            {"ref": "A1", "omi_score": 12, "suspicion_tier": "low", "assessment": "reads organic.", "citations": ["A1"]},
+            {"ref": "A2", "omi_score": 82, "suspicion_tier": "high", "assessment": "amplifier profile.", "citations": ["A2"]},
+            {"ref": "A3", "omi_score": 55, "suspicion_tier": "elevated", "assessment": "thin history.", "citations": ["A3"]},
+        ],
+    })
+    # Cut inside the third account's object (simulates hitting the token cap mid-emit).
+    salvaged = extract_json(full[: full.index("thin history") + 4])
+    assert salvaged is not None
+    refs = [a.get("ref") for a in salvaged.get("commenter_assessments", [])]
+    assert "A1" in refs and "A2" in refs          # the completed accounts survived
+    assert salvaged["omi_score"] == 40            # the wrapper survived
+
+
 # --- runtime readiness: activation is configuration ------------------------- #
 def test_build_council_is_deterministic_when_disabled():
     assert isinstance(build_council(_Settings(analyst_enabled=False))[0], BehaviorAnalyst)
