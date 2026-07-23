@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CheckSquare, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckSquare, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
@@ -386,28 +386,41 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
                       disabled={r.scanned}
                       onClick={() => toggle(r.external_id)}
                       aria-pressed={isSel}
-                      className={`row-btn w-full text-left flex items-start gap-3 px-4 py-3 border-b border-divider
+                      aria-label={`Select ${r.handle ?? r.external_id}${r.comment ? `, who commented: ${r.comment}` : ''}`}
+                      className={`row-btn w-full text-left flex items-start gap-3 px-4 py-3.5 border-b border-divider
                         ${isSel ? 'is-selected' : ''} ${r.scanned ? 'is-scanned' : ''}`}
                     >
-                      <span className={`box ${isSel ? 'box-on' : ''}`} aria-hidden>
-                        {isSel && <CheckSquare size={13} />}
-                      </span>
+                      <Avatar src={r.avatar_url} handle={r.handle ?? r.external_id} />
+
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-sm text-fg break-all">{r.handle ?? r.external_id}</span>
+                        {/* The comment is the hero — it's what you read to decide who to scan. */}
+                        {r.comment ? (
+                          <span className="comment-text block text-fg line-clamp-3">{r.comment}</span>
+                        ) : (
+                          <span className="block text-sm text-fg-mute italic">Engaged without a text comment</span>
+                        )}
+                        {/* Byline: who said it, kept quiet under the comment. */}
+                        <span className="flex items-center gap-2 flex-wrap mt-1.5">
+                          <span className="font-mono text-xs text-fg-mute truncate max-w-[16rem]">
+                            @{(r.handle ?? r.external_id).replace(/^@/, '')}
+                          </span>
+                          {r.comment_count > 1 && (
+                            <span className="font-mono text-[0.65rem] text-fg-faint">· {r.comment_count} comments</span>
+                          )}
                           {r.scanned && (
                             <span className="font-mono text-[0.6rem] tracking-wider uppercase text-tier-low border border-tier-low/40 rounded px-1.5 py-0.5">
                               scanned
                             </span>
                           )}
-                          {r.comment_count > 1 && (
-                            <span className="font-mono text-[0.6rem] text-fg-faint">×{r.comment_count}</span>
-                          )}
                         </span>
-                        {r.comment && (
-                          <span className="block text-sm text-fg-dim leading-snug mt-0.5 line-clamp-2">{r.comment}</span>
-                        )}
                       </span>
+
+                      {/* Selection pip — fills with a spring when picked. */}
+                      {!r.scanned && (
+                        <span className={`pip ${isSel ? 'pip-on' : ''}`} aria-hidden>
+                          {isSel && <Check size={13} strokeWidth={3} />}
+                        </span>
+                      )}
                     </button>
                   </li>
                 );
@@ -471,34 +484,76 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
           92% { opacity: 0.9; }
           100% { transform: translateY(62vh); opacity: 0; }
         }
+        /* content-visibility lets the browser skip rendering off-screen rows — the whole comment
+           section (up to ~1000 rows) scrolls smoothly without a virtualization library. */
+        .commenter-row { content-visibility: auto; contain-intrinsic-size: auto 76px; }
         .commenter-row.reveal {
           opacity: 0;
           animation: row-in 300ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
           animation-delay: calc(var(--i) * 32ms);
         }
         @keyframes row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
         .row-btn { transition: background-color 140ms ease, box-shadow 140ms ease, transform 120ms ease-out; }
         /* Hover gated: touch taps fire a false :hover that would stick the tint on mobile. */
         @media (hover: hover) and (pointer: fine) {
           .row-btn:hover:not(:disabled) { background: var(--bg-elev-2); }
         }
-        .row-btn:active:not(:disabled) { transform: translateY(1px); }
-        .row-btn.is-selected { background: color-mix(in oklab, var(--violet-solid) 12%, var(--bg-elev)); box-shadow: inset 2px 0 0 var(--violet-2); }
-        .row-btn.is-scanned { opacity: 0.55; cursor: default; }
-        .box {
-          margin-top: 1px; width: 18px; height: 18px; flex: none; border-radius: 5px;
+        .row-btn:active:not(:disabled) { transform: scale(0.992); }
+        .row-btn.is-selected {
+          background: color-mix(in oklab, var(--violet-solid) 13%, var(--bg-elev));
+          box-shadow: inset 3px 0 0 var(--violet-2);
+        }
+        .row-btn.is-scanned { opacity: 0.5; cursor: default; }
+
+        /* The comment — the hero. Bigger and brighter than the byline, comfortable to read. */
+        .comment-text { font-size: 0.95rem; line-height: 1.5; }
+
+        /* Selection pip — the fun beat: an empty ring that fills with a spring when you pick someone. */
+        .pip {
+          margin-top: 2px; width: 22px; height: 22px; flex: none; border-radius: 999px;
           border: 1.5px solid var(--border-hot); display: grid; place-items: center; color: #fff;
           transition: background 120ms ease, border-color 120ms ease;
         }
-        /* Selection fires many times a session — a subtle pop, not a carnival bounce. */
-        .box-on { background: var(--violet-solid); border-color: var(--violet-solid); animation: pop 200ms cubic-bezier(0.23, 1, 0.32, 1); }
-        @keyframes pop { 0% { transform: scale(0.9); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }
+        .pip-on { background: var(--violet-solid); border-color: var(--violet-solid); animation: pop 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes pop { 0% { transform: scale(0.7); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
         @media (prefers-reduced-motion: reduce) {
-          .scan-beam, .commenter-row.reveal, .box-on { animation: none !important; }
+          .scan-beam, .commenter-row.reveal, .pip-on { animation: none !important; }
           .commenter-row.reveal { opacity: 1; }
         }
       `}</style>
     </div>
+  );
+}
+
+// A commenter's avatar makes the list read like the real comment section. Small + subtle so the
+// comment stays the hero; falls back to an initial monogram when there's no image (or it fails).
+function Avatar({ src, handle }: { src?: string | null; handle: string }) {
+  const [failed, setFailed] = useState(false);
+  const initial = (handle || '?').replace(/^@/, '').charAt(0).toUpperCase() || '?';
+  const base = 'w-9 h-9 mt-0.5 shrink-0 rounded-full';
+  if (src && !failed) {
+    // Native lazy-load + content-visibility means only on-screen avatars ever fetch. Plain <img>
+    // (not next/image) because avatar hosts are arbitrary external CDNs we can't pre-allowlist.
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={`${base} object-cover bg-bg-elev-2`}
+      />
+    );
+  }
+  return (
+    <span
+      className={`${base} grid place-items-center bg-bg-elev-2 border border-border-1 text-fg-mute font-mono text-sm font-semibold`}
+      aria-hidden
+    >
+      {initial}
+    </span>
   );
 }
 
