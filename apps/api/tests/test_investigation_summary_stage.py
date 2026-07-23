@@ -111,7 +111,7 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     assert "SPECIALIST INVESTIGATION FRAMEWORK" not in pp.system
     # the summary stage REUSES the existing analyst response schema (no new schema)
     assert pp.schema_ref == "schema/analyst_response_schema.json"
-    assert pp.manifest["package_hash"] == "pkg:7a2c4124a35e53938814514d"   # own-evidence-first scoring doctrine
+    assert pp.manifest["package_hash"] == "pkg:7898639e40845f77793258c4"   # bought/inauthentic per-account doctrine
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 
@@ -165,7 +165,7 @@ def test_production_path_is_now_the_comprehensive_single_inference_not_the_summa
     with patch("app.reasoning.model_providers.remote.urllib.request.urlopen", _fake):
         out = analyst.assess_payload(_PAYLOAD, ref="sub_is", platform="youtube", settings=_settings("https://ep"))
     system_sent = captured["body"]["messages"][0]["content"]
-    assert "COMPREHENSIVE INVESTIGATION TASK" in system_sent      # the single-inference stage reached the model
+    assert "ARE THESE ACCOUNTS BOUGHT OR REAL" in system_sent      # the single-inference stage reached the model
     assert "INVESTIGATION SUMMARY TASK" not in system_sent
     assert out["prompt_build"]["mode"] == "stage:comprehensive_investigation"
 

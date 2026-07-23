@@ -123,7 +123,7 @@ def test_assess_payload_sends_the_canonical_stage_prompt():
     # the specialist-council framework is NOT injected (single Lead Investigator, not a council)
     assert "SPECIALIST INVESTIGATION FRAMEWORK" not in system_sent
     assert "KNOWLEDGE LIBRARY" in system_sent
-    assert "COMPREHENSIVE INVESTIGATION TASK" in system_sent
+    assert "ARE THESE ACCOUNTS BOUGHT OR REAL" in system_sent
     assert "OUTPUT CONTRACT" in system_sent
     # user: the COMPLETE InvestigationPackage evidence sections (the single-inference path) — not the
     # legacy raw lossy JSON dump; the account domain is a compact table with detector columns.
