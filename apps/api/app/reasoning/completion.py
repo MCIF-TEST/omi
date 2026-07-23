@@ -29,9 +29,13 @@ from dataclasses import dataclass
 # assessment object (ref + a short probabilistic assessment + a few citations, with JSON overhead). The
 # ceiling is the hard upper bound for a single inference; raising it (config) is the ONLY change needed to
 # support larger investigations — the formula itself never changes.
-COMPLETION_BASE_TOKENS = 4500           # the 7-section synthesis wrapper runs larger than first sized
-COMPLETION_PER_COMMENTER_TOKENS = 180
-COMPLETION_FLOOR_TOKENS = 5000          # even a 0-commenter investigation needs the full synthesis
+# These are OUTPUT-TOKEN CAPS, not reservations — OpenRouter bills only what is generated, so a generous
+# budget prevents truncation (which silently drops per-account results) WITHOUT adding cost. Sized for a
+# reasoning model: reasoning tokens bill as output and count against this cap, so each account gets real
+# headroom (its assessment + citations + the model's reasoning) rather than the bare JSON size.
+COMPLETION_BASE_TOKENS = 12000          # the 7-section synthesis wrapper + reasoning headroom
+COMPLETION_PER_COMMENTER_TOKENS = 450   # per account: reasoning + a plain-English assessment + citations
+COMPLETION_FLOOR_TOKENS = 16000         # never below the model config's own comfortable default
 COMPLETION_CEILING_TOKENS = 150000      # generous cap while we MEASURE real per-scan cost (temporary).
 # NOTE (2026-07-22): ceiling raised 32000 → 150000 DELIBERATELY and TEMPORARILY, to observe the true
 # per-investigation output cost on live runs with no truncation, before tuning it back down once real
@@ -50,11 +54,12 @@ def completion_budget(
     ceiling: int = COMPLETION_CEILING_TOKENS,
 ) -> int:
     """Output-token budget for an investigation with ``num_commenters`` accounts to assess. Linear in the
-    commenter count, clamped to ``[floor, ceiling]`` — enough to finish without excessive unused budget on
-    small investigations. Deterministic and pure."""
+    commenter count, clamped to ``[floor, ceiling]``. The CEILING is the hard cap and always wins — a
+    deploy that lowers it to bound spend is honored even when it sits below the floor, so cost control is
+    never silently overridden. Deterministic and pure."""
     n = max(0, int(num_commenters or 0))
     want = base + per_commenter * n
-    return max(floor, min(ceiling, want))
+    return min(ceiling, max(floor, want))
 
 
 def commenter_capacity(

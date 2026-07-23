@@ -153,18 +153,105 @@ def strip_thinking(text: str) -> str:
     return _THINK.sub("", text or "").strip()
 
 
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
+
+
+def _strip_code_fences(text: str) -> str:
+    """Drop a surrounding markdown code fence (```json … ```), if present."""
+    return _FENCE_RE.sub("", text or "").strip()
+
+
+def _repair_truncated_json(s: str) -> dict | None:
+    """Best-effort salvage of a JSON object that was CUT OFF (the model hit the output-token cap).
+
+    A truncated comprehensive assessment loses every per-account result it already produced when a
+    strict parse fails. This closes the structures that were still open — an unterminated string, and
+    any unclosed arrays/objects — after trimming a dangling trailing token, so the accounts that DID
+    arrive survive. Returns the parsed object, or ``None`` if it still cannot be made valid (never
+    raises). It only ever recovers a PREFIX of what the model emitted; it never invents content."""
+    stack: list[str] = []
+    in_str = False
+    escape = False
+    for ch in s:
+        if escape:
+            escape = False
+            continue
+        if in_str:
+            if ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+    # Try progressively shorter prefixes: close what's open, and on failure trim back to the last
+    # element boundary (a comma / closing brace at the top of the truncated tail) and retry. Bounded.
+    for _ in range(6):
+        candidate = s
+        if in_str:
+            candidate += '"'
+        candidate = candidate.rstrip().rstrip(",")
+        candidate += "".join(reversed(stack))
+        try:
+            obj = json.loads(candidate)
+            return obj if isinstance(obj, dict) else None
+        except json.JSONDecodeError:
+            pass
+        # Trim the dangling tail back to the last complete element, then re-close and retry.
+        cut = max(s.rfind("},"), s.rfind("],"), s.rfind('",'))
+        if cut <= 0:
+            break
+        trimmed = s[: cut + 1]
+        # Recompute the open-structure stack for the trimmed prefix.
+        stack, in_str, escape = [], False, False
+        for ch in trimmed:
+            if escape:
+                escape = False
+                continue
+            if in_str:
+                if ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]":
+                if stack:
+                    stack.pop()
+        s = trimmed
+    return None
+
+
 def extract_json(text: str) -> dict | None:
-    """Parse the final JSON object out of a model completion (after stripping any think
-    trace). Returns ``None`` if no JSON object is present — never raises."""
-    text = strip_thinking(text)
-    start, end = text.find("{"), text.rfind("}")
-    if start < 0 or end <= start:
+    """Parse the final JSON object out of a model completion (after stripping any think trace and any
+    markdown code fence). Returns ``None`` if no JSON object can be recovered — never raises.
+
+    Robust by design so a good-faith model response is not lost to a formatting quirk: it tries a
+    direct parse of the outermost ``{ … }`` first, then falls back to salvaging a TRUNCATED object
+    (the model hit the output-token cap) so the per-account results that DID arrive are preserved."""
+    text = _strip_code_fences(strip_thinking(text))
+    start = text.find("{")
+    if start < 0:
         return None
-    try:
-        obj = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
-        return None
-    return obj if isinstance(obj, dict) else None
+    body = text[start:]
+    end = body.rfind("}")
+    if end > 0:
+        try:
+            obj = json.loads(body[: end + 1])
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+    # Direct parse failed (most often a truncated response) — attempt a bounded repair.
+    return _repair_truncated_json(body)
 
 
 def assemble_stream(chunks: Iterable[bytes | str]) -> str:

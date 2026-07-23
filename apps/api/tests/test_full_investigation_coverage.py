@@ -46,8 +46,9 @@ def test_completion_budget_scales_and_clamps():
     assert completion_budget(10) == max(
         COMPLETION_FLOOR_TOKENS, COMPLETION_BASE_TOKENS + COMPLETION_PER_COMMENTER_TOKENS * 10)
     assert completion_budget(10**9) == COMPLETION_CEILING_TOKENS   # ceiling binds on the huge case
-    # small investigations don't get an excessive budget
-    assert completion_budget(10) <= 7000
+    # a small investigation gets a generous CAP (not a reservation — billing is on tokens generated),
+    # sized to prevent truncation, and still well below a large scan's budget.
+    assert COMPLETION_FLOOR_TOKENS <= completion_budget(10) < completion_budget(150)
 
 
 def test_commenter_capacity_matches_ceiling():
