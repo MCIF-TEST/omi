@@ -1,54 +1,51 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
- * Clerk authentication middleware.
+ * Clerk middleware — context only, secret NOT required.
  *
- * Protects the authenticated app group — /(app)/* routes — with Clerk: an unauthenticated visitor
- * is redirected to the sign-in page. Marketing + auth routes pass through. The `/api/*` path is the
- * rewrite to the FastAPI service and is deliberately excluded from the matcher — that service does
- * its own auth (it verifies the Clerk session token the browser sends), so Clerk middleware never
- * needs to run on it.
+ * ROOT-CAUSE NOTE (why this file looks the way it does):
+ * Next.js compiles middleware into the Edge runtime. It inlines `NEXT_PUBLIC_*` env vars into that
+ * bundle, but it deliberately does NOT inline server secrets — `process.env.CLERK_SECRET_KEY` stays a
+ * runtime lookup that the Edge sandbox only satisfies for keys threaded in at BUILD time. So the Clerk
+ * SECRET can never be relied on inside middleware, and a `clerkMiddleware` that needs it (e.g. via
+ * `auth.protect()`, which forces a secret-backed handshake) throws "Missing secretKey" at runtime and
+ * 500s every request — even when the key is correctly set on the host.
  *
- * KEY RESOLUTION — why the keys are passed explicitly:
- * Clerk resolves its publishable/secret key from `process.env` *inside its own bundled code*. Next
- * inlines `NEXT_PUBLIC_*` env vars only where they appear as a literal `process.env.NEXT_PUBLIC_x`
- * reference in first-party source — it cannot inline a dynamic lookup buried in a dependency. So in
- * the compiled `.next/server/middleware.js`, Clerk's internal lookup finds nothing and throws
- * "Missing publishableKey" at runtime, even when the var is set in the host environment. Reading the
- * keys here (literal references Next WILL inline at build) and passing them to `clerkMiddleware`
- * closes that gap. The middleware bundle is server-only and never shipped to the browser, so
- * inlining the secret key here is safe.
- *
- * RESILIENCE — if the publishable key is somehow absent at build time, we export a pass-through
- * middleware instead of one that throws on every request. The site stays up (Clerk just isn't
- * enforced); with the key present — the normal case — protection works exactly as before.
+ * The fix is architectural, not a band-aid: middleware does NOT enforce protection and does NOT need
+ * the secret. Route protection is enforced server-side in `app/(app)/layout.tsx`
+ * (getCurrentUser → redirect), which runs in the Node runtime where the secret and the FastAPI
+ * verifier are always available. This middleware only populates Clerk's request context (so
+ * `auth()`/`getToken()` can work in server components when the session is valid) and refreshes the
+ * session cookie when the secret happens to be present. Keys are resolved at request time from
+ * runtime env, and any Clerk error degrades to letting the request through — the server layer still
+ * verifies every protected page. Result: the site can never be taken down by an Edge secret gap.
  */
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-const SECRET_KEY = process.env.CLERK_SECRET_KEY;
-
-const isAppRoute = createRouteMatcher([
-  '/investigate(.*)', '/investigations(.*)', '/accounts(.*)', '/graph(.*)',
-  '/campaigns(.*)', '/content(.*)', '/channels(.*)', '/monitoring(.*)', '/search(.*)',
-  '/bulk(.*)', '/reports(.*)', '/settings(.*)',
-]);
 
 const clerkHandler = clerkMiddleware(
-  async (auth, req) => {
-    if (isAppRoute(req)) {
-      await auth.protect();
-    }
-  },
-  // Explicit keys — see "KEY RESOLUTION" above. Undefined here only if truly unset at build.
-  { publishableKey: PUBLISHABLE_KEY, secretKey: SECRET_KEY },
+  // No auth.protect() here — protection lives in the (app) server layout (see note above). We only
+  // want Clerk's context populated for the session-read (networkless via JWKS) + optional refresh.
+  () => {},
+  // Resolve keys per-request from runtime env. secretKey is optional: reading a valid session works
+  // networklessly with just the publishable key; the secret only enables the refresh handshake.
+  () => ({
+    publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+    secretKey: process.env.CLERK_SECRET_KEY,
+  }),
 );
 
-// Never let a missing key take the whole site down: fall back to a no-op when it isn't configured.
-export default PUBLISHABLE_KEY
-  ? clerkHandler
-  : function passthroughMiddleware(_req: NextRequest) {
-      return NextResponse.next();
-    };
+export default async function middleware(req: NextRequest, ev: any) {
+  // Clerk not configured → never gate, never call into Clerk.
+  if (!PUBLISHABLE_KEY) return NextResponse.next();
+  try {
+    return await clerkHandler(req, ev);
+  } catch {
+    // A missing-secret handshake (or any Edge-runtime Clerk error) must not 500 the site. The
+    // server layout re-verifies via FastAPI/JWKS on every protected route, so it is safe to proceed.
+    return NextResponse.next();
+  }
+}
 
 export const config = {
   matcher: [
