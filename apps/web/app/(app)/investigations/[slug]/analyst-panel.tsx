@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Brain, Loader2, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
+import { Brain, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
+import { AnalystLoading } from './analyst-loading';
 import {
   apiClient,
   ApiError,
@@ -19,11 +20,17 @@ import {
   type Tier,
 } from '@/lib/api';
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = 2500;
 // The user lands here straight from a completed scan while the ONE model inference may still be
 // running — a large investigation (150 commenters, full per-account output) can take a couple of
-// minutes. Poll for up to ~4 minutes before declaring it slow.
-const MAX_POLLS = 120;
+// minutes. Wait patiently: keep the loading screen up through the whole generation rather than
+// dropping to the fallback. ~7 minutes of polling covers a slow OpenRouter call plus a retry.
+const MAX_POLLS = 170;
+// If a completed result comes back as the deterministic Floor (the model wasn't reached, or its
+// output failed validation) we give OpenRouter another genuine attempt before ever showing the
+// fallback — the user asked to WAIT for the real response, not fall back early. Bounded so a
+// permanently-floored server can't loop or run up cost.
+const MAX_FLOOR_RETRIES = 2;
 
 // Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
 // URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.
@@ -46,11 +53,24 @@ export function AnalystPanel({ slug }: { slug: string }) {
   const [provider, setProvider] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [disabled, setDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startRef = useRef<number>(0);
 
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
+
+  // Tick a real elapsed clock while the AI runs, so a two-minute wait reads as deliberate.
+  useEffect(() => {
+    if (!pending) return;
+    const t = setInterval(
+      () => setElapsedSec(Math.round((Date.now() - startRef.current) / 1000)),
+      500,
+    );
+    return () => clearInterval(t);
+  }, [pending]);
 
   const post = (refresh: boolean) =>
     apiClient<AnalystResponse>(
@@ -61,22 +81,37 @@ export function AnalystPanel({ slug }: { slug: string }) {
   const run = async (refresh: boolean) => {
     setError(null);
     setDisabled(false);
+    setRetrying(false);
+    setElapsedSec(0);
+    startRef.current = Date.now();
     setPending(true);
     let polls = 0;
+    let floorRetries = 0;
 
     const step = async (doRefresh: boolean): Promise<void> => {
       try {
         const r = await post(doRefresh);
         if (r.status === 'ready' && r.assessment) {
-          setAssessment(r.assessment);
-          setProvider(r.provider ?? null);
-          setGeneratedAt(r.generated_at ?? null);
-          setPending(false);
+          // A model-backed result is the real thing — show it. A floored result means the model
+          // wasn't reached this pass; give OpenRouter another genuine attempt (bounded) before we
+          // ever fall back, keeping the loading screen up in the meantime.
+          if (isModelBacked(r.assessment) || floorRetries >= MAX_FLOOR_RETRIES) {
+            setAssessment(r.assessment);
+            setProvider(r.provider ?? null);
+            setGeneratedAt(r.generated_at ?? null);
+            setPending(false);
+            setRetrying(false);
+            return;
+          }
+          floorRetries += 1;
+          setRetrying(true);
+          if (polls++ >= MAX_POLLS) { setPending(false); setAssessment(r.assessment); return; }
+          pollRef.current = setTimeout(() => { void step(true); }, POLL_INTERVAL_MS);
           return;
         }
-        // Still generating off the request hot path — poll (no refresh) until ready.
+        // Still generating off the request hot path — keep waiting (no new job) until ready.
         if (polls++ >= MAX_POLLS) {
-          setError('Assessment is taking longer than expected. Try again shortly.');
+          setError('The AI analysis is taking longer than usual. It keeps running on the server — reload in a moment to pick it up.');
           setPending(false);
           return;
         }
@@ -127,14 +162,15 @@ export function AnalystPanel({ slug }: { slug: string }) {
           evidence-bounded assessment becomes available once the reasoning layer is
           turned on — the investigation evidence above is unaffected.
         </p>
+      ) : pending ? (
+        // The analyst runs automatically for every investigation. Hold a real loading screen while
+        // the OpenRouter response is on its way — it fills in the moment the result lands.
+        <AnalystLoading elapsedSec={elapsedSec} retrying={retrying} />
       ) : !assessment ? (
-        // The analyst runs automatically for every investigation — no manual generation.
-        // Surface the in-progress / pending state; the assessment fills in when ready.
         <p className="text-sm text-fg-dim flex items-start gap-2">
-          <Loader2 size={14} className={`mt-0.5 shrink-0 text-fg-mute${pending ? ' animate-spin' : ''}`} />
-          {pending
-            ? 'Reasoning over the investigation evidence…'
-            : 'The Omi Analyst’s structured reading of this investigation will appear here. It interprets the evidence the engine already produced; it never recomputes a score.'}
+          <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
+          The Omi Analyst’s structured reading of this investigation will appear here. It interprets
+          the evidence the engine already produced; it never recomputes a score.
         </p>
       ) : (
         <AssessmentView a={assessment} slug={slug} />

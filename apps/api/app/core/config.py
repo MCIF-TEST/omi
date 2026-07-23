@@ -198,12 +198,13 @@ class Settings(BaseSettings):
     # registry (prompt/schema/config), not the model.
     analyst_model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"
     analyst_endpoint_url: str | None = None
-    # The analyst runs in a background worker (off the request hot path) and the UI polls for ~4 min, so
-    # this bounds ONE model generation, not a user request. 150s accommodates a full-investigation GPT-5
-    # generation (up to the completion budget + reasoning tokens) yet still fails a genuinely STALLED
-    # OpenRouter call within the UI's ~4-min poll window, instead of hanging indefinitely (which shows up
-    # as a request that STARTs but never returns OK/FAIL). Env-overridable (OMI_ANALYST_TIMEOUT_SECONDS).
-    analyst_timeout_seconds: float = 150.0
+    # The analyst runs in a background worker (off the request hot path) and the UI holds a loading
+    # screen while polling (~7 min), so this bounds ONE model generation, not a user request. 240s gives
+    # a slow full-investigation GPT-5 generation (up to the completion budget + reasoning tokens) room to
+    # FINISH instead of being cut off and floored, which is what showed the "isn't ready yet" fallback.
+    # It still fails a genuinely STALLED call well inside the UI's poll window rather than hanging forever.
+    # Env-overridable (OMI_ANALYST_TIMEOUT_SECONDS).
+    analyst_timeout_seconds: float = 240.0
     analyst_max_retries: int = 2
     # Serving API the deployed endpoint speaks. "generate" (default) posts the raw
     # TGI text-generation body (existing behavior, byte-identical). "messages" posts
