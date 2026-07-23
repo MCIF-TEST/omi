@@ -1067,3 +1067,18 @@ class PriorContextCacheRow(Base):
     result: Mapped[list] = mapped_column(JSON, default=list)
     memory_revision: Mapped[str | None] = mapped_column(String(80), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class Feedback(Base):
+    """User-submitted product feedback. Any signed-in user can create one; only admins can list/search
+    them (the admin feedback queue). The submitter is recorded for context; the message is the point."""
+
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    category: Mapped[str] = mapped_column(String(40), default="general")
+    message: Mapped[str] = mapped_column(Text, default="")
+    page: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)

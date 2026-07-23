@@ -6,6 +6,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function Root() {
   const user = await getCurrentUser();
-  if (user) redirect('/dashboard');
+  if (user) redirect('/investigate');
   return <LandingPage />;
 }

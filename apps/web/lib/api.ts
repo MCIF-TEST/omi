@@ -128,6 +128,32 @@ export function scoreSelection(url: string, selected: string[]): Promise<ScoreJo
 }
 
 // ---------------------------------------------------------------------------
+// Feedback — any signed-in user submits; admins read a searchable queue.
+// ---------------------------------------------------------------------------
+export interface FeedbackEntry {
+  id: number;
+  user_id: number | null;
+  email: string | null;
+  category: string;
+  message: string;
+  page: string | null;
+  created_at: string;
+}
+export interface FeedbackListResponse { feedback: FeedbackEntry[]; total: number; }
+
+export function submitFeedback(input: { message: string; category?: string; page?: string }): Promise<{ ok: boolean; id: number }> {
+  return apiClient('/v1/feedback', { method: 'POST', body: JSON.stringify(input) });
+}
+export function listFeedback(params: { q?: string; user?: string; limit?: number; offset?: number } = {}): Promise<FeedbackListResponse> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.user) qs.set('user', params.user);
+  qs.set('limit', String(params.limit ?? 100));
+  if (params.offset) qs.set('offset', String(params.offset));
+  return apiClient<FeedbackListResponse>(`/v1/feedback?${qs.toString()}`);
+}
+
+// ---------------------------------------------------------------------------
 // Shared response types (mirror app/schemas.py — kept thin until Phase 1.5
 // generates types from OpenAPI directly).
 // ---------------------------------------------------------------------------

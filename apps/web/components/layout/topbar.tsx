@@ -7,6 +7,7 @@ import { UserButton } from '@clerk/nextjs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/logo';
+import { FeedbackButton } from '@/components/shared/feedback-button';
 import { apiClient, type AlertsResponse, type User } from '@/lib/api';
 import { usePolling } from '@/lib/use-polling';
 import { ServiceHealthPill } from './service-health';
@@ -37,8 +38,11 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
   return (
     <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 glass px-4 md:px-5 flex items-center gap-3">
 
+      {/* Persistent feedback — top-left, on every page, even deep inside an investigation. */}
+      <FeedbackButton />
+
       {/* Brand — phones have no sidebar, so the wordmark lives here. */}
-      <Link href="/dashboard" className="md:hidden tap" aria-label="OMISPHERE home">
+      <Link href="/investigate" className="md:hidden tap" aria-label="OMISPHERE home">
         <Logo size="sm" />
       </Link>
 

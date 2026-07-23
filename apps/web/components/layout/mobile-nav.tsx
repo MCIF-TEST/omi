@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import {
-  LayoutDashboard, Search, Network, Bell, Menu, Megaphone,
+  Search, Network, Bell, Menu, Megaphone,
   Folder, MessageSquareText, Database, Settings, LogOut, X,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,7 +29,6 @@ const routeActive = (pathname: string, href: string) =>
 // used: land, scan, return to your saved work, watch for alerts. Everything
 // else lives in the More sheet, so nothing is more than two taps away.
 const TABS: Tab[] = [
-  { href: '/dashboard',      label: 'Home',       icon: LayoutDashboard },
   { href: '/investigate',    label: 'Investigate', icon: Search },
   { href: '/investigations', label: 'Saved',       icon: Folder },
   { href: '/monitoring',     label: 'Alerts',      icon: Bell },

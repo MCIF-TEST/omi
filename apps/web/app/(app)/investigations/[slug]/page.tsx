@@ -30,10 +30,10 @@ export default async function InvestigationPage({ params }: { params: { slug: st
     <div className="space-y-6">
       <div>
         <Link
-          href="/dashboard"
+          href="/investigations"
           className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg transition-colors font-mono tracking-wider uppercase"
         >
-          <ArrowLeft size={14} /> Back to dashboard
+          <ArrowLeft size={14} /> Back to investigations
         </Link>
       </div>
 
