@@ -1,5 +1,21 @@
 import type { Metadata } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
 import './globals.css';
+
+// Clerk's hosted UI, themed to the OmiSphere palette (deep-blue identity, navy-graphite surfaces)
+// so sign-in/up feels native. Only the PUBLISHABLE key reaches the browser here — the secret key is
+// read server-side by Clerk's middleware/handlers and never ships to the client.
+const clerkAppearance = {
+  variables: {
+    colorPrimary: '#3B82F6',
+    colorBackground: '#131E31',
+    colorInputBackground: '#0F1828',
+    colorText: '#F8FAFC',
+    colorTextSecondary: '#94A3B8',
+    colorInputText: '#F8FAFC',
+    borderRadius: '0.625rem',
+  },
+};
 
 export const metadata: Metadata = {
   title: 'OMISPHERE — Social Authenticity Intelligence',
@@ -37,7 +53,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
         />
       </head>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>
+      </body>
     </html>
   );
 }

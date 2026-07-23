@@ -104,6 +104,11 @@ def issue_session(response: Response, user: User, settings: Settings | None = No
         samesite="lax",
         secure=settings.public_base_url.startswith("https://"),
     )
+    # A response that hands out a session cookie must NEVER be cached: if an edge/CDN/proxy caches it,
+    # one user's Set-Cookie is replayed to everyone who hits the cache — they all get logged into that
+    # one account (the "auto-logged into someone else's admin" class of bug). Force it private+no-store.
+    response.headers["Cache-Control"] = "private, no-store, max-age=0"
+    response.headers["Vary"] = "Cookie"
 
 
 def clear_session(response: Response) -> None:
@@ -156,11 +161,82 @@ class CurrentUser:
 # FastAPI dependencies
 # ---------------------------------------------------------------------------
 
+def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | None:
+    """Resolve the caller from a Clerk session JWT (``Authorization: Bearer <token>``).
+
+    Verifies the token against Clerk's JWKS, then maps the Clerk user to the LOCAL account: by
+    ``clerk_user_id`` if already linked, otherwise by email (linking an existing account so its
+    credits/subscription/investigations carry over), otherwise creating a fresh local account. The
+    local row remains the source of truth for credits + data; Clerk is only the identity. Returns None
+    when Clerk is disabled, no bearer token is present, or the token is invalid — the caller then falls
+    back to the legacy cookie session."""
+    from app.core.clerk_auth import (
+        clerk_enabled, email_from_claims, fetch_user_email, verify_session_token,
+    )
+
+    if not clerk_enabled():
+        return None
+    header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+    if not header.lower().startswith("bearer "):
+        return None
+    claims = verify_session_token(header[7:].strip())
+    if not claims:
+        return None
+    clerk_uid = claims.get("sub")
+    if not isinstance(clerk_uid, str) or not clerk_uid:
+        return None
+
+    with get_session() as session:
+        u = session.query(User).filter(User.clerk_user_id == clerk_uid).first()
+        if u is not None:
+            return CurrentUser.from_row(u)
+
+        email = email_from_claims(claims) or fetch_user_email(clerk_uid)
+        if not email or not is_valid_email(email):
+            return None  # can't safely link/create without a verified email
+
+        # Link an existing account by email (keep its data), or create a new one.
+        u = session.query(User).filter(User.email == email).first()
+        if u is not None:
+            if not u.clerk_user_id:
+                u.clerk_user_id = clerk_uid
+            u.last_login_at = datetime.utcnow()
+            session.flush()
+            return CurrentUser.from_row(u)
+
+        admin_emails = {
+            e.strip().lower() for e in (settings.super_admin_emails or "").split(",") if e.strip()
+        }
+        is_super = email in admin_emails
+        u = User(
+            email=email,
+            password_hash="",  # Clerk-managed identity — no local password
+            clerk_user_id=clerk_uid,
+            credits_remaining=999999 if is_super else settings.free_trial_credits,
+            is_admin=1 if is_super else 0,
+            last_login_at=datetime.utcnow(),
+        )
+        session.add(u)
+        try:
+            session.flush()
+        except Exception:  # noqa: BLE001 — a race created it; re-read
+            session.rollback()
+            u = session.query(User).filter(User.clerk_user_id == clerk_uid).first() \
+                or session.query(User).filter(User.email == email).first()
+            if u is None:
+                return None
+        return CurrentUser.from_row(u)
+
+
 def get_optional_user(
     request: Request,
     settings: Settings = Depends(get_settings),
 ) -> CurrentUser | None:
-    """Best-effort user resolution. Returns None when no/invalid session."""
+    """Best-effort user resolution. Prefers a Clerk session token (the new auth), then falls back to
+    the legacy signed cookie. Returns None when neither is present/valid."""
+    clerk_user = _resolve_clerk_user(request, settings)
+    if clerk_user is not None:
+        return clerk_user
     token = request.cookies.get(SESSION_COOKIE_NAME)
     uid = _decode_session(token, settings)
     if uid is None:

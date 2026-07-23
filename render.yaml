@@ -48,6 +48,13 @@ services:
         value: '3.11.9'
       - key: OMI_MONTHLY_CREDIT_GRANT
         value: '20'
+      # Clerk auth — the API verifies Clerk session JWTs (see app/core/clerk_auth.py).
+      # These are set in the Render dashboard, NEVER committed. The secret key is
+      # server-only; the publishable key (public) is used only to derive the JWKS/issuer.
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
       # Validation-window trial: 25 credits = two X batch investigations (10
       # each) + change, so a first real user can run their own case AND return
       # for a second one. Abuse stays bounded: repeat signups from an IP that
@@ -200,6 +207,17 @@ services:
         value: '20'
       - key: OMI_PUBLIC_BASE_URL
         sync: false
+      # Clerk auth (frontend). The publishable key is public (ships in the browser
+      # bundle by design); the secret key is server-only. Both are set in the Render
+      # dashboard, NEVER committed. NEXT_PUBLIC_* must exist at build time.
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        value: /sign-in
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        value: /sign-up
 
 databases:
   # IMPORTANT: never run production on Render's `free` Postgres — free databases
