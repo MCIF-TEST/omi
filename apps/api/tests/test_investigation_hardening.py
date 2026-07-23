@@ -478,7 +478,7 @@ def test_style_match_caps_at_max_entries():
 # ---------------------------------------------------------------------------
 
 def test_investigation_label_video():
-    assert _investigation_label({"kind": "video", "video_id": "abc123"}, "") == "Video abc123"
+    assert _investigation_label({"kind": "video", "video_id": "abc123"}, "") == "YouTube video abc123"
 
 
 def test_investigation_label_channel():

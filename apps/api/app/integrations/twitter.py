@@ -46,6 +46,27 @@ _USER_TWEETS_PATH = "/twitter/user/last_tweets"
 # your twitterapi.io plan — the response envelope + pagination match the other
 # endpoints, so only the path string should ever need adjusting.
 _TWEET_REPLIES_PATH = "/twitter/tweet/replies"
+_TWEETS_BY_ID_PATH = "/twitter/tweets"
+
+
+def fetch_tweet_text(client: TwitterClient, tweet_id: str, stats: "FetchStats | None" = None) -> str | None:
+    """Best-effort: the text of a single tweet, used to title an investigation. Returns None on any
+    failure (the caller falls back to a generic label), so this never blocks a scan."""
+    from app.integrations.twitter import FetchStats as _FS  # local import keeps module import light
+
+    stats = stats or _FS()
+    try:
+        payload = client.get(_TWEETS_BY_ID_PATH, {"tweet_ids": tweet_id})
+        stats.bump()
+        data = _unwrap(payload)
+        tweets = _extract_tweets(data) or _extract_tweets(payload)
+        for tw in tweets:
+            post = _map_tweet(tw, handle="")
+            if post is not None and post.text:
+                return post.text
+    except Exception:
+        return None
+    return None
 
 
 # ---------------------------------------------------------------------------

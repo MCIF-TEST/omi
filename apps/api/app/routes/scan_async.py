@@ -221,6 +221,15 @@ def list_commenters(
             # _source_for_platform raises HTTPException(503) when a platform key is missing — let that
             # through unchanged so the UI shows the real "key not configured" message.
             source = _source_for_platform(platform, settings)
+            # Best-effort: capture the post's real title (video title / tweet text) once, so the saved
+            # investigation reads "Xandr's launch video" not "Scan of https://…". Never blocks the list.
+            if not cl.content_title:
+                try:
+                    title = source.fetch_content_title(content_id)
+                    if title:
+                        cl.content_title = title.strip()[:500]
+                except Exception:  # noqa: BLE001 — titling is cosmetic, never fatal
+                    pass
             # Sample enough comments to actually surface that many commenters (never fewer than the
             # configured floor), since a comment section has more comments than unique authors.
             comment_budget = max(settings.candidate_min_comments, fetch_n * 3)
@@ -682,6 +691,7 @@ def score_selection(
         cl_id = cl.id
         existing_slug = cl.investigation_slug
         content_url = cl.content_url or url
+        content_title = cl.content_title
 
     if not selected_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No scannable selection.")
@@ -723,7 +733,7 @@ def score_selection(
             _run_link_scan_job,
             db_id=db_id, user_id=current.id, url=content_url, platform=platform,
             classification=classification, slug=slug, cost=cost, creq=creq, source=source,
-            candidate_list_id=cl_id, selected_ids=selected_ids,
+            candidate_list_id=cl_id, selected_ids=selected_ids, content_title=content_title,
         )
     except Exception:
         refund_credits(current.id, cost, reason="scan_start_error")
@@ -758,6 +768,7 @@ def _run_link_scan_job(
     classification: dict, slug: str, cost: int,
     creq: ComprehensiveScanRequest, source: "Source",
     candidate_list_id: int | None = None, selected_ids: list[str] | None = None,
+    content_title: str | None = None,
 ) -> None:
     """Background worker for /link/start. Mirrors scan_link's body: run the
     comprehensive scan with the Source built by the caller, persist the
@@ -883,7 +894,7 @@ def _run_link_scan_job(
 
     saved = scan_mod._persist_investigation(
         slug=slug, user_id=user_id, classification=classification,
-        url=url, payload=result_payload,
+        url=url, payload=result_payload, label_override=content_title,
     )
     if not saved:
         log.error("async investigation %s could not be persisted", slug)
