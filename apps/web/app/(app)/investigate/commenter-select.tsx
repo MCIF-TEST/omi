@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CheckSquare, Loader2, Plus, Search, Square, Radar, ScanLine } from 'lucide-react';
+import { AlertTriangle, CheckSquare, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
@@ -82,14 +82,24 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);          // add-more / compile in flight
+  const [loadingAll, setLoadingAll] = useState(false); // "load all" pull in flight
   const [revealFrom, setRevealFrom] = useState(0);  // rows at/after this index animate in
   const [sweepKey, setSweepKey] = useState(0);      // retriggers the scanner sweep
   const [scanningCount, setScanningCount] = useState(0); // accounts in the in-flight score job
+  const [query, setQuery] = useState('');           // filter the (potentially huge) list
   const runRef = useRef(0);
 
-  const unscanned = useMemo(() => rows.filter((r) => !r.scanned), [rows]);
-  const selectableCount = unscanned.length;
-  const allSelected = selectableCount > 0 && unscanned.every((r) => selected.has(r.external_id));
+  // The list can hold the whole comment section, so browsing needs a filter (by handle or comment).
+  const visibleRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) => (r.handle ?? r.external_id).toLowerCase().includes(q) || (r.comment ?? '').toLowerCase().includes(q),
+    );
+  }, [rows, query]);
+
+  const selectableVisible = useMemo(() => visibleRows.filter((r) => !r.scanned), [visibleRows]);
+  const allSelected = selectableVisible.length > 0 && selectableVisible.every((r) => selected.has(r.external_id));
 
   const compile = useCallback(async (opts: { fetch?: number; refresh?: boolean } = {}) => {
     if (!url.trim()) return;
@@ -124,11 +134,41 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
       return next;
     });
 
+  // Select all / clear operates on what's currently visible (respects the filter), so picking
+  // "everyone who mentioned X" is one action.
   const toggleAll = () =>
     setSelected((prev) => {
-      if (allSelected) return new Set();
-      return new Set(unscanned.map((r) => r.external_id));
+      if (allSelected) {
+        const next = new Set(prev);
+        for (const r of selectableVisible) next.delete(r.external_id);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const r of selectableVisible) next.add(r.external_id);
+      return next;
     });
+
+  // Pull the WHOLE comment section, one bounded page at a time (each request stays fast, so a big
+  // post can't time out a single call). Grows the same server-side cache until the pool is exhausted.
+  const loadAll = useCallback(async () => {
+    if (!url.trim() || loadingAll) return;
+    setLoadingAll(true);
+    setError(null);
+    try {
+      for (let guard = 0; guard < 40; guard++) {
+        const res = await listCommenters(url.trim(), { fetch: 200 });
+        setPlatform(res.platform);
+        setRows(res.commenters);
+        setHasMore(res.has_more);
+        setRevealFrom(res.total); // bulk load — don't fire per-row reveals for hundreds of rows
+        if (!res.has_more || res.fetched_now === 0) break;
+      }
+    } catch (e) {
+      setError(friendlyError(e, 'compile'));
+    } finally {
+      setLoadingAll(false);
+    }
+  }, [url, loadingAll]);
 
   const rowsRef = useRef(0);
   rowsRef.current = rows.length;
@@ -261,47 +301,80 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
       {phase === 'list' && rows.length > 0 && (
         <div className="rounded-xl border border-border-1 bg-bg-elev overflow-hidden">
           {/* HUD header */}
-          <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-b border-divider bg-bg/60">
-            <span className="flex items-center gap-2 font-mono text-2xs tracking-[0.16em] uppercase text-accent-text">
-              <Radar size={13} className="text-accent" />
-              {rows.length} commenter{rows.length === 1 ? '' : 's'} found
-            </span>
-            <span className="font-mono text-2xs tracking-[0.16em] uppercase text-violet-2">
-              {selCount} selected
-            </span>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={toggleAll}
-                disabled={selectableCount === 0}
-                className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
-              >
-                {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
-                {allSelected ? 'Clear' : 'Select all'}
-              </button>
-              <button
-                onClick={() => void compile({ fetch: 25 })}
-                disabled={!hasMore || busy}
-                className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
-              >
-                {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Add 25
-              </button>
-              <button
-                onClick={() => void compile({ fetch: 50 })}
-                disabled={!hasMore || busy}
-                className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
-              >
-                <Plus size={13} /> 50
-              </button>
+          <div className="px-4 py-3 border-b border-divider bg-bg/60 space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="flex items-center gap-2 font-mono text-2xs tracking-[0.16em] uppercase text-accent-text">
+                <Radar size={13} className="text-accent" />
+                {query.trim() ? `${visibleRows.length} of ${rows.length}` : rows.length} commenter{rows.length === 1 ? '' : 's'}
+                {query.trim() ? ' shown' : ' found'}
+              </span>
+              <span className="font-mono text-2xs tracking-[0.16em] uppercase text-violet-2">
+                {selCount} selected
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={toggleAll}
+                  disabled={selectableVisible.length === 0}
+                  className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
+                >
+                  {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
+                  {allSelected ? 'Clear' : query.trim() ? 'Select shown' : 'Select all'}
+                </button>
+                <button
+                  onClick={() => void compile({ fetch: 100 })}
+                  disabled={!hasMore || busy || loadingAll}
+                  className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
+                >
+                  {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Add 100
+                </button>
+                <button
+                  onClick={() => void loadAll()}
+                  disabled={!hasMore || busy || loadingAll}
+                  className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-accent-text disabled:opacity-40"
+                >
+                  {loadingAll ? <Loader2 size={13} className="animate-spin" /> : <Layers size={13} />}
+                  {loadingAll ? `Loading… ${rows.length}` : 'Load all'}
+                </button>
+              </div>
             </div>
+            {/* Filter — a full comment section can be hundreds of rows; find a handle or phrase fast. */}
+            {rows.length > 8 && (
+              <div className="relative">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filter by handle or comment…"
+                  aria-label="Filter commenters"
+                  className="h-9 w-full pl-8 pr-8 text-sm rounded-md bg-bg-inset border border-border-2 text-fg
+                             placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear filter"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-mute hover:text-fg"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* rows + the scanner sweep */}
           <div className="scan-shell relative max-h-[62vh] overflow-y-auto">
             <span key={sweepKey} className="scan-beam" aria-hidden />
+            {visibleRows.length === 0 && (
+              <p className="px-4 py-6 text-sm text-fg-mute text-center">No commenter matches “{query}”.</p>
+            )}
             <ul>
-              {rows.map((r, i) => {
+              {visibleRows.map((r, i) => {
                 const isSel = selected.has(r.external_id);
-                const fresh = i >= revealFrom;
+                // Only newly-compiled rows animate, and only the first ~40 of them (never a filtered
+                // view) — a few hundred simultaneous entrances would stutter.
+                const fresh = !query.trim() && i >= revealFrom && i - revealFrom < 40;
                 return (
                   <li
                     key={r.external_id}
@@ -345,7 +418,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
           {/* action bar */}
           <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-divider bg-bg/60">
             <p className="font-mono text-2xs tracking-wider text-fg-faint">
-              {hasMore ? 'More commenters available — add another page any time.' : 'Full commenter list loaded.'}
+              {hasMore ? 'More commenters available — “Add 100” or “Load all” to pull the rest.' : 'Whole comment section loaded.'}
             </p>
             <button
               onClick={() => void scan()}

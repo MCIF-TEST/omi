@@ -215,7 +215,7 @@ class TwitterSource:
         return fetch_tweet_engagers(
             self._client, content_id,
             max_commenters=max_commenters, max_comments=max_comments,
-            stats=self._stats,
+            stats=self._stats, start_page_token=start_page_token,
         )
 
 

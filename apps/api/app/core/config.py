@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     youtube_api_key: str | None = None
     # Max commenters to fetch per video scan (bounds YouTube quota use).
     scan_max_commenters: int = 100
+    # Select-then-scan COMPILE step (the free list you pick from). Decoupled from the per-scan cap
+    # above: the list is meant to mirror the whole comment section so you can browse and select, so it
+    # can grow far larger than what you'd actually score. Bounds one compile page, the whole pool, and
+    # the comment sample pulled to enumerate commenters.
+    candidate_pool_max: int = 1000        # most commenters one post's list can hold
+    candidate_page_max: int = 200         # most commenters a single compile call fetches
+    candidate_first_page: int = 100       # commenters pulled on the first compile
+    candidate_min_comments: int = 100     # never sample fewer than this many comments to find them
     # Max recent comments to pull per commenter (their "history").
     scan_max_history_per_commenter: int = 50
     # If we've scanned an account within this many days, reuse the cached score.
