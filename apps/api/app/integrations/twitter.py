@@ -445,10 +445,15 @@ def fetch_tweet_engagers(
     max_commenters: int = 100,
     max_comments: int | None = None,
     stats: FetchStats | None = None,
+    start_page_token: str | None = None,
 ) -> tuple[list[dict], list[dict], str | None]:
     """Fetch the accounts replying to a tweet (its "commenters") + the raw reply
     items, shaped to mirror YouTube's ``fetch_video_full`` output so the shared
     ``scan_video_full`` consumes it unchanged.
+
+    Pass the returned cursor back as ``start_page_token`` to resume from where the
+    last call stopped — this is what makes "add more commenters" page deeper into a
+    big reply thread instead of re-fetching the first replies.
 
     Returns ``(commenters_meta, all_comments, next_cursor)`` where:
       * ``commenters_meta`` — one entry per unique replying account
@@ -462,7 +467,7 @@ def fetch_tweet_engagers(
     max_comments = max_comments or max(max_commenters * 3, 100)
     commenters: dict[str, dict] = {}
     all_comments: list[dict] = []
-    cursor: str | None = None
+    cursor: str | None = start_page_token
     seen_cursors: set[str] = set()
     next_cursor: str | None = None
 

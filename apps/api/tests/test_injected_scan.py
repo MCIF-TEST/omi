@@ -65,17 +65,17 @@ class _SelectionSource:
 
 
 def test_injected_scan_scores_exactly_the_selection():
-    selection = [
-        {"channel_id": "alice", "handle": "alice"},
-        {"channel_id": "bob", "handle": "bob"},
-    ]
+    # Three+ commenters so the run exercises the temporal-semantic coordination detector, which calls
+    # .timestamp() on each comment — the path that crashed when cached comments came back as ISO
+    # strings ("scan failed unexpectedly"). This is the regression guard for that crash.
+    picks = ["alice", "bob", "carol"]
+    selection = [{"channel_id": a, "handle": a} for a in picks]
     # created_at is an ISO string here, exactly as the fixed compile cache round-trips it back
     # (source emits a datetime -> _dumps() writes ISO-8601 -> json.loads() -> str).
     comments = [
-        {"comment_id": "c1", "author_external_id": "alice", "text": "first!!",
-         "created_at": "2024-06-01T00:00:00+00:00"},
-        {"comment_id": "c2", "author_external_id": "bob", "text": "check my channel",
-         "created_at": "2024-06-01T00:05:00+00:00"},
+        {"comment_id": f"c{i}", "author_external_id": a, "text": "first!! check my channel",
+         "created_at": f"2024-06-01T00:0{i}:00+00:00"}
+        for i, a in enumerate(picks)
     ]
     src = _SelectionSource()
 
@@ -95,14 +95,34 @@ def test_injected_scan_scores_exactly_the_selection():
     # The video scan ran on the injected selection ...
     assert out.video_output is not None
     scored = {r.external_id for r in out.video_output.commenter_records}
-    assert scored == {"alice", "bob"}, "must score exactly the two picked commenters"
+    assert scored == set(picks), "must score exactly the picked commenters"
 
     # ... via a genuine per-account fetch (the "second API call"), for each selected account ...
-    assert sorted(src.profile_calls) == ["alice", "bob"]
-    assert sorted(src.history_calls) == ["alice", "bob"]
+    assert sorted(src.profile_calls) == sorted(picks)
+    assert sorted(src.history_calls) == sorted(picks)
 
     # ... and every scored account carries real evidence for the Omi Analyst to read.
     for rec in out.video_output.commenter_records:
         assert rec.profile is not None
         assert rec.posts, "each selected account must have fetched history as evidence"
         assert rec.error is None
+
+
+def test_injected_comments_with_string_timestamps_do_not_crash_coordination():
+    """Direct regression pin: comments whose created_at is an ISO string (as the JSON cache stores
+    them) must NOT crash the temporal-semantic detector — the orchestrator coerces them to datetime."""
+    picks = ["u1", "u2", "u3", "u4"]
+    selection = [{"channel_id": a, "handle": a} for a in picks]
+    comments = [
+        {"comment_id": f"c{i}", "author_external_id": a, "text": "same burst text here",
+         "created_at": f"2024-06-01T00:0{i}:00+00:00"}
+        for i, a in enumerate(picks)
+    ]
+    with get_session() as session:
+        out = scan_comprehensive(
+            session, account_url_or_handle=None, video_url_or_id="vid-9", comments_text=None,
+            max_commenters=5, force_refresh=False, source=_SelectionSource(),
+            injected_commenters=selection, injected_comments=comments,
+        )
+    assert out.video_output is not None
+    assert len(out.video_output.commenter_records) == len(picks)

@@ -16,7 +16,22 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
+
+
+def _coerce_dt(v: Any) -> datetime | None:
+    """Comment timestamps must be real datetimes for the coordination detectors (they call
+    ``.timestamp()``). Live sources already hand us datetimes; a comment rebuilt from a JSON cache
+    arrives as an ISO string. Coerce, and return None for anything we can't place in time."""
+    if isinstance(v, datetime):
+        return v
+    if isinstance(v, str) and v:
+        try:
+            return datetime.fromisoformat(v)
+        except ValueError:
+            return None
+    return None
 
 from sqlalchemy.orm import Session
 
@@ -470,17 +485,22 @@ def scan_video_full(
     # --- Phase 3: cross-account coordination detectors -------------------
     clusters: list[CoordinationCluster] = []
 
-    # Temporal-semantic clique on all top-level comments under the video.
-    if all_comments_under_video:
-        ts_finding = detect_temporal_semantic_cliques([
-            CommentEntry(
-                comment_id=i["comment_id"],
-                author_external_id=i["author_external_id"],
-                text=i["text"],
-                created_at=i["created_at"],
-            )
-            for i in all_comments_under_video
-        ])
+    # Temporal-semantic clique on all top-level comments under the video. The detector calls
+    # .timestamp() on created_at, so coerce to a real datetime (a comment rebuilt from a JSON cache
+    # arrives as an ISO string) and skip any comment we can't place in time.
+    ts_entries: list[CommentEntry] = []
+    for i in all_comments_under_video:
+        created = _coerce_dt(i.get("created_at"))
+        if created is None:
+            continue
+        ts_entries.append(CommentEntry(
+            comment_id=i.get("comment_id"),
+            author_external_id=i.get("author_external_id"),
+            text=i.get("text", "") or "",
+            created_at=created,
+        ))
+    if ts_entries:
+        ts_finding = detect_temporal_semantic_cliques(ts_entries)
         clusters.extend(ts_finding.clusters)
     else:
         ts_finding = None

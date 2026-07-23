@@ -107,6 +107,50 @@ def test_refresh_rebuilds_the_list_from_scratch(monkeypatch):
         assert b["fetched_now"] == 2
 
 
+class _BigSource:
+    """A Source that keeps producing fresh commenters every page (never naturally exhausts), so we can
+    prove the first page is large, paging grows the pool, and the pool cap is what stops it."""
+
+    def __init__(self):
+        self.n = 0
+        self.last_max_comments = None
+
+    def fetch_content_engagers(self, content_id, *, max_commenters, max_comments, start_page_token=None):
+        self.last_max_comments = max_comments
+        metas, comments = [], []
+        for _ in range(max_commenters):
+            self.n += 1
+            ext = f"user{self.n}"
+            metas.append({"channel_id": ext, "handle": ext})
+            comments.append({"comment_id": f"c{self.n}", "author_external_id": ext,
+                             "text": f"comment {self.n}", "created_at": _TS})
+        return metas, comments, f"cursor-{self.n}"   # always another page available
+
+
+def test_first_compile_is_large_and_pool_cap_bounds_growth(monkeypatch):
+    big = _BigSource()
+    monkeypatch.setattr(scan_async, "_source_for_platform", lambda platform, settings: big)
+    s = get_settings()
+    with TestClient(app) as tc:
+        # First compile pulls a big page (candidate_first_page), not a tiny 25.
+        b1 = tc.post("/v1/scan/link/commenters", json={"url": _URL}).json()
+        assert b1["total"] == s.candidate_first_page == 100
+        assert b1["fetched_now"] == 100 and b1["has_more"] is True
+        # It sampled at least the comment floor to surface that many commenters.
+        assert big.last_max_comments >= s.candidate_min_comments
+
+        # A single "add more" is bounded by candidate_page_max ...
+        b2 = tc.post("/v1/scan/link/commenters", json={"url": _URL, "fetch": 10_000}).json()
+        assert b2["fetched_now"] == s.candidate_page_max == 200
+        assert b2["total"] == 300
+
+        # ... and repeated paging stops exactly at the whole-post pool cap.
+        for _ in range(20):
+            body = tc.post("/v1/scan/link/commenters", json={"url": _URL, "fetch": 10_000}).json()
+        assert body["total"] == s.candidate_pool_max == 1000
+        assert body["has_more"] is False and body["fetched_now"] == 0
+
+
 def test_compile_with_no_commenters_returns_empty_ok(monkeypatch):
     """A post with comments off / no replies must return a clean empty list (total 0), NOT an error and
     NOT a blank — the UI renders an explicit "no commenters" state off this."""

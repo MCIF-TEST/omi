@@ -70,6 +70,21 @@ def _dumps(obj) -> str:
     return json.dumps(obj, default=_json_default)
 
 
+def _parse_iso(v):
+    """Inverse of ``_json_default`` for timestamps: ISO string -> datetime. The live sources hand the
+    orchestrator real ``datetime`` comment timestamps (the coordination detectors call ``.timestamp()``
+    on them), so a comment rebuilt from the JSON cache MUST be re-parsed to a datetime or it crashes
+    the scan. Returns None for anything unparseable so the caller can drop it."""
+    if isinstance(v, datetime):
+        return v
+    if isinstance(v, str) and v:
+        try:
+            return datetime.fromisoformat(v)
+        except ValueError:
+            return None
+    return None
+
+
 class LinkScanJobOut(BaseModel):
     """Async single-link scan job, returned by ``/link/start`` and
     ``/link/status/{job_id}``. ``status`` is the job lifecycle state; the other
@@ -158,7 +173,11 @@ def list_commenters(
         )
     refresh = bool(payload.get("refresh"))
     uid = current.id if current.id != 0 else None
-    cap = settings.scan_max_commenters
+    # The compile list mirrors the whole comment section (browse + pick), so it uses the generous
+    # candidate-pool caps, NOT the smaller per-scan analysis cap.
+    pool_max = settings.candidate_pool_max
+    page_max = settings.candidate_page_max
+    first_page = settings.candidate_first_page
 
     with get_session() as session:
         cond = [CandidateList.platform == platform, CandidateList.content_id == content_id]
@@ -183,25 +202,31 @@ def list_commenters(
             cl.exhausted = False
             session.flush()
 
-        # How many NEW commenters to pull on THIS call: default to a first page when the list is empty,
-        # otherwise fetch only when the client explicitly asks ("add more").
+        # How many NEW commenters to pull on THIS call: a big first page when the list is empty,
+        # otherwise only when the client asks ("add more"). Each call is bounded (page_max) so it stays
+        # fast; the list grows across calls up to the whole-post pool cap. "Load all" just repeats this.
+        room = max(0, pool_max - len(existing))
         raw_fetch = payload.get("fetch")
         if raw_fetch is None:
-            fetch_n = 0 if existing else 25
+            fetch_n = 0 if existing else first_page
         else:
             try:
-                fetch_n = max(0, min(int(raw_fetch), cap))
+                fetch_n = max(0, int(raw_fetch))
             except (TypeError, ValueError):
-                fetch_n = 25
+                fetch_n = first_page
+        fetch_n = min(fetch_n, page_max, room)
 
         fetched_now = 0
         if fetch_n > 0 and not cl.exhausted:
             # _source_for_platform raises HTTPException(503) when a platform key is missing — let that
             # through unchanged so the UI shows the real "key not configured" message.
             source = _source_for_platform(platform, settings)
+            # Sample enough comments to actually surface that many commenters (never fewer than the
+            # configured floor), since a comment section has more comments than unique authors.
+            comment_budget = max(settings.candidate_min_comments, fetch_n * 3)
             try:
                 commenters_meta, all_comments, next_cursor = source.fetch_content_engagers(
-                    content_id, max_commenters=fetch_n, max_comments=fetch_n * 3,
+                    content_id, max_commenters=fetch_n, max_comments=comment_budget,
                     start_page_token=cl.next_cursor,
                 )
             except (TwitterClientError, YouTubeClientError) as exc:
@@ -261,10 +286,12 @@ def list_commenters(
             )
             for r in rows
         ]
+        # More to pull only if the source has more AND we're under the whole-post pool cap.
+        has_more = (not cl.exhausted) and len(commenters) < pool_max
         return CommenterListOut(
             platform=platform, content_id=content_id, url=cl.content_url or url,
             commenters=commenters, total=len(commenters),
-            has_more=not cl.exhausted, fetched_now=fetched_now,
+            has_more=has_more, fetched_now=fetched_now,
         )
 
 
@@ -642,11 +669,16 @@ def score_selection(
                     parsed = json.loads(r.comments_json)
                 except (TypeError, ValueError):
                     parsed = []
-                # The evidence compiler builds a Post per comment and REQUIRES a timestamp; drop any
-                # cached comment missing one so a single bad row can never crash the whole scan.
-                injected_comments.extend(
-                    c for c in parsed if isinstance(c, dict) and c.get("created_at")
-                )
+                # Rebuild each comment with a real datetime (the cache stored ISO strings). The
+                # evidence compiler + coordination detectors REQUIRE datetime timestamps, so drop any
+                # comment whose timestamp can't be parsed rather than crash the whole scan.
+                for c in parsed:
+                    if not isinstance(c, dict):
+                        continue
+                    dt = _parse_iso(c.get("created_at"))
+                    if dt is None:
+                        continue
+                    injected_comments.append({**c, "created_at": dt})
         cl_id = cl.id
         existing_slug = cl.investigation_slug
         content_url = cl.content_url or url
@@ -659,9 +691,9 @@ def score_selection(
     # Build creq (with the injected selection) + Source BEFORE charging, so a mis-config never bills.
     creq = ComprehensiveScanRequest(
         video_url_or_id=content_id, account_url_or_handle=None, comments_text=None,
-        # max_commenters is unused on the injected path (the selection replaces the fetch); keep it valid
-        # for the schema. The real charge is computed below from the selection count.
-        max_commenters=max(5, len(selected_ids)), force_refresh=False,
+        # max_commenters is unused on the injected path (the selection replaces the fetch); keep it in
+        # the schema's [5, 500] range. The real charge is computed below from the selection count.
+        max_commenters=min(500, max(5, len(selected_ids))), force_refresh=False,
         injected_commenters=injected_commenters, injected_comments=injected_comments,
     )
     source = _source_for_platform(platform, settings)
