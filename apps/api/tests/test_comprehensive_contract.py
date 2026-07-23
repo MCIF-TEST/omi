@@ -353,11 +353,37 @@ def test_coercion_normalizes_per_account_items():
 
 def test_coercion_still_floors_when_core_substance_is_missing():
     # The model must supply the substance it alone can produce — coercion never invents it. omi_score /
-    # suspicion_tier are NOT in this set: they are derivable from the model's own verdict.
+    # suspicion_tier are NOT in this set: they are derivable from the model's own verdict. This holds when
+    # there are NO per-account results to derive an overall read from.
     for core in ("verdict", "headline", "assessment"):
         obj = _valid_model_output()
         del obj[core]
         assert _valid_after_coercion(obj), f"expected floor when {core} is missing"
+
+
+def test_wrapper_is_salvaged_from_per_account_results_when_the_model_omits_it():
+    """Real failure mode from production: the model produced per-account results but omitted the executive
+    wrapper (verdict/omi_score/suspicion_tier/headline/assessment). Rather than discard the per-account AI
+    work, the coercion derives the overall read from the model's OWN per-account scores so it renders."""
+    obj = _valid_model_output()
+    for core in ("verdict", "omi_score", "suspicion_tier", "headline", "assessment"):
+        obj.pop(core, None)
+    obj["commenter_assessments"] = [
+        {"ref": "A1", "omi_score": 12, "suspicion_tier": "low", "assessment": "reads organic.", "citations": ["A1"]},
+        {"ref": "A2", "omi_score": 82, "suspicion_tier": "high", "assessment": "amplifier profile.", "citations": ["A2"]},
+        {"ref": "A3", "omi_score": 55, "suspicion_tier": "elevated", "assessment": "thin history.", "citations": ["A3"]},
+    ]
+    coerced = _coerce(obj)
+    assert _valid_after_coercion(obj) == []                       # renders instead of floorng
+    assert isinstance(coerced["omi_score"], int)                  # overall derived from per-account scores
+    assert coerced["verdict"] in ("mixed", "likely_inauthentic", "inconclusive", "likely_authentic")
+    assert len(coerced["commenter_assessments"]) == 3             # every per-account result survived
+
+
+def test_envelope_wrapped_output_is_unwrapped_and_renders():
+    """A model that wraps the whole assessment in one top-level key is unwrapped, not discarded."""
+    obj = {"investigation": _valid_model_output()}
+    assert _valid_after_coercion(obj) == []
 
 
 def test_omi_owned_metadata_is_not_required_from_the_model():

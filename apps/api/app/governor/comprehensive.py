@@ -11,7 +11,10 @@ governance bundle's ``ev:`` ids), so the presentation layer can surface only res
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Sequence
+
+logger = logging.getLogger("omi.governor.comprehensive")
 
 _SECTION_SHAPE = "object with a string 'assessment' and an optional 'citations' array"
 
@@ -131,6 +134,18 @@ def _tier_for_score(score: int) -> str:
     return "high"
 
 
+def _verdict_for_score(score: int) -> str:
+    """A conservative omi_score→verdict mapping, used only to derive the executive verdict from the
+    model's OWN per-account scores when it omitted the wrapper (never over-accuses on a derivation)."""
+    if score >= 75:
+        return "likely_inauthentic"
+    if score >= 50:
+        return "mixed"
+    if score >= 25:
+        return "inconclusive"
+    return "likely_authentic"
+
+
 def coerce_comprehensive_model_output(
     obj: Any, *, schema: dict, section_keys: Sequence[str],
 ) -> Any:
@@ -158,6 +173,13 @@ def coerce_comprehensive_model_output(
     if not isinstance(obj, dict):
         return obj
     props: dict = schema.get("properties", {})
+    # Envelope unwrap: some models wrap the whole assessment in one top-level key (e.g.
+    # {"investigation": {…}} / {"result": {…}}). If unwrapping the single dict value exposes materially
+    # more schema fields, do it so the real assessment isn't discarded by the additionalProperties filter.
+    if len(obj) == 1:
+        _inner = next(iter(obj.values()))
+        if isinstance(_inner, dict) and sum(k in props for k in _inner) > sum(k in props for k in obj):
+            obj = _inner
     out: dict = {k: v for k, v in obj.items() if k in props}  # additionalProperties: false — drop unknowns
 
     for key in section_keys:
@@ -261,6 +283,40 @@ def coerce_comprehensive_model_output(
         derived = _VERDICT_TO_SCORE.get(str(out.get("verdict", "")).strip().lower())
         if derived is not None:
             out["omi_score"] = derived
+    # WRAPPER SALVAGE — some models produce the substantive PER-ACCOUNT output but omit the executive
+    # wrapper (verdict/omi_score/headline/assessment). Rather than discard real per-account AI work, derive
+    # the overall read from the model's OWN per-account scores so the response renders. Gated on actually
+    # having per-account results — a genuinely empty reply still floors. These are honest derivations /
+    # factual summaries of the model's output, not invented analysis.
+    _ca_final = out.get("commenter_assessments")
+    _ca_scores = ([c["omi_score"] for c in _ca_final
+                   if isinstance(c, dict) and isinstance(c.get("omi_score"), int)]
+                  if isinstance(_ca_final, list) else [])
+    _verdict_enum_l = [str(v).lower() for v in props.get("verdict", {}).get("enum", [])]
+    if _ca_scores and not isinstance(out.get("omi_score"), int):
+        # Reflect the most-suspicious accounts without letting a single account dominate: the mean of the
+        # worse half of the per-account scores.
+        _worse = sorted(_ca_scores, reverse=True)[: (len(_ca_scores) + 1) // 2]
+        out["omi_score"] = max(0, min(100, int(round(sum(_worse) / len(_worse)))))
+    if _ca_scores and isinstance(out.get("omi_score"), int) and (
+            str(out.get("verdict", "")).strip().lower() not in _verdict_enum_l
+            or not str(out.get("headline", "")).strip()
+            or not str(out.get("assessment", "")).strip()):
+        if str(out.get("verdict", "")).strip().lower() not in _verdict_enum_l:
+            out["verdict"] = _verdict_for_score(out["omi_score"])
+        _n = len(_ca_scores)
+        _flagged = sum(1 for s in _ca_scores if s >= 50)
+        if not str(out.get("headline", "")).strip():
+            out["headline"] = (f"Assessed {_n} account{'' if _n == 1 else 's'}; "
+                               f"{_flagged} at elevated risk or higher.")
+        if not str(out.get("assessment", "")).strip():
+            out["assessment"] = ("Overall read derived from the individual account assessments below — "
+                                 "see each account for its reasoning.")
+        for _ek in ("evidence_for", "evidence_against"):
+            if not isinstance(out.get(_ek), list):
+                out[_ek] = []
+        logger.info("coerce: synthesized the executive wrapper from %d per-account results "
+                    "(the model omitted it) — check the OpenRouter preset is current", _n)
     tier_enum = props.get("suspicion_tier", {}).get("enum", [])
     if isinstance(out.get("omi_score"), int) and out.get("suspicion_tier") not in tier_enum:
         out["suspicion_tier"] = _tier_for_score(out["omi_score"])
