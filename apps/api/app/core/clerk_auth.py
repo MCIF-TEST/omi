@@ -150,4 +150,7 @@ def fetch_user_email(user_id: str) -> str | None:
         return email
     except Exception as e:  # noqa: BLE001
         log.warning("could not fetch Clerk user email: %s", e)
+        # Negative-cache the failure briefly so a misconfigured secret / unreachable Backend API can't
+        # turn every user-resolution into a multi-second blocking call.
+        _USER_EMAIL_CACHE[user_id] = (time.time() + 60, None)
         return None

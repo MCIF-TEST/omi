@@ -81,6 +81,22 @@ def is_valid_email(email: str) -> bool:
     return bool(email and _EMAIL_RE.match(email.strip().lower()))
 
 
+# Placeholder identity for a Clerk account we could verify (valid signed token) but whose email we
+# can't read yet (development session tokens carry no email, and the Backend API lookup may be
+# unconfigured or briefly unreachable). Keyed on the Clerk user id so it's stable and unique; the real
+# email is backfilled on a later request. This guarantees a valid sign-in always resolves to a user,
+# which is what prevents the sign-in ↔ app redirect loop.
+_PLACEHOLDER_EMAIL_DOMAIN = "placeholder.omisphere.local"
+
+
+def _placeholder_email(clerk_uid: str) -> str:
+    return f"clerk_{clerk_uid.lower()}@{_PLACEHOLDER_EMAIL_DOMAIN}"
+
+
+def _is_placeholder_email(email: str | None) -> bool:
+    return bool(email) and email.strip().lower().endswith("@" + _PLACEHOLDER_EMAIL_DOMAIN)
+
+
 # ---------------------------------------------------------------------------
 # Sessions — signed cookies
 # ---------------------------------------------------------------------------
@@ -186,30 +202,57 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
     if not isinstance(clerk_uid, str) or not clerk_uid:
         return None
 
+    admin_emails = {
+        e.strip().lower() for e in (settings.super_admin_emails or "").split(",") if e.strip()
+    }
+
     with get_session() as session:
         u = session.query(User).filter(User.clerk_user_id == clerk_uid).first()
-        if u is not None:
-            return CurrentUser.from_row(u)
 
-        email = email_from_claims(claims) or fetch_user_email(clerk_uid)
-        if not email or not is_valid_email(email):
-            return None  # can't safely link/create without a verified email
-
-        # Link an existing account by email (keep its data), or create a new one.
-        u = session.query(User).filter(User.email == email).first()
-        if u is not None:
-            if not u.clerk_user_id:
-                u.clerk_user_id = clerk_uid
+        # Fast path: a known, fully-provisioned account. No email lookup, no network call — this is the
+        # request-time hot path (every page/API call resolves the user), so it must stay cheap.
+        if u is not None and not _is_placeholder_email(u.email):
             u.last_login_at = datetime.utcnow()
             session.flush()
             return CurrentUser.from_row(u)
 
-        admin_emails = {
-            e.strip().lower() for e in (settings.super_admin_emails or "").split(",") if e.strip()
-        }
-        is_super = email in admin_emails
+        # We need the email only to finish provisioning a NEW account or to upgrade a placeholder one.
+        # A Clerk development session token carries no email, so the claim is usually empty and we ask
+        # the Clerk Backend API (cached, incl. negative results, so a failing call can't slow the app).
+        email = email_from_claims(claims) or fetch_user_email(clerk_uid)
+        email = email.strip().lower() if isinstance(email, str) and is_valid_email(email) else None
+        is_super = bool(email) and email in admin_emails
+
+        # Existing PLACEHOLDER account: upgrade it to the real email once we can get one (and grant
+        # admin if it now matches). Never dead-ends — the account already works either way.
+        if u is not None:
+            if email and email != u.email and (
+                session.query(User).filter(User.email == email, User.id != u.id).first() is None
+            ):
+                u.email = email
+                if is_super:
+                    u.is_admin = 1
+            u.last_login_at = datetime.utcnow()
+            session.flush()
+            return CurrentUser.from_row(u)
+
+        # No local row for this Clerk id yet. If we have a real email, link an existing account by it
+        # (carry over its credits/data), else fall through to create.
+        if email:
+            existing = session.query(User).filter(User.email == email).first()
+            if existing is not None:
+                if not existing.clerk_user_id:
+                    existing.clerk_user_id = clerk_uid
+                existing.last_login_at = datetime.utcnow()
+                session.flush()
+                return CurrentUser.from_row(existing)
+
+        # Create a fresh account. Use the real email when we have one; otherwise a STABLE placeholder
+        # keyed on the Clerk id so a valid sign-in ALWAYS resolves to a user (no redirect loop). The
+        # real email is backfilled on a later request via the placeholder-upgrade path above.
+        acct_email = email or _placeholder_email(clerk_uid)
         u = User(
-            email=email,
+            email=acct_email,
             password_hash="",  # Clerk-managed identity — no local password
             clerk_user_id=clerk_uid,
             credits_remaining=999999 if is_super else settings.free_trial_credits,
@@ -222,7 +265,7 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
         except Exception:  # noqa: BLE001 — a race created it; re-read
             session.rollback()
             u = session.query(User).filter(User.clerk_user_id == clerk_uid).first() \
-                or session.query(User).filter(User.email == email).first()
+                or session.query(User).filter(User.email == acct_email).first()
             if u is None:
                 return None
         return CurrentUser.from_row(u)
