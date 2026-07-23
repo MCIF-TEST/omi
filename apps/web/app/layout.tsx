@@ -13,7 +13,34 @@ const clerkAppearance = {
     colorText: '#F8FAFC',
     colorTextSecondary: '#94A3B8',
     colorInputText: '#F8FAFC',
+    colorDanger: '#EF4444',
+    colorSuccess: '#22C55E',
     borderRadius: '0.625rem',
+    fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+  },
+  elements: {
+    // The card lives inside our own auth shell, so drop Clerk's chrome and let the shell frame it.
+    card: 'bg-transparent shadow-none border-0',
+    rootBox: 'w-full',
+    headerTitle: 'hidden',        // our page supplies the heading
+    headerSubtitle: 'hidden',
+    // Primary action reads as the app's blue lamp button.
+    formButtonPrimary:
+      'bg-[#3B82F6] hover:bg-[#2d6edf] text-white font-semibold normal-case shadow-none',
+    // Social/OAuth buttons: quiet bordered surfaces that light up on hover.
+    socialButtonsBlockButton:
+      'border border-[#31425e] bg-[#0f1828] hover:bg-[#18263d] hover:border-[#3c4f70] text-[#f8fafc] normal-case',
+    socialButtonsBlockButtonText: 'text-[#f8fafc] font-medium',
+    dividerLine: 'bg-[#24344f]',
+    dividerText: 'text-[#64748b] font-mono text-xs tracking-wider uppercase',
+    formFieldLabel: 'text-[#cbd5e1]',
+    formFieldInput:
+      'bg-[#0f1828] border border-[#24344f] focus:border-[#3B82F6] text-[#f8fafc]',
+    footer: 'hidden',             // we render our own switch-mode link
+    footerAction: 'hidden',
+    identityPreviewEditButton: 'text-[#5b9dff]',
+    formResendCodeLink: 'text-[#5b9dff]',
+    otpCodeFieldInput: 'bg-[#0f1828] border border-[#24344f] text-[#f8fafc]',
   },
 };
 

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import {
-  ShieldAlert, Activity, Network, Database,
-  CheckCircle2, ArrowRight, Cpu, Eye,
+  ShieldCheck, Gauge, MessagesSquare, Database,
+  CheckCircle2, ArrowRight, Fingerprint, ScanLine,
+  Link2, MousePointerClick,
 } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
 import { Reveal } from '@/components/shared/reveal';
@@ -13,7 +14,7 @@ import { TRIAL_CREDITS, MONTHLY_CREDITS } from '@/lib/plan';
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-bg-deep flex flex-col relative overflow-hidden grain">
+    <div className="min-h-screen bg-bg-deep flex flex-col relative overflow-hidden">
       <ScrollProgress />
 
       {/* ── Nav ─────────────────────────────────────────────────── */}
@@ -21,16 +22,16 @@ export function LandingPage() {
         <Link href="/" aria-label="omisphere home">
           <Logo />
         </Link>
-        {/* Deliberately minimal top nav: a cold visitor's only jobs here are
-            "see the value" or "log back in". Pricing/About live in the footer —
-            a buying decision before the value moment is a detour. */}
+        {/* A cold visitor has two jobs here: start, or sign back in. Pricing and
+            About live in the footer — a buying decision before the value moment
+            is a detour. Both links go straight to Clerk. */}
         <nav className="flex items-center gap-5 font-mono text-2xs tracking-[0.14em] text-fg-mute">
-          <Link href="/login"   className="hover:text-fg transition-colors">Log in</Link>
+          <Link href="/sign-in" className="hover:text-fg transition-colors">Log in</Link>
           <Link
-            href="/signup"
+            href="/sign-up"
             className="inline-flex items-center gap-1.5 btn-lamp text-[0.7rem] font-semibold px-3.5 py-1.5 rounded-md"
           >
-            Sign up
+            Start free
             <ArrowRight size={11} />
           </Link>
         </nav>
@@ -47,65 +48,62 @@ export function LandingPage() {
               style={{ animation: 'fade-up 220ms cubic-bezier(0.16,1,0.3,1) both' }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-tier-low animate-pulse-dot" />
-              Online Media Intelligence · Beta
+              Online Media Intelligence · Private beta
             </div>
 
             <h1
-              className="display font-semibold tracking-[-0.03em] leading-[0.92] mb-7"
+              className="display font-semibold tracking-[-0.03em] leading-[0.94] mb-7"
               style={{
-                fontSize: 'clamp(2.6rem, 5.5vw, 4.4rem)',
+                fontSize: 'clamp(2.5rem, 5.4vw, 4.2rem)',
                 animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both',
                 animationDelay: '60ms',
               }}
             >
-              Detect coordinated
+              See which accounts
               <br />
-              <span className="text-gradient">influence</span>
+              are real — and which
               <br />
-              at scale.
+              were <span className="text-gradient">bought</span>.
             </h1>
 
             <p
-              className="text-base text-fg-dim leading-relaxed max-w-[480px] mb-9"
+              className="text-base text-fg-dim leading-relaxed max-w-[490px] mb-9"
               style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '100ms' }}
             >
-              Evidence-based Campaign Intelligence for investigators, researchers,
-              journalists, and trust-&amp;-safety teams. Identify coordinated account
-              groups on YouTube and X — corroboration-gated, evidence-bearing,
-              evolving Campaign records. Probability with its uncertainty, not a
-              verdict.
+              Paste a post from X or YouTube. OmiSphere pulls the comment section, you
+              pick the accounts to check, and each one comes back with an OMI score and
+              a plain-English read: a real person, or a bought account. Every verdict
+              shows the behavioral evidence behind it.
             </p>
 
-            {/* Primary CTA: the shortest path to the value moment — a REAL,
-                disclosed influence operation already assembled with its
-                evidence, ~10 seconds away, no account. The token is the
-                stable featured-campaign token (cmp_ + campaign_key, seeded at
-                boot; pinned by test_stable_tokens_match_the_landing_page_contract
-                so a scheme change breaks loudly instead of dead-linking). */}
             <div
               className="flex items-center gap-3 flex-wrap mb-9"
               style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '150ms' }}
             >
-              <a
-                href="/rc/cmp_feat_cn_xinjiang"
+              <Link
+                href="/sign-up"
                 className="inline-flex items-center gap-2 btn-lamp font-semibold px-6 py-2.5 rounded-lg text-sm"
               >
-                See a real campaign — no sign-up
+                Start free — {TRIAL_CREDITS} credits
                 <ArrowRight size={14} />
-              </a>
-              <Link
-                href="/signup"
+              </Link>
+              {/* The pinned featured-campaign token (cmp_ + campaign_key, seeded at
+                  boot; held by test_stable_tokens_match_the_landing_page_contract so
+                  a scheme change breaks loudly instead of dead-linking). A real,
+                  disclosed case with its evidence, no account required. */}
+              <a
+                href="/rc/cmp_feat_cn_xinjiang"
                 className="inline-flex items-center gap-2 border border-border-2 text-fg-dim font-medium px-5 py-2.5 rounded-lg hover:text-fg hover:border-border-hot transition-colors text-sm"
               >
-                Scan your own — sign up free
-              </Link>
+                See a real case — no sign-up
+              </a>
             </div>
 
             <div
-              className="flex items-center gap-6 flex-wrap font-mono text-2xs text-fg-faint tracking-wider"
+              className="flex items-center gap-x-6 gap-y-2 flex-wrap font-mono text-2xs text-fg-faint tracking-wider"
               style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '200ms' }}
             >
-              {['A real disclosed operation, 10 seconds away', `${TRIAL_CREDITS} free credits · no credit card`, 'Always probabilistic'].map((t) => (
+              {[`${TRIAL_CREDITS} free credits, no card`, 'A plain-English reason on every score', 'X and YouTube'].map((t) => (
                 <span key={t} className="flex items-center gap-1.5">
                   <CheckCircle2 size={10} className="text-tier-low shrink-0" />
                   {t}
@@ -127,14 +125,14 @@ export function LandingPage() {
           <div className="border-y border-border-1 py-7">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {[
-                { value: 8,    label: 'Detection signals', sub: 'per commenter' },
-                { value: 3,    label: 'Coord. detectors',  sub: 'cross-account' },
-                { value: 0,    label: 'LLMs in core path', sub: 'pure heuristics' },
-                { value: null, suffix: '∞', label: 'Self-improving', sub: 'every scan trains it' },
+                { value: 8,    suffix: null, label: 'Behavioral signals', sub: 'read per account' },
+                { value: 100,  suffix: null, label: 'OMI score', sub: '0 real · 100 bought' },
+                { value: 2,    suffix: null, label: 'Platforms', sub: 'X · YouTube' },
+                { value: null, suffix: 'Why', label: 'Every verdict', sub: 'explained in plain English' },
               ].map(({ value, suffix, label, sub }) => (
                 <div key={label}>
                   <div className="display text-3xl font-semibold text-fg mb-1 tabular-nums">
-                    {value !== null ? <AnimatedNumber value={value!} format={false} onView /> : suffix}
+                    {value !== null ? <AnimatedNumber value={value} format={false} onView /> : suffix}
                   </div>
                   <div className="font-mono text-2xs text-fg-dim uppercase tracking-wider">{label}</div>
                   <div className="font-mono text-2xs text-fg-faint mt-0.5">{sub}</div>
@@ -157,11 +155,11 @@ export function LandingPage() {
                   <span className="w-2 h-2 rounded-full bg-tier-low/55" />
                 </span>
                 <span className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">
-                  Or scan your own target · no account required
+                  Run a free scan — no account
                 </span>
               </div>
               <span className="font-mono text-2xs text-fg-faint tracking-wider">
-                10 commenters · ≈10 s · 1 free / day
+                Top commenters · ≈10 s · 1 free / day
               </span>
             </div>
             <div className="p-6 md:p-8">
@@ -171,45 +169,12 @@ export function LandingPage() {
         </Reveal>
       </section>
 
-      {/* ── Capabilities ────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
-        <Reveal className="mb-8">
-          <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">Capabilities</p>
-          <h2 className="display text-2xl md:text-3xl font-semibold tracking-tight">
-            Intelligence across every dimension
-          </h2>
-        </Reveal>
-
-        <div className="border border-border-1 rounded-xl divide-y divide-border-1 overflow-hidden">
-          {CAPABILITIES.map((cap, i) => (
-            <Reveal key={cap.title} delay={i * 55} from="up">
-              <div className="group flex gap-4 p-5 hover:bg-bg-elev/50 transition-colors">
-                <div className="shrink-0 w-8 h-8 border border-border-2 rounded-sm flex items-center justify-center text-fg-mute group-hover:text-accent group-hover:border-accent/35 transition-colors mt-0.5">
-                  {cap.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-3 mb-1 flex-wrap">
-                    <span className="text-sm font-semibold text-fg">{cap.title}</span>
-                    {cap.tag && (
-                      <span className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-fg-faint border border-border-2 px-1.5 py-0.5 rounded-sm">
-                        {cap.tag}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-fg-dim leading-relaxed">{cap.body}</p>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
       {/* ── How it works ────────────────────────────────────────── */}
       <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
         <Reveal className="mb-8">
           <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">How it works</p>
           <h2 className="display text-2xl md:text-3xl font-semibold tracking-tight">
-            From URL to insight in seconds
+            A post goes in. Scored accounts come out.
           </h2>
         </Reveal>
 
@@ -233,16 +198,49 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* ── Capabilities ────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
+        <Reveal className="mb-8">
+          <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">What you get</p>
+          <h2 className="display text-2xl md:text-3xl font-semibold tracking-tight">
+            Evidence first. Then an analyst explains it.
+          </h2>
+        </Reveal>
+
+        <div className="border border-border-1 rounded-xl divide-y divide-border-1 overflow-hidden">
+          {CAPABILITIES.map((cap) => (
+            <Reveal key={cap.title} from="up">
+              <div className="group flex gap-4 p-5 hover:bg-bg-elev/50 transition-colors">
+                <div className="shrink-0 w-8 h-8 border border-border-2 rounded-sm flex items-center justify-center text-fg-mute group-hover:text-accent group-hover:border-accent/35 transition-colors mt-0.5">
+                  {cap.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-3 mb-1 flex-wrap">
+                    <span className="text-sm font-semibold text-fg">{cap.title}</span>
+                    {cap.tag && (
+                      <span className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-fg-faint border border-border-2 px-1.5 py-0.5 rounded-sm">
+                        {cap.tag}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-fg-dim leading-relaxed">{cap.body}</p>
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
       {/* ── Scope ───────────────────────────────────────────────── */}
       <section className="relative z-10 px-6 md:px-8 pb-12 max-w-5xl mx-auto w-full">
         <Reveal>
           <div className="rounded-xl border border-border-1 bg-bg-elev p-6">
             <p className="font-mono text-2xs tracking-[0.18em] uppercase text-fg-mute mb-3">Scope, plainly</p>
             <p className="text-sm text-fg-dim leading-relaxed">
-              Today OMISPHERE scans <span className="text-fg font-medium">YouTube</span> and
-              <span className="text-fg font-medium"> X (Twitter)</span> — videos, channels, and
-              accounts. The detection engine is platform-agnostic; Reddit and TikTok are on the
-              roadmap. We&apos;d rather ship two platforms with depth than four with stubs.
+              Today OmiSphere reads <span className="text-fg font-medium">X (Twitter)</span> and
+              <span className="text-fg font-medium"> YouTube</span> — posts, videos, and the accounts
+              that comment on them. The detection engine is platform-agnostic; Reddit and TikTok are
+              next. We would rather ship two platforms with depth than four with stubs.
             </p>
           </div>
         </Reveal>
@@ -253,21 +251,21 @@ export function LandingPage() {
         <Reveal from="up">
           <div className="border-t border-border-1 pt-16 text-center">
             <p className="font-mono text-2xs tracking-[0.22em] text-fg-mute uppercase mb-5">
-              Start your investigation
+              Start your first scan
             </p>
             <h2 className="display text-3xl md:text-4xl font-semibold tracking-tight mb-5">
-              See what&apos;s real.
+              Find out who&apos;s real.
             </h2>
             <p className="text-sm text-fg-dim max-w-md mx-auto mb-8">
-              $9.99/month · {MONTHLY_CREDITS} credits monthly · {TRIAL_CREDITS} free on signup. Cancel anytime.
-              Built for journalists, researchers, and platform integrity teams.
+              ${'9.99'}/month · {MONTHLY_CREDITS} credits monthly · {TRIAL_CREDITS} free to start. Cancel anytime.
+              Built for creators, brands, journalists, and platform-integrity teams.
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link
-                href="/signup"
+                href="/sign-up"
                 className="inline-flex items-center gap-2 btn-lamp font-semibold px-7 py-2.5 rounded-lg"
               >
-                Begin investigating
+                Create your free account
                 <ArrowRight size={14} />
               </Link>
               <Link
@@ -299,57 +297,57 @@ export function LandingPage() {
 
 const CAPABILITIES = [
   {
-    icon: <ShieldAlert size={15} />,
-    title: 'Per-commenter detection',
-    body: 'Each commenter scored on temporal cadence, semantic repetition, AI-writing tells, profile metadata, personal-voice rate, engagement farming, fingerprint memory, and coordination. Probabilistic with explicit evidence.',
+    icon: <Gauge size={15} />,
+    title: 'A per-account OMI score',
+    body: 'Every account you check gets its own 0-to-100 score for how likely it is bought or inauthentic. No blanket verdict on the whole comment section — each account is judged on its own evidence.',
     tag: 'core',
   },
   {
-    icon: <Network size={15} />,
-    title: 'Coordination mapping',
-    body: 'Three cross-account detectors find groups acting together: temporal-semantic bursts, age cohorts, and co-engagement patterns across multiple videos.',
+    icon: <MessagesSquare size={15} />,
+    title: 'A plain-English read on every account',
+    body: 'The omi analyst reads the evidence and tells you, in a sentence or two, why an account looks real or bought. No jargon, no black box.',
     tag: null,
   },
   {
-    icon: <Activity size={15} />,
-    title: 'Narrative tracking',
-    body: 'Semantic clusters across all your scans surface which talking points are organic and which are amplified campaigns.',
+    icon: <ShieldCheck size={15} />,
+    title: 'Eight behavioral signals',
+    body: 'Posting cadence, repetition, writing tells, profile metadata, personal-voice rate, engagement farming, account history, and fingerprint memory. Computed, not guessed — fast and auditable.',
+    tag: null,
+  },
+  {
+    icon: <MousePointerClick size={15} />,
+    title: 'Pick who to scan',
+    body: 'OmiSphere pulls the whole comment section for free. You choose the accounts worth checking, and credits go only to the ones you select.',
     tag: null,
   },
   {
     icon: <Database size={15} />,
-    title: 'Behavioral fingerprint database',
-    body: 'Every scan adds a behavioral fingerprint and persists coordination edges. Future scans pull priors from the growing dataset — the engine sharpens with use.',
+    title: 'A memory that sharpens with use',
+    body: 'Every scan adds a behavioral fingerprint to the database. Later scans pull priors from what came before, so repeat offenders surface faster.',
     tag: null,
   },
   {
-    icon: <Cpu size={15} />,
-    title: 'Pure-signal engine',
-    body: 'No LLMs in the core detection path. Pure Python heuristics, embeddings, and graph algorithms. Fast, deterministic, auditable.',
-    tag: 'no llm',
-  },
-  {
-    icon: <Eye size={15} />,
-    title: 'Full evidence chain',
-    body: 'Every score shows its work. Click any flag to see the raw signals that triggered it. No black boxes, no unexplained verdicts.',
+    icon: <Fingerprint size={15} />,
+    title: 'The full evidence chain',
+    body: 'Open any score to see the raw signals that drove it — the comment, the account metadata, the cadence. Every number shows its work.',
     tag: null,
   },
 ];
 
 const STEPS = [
   {
-    icon: <ArrowRight size={16} />,
-    title: 'Paste a YouTube URL',
-    body: 'Any video or channel URL. OMISPHERE pulls the top commenters immediately — no preprocessing required.',
+    icon: <Link2 size={16} />,
+    title: 'Paste a post',
+    body: 'Drop in any X post or YouTube video. OmiSphere pulls its comment section — up to every account on the post.',
   },
   {
-    icon: <Activity size={16} />,
-    title: 'Engine scores each commenter',
-    body: 'Eight independent signals run in parallel: temporal cadence, semantic repetition, AI-writing tells, profile metadata, and more.',
+    icon: <MousePointerClick size={16} />,
+    title: 'Pick the accounts',
+    body: 'Read through the comments and select the ones you want checked. You spend credits only on the accounts you choose.',
   },
   {
-    icon: <Eye size={16} />,
-    title: 'Review the evidence',
-    body: 'Every score shows its work. Save investigations and track narratives over time. Share or export to PDF.',
+    icon: <ScanLine size={16} />,
+    title: 'Read each score',
+    body: 'Each account comes back with a 0-to-100 OMI score and a plain-English reason: real person, or bought, and the evidence behind the call.',
   },
 ];
