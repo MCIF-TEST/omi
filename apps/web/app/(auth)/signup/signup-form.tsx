@@ -52,7 +52,7 @@ export function SignupForm() {
       });
       sessionStorage.removeItem('omi_ref');
       router.refresh();
-      router.push('/dashboard');
+      router.push('/investigate');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Signup failed. Try again.');
     } finally {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Search, LayoutDashboard, MessageSquareText, Network, Settings,
+  Search, MessageSquareText, Network, Settings,
   FileSearch, ArrowRight,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
@@ -22,7 +22,6 @@ interface PaletteItem {
 }
 
 const NAV_ITEMS: PaletteItem[] = [
-  { id: 'nav-dashboard',    label: 'Dashboard',   icon: <LayoutDashboard size={14} />, href: '/dashboard',  group: 'Navigate' },
   { id: 'nav-investigate',  label: 'New scan',    icon: <Search size={14} />,           href: '/investigate', group: 'Navigate', hint: 'Paste a URL to begin' },
   { id: 'nav-narratives',   label: 'Narratives',  icon: <MessageSquareText size={14} />, href: '/narratives',  group: 'Navigate' },
   { id: 'nav-graph',        label: 'Graph',       icon: <Network size={14} />,          href: '/graph',       group: 'Navigate' },

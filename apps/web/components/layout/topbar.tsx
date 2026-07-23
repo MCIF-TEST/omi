@@ -38,7 +38,7 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
     <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 glass px-4 md:px-5 flex items-center gap-3">
 
       {/* Brand — phones have no sidebar, so the wordmark lives here. */}
-      <Link href="/dashboard" className="md:hidden tap" aria-label="OMISPHERE home">
+      <Link href="/investigate" className="md:hidden tap" aria-label="OMISPHERE home">
         <Logo size="sm" />
       </Link>
 

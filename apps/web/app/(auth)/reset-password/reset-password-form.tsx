@@ -32,7 +32,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       });
       // Reset logs the user in — go straight to the app.
       router.refresh();
-      router.push('/dashboard');
+      router.push('/investigate');
     } catch (e) {
       setError(
         e instanceof ApiError

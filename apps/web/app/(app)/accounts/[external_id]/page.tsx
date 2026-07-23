@@ -104,7 +104,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
 
       <div>
         <Link
-          href="/dashboard"
+          href="/investigations"
           className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg transition-colors font-mono tracking-wider uppercase mb-4"
         >
           <ArrowLeft size={14} /> Back

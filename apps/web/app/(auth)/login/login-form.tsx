@@ -24,7 +24,7 @@ export function LoginForm({ next }: { next?: string }) {
         body: JSON.stringify({ email, password }),
       });
       router.refresh();
-      router.push(next || '/dashboard');
+      router.push(next || '/investigate');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Login failed. Try again.');
     } finally {

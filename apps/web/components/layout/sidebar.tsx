@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Search, Network, MessageSquareText, Megaphone,
+  Search, Network, MessageSquareText, Megaphone,
   Activity, FileText, Settings, Folder, Database, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -21,7 +21,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: 'Intelligence',
     items: [
-      { href: '/dashboard',      label: 'Dashboard',     icon: LayoutDashboard },
       { href: '/investigate',    label: 'Investigate',   icon: Search },
       { href: '/investigations', label: 'Investigations',icon: Folder },
     ],
@@ -56,7 +55,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
 // Pre-activation (no investigations yet) the nav narrows to the value-moment
 // path: Dashboard / Investigate / Investigations / Campaigns / Settings.
 const NEW_USER_VISIBLE = new Set([
-  '/dashboard', '/investigate', '/investigations', '/campaigns', '/settings',
+  '/investigate', '/investigations', '/campaigns', '/settings',
 ]);
 
 function visibleGroups(isNewUser: boolean) {
