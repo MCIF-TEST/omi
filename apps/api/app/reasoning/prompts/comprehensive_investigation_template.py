@@ -35,7 +35,7 @@ from pathlib import Path
 
 from app.evidence.bundle import digest
 
-COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v7"
+COMPREHENSIVE_INVESTIGATION_TEMPLATE_VERSION = "citmpl-v8"
 
 # The Lead-Investigator synthesis wrapper is DERIVED from the EXISTING analyst response schema — the one
 # wrapper source of truth — so the website response, the Governor validation, and the deterministic Floor
@@ -403,7 +403,27 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "resolves them and you cite only those aliases. Very large investigations may be represented by "
     "evidence COVERAGE disclosed by structure, never by suspicion; omitted entities remain citable. "
     "Describe behavior, not people; use probabilistic language; a genuine-looking account scores low. "
-    "The human analyst sets the final verdict."
+    "The human analyst sets the final verdict.\n"
+    "PER-ACCOUNT INDEPENDENCE (anti-shortcut rule — obey it absolutely). You MUST score every account "
+    "individually; batching, copying, or giving everyone one number is a failed investigation. Work "
+    "through the accounts ONE AT A TIME in alias order — A1, then A2, then A3, … through the last row "
+    "of the Accounts table — and do not move on until the current account is scored on its OWN "
+    "evidence. Before each omi_score, restate that account's own facts to yourself: its age "
+    "(account_created_at vs the post times), its follower_count and following_count, its post_count, "
+    "and what its actual posts/comments look like — and score from THOSE facts, never from another "
+    "account's. Every account gets its OWN separately-reasoned omi_score and its OWN plain-English "
+    "reason built from its OWN numbers and content; never reuse a score, a sentence, or a reason "
+    "across accounts. IDENTICAL SCORES ARE A RED FLAG OF A SHORTCUT: two accounts may share a score "
+    "ONLY if their evidence is genuinely alike, and a real batch almost always produces a SPREAD of "
+    "different scores — if you are about to give several accounts the same number, STOP and re-read "
+    "each one's own evidence. Do NOT push the overall bundle number onto the individuals: the wrapper "
+    "omi_score is the whole-batch synthesis, while the per-account omi_scores are independent and "
+    "usually differ from it and from each other. Thin-data accounts each still get their OWN read — "
+    "score each low with its OWN specific 'not enough history to tell' note, never one shared default. "
+    "commenter_assessments MUST hold EXACTLY ONE item per account alias, each with a distinct, "
+    "independently-reasoned omi_score; an array whose scores are all identical or whose reasons are "
+    "interchangeable boilerplate means you did not analyze the accounts — redo it one account at a "
+    "time before emitting the JSON."
 )
 
 # The model-facing OUTPUT CONTRACT — rendered deterministically from the ONE canonical schema (no
