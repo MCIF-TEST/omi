@@ -13,7 +13,7 @@ import {
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
 
-export const metadata = { title: 'Campaigns — OMISPHERE' };
+export const metadata = { title: 'Narratives — OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 const SORTS: { value: CampaignSort; label: string }[] = [
@@ -88,7 +88,7 @@ export default async function CampaignsPage({ searchParams }: PageProps) {
         <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <span className="section-label">Coordination · Campaigns</span>
+            <span className="section-label">Coordination · Narratives</span>
             <h1 className="display text-2xl font-semibold tracking-tight mt-3">
               Coordinated account groups
             </h1>
@@ -152,7 +152,7 @@ export default async function CampaignsPage({ searchParams }: PageProps) {
           <div className="w-12 h-12 mx-auto mb-4 rounded-xl border border-border-2 bg-bg-elev-2 flex items-center justify-center text-accent">
             <Megaphone size={20} strokeWidth={1.5} />
           </div>
-          <CardTitle className="mb-1.5">No campaigns at this filter</CardTitle>
+          <CardTitle className="mb-1.5">No narratives at this filter</CardTitle>
           <p className="text-sm text-fg-dim max-w-lg mx-auto leading-relaxed">
             Campaigns are captured during scans when a corroboration-gated coordination
             cluster of ≥3 accounts is detected (score ≥ 0.50). Widen the filter, or run

@@ -144,6 +144,8 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("watchlists", "platform", "VARCHAR(32) DEFAULT 'youtube'"),
     # Clerk auth linkage — maps a local account to its Clerk user (linked by email on first sign-in).
     ("users", "clerk_user_id", "VARCHAR(64)"),
+    # Real post title (video title / tweet text) for human-readable investigation labels.
+    ("candidate_lists", "content_title", "VARCHAR(500)"),
 ]
 
 

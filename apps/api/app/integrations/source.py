@@ -148,6 +148,13 @@ class YouTubeSource:
             start_page_token=start_page_token,
         )
 
+    def fetch_content_title(self, content_id: str) -> str | None:
+        """The video's real title, for a human-readable investigation label. Best-effort."""
+        from app.integrations.youtube import fetch_video_metadata
+
+        meta = fetch_video_metadata(self._client, content_id, stats=self._stats)
+        return (meta or {}).get("title") or None
+
 
 class TwitterSource:
     """Twitter/X data source — a thin adapter over ``app.integrations.twitter``.
@@ -217,6 +224,12 @@ class TwitterSource:
             max_commenters=max_commenters, max_comments=max_comments,
             stats=self._stats, start_page_token=start_page_token,
         )
+
+    def fetch_content_title(self, content_id: str) -> str | None:
+        """The tweet's text, for a human-readable investigation label. Best-effort."""
+        from app.integrations.twitter import fetch_tweet_text
+
+        return fetch_tweet_text(self._client, content_id, stats=self._stats)
 
 
 def classify_link(url: str) -> dict:

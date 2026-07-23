@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Search, Network, MessageSquareText, Megaphone,
+  Search, Network, MessageSquareText,
   Activity, FileText, Settings, Folder, Database, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -26,14 +26,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // Coordination-first framing — Campaigns are the durable account-cluster
-    // asset; Narratives are message-cluster (different grain — don't conflate);
-    // Graph is the cross-scan account network. Content DB is "what was scanned",
-    // not coordination output — moved to its own group below.
+    // Narratives = the durable coordinated-account clusters (formerly "Campaigns");
+    // the separate message-cluster Narratives tab was merged into this one unified tab.
+    // Graph is the cross-scan account network.
     label: 'Coordination',
     items: [
-      { href: '/campaigns',      label: 'Campaigns',     icon: Megaphone },
-      { href: '/narratives',     label: 'Narratives',    icon: MessageSquareText },
+      { href: '/campaigns',      label: 'Narratives',    icon: MessageSquareText },
       { href: '/graph',          label: 'Graph',         icon: Network },
     ],
   },

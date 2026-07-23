@@ -754,6 +754,9 @@ class CandidateList(Base):
     platform: Mapped[str] = mapped_column(String(32), index=True)
     content_id: Mapped[str] = mapped_column(String(255), index=True)
     content_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # The post's real human title (YouTube video title / tweet text) — used to label the investigation
+    # instead of "Scan of <url>". Captured best-effort on the first compile.
+    content_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # The investigation this post's scored batches grow into (set on the first scored selection); later
     # selections continue into the SAME investigation so the overall OMI recomputes over everyone scored.
     investigation_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

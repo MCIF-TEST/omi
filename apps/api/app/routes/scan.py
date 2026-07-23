@@ -1252,11 +1252,26 @@ def scan_link(
     return result
 
 
+def _clean_content_label(title: str | None) -> str | None:
+    """Turn a raw video title / tweet text into a clean, single-line investigation label:
+    collapse whitespace, take the first meaningful line, truncate long text with an ellipsis."""
+    if not title:
+        return None
+    first_line = next((ln.strip() for ln in str(title).splitlines() if ln.strip()), "")
+    t = " ".join(first_line.split()).strip()
+    if not t:
+        return None
+    return (t[:157].rstrip() + "…") if len(t) > 160 else t
+
+
 def _investigation_label(classification: dict, url: str) -> str:
-    """Generate a human label like 'Video mBuhgvJzAN0' or 'Channel @handle'."""
+    """Human label for an investigation. Falls back (when no real title is available) to a clean
+    author/id form rather than the raw URL."""
     kind = classification.get("kind")
     if kind == "video" and classification.get("video_id"):
-        return f"Video {classification['video_id']}"
+        return f"YouTube video {classification['video_id']}"
+    if classification.get("tweet_id"):
+        return f"X post {classification['tweet_id']}"
     if kind == "channel" and classification.get("account_input"):
         return f"Channel {classification['account_input']}"
     return f"Scan of {url[:200]}"
@@ -1587,6 +1602,7 @@ def _persist_investigation(
     classification: dict,
     url: str,
     payload: dict,
+    label_override: str | None = None,
 ) -> bool:
     """Persist (create or merge) an investigation row. Returns True on success.
 
@@ -1605,7 +1621,7 @@ def _persist_investigation(
 
     log = logging.getLogger("omi.scan")
 
-    label = _investigation_label(classification, url)
+    label = _clean_content_label(label_override) or _investigation_label(classification, url)
     target_id = classification.get("video_id") or classification.get("account_input")
     overall_probability = float(payload.get("overall_probability") or 0.0)
     overall_tier = str(payload.get("overall_tier") or "low")
