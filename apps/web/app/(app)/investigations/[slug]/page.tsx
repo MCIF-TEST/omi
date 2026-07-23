@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Radar } from 'lucide-react';
 import { ApiError, type InvestigationDetailResponse, VERDICT_LABELS } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { Card, CardLabel } from '@/components/ui/card';
@@ -46,13 +46,22 @@ export default async function InvestigationPage({ params }: { params: { slug: st
             <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mb-1.5 mt-3 line-clamp-2 break-words">{inv.label}</h1>
             <p className="font-mono text-xs text-fg-faint truncate">{inv.input_url}</p>
           </div>
-          {inv.verdict && inv.verdict !== 'pending' && (
-            <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
+            {inv.verdict && inv.verdict !== 'pending' && (
               <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-hot px-2.5 py-1 rounded-full bg-bg-elev-2">
                 {VERDICT_LABELS[inv.verdict]}
               </span>
-            </div>
-          )}
+            )}
+            {inv.input_url && (
+              <Link
+                href={`/investigate?url=${encodeURIComponent(inv.input_url)}`}
+                className="btn-slab h-9 px-4 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim"
+              >
+                <Radar size={13} className="text-accent" />
+                Scan more commenters
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Inline metadata strip — run identity only. The suspicion read now lives
