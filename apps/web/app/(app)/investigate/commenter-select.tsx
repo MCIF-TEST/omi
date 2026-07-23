@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Check, CheckSquare, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckSquare, ClipboardPaste, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
@@ -125,6 +125,18 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
       setBusy(false);
     }
   }, [url, rows.length]);
+
+  // One-tap paste — reads the clipboard straight into the link field. Especially clean on mobile,
+  // where pasting normally means long-press → menu → Paste. Silently no-ops if the browser blocks
+  // clipboard reads (permissions / non-HTTPS) — the user can still paste by hand.
+  const pasteFromClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setUrl(text.trim());
+    } catch {
+      /* clipboard unavailable — no-op */
+    }
+  }, []);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -259,16 +271,40 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a YouTube video or X (Twitter) post…"
+              placeholder="Paste a YouTube or X (Twitter) link…"
               aria-label="Post link"
-              className="h-12 w-full pl-10 pr-3 text-base rounded-lg bg-bg-inset border border-border-2 text-fg
+              inputMode="url"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className="h-12 w-full pl-10 pr-24 text-base rounded-lg bg-bg-inset border border-border-2 text-fg
                          placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline"
             />
+            {/* Auto-paste — one tap drops the copied link in. A big win on mobile, where pasting is fiddly. */}
+            {!url.trim() ? (
+              <button
+                type="button"
+                onClick={pasteFromClipboard}
+                aria-label="Paste link from clipboard"
+                className="btn-slab absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-accent-text"
+              >
+                <ClipboardPaste size={14} /> Paste
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setUrl('')}
+                aria-label="Clear link"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-mute hover:text-fg p-1"
+              >
+                <X size={15} />
+              </button>
+            )}
           </div>
           <button
             type="submit"
             disabled={!url.trim() || busy || phase === 'scanning'}
-            className="btn-lamp h-12 px-6 rounded-lg font-semibold inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+            className="btn-lamp h-12 w-full sm:w-auto px-6 rounded-lg font-semibold inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed"
           >
             {phase === 'compiling'
               ? <><Loader2 size={16} className="animate-spin" /> Reading…</>
@@ -428,15 +464,15 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
             </ul>
           </div>
 
-          {/* action bar */}
-          <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-divider bg-bg/60">
-            <p className="font-mono text-2xs tracking-wider text-fg-faint">
-              {hasMore ? 'More commenters available — “Add 100” or “Load all” to pull the rest.' : 'Whole comment section loaded.'}
+          {/* action bar — on mobile the Scan button goes full-width + sticks to the bottom of the card */}
+          <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-divider bg-bg/60 sticky bottom-0">
+            <p className="font-mono text-2xs tracking-wider text-fg-faint w-full sm:w-auto">
+              {hasMore ? 'More available — “Add 100” or “Load all” to pull the rest.' : 'Whole comment section loaded.'}
             </p>
             <button
               onClick={() => void scan()}
               disabled={selCount === 0}
-              className="btn-ai ml-auto h-10 px-5 rounded-lg font-semibold inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-ai w-full sm:w-auto sm:ml-auto h-11 px-5 rounded-lg font-semibold inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Radar size={15} />
               Scan {selCount > 0 ? `${selCount} ` : ''}selected

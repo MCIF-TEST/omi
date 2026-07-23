@@ -9,7 +9,7 @@ export default function SignUpPage() {
     <div className="flex justify-center">
       <SignUp
         signInUrl="/sign-in"
-        fallbackRedirectUrl="/dashboard"
+        fallbackRedirectUrl="/investigate"
         appearance={{ elements: { rootBox: 'w-full', card: 'shadow-none bg-transparent' } }}
       />
     </div>
