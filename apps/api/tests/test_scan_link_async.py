@@ -119,7 +119,8 @@ def test_scan_link_status_404_for_unknown_job(auth_client):
     assert r.status_code == 404, r.text
 
 
-def _insert_running_job(email: str, job_id: str, *, age_seconds: int, credits: int = 2):
+def _insert_running_job(email: str, job_id: str, *, age_seconds: int, credits: int = 2,
+                        max_commenters: int = 25):
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import select
     from app.storage.db import get_session
@@ -132,7 +133,7 @@ def _insert_running_job(email: str, job_id: str, *, age_seconds: int, credits: i
             results_json=[{"url": "https://x.com/p", "platform": "x",
                            "status": "pending", "slug": "inv_stale"}],
             status="running", total=1, completed=0, failed_count=0,
-            credits_estimate=credits, credits_used=credits, max_commenters=25,
+            credits_estimate=credits, credits_used=credits, max_commenters=max_commenters,
             created_at=when, started_at=when,
         ))
         s.flush()
@@ -152,6 +153,39 @@ def test_stale_job_reaped_and_refunded_on_poll(auth_client):
 
     after = auth_client.get("/v1/auth/me").json()["credits_remaining"]
     assert after == before + 2, (before, after)  # refunded exactly the charge
+
+
+def test_a_big_scan_is_not_declared_dead_on_a_small_scan_s_clock(auth_client):
+    """The watchdog budget scales with the job's size.
+
+    Every selected account costs a profile fetch, a history fetch and a detection pass, so a
+    100-account scan legitimately runs far longer than a 5-account one. On a flat budget the big scan
+    is killed while still healthy — and a false reap is the expensive kind of mistake: the user is
+    refunded and told the scan failed AFTER the upstream calls were paid for, and the worker persists
+    the investigation before reporting success, so it can happen to a scan whose results are saved."""
+    _insert_running_job("async@t.com", "link_big", age_seconds=420, credits=2, max_commenters=100)
+    r = auth_client.get("/v1/scan/link/status/link_big")
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "running", "a 100-account scan is still within budget at 7 minutes"
+
+    # The same age against a small job IS past budget — the floor still applies to small scans.
+    _insert_running_job("async@t.com", "link_small", age_seconds=420, credits=2, max_commenters=5)
+    r2 = auth_client.get("/v1/scan/link/status/link_small")
+    assert r2.json()["status"] == "failed"
+
+
+def test_the_budget_scales_with_account_count_and_is_bounded():
+    from app.core.config import get_settings
+    from app.routes.scan_async import scan_job_budget_seconds
+
+    s = get_settings()
+    # A small job gets the floor, not a couple of seconds.
+    assert scan_job_budget_seconds(1, s) == s.scan_job_timeout_seconds
+    assert scan_job_budget_seconds(None, s) == s.scan_job_timeout_seconds
+    # A big job gets proportionally more...
+    assert scan_job_budget_seconds(100, s) > scan_job_budget_seconds(25, s)
+    # ...but a wedged job still frees up eventually.
+    assert scan_job_budget_seconds(100_000, s) == s.scan_job_timeout_max_seconds
 
 
 def test_fresh_running_job_not_reaped(auth_client):

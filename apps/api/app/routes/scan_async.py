@@ -436,29 +436,59 @@ def _link_job_out(job: ScanJob) -> LinkScanJobOut:
     )
 
 
-def reap_stale_scan_jobs(
-    timeout_seconds: int, *, user_id: int | None = None, job_id: str | None = None
-) -> int:
-    """Mark scan jobs stuck in queued/running past the budget as failed + refund.
+def scan_job_budget_seconds(max_commenters: int | None, settings: Settings) -> int:
+    """How long a scan job of this size is allowed to run before the watchdog calls it dead.
 
-    The safety net for the cases the worker can't self-report: a scan slower than
-    the budget, or a worker killed mid-scan (OOM / redeploy) that never wrote a
-    terminal status. Without this a job polls forever and the credit is stranded.
-    Idempotent and transition-guarded (row lock + status check) so the credit is
-    refunded exactly once, even racing a late-finishing worker. Returns the count
-    reaped. Scope to a user/job to keep the per-request sweep cheap.
+    Scaled by the account count, because that is what the work is: every selected account costs a
+    profile fetch, a history fetch, and a detection pass. A flat budget sized for a small scan
+    guarantees that big ones are killed while still healthy — and a false reap is expensive in a way
+    a late reap is not. It refunds and tells the user their scan failed AFTER the upstream calls have
+    been paid for, and (because the worker persists the investigation before it reports success) it can
+    do that for a scan whose results are already saved and sitting in their history.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
+    n = max(1, int(max_commenters or 1))
+    scaled = float(settings.scan_job_timeout_per_account_seconds) * n
+    return int(min(
+        float(settings.scan_job_timeout_max_seconds),
+        max(float(settings.scan_job_timeout_seconds), scaled),
+    ))
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Rows written through SQLite come back naive; the budget arithmetic below needs an aware value."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+def reap_stale_scan_jobs(
+    settings: Settings, *, user_id: int | None = None, job_id: str | None = None
+) -> int:
+    """Mark scan jobs stuck in queued/running past THEIR OWN budget as failed + refund.
+
+    The safety net for the cases the worker can't self-report: a worker killed mid-scan (OOM /
+    redeploy) that never wrote a terminal status. Without this a job polls forever and the credit is
+    stranded. Each job is judged against a budget scaled to its account count
+    (``scan_job_budget_seconds``) rather than one flat number, so a 100-account scan isn't declared
+    dead at the five-minute mark a 5-account scan is sized for. Idempotent and transition-guarded (row
+    lock + status check) so the credit is refunded exactly once, even racing a late-finishing worker.
+    Returns the count reaped. Scope to a user/job to keep the per-request sweep cheap.
+    """
+    now = datetime.now(timezone.utc)
+    # Cheap pre-filter in SQL at the smallest possible budget; the per-job budget is applied below.
+    floor_cutoff = now - timedelta(seconds=settings.scan_job_timeout_seconds)
     with get_session() as session:
         q = select(ScanJob).where(
             ScanJob.status.in_(["queued", "running"]),
-            ScanJob.created_at < cutoff,
+            ScanJob.created_at < floor_cutoff,
         )
         if user_id is not None:
             q = q.where(ScanJob.user_id == user_id)
         if job_id is not None:
             q = q.where(ScanJob.job_id == job_id)
-        candidate_ids = [j.id for j in session.execute(q).scalars()]
+        candidate_ids = [
+            j.id for j in session.execute(q).scalars()
+            if (now - _as_utc(j.created_at)).total_seconds()
+            >= scan_job_budget_seconds(j.max_commenters, settings)
+        ]
 
     reaped = 0
     for cid in candidate_ids:
@@ -492,7 +522,11 @@ def reap_stale_scan_jobs(
                 log.exception("refund failed reaping scan job id=%s", cid)
         reaped += 1
     if reaped:
-        log.warning("reaped %d stale scan job(s) past %ds budget", reaped, timeout_seconds)
+        log.warning(
+            "reaped %d stale scan job(s) past their size-scaled budget (floor %ds, %.1fs/account, "
+            "ceiling %ds)", reaped, settings.scan_job_timeout_seconds,
+            settings.scan_job_timeout_per_account_seconds, settings.scan_job_timeout_max_seconds,
+        )
     return reaped
 
 
@@ -541,7 +575,7 @@ def scan_link_start(
 
     # Reap any of this user's jobs stuck past the budget (refund + clear stale
     # 'running' rows) before kicking off a new one.
-    reap_stale_scan_jobs(settings.scan_job_timeout_seconds, user_id=current.id)
+    reap_stale_scan_jobs(settings, user_id=current.id)
 
     # Build the creq + platform Source BEFORE charging — a mis-config (e.g. a
     # missing API key → 503) must never bill the user, exactly as /link does.
@@ -656,9 +690,7 @@ def scan_link_status(
     Reaps this job first if it's stuck past the time budget, so a hung/dead scan
     returns a clean failed+refunded status here instead of polling forever.
     """
-    reap_stale_scan_jobs(
-        settings.scan_job_timeout_seconds, user_id=current.id, job_id=job_id
-    )
+    reap_stale_scan_jobs(settings, user_id=current.id, job_id=job_id)
     with get_session() as session:
         job = session.execute(
             select(ScanJob).where(
@@ -734,7 +766,7 @@ def score_selection(
     if not selected_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No scannable selection.")
 
-    reap_stale_scan_jobs(settings.scan_job_timeout_seconds, user_id=current.id)
+    reap_stale_scan_jobs(settings, user_id=current.id)
 
     # Build creq (with the injected selection) + Source BEFORE charging, so a mis-config never bills.
     creq = ComprehensiveScanRequest(
@@ -848,6 +880,17 @@ def _run_link_scan_job(
             # owns the (single) refund.
             job = session.get(ScanJob, db_id, with_for_update=True)
             if job is None or job.status in ("done", "failed"):
+                if job is not None and state == "done":
+                    # The watchdog called this job dead while it was still working, and it has now
+                    # finished successfully. The investigation IS saved (persistence happens before
+                    # this call), so the user has their results and their refund — but they were told
+                    # the scan failed. That means the budget is too tight for scans this size: raise
+                    # scan_job_timeout_per_account_seconds.
+                    log.error(
+                        "scan job %s finished OK after being reaped — investigation %s is saved but "
+                        "was reported as failed. The size-scaled budget is too tight for %s accounts.",
+                        db_id, slug, creq.max_commenters,
+                    )
                 return
             job.status = state
             job.completed = 1
