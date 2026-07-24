@@ -1291,20 +1291,24 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int) 
 
 def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks: list[dict],
                       *, platform: str, settings: Settings) -> dict | None:
-    """Run one analyst inference PER ≤N-account batch — in parallel, bounded — merging + persisting
-    the combined assessment after each batch lands, strictly first-to-last, so the UI can show batch
-    1's results while batch 2 is still generating. Returns the final persisted entry."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    """Run one analyst inference PER ≤N-account batch, merging + persisting the combined assessment
+    after each batch lands (strictly first-to-last) so the UI can show batch 1's accounts while the
+    rest are still generating. Returns the final persisted entry.
 
+    Batches run SEQUENTIALLY by default (``analyst_batch_concurrency`` = 1): one unshared request at a
+    time means the first 25 accounts land as early as possible instead of every batch finishing
+    together at the end. Raising the concurrency restores bounded parallelism; the prefix-flush below
+    keeps results appearing in order either way."""
     from app.storage.repository import AccountRepository
 
     ref = _ref(inv_slug)
     total = len(chunks)
-    workers = max(1, min(total, int(getattr(settings, "analyst_batch_concurrency", 3) or 3)))
+    workers = max(1, min(total, int(getattr(settings, "analyst_batch_concurrency", 1) or 1)))
     batch_size = int(getattr(settings, "analyst_batch_accounts", 50) or 50)
-    logger.info("analyst.batched: slug=%s accounts=%d -> %d batches of <=%d (concurrency=%d)",
+    logger.info("analyst.batched: slug=%s accounts=%d -> %d batches of <=%d (%s)",
                 inv_slug, len((payload.get("video") or {}).get("commenters") or []),
-                total, batch_size, workers)
+                total, batch_size,
+                "sequential" if workers == 1 else f"concurrency={workers}")
 
     parts: list[dict | None] = [None] * total
     flushed = 0  # batches merged+persisted so far (strict first-to-last prefix)
@@ -1323,33 +1327,46 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
             return persist_assessment(session, inv, merged, provider)
 
     entry: dict | None = None
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="omi-batch") as pool:
-        futures = {
-            pool.submit(
-                assess_payload, chunk, ref=f"{ref}.b{i + 1}", platform=platform, settings=settings,
-            ): i
-            for i, chunk in enumerate(chunks)
-        }
-        for fut in as_completed(futures):
-            i = futures[fut]
-            try:
+
+    def _landed(i: int) -> None:
+        """Record batch ``i``'s outcome, then persist the longest completed PREFIX — results appear
+        first-to-last, in order, even when a later batch finishes before an earlier one."""
+        nonlocal flushed, entry
+        if parts[i] is None:
+            logger.warning("analyst.batched: batch %d/%d returned no assessment (slug=%s)",
+                           i + 1, total, inv_slug)
+        new_flushed = flushed
+        while new_flushed < total and parts[new_flushed] is not None:
+            new_flushed += 1
+        if new_flushed > flushed:
+            flushed = new_flushed
+            entry = _persist_progress(flushed) or entry
+            logger.info("analyst.batched: slug=%s progress %d/%d batches persisted",
+                        inv_slug, flushed, total)
+
+    def _run(i: int) -> dict | None:
+        try:
+            return assess_payload(
+                chunks[i], ref=f"{ref}.b{i + 1}", platform=platform, settings=settings,
+            )
+        except Exception:  # noqa: BLE001 — one failed batch must not sink the others
+            logger.exception("analyst.batched: batch %d/%d crashed for slug=%s", i + 1, total, inv_slug)
+            return None
+
+    if workers == 1:
+        # Sequential: each batch is persisted the moment it lands, so the UI reveals accounts 1-25
+        # while 26-50 are still being generated.
+        for i in range(total):
+            parts[i] = _run(i)
+            _landed(i)
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="omi-batch") as pool:
+            futures = {pool.submit(_run, i): i for i in range(total)}
+            for fut in as_completed(futures):
+                i = futures[fut]
                 parts[i] = fut.result()
-            except Exception:  # noqa: BLE001 — one failed batch must not sink the others
-                logger.exception("analyst.batched: batch %d/%d crashed for slug=%s", i + 1, total, inv_slug)
-                parts[i] = None
-            if parts[i] is None:
-                logger.warning("analyst.batched: batch %d/%d returned no assessment (slug=%s)",
-                               i + 1, total, inv_slug)
-            # Flush the longest completed PREFIX — results appear first-to-last, in order, even when
-            # a later batch finishes early (it waits, already merged in memory, for its predecessors).
-            new_flushed = flushed
-            while new_flushed < total and parts[new_flushed] is not None:
-                new_flushed += 1
-            if new_flushed > flushed:
-                flushed = new_flushed
-                entry = _persist_progress(flushed) or entry
-                logger.info("analyst.batched: slug=%s progress %d/%d batches persisted",
-                            inv_slug, flushed, total)
+                _landed(i)
 
     # Final merge: count every landed batch (including any that finished after a failed predecessor
     # blocked the prefix flush) and mark the run complete.

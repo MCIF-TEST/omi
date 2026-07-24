@@ -128,6 +128,30 @@ export function scoreSelection(url: string, selected: string[]): Promise<ScoreJo
 }
 
 // ---------------------------------------------------------------------------
+// The free pre-login scan — the SAME compile → select → analyze flow as above,
+// anonymous, X-only, capped at 25 repliers, two scans per visitor.
+// ---------------------------------------------------------------------------
+
+/** FREE (no account): list an X post's repliers so a visitor can pick who to analyze. */
+export function demoListCommenters(url: string): Promise<CommenterListResponse> {
+  return apiClient<CommenterListResponse>('/v1/scan/demo/commenters', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+}
+
+/** FREE (no account): analyze the selected repliers. Runs synchronously and returns the result. */
+export function demoScoreSelection(
+  url: string,
+  selected: string[],
+): Promise<ComprehensiveScanResult> {
+  return apiClient<ComprehensiveScanResult>('/v1/scan/demo/score', {
+    method: 'POST',
+    body: JSON.stringify({ url, selected }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Feedback — any signed-in user submits; admins read a searchable queue.
 // ---------------------------------------------------------------------------
 export interface FeedbackEntry {

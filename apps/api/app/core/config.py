@@ -293,11 +293,16 @@ class Settings(BaseSettings):
     # Sized for LATENCY, not just the token budget: one call reasoning over the full per-account
     # protocol (Dossier Loop + audits) for ~50 accounts ran long enough to breach the request timeout
     # and fall to the Floor (which drops all per-account results — reads as a "failed" scan). 25 keeps
-    # each call comfortably inside the timeout, and because batches run concurrently a 50-account scan
-    # is now 2 fast parallel calls instead of one slow one. Env-overridable (raise it only if you also
-    # lower reasoning effort). Concurrency bounds the simultaneous OpenRouter requests per scan.
+    # each call comfortably inside the timeout.
+    #
+    # Batches run ONE AT A TIME (concurrency 1), deliberately. Firing all of them at once makes every
+    # batch contend for the same upstream capacity, so the FIRST 25 accounts land no sooner than the
+    # last — the user stares at nothing until the whole scan finishes. Sequentially, batch 1 is a
+    # single unshared request: its results appear in the UI at the earliest possible moment, and each
+    # later batch reveals as it lands. Total wall-clock is similar; time-to-first-result is far better,
+    # and it keeps us to one in-flight OpenRouter request per scan. Env-overridable.
     analyst_batch_accounts: int = 25          # OMI_ANALYST_BATCH_ACCOUNTS
-    analyst_batch_concurrency: int = 4        # OMI_ANALYST_BATCH_CONCURRENCY
+    analyst_batch_concurrency: int = 1        # OMI_ANALYST_BATCH_CONCURRENCY
     # GPT-5-class reasoning effort. Reasoning tokens bill as output AND are the dominant latency driver —
     # with the preset left to decide (its default trends high), a single call reasoned long enough to
     # breach the timeout. The per-account protocol is highly prescriptive (it tells the model exactly how

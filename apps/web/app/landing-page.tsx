@@ -159,7 +159,7 @@ export function LandingPage() {
                 </span>
               </div>
               <span className="font-mono text-2xs text-fg-faint tracking-wider">
-                Up to 25 repliers · one per visitor
+                Compile · select · analyze · up to 25 · 2 free
               </span>
             </div>
             <div className="p-6 md:p-8">

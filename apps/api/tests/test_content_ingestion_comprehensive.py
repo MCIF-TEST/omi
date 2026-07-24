@@ -27,7 +27,7 @@ from app.routes.scan import (
 )
 from app.storage.db import get_session, reset_db_for_tests
 from app.storage.models import CommentBatch, ContentComment, ContentEntity, User
-from tests.test_demo_scan import VID, _fake_client_with_n_commenters
+from tests.fakes import VID, _fake_client_with_n_commenters
 from tests.test_twitter_link_scan import FakeTwitterScanClient
 
 
