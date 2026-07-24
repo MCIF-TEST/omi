@@ -52,7 +52,7 @@ export function LandingPage() {
             </div>
 
             <h1
-              className="display font-semibold tracking-[-0.03em] leading-[0.94] mb-7"
+              className="display-alt font-semibold tracking-[-0.035em] leading-[0.94] mb-7"
               style={{
                 fontSize: 'clamp(2.5rem, 5.4vw, 4.2rem)',
                 animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both',
@@ -131,7 +131,7 @@ export function LandingPage() {
                 { value: null, suffix: 'Why', label: 'Every verdict', sub: 'explained in plain English' },
               ].map(({ value, suffix, label, sub }) => (
                 <div key={label}>
-                  <div className="display text-3xl font-semibold text-fg mb-1 tabular-nums">
+                  <div className="display-alt text-3xl font-semibold text-fg mb-1 tabular-nums">
                     {value !== null ? <AnimatedNumber value={value} format={false} onView /> : suffix}
                   </div>
                   <div className="font-mono text-2xs text-fg-dim uppercase tracking-wider">{label}</div>
@@ -155,11 +155,11 @@ export function LandingPage() {
                   <span className="w-2 h-2 rounded-full bg-tier-low/55" />
                 </span>
                 <span className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">
-                  Run a free scan — no account
+                  Free X scan — no account
                 </span>
               </div>
               <span className="font-mono text-2xs text-fg-faint tracking-wider">
-                Top commenters · ≈10 s · 1 free / day
+                Up to 25 repliers · one per visitor
               </span>
             </div>
             <div className="p-6 md:p-8">
@@ -173,7 +173,7 @@ export function LandingPage() {
       <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
         <Reveal className="mb-8">
           <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">How it works</p>
-          <h2 className="display text-2xl md:text-3xl font-semibold tracking-tight">
+          <h2 className="display-alt text-2xl md:text-3xl font-semibold tracking-tight">
             A post goes in. Scored accounts come out.
           </h2>
         </Reveal>
@@ -202,7 +202,7 @@ export function LandingPage() {
       <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
         <Reveal className="mb-8">
           <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">What you get</p>
-          <h2 className="display text-2xl md:text-3xl font-semibold tracking-tight">
+          <h2 className="display-alt text-2xl md:text-3xl font-semibold tracking-tight">
             Evidence first. Then an analyst explains it.
           </h2>
         </Reveal>
@@ -253,7 +253,7 @@ export function LandingPage() {
             <p className="font-mono text-2xs tracking-[0.22em] text-fg-mute uppercase mb-5">
               Start your first scan
             </p>
-            <h2 className="display text-3xl md:text-4xl font-semibold tracking-tight mb-5">
+            <h2 className="display-alt text-3xl md:text-4xl font-semibold tracking-tight mb-5">
               Find out who&apos;s real.
             </h2>
             <p className="text-sm text-fg-dim max-w-md mx-auto mb-8">

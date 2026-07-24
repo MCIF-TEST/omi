@@ -202,6 +202,17 @@
     font-weight: 600;
   }
 
+  /* Marketing display voice — Space Grotesk. A technical grotesk with genuine character (open
+     apertures, the distinctive single-storey 'a' and 'g'), so the pre-login page reads as a real,
+     deliberate product rather than a default system stack — while the app keeps the neutral Inter
+     .display. Tight tracking + the interface's cv/ss features keep it crisp at display sizes. */
+  .display-alt {
+    font-family: 'Space Grotesk', var(--font-display);
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    font-feature-settings: 'ss01', 'ss03';
+  }
+
   /* Wordmark — flat, no gradient. OMI carries the blue; SPHERE stays ink. */
   .text-gradient,
   .text-brand { color: var(--accent-text); }

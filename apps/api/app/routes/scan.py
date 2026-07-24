@@ -996,44 +996,53 @@ def _client_ip(request) -> str | None:
     return request.client.host if request.client else None
 
 
+DEMO_MAX_COMMENTERS = 25  # free pre-login X scan: up to 25 repliers analyzed
+
+
 @router.post("/demo", response_model=ComprehensiveScanResult)
 def scan_demo(
     payload: dict,
     request: Request,
     settings: Settings = Depends(get_settings),
 ) -> ComprehensiveScanResult:
-    """Anonymous demo scan — no auth required, no credits charged.
+    """Anonymous free X scan — no auth required, no credits charged.
 
-    Rate-limited to one scan per IP per 24h to keep YouTube quota under
-    control. Capped at 10 commenters so the result lands in 5-10 seconds
-    and the visitor sees real coordination output without any signup
-    friction. After this they need an account to scan again, save the
-    result, or unlock the rest of the platform.
+    ONE free scan per IP address, EVER (lifetime, not per-day), of a single X /
+    Twitter post: up to 25 repliers analyzed so the visitor sees a real
+    per-account read on whether the accounts under a post are bought or genuine.
+    After this they need an account to scan again, save the result, pick more
+    accounts, or scan YouTube.
     """
-    from datetime import timedelta
     from app.storage.models import DemoScanLog
 
     url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
     if not url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url is required.")
 
-    classification = classify_url(url)
-    if classification["kind"] != "video":
+    # The free scan is X-only. classify_link resolves platform + tweet_id.
+    classification = classify_link(url)
+    if classification.get("platform") != "x" or classification.get("kind") != "tweet":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Demo scans only support YouTube video URLs right now. Paste a watch?v= or youtu.be link.",
+            detail="The free scan works on X (Twitter) posts. Paste a link like "
+                   "https://x.com/<user>/status/<id>.",
+        )
+    tweet_id = classification.get("tweet_id")
+    if not tweet_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Couldn't read that X post link. Paste the full URL to a specific post "
+                   "(it contains /status/).",
         )
 
     ip = _client_ip(request)
     ip_hash = _hash_ip(ip)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
 
-    # Rate limit: 1 successful demo per IP per 24h
+    # Rate limit: ONE successful free scan per IP, for the lifetime of that IP (no 24h reset).
     with get_session() as session:
         existing = session.execute(
             select(DemoScanLog).where(
                 DemoScanLog.ip_hash == ip_hash,
-                DemoScanLog.created_at >= cutoff,
                 DemoScanLog.success == 1,
             ).limit(1)
         ).scalar_one_or_none()
@@ -1041,8 +1050,8 @@ def scan_demo(
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=(
-                    "You've used your free demo for today. "
-                    "Sign up to run more scans, save results, and unlock the full platform."
+                    "You've already used your one free scan. "
+                    "Create a free account to keep scanning, save results, and unlock the full platform."
                 ),
             )
 
@@ -1054,38 +1063,38 @@ def scan_demo(
         subscription_renews_at=None, is_admin=False,
     )
 
-    # Run the comprehensive scan with a smaller batch — demo only.
+    # Build the X source (same engine the paid X flow uses) and cap at 25 repliers.
+    tw_factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
+    source: Source = TwitterSource(tw_factory())
     creq = ComprehensiveScanRequest(
-        video_url_or_id=classification.get("video_id"),
+        video_url_or_id=tweet_id,
         account_url_or_handle=None,
         comments_text=None,
-        max_commenters=10,
+        max_commenters=DEMO_MAX_COMMENTERS,
         force_refresh=False,
         start_page_token=None,
     )
 
     success_flag = 1
     try:
-        result = _run_comprehensive(creq, settings, anon, _charge_credit=False)
-    except YouTubeClientError as e:
-        # The inner endpoint now propagates YouTube failures raw to whoever owns
-        # the charge. The demo charges nothing, so credits_to_refund=0 — this just
-        # maps the failure to a clean HTTP response instead of leaking a 500.
+        result = _run_comprehensive(creq, settings, anon, _charge_credit=False, source=source)
+    except TwitterClientError as e:
+        # Map an X API failure to a clean HTTP response instead of leaking a 500. The demo charges
+        # nothing, so there is no credit to refund.
         success_flag = 0
-        raise _handle_youtube_error(
-            e, user_id=anon.id, credits_to_refund=0,
-            target_input=classification.get("video_id") or url,
+        raise _handle_twitter_error(
+            e, user_id=anon.id, credits_to_refund=0, target_input=tweet_id,
         )
     except HTTPException:
         success_flag = 0
         raise
     finally:
-        # Log the attempt either way so a failed demo doesn't grant an extra free one,
-        # but only successful scans count toward the rate limit (success=1 above).
+        # Log the attempt either way so a failed scan doesn't grant an extra free one, but only a
+        # SUCCESSFUL scan burns the IP's one free use (success flag set above).
         with get_session() as session:
             session.add(DemoScanLog(
                 ip_hash=ip_hash,
-                video_id=classification.get("video_id") or url[:60],
+                video_id=str(tweet_id)[:60],
                 user_agent_snippet=(request.headers.get("user-agent") or "")[:200],
                 success=success_flag,
             ))
