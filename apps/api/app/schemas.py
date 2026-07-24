@@ -216,9 +216,23 @@ class CommenterScanResult(BaseModel):
     suspected_intent: str | None = None
     intent_label: str | None = None
     reasons: list[str] = Field(default_factory=list)
-    # Sample recent activity (only populated for non-low-tier accounts so
-    # the UI can show "here's what this account actually wrote" without
-    # bloating the response on the 80% of low-suspicion commenters).
+    # --- RAW profile metadata ---------------------------------------------------------------
+    # The objective facts the Omi Analyst reasons from: is this account a week old with 12 followers
+    # and 4,000 following, no bio, posting the same praise under twenty videos? None of that is
+    # derivable from a score. These were absent for the whole of a scan's life, so the evidence
+    # composer — which reads exactly these keys — handed the model None for every account and asked
+    # it to judge authenticity from a pseudonymous ref and four posts. Populated from the scanned
+    # Profile; None here means the platform genuinely did not return the field.
+    follower_count: int | None = None
+    following_count: int | None = None
+    account_created_at: datetime | None = None
+    bio: str | None = None
+    verified: bool | None = None
+    # True depth of this account's pulled history, independent of how many samples ride along below.
+    history_size: int = 0
+    # Sample recent activity — what this account actually wrote. Populated for EVERY account that has
+    # any history: withholding it from low-tier accounts denied the model the evidence that an account
+    # is genuine, which is half of the judgment it is asked to make.
     recent_activity: list[dict] = Field(default_factory=list)
     activity_total: int = 0
     weak_signals: list[str] = Field(default_factory=list)

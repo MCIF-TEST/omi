@@ -43,19 +43,27 @@ class RenderedEvidence:
 # AI-first (raw metadata only): the account row carries the objective, collected facts about the account —
 # NO engine probability / tier / detector score. The model reasons its OWN per-account omi_score from these.
 _ACCOUNT_COLUMNS = ["account", "follower_count", "following_count", "account_created_at",
-                    "post_count", "recent_posts"]
+                    "verified", "bio", "post_count", "recent_posts"]
 _POST_COLUMNS = ["text", "created_at"]
 
 
 def _account_row(a, alias: AliasLegend) -> list:
     """One compact, positional account row of RAW metadata: the alias, the objective profile counts, the
-    account creation time (the model derives age itself), how many posts the account has, and a raw sample
-    of its own posts (text + time). No computed score — the AI judges the account from these facts."""
+    account creation time (the model derives age itself), whether the platform verified it, its bio, how
+    many posts the account has, and a raw sample of its own posts (text + time). No computed score — the
+    AI judges the account from these facts.
+
+    ``verified`` and ``bio`` are here because they are among the cheapest and most discriminating facts
+    available: an account with no bio, no verification, a four-figure following count and a three-figure
+    follower count reads very differently from one with a written bio and years of history — and none of
+    that is recoverable from a probability."""
     return [
         alias.account_alias(a.author_ref),
         a.follower_count,
         a.following_count,
         a.account_created_at,
+        getattr(a, "verified", None),
+        getattr(a, "bio", None),
         a.post_count,
         [[p.text, p.created_at] for p in getattr(a, "recent_posts", ())],
     ]

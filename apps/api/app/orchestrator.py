@@ -254,8 +254,12 @@ class FullScanOutput:
     cached_count: int
 
 
-def _cached_commenter_record(cache_hit, c: dict, platform: str) -> CommenterRecord:
-    """Build a CommenterRecord from a cache hit (no network/scoring)."""
+def _cached_commenter_record(
+    cache_hit, c: dict, platform: str, *, profile: Profile | None = None, posts: list | None = None,
+) -> CommenterRecord:
+    """Build a CommenterRecord from a cache hit — the cached SCORE is reused (no re-scoring, no DB
+    writes, no fingerprint churn), but ``profile``/``posts`` carry the freshly-fetched evidence when
+    the caller pulled it, so a cached account still reaches the analyst with its real history."""
     acc, scan_row = cache_hit
     cached_signals = [SignalResult(**s) for s in scan_row.signals_json]
     cached_tier = Tier(scan_row.tier)
@@ -273,18 +277,24 @@ def _cached_commenter_record(cache_hit, c: dict, platform: str) -> CommenterReco
     )
     return CommenterRecord(
         external_id=c["channel_id"],
-        handle=acc.handle or c["handle"],
-        display_name=acc.display_name,
+        handle=(profile.handle if profile is not None else (acc.handle or c["handle"])),
+        display_name=(profile.display_name if profile is not None else acc.display_name),
         avatar_url=c.get("avatar_url"),
-        profile=Profile(
+        # Prefer the freshly-fetched profile when we have one: the stored row keeps only the columns
+        # the Account table has (no verified flag), and its counts are as old as the last scan.
+        profile=profile or Profile(
             platform=platform,
             handle=acc.handle or c["handle"],
             display_name=acc.display_name,
             bio=acc.bio,
             follower_count=acc.follower_count,
+            following_count=acc.following_count,
             created_at=acc.account_created_at,
         ),
-        posts=[],  # not refetched on cache hit
+        # Posts are the account's own words — the evidence the analyst reads to decide whether this
+        # is a person or a purchase. An empty list here must mean "this account has posted nothing",
+        # never "we had a cached score so we didn't look" (see scan_reuse_cached_scores).
+        posts=list(posts or []),
         scan_result=cached_result,
         fingerprint=acc.fingerprint_json,
         from_cache=True,
@@ -347,6 +357,7 @@ def scan_video_full(
 
     # --- Phase 0: classify cached vs needs-fetch (sequential, cheap DB reads) ---
     to_fetch: list[tuple[int, dict]] = []
+    cache_hits: dict[int, Any] = {}
     for idx, c in enumerate(commenters_meta):
         cache_hit = None
         if not force_refresh:
@@ -354,8 +365,17 @@ def scan_video_full(
                 platform, c["channel_id"], settings.scan_cache_ttl_days
             )
         if cache_hit is not None:
-            slots[idx] = _cached_commenter_record(cache_hit, c, platform)
             cached += 1
+            if settings.scan_refetch_evidence_for_cached:
+                # Reuse the cached SCORE but still pull this account's profile + history, because
+                # that history is the evidence the analyst reads. Skipping the fetch made a cached
+                # account arrive at the model with an empty post list, indistinguishable from an
+                # account that has never posted — and with a 7-day TTL that is precisely the
+                # repeat-offender the memory is supposed to catch.
+                cache_hits[idx] = cache_hit
+                to_fetch.append((idx, c))
+            else:
+                slots[idx] = _cached_commenter_record(cache_hit, c, platform)
         else:
             to_fetch.append((idx, c))
 
@@ -396,6 +416,17 @@ def scan_video_full(
     for idx, c in to_fetch:
         channel_id = c["channel_id"]
         profile, posts, err = prefetched.get(idx, (None, [], None))
+        cache_hit = cache_hits.get(idx)
+        if cache_hit is not None:
+            # Cached score + whatever evidence the fetch returned. A fetch failure here is not an
+            # error record: we still hold a valid cached scan, so degrade to the stored profile
+            # rather than throwing away a result the user already has.
+            slots[idx] = _cached_commenter_record(
+                cache_hit, c, platform,
+                profile=(profile if err is None else None),
+                posts=(posts if err is None else []),
+            )
+            continue
         if err is not None:
             slots[idx] = _error_commenter_record(c, type(err).__name__)
             errored += 1

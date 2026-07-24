@@ -1,3 +1,7 @@
+> **Superseded.** This is a point-in-time handoff from 2026-05-29 on branch
+> `claude/ecstatic-babbage-wu1f4`, kept for history. The current, continuously-updated handoff is
+> [`CLAUDE.md`](./CLAUDE.md) at the repo root — read that first.
+
 # OMISPHERE — Session Handoff (2026-05-29)
 
 ## Where we left off

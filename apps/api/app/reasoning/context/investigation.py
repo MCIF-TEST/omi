@@ -45,7 +45,12 @@ INVESTIGATION_CONTEXT_VERSION = "ictx-v1"
 # any residual overflow beyond the ceiling stays DISCLOSED via the sampling manifest (never silent).
 _MAX_ACCOUNTS = 250
 _MAX_COMMENT_SAMPLES = 250
-_MAX_PER_ACCOUNT_SAMPLES = 4
+# Per-account raw posts carried into the evidence context. This is a SAFETY ceiling, not the real
+# budget: the coverage budgeter downstream (120k tokens for a full investigation, with a disclosed
+# omission manifest) is what decides how much actually renders. It sat at 4, which meant an account's
+# behaviour was judged on four posts no matter how much history had been pulled — a cut made here is
+# invisible to the budgeter and undisclosed, because the evidence simply never arrived.
+_MAX_PER_ACCOUNT_SAMPLES = 50
 _MAX_CLUSTERS = 40
 _MAX_CROSS_LINKS = 40
 _MAX_GRAPH_EDGES = 80
@@ -188,6 +193,8 @@ class AccountEvidence(Section):
     follower_count: int | None = None
     following_count: int | None = None
     account_created_at: str | None = None       # ISO timestamp — the model derives account age itself
+    bio: str | None = None                      # empty/boilerplate bios are a classic bought-account tell
+    verified: bool | None = None                # None = the platform didn't say, which is not False
     post_count: int | None = None               # size of this account's activity history
     recent_posts: tuple[RawPostSample, ...] = ()  # raw sample of this account's own posts (text + time)
     activity_sample_count: int = 0
@@ -530,6 +537,11 @@ def _account_evidence(c: dict, platform: str) -> AccountEvidence:
         follower_count=_int_or_none(c.get("follower_count")),
         following_count=_int_or_none(c.get("following_count")),
         account_created_at=(str(c.get("account_created_at")) if c.get("account_created_at") else None),
+        # "" and None mean different things and must stay distinguishable: an empty bio is a fact
+        # about the account (and a common bought-account tell), while None means the platform never
+        # gave us one. Collapsing them would tell the model "unknown" about something we do know.
+        bio=(None if c.get("bio") is None else str(c.get("bio")).strip()[:400]),
+        verified=(None if c.get("verified") is None else bool(c.get("verified"))),
         post_count=_int_or_none(post_count),
         recent_posts=posts,
         activity_sample_count=len(activity),

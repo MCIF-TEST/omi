@@ -193,20 +193,32 @@ def _autolabel_suspension(target_input: str) -> None:
         ))
 
 
+# How many of an account's pulled posts ride along on a scan result. The evidence composer reads its
+# per-account samples from here, so this is the ceiling on the history the Omi Analyst can ever see —
+# anything dropped at this line is gone before the coverage budget (120k tokens, and its disclosed
+# omission manifest) gets a say. Sized to the history we actually fetch per account
+# (scan_max_history_per_commenter), so in practice nothing is dropped at all.
+ACTIVITY_SAMPLE_LIMIT = 50
+
+
 def _activity_payload(
     posts: list,
     tier: Tier,
     *,
-    limit: int = 10,
-    include_low: bool = False,
+    limit: int = ACTIVITY_SAMPLE_LIMIT,
+    include_low: bool = True,
 ) -> tuple[list[dict], int]:
-    """Build the recent_activity samples (the commenter's pulled comments).
+    """Build the recent_activity samples (the account's pulled posts/comments).
 
-    Returns ``(samples, total)``. By default low-tier accounts get empty
-    samples to keep bulk scan payloads small — the list view doesn't render
-    activity for them. An explicit single-account deep scan passes
-    ``include_low=True`` (and usually a higher ``limit``) so the operator can
-    always see what an account has actually commented when they ask for it.
+    Returns ``(samples, total)``. EVERY account with history gets samples: an empty list means the
+    account genuinely has no pulled posts, and nothing else.
+
+    This used to return no samples at all for low-tier accounts, to keep bulk payloads small. That was
+    a UI-shaped decision applied to the model's evidence: the analyst was asked to say whether an
+    account is a real person while being shown nothing that account ever wrote — and "reads like a
+    real person" is exactly what exonerates the ~80% of commenters who are genuine. It also made the
+    absence of history ambiguous, since "no posts" and "posts withheld" looked identical downstream.
+    ``include_low`` is kept for callers that explicitly want the old narrow behaviour.
     """
     if not posts:
         return [], 0
@@ -215,8 +227,11 @@ def _activity_payload(
     samples: list[dict] = []
     for p in posts[:limit]:
         text = (getattr(p, "text", "") or "").strip()
-        if len(text) > 280:
-            text = text[:280] + "…"
+        # 280 -> 600: the evidence layer renders up to 600 chars, so a tighter cut here was silently
+        # deciding what the model could read. Long posts are where the tells live (copypasta, spun
+        # phrasing, an engagement-farm CTA at the end).
+        if len(text) > 600:
+            text = text[:600] + "…"
         ts = getattr(p, "created_at", None)
         samples.append({
             "text": text,
@@ -225,6 +240,26 @@ def _activity_payload(
             "like_count": getattr(p, "like_count", None),
         })
     return samples, len(posts)
+
+
+def _profile_fields(profile) -> dict:
+    """The raw account metadata a scan result carries to the Omi Analyst.
+
+    Returns keys the evidence composer reads by name (``follower_count``, ``following_count``,
+    ``account_created_at``, ``bio``, ``verified``). A missing profile yields all-None — the honest
+    "the platform didn't give us this", which the model is told to read as low confidence rather than
+    as a signal.
+    """
+    if profile is None:
+        return {"follower_count": None, "following_count": None, "account_created_at": None,
+                "bio": None, "verified": None}
+    return {
+        "follower_count": getattr(profile, "follower_count", None),
+        "following_count": getattr(profile, "following_count", None),
+        "account_created_at": getattr(profile, "created_at", None),
+        "bio": getattr(profile, "bio", None),
+        "verified": getattr(profile, "verified", None),
+    }
 
 
 def _attach_content_titles(platform: str, samples: list[dict]) -> None:
@@ -417,6 +452,8 @@ def scan_youtube_video(
                         reasons=list(scan.result.reasons or []),
                         recent_activity=activity_samples,
                         activity_total=activity_total,
+                        history_size=activity_total,
+                        **_profile_fields(profile),
                     )
                 )
             except YouTubeClientError:
@@ -563,6 +600,8 @@ def scan_youtube_video_full(
                 contributions=list(r.scan_result.contributions or []),
                 recent_activity=activity_samples,
                 activity_total=activity_total,
+                history_size=activity_total,
+                **_profile_fields(r.profile),
             ))
 
         tier_counts = Counter(r.tier.value for r in commenter_results)
@@ -1372,6 +1411,8 @@ def _run_comprehensive(
                 contributions=list(r.scan_result.contributions or []),
                 recent_activity=activity_samples,
                 activity_total=activity_total,
+                history_size=activity_total,
+                **_profile_fields(r.profile),
             ))
         tier_counts = Counter(c.tier.value for c in commenter_results)
         high_handles = sorted(

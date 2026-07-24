@@ -85,18 +85,48 @@ def test_account_rows_carry_raw_metadata_not_computed_scores():
     account's own raw posts. NO engine probability / tier / detector score reaches the model."""
     rv = render_investigation_evidence(_package(_small_payload()))
     acct = rv.sections["account_analysis"]
-    assert acct["columns"] == ["account", "follower_count", "following_count", "account_created_at",
-                               "post_count", "recent_posts"]
+    cols = acct["columns"]
+    assert cols == ["account", "follower_count", "following_count", "account_created_at",
+                    "verified", "bio", "post_count", "recent_posts"]
     # no computed columns anywhere in the account section
     for banned in ("signals", "contributions", "overall_probability", "tier", "confidence", "omiscore"):
-        assert banned not in acct["columns"]
+        assert banned not in cols
     row = next(r for r in acct["rows"] if r[0] == "A1")
-    assert row[1] == 12 and row[2] == 900                    # follower / following (raw)
-    assert row[3] == "2025-12-20T00:00:00Z"                  # account_created_at (model derives age)
-    assert row[5][0] == ["great video!!", "2026-01-01T00:00:00Z"]   # the account's own raw post (text+time)
+    assert row[cols.index("follower_count")] == 12
+    assert row[cols.index("following_count")] == 900
+    # account_created_at — the model derives age itself
+    assert row[cols.index("account_created_at")] == "2025-12-20T00:00:00Z"
+    # the account's own raw post (text + time)
+    assert row[cols.index("recent_posts")][0] == ["great video!!", "2026-01-01T00:00:00Z"]
     # the row carries NO numeric suspicion score
     dump = json.dumps(row)
     assert "0.8" not in dump and "high" not in dump
+
+
+def test_bio_and_verified_reach_the_model_and_empty_is_not_unknown():
+    """An empty bio is a fact about the account and a common bought-account tell; a missing one means
+    the platform never told us. Collapsing them would report "unknown" about something we know."""
+    from app.reasoning.context.investigation import _account_evidence
+
+    blank = _account_evidence({"handle": "@x", "bio": "", "verified": False}, "x")
+    assert blank.bio == "" and blank.verified is False
+
+    unknown = _account_evidence({"handle": "@y"}, "x")
+    assert unknown.bio is None and unknown.verified is None
+
+
+def test_a_full_history_is_not_truncated_to_a_handful_of_posts():
+    """The per-account sample ceiling is a safety limit, not the budget. The coverage budgeter (with
+    its disclosed omission manifest) decides what renders; a cut above it is silent and undisclosed."""
+    from app.reasoning.context.investigation import _account_evidence
+
+    ev = _account_evidence({
+        "handle": "@z", "history_size": 40,
+        "recent_activity": [{"text": f"post {i}", "created_at": "2026-01-01T00:00:00Z"}
+                            for i in range(40)],
+    }, "x")
+    assert len(ev.recent_posts) == 40, "an account's pulled history must survive to the evidence layer"
+    assert ev.post_count == 40
 
 
 def test_near_duplicate_grouping_is_lossless():
