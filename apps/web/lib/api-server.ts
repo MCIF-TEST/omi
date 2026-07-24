@@ -13,7 +13,6 @@
 // (which is how we caught the original `lib/api.ts` bug).
 
 import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
 import { ApiError, _parse } from './api';
 import { env } from './env';
 
@@ -21,37 +20,25 @@ export async function apiServer<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  // Primary auth: forward the Clerk session token as a Bearer so FastAPI can verify + resolve the
-  // user. FastAPI verifies the JWT against Clerk's public JWKS (RS256) — no Clerk secret needed here.
+  // Auth: forward the Clerk session token as a Bearer so FastAPI can verify + resolve the user.
+  // FastAPI verifies the JWT against Clerk's public JWKS (RS256) — no Clerk secret needed here.
   //
-  // Two ways to obtain that token, tried in order, so this never depends on the Edge middleware:
-  //   1. auth().getToken() — works when clerkMiddleware populated the request context.
-  //   2. the `__session` cookie — Clerk stores the session JWT here; readable server-side even when
-  //      the middleware degraded (e.g. the secret couldn't reach the Edge runtime). This is what
-  //      keeps auth working regardless of the middleware/secret situation.
+  // We read the token straight from the `__session` cookie Clerk stores on the app's own domain,
+  // and DO NOT call Clerk's server-side auth(). This app intentionally runs no clerkMiddleware (it
+  // can't get the secret into the Edge runtime), and auth() throws "clerkMiddleware() was not
+  // detected" whenever it runs without that middleware — a server-side exception that would take the
+  // page down. The cookie carries the same JWT auth() would return, so reading it directly is both
+  // sufficient and immune to the middleware requirement. (`__session`, or a suffixed
+  // `__session_<hash>` on a dev instance with suffixed cookies.)
   const jar = cookies();
   let bearer: string | undefined;
-  try {
-    const { getToken } = await auth();
-    const token = await getToken();
-    if (token) bearer = `Bearer ${token}`;
-  } catch {
-    /* middleware didn't run / not signed in — the __session fallback below covers it */
-  }
-  if (!bearer) {
-    // Clerk stores the session JWT in `__session` (or a suffixed `__session_<hash>` when the instance
-    // uses suffixed cookies). Take whichever is present so a dev instance's suffixed cookie also works.
-    const all = jar.getAll();
-    const sessionCookie =
-      all.find((c) => c.name === '__session') ??
-      all.find((c) => c.name.startsWith('__session_'));
-    if (sessionCookie?.value) bearer = `Bearer ${sessionCookie.value}`;
-  }
+  const all = jar.getAll();
+  const sessionCookie =
+    all.find((c) => c.name === '__session') ??
+    all.find((c) => c.name.startsWith('__session_'));
+  if (sessionCookie?.value) bearer = `Bearer ${sessionCookie.value}`;
 
-  const cookieHeader = jar
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join('; ');
+  const cookieHeader = all.map((c) => `${c.name}=${c.value}`).join('; ');
 
   const res = await fetch(`${env.API_ORIGIN}${path}`, {
     ...init,
