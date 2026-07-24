@@ -1,15 +1,14 @@
 import Link from 'next/link';
-import { SignUp, SignedIn, SignedOut } from '@clerk/nextjs';
+import { SignUp } from '@clerk/nextjs';
 import { TRIAL_CREDITS } from '@/lib/plan';
-import { AuthBridge } from '@/components/shared/auth-bridge';
+import { AuthFormGate } from '@/components/shared/auth-form-gate';
 
 export const metadata = { title: 'Create account — OMISPHERE' };
 
 // Clerk-hosted sign-up (Google, Apple, X, email/phone — whatever is enabled in the Clerk dashboard),
-// dropped into the app's centered auth shell. Global theming lives in app/layout.tsx; the heading and
-// the switch-to-sign-in link are ours so the page reads as part of the product, not a bolted-on widget.
-// Loop guard mirrors the sign-in page: render <SignUp> only when signed out; recover via AuthBridge
-// when Clerk reports the visitor already signed in on this page.
+// dropped into the app's centered auth shell. Loop guard runs CLIENT-side via AuthFormGate (useAuth),
+// never Clerk's <SignedIn>/<SignedOut> — those call auth() server-side and would throw here because
+// this app runs no clerkMiddleware.
 export default function SignUpPage() {
   return (
     <div className="w-full">
@@ -20,7 +19,7 @@ export default function SignUpPage() {
         </p>
       </div>
 
-      <SignedOut>
+      <AuthFormGate>
         <SignUp signInUrl="/sign-in" fallbackRedirectUrl="/investigate" />
         <p className="mt-6 text-center font-mono text-2xs tracking-wider text-fg-mute">
           Already have an account?{' '}
@@ -28,11 +27,7 @@ export default function SignUpPage() {
             Sign in
           </Link>
         </p>
-      </SignedOut>
-
-      <SignedIn>
-        <AuthBridge />
-      </SignedIn>
+      </AuthFormGate>
     </div>
   );
 }

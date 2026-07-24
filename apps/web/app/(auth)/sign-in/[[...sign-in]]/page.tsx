@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { SignIn, SignedIn, SignedOut } from '@clerk/nextjs';
-import { AuthBridge } from '@/components/shared/auth-bridge';
+import { SignIn } from '@clerk/nextjs';
+import { AuthFormGate } from '@/components/shared/auth-form-gate';
 
 export const metadata = { title: 'Sign in — OMISPHERE' };
 
@@ -8,9 +8,10 @@ export const metadata = { title: 'Sign in — OMISPHERE' };
 // dropped into the app's centered auth shell. Global theming lives in app/layout.tsx; the heading and
 // the switch-to-sign-up link are ours so the page reads as part of the product, not a bolted-on widget.
 //
-// Loop guard: <SignIn> renders ONLY when the visitor is signed OUT. If Clerk reports them signed IN on
-// this page, they were bounced here by the app's server guard (Clerk/server disagree about the session)
-// — AuthBridge recovers instead of letting <SignIn> silently redirect back into an infinite loop.
+// Loop guard runs CLIENT-side (AuthFormGate/useAuth), never via Clerk's <SignedIn>/<SignedOut> — those
+// call auth() on the server and would throw here because this app runs no clerkMiddleware. The gate
+// shows <SignIn> when signed out, and AuthBridge (recovery) when Clerk reports the visitor already
+// signed in on this page (they were bounced here), so the form never loops back into the app.
 export default function SignInPage() {
   return (
     <div className="w-full">
@@ -19,7 +20,7 @@ export default function SignInPage() {
         <p className="text-sm text-fg-mute">Sign in to continue your investigations.</p>
       </div>
 
-      <SignedOut>
+      <AuthFormGate>
         <SignIn signUpUrl="/sign-up" fallbackRedirectUrl="/investigate" />
         <p className="mt-6 text-center font-mono text-2xs tracking-wider text-fg-mute">
           New here?{' '}
@@ -27,11 +28,7 @@ export default function SignInPage() {
             Create a free account
           </Link>
         </p>
-      </SignedOut>
-
-      <SignedIn>
-        <AuthBridge />
-      </SignedIn>
+      </AuthFormGate>
     </div>
   );
 }
