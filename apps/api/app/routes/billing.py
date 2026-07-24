@@ -78,8 +78,14 @@ def create_checkout_session(
         if user.stripe_customer_id:
             customer_id = user.stripe_customer_id
         else:
+            # Never seed Stripe with the synthetic placeholder address a Clerk account carries before
+            # its real email resolves — Stripe would store a junk email and mail receipts nowhere.
+            # Omit it; Stripe Checkout collects a real email at payment time, and the webhook can
+            # backfill the customer later.
+            from app.core.auth import _is_placeholder_email
+            customer_email = None if _is_placeholder_email(user.email) else user.email
             customer = stripe.Customer.create(
-                email=user.email,
+                email=customer_email,
                 metadata={"omi_user_id": str(user.id)},
             )
             customer_id = customer.id

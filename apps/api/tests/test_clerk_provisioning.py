@@ -23,11 +23,20 @@ from app.storage.db import get_session, reset_db_for_tests
 from app.storage.models import User
 
 
+class _Client:
+    def __init__(self, host: str):
+        self.host = host
+
+
 class _Req:
-    """Minimal stand-in for a Starlette Request — only .headers.get and .cookies are read."""
-    def __init__(self, token: str = "tok", *, via_cookie: bool = False, cookie_name: str = "__session"):
+    """Minimal stand-in for a Starlette Request — .headers.get, .cookies, and .client.host are read."""
+    def __init__(self, token: str = "tok", *, via_cookie: bool = False, cookie_name: str = "__session",
+                 ip: str = "1.2.3.4", ref: str | None = None):
         self.headers = {} if via_cookie else {"authorization": f"Bearer {token}"}
         self.cookies = {cookie_name: token} if via_cookie else {}
+        if ref:
+            self.cookies["omi_ref"] = ref
+        self.client = _Client(ip)
 
 
 @pytest.fixture
@@ -58,6 +67,53 @@ def test_valid_token_without_email_still_provisions_a_user(env, monkeypatch):
         assert _is_placeholder_email(row.email)
         assert row.is_admin == 0
         assert row.credits_remaining == 25
+
+
+def test_clerk_user_gets_a_referral_code(env, monkeypatch):
+    """Clerk-provisioned accounts must get a referral code (legacy signup minted one; provisioning
+    forgot to) — else the referral feature is dead for everyone who signs up via Clerk."""
+    _patch(monkeypatch, sub="user_ref", email="ref@x.com")
+    cu = _resolve_clerk_user(_Req(), get_settings())
+    assert cu is not None and cu.referral_code
+    with get_session() as s:
+        row = s.query(User).filter(User.clerk_user_id == "user_ref").one()
+        assert row.referral_code and len(row.referral_code) >= 4
+
+
+def test_referral_code_backfills_for_a_codeless_existing_account(env, monkeypatch):
+    _patch(monkeypatch, sub="user_bf", email="bf@x.com")
+    with get_session() as s:
+        s.add(User(email="bf@x.com", password_hash="h", credits_remaining=5, referral_code=None))
+    cu = _resolve_clerk_user(_Req(), get_settings())
+    assert cu is not None and cu.referral_code, "an existing code-less account must be backfilled"
+
+
+def test_referral_link_credits_the_referrer_on_clerk_signup(env, monkeypatch):
+    """A Clerk signup arriving via a referral link (code stashed in the omi_ref cookie) links the
+    referrer and pays the +3 signup bonus — the acquisition half of the referral system."""
+    with get_session() as s:
+        s.add(User(email="advocate@x.com", password_hash="h", credits_remaining=10,
+                   referral_code="REFCODE1", referral_credits_earned=0))
+    _patch(monkeypatch, sub="user_referred", email="new@x.com")
+    cu = _resolve_clerk_user(_Req(ip="7.7.7.7", ref="REFCODE1"), get_settings())
+    assert cu is not None
+    with get_session() as s:
+        referred = s.query(User).filter(User.clerk_user_id == "user_referred").one()
+        advocate = s.query(User).filter(User.referral_code == "REFCODE1").one()
+        assert referred.referred_by_user_id == advocate.id
+        assert advocate.credits_remaining == 13  # +3 signup bonus
+        assert advocate.referral_credits_earned == 3
+
+
+def test_second_signup_from_same_ip_gets_no_trial_credits(env, monkeypatch):
+    """Anti-farming parity with the legacy signup: the first Clerk account from an IP gets the trial,
+    later ones from the same IP get 0 — so trial credits (real API spend) can't be stacked."""
+    _patch(monkeypatch, sub="user_ip1", email="ip1@x.com")
+    first = _resolve_clerk_user(_Req(ip="9.9.9.9"), get_settings())
+    assert first is not None and first.credits_remaining == 25
+    _patch(monkeypatch, sub="user_ip2", email="ip2@x.com")
+    second = _resolve_clerk_user(_Req(ip="9.9.9.9"), get_settings())
+    assert second is not None and second.credits_remaining == 0
 
 
 def test_placeholder_is_upgraded_when_the_real_email_arrives(env, monkeypatch):
