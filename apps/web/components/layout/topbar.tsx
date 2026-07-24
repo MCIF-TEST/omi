@@ -117,7 +117,9 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
 
         {/* Account — Clerk manages the session (profile, sign out, connected accounts). */}
         <UserButton
-          afterSignOutUrl="/"
+          // Route sign-out through /signed-out so the legacy httpOnly omi_session cookie is cleared
+          // too (Clerk only clears its own session) — otherwise a legacy-cookie user stays logged in.
+          afterSignOutUrl="/signed-out"
           appearance={{ elements: { avatarBox: 'w-8 h-8' } }}
         />
       </div>

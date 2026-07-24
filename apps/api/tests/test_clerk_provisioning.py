@@ -24,9 +24,10 @@ from app.storage.models import User
 
 
 class _Req:
-    """Minimal stand-in for a Starlette Request — only .headers.get is used."""
-    def __init__(self, token: str = "tok"):
-        self.headers = {"authorization": f"Bearer {token}"}
+    """Minimal stand-in for a Starlette Request — only .headers.get and .cookies are read."""
+    def __init__(self, token: str = "tok", *, via_cookie: bool = False, cookie_name: str = "__session"):
+        self.headers = {} if via_cookie else {"authorization": f"Bearer {token}"}
+        self.cookies = {cookie_name: token} if via_cookie else {}
 
 
 @pytest.fixture
@@ -72,6 +73,20 @@ def test_placeholder_is_upgraded_when_the_real_email_arrives(env, monkeypatch):
         rows = s.query(User).filter(User.clerk_user_id == "user_up").all()
         assert len(rows) == 1, "must upgrade in place, not create a duplicate account"
         assert not _is_placeholder_email(rows[0].email)
+
+
+def test_session_cookie_authenticates_without_a_bearer_header(env, monkeypatch):
+    """A client fetch fired before window.Clerk.session is ready sends the __session cookie but no
+    Bearer — it must still resolve, or app pages 401 on first paint."""
+    _patch(monkeypatch, sub="user_cookie", email="cookie@x.com")
+    cu = _resolve_clerk_user(_Req(via_cookie=True), get_settings())
+    assert cu is not None and cu.email == "cookie@x.com"
+
+
+def test_suffixed_session_cookie_also_authenticates(env, monkeypatch):
+    _patch(monkeypatch, sub="user_suffixed", email="suffix@x.com")
+    cu = _resolve_clerk_user(_Req(via_cookie=True, cookie_name="__session_abc123"), get_settings())
+    assert cu is not None and cu.email == "suffix@x.com"
 
 
 def test_super_admin_email_grants_admin(env, monkeypatch):

@@ -178,14 +178,20 @@ class CurrentUser:
 # ---------------------------------------------------------------------------
 
 def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | None:
-    """Resolve the caller from a Clerk session JWT (``Authorization: Bearer <token>``).
+    """Resolve the caller from a Clerk session JWT (``Authorization: Bearer <token>`` OR the Clerk
+    ``__session`` cookie).
 
     Verifies the token against Clerk's JWKS, then maps the Clerk user to the LOCAL account: by
     ``clerk_user_id`` if already linked, otherwise by email (linking an existing account so its
     credits/subscription/investigations carry over), otherwise creating a fresh local account. The
     local row remains the source of truth for credits + data; Clerk is only the identity. Returns None
-    when Clerk is disabled, no bearer token is present, or the token is invalid — the caller then falls
-    back to the legacy cookie session."""
+    when Clerk is disabled, no token is present, or the token is invalid — the caller then falls back
+    to the legacy cookie session.
+
+    Token source (either works, so a request authenticates whether or not the frontend managed to
+    attach the Bearer header): the ``Authorization: Bearer`` header first, then the ``__session``
+    cookie Clerk sets on the app's own domain (browsers send it automatically on same-origin requests,
+    so a client fetch fired before ``window.Clerk.session`` is ready still authenticates)."""
     from app.core.clerk_auth import (
         clerk_enabled, email_from_claims, fetch_user_email, verify_session_token,
     )
@@ -193,9 +199,20 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
     if not clerk_enabled():
         return None
     header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
-    if not header.lower().startswith("bearer "):
+    token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    if not token:
+        # Fall back to the Clerk session cookie (__session, or a suffixed __session_<hash> on a dev
+        # instance with suffixed cookies). Reaches FastAPI via the web app's /api rewrite, which
+        # forwards the browser's cookies.
+        token = (request.cookies.get("__session") or "").strip()
+        if not token:
+            for name, value in request.cookies.items():
+                if name.startswith("__session_") and value:
+                    token = value.strip()
+                    break
+    if not token:
         return None
-    claims = verify_session_token(header[7:].strip())
+    claims = verify_session_token(token)
     if not claims:
         return None
     clerk_uid = claims.get("sub")
