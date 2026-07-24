@@ -26,6 +26,15 @@ dependencies = [
     # and every Twitter scan failed. A core platform dependency must never sit
     # in an extra. (httpx is also what fastapi's TestClient uses in dev.)
     "httpx>=0.27",
+    # CORE, not optional: Clerk auth verifies each session JWT against Clerk's
+    # JWKS (RS256) in app/core/clerk_auth.py — `from jwt import PyJWKClient` +
+    # `jwt.decode(..., algorithms=["RS256"])`. RS256 needs the `crypto` extra
+    # (which pulls in `cryptography`). Without this, the import fails, every
+    # token verification silently returns None, and EVERY Clerk login is rejected
+    # server-side (the user logs in on the client, then bounces straight back
+    # out). Same lesson as httpx above: a core platform dependency must never sit
+    # in an extra.
+    "pyjwt[crypto]>=2.8",
 ]
 
 [project.optional-dependencies]
