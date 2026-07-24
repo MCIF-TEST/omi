@@ -36,13 +36,16 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
   const unread = alerts.data?.unread_count ?? 0;
 
   return (
-    <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 glass px-4 md:px-5 flex items-center gap-3">
+    // min-w-0 + gap-2 on phones: this row holds six things, and without a floor on how far it can
+    // shrink the last of them (the account button) is simply pushed off the right edge of a 390px
+    // screen — reachable only by panning the page sideways.
+    <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 glass px-3 md:px-5 flex items-center gap-2 md:gap-3 min-w-0">
 
       {/* Persistent feedback — top-left, on every page, even deep inside an investigation. */}
       <FeedbackButton />
 
       {/* Brand — phones have no sidebar, so the wordmark lives here. */}
-      <Link href="/investigate" className="md:hidden tap" aria-label="OMISPHERE home">
+      <Link href="/investigate" className="md:hidden tap shrink min-w-0 overflow-hidden" aria-label="OMISPHERE home">
         <Logo size="sm" />
       </Link>
 
@@ -79,21 +82,25 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
       </Link>
 
       {/* Right cluster */}
-      <div className="flex items-center gap-2 ml-auto md:ml-0 shrink-0">
+      <div className="flex items-center gap-1.5 md:gap-2 ml-auto md:ml-0 shrink-0">
+        {/* Service health is diagnostic, and phones already carry a full-width degraded banner
+            underneath this bar — so it earns its space on tablets up, not on a 390px row. */}
         {engineStatus && (
-          <ServiceHealthPill
-            youtubeConfigured={engineStatus.youtube_configured}
-            storageEphemeral={Boolean(engineStatus.storage_ephemeral)}
-            isAdmin={user.is_admin}
-            quotaUsedToday={engineStatus.youtube_quota_used_today}
-            quotaDailyLimit={engineStatus.youtube_quota_daily_limit}
-          />
+          <span className="hidden sm:inline-flex">
+            <ServiceHealthPill
+              youtubeConfigured={engineStatus.youtube_configured}
+              storageEphemeral={Boolean(engineStatus.storage_ephemeral)}
+              isAdmin={user.is_admin}
+              quotaUsedToday={engineStatus.youtube_quota_used_today}
+              quotaDailyLimit={engineStatus.youtube_quota_daily_limit}
+            />
+          </span>
         )}
 
-        {/* Alerts */}
+        {/* Alerts — phones reach alerts from the tab bar, so this duplicate is tablet-up. */}
         <Link
           href="/monitoring"
-          className="relative inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border-2 bg-bg-elev/60 hover:border-border-hot hover:text-fg-dim text-fg-mute transition-colors"
+          className="relative hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border-2 bg-bg-elev/60 hover:border-border-hot hover:text-fg-dim text-fg-mute transition-colors"
           aria-label={`Alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
         >
           <Bell size={15} />

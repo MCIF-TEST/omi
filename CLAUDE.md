@@ -128,6 +128,34 @@ meant the model was judging accounts on almost nothing:
 `bio` distinguishes `""` (the account has no bio — a real tell) from `None` (the platform never told
 us). Don't collapse them.
 
+### Mobile: the page is a column, never a canvas
+
+Four rules in `globals.css` hold the phone layout together. They look like small CSS details and are
+not:
+
+- **`overflow-x: clip` on `html, body`** (with an `overflow-x: hidden` fallback for Safari < 16).
+  `clip` rather than `hidden` on purpose — `hidden` creates a scroll container and breaks the sticky
+  topbar. One overflowing child used to make the whole document pan sideways, which reads as a broken
+  app: the sticky header stops short of the scrolled edge and content slides out from under the
+  viewport. Anything genuinely wider than the screen (the posting heatmap, a wide table) scrolls
+  inside its **own** `overflow-x-auto` container.
+- **Form controls are 16px on touch screens** (`@media (max-width: 767px), (pointer: coarse)`). iOS
+  Safari zooms the entire page when you focus a control under 16px and never zooms back out — that
+  single tap is what leaves the app magnified and pannable. Do **not** "fix" this by disabling
+  pinch-zoom; people who need to magnify must still be able to.
+- **`touch-action: manipulation`** on interactive elements — removes Safari's ~300ms double-tap-zoom
+  wait, which otherwise makes every button feel dead.
+- **`.section-label` wraps** (`max-width: 100%`, `flex-wrap: wrap`). It is `inline-flex`, so it would
+  not shrink below its content and spilled out of narrow columns to paint over its neighbours.
+
+Layout rule that caused the worst of it: **never put a `shrink-0` action cluster beside a
+`flex-1 min-w-0` text column without stacking on mobile.** The text column collapses to near-zero —
+the investigation title rendered two characters per line ("Ba" / "I…") and its URL as "htt…". Stack
+with `flex-col … sm:flex-row`.
+
+Verified with Playwright at 360/375/390/430px: no sideways pan, account button on-screen, no
+overlap, title at ~80% of viewport width, inputs computed at 16px.
+
 ### Scan watchdog scales with scan size
 
 `reap_stale_scan_jobs` judges each job against `scan_job_budget_seconds(job.max_commenters,

@@ -271,13 +271,13 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a YouTube or X (Twitter) link…"
+              placeholder="Paste a YouTube or X link…"
               aria-label="Post link"
               inputMode="url"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
-              className="h-12 w-full pl-10 pr-24 text-base rounded-lg bg-bg-inset border border-border-2 text-fg
+              className="h-12 w-full pl-10 pr-14 sm:pr-24 text-base rounded-lg bg-bg-inset border border-border-2 text-fg
                          placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline"
             />
             {/* Auto-paste — one tap drops the copied link in. A big win on mobile, where pasting is fiddly. */}
@@ -286,9 +286,12 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
                 type="button"
                 onClick={pasteFromClipboard}
                 aria-label="Paste link from clipboard"
-                className="btn-slab absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-accent-text"
+                className="btn-slab absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-2.5 sm:px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-accent-text"
               >
-                <ClipboardPaste size={14} /> Paste
+                {/* Icon-only on phones — the word costs ~45px that the placeholder needs to stay
+                    readable, and the icon + aria-label already say what it does. */}
+                <ClipboardPaste size={14} className="shrink-0" />
+                <span className="hidden sm:inline">Paste</span>
               </button>
             ) : (
               <button
@@ -301,16 +304,19 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
               </button>
             )}
           </div>
+          {/* whitespace-nowrap: the label was breaking mid-phrase into "Compile" / "commenters" on a
+              two-line button with the icon stranded on the left. shrink-0 on the icon keeps it from
+              being squashed into an ellipse when the label is long. */}
           <button
             type="submit"
             disabled={!url.trim() || busy || phase === 'scanning'}
-            className="btn-lamp h-12 w-full sm:w-auto px-6 rounded-lg font-semibold inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+            className="btn-lamp h-12 w-full sm:w-auto px-6 rounded-lg font-semibold inline-flex items-center justify-center gap-2 whitespace-nowrap disabled:cursor-not-allowed"
           >
             {phase === 'compiling'
-              ? <><Loader2 size={16} className="animate-spin" /> Reading…</>
+              ? <><Loader2 size={16} className="animate-spin shrink-0" /> Reading…</>
               : rows.length > 0
-                ? <><ScanLine size={16} /> Re-read</>
-                : <><ScanLine size={16} /> Compile commenters</>}
+                ? <><ScanLine size={16} className="shrink-0" /> Re-read</>
+                : <><ScanLine size={16} className="shrink-0" /> Compile commenters</>}
           </button>
         </form>
         <p className="mt-2.5 font-mono text-2xs tracking-wider text-fg-faint">
