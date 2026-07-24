@@ -680,7 +680,7 @@ class AnalystResponse(BaseModel):
 
     slug: str
     enabled: bool
-    status: str  # "ready" | "generating"
+    status: str  # "ready" | "generating" | "partial" (batched run: assessment-so-far, keep polling)
     cached: bool
     assessment: dict | None = None
     provider: str | None = None

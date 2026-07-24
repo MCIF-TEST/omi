@@ -4,10 +4,10 @@
   "manifest_version": "v1",
   "preset_name": "omi-master-v1",
   "protocol": {
-    "chars": 55995,
-    "hash": "map:2a042951c569c1a999c96014",
+    "chars": 60384,
+    "hash": "map:c71d5d06308c9cf1a3455c63",
     "name": "omi_master_analyst_protocol",
-    "version": "map/prompt:v1+constitution:v7+framework:v1+template:citmpl-v8"
+    "version": "map/prompt:v1+constitution:v8+framework:v1+template:citmpl-v9"
   },
   "source_of_truth": "app.reasoning.prompts.master_protocol.compile_master_analyst_protocol (do not hand-edit)",
   "usage": "Paste omi_master_v1_preset.txt VERBATIM as the preset's system prompt in the OpenRouter dashboard. In preset mode the per-investigation request sends ONLY the Investigation Package as the user message; the preset supplies these instructions. The trace records protocol.hash as the content Omi expects the preset to hold."
