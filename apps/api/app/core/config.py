@@ -110,7 +110,15 @@ class Settings(BaseSettings):
     # this (slow/hung scan, or a worker killed by OOM/restart) is reaped: marked
     # failed + refunded, so it can never poll forever. Kept under the client's
     # ~8-min poll window so the user sees a clean failure, not a timeout.
+    # Scan-job watchdog. The budget SCALES with the job's size (see scan_job_budget_seconds): a flat
+    # number is wrong by construction when one job is 1 account and the next is 100. These three are
+    # the floor (small jobs), the per-account allowance, and a hard ceiling for a truly wedged job.
+    # Deliberately generous: the watchdog exists to catch a DEAD worker, and reaping a LIVE one is the
+    # expensive mistake — it refunds and reports failure for a scan whose upstream calls were already
+    # paid for, and whose investigation may already be saved.
     scan_job_timeout_seconds: int = 300
+    scan_job_timeout_per_account_seconds: float = 12.0
+    scan_job_timeout_max_seconds: int = 1800
     # YouTube Data API v3 daily quota cap. Defaults to the free-tier limit;
     # set higher if you've requested a quota increase from Google. Used for
     # the health-pill warning level and the /v1/status quota_used_today number.

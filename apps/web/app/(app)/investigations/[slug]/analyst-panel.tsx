@@ -26,9 +26,10 @@ const POLL_INTERVAL_MS = 2500;
 // backend's one-shot auto-heal of an inconclusive/floored result — we hold the loading screen and
 // poll until it lands. We never force a re-run from here. ~520s of polling matches the server's
 // 500s generation timeout, so the wait ends when the real result does.
-// ~10 min of polling. A batched run makes several parallel OpenRouter calls, so give it headroom
-// beyond a single call's timeout; the budget also RESETS every time a new batch's results land (see
-// the 'partial' branch), so a scan that is visibly making progress is never cut off here.
+// ~10 min of polling. A batched run issues its OpenRouter calls ONE AT A TIME (so the first accounts
+// land as early as possible), which means the wall-clock total grows with the batch count — but this
+// budget RESETS every time a new batch's results land (see the 'partial' branch), so it is really
+// "10 minutes without visible progress". A scan that keeps delivering batches is never cut off here.
 const MAX_POLLS = 240;
 
 // Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the

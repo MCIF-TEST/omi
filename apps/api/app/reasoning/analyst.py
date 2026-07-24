@@ -1447,7 +1447,8 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
             inv_slug = inv.slug
 
         # Batched path — a single OpenRouter request carries at most N accounts; a larger selection
-        # runs as parallel ≤N-account requests merged first-to-last with progressive persistence.
+        # runs as ≤N-account requests issued ONE AT A TIME, each persisted the moment it lands, so the
+        # first accounts are readable while the rest are still being generated.
         batch_size = max(1, int(getattr(settings, "analyst_batch_accounts", 50) or 50))
         chunks = _split_batches(payload, batch_size)
         if chunks:
