@@ -284,16 +284,22 @@ class Settings(BaseSettings):
     analyst_completion_ceiling_tokens: int = 150000   # TEMP high cap to measure real scan cost; tune down later
     # Batched analyst inference. A single OpenRouter request carries AT MOST this many accounts; a larger
     # selection is split into ≤N-account batches sent as PARALLEL requests, merged first-to-last, and
-    # persisted progressively so the UI shows batch 1's accounts while later batches still run. 50 keeps
-    # each generation comfortably inside the output budget — the regime where per-account quality (and
-    # score individuality) is highest. Concurrency bounds the simultaneous OpenRouter requests per scan.
-    analyst_batch_accounts: int = 50          # OMI_ANALYST_BATCH_ACCOUNTS
-    analyst_batch_concurrency: int = 3        # OMI_ANALYST_BATCH_CONCURRENCY
-    # GPT-5-class reasoning effort. Reasoning tokens are billed as output and are the other big cost/latency
-    # lever. Leave unset to let the OpenRouter preset decide; set "minimal" | "low" | "medium" | "high"
-    # (OMI_OPENROUTER_REASONING_EFFORT) to bound reasoning cost per scan. "low" roughly halves reasoning
-    # spend vs "high" for this structured analysis task.
-    openrouter_reasoning_effort: str | None = None
+    # persisted progressively so the UI shows batch 1's accounts while later batches still run.
+    # Sized for LATENCY, not just the token budget: one call reasoning over the full per-account
+    # protocol (Dossier Loop + audits) for ~50 accounts ran long enough to breach the request timeout
+    # and fall to the Floor (which drops all per-account results — reads as a "failed" scan). 25 keeps
+    # each call comfortably inside the timeout, and because batches run concurrently a 50-account scan
+    # is now 2 fast parallel calls instead of one slow one. Env-overridable (raise it only if you also
+    # lower reasoning effort). Concurrency bounds the simultaneous OpenRouter requests per scan.
+    analyst_batch_accounts: int = 25          # OMI_ANALYST_BATCH_ACCOUNTS
+    analyst_batch_concurrency: int = 4        # OMI_ANALYST_BATCH_CONCURRENCY
+    # GPT-5-class reasoning effort. Reasoning tokens bill as output AND are the dominant latency driver —
+    # with the preset left to decide (its default trends high), a single call reasoned long enough to
+    # breach the timeout. The per-account protocol is highly prescriptive (it tells the model exactly how
+    # to work each account), so "low" keeps per-account quality while roughly halving generation time —
+    # the difference between a real result and a timed-out Floor. Override via OMI_OPENROUTER_REASONING_
+    # EFFORT ("minimal" | "low" | "medium" | "high") if you want deeper reasoning and accept the latency.
+    openrouter_reasoning_effort: str | None = "low"
     # P3.1.6 — the AI-native Comment Analysis cutover. OFF by default, so the production comment/
     # thread surface is byte-identical to before (the deterministic thread_scan). When ON, every
     # comprehensive investigation runs Comment Analysis through the AI Investigation Runtime and the

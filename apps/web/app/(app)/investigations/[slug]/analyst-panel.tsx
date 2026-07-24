@@ -26,7 +26,10 @@ const POLL_INTERVAL_MS = 2500;
 // backend's one-shot auto-heal of an inconclusive/floored result — we hold the loading screen and
 // poll until it lands. We never force a re-run from here. ~520s of polling matches the server's
 // 500s generation timeout, so the wait ends when the real result does.
-const MAX_POLLS = 210;
+// ~10 min of polling. A batched run makes several parallel OpenRouter calls, so give it headroom
+// beyond a single call's timeout; the budget also RESETS every time a new batch's results land (see
+// the 'partial' branch), so a scan that is visibly making progress is never cut off here.
+const MAX_POLLS = 240;
 
 // Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
 // URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.
