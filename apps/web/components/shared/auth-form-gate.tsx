@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@clerk/nextjs';
+import { usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { AuthBridge } from './auth-bridge';
 
@@ -20,6 +21,7 @@ import { AuthBridge } from './auth-bridge';
  */
 export function AuthFormGate({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth();
+  const pathname = usePathname();
   if (!isLoaded) {
     return (
       <div className="flex justify-center py-10" aria-busy>
@@ -27,6 +29,13 @@ export function AuthFormGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (isSignedIn) return <AuthBridge />;
+  // Only engage the loop recovery on the BASE auth path. Clerk runs multi-step flows under sub-routes
+  // — /sign-up/continue (collect required fields), /sign-in/sso-callback (OAuth return),
+  // /sign-in/factor-two (MFA), email/phone verification — and on those the child <SignIn>/<SignUp>
+  // MUST render to finish the flow. Hijacking a sub-route with AuthBridge would strand the user
+  // mid-signup. So the recovery only triggers when the visitor is fully signed in AND sitting on the
+  // plain /sign-in or /sign-up entry (the only place the redirect loop can form).
+  const onBaseAuthPath = pathname === '/sign-in' || pathname === '/sign-up';
+  if (isSignedIn && onBaseAuthPath) return <AuthBridge />;
   return <>{children}</>;
 }
