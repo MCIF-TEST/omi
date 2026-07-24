@@ -429,9 +429,14 @@ def me(
         if request.cookies.get(SESSION_COOKIE_NAME):
             clear_session(response)
         return None
+    # A Clerk account whose real email isn't available yet carries a synthetic placeholder address
+    # (see _resolve_clerk_user). Never surface that to the UI — show it blank until the real email
+    # backfills, so the topbar doesn't display "clerk_...@placeholder.omisphere.local".
+    from app.core.auth import _is_placeholder_email
+    display_email = "" if _is_placeholder_email(current.email) else current.email
     return UserOut(
         id=current.id,
-        email=current.email,
+        email=display_email,
         credits_remaining=current.credits_remaining,
         subscription_status=current.subscription_status,
         subscription_renews_at=current.subscription_renews_at,

@@ -39,8 +39,13 @@ export async function apiServer<T>(
     /* middleware didn't run / not signed in — the __session fallback below covers it */
   }
   if (!bearer) {
-    const sessionJwt = jar.get('__session')?.value;
-    if (sessionJwt) bearer = `Bearer ${sessionJwt}`;
+    // Clerk stores the session JWT in `__session` (or a suffixed `__session_<hash>` when the instance
+    // uses suffixed cookies). Take whichever is present so a dev instance's suffixed cookie also works.
+    const all = jar.getAll();
+    const sessionCookie =
+      all.find((c) => c.name === '__session') ??
+      all.find((c) => c.name.startsWith('__session_'));
+    if (sessionCookie?.value) bearer = `Bearer ${sessionCookie.value}`;
   }
 
   const cookieHeader = jar
