@@ -89,7 +89,16 @@ def verify_session_token(token: str) -> dict | None:
     iss = _issuer()
     try:
         import jwt  # lazy
-
+    except Exception as e:  # noqa: BLE001
+        # A MISCONFIG, not a bad token: PyJWT (with the crypto extra) isn't installed, so NO Clerk
+        # login can ever be verified server-side — every session is rejected and users bounce straight
+        # back out. Log LOUDLY (once is enough per process, but a warning per attempt is acceptable and
+        # unmissable) so this can never hide as a silent "unauthenticated" again. Fix: install
+        # `pyjwt[crypto]` (it's a core dependency in pyproject.toml).
+        log.error("clerk: PyJWT/cryptography unavailable — Clerk verification is DISABLED and all "
+                  "logins will fail. Install pyjwt[crypto]. (%s)", e)
+        return None
+    try:
         client = _jwks_client()
         if client is None:
             return None
