@@ -15,11 +15,11 @@ from app.core.config import Settings
 
 
 def _settings(**overrides) -> Settings:
-    """Build a Settings object with batch-pricing knobs set to known values."""
+    """Build a Settings object with batch-pricing knobs set to the production defaults."""
     defaults = dict(
         scan_batch_unit=50,
         credits_per_batch_youtube=1,
-        credits_per_batch_twitter=10,
+        credits_per_batch_twitter=1,
     )
     defaults.update(overrides)
     return Settings(**defaults)
@@ -56,23 +56,43 @@ def test_youtube_max_commenters_default():
 
 
 # ---------------------------------------------------------------------------
-# Twitter (10 credits / 50 commenters)
+# Twitter — SAME flat rate as YouTube now: 1 credit / 50 accounts
 # ---------------------------------------------------------------------------
 
 def test_twitter_single_batch_exact():
-    assert compute_scan_credits("twitter", 50, _settings()) == 10
+    assert compute_scan_credits("twitter", 50, _settings()) == 1
 
 
 def test_twitter_single_batch_partial():
-    assert compute_scan_credits("twitter", 1, _settings()) == 10
+    assert compute_scan_credits("twitter", 1, _settings()) == 1
 
 
 def test_twitter_two_batches():
-    assert compute_scan_credits("twitter", 51, _settings()) == 20
+    assert compute_scan_credits("twitter", 51, _settings()) == 2
 
 
 def test_twitter_100_commenters():
-    assert compute_scan_credits("twitter", 100, _settings()) == 20
+    assert compute_scan_credits("twitter", 100, _settings()) == 2
+
+
+def test_both_platforms_charge_the_same():
+    s = _settings()
+    for n in [1, 25, 50, 75, 100, 150]:
+        assert compute_scan_credits("youtube", n, s) == compute_scan_credits("twitter", n, s), f"n={n}"
+
+
+def test_production_default_is_1_credit_per_50_both_platforms():
+    """Pin the shipped default so a future edit can't silently change what users are charged."""
+    assert Settings.model_fields["scan_batch_unit"].default == 50
+    assert Settings.model_fields["credits_per_batch_youtube"].default == 1
+    assert Settings.model_fields["credits_per_batch_twitter"].default == 1
+
+
+def test_the_multiplier_still_scales_when_configured():
+    """The formula must still honor a higher per-batch rate if a deploy sets one."""
+    s = _settings(credits_per_batch_twitter=10)
+    assert compute_scan_credits("twitter", 50, s) == 10
+    assert compute_scan_credits("twitter", 100, s) == 20
 
 
 # ---------------------------------------------------------------------------

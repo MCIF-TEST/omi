@@ -148,19 +148,24 @@ class Settings(BaseSettings):
     # ~$0.005 per post read, so a 50-commenter batch with H posts of history
     # each costs ~50×(H+4)×$0.005 in real money.
     #
-    # Credits charged = ceil(commenters_requested / scan_batch_unit)
+    # Credits charged = ceil(accounts_scored / scan_batch_unit)
     #                   × credits_per_batch[platform].
     #
-    # With the defaults below: a YouTube batch of ≤50 commenters costs 1 credit
-    # (unchanged from the old flat rate); a Twitter batch of ≤50 costs 10. At
-    # ~$0.50/credit that is $5.00 of revenue per Twitter batch — which only
-    # clears the API cost if the Twitter history depth is kept lean (≈10 posts
-    # per commenter → ~50×14×$0.005 ≈ $3.50 cost, ~30% margin). Raise
-    # credits_per_batch_twitter or lower the Twitter history depth if you scan
-    # deeper than that.
+    # Flat rate for BOTH platforms: 1 credit per 50 accounts analyzed. So 1–50
+    # accounts = 1 credit, 51–100 = 2, 101–150 = 3, and so on (100 accounts = 2
+    # credits). The count is the number of accounts actually scored (the user's
+    # selection), which is exactly what OpenRouter analyzes.
+    #
+    # NOTE on Twitter economics: X's API costs far more per account than YouTube
+    # (~$0.005 per post read; a 50-account batch with ~10 posts of history each is
+    # ~$3.50 of API spend). Charging X at the same 1-credit-per-50 rate as YouTube
+    # is a deliberate product choice (simple, uniform pricing) that runs thin or
+    # negative margin on deep-history X scans — keep the X history depth lean, or
+    # raise credits_per_batch_twitter (env: OMI_CREDITS_PER_BATCH_TWITTER) if the
+    # X API cost outgrows the credit price.
     scan_batch_unit: int = 50
     credits_per_batch_youtube: int = 1
-    credits_per_batch_twitter: int = 10
+    credits_per_batch_twitter: int = 1
     # Comma-separated list of email addresses auto-promoted to admin on
     # signup. Admins skip credit consumption and see /v1/metrics. Lowercased
     # for comparison.
