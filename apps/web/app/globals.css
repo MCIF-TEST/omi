@@ -126,6 +126,34 @@
     overscroll-behavior-y: none;
     accent-color: var(--accent);
     caret-color: var(--accent-2);
+    /* The page is a COLUMN, never a canvas you pan around. One overflowing child used to make the
+       whole document scroll sideways, which on a phone reads as a broken app: the sticky header
+       stops short of the scrolled edge, and content slides out from under the viewport. Anything
+       genuinely wider than the screen (a heatmap, a wide table) must scroll inside its OWN
+       overflow-x container, not drag the document with it. */
+    overflow-x: hidden;   /* fallback for Safari < 16 */
+    overflow-x: clip;     /* preferred: unlike hidden it creates no scroll container, so the sticky
+                             topbar keeps sticking */
+    overscroll-behavior-x: none;
+    max-width: 100%;
+  }
+
+  /* iOS Safari zooms the whole page in when you focus a form control whose text is under 16px, and
+     it does NOT zoom back out when you leave — which is how the app ends up magnified and pannable
+     after a single tap on a search box. Keeping every control at 16px on touch screens removes the
+     trigger entirely, and is why this is a min-width query: the tighter desktop type is deliberate
+     and unaffected. Do not "fix" this by disabling pinch-zoom — people who need to magnify text
+     must still be able to. */
+  @media (max-width: 767px), (pointer: coarse) {
+    input, textarea, select {
+      font-size: 16px;
+    }
+  }
+
+  /* Removes the ~300ms wait Safari holds on every tap in case it becomes a double-tap-to-zoom.
+     Buttons feel dead without this; double-tap zoom on the surrounding page still works. */
+  button, a, [role="button"], input, select, textarea, label, summary {
+    touch-action: manipulation;
   }
   * { border-color: var(--border); }
   ::selection { background: rgba(59, 130, 246, 0.32); color: #ffffff; }
@@ -255,11 +283,19 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-mute);
+    /* An inline-flex box does not shrink below its content, so in a narrow column this label used to
+       spill out and paint over whatever sat beside it. Let the words wrap instead, and keep the
+       accent tick pinned to the first line rather than stretched down the block. */
+    max-width: 100%;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
   }
   .section-label::before {
     content: '';
     width: 12px; height: 2px; border-radius: 2px;
     background: var(--accent);
+    flex: none;
+    align-self: center;
   }
 
   /* Stat / metric value — figures are evidence: mono, tabular. */
