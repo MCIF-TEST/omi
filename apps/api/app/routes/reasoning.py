@@ -176,7 +176,9 @@ def generate_analyst_assessment(
             return AnalystResponse(slug=inv.slug, enabled=True, status="generating", cached=False)
 
         # Async: generate off the request hot path; client polls for the result.
-        background.submit(
+        # Slow pool — a batched generation runs its model calls one at a time and holds its worker for
+        # the whole run; it must not compete with scan jobs for the general pool's threads.
+        background.submit_slow(
             analyst.generate_and_persist, inv.slug,
             current.id if current.id != 0 else None, refresh,
         )

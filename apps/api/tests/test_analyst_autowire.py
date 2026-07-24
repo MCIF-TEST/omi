@@ -43,7 +43,7 @@ def test_maybe_autogenerate_schedules_when_enabled(monkeypatch):
     monkeypatch.setenv("OMI_ANALYST_ENABLED", "true")
     get_settings.cache_clear()
     calls = []
-    monkeypatch.setattr("app.core.background.submit",
+    monkeypatch.setattr("app.core.background.submit_slow",
                         lambda fn, *a, **k: (calls.append((fn, a)) or "future"))
     assert analyst.maybe_autogenerate("inv_x", 7) is True
     assert len(calls) == 1
@@ -52,11 +52,26 @@ def test_maybe_autogenerate_schedules_when_enabled(monkeypatch):
     assert args == ("inv_x", 7, False)
 
 
+def test_generation_never_runs_on_the_pool_the_scans_use(monkeypatch):
+    """A batched generation issues its model calls one at a time and holds its worker for the whole
+    run. On the general pool a few concurrent investigations could hold every thread and the SCAN
+    jobs would queue behind AI work that was never on their critical path."""
+    monkeypatch.setenv("OMI_ANALYST_ENABLED", "true")
+    get_settings.cache_clear()
+    general, slow = [], []
+    monkeypatch.setattr("app.core.background.submit", lambda fn, *a, **k: general.append(fn))
+    monkeypatch.setattr("app.core.background.submit_slow",
+                        lambda fn, *a, **k: (slow.append(fn) or "future"))
+    analyst.maybe_autogenerate("inv_x", 7)
+    assert slow == [analyst.generate_and_persist]
+    assert general == [], "analyst work must never touch the pool the scan jobs share"
+
+
 def test_maybe_autogenerate_is_noop_when_disabled(monkeypatch):
     monkeypatch.setenv("OMI_ANALYST_ENABLED", "false")
     get_settings.cache_clear()
     calls = []
-    monkeypatch.setattr("app.core.background.submit", lambda fn, *a, **k: calls.append(1))
+    monkeypatch.setattr("app.core.background.submit_slow", lambda fn, *a, **k: calls.append(1))
     assert analyst.maybe_autogenerate("inv_x", 7) is False
     assert calls == []
 
@@ -68,7 +83,7 @@ def test_maybe_autogenerate_never_raises(monkeypatch):
     def _boom(*a, **k):
         raise RuntimeError("pool exploded")
 
-    monkeypatch.setattr("app.core.background.submit", _boom)
+    monkeypatch.setattr("app.core.background.submit_slow", _boom)
     assert analyst.maybe_autogenerate("inv_x", 7) is False  # swallowed, scan unaffected
 
 

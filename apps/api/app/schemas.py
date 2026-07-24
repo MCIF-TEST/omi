@@ -424,6 +424,12 @@ class ComprehensiveScanResult(BaseModel):
     # back on continuation batches so they append to the same record.
     investigation_slug: str | None = None
 
+    # The Omi Analyst's reading, inlined on the response. Signed-in scans leave this None and fetch
+    # the assessment from /v1/investigations/{slug}/analyst once the background generation lands (it
+    # can outlive the request). The anonymous free scan has no saved investigation to poll, so it
+    # carries its assessment here — the same evidence-bounded model output, from the same runtime.
+    analyst_assessment: dict | None = None
+
 
 # ---------------------------------------------------------------------------
 # /v1/status — live engine state for the UI header

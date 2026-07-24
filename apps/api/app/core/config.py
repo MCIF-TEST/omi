@@ -218,6 +218,12 @@ class Settings(BaseSettings):
     # what showed the "isn't ready yet" fallback and made re-opens re-run). Env-overridable
     # (OMI_ANALYST_TIMEOUT_SECONDS).
     analyst_timeout_seconds: float = 500.0
+    # The free pre-login scan runs its analyst call INLINE (an anonymous scan has no saved
+    # investigation to generate against in the background and poll), so a visitor's browser is holding
+    # the connection open the whole time. The full 500s budget is right for a signed-in investigation
+    # generating in the background; here it would mean an eight-minute hang before the page gave up.
+    # One 25-account call at low reasoning effort lands well inside this. OMI_DEMO_ANALYST_TIMEOUT_SECONDS.
+    demo_analyst_timeout_seconds: float = 120.0
     analyst_max_retries: int = 2
     # Serving API the deployed endpoint speaks. "generate" (default) posts the raw
     # TGI text-generation body (existing behavior, byte-identical). "messages" posts

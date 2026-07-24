@@ -180,10 +180,67 @@ def test_the_budget_is_two(client):
 def test_compile_is_refused_once_the_budget_is_spent(client):
     """A spent visitor is turned away at the FIRST step, not after compiling a list they can't analyze."""
     ip = "10.0.0.31"
-    _run_full_scan(client, ip)
-    _run_full_scan(client, ip, OTHER_TWEET_URL)
+    # Assert the setup: a scan that silently failed would leave the budget unspent and make the real
+    # assertion below fail for a reason that has nothing to do with what this test is about.
+    first = _run_full_scan(client, ip)
+    assert first.status_code == 200, first.text
+    second = _run_full_scan(client, ip, OTHER_TWEET_URL)
+    assert second.status_code == 200, second.text
+
     resp = _compile(client, ip)
     assert resp.status_code == 429
+
+
+def test_an_in_flight_scan_holds_its_place_in_the_budget(client):
+    """The limit must count scans that are RUNNING, not just finished ones.
+
+    A demo scan takes minutes. If the budget only counted completed scans, firing several requests at
+    once from one IP would let every one of them pass the check before any had written a row — a free
+    unlimited scan for anyone willing to open three tabs."""
+    from app.routes import scan_async as SA
+    from app.storage.db import get_session
+
+    ip_hash = SA.scan_mod._hash_ip("10.0.0.60")
+    with get_session() as session:
+        # Two scans in flight (reserved, not yet finished) = the whole budget.
+        assert SA._demo_scans_used(session, ip_hash) == 0
+    r1 = SA._reserve_demo_scan(ip_hash, "111", "ua")
+    r2 = SA._reserve_demo_scan(ip_hash, "222", "ua")
+    with get_session() as session:
+        assert SA._demo_scans_used(session, ip_hash) == 2
+
+    # A third request from that IP is refused while the first two are still running.
+    assert _compile(client, "10.0.0.60").status_code == 429
+
+    # One fails: its place is handed back and the visitor can scan again.
+    SA._release_demo_scan(r1)
+    with get_session() as session:
+        assert SA._demo_scans_used(session, ip_hash) == 1
+    assert _compile(client, "10.0.0.60").status_code == 200
+
+    # The other succeeds: permanently spent.
+    SA._confirm_demo_scan(r2)
+    with get_session() as session:
+        assert SA._demo_scans_used(session, ip_hash) == 1
+
+
+def test_a_reservation_orphaned_by_a_crash_expires(client):
+    """A process killed mid-scan leaves a reservation behind. It must age out instead of locking that
+    visitor out of the product forever."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.routes import scan_async as SA
+    from app.storage.db import get_session
+    from app.storage.models import DemoScanLog
+
+    ip_hash = SA.scan_mod._hash_ip("10.0.0.61")
+    row_id = SA._reserve_demo_scan(ip_hash, "333", "ua")
+    with get_session() as session:
+        row = session.get(DemoScanLog, row_id)
+        row.created_at = datetime.now(timezone.utc) - SA.DEMO_RESERVATION_TTL - timedelta(minutes=1)
+        session.commit()
+    with get_session() as session:
+        assert SA._demo_scans_used(session, ip_hash) == 0
 
 
 def test_different_ips_have_independent_budgets(client):
@@ -199,6 +256,70 @@ def test_a_failed_analyze_does_not_spend_a_free_scan(client):
     # Both free scans are still available.
     assert _run_full_scan(client, ip).status_code == 200
     assert _run_full_scan(client, ip, OTHER_TWEET_URL).status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# The analyst — the free scan is a REAL read, not a canned one
+# --------------------------------------------------------------------------- #
+def test_the_free_scan_runs_the_real_analyst_and_inlines_its_reading(client, monkeypatch):
+    """The free scan must reach the model, like a signed-in one. A signed-in scan generates in the
+    background and the client polls /v1/investigations/{slug}/analyst; an anonymous scan has no saved
+    investigation to poll, so the assessment rides back on the response."""
+    from app.reasoning import analyst as A
+
+    seen: list[dict] = []
+
+    def fake_assess(payload, *, ref, platform, settings=None, capture=None):
+        seen.append({"ref": ref, "platform": platform,
+                     "accounts": len((payload.get("video") or {}).get("commenters") or [])})
+        return {"headline": "Three accounts look bought.", "assessment": "Reasoning here."}
+
+    monkeypatch.setattr(A, "analyst_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr(A, "assess_payload", fake_assess)
+
+    listing = _compile(client, "10.0.0.50").json()
+    picked = [c["external_id"] for c in listing["commenters"]][:3]
+    body = _score(client, "10.0.0.50", picked).json()
+
+    # The analyst saw the real scan payload for the real platform...
+    assert len(seen) == 1, "exactly one model call for a free scan (it is capped at one batch)"
+    assert seen[0]["platform"] == "x"
+    assert seen[0]["accounts"] == 3
+    # ...and its reading came back on the response for the UI to render.
+    assert body["analyst_assessment"]["headline"] == "Three accounts look bought."
+
+
+def test_a_failing_analyst_still_returns_the_scan(client, monkeypatch):
+    """The assessment is a bonus on top of a finished scan. If the model call fails, the visitor
+    still gets every deterministic per-account score — and has still spent only one free scan."""
+    from app.reasoning import analyst as A
+
+    monkeypatch.setattr(A, "analyst_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr(A, "assess_payload",
+                        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("openrouter down")))
+
+    listing = _compile(client, "10.0.0.51").json()
+    picked = [c["external_id"] for c in listing["commenters"]][:2]
+    resp = _score(client, "10.0.0.51", picked)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["analyst_assessment"] is None
+    assert body["video"]["commenter_count"] == 2
+
+
+def test_the_analyst_is_skipped_when_it_is_disabled(client, monkeypatch):
+    """The default path (analyst off) must not attempt a model call at all."""
+    from app.reasoning import analyst as A
+
+    called = []
+    monkeypatch.setattr(A, "analyst_enabled", lambda *_a, **_k: False)
+    monkeypatch.setattr(A, "assess_payload", lambda *a, **k: called.append(1))
+
+    listing = _compile(client, "10.0.0.52").json()
+    picked = [c["external_id"] for c in listing["commenters"]][:2]
+    body = _score(client, "10.0.0.52", picked).json()
+    assert called == []
+    assert body["analyst_assessment"] is None
 
 
 def test_compiling_does_not_spend_a_free_scan(client):

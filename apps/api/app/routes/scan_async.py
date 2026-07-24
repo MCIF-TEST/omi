@@ -990,15 +990,77 @@ def _demo_ip_hash(request: Request) -> str:
     return scan_mod._hash_ip(scan_mod._client_ip(request))
 
 
+# How long an in-flight reservation counts against the budget. Long enough to cover the slowest real
+# scan (fetch every account's history + one model call), short enough that a row orphaned by a crash
+# or a redeploy frees itself instead of locking that visitor out for good.
+DEMO_RESERVATION_TTL = timedelta(minutes=20)
+
+
 def _demo_scans_used(session, ip_hash: str) -> int:
-    """How many SUCCESSFUL free scans this IP has spent (capped read — we only care whether it's < 2)."""
+    """How much of this IP's free budget is spoken for: scans that SUCCEEDED, plus scans that are
+    running right now (un-expired reservations).
+
+    Counting in-flight reservations is what makes the limit real. Checking only completed scans left a
+    wide time-of-check/time-of-use window — a demo scan takes minutes, so firing N requests at once
+    meant all N passed the check before any of them had written a row, and one IP got N free scans for
+    the price of the limit's ignorance. Reservations are written before the work starts, so a
+    concurrent request sees them."""
+    cutoff = datetime.now(timezone.utc) - DEMO_RESERVATION_TTL
     rows = session.execute(
         select(DemoScanLog.id).where(
             DemoScanLog.ip_hash == ip_hash,
-            DemoScanLog.success == 1,
+            (DemoScanLog.success == 1) | (DemoScanLog.created_at >= cutoff),
         ).limit(DEMO_FREE_SCANS_PER_IP)
     ).all()
     return len(rows)
+
+
+def _reserve_demo_scan(ip_hash: str, content_id: str, user_agent: str) -> int | None:
+    """Claim one of the IP's free scans BEFORE the work starts. Returns the reservation's row id, which
+    the caller must either confirm (``_confirm_demo_scan``) or release (``_release_demo_scan``)."""
+    try:
+        with get_session() as session:
+            row = DemoScanLog(
+                ip_hash=ip_hash, video_id=str(content_id)[:60],
+                user_agent_snippet=(user_agent or "")[:200],
+                success=0,
+            )
+            session.add(row)
+            session.flush()
+            row_id = row.id
+            session.commit()
+            return row_id
+    except Exception:  # noqa: BLE001 — never fail a scan because bookkeeping failed
+        log.exception("demo: could not reserve a free scan")
+        return None
+
+
+def _confirm_demo_scan(row_id: int | None) -> None:
+    """The scan succeeded — the reservation becomes a permanently spent free scan."""
+    if row_id is None:
+        return
+    try:
+        with get_session() as session:
+            row = session.get(DemoScanLog, row_id)
+            if row is not None:
+                row.success = 1
+            session.commit()
+    except Exception:  # noqa: BLE001
+        log.exception("demo: could not confirm free scan %s", row_id)
+
+
+def _release_demo_scan(row_id: int | None) -> None:
+    """The scan failed — hand the free scan back. A visitor must never lose one to our error."""
+    if row_id is None:
+        return
+    try:
+        with get_session() as session:
+            row = session.get(DemoScanLog, row_id)
+            if row is not None:
+                session.delete(row)
+            session.commit()
+    except Exception:  # noqa: BLE001
+        log.exception("demo: could not release free scan %s", row_id)
 
 
 def _demo_classify_x_post(url: str) -> str:
@@ -1084,6 +1146,46 @@ def scan_demo_commenters(
         )
 
 
+def _demo_assessment(result, settings: Settings) -> dict | None:
+    """Run the REAL Omi Analyst over a finished free scan and return its assessment.
+
+    Same runtime, same prompt, same governance as a signed-in investigation — the free scan is a
+    genuine read, not a canned one. It runs INLINE here (a signed-in scan generates in the background
+    and the client polls ``/v1/investigations/{slug}/analyst``, but an anonymous scan has no saved
+    investigation to poll), which is affordable precisely because the free tier is capped at 25
+    accounts: exactly ONE model call, the same unit the batching is sized around.
+
+    Best-effort by contract: ``assess_payload`` never raises and returns None when the analyst is
+    disabled, unconfigured, or the call fails. The visitor still gets the full deterministic result —
+    every per-account score on screen is the engine's, and never the model's, either way.
+    """
+    from app.reasoning import analyst as _analyst
+
+    if not _analyst.analyst_enabled(settings):
+        return None
+    try:
+        payload = scan_mod._serialize_result(result)
+    except Exception:  # noqa: BLE001 — the assessment is a bonus; never break a good scan over it
+        log.exception("demo: could not serialise the payload for the analyst")
+        return None
+    # A visitor's browser is holding this connection, so cap the model call well below the budget a
+    # background generation gets (see demo_analyst_timeout_seconds).
+    demo_settings = settings.model_copy(update={
+        "analyst_timeout_seconds": float(settings.demo_analyst_timeout_seconds),
+    })
+    try:
+        assessment = _analyst.assess_payload(
+            payload, ref="demo", platform="x", settings=demo_settings,
+        )
+    except Exception:  # noqa: BLE001 — documented never to raise; belt-and-braces, since by this
+        # point the scan has SUCCEEDED and already spent the visitor's free scan.
+        log.exception("demo: analyst call raised")
+        return None
+    if assessment is None:
+        log.info("demo: analyst returned no assessment (disabled, unconfigured, or call failed)")
+    return assessment
+
+
 @router.post("/demo/score", response_model=ComprehensiveScanResult)
 def scan_demo_score(
     payload: dict,
@@ -1146,7 +1248,11 @@ def scan_demo_score(
         subscription_status="demo", subscription_renews_at=None, is_admin=False,
     )
 
-    success_flag = 0
+    # Claim the free scan BEFORE the (minutes-long) work, so a burst of concurrent requests from one
+    # IP can't all pass the budget check while none of them has written a row yet.
+    reservation = _reserve_demo_scan(ip_hash, content_id, request.headers.get("user-agent") or "")
+
+    succeeded = False
     try:
         result = scan_mod._run_comprehensive(
             creq, settings, anon, _charge_credit=False, source=source,
@@ -1158,7 +1264,11 @@ def scan_demo_score(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Could not analyze any of the selected repliers. Please try again.",
             )
-        success_flag = 1
+        # The scan itself is what the free budget pays for. Mark it spent here, BEFORE the analyst:
+        # the assessment is a best-effort extra, and a model hiccup must not hand back a scan whose
+        # (real, billable) X fetches and detection work already happened.
+        succeeded = True
+        result.analyst_assessment = _demo_assessment(result, settings)
     except TwitterClientError as e:
         raise scan_mod._handle_twitter_error(
             e, user_id=anon.id, credits_to_refund=0, target_input=content_id,
@@ -1172,15 +1282,11 @@ def scan_demo_score(
             detail="The scan failed unexpectedly. Please try again.",
         )
     finally:
-        # Log the attempt either way (a failed one logs success=0 and does NOT burn a free scan); only a
-        # successful analyze spends one of the IP's two.
-        with get_session() as session:
-            session.add(DemoScanLog(
-                ip_hash=ip_hash,
-                video_id=str(content_id)[:60],
-                user_agent_snippet=(request.headers.get("user-agent") or "")[:200],
-                success=success_flag,
-            ))
-            session.commit()
+        # Confirm the reservation on success; hand the free scan back on any failure, so a visitor
+        # never loses one to our error.
+        if succeeded:
+            _confirm_demo_scan(reservation)
+        else:
+            _release_demo_scan(reservation)
 
     return result

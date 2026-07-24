@@ -29,6 +29,13 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import Settings, get_settings
+# Module scope on purpose. The batched generation's progressive persist (_generate_batched ->
+# _persist_progress) calls get_session(); when this import lived only inside generate_and_persist it
+# was a LOCAL binding there, so the nested closure resolved the name against module globals, found
+# nothing, and every batched run died with NameError on its first persist — silently, inside the
+# background pool. The effect: NO investigation over one batch of accounts ever produced an
+# assessment; the client just polled until it timed out. Keep this at module level.
+from app.storage.db import get_session
 
 logger = logging.getLogger("omi.reasoning.analyst")
 
@@ -1183,7 +1190,8 @@ def _tier_for_score(score: int) -> str:
     return "low" if score <= 24 else "moderate" if score <= 49 else "elevated" if score <= 74 else "high"
 
 
-def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int) -> dict | None:
+def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
+                       run_finished: bool = False) -> dict | None:
     """Merge per-batch assessments into ONE progressive assessment, strictly first-to-last.
 
     ``parts`` is indexed by batch; entries still pending (or failed) are None. The first completed
@@ -1284,8 +1292,16 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int) 
     base["investigation_trace"] = tr
 
     # The progressive marker the route + UI read: how far the batched generation has come.
+    #
+    # ``complete`` means THE RUN IS OVER, not "every batch succeeded" — ``run_finished`` is set on the
+    # final merge even when some batches produced nothing. That distinction is load-bearing: an
+    # incomplete marker makes the route treat the entry as an interrupted run and resubmit a FULL
+    # regeneration on every poll, so a batch that fails deterministically would bill OpenRouter for a
+    # fresh run every few seconds, forever, and the client would poll for a batch that is never coming.
+    # ``done`` < ``total`` with ``complete`` true is the honest "finished, but N batches yielded
+    # nothing" state; the UI says so and offers a refresh.
     base["batching"] = {"total": total_batches, "done": done, "batch_size": batch_size,
-                        "complete": done >= total_batches}
+                        "complete": bool(run_finished) or done >= total_batches}
     return base
 
 
@@ -1313,8 +1329,9 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     parts: list[dict | None] = [None] * total
     flushed = 0  # batches merged+persisted so far (strict first-to-last prefix)
 
-    def _persist_progress(done: int) -> dict | None:
-        merged = _merge_batch_parts(parts, batch_size=batch_size, done=done)
+    def _persist_progress(done: int, *, run_finished: bool = False) -> dict | None:
+        merged = _merge_batch_parts(parts, batch_size=batch_size, done=done,
+                                    run_finished=run_finished)
         if merged is None:
             return None
         gov = merged.get("governance") or {}
@@ -1368,11 +1385,14 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                 parts[i] = fut.result()
                 _landed(i)
 
-    # Final merge: count every landed batch (including any that finished after a failed predecessor
-    # blocked the prefix flush) and mark the run complete.
-    landed = sum(1 for p in parts if p is not None)
-    entry = _persist_progress(total if landed == total else landed) or entry
-    if landed < total:
+    # Final merge. When every batch landed, the last _landed() already persisted a complete entry —
+    # writing it again would be a pointless round trip. Otherwise some batch produced nothing, so the
+    # prefix flush stalled short of the end: persist what DID land and mark the run finished, so the
+    # client stops polling for a batch that will never arrive and the cache stops re-triggering a full
+    # (billable) regeneration on every subsequent request.
+    if flushed < total:
+        landed = sum(1 for p in parts if p is not None)
+        entry = _persist_progress(landed, run_finished=True) or entry
         logger.warning("analyst.batched: slug=%s finished with %d/%d batches (failed batches keep "
                        "their accounts unassessed; a refresh re-runs the generation)",
                        inv_slug, landed, total)
@@ -1397,7 +1417,8 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
             return None
         _autogen_inflight.add(slug)
     try:
-        from app.storage.db import get_session
+        # get_session is imported at module scope (see the note there — a local import here is what
+        # broke the batched path's nested closure).
         from app.storage.repository import AccountRepository
 
         payload: dict = {}
@@ -1470,7 +1491,9 @@ def maybe_autogenerate(slug: str, user_id: int | None) -> bool:
         if not analyst_enabled(settings):
             return False
         from app.core import background
-        fut = background.submit(generate_and_persist, slug, user_id, False)
+        # The SLOW pool: a batched generation holds its worker for the whole run (batches are issued
+        # one at a time), so it must never share threads with the scan jobs.
+        fut = background.submit_slow(generate_and_persist, slug, user_id, False)
         scheduled = fut is not None
         # Provider-aware target — HF needs the endpoint; OpenRouter needs a preset or model. Log only.
         if reasoning_provider(settings) == "openrouter":

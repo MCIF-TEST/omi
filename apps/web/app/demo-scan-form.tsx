@@ -302,7 +302,7 @@ export function DemoScanForm() {
             </p>
             <p className="text-xs text-fg-mute mt-0.5 leading-relaxed">
               Pulling each account&apos;s history, detecting coordination, then Omi writes the verdict.
-              This takes up to a minute.
+              This is the real analysis, so it can take a couple of minutes — keep this tab open.
             </p>
           </div>
         </div>
@@ -411,6 +411,26 @@ function DemoResult({
         />
         <Stat label="Clusters" value={video?.clusters?.length || 0} highlight={(video?.clusters?.length || 0) > 0} />
       </div>
+
+      {/* The analyst's reading — the same model output a signed-in investigation gets. Absent when
+          the analyst is off or its call failed; the scored accounts below stand on their own. */}
+      {result.analyst_assessment && (
+        <div className="rounded-sm border border-violet-solid/30 bg-violet-solid/[0.05] p-4">
+          <p className="font-mono text-2xs tracking-[0.18em] uppercase text-violet-2 mb-2">
+            Omi Analyst
+          </p>
+          {result.analyst_assessment.headline && (
+            <p className="text-sm text-fg font-medium leading-snug mb-1.5">
+              {result.analyst_assessment.headline}
+            </p>
+          )}
+          {result.analyst_assessment.assessment && (
+            <p className="text-sm text-fg-dim leading-relaxed">
+              {result.analyst_assessment.assessment}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Per-account read — the whole point of the product */}
       {video && video.commenters && (

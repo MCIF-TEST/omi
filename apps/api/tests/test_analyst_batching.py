@@ -1,12 +1,18 @@
-"""Batched analyst inference — the 50-account cap per OpenRouter request.
+"""Batched analyst inference — the per-request account cap.
 
-A selection larger than the per-request account cap is split into ≤cap batches, run as PARALLEL
-inferences, merged strictly first-to-last, and persisted progressively so the UI can render batch 1's
-accounts while later batches still generate. These tests pin the pure core (split + ordered merge)
-and the progressive semantics — no model, no network.
+A selection larger than the cap is split into ≤cap batches, run ONE AT A TIME, merged strictly
+first-to-last, and persisted progressively so the UI can render batch 1's accounts while later
+batches still generate. These tests pin the pure core (split + ordered merge), the sequential +
+progressive semantics, and the terminal state of a run with a failed batch — no model, no network.
 """
 from __future__ import annotations
 
+import contextlib
+
+import pytest
+
+from app.core.config import get_settings
+from app.reasoning import analyst as A
 from app.reasoning.analyst import _merge_batch_parts, _split_batches
 
 
@@ -110,3 +116,119 @@ def test_a_floored_batch_marks_the_merge_not_model_backed():
 
 def test_merge_with_no_parts_is_none():
     assert _merge_batch_parts([None, None], batch_size=50, done=0) is None
+
+
+def test_a_finished_run_is_marked_complete_even_with_a_failed_batch():
+    """``complete`` means THE RUN IS OVER, not "every batch succeeded".
+
+    If a finished-but-partial run stayed incomplete, the route would treat the cached entry as an
+    interrupted run and resubmit a full (billable) regeneration on every poll, forever, while the
+    client waited for a batch that is never coming."""
+    parts = [_part(scores=[10], overall=10), None, _part(scores=[20], overall=20)]
+    merged = _merge_batch_parts(parts, batch_size=1, done=2, run_finished=True)
+    assert merged["batching"] == {"total": 3, "done": 2, "batch_size": 1, "complete": True}
+    # Still honest about coverage: only the two landed batches' accounts are present.
+    assert len(merged["commenter_assessments"]) == 2
+
+
+# --------------------------------------------------------------------------- #
+# The generation loop — sequential, progressive, always terminal
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def batched(monkeypatch):
+    """Drive ``_generate_batched`` with a fake model + fake persistence, recording (a) how many
+    persists had happened when each batch STARTED, and (b) every persisted batching marker."""
+    persisted: list[dict] = []
+    persists_seen_at_start: list[int] = []
+
+    @contextlib.contextmanager
+    def fake_session():
+        yield object()
+
+    class FakeRepo:
+        def __init__(self, _session):
+            pass
+
+        def get_investigation(self, slug=None, user_id=None):
+            return object()
+
+    def fake_persist(_session, _inv, merged, _provider):
+        persisted.append(merged["batching"])
+        return {"assessment": merged}
+
+    monkeypatch.setattr(A, "get_session", fake_session)
+    monkeypatch.setattr(A, "persist_assessment", fake_persist)
+    monkeypatch.setattr("app.storage.repository.AccountRepository", FakeRepo)
+
+    def run(outcomes: list[bool]):
+        """``outcomes[i]`` = whether batch i produces an assessment."""
+        def fake_assess(chunk, *, ref, platform, settings):
+            persists_seen_at_start.append(len(persisted))
+            i = len(persists_seen_at_start) - 1
+            if not outcomes[i]:
+                return None
+            n = len(chunk["video"]["commenters"])
+            return _part(scores=[10] * n, overall=10)
+
+        monkeypatch.setattr(A, "assess_payload", fake_assess)
+        payload = _payload(25 * len(outcomes))
+        chunks = _split_batches(payload, 25)
+        A._generate_batched("inv_test", 1, payload, chunks,
+                            platform="x", settings=get_settings())
+        return persists_seen_at_start, persisted
+
+    return run
+
+
+def test_batches_run_one_at_a_time_and_persist_as_they_land(batched):
+    """The point of the whole design: batch 1's accounts are saved (and therefore renderable) BEFORE
+    batch 2 is even sent. If the batches were fired together, no persist would have happened when
+    batches 2 and 3 started."""
+    starts, persisted = batched([True, True, True])
+    assert starts == [0, 1, 2]
+    assert [b["done"] for b in persisted] == [1, 2, 3]
+    assert [b["complete"] for b in persisted] == [False, False, True]
+
+
+def test_get_session_is_importable_at_module_scope():
+    """Regression guard for a silent, total failure of the batched path.
+
+    ``_generate_batched``'s progressive persist is a nested closure that calls ``get_session()``. When
+    that import lived only inside ``generate_and_persist`` it was a local there, so the closure
+    resolved the name against module globals, found nothing, and raised NameError on the first
+    persist — swallowed by the background pool. Every investigation larger than one batch produced no
+    assessment at all while the client polled until it gave up. Keep the name on the module."""
+    assert hasattr(A, "get_session"), (
+        "analyst.get_session must be a module-level import — the batched persist closure needs it"
+    )
+
+
+def test_the_default_configuration_is_sequential_25s():
+    """Pins the shipped defaults the sequential design depends on."""
+    s = get_settings()
+    assert s.analyst_batch_accounts == 25
+    assert s.analyst_batch_concurrency == 1
+
+
+def test_a_run_whose_batch_fails_still_ends_complete(batched):
+    """A failed middle batch must not leave the run polling forever / regenerating forever."""
+    _starts, persisted = batched([True, False, True])
+    final = persisted[-1]
+    assert final["complete"] is True, "a finished run must be terminal even when a batch failed"
+    assert final["done"] == 2 and final["total"] == 3
+
+
+def test_a_first_batch_failure_still_ends_complete(batched):
+    """The prefix flush can never advance here, so the terminal state comes from the final merge."""
+    _starts, persisted = batched([False, True])
+    assert persisted, "the landed batch must still be persisted"
+    final = persisted[-1]
+    assert final["complete"] is True
+    assert final["done"] == 1 and final["total"] == 2
+
+
+def test_a_fully_successful_run_is_not_persisted_twice(batched):
+    """The last progressive flush already wrote the complete entry — writing it again is a wasted
+    round trip on the hot path of every large scan."""
+    _starts, persisted = batched([True, True])
+    assert len(persisted) == 2

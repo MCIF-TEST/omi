@@ -688,6 +688,11 @@ export interface ComprehensiveScanResult {
   next_page_token: string | null;
   video_id: string | null;
   investigation_slug: string | null;
+  /** The Omi Analyst's reading, inlined on the response. Signed-in scans leave this null and poll
+   *  /v1/investigations/{slug}/analyst instead; the anonymous free scan has no saved investigation
+   *  to poll, so it carries the assessment here. Null when the analyst is off or the call failed —
+   *  the deterministic result above is unaffected. */
+  analyst_assessment?: AnalystAssessment | null;
 }
 
 // ---------------------------------------------------------------------------
