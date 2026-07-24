@@ -23,7 +23,7 @@ from app.reasoning import analyst
 from app.routes import scan as scan_mod
 from app.storage.db import get_session, reset_db_for_tests
 from app.storage.repository import AccountRepository
-from tests.test_demo_scan import VID
+from tests.fakes import VID
 from tests.test_investigation_hardening import _make_payload
 
 

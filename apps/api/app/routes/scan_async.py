@@ -30,7 +30,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -47,9 +47,9 @@ from app.core.config import Settings, get_settings
 from app.integrations.source import Source, TwitterSource, YouTubeSource, classify_link
 from app.integrations.twitter_errors import TwitterClientError
 from app.integrations.youtube_errors import YouTubeClientError
-from app.schemas import ComprehensiveScanRequest, Tier
+from app.schemas import ComprehensiveScanRequest, ComprehensiveScanResult, Tier
 from app.storage.db import get_session
-from app.storage.models import CandidateList, CommenterCandidate, ScanJob
+from app.storage.models import CandidateList, CommenterCandidate, DemoScanLog, ScanJob
 
 log = logging.getLogger("omi.scan")
 
@@ -147,6 +147,114 @@ def _source_for_platform(platform: str, settings: Settings) -> Source:
     return YouTubeSource(factory())
 
 
+def _fetch_and_cache_commenters(
+    session, cl: CandidateList, existing: list, *, fetch_n: int, settings: Settings, source_factory
+) -> int:
+    """Pull up to ``fetch_n`` NEW commenters for ``cl`` from the platform source and persist them as
+    ``CommenterCandidate`` rows (exemplar comment + cached meta/comments for the later score step).
+    Returns how many new commenters were added. The source is built lazily via ``source_factory`` — only
+    when there is actually work to do — so a fetch-nothing call never touches (or 503s on) the platform.
+
+    Shared verbatim by the signed-in compile step and the free demo compile so both produce
+    byte-identical candidate rows and a single fetch/caching code path."""
+    if fetch_n <= 0 or cl.exhausted:
+        return 0
+    source = source_factory()
+    # Best-effort: capture the post's real title once, so a saved investigation reads "Xandr's launch
+    # video" not "Scan of https://…". Never blocks the list.
+    if not cl.content_title:
+        try:
+            title = source.fetch_content_title(cl.content_id)
+            if title:
+                cl.content_title = title.strip()[:500]
+        except Exception:  # noqa: BLE001 — titling is cosmetic, never fatal
+            pass
+    # Sample enough comments to actually surface that many commenters (never fewer than the configured
+    # floor), since a comment section has more comments than unique authors.
+    comment_budget = max(settings.candidate_min_comments, fetch_n * 3)
+    try:
+        commenters_meta, all_comments, next_cursor = source.fetch_content_engagers(
+            cl.content_id, max_commenters=fetch_n, max_comments=comment_budget,
+            start_page_token=cl.next_cursor,
+        )
+    except (TwitterClientError, YouTubeClientError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not fetch the commenters: {exc}",
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — never surface a raw 500 to the compile step
+        log.warning(
+            "list_commenters fetch failed platform=%s content_id=%s: %s",
+            cl.platform, cl.content_id, exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Could not read this post's commenters. The source may be rate-limiting, or "
+                "the post may be private or unavailable — please try again in a moment."
+            ),
+        ) from exc
+
+    comments_by_author: dict[str, list[dict]] = {}
+    for c in all_comments:
+        comments_by_author.setdefault(str(c.get("author_external_id") or ""), []).append(c)
+
+    seen = {row.external_id for row in existing}
+    next_seq = (max((row.seq for row in existing), default=-1) + 1)
+    fetched_now = 0
+    for meta in commenters_meta:
+        ext = str(meta.get("channel_id") or meta.get("handle") or "").strip()
+        if not ext or ext in seen:
+            continue
+        cmts = comments_by_author.get(ext, [])
+        exemplar = next((str(c.get("text")) for c in cmts if c.get("text")), None)
+        session.add(CommenterCandidate(
+            list_id=cl.id, external_id=ext, handle=meta.get("handle"),
+            avatar_url=meta.get("avatar_url"), comment_text=exemplar,
+            comment_count=max(1, len(cmts)), seq=next_seq,
+            meta_json=_dumps(meta), comments_json=_dumps(cmts),
+        ))
+        seen.add(ext)
+        next_seq += 1
+        fetched_now += 1
+    cl.next_cursor = next_cursor
+    cl.exhausted = not next_cursor
+    session.flush()
+    return fetched_now
+
+
+def _reconstruct_injected(rows: list) -> tuple[list[dict], list[dict], list[str]]:
+    """Rebuild the injected-scan inputs from cached ``CommenterCandidate`` rows: the selected commenters'
+    raw meta and their comments (each comment's ISO timestamp re-parsed to a real ``datetime`` — the
+    evidence compiler + coordination detectors REQUIRE datetimes, so a comment whose timestamp can't be
+    parsed is dropped rather than crashing the scan). Returns ``(injected_commenters, injected_comments,
+    selected_ids)``. Shared by the paid score step and the free demo score."""
+    injected_commenters: list[dict] = []
+    injected_comments: list[dict] = []
+    selected_ids: list[str] = []
+    for r in rows:
+        try:
+            injected_commenters.append(json.loads(r.meta_json))
+        except (TypeError, ValueError):
+            continue
+        selected_ids.append(r.external_id)
+        if r.comments_json:
+            try:
+                parsed = json.loads(r.comments_json)
+            except (TypeError, ValueError):
+                parsed = []
+            for c in parsed:
+                if not isinstance(c, dict):
+                    continue
+                dt = _parse_iso(c.get("created_at"))
+                if dt is None:
+                    continue
+                injected_comments.append({**c, "created_at": dt})
+    return injected_commenters, injected_comments, selected_ids
+
+
 @router.post("/link/commenters", response_model=CommenterListOut)
 def list_commenters(
     payload: dict,
@@ -216,72 +324,12 @@ def list_commenters(
                 fetch_n = first_page
         fetch_n = min(fetch_n, page_max, room)
 
-        fetched_now = 0
-        if fetch_n > 0 and not cl.exhausted:
-            # _source_for_platform raises HTTPException(503) when a platform key is missing — let that
-            # through unchanged so the UI shows the real "key not configured" message.
-            source = _source_for_platform(platform, settings)
-            # Best-effort: capture the post's real title (video title / tweet text) once, so the saved
-            # investigation reads "Xandr's launch video" not "Scan of https://…". Never blocks the list.
-            if not cl.content_title:
-                try:
-                    title = source.fetch_content_title(content_id)
-                    if title:
-                        cl.content_title = title.strip()[:500]
-                except Exception:  # noqa: BLE001 — titling is cosmetic, never fatal
-                    pass
-            # Sample enough comments to actually surface that many commenters (never fewer than the
-            # configured floor), since a comment section has more comments than unique authors.
-            comment_budget = max(settings.candidate_min_comments, fetch_n * 3)
-            try:
-                commenters_meta, all_comments, next_cursor = source.fetch_content_engagers(
-                    content_id, max_commenters=fetch_n, max_comments=comment_budget,
-                    start_page_token=cl.next_cursor,
-                )
-            except (TwitterClientError, YouTubeClientError) as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Could not fetch the commenters: {exc}",
-                ) from exc
-            except HTTPException:
-                raise
-            except Exception as exc:  # noqa: BLE001 — never surface a raw 500 to the compile step
-                log.warning(
-                    "list_commenters fetch failed platform=%s content_id=%s: %s",
-                    platform, content_id, exc,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=(
-                        "Could not read this post's commenters. The source may be rate-limiting, or "
-                        "the post may be private or unavailable — please try again in a moment."
-                    ),
-                ) from exc
-
-            comments_by_author: dict[str, list[dict]] = {}
-            for c in all_comments:
-                comments_by_author.setdefault(str(c.get("author_external_id") or ""), []).append(c)
-
-            seen = {row.external_id for row in existing}
-            next_seq = (max((row.seq for row in existing), default=-1) + 1)
-            for meta in commenters_meta:
-                ext = str(meta.get("channel_id") or meta.get("handle") or "").strip()
-                if not ext or ext in seen:
-                    continue
-                cmts = comments_by_author.get(ext, [])
-                exemplar = next((str(c.get("text")) for c in cmts if c.get("text")), None)
-                session.add(CommenterCandidate(
-                    list_id=cl.id, external_id=ext, handle=meta.get("handle"),
-                    avatar_url=meta.get("avatar_url"), comment_text=exemplar,
-                    comment_count=max(1, len(cmts)), seq=next_seq,
-                    meta_json=_dumps(meta), comments_json=_dumps(cmts),
-                ))
-                seen.add(ext)
-                next_seq += 1
-                fetched_now += 1
-            cl.next_cursor = next_cursor
-            cl.exhausted = not next_cursor
-            session.flush()
+        # _source_for_platform raises HTTPException(503) when a platform key is missing — let that
+        # through unchanged so the UI shows the real "key not configured" message.
+        fetched_now = _fetch_and_cache_commenters(
+            session, cl, existing, fetch_n=fetch_n, settings=settings,
+            source_factory=lambda: _source_for_platform(platform, settings),
+        )
 
         # Always record this post in the content DB — even if the user never scans it. Every X post /
         # YouTube video that the system loads is persisted, not just the selected ones. Idempotent +
@@ -677,30 +725,7 @@ def score_selection(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="None of the selected commenters are in this post's list.",
             )
-        injected_commenters: list[dict] = []
-        injected_comments: list[dict] = []
-        selected_ids: list[str] = []
-        for r in rows:
-            try:
-                injected_commenters.append(json.loads(r.meta_json))
-            except (TypeError, ValueError):
-                continue
-            selected_ids.append(r.external_id)
-            if r.comments_json:
-                try:
-                    parsed = json.loads(r.comments_json)
-                except (TypeError, ValueError):
-                    parsed = []
-                # Rebuild each comment with a real datetime (the cache stored ISO strings). The
-                # evidence compiler + coordination detectors REQUIRE datetime timestamps, so drop any
-                # comment whose timestamp can't be parsed rather than crash the whole scan.
-                for c in parsed:
-                    if not isinstance(c, dict):
-                        continue
-                    dt = _parse_iso(c.get("created_at"))
-                    if dt is None:
-                        continue
-                    injected_comments.append({**c, "created_at": dt})
+        injected_commenters, injected_comments, selected_ids = _reconstruct_injected(rows)
         cl_id = cl.id
         existing_slug = cl.investigation_slug
         content_url = cl.content_url or url
@@ -943,3 +968,219 @@ def _run_link_scan_job(
         1 if getattr(result, "focus_account", None) else 0
     )
     _finish("done", tier=tier, probability=result.overall_probability, commenters=commenters)
+
+
+# --------------------------------------------------------------------------- #
+# Free anonymous demo — the SAME select-then-scan flow the signed-in workspace
+# uses (compile the repliers → pick who to analyze → run the REAL engine +
+# OpenRouter analyst), but X-only, capped at 25 repliers, and limited to TWO
+# full scans per IP address, ever. No auth, no credits.
+# --------------------------------------------------------------------------- #
+DEMO_FREE_SCANS_PER_IP = 2
+
+_DEMO_LIMIT_MSG = (
+    "You've used both of your free scans. Create a free account to keep scanning, "
+    "pick more accounts, save your results, and unlock the full platform."
+)
+
+
+def _demo_ip_hash(request: Request) -> str:
+    """Hashed client IP — the free-scan budget key. Reuses the scan module's helpers so the demo and any
+    other IP bookkeeping hash identically."""
+    return scan_mod._hash_ip(scan_mod._client_ip(request))
+
+
+def _demo_scans_used(session, ip_hash: str) -> int:
+    """How many SUCCESSFUL free scans this IP has spent (capped read — we only care whether it's < 2)."""
+    rows = session.execute(
+        select(DemoScanLog.id).where(
+            DemoScanLog.ip_hash == ip_hash,
+            DemoScanLog.success == 1,
+        ).limit(DEMO_FREE_SCANS_PER_IP)
+    ).all()
+    return len(rows)
+
+
+def _demo_classify_x_post(url: str) -> str:
+    """Validate + classify a free-scan URL. The free scan is X-only, on a specific post. Returns the
+    tweet id, or raises the appropriate 400."""
+    if not url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url is required.")
+    classification = classify_link(url)
+    if classification.get("platform") != "x" or classification.get("kind") != "tweet":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The free scan works on X (Twitter) posts. Paste a link like "
+                   "https://x.com/<user>/status/<id>.",
+        )
+    tweet_id = classification.get("tweet_id")
+    if not tweet_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Couldn't read that X post link. Paste the full URL to a specific post "
+                   "(it contains /status/).",
+        )
+    return tweet_id
+
+
+@router.post("/demo/commenters", response_model=CommenterListOut)
+def scan_demo_commenters(
+    payload: dict,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> CommenterListOut:
+    """FREE anonymous COMPILE step — the same first move as the signed-in workspace, X-only and capped at
+    25 repliers. Lists (and caches) a post's repliers so the visitor can pick who to analyze. No auth, no
+    credits. An IP that has already spent both free scans is turned away here too."""
+    url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
+    content_id = _demo_classify_x_post(url)
+    ip_hash = _demo_ip_hash(request)
+
+    with get_session() as session:
+        if _demo_scans_used(session, ip_hash) >= DEMO_FREE_SCANS_PER_IP:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_DEMO_LIMIT_MSG)
+
+        # Anonymous candidate lists live in the shared user_id=None bucket, keyed by the post — two
+        # visitors scanning the same post reuse one cached replier list (one X fetch, not two).
+        cond = [CandidateList.platform == "x", CandidateList.content_id == content_id,
+                CandidateList.user_id.is_(None)]
+        cl = session.execute(select(CandidateList).where(*cond)).scalar_one_or_none()
+        if cl is None:
+            cl = CandidateList(user_id=None, platform="x", content_id=content_id, content_url=url)
+            session.add(cl)
+            session.flush()
+
+        existing = list(session.execute(
+            select(CommenterCandidate).where(CommenterCandidate.list_id == cl.id)
+            .order_by(CommenterCandidate.seq)
+        ).scalars().all())
+
+        # A single bounded page: fetch the first (up to) 25 repliers when the list is empty; re-compiling
+        # the same post returns the cached rows with no new X call.
+        fetch_n = 0 if existing else scan_mod.DEMO_MAX_COMMENTERS
+        _fetch_and_cache_commenters(
+            session, cl, existing, fetch_n=fetch_n, settings=settings,
+            source_factory=lambda: _source_for_platform("x", settings),
+        )
+
+        rows = list(session.execute(
+            select(CommenterCandidate).where(CommenterCandidate.list_id == cl.id)
+            .order_by(CommenterCandidate.seq)
+        ).scalars().all())[: scan_mod.DEMO_MAX_COMMENTERS]
+        commenters = [
+            CommenterCandidateOut(
+                external_id=r.external_id, handle=r.handle, comment=r.comment_text,
+                comment_count=r.comment_count, avatar_url=r.avatar_url,
+                # The demo never marks candidates scanned (the shared anonymous bucket must not leak one
+                # visitor's picks to the next), so every replier stays selectable.
+                scanned=False,
+            )
+            for r in rows
+        ]
+        return CommenterListOut(
+            platform="x", content_id=content_id, url=cl.content_url or url,
+            commenters=commenters, total=len(commenters),
+            has_more=False, fetched_now=len(commenters),
+        )
+
+
+@router.post("/demo/score", response_model=ComprehensiveScanResult)
+def scan_demo_score(
+    payload: dict,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> ComprehensiveScanResult:
+    """FREE anonymous ANALYZE step — runs the REAL engine (histories + detection + the OpenRouter analyst)
+    on the visitor's SELECTED repliers, exactly like the signed-in scan, but synchronously and capped at
+    25. Consumes ONE of the IP's two free scans on success; a failed attempt does not."""
+    url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
+    content_id = _demo_classify_x_post(url)
+
+    raw_sel = payload.get("selected") or payload.get("external_ids") or []
+    selected = [str(s).strip() for s in raw_sel if str(s).strip()] if isinstance(raw_sel, list) else []
+    if not selected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Select at least one replier to analyze.",
+        )
+    selected = selected[: scan_mod.DEMO_MAX_COMMENTERS]
+
+    ip_hash = _demo_ip_hash(request)
+    with get_session() as session:
+        if _demo_scans_used(session, ip_hash) >= DEMO_FREE_SCANS_PER_IP:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_DEMO_LIMIT_MSG)
+
+        cond = [CandidateList.platform == "x", CandidateList.content_id == content_id,
+                CandidateList.user_id.is_(None)]
+        cl = session.execute(select(CandidateList).where(*cond)).scalar_one_or_none()
+        if cl is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Compile this post's repliers first, then pick who to analyze.",
+            )
+        rows = list(session.execute(
+            select(CommenterCandidate).where(
+                CommenterCandidate.list_id == cl.id,
+                CommenterCandidate.external_id.in_(selected),
+            ).order_by(CommenterCandidate.seq)
+        ).scalars().all())
+        if not rows:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="None of the selected repliers are in this post's list.",
+            )
+        injected_commenters, injected_comments, selected_ids = _reconstruct_injected(rows)
+
+    if not selected_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No scannable selection.")
+
+    creq = ComprehensiveScanRequest(
+        video_url_or_id=content_id, account_url_or_handle=None, comments_text=None,
+        max_commenters=min(500, max(5, len(selected_ids))), force_refresh=False,
+        injected_commenters=injected_commenters, injected_comments=injected_comments,
+    )
+    source = _source_for_platform("x", settings)
+    # Synthetic anonymous user just for the call signature — id=0 skips credit logic + persistence.
+    anon = CurrentUser(
+        id=0, email="demo@omi.local", credits_remaining=999,
+        subscription_status="demo", subscription_renews_at=None, is_admin=False,
+    )
+
+    success_flag = 0
+    try:
+        result = scan_mod._run_comprehensive(
+            creq, settings, anon, _charge_credit=False, source=source,
+        )
+        # A result where EVERY replier errored is a systemic failure, not a read — don't spend a free
+        # scan on it, and surface a clean error instead of a uniformly-empty result.
+        if scan_mod._all_commenters_failed(result):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Could not analyze any of the selected repliers. Please try again.",
+            )
+        success_flag = 1
+    except TwitterClientError as e:
+        raise scan_mod._handle_twitter_error(
+            e, user_id=anon.id, credits_to_refund=0, target_input=content_id,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("demo score failed for %s", url[:120])
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The scan failed unexpectedly. Please try again.",
+        )
+    finally:
+        # Log the attempt either way (a failed one logs success=0 and does NOT burn a free scan); only a
+        # successful analyze spends one of the IP's two.
+        with get_session() as session:
+            session.add(DemoScanLog(
+                ip_hash=ip_hash,
+                video_id=str(content_id)[:60],
+                user_agent_snippet=(request.headers.get("user-agent") or "")[:200],
+                success=success_flag,
+            ))
+            session.commit()
+
+    return result

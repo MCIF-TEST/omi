@@ -180,9 +180,22 @@ export function AnalystPanel({ slug }: { slug: string }) {
       ) : (
         <>
           {assessment.batching && !assessment.batching.complete && (
-            <BatchProgressStrip batching={assessment.batching} elapsedSec={elapsedSec} />
+            <BatchProgressStrip
+              batching={assessment.batching}
+              elapsedSec={elapsedSec}
+              scored={assessment.commenter_assessments?.length ?? 0}
+            />
           )}
           <AssessmentView a={assessment} slug={slug} />
+          {/* The same live state repeated where the results END — the user reading down the list
+              reaches the last scored account here, and needs to know more are still coming rather
+              than assuming the scan stopped short. */}
+          {assessment.batching && !assessment.batching.complete && (
+            <BatchTrailingNotice
+              batching={assessment.batching}
+              scored={assessment.commenter_assessments?.length ?? 0}
+            />
+          )}
         </>
       )}
 
@@ -200,17 +213,21 @@ export function AnalystPanel({ slug }: { slug: string }) {
 }
 
 /**
- * Live progress for a batched run (selections above the per-request account cap are scored in
- * parallel ≤cap-account batches, merged first-to-last). Purple = the AI layer. The results shown
- * below the strip are FINAL for the batches already landed; later batches append underneath in
- * order, so the list grows first-to-last while the run continues.
+ * Live progress for a batched run. Accounts are scored one ≤cap-account batch at a time, merged
+ * first-to-last, so batch 1's results are readable while the rest still generate. Purple = the AI
+ * layer. The results shown below the strip are FINAL for the batches already landed; later batches
+ * append underneath in order.
  */
 function BatchProgressStrip({
   batching,
   elapsedSec,
+  scored,
 }: {
   batching: NonNullable<AnalystAssessment['batching']>;
   elapsedSec: number;
+  /** Accounts actually returned so far — the real count, not done × batch_size (the final batch is
+   *  usually partial, which would overstate it). */
+  scored: number;
 }) {
   const pct = Math.max(4, Math.round((batching.done / Math.max(1, batching.total)) * 100));
   return (
@@ -221,7 +238,7 @@ function BatchProgressStrip({
           Scoring in batches — {batching.done} of {batching.total} done
         </span>
         <span className="font-mono text-2xs text-fg-mute tabular-nums">
-          {batching.done * batching.batch_size} accounts scored · {elapsedSec}s
+          {scored} account{scored === 1 ? '' : 's'} scored · {elapsedSec}s
         </span>
       </div>
       <div className="h-1 rounded-full bg-bg-inset overflow-hidden" role="progressbar"
@@ -235,6 +252,34 @@ function BatchProgressStrip({
       <p className="mt-1.5 text-2xs text-fg-mute leading-relaxed">
         The scores below are final for the accounts already analyzed. The remaining accounts are being
         analyzed right now and will appear underneath, in order.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The bottom bookend of a batched run. Someone reading down the results reaches the end of the
+ * scored accounts here — without this, a 100-account scan showing 25 results looks finished-and-short
+ * rather than still-running.
+ */
+function BatchTrailingNotice({
+  batching,
+  scored,
+}: {
+  batching: NonNullable<AnalystAssessment['batching']>;
+  scored: number;
+}) {
+  const remaining = Math.max(0, batching.total - batching.done);
+  return (
+    <div
+      className="mt-4 rounded-lg border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-3 flex items-center gap-2.5"
+      aria-live="polite"
+    >
+      <Loader2 size={13} className="animate-spin text-violet-2 shrink-0" />
+      <p className="text-2xs text-fg-dim leading-relaxed">
+        <span className="text-fg-dim font-medium">{scored} account{scored === 1 ? '' : 's'} analyzed.</span>{' '}
+        Still analyzing the rest — {remaining} more batch{remaining === 1 ? '' : 'es'} to go. New
+        accounts appear here as each batch lands; you don&apos;t need to wait on this page.
       </p>
     </div>
   );

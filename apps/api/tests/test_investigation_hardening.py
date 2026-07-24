@@ -34,7 +34,7 @@ from app.routes.scan import (
 )
 from app.storage.db import get_session, reset_db_for_tests
 from app.storage.repository import AccountRepository
-from tests.test_demo_scan import _fake_client_with_n_commenters, VID
+from tests.fakes import _fake_client_with_n_commenters, VID
 
 
 # ---------------------------------------------------------------------------

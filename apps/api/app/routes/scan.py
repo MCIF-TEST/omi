@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from app.core.auth import CurrentUser, compute_scan_credits, consume_credits, refund_credits, require_user
@@ -997,110 +997,9 @@ def _client_ip(request) -> str | None:
 
 
 DEMO_MAX_COMMENTERS = 25  # free pre-login X scan: up to 25 repliers analyzed
-
-
-@router.post("/demo", response_model=ComprehensiveScanResult)
-def scan_demo(
-    payload: dict,
-    request: Request,
-    settings: Settings = Depends(get_settings),
-) -> ComprehensiveScanResult:
-    """Anonymous free X scan — no auth required, no credits charged.
-
-    ONE free scan per IP address, EVER (lifetime, not per-day), of a single X /
-    Twitter post: up to 25 repliers analyzed so the visitor sees a real
-    per-account read on whether the accounts under a post are bought or genuine.
-    After this they need an account to scan again, save the result, pick more
-    accounts, or scan YouTube.
-    """
-    from app.storage.models import DemoScanLog
-
-    url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
-    if not url:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url is required.")
-
-    # The free scan is X-only. classify_link resolves platform + tweet_id.
-    classification = classify_link(url)
-    if classification.get("platform") != "x" or classification.get("kind") != "tweet":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The free scan works on X (Twitter) posts. Paste a link like "
-                   "https://x.com/<user>/status/<id>.",
-        )
-    tweet_id = classification.get("tweet_id")
-    if not tweet_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Couldn't read that X post link. Paste the full URL to a specific post "
-                   "(it contains /status/).",
-        )
-
-    ip = _client_ip(request)
-    ip_hash = _hash_ip(ip)
-
-    # Rate limit: ONE successful free scan per IP, for the lifetime of that IP (no 24h reset).
-    with get_session() as session:
-        existing = session.execute(
-            select(DemoScanLog).where(
-                DemoScanLog.ip_hash == ip_hash,
-                DemoScanLog.success == 1,
-            ).limit(1)
-        ).scalar_one_or_none()
-        if existing is not None:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=(
-                    "You've already used your one free scan. "
-                    "Create a free account to keep scanning, save results, and unlock the full platform."
-                ),
-            )
-
-    # Synthetic anonymous user just for the request — id=0 skips credit logic + persistence.
-    from app.core.auth import CurrentUser
-    anon = CurrentUser(
-        id=0, email="demo@omi.local",
-        credits_remaining=999, subscription_status="demo",
-        subscription_renews_at=None, is_admin=False,
-    )
-
-    # Build the X source (same engine the paid X flow uses) and cap at 25 repliers.
-    tw_factory = _twitter_client_factory_override or (lambda: _resolve_twitter_client(settings))
-    source: Source = TwitterSource(tw_factory())
-    creq = ComprehensiveScanRequest(
-        video_url_or_id=tweet_id,
-        account_url_or_handle=None,
-        comments_text=None,
-        max_commenters=DEMO_MAX_COMMENTERS,
-        force_refresh=False,
-        start_page_token=None,
-    )
-
-    success_flag = 1
-    try:
-        result = _run_comprehensive(creq, settings, anon, _charge_credit=False, source=source)
-    except TwitterClientError as e:
-        # Map an X API failure to a clean HTTP response instead of leaking a 500. The demo charges
-        # nothing, so there is no credit to refund.
-        success_flag = 0
-        raise _handle_twitter_error(
-            e, user_id=anon.id, credits_to_refund=0, target_input=tweet_id,
-        )
-    except HTTPException:
-        success_flag = 0
-        raise
-    finally:
-        # Log the attempt either way so a failed scan doesn't grant an extra free one, but only a
-        # SUCCESSFUL scan burns the IP's one free use (success flag set above).
-        with get_session() as session:
-            session.add(DemoScanLog(
-                ip_hash=ip_hash,
-                video_id=str(tweet_id)[:60],
-                user_agent_snippet=(request.headers.get("user-agent") or "")[:200],
-                success=success_flag,
-            ))
-            session.commit()
-
-    return result
+# The anonymous free-scan flow (compile → select → analyze, X-only, 2 per IP) lives in scan_async.py
+# as /v1/scan/demo/commenters + /v1/scan/demo/score — the SAME select-then-scan machinery the signed-in
+# workspace uses. _hash_ip / _client_ip / DEMO_MAX_COMMENTERS below are shared by those endpoints.
 
 
 @router.post("/link", response_model=ComprehensiveScanResult)

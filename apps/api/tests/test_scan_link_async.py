@@ -18,7 +18,7 @@ from app.core.config import get_settings
 from app.main import app
 from app.routes.scan import set_client_factory_for_tests
 from app.storage.db import reset_db_for_tests
-from tests.test_demo_scan import _fake_client_with_n_commenters, VID
+from tests.fakes import _fake_client_with_n_commenters, VID
 
 
 @pytest.fixture
