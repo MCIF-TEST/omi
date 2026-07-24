@@ -6,7 +6,7 @@ the way they are. If you change behaviour and don't update this file, the next s
 re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-24 · branch `claude/master-analyst-protocol-v1-1u8tyk` · PR
-[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft)
+[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1469 passed, 1 known-failing**
 
 > `HANDOFF.md` at the repo root is a **stale one-off** from a different branch (2026-05-29). Ignore
 > it; this file supersedes it.
@@ -101,6 +101,33 @@ Three landmines here, all previously live bugs:
 - **Analyst work runs on `background.submit_slow`**, a pool of its own. It holds a worker for the
   whole run, and on the shared pool it starved the *scan* jobs.
 
+### Evidence completeness — what the model is allowed to see
+
+The analyst's verdict is only as good as the evidence assembled *before* the coverage budgeter
+(120k tokens for a full investigation, with a disclosed omission manifest) ever runs. Anything cut
+upstream of it is cut silently and is not in the manifest. Four such cuts existed, and together they
+meant the model was judging accounts on almost nothing:
+
+- **`CommenterScanResult` carries the raw profile metadata** — `follower_count`, `following_count`,
+  `account_created_at`, `bio`, `verified`, `history_size`. `_account_evidence` reads exactly these
+  keys; the schema didn't have them, so every account reached the model with `None` for all of them.
+  Populate via `_profile_fields(record.profile)` at every construction site.
+- **History goes to every tier.** `_activity_payload` used to return `[]` for LOW-tier accounts.
+  "Reads like a real person" is what exonerates the ~80% of commenters who are genuine, and the
+  empty list was indistinguishable from "this account has never posted". An empty list must now mean
+  *only* that.
+- **The caps track what we fetch.** `ACTIVITY_SAMPLE_LIMIT` (50) ≥ `scan_max_history_per_commenter`,
+  and `_MAX_PER_ACCOUNT_SAMPLES` is 50 (was **4**). Post text is cut at 600 to match what the
+  evidence layer renders. A tighter cut here is wasted API quota — fetched and then discarded.
+- **A cache hit reuses the score, not the evidence.** `scan_refetch_evidence_for_cached` (default
+  on) still pulls profile + history for cached accounts. With a 7-day TTL the recurring accounts are
+  precisely the repeat offenders the fingerprint memory exists to catch, and they were arriving with
+  an empty post list. Turning it off saves upstream calls on repeat accounts and makes their verdicts
+  materially worse.
+
+`bio` distinguishes `""` (the account has no bio — a real tell) from `None` (the platform never told
+us). Don't collapse them.
+
 ### Scan watchdog scales with scan size
 
 `reap_stale_scan_jobs` judges each job against `scan_job_budget_seconds(job.max_commenters,
@@ -183,6 +210,12 @@ Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-m
 - One flaky run of `test_compile_is_refused_once_the_budget_is_spent` was observed and could not be
   reproduced in seven subsequent runs. Its setup now asserts explicitly, so a recurrence will point
   at the real cause instead of the symptom.
+- `scan_refetch_evidence_for_cached` costs upstream API calls on repeat accounts (the cache no
+  longer saves the fetch, only the scoring). It is on because evidence completeness was the explicit
+  goal; watch quota and flip it if that bites.
+- Prompt/protocol quality with the widened evidence has not been observed against the live model —
+  the model now receives far more per account than it ever has, and the preset may want revisiting
+  once you can see real outputs.
 
 ---
 

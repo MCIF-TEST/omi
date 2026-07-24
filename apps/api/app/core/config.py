@@ -106,6 +106,13 @@ class Settings(BaseSettings):
     scan_max_history_per_commenter: int = 50
     # If we've scanned an account within this many days, reuse the cached score.
     scan_cache_ttl_days: int = 7
+    # A cache hit reuses the stored SCORE. This decides whether it also re-pulls the account's
+    # profile + post history for the EVIDENCE the Omi Analyst reads. On (default), the cache saves
+    # the scoring and DB work but the model still sees what the account actually wrote; off, a
+    # cached account reaches the model with an empty post list that is indistinguishable from an
+    # account which has never posted. Turning it off saves upstream API calls on repeat accounts at
+    # the cost of a materially worse per-account verdict for them. OMI_SCAN_REFETCH_EVIDENCE_FOR_CACHED.
+    scan_refetch_evidence_for_cached: bool = True
     # Wall-clock budget for an async scan job. A job stuck queued/running past
     # this (slow/hung scan, or a worker killed by OOM/restart) is reaped: marked
     # failed + refunded, so it can never poll forever. Kept under the client's

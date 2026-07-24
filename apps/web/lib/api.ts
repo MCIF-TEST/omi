@@ -559,6 +559,15 @@ export interface CommenterScanResult {
   reasons: string[];
   weak_signals: string[];
   score_adjustments: string[];
+  /** Raw profile metadata — the objective facts the analyst reasons from (and the account view can
+   *  show). `null` means the platform genuinely didn't return the field, not zero/false. */
+  follower_count?: number | null;
+  following_count?: number | null;
+  account_created_at?: string | null;
+  bio?: string | null;
+  verified?: boolean | null;
+  /** True depth of this account's pulled history, independent of how many samples ride along. */
+  history_size?: number;
   recent_activity: Array<{
     text: string;
     created_at: string | null;
