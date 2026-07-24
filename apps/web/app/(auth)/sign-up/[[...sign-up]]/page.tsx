@@ -1,12 +1,15 @@
 import Link from 'next/link';
-import { SignUp } from '@clerk/nextjs';
+import { SignUp, SignedIn, SignedOut } from '@clerk/nextjs';
 import { TRIAL_CREDITS } from '@/lib/plan';
+import { AuthBridge } from '@/components/shared/auth-bridge';
 
 export const metadata = { title: 'Create account — OMISPHERE' };
 
 // Clerk-hosted sign-up (Google, Apple, X, email/phone — whatever is enabled in the Clerk dashboard),
 // dropped into the app's centered auth shell. Global theming lives in app/layout.tsx; the heading and
 // the switch-to-sign-in link are ours so the page reads as part of the product, not a bolted-on widget.
+// Loop guard mirrors the sign-in page: render <SignUp> only when signed out; recover via AuthBridge
+// when Clerk reports the visitor already signed in on this page.
 export default function SignUpPage() {
   return (
     <div className="w-full">
@@ -17,14 +20,19 @@ export default function SignUpPage() {
         </p>
       </div>
 
-      <SignUp signInUrl="/sign-in" fallbackRedirectUrl="/investigate" />
+      <SignedOut>
+        <SignUp signInUrl="/sign-in" fallbackRedirectUrl="/investigate" />
+        <p className="mt-6 text-center font-mono text-2xs tracking-wider text-fg-mute">
+          Already have an account?{' '}
+          <Link href="/sign-in" className="text-accent-text hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </SignedOut>
 
-      <p className="mt-6 text-center font-mono text-2xs tracking-wider text-fg-mute">
-        Already have an account?{' '}
-        <Link href="/sign-in" className="text-accent-text hover:underline">
-          Sign in
-        </Link>
-      </p>
+      <SignedIn>
+        <AuthBridge />
+      </SignedIn>
     </div>
   );
 }
