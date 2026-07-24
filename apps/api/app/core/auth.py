@@ -97,6 +97,20 @@ def _is_placeholder_email(email: str | None) -> bool:
     return bool(email) and email.strip().lower().endswith("@" + _PLACEHOLDER_EMAIL_DOMAIN)
 
 
+def _ensure_referral_code(session, u) -> None:
+    """Give a user a referral code if it lacks one. Legacy signup minted codes inline; Clerk-
+    provisioned accounts did not, so without this every Clerk user would have a null referral code and
+    could never refer anyone. Backfilled lazily on resolve (one uniqueness query per code-less user,
+    then never again). Never raises — a referral-code failure must not break sign-in."""
+    if getattr(u, "referral_code", None):
+        return
+    try:
+        from app.core.referrals import generate_unique_code
+        u.referral_code = generate_unique_code(session)
+    except Exception:  # noqa: BLE001 — referral codes are non-critical to authentication
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Sessions — signed cookies
 # ---------------------------------------------------------------------------
@@ -230,6 +244,7 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
         # request-time hot path (every page/API call resolves the user), so it must stay cheap.
         if u is not None and not _is_placeholder_email(u.email):
             u.last_login_at = datetime.utcnow()
+            _ensure_referral_code(session, u)
             session.flush()
             return CurrentUser.from_row(u)
 
@@ -250,6 +265,7 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
                 if is_super:
                     u.is_admin = 1
             u.last_login_at = datetime.utcnow()
+            _ensure_referral_code(session, u)
             session.flush()
             return CurrentUser.from_row(u)
 
@@ -261,6 +277,7 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
                 if not existing.clerk_user_id:
                     existing.clerk_user_id = clerk_uid
                 existing.last_login_at = datetime.utcnow()
+                _ensure_referral_code(session, existing)
                 session.flush()
                 return CurrentUser.from_row(existing)
 
@@ -268,23 +285,72 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
         # keyed on the Clerk id so a valid sign-in ALWAYS resolves to a user (no redirect loop). The
         # real email is backfilled on a later request via the placeholder-upgrade path above.
         acct_email = email or _placeholder_email(clerk_uid)
+        # Anti-farming: mirror the legacy signup's per-IP trial-credit suppression so someone can't mint
+        # many Clerk accounts from one machine to stack free trial credits (each of which costs real API
+        # spend). The first account from an IP gets the trial; later ones from the same IP get 0. Super
+        # admins are exempt. Best-effort — an IP-hash failure never blocks provisioning.
+        ip_hash = None
+        try:
+            from app.core.ip import client_ip, hash_ip
+            ip_hash = hash_ip(client_ip(request))
+        except Exception:  # noqa: BLE001
+            ip_hash = None
+        if is_super:
+            initial_credits = 999999
+        elif ip_hash and settings.free_trial_credits > 0 and (
+            session.query(User.id).filter(User.signup_ip_hash == ip_hash).first() is not None
+        ):
+            initial_credits = 0  # this IP already claimed a free trial
+        else:
+            initial_credits = settings.free_trial_credits
+
+        # Referral redemption. A visitor who arrived via a referral link had the code stashed in the
+        # `omi_ref` cookie by the web middleware (Clerk's flow can't carry the ?ref= param). Resolve it
+        # here so the referrer is linked + credited — the acquisition half of the referral system the
+        # legacy signup did inline. Best-effort; never blocks provisioning. Self-referral is ignored,
+        # and an IP-suppressed signup does not pay the referrer (same guard as the legacy path).
+        referrer_id = None
+        try:
+            from app.core.referrals import resolve_referrer
+            ref_code = (request.cookies.get("omi_ref") or "").strip()
+            if ref_code:
+                referrer = resolve_referrer(session, ref_code)
+                if referrer is not None and referrer.clerk_user_id != clerk_uid:
+                    referrer_id = referrer.id
+        except Exception:  # noqa: BLE001
+            referrer_id = None
+
         u = User(
             email=acct_email,
             password_hash="",  # Clerk-managed identity — no local password
             clerk_user_id=clerk_uid,
-            credits_remaining=999999 if is_super else settings.free_trial_credits,
+            credits_remaining=initial_credits,
             is_admin=1 if is_super else 0,
+            signup_ip_hash=ip_hash,
+            referred_by_user_id=referrer_id,
             last_login_at=datetime.utcnow(),
         )
+        _ensure_referral_code(session, u)
         session.add(u)
         try:
             session.flush()
+            # Pay the referrer's +3 bonus only for a real (not IP-suppressed) signup — mirrors the
+            # legacy path and closes the self-referral-on-same-IP scam.
+            if referrer_id is not None and initial_credits > 0:
+                try:
+                    from app.core.referrals import grant_signup_bonus
+                    referrer = session.get(User, referrer_id)
+                    if referrer is not None:
+                        grant_signup_bonus(session, referrer)
+                except Exception:  # noqa: BLE001 — bonus is non-critical
+                    pass
         except Exception:  # noqa: BLE001 — a race created it; re-read
             session.rollback()
             u = session.query(User).filter(User.clerk_user_id == clerk_uid).first() \
                 or session.query(User).filter(User.email == acct_email).first()
             if u is None:
                 return None
+            _ensure_referral_code(session, u)
         return CurrentUser.from_row(u)
 
 

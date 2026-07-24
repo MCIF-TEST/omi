@@ -19,11 +19,27 @@ import { NextResponse, type NextRequest } from 'next/server';
  * So middleware has no auth job left; it just passes everything through and can never break Clerk or
  * 500 the Edge.
  */
-export default function middleware(_req: NextRequest) {
-  return NextResponse.next();
+// Referral capture. Clerk's hosted sign-up can't carry a `?ref=CODE` query param through its flow,
+// so a visitor who arrives via a referral link (e.g. /signup?ref=CODE, or any page with ?ref=) would
+// lose the code before the account is created. We stash it in a first-party cookie the moment we see
+// it; the backend reads that cookie when it provisions the Clerk account and credits the referrer.
+const REF_RE = /^[A-Za-z0-9_-]{4,16}$/;
+
+export default function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const ref = req.nextUrl.searchParams.get('ref');
+  if (ref && REF_RE.test(ref) && req.cookies.get('omi_ref')?.value !== ref) {
+    res.cookies.set('omi_ref', ref, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30, // 30 days to convert
+      sameSite: 'lax',
+      httpOnly: true,
+    });
+  }
+  return res;
 }
 
 export const config = {
-  // Keep the matcher tight so this no-op doesn't run on static assets or the FastAPI /api rewrite.
+  // Keep the matcher tight so this runs on real page navigations, not static assets or the /api rewrite.
   matcher: ['/((?!_next/|api/|favicon.ico|.*\\..*).*)'],
 };
