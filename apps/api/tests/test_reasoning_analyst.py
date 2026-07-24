@@ -98,7 +98,7 @@ def test_route_async_202_then_cached_200(monkeypatch):
     _enable(monkeypatch)
     _seed()
     captured: list = []
-    monkeypatch.setattr(background, "submit", lambda fn, *a, **k: captured.append((fn, a)))
+    monkeypatch.setattr(background, "submit_slow", lambda fn, *a, **k: captured.append((fn, a)))
 
     with TestClient(app) as tc:
         r1 = tc.post("/v1/investigations/inv_analyst/analyst")
@@ -138,7 +138,7 @@ def test_generate_and_persist_caches_savepoint_isolated(monkeypatch):
 
 def test_route_404_unknown_slug_when_enabled(monkeypatch):
     _enable(monkeypatch)
-    monkeypatch.setattr(background, "submit", lambda fn, *a, **k: None)
+    monkeypatch.setattr(background, "submit_slow", lambda fn, *a, **k: None)
     with TestClient(app) as tc:
         r = tc.post("/v1/investigations/inv_nope/analyst")
         assert r.status_code == 404
@@ -149,7 +149,7 @@ def test_refresh_triggers_regeneration(monkeypatch):
     _seed()
     analyst.generate_and_persist("inv_analyst", None, False)
     captured: list = []
-    monkeypatch.setattr(background, "submit", lambda fn, *a, **k: captured.append((fn, a)))
+    monkeypatch.setattr(background, "submit_slow", lambda fn, *a, **k: captured.append((fn, a)))
     with TestClient(app) as tc:
         # refresh=true bypasses the cache -> 202 (regenerate), not a cached 200
         r = tc.post("/v1/investigations/inv_analyst/analyst?refresh=true")
@@ -175,7 +175,7 @@ def test_floored_cache_auto_regenerates_once_when_a_live_model_is_ready(monkeypa
         session.add(inv)
     analyst._floor_autorefreshed.discard("inv_floor")            # fresh process state for the assertion
     captured: list = []
-    monkeypatch.setattr(background, "submit", lambda fn, *a, **k: captured.append((fn, a)))
+    monkeypatch.setattr(background, "submit_slow", lambda fn, *a, **k: captured.append((fn, a)))
     with TestClient(app) as tc:
         # first view of the floored cache → auto-regenerate (202), a fresh model call is submitted
         r1 = tc.post("/v1/investigations/inv_floor/analyst")
@@ -263,7 +263,7 @@ def test_floored_cache_is_served_as_is_when_no_live_model(monkeypatch):
         inv.payload_json = {**(inv.payload_json or {}), analyst.CACHE_KEY: floored}
         session.add(inv)
     captured: list = []
-    monkeypatch.setattr(background, "submit", lambda fn, *a, **k: captured.append((fn, a)))
+    monkeypatch.setattr(background, "submit_slow", lambda fn, *a, **k: captured.append((fn, a)))
     with TestClient(app) as tc:
         r = tc.post("/v1/investigations/inv_floor2/analyst")
         assert r.status_code == 200

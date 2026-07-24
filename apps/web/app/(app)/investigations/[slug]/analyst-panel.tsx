@@ -196,6 +196,17 @@ export function AnalystPanel({ slug }: { slug: string }) {
               scored={assessment.commenter_assessments?.length ?? 0}
             />
           )}
+          {/* Finished, but a batch produced nothing — say so plainly rather than letting a short list
+              read as the whole answer, and offer the retry that would fill it in. */}
+          {assessment.batching
+            && assessment.batching.complete
+            && assessment.batching.done < assessment.batching.total && (
+            <IncompleteCoverageNotice
+              batching={assessment.batching}
+              onRetry={() => { lastBatchDoneRef.current = 0; void run(true); }}
+              busy={pending}
+            />
+          )}
         </>
       )}
 
@@ -281,6 +292,42 @@ function BatchTrailingNotice({
         Still analyzing the rest — {remaining} more batch{remaining === 1 ? '' : 'es'} to go. New
         accounts appear here as each batch lands; you don&apos;t need to wait on this page.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The run finished, but one or more batches came back empty (a failed model call), so some selected
+ * accounts have no assessment. Stating that is the honest thing to do — a silently short list reads
+ * as "these were all the accounts". The retry re-runs the generation for the whole investigation.
+ */
+function IncompleteCoverageNotice({
+  batching,
+  onRetry,
+  busy,
+}: {
+  batching: NonNullable<AnalystAssessment['batching']>;
+  onRetry: () => void;
+  busy: boolean;
+}) {
+  const missing = batching.total - batching.done;
+  return (
+    <div className="mt-4 rounded-lg border border-warn/35 bg-warn/[0.07] px-3.5 py-3 flex items-start gap-2.5 flex-wrap">
+      <TriangleAlert size={13} className="mt-0.5 shrink-0 text-warn" />
+      <p className="text-2xs text-fg-dim leading-relaxed flex-1 min-w-[12rem]">
+        {batching.done} of {batching.total} batches were analyzed. {missing} batch
+        {missing === 1 ? '' : 'es'} came back empty, so some of the accounts you selected have no
+        assessment below. The scores that are shown are final.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={busy}
+        className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40"
+      >
+        {busy ? <Loader2 size={12} className="animate-spin" /> : null}
+        Retry analysis
+      </button>
     </div>
   );
 }
