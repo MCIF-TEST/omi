@@ -282,6 +282,13 @@ class Settings(BaseSettings):
     analyst_completion_per_commenter_tokens: int = 450
     analyst_completion_floor_tokens: int = 16000
     analyst_completion_ceiling_tokens: int = 150000   # TEMP high cap to measure real scan cost; tune down later
+    # Batched analyst inference. A single OpenRouter request carries AT MOST this many accounts; a larger
+    # selection is split into ≤N-account batches sent as PARALLEL requests, merged first-to-last, and
+    # persisted progressively so the UI shows batch 1's accounts while later batches still run. 50 keeps
+    # each generation comfortably inside the output budget — the regime where per-account quality (and
+    # score individuality) is highest. Concurrency bounds the simultaneous OpenRouter requests per scan.
+    analyst_batch_accounts: int = 50          # OMI_ANALYST_BATCH_ACCOUNTS
+    analyst_batch_concurrency: int = 3        # OMI_ANALYST_BATCH_CONCURRENCY
     # GPT-5-class reasoning effort. Reasoning tokens are billed as output and are the other big cost/latency
     # lever. Leave unset to let the OpenRouter preset decide; set "minimal" | "low" | "medium" | "high"
     # (OMI_OPENROUTER_REASONING_EFFORT) to bound reasoning cost per scan. "low" roughly halves reasoning

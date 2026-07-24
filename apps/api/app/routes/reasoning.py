@@ -120,6 +120,22 @@ def generate_analyst_assessment(
             )
 
         entry = analyst.cached_assessment(inv)
+        # Batched generation in progress: the cached entry holds the merged assessment SO FAR
+        # (first batches' accounts already scored). Serve it as "partial" so the UI can render the
+        # finished batches immediately and keep polling for the rest — first-to-last.
+        if entry and not refresh:
+            _batching = (entry.get("assessment") or {}).get("batching") or {}
+            if _batching and not _batching.get("complete"):
+                if analyst.is_generation_inflight(inv.slug):
+                    response.status_code = status.HTTP_202_ACCEPTED
+                    return AnalystResponse(
+                        slug=inv.slug, enabled=True, status="partial", cached=False,
+                        assessment=entry["assessment"], provider=entry.get("provider"),
+                        generated_at=entry.get("generated_at"),
+                    )
+                # Interrupted batched run (partial entry, nothing in flight) — treat as uncached so
+                # the resubmission below regenerates it rather than serving a half-finished result.
+                entry = None
         if entry and not refresh:
             if analyst.entry_is_model_backed(entry):
                 return AnalystResponse(

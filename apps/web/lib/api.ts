@@ -839,6 +839,10 @@ export interface AnalystAssessment {
   coordination_label?: string | null;
   legitimate_hypothesis?: string | null;
   supplemental_context?: { signal: string; note: string }[];
+  /** Batched generation progress (selections > the per-request account cap run as parallel ≤cap
+   *  batches, merged first-to-last). Present only on batched runs; `complete` false means more
+   *  batches are still landing and the client should keep polling. */
+  batching?: { total: number; done: number; batch_size: number; complete: boolean };
   // The engine's corroboration state, echoed onto the assessment (overlaid from the deterministic
   // Floor, never model-fabricated — apps/api runtime.py). It bounds the coordination read: a maximal
   // 'coordinated' verdict requires >=1 discriminative method AND single_axis_capped === false.
@@ -934,7 +938,8 @@ export interface AnalystAssessment {
 export interface AnalystResponse {
   slug: string;
   enabled: boolean;
-  status: 'ready' | 'generating';
+  /** 'partial' = a batched run's assessment-so-far (first batches scored); keep polling. */
+  status: 'ready' | 'generating' | 'partial';
   cached: boolean;
   assessment: AnalystAssessment | null;
   provider?: string | null;

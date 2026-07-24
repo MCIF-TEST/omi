@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Brain, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
+import { Brain, Loader2, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
@@ -54,6 +54,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startRef = useRef<number>(0);
+  const lastBatchDoneRef = useRef<number>(0);
 
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
 
@@ -93,6 +94,19 @@ export function AnalystPanel({ slug }: { slug: string }) {
           setGeneratedAt(r.generated_at ?? null);
           setPending(false);
           return;
+        }
+        // Batched run in progress: render the finished batches' accounts NOW (first-to-last) and
+        // keep polling for the rest. Every batch that lands resets the poll budget — a many-batch
+        // scan visibly making progress is never timed out.
+        if (r.status === 'partial' && r.assessment) {
+          const done = r.assessment.batching?.done ?? 0;
+          if (done > lastBatchDoneRef.current) {
+            lastBatchDoneRef.current = done;
+            polls = 0;
+          }
+          setAssessment(r.assessment);
+          setProvider(r.provider ?? null);
+          setGeneratedAt(r.generated_at ?? null);
         }
         // 202 generating — a scan-time generation or the backend's one-shot auto-heal is in flight.
         // Hold the loading screen and poll until it lands.
@@ -148,9 +162,11 @@ export function AnalystPanel({ slug }: { slug: string }) {
           evidence-bounded assessment becomes available once the reasoning layer is
           turned on — the investigation evidence above is unaffected.
         </p>
-      ) : pending ? (
+      ) : pending && !assessment ? (
         // The analyst runs automatically for every investigation. Hold a real loading screen while
-        // the OpenRouter response is on its way — it fills in the moment the result lands.
+        // the OpenRouter response is on its way — it fills in the moment the result lands. Once a
+        // batched run's FIRST batch lands, the partial assessment renders below instead (with a
+        // progress strip), so results appear first-to-last while later batches still generate.
         <AnalystLoading elapsedSec={elapsedSec} />
       ) : !assessment ? (
         <p className="text-sm text-fg-dim flex items-start gap-2">
@@ -159,7 +175,12 @@ export function AnalystPanel({ slug }: { slug: string }) {
           the evidence the engine already produced; it never recomputes a score.
         </p>
       ) : (
-        <AssessmentView a={assessment} slug={slug} />
+        <>
+          {assessment.batching && !assessment.batching.complete && (
+            <BatchProgressStrip batching={assessment.batching} elapsedSec={elapsedSec} />
+          )}
+          <AssessmentView a={assessment} slug={slug} />
+        </>
       )}
 
       {assessment && verificationEnabled() && (
@@ -172,6 +193,47 @@ export function AnalystPanel({ slug }: { slug: string }) {
         </p>
       )}
     </Card>
+  );
+}
+
+/**
+ * Live progress for a batched run (selections above the per-request account cap are scored in
+ * parallel ≤cap-account batches, merged first-to-last). Purple = the AI layer. The results shown
+ * below the strip are FINAL for the batches already landed; later batches append underneath in
+ * order, so the list grows first-to-last while the run continues.
+ */
+function BatchProgressStrip({
+  batching,
+  elapsedSec,
+}: {
+  batching: NonNullable<AnalystAssessment['batching']>;
+  elapsedSec: number;
+}) {
+  const pct = Math.max(4, Math.round((batching.done / Math.max(1, batching.total)) * 100));
+  return (
+    <div className="mb-4 rounded-lg border border-violet/25 bg-violet/[0.06] px-3.5 py-2.5">
+      <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2 flex items-center gap-1.5">
+          <Loader2 size={11} className="animate-spin" />
+          Scoring in batches — {batching.done} of {batching.total} done
+        </span>
+        <span className="font-mono text-2xs text-fg-mute tabular-nums">
+          {batching.done * batching.batch_size} accounts scored · {elapsedSec}s
+        </span>
+      </div>
+      <div className="h-1 rounded-full bg-bg-inset overflow-hidden" role="progressbar"
+           aria-valuenow={batching.done} aria-valuemin={0} aria-valuemax={batching.total}
+           aria-label={`Analysis batches completed: ${batching.done} of ${batching.total}`}>
+        <div
+          className="h-full rounded-full bg-violet-dim transition-[width] duration-500 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="mt-1.5 text-2xs text-fg-mute leading-relaxed">
+        The scores below are final for the accounts already analyzed. The remaining accounts are being
+        analyzed right now and will appear underneath, in order.
+      </p>
+    </div>
   );
 }
 

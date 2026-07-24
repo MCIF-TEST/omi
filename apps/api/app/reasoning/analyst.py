@@ -18,6 +18,7 @@ simply has no assessment, never an error in the request path.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import sys
@@ -1150,6 +1151,219 @@ _autogen_inflight: set[str] = set()
 _autogen_lock = threading.Lock()
 
 
+# --------------------------------------------------------------------------- #
+# Batched inference — a single OpenRouter request carries at most N accounts.
+# --------------------------------------------------------------------------- #
+# WHY: per-account quality (and score individuality) degrades as one generation is asked to reason
+# over more accounts — the model starts batching mentally, and scores collapse toward one number.
+# Splitting a big selection into ≤50-account requests keeps every generation in the regime where the
+# Dossier-Loop protocol holds, and running the batches in PARALLEL keeps the wall-clock flat. Results
+# merge in batch order (first-to-last) and persist progressively, so the UI shows batch 1's accounts
+# while later batches are still generating.
+
+
+def _split_batches(payload: dict, batch_size: int) -> list[dict] | None:
+    """Split an investigation payload into ≤batch_size-account chunk payloads (selection order
+    preserved), or None when it already fits in one request. Each chunk shares the investigation's
+    non-account context; only video.commenters is sliced — the evidence composer renders the Accounts
+    table (and the per-account evidence budget) from that list."""
+    video = payload.get("video") or {}
+    commenters = video.get("commenters") or []
+    if len(commenters) <= batch_size:
+        return None
+    chunks: list[dict] = []
+    for i in range(0, len(commenters), batch_size):
+        chunk_payload = {k: v for k, v in payload.items() if k != CACHE_KEY}
+        chunk_payload["video"] = {**video, "commenters": commenters[i:i + batch_size]}
+        chunks.append(chunk_payload)
+    return chunks
+
+
+def _tier_for_score(score: int) -> str:
+    return "low" if score <= 24 else "moderate" if score <= 49 else "elevated" if score <= 74 else "high"
+
+
+def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int) -> dict | None:
+    """Merge per-batch assessments into ONE progressive assessment, strictly first-to-last.
+
+    ``parts`` is indexed by batch; entries still pending (or failed) are None. The first completed
+    part supplies the executive wrapper + domain sections; commenter_assessments concatenate in batch
+    order; the OVERALL omi_score is recomputed as the account-count-weighted mean of the completed
+    batches' overall scores (each batch's overall already synthesizes ITS accounts, so the weighted
+    mean preserves the model's judgment at full-selection scale). Token/cost telemetry sums across
+    batches. Returns None until at least one part exists."""
+    completed = [(i, p) for i, p in enumerate(parts) if p is not None]
+    if not completed:
+        return None
+    base = json.loads(json.dumps(completed[0][1], default=str))
+
+    merged_accounts: list[dict] = []
+    for _i, p in completed:
+        merged_accounts.extend(p.get("commenter_assessments") or [])
+    base["commenter_assessments"] = merged_accounts
+
+    # Overall = weighted mean of each batch's overall score by its account count (model judgment,
+    # rescaled to the whole selection — never pushed down onto any individual account).
+    weights = []
+    for _i, p in completed:
+        n = len(p.get("commenter_assessments") or []) or 1
+        s = p.get("omi_score")
+        if isinstance(s, (int, float)):
+            weights.append((n, float(s)))
+    if weights:
+        total_n = sum(n for n, _ in weights)
+        overall = int(round(sum(n * s for n, s in weights) / total_n))
+        base["omi_score"] = max(0, min(100, overall))
+        base["suspicion_tier"] = _tier_for_score(base["omi_score"])
+
+    # Evidence / uncertainty: concatenate across batches (bounded so the payload stays readable).
+    for key, cap in (("evidence_for", 16), ("evidence_against", 16),
+                     ("uncertainty", 12), ("what_would_change_this", 12)):
+        acc: list = []
+        seen: set[str] = set()
+        for _i, p in completed:
+            for item in (p.get(key) or []):
+                marker = json.dumps(item, default=str, sort_keys=True)
+                if marker not in seen:
+                    seen.add(marker)
+                    acc.append(item)
+        base[key] = acc[:cap]
+
+    # Completion: sums across completed batches; complete only when EVERY batch landed and completed.
+    total_batches = len(parts)
+    rep = sum((p.get("completion") or {}).get("represented_commenters") or 0 for _i, p in completed)
+    ass = sum((p.get("completion") or {}).get("assessed_commenters") or 0 for _i, p in completed)
+    all_complete = (len(completed) == total_batches) and all(
+        (p.get("completion") or {}).get("complete") for _i, p in completed)
+    base["completion"] = {**(base.get("completion") or {}),
+                          "represented_commenters": rep, "assessed_commenters": ass,
+                          "complete": bool(all_complete)}
+
+    # Trace: keep the base trace, overlay batch telemetry + summed usage; model_backed = every
+    # completed batch model-backed (a floored batch marks the whole merged result non-model-backed
+    # so the self-heal path can regenerate it).
+    tr = dict(base.get("investigation_trace") or {})
+    in_tok = out_tok = tot_tok = 0
+    cost = 0.0
+    have_usage = False
+    batch_traces: list[dict] = []
+    all_model_backed = len(completed) == total_batches
+    for i, p in completed:
+        pt = p.get("investigation_trace") or {}
+        if not pt.get("model_backed"):
+            all_model_backed = False
+        for k_src, agg in (("input_tokens", "in"), ("output_tokens", "out"), ("total_tokens", "tot")):
+            v = pt.get(k_src)
+            if isinstance(v, (int, float)):
+                have_usage = True
+                if agg == "in":
+                    in_tok += int(v)
+                elif agg == "out":
+                    out_tok += int(v)
+                else:
+                    tot_tok += int(v)
+        c = pt.get("endpoint_cost_usd")
+        if isinstance(c, (int, float)):
+            cost += float(c)
+        batch_traces.append({
+            "batch": i + 1, "accounts": len(p.get("commenter_assessments") or []),
+            "model_backed": pt.get("model_backed"), "served_model": pt.get("served_model"),
+            "endpoint_request_id": pt.get("endpoint_request_id"),
+            "input_tokens": pt.get("input_tokens"), "output_tokens": pt.get("output_tokens"),
+            "endpoint_cost_usd": pt.get("endpoint_cost_usd"),
+            "endpoint_latency_ms": pt.get("endpoint_latency_ms"),
+        })
+    if have_usage:
+        tr["input_tokens"], tr["output_tokens"], tr["total_tokens"] = in_tok, out_tok, tot_tok
+        tr["endpoint_cost_usd"] = round(cost, 6)
+    tr["model_backed"] = bool(all_model_backed)
+    tr["inference_count"] = len(completed)
+    tr["batches"] = {"total": total_batches, "done": done, "size": batch_size,
+                     "traces": batch_traces}
+    tr["commenters_assessed"] = ass
+    base["investigation_trace"] = tr
+
+    # The progressive marker the route + UI read: how far the batched generation has come.
+    base["batching"] = {"total": total_batches, "done": done, "batch_size": batch_size,
+                        "complete": done >= total_batches}
+    return base
+
+
+def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks: list[dict],
+                      *, platform: str, settings: Settings) -> dict | None:
+    """Run one analyst inference PER ≤N-account batch — in parallel, bounded — merging + persisting
+    the combined assessment after each batch lands, strictly first-to-last, so the UI can show batch
+    1's results while batch 2 is still generating. Returns the final persisted entry."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from app.storage.repository import AccountRepository
+
+    ref = _ref(inv_slug)
+    total = len(chunks)
+    workers = max(1, min(total, int(getattr(settings, "analyst_batch_concurrency", 3) or 3)))
+    batch_size = int(getattr(settings, "analyst_batch_accounts", 50) or 50)
+    logger.info("analyst.batched: slug=%s accounts=%d -> %d batches of <=%d (concurrency=%d)",
+                inv_slug, len((payload.get("video") or {}).get("commenters") or []),
+                total, batch_size, workers)
+
+    parts: list[dict | None] = [None] * total
+    flushed = 0  # batches merged+persisted so far (strict first-to-last prefix)
+
+    def _persist_progress(done: int) -> dict | None:
+        merged = _merge_batch_parts(parts, batch_size=batch_size, done=done)
+        if merged is None:
+            return None
+        gov = merged.get("governance") or {}
+        provider = gov.get("provider") or "omi-analyst"
+        with get_session() as session:
+            repo = AccountRepository(session)
+            inv = repo.get_investigation(slug=inv_slug, user_id=user_id)
+            if inv is None:
+                return None
+            return persist_assessment(session, inv, merged, provider)
+
+    entry: dict | None = None
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="omi-batch") as pool:
+        futures = {
+            pool.submit(
+                assess_payload, chunk, ref=f"{ref}.b{i + 1}", platform=platform, settings=settings,
+            ): i
+            for i, chunk in enumerate(chunks)
+        }
+        for fut in as_completed(futures):
+            i = futures[fut]
+            try:
+                parts[i] = fut.result()
+            except Exception:  # noqa: BLE001 — one failed batch must not sink the others
+                logger.exception("analyst.batched: batch %d/%d crashed for slug=%s", i + 1, total, inv_slug)
+                parts[i] = None
+            if parts[i] is None:
+                logger.warning("analyst.batched: batch %d/%d returned no assessment (slug=%s)",
+                               i + 1, total, inv_slug)
+            # Flush the longest completed PREFIX — results appear first-to-last, in order, even when
+            # a later batch finishes early (it waits, already merged in memory, for its predecessors).
+            new_flushed = flushed
+            while new_flushed < total and parts[new_flushed] is not None:
+                new_flushed += 1
+            if new_flushed > flushed:
+                flushed = new_flushed
+                entry = _persist_progress(flushed) or entry
+                logger.info("analyst.batched: slug=%s progress %d/%d batches persisted",
+                            inv_slug, flushed, total)
+
+    # Final merge: count every landed batch (including any that finished after a failed predecessor
+    # blocked the prefix flush) and mark the run complete.
+    landed = sum(1 for p in parts if p is not None)
+    entry = _persist_progress(total if landed == total else landed) or entry
+    if landed < total:
+        logger.warning("analyst.batched: slug=%s finished with %d/%d batches (failed batches keep "
+                       "their accounts unassessed; a refresh re-runs the generation)",
+                       inv_slug, landed, total)
+    else:
+        logger.info("analyst.batched: slug=%s complete — %d batches merged", inv_slug, total)
+    return entry
+
+
 def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) -> dict | None:
     """Background worker: open an own session, generate the assessment, cache it.
     Idempotent. Runs off the request hot path via app.core.background.submit.
@@ -1169,6 +1383,9 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
         from app.storage.db import get_session
         from app.storage.repository import AccountRepository
 
+        payload: dict = {}
+        platform = "unknown"
+        inv_slug = slug
         with get_session() as session:
             repo = AccountRepository(session)
             inv = repo.get_investigation(slug=slug, user_id=user_id)
@@ -1176,20 +1393,45 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
                 logger.info("analyst.generate: investigation slug=%s not found (user_id=%s); skipping",
                             slug, user_id)
                 return None
-            if not refresh and cached_assessment(inv):
-                _cache_stats["served_from_cache"] += 1
-                logger.info("analyst.generate: slug=%s already has a cached assessment; no model call "
-                            "(cache hit_rate=%.2f)", slug, runtime_metrics()["assessment_cache"]["hit_rate"])
-                return cached_assessment(inv)
-            assessment = assess_payload(
-                inv.payload_json or {},
-                ref=_ref(inv.slug), platform=_platform_of(inv), settings=settings,
-            )
-            if assessment is None:
+            cached = None if refresh else cached_assessment(inv)
+            if cached is not None:
+                batching = (cached.get("assessment") or {}).get("batching") or {}
+                if not batching or batching.get("complete"):
+                    _cache_stats["served_from_cache"] += 1
+                    logger.info("analyst.generate: slug=%s already has a cached assessment; no model call "
+                                "(cache hit_rate=%.2f)", slug,
+                                runtime_metrics()["assessment_cache"]["hit_rate"])
+                    return cached
+                # A PARTIAL batched entry (an interrupted run left batching.complete=False with no
+                # generation in flight) is not a finished result — fall through and regenerate.
+            payload = inv.payload_json or {}
+            platform = _platform_of(inv)
+            inv_slug = inv.slug
+
+        # Batched path — a single OpenRouter request carries at most N accounts; a larger selection
+        # runs as parallel ≤N-account requests merged first-to-last with progressive persistence.
+        batch_size = max(1, int(getattr(settings, "analyst_batch_accounts", 50) or 50))
+        chunks = _split_batches(payload, batch_size)
+        if chunks:
+            entry = _generate_batched(inv_slug, user_id, payload, chunks,
+                                      platform=platform, settings=settings)
+            if entry is not None:
+                _cache_stats["generated"] += 1
+            return entry
+
+        assessment = assess_payload(
+            payload, ref=_ref(inv_slug), platform=platform, settings=settings,
+        )
+        if assessment is None:
+            return None
+        _cache_stats["generated"] += 1
+        gov = assessment.get("governance") or {}
+        provider = gov.get("provider") or assessment.get("model_revision", "omi-analyst")
+        with get_session() as session:
+            repo = AccountRepository(session)
+            inv = repo.get_investigation(slug=slug, user_id=user_id)
+            if inv is None:
                 return None
-            _cache_stats["generated"] += 1
-            gov = assessment.get("governance") or {}
-            provider = gov.get("provider") or assessment.get("model_revision", "omi-analyst")
             return persist_assessment(session, inv, assessment, provider)
     finally:
         with _autogen_lock:
