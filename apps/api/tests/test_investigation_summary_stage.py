@@ -111,7 +111,9 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     assert "SPECIALIST INVESTIGATION FRAMEWORK" not in pp.system
     # the summary stage REUSES the existing analyst response schema (no new schema)
     assert pp.schema_ref == "schema/analyst_response_schema.json"
-    assert pp.manifest["package_hash"] == "pkg:982b1538f808e0cf4233073c"   # Dossier Loop / anti-collapse doctrine (constitution v8)
+    # Missing-evidence rule + show-your-reasoning assessments + widened raw-metadata columns
+    # (verified/bio). Bump this pin deliberately whenever the protocol text changes on purpose.
+    assert pp.manifest["package_hash"] == "pkg:26d203b1ef8382d19d69aeac"
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 

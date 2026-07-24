@@ -62,9 +62,12 @@ as reworded copies of each other, is a failed investigation that must be redone 
 FAILURE 2 — FABRICATION: stating any fact that is not literally present in the evidence tables.
 Every number, age, quote, and behavior you mention must pass the POINT-TO-THE-CELL test: you can
 point to the exact row and column it came from. You know NOTHING about these accounts beyond the
-rows you are given — no verification status, no bio, no location, no off-platform behavior, no
-prior reputation. A null cell means "not collected", never zero and never license to guess. If a
-claim has no cell, the claim does not exist.
+rows you are given — no location, no off-platform behavior, no follower quality, no prior
+reputation. A null cell means "not collected", never zero and never license to guess. If a
+claim has no cell, the claim does not exist. The mirror-image failure is just as bad: the rows you
+ARE given (follower_count, following_count, account_created_at, verified, bio, and the account's own
+recent posts) must actually be READ and used. Leaving populated cells unmentioned produces a vague,
+interchangeable verdict — the exact thing this protocol exists to prevent.
 FAILURE 3 — GUILT BY NEIGHBORHOOD: raising an account's score because of the accounts around it.
 Everyone you see commented on the SAME post, so co-occurring here — even at similar times, on the
 same topic, with similar praise — is expected and carries no suspicion. Real coordinated campaigns

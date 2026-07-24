@@ -4,8 +4,8 @@
   "manifest_version": "v1",
   "preset_name": "omi-master-v1",
   "protocol": {
-    "chars": 60384,
-    "hash": "map:c71d5d06308c9cf1a3455c63",
+    "chars": 63177,
+    "hash": "map:f83dfa4ab015f5d71596ada6",
     "name": "omi_master_analyst_protocol",
     "version": "map/prompt:v1+constitution:v8+framework:v1+template:citmpl-v9"
   },
