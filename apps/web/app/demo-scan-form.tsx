@@ -18,8 +18,8 @@ import { apiClient, ApiError, type ComprehensiveScanResult } from '@/lib/api';
 import { ScoreRing } from '@/components/shared/score-ring';
 
 const EXAMPLES = [
-  'https://www.youtube.com/watch?v=jNQXAC9IVRw',
-  'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'https://x.com/elonmusk/status/1790000000000000000',
+  'https://x.com/nasa/status/1789000000000000000',
 ];
 
 const TIER_COLOR: Record<string, string> = {
@@ -83,7 +83,7 @@ export function DemoScanForm() {
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=…"
+          placeholder="https://x.com/…/status/…"
           disabled={busy}
           required
           className="flex-1 min-w-[280px] px-4 py-3 bg-bg border border-border-1 rounded-sm text-fg placeholder:text-fg-mute focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
@@ -108,20 +108,21 @@ export function DemoScanForm() {
               onClick={() => setUrl(u)}
               className="text-accent hover:underline truncate max-w-[280px]"
             >
-              {u.replace('https://www.youtube.com/', '')}
+              {u.replace('https://', '')}
             </button>
           ))}
+          <span className="text-fg-mute/70">· one free X scan per visitor · up to 25 repliers</span>
         </div>
       )}
 
       {busy && (
         <div className="space-y-1.5 pt-2">
           {[
-            'Fetching commenters from YouTube…',
-            'Pulling each commenter\'s recent history…',
-            'Running detection engine…',
-            'Computing coordination signals…',
-            'Building cross-links + synthesis…',
+            'Pulling repliers from the X post…',
+            'Reading each account\'s recent history…',
+            'Running the detection engine…',
+            'Scoring coordination signals…',
+            'Assembling the verdict…',
           ].map((p, i) => (
             <div key={i} className="flex items-center gap-2 font-mono text-2xs">
               <span
@@ -140,12 +141,12 @@ export function DemoScanForm() {
           <AlertCircle size={14} className="text-tier-high mt-0.5 shrink-0" />
           <div>
             <p className="text-sm text-fg">{err}</p>
-            {err.toLowerCase().includes("today") && (
+            {err.toLowerCase().includes("free scan") && (
               <Link
                 href="/signup"
                 className="inline-flex items-center gap-1 mt-2 font-mono text-2xs tracking-wider uppercase text-accent hover:underline"
               >
-                Sign up to scan more <ArrowRight size={11} />
+                Create a free account <ArrowRight size={11} />
               </Link>
             )}
           </div>
@@ -191,7 +192,7 @@ function DemoResult({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Commenters" value={video?.commenter_count || 0} icon={<Users size={11} />} />
+        <Stat label="Repliers" value={video?.commenter_count || 0} icon={<Users size={11} />} />
         <Stat label="Flagged" value={flagged} icon={<ShieldAlert size={11} />} highlight={flagged > 0} />
         <Stat
           label="Coordination"
@@ -206,7 +207,7 @@ function DemoResult({
       {video && video.commenters && (
         <div>
           <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">
-            Top commenters by suspicion
+            Top repliers by suspicion
           </p>
           <div className="space-y-1.5">
             {[...video.commenters]
