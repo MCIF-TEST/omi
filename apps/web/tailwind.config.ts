@@ -60,9 +60,11 @@ const config: Config = {
         'ev-meta':     'var(--ev-meta)',
       },
       fontFamily: {
-        sans:    ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        mono:    ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        // CSS variables injected by next/font on <html> (self-hosted — no CDN CSS).
+        sans:    ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono:    ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        'display-alt': ['var(--font-display-alt)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
