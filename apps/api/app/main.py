@@ -22,7 +22,10 @@ from app import __version__
 from app.core import background
 from app.core.config import get_settings
 from app.core.middleware import (
-    MetricsMiddleware, RequestIdMiddleware, SecurityHeadersMiddleware,
+    GlobalRateLimitMiddleware,
+    MetricsMiddleware,
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
 )
 from app.monitoring import lifespan_monitoring
 from app.routes import (
@@ -246,13 +249,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 2. Security headers
+    # 2. Security headers (HSTS, CSP, frame, COOP, …)
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # 3. Compression — Cuts scan-response payloads by ~70%.
+    # 3. Global per-IP rate limit (scanners / abuse). Auth routes have stricter limiters.
+    app.add_middleware(GlobalRateLimitMiddleware)
+
+    # 4. Compression — Cuts scan-response payloads by ~70%.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-    # 4. Per-request observability
+    # 5. Per-request observability
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestIdMiddleware)
 
