@@ -83,6 +83,31 @@ def _stripe(settings: Settings):
     return stripe
 
 
+def _require_price_id(settings: Settings) -> str:
+    """Stripe Price ids look like ``price_1ABC…``. Dollar amounts like ``9.99`` are not valid."""
+    raw = (settings.stripe_price_id or "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "OMI_STRIPE_PRICE_ID is not set. In Stripe Dashboard → Product catalogue, open "
+                "your monthly recurring price and copy the id that starts with price_ (not the "
+                "dollar amount)."
+            ),
+        )
+    if not raw.startswith("price_"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"OMI_STRIPE_PRICE_ID is set to {raw!r}, which is not a Stripe Price id. "
+                "It must look like price_1ABC… (Dashboard → Product catalogue → your product → "
+                "the recurring monthly price → copy Price ID). Do not put 9.99 or $9.99 here — "
+                "the amount lives on the Price object in Stripe."
+            ),
+        )
+    return raw
+
+
 def _public_base(settings: Settings) -> str:
     """Normalize OMI_PUBLIC_BASE_URL so success/cancel URLs never double-slash."""
     base = (settings.public_base_url or "").strip().rstrip("/")
@@ -323,7 +348,19 @@ def billing_preflight(
         ))
         steps.append(
             "Create the $9.99/month recurring price in Stripe and set OMI_STRIPE_PRICE_ID to its "
-            "price_… id."
+            "price_… id (not the dollar amount)."
+        )
+    elif not price_id.startswith("price_"):
+        checks.append(PreflightCheck(
+            name="price", ok=False,
+            detail=(
+                f"OMI_STRIPE_PRICE_ID is {price_id!r} — that is not a Stripe Price id. "
+                "It must start with price_ (Dashboard → Product catalogue → recurring price → "
+                "copy Price ID). Values like 9.99 or $9.99 will never work."
+            ),
+        ))
+        steps.append(
+            "Replace OMI_STRIPE_PRICE_ID with the Price ID that starts with price_ from Stripe."
         )
     elif stripe is not None:
         try:
@@ -414,17 +451,18 @@ def create_checkout_session(
     """
     stripe = _stripe(settings)
     base = _public_base(settings)
+    price_id = _require_price_id(settings)
 
     # Fail fast with a clear message when the configured price cannot back a subscription.
     # Without this, a one-off / archived / wrong-mode price only surfaces as a vague 502 at click.
     try:
-        price = stripe.Price.retrieve(settings.stripe_price_id)
+        price = stripe.Price.retrieve(price_id)
         recurring = getattr(price, "recurring", None)
         if not recurring:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=(
-                    f"OMI_STRIPE_PRICE_ID ({settings.stripe_price_id}) is a one-off price, not a "
+                    f"OMI_STRIPE_PRICE_ID ({price_id}) is a one-off price, not a "
                     "recurring subscription price. Create a monthly recurring price in Stripe and "
                     "set OMI_STRIPE_PRICE_ID to its price_… id."
                 ),
@@ -433,19 +471,19 @@ def create_checkout_session(
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=(
-                    f"OMI_STRIPE_PRICE_ID ({settings.stripe_price_id}) is archived in Stripe. "
+                    f"OMI_STRIPE_PRICE_ID ({price_id}) is archived in Stripe. "
                     "Activate it or point the env var at an active recurring price."
                 ),
             )
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001
-        log.exception("stripe price retrieve failed for price=%s", settings.stripe_price_id)
+        log.exception("stripe price retrieve failed for price=%s", price_id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                f"Could not load OMI_STRIPE_PRICE_ID from Stripe: {_stripe_user_message(e)}. "
-                "Confirm the price id is from the SAME mode (test/live) as OMI_STRIPE_SECRET_KEY."
+                f"Could not load OMI_STRIPE_PRICE_ID ({price_id}) from Stripe: {_stripe_user_message(e)}. "
+                "Confirm it is a price_… id from the SAME mode (test/live) as OMI_STRIPE_SECRET_KEY."
             ),
         ) from e
 
@@ -484,7 +522,7 @@ def create_checkout_session(
         s = stripe.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
-            line_items=[{"price": settings.stripe_price_id, "quantity": 1}],
+            line_items=[{"price": price_id, "quantity": 1}],
             success_url=f"{base}/settings?billing=success",
             cancel_url=f"{base}/settings?billing=cancel",
             allow_promotion_codes=True,
@@ -513,7 +551,7 @@ def create_checkout_session(
                 s = stripe.checkout.Session.create(
                     mode="subscription",
                     customer=customer_id,
-                    line_items=[{"price": settings.stripe_price_id, "quantity": 1}],
+                    line_items=[{"price": price_id, "quantity": 1}],
                     success_url=f"{base}/settings?billing=success",
                     cancel_url=f"{base}/settings?billing=cancel",
                     allow_promotion_codes=True,
