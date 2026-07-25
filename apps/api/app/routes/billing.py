@@ -86,7 +86,30 @@ def _stripe(settings: Settings):
     return stripe
 
 
+def _payment_method_types(settings: Settings) -> list[str]:
+    """Checkout payment methods for this deployment.
+
+    Default is link + card:
+      * **Link** — works when Cards are still pending Stripe approval.
+      * **card** — required for Apple Pay / Google Pay on Checkout (wallets ride on the card type).
+
+    Override with env ``OMI_STRIPE_PAYMENT_METHOD_TYPES`` (comma-separated), e.g. ``link`` only
+    if card is fully blocked, or ``card,link`` to prefer card wallets first.
+    """
+    raw = (getattr(settings, "stripe_payment_method_types", None) or "link,card").strip()
+    types = [t.strip().lower() for t in raw.split(",") if t.strip()]
+    # De-dupe, preserve order
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in types:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out or ["link", "card"]
+
+
 def _billing_is_configured(settings: Settings) -> bool:
+
     """True only when Subscribe can actually open a Checkout session.
 
     Requires a secret key, a real ``price_…`` id (not a dollar amount), and a non-empty
@@ -669,9 +692,9 @@ def create_checkout_session(
             line_items=[{"price": price_id, "quantity": 1}],
             success_url=success,
             cancel_url=cancel,
-            # Explicit card — avoids "No valid payment method types" when Dashboard automatic
-            # payment methods are empty/misconfigured for the price currency (common on new Live accounts).
-            payment_method_types=["card"],
+            # link + card by default (see _payment_method_types / OMI_STRIPE_PAYMENT_METHOD_TYPES).
+            # Link works while Cards are pending approval; card enables Apple Pay / Google Pay wallets.
+            payment_method_types=_payment_method_types(settings),
             allow_promotion_codes=True,
             # Lets Checkout collect name/address when the Customer row is sparse — required when
             # Automatic Tax (or similar dashboard defaults) needs an address, and harmless otherwise.
@@ -702,7 +725,7 @@ def create_checkout_session(
                     line_items=[{"price": price_id, "quantity": 1}],
                     success_url=success,
                     cancel_url=cancel,
-                    payment_method_types=["card"],
+                    payment_method_types=_payment_method_types(settings),
                     allow_promotion_codes=True,
                     billing_address_collection="auto",
                     customer_update={"address": "auto", "name": "auto"},
@@ -720,8 +743,10 @@ def create_checkout_session(
             hint = msg
             if "payment method" in msg.lower():
                 hint = (
-                    f"{msg} Enable Cards for your price currency in Stripe Dashboard → "
-                    "Settings → Payment methods (use Live mode if OMI_STRIPE_SECRET_KEY is sk_live)."
+                    f"{msg} In Live mode enable Link and/or Cards under Dashboard → Settings → "
+                    "Payment methods. Apple Pay needs Cards + a verified domain "
+                    "(Settings → Payment method domains). Or set OMI_STRIPE_PAYMENT_METHOD_TYPES=link "
+                    "if only Link is approved."
                 )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
