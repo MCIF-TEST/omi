@@ -113,14 +113,19 @@ def build_prompt(
     tmpl = spec.template_of(a)
 
     # --- system message: identical assembly for every stage, from package assets only -------------
+    # Still assembled for HF transport + content-addressed provenance. OpenRouter never puts this
+    # on the wire — the operator's dashboard Preset owns the instructions (see openrouter.py).
     system = assemble_stage_system(lp, tmpl)
 
-    # --- user message: the stage's evidence sections, each rendered as JSON data ------------------
+    # --- user message: PURE evidence package only -------------------------------------------------
+    # Section headers + JSON data. No base prompt, no output-contract restate, no "produce JSON"
+    # instruction — those live in the system assembly (HF) or the OpenRouter dashboard Preset.
+    # Keeping the user message evidence-only is what stops us double-shipping instructions when
+    # OpenRouter already has the Master Analyst Protocol configured on the preset.
     sections = spec.render_sections(bundle, ctx)
     ev = [tmpl["evidence_preamble"]]
     for s in tmpl["evidence_sections"]:
         ev.append(s["header"] + "\n" + json.dumps(sections.get(s["section"], {}), ensure_ascii=False, sort_keys=True))
-    ev.append(tmpl["evidence_instruction"])
     user = "\n\n".join(ev).strip()
 
     manifest = {

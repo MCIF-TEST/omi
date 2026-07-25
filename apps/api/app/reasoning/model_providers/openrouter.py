@@ -8,11 +8,13 @@ served the inference. It performs exactly ONE model inference per call.
 Two modes, chosen by configuration:
 
 * **Preset mode** (primary) — the request references an OpenRouter Preset (``model="@preset/<slug>"``) that
-  holds Omi's stable Master Analyst Protocol (system prompt + model + routing). The dynamic request then
-  sends ONLY the Investigation Package as the user message; it does NOT redundantly resend the master
-  prompt. Omi records the local master-prompt version/hash it EXPECTS the preset to contain (it does not,
-  and cannot, verify the remote preset content).
-* **Direct mode** — no preset; the request sends the compiled system + user messages and an explicit model.
+  holds Omi's stable Master Analyst Protocol (system prompt + model + routing) on the OpenRouter dashboard.
+  The dynamic request then sends ONLY the Investigation Evidence Package as the user message — never a
+  local system / base prompt. Omi records the local master-prompt version/hash it EXPECTS the preset to
+  contain (it does not, and cannot, verify the remote preset content).
+* **Direct mode** — no preset; the request still sends ONLY the evidence package as the user message
+  (no local system role). Use a dashboard preset for instructions; an explicit model slug alone routes
+  inference without re-shipping the compiled base prompt.
 
 Structured output: the request carries ``response_format={"type":"json_object"}`` (OpenAI-compatible JSON
 mode) so the gateway returns syntactically valid JSON. We deliberately do NOT send a strict ``json_schema``
@@ -168,13 +170,17 @@ class OpenRouterReasoningProvider:
         return {"type": "json_object"}
 
     def _request_body(self, request: ReasoningRequest) -> bytes:
-        # Preset mode: the preset supplies the system prompt, so send ONLY the dynamic user message — the
-        # Master Analyst Protocol is NOT redundantly resent. Direct mode: send system + user.
-        if self.preset:
-            messages = [{"role": "user", "content": request.user}]
-        else:
-            messages = [{"role": "system", "content": request.system},
-                        {"role": "user", "content": request.user}]
+        # OpenRouter wire policy: NEVER send a local system / base prompt.
+        #
+        # The operator's OpenRouter dashboard Preset (or their gateway-side system
+        # instructions) already owns the Master Analyst Protocol. Resending the
+        # compiled local system (omi_analyst base + constitution + knowledge +
+        # task + output contract) doubles instructions, burns tokens, and fights
+        # the dashboard preset. The request carries ONLY the investigation
+        # evidence package as a single user message.
+        #
+        # HF transport is unaffected — it still receives system+user via remote.py.
+        messages = [{"role": "user", "content": request.user}]
         body: dict = {
             "model": self._model_ref(),
             "messages": messages,
@@ -212,8 +218,11 @@ class OpenRouterReasoningProvider:
         self.capture["structured_output"] = bool(self._response_format() is not None)
         self.capture["request_wire_body"] = body.decode("utf-8", "replace")[:12000]
         self.capture["final_prompt_user"] = request.user
-        # In preset mode the system prompt lives in the preset; record what Omi EXPECTS it to be.
-        self.capture["final_prompt_system"] = None if self.preset else request.system
+        # Local system is NEVER on the OpenRouter wire (dashboard preset owns it).
+        # Keep a hash-only breadcrumb of what we assembled locally for forensics.
+        self.capture["final_prompt_system"] = None
+        self.capture["local_system_omitted"] = True
+        self.capture["local_system_chars"] = len(request.system or "")
         self.capture["master_prompt_hash"] = self.master_prompt_hash
 
     def _capture_response(self, status, raw: bytes) -> None:

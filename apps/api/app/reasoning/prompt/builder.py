@@ -89,11 +89,12 @@ def build_prompt_package(
     ).strip()
 
     cdict = context.to_dict()
+    # Pure evidence package only — no instructional restate (matches stage_builder).
+    # OpenRouter never receives the system role; the dashboard Preset owns instructions.
     ev_parts: list[str] = [tmpl["evidence_preamble"]]
     for s in tmpl["evidence_sections"]:
         section = cdict.get(s["section"], {})
         ev_parts.append(s["header"] + "\n" + json.dumps(section, ensure_ascii=False, sort_keys=True))
-    ev_parts.append(tmpl["evidence_instruction"])
     user = "\n\n".join(ev_parts).strip()
 
     system_sha = "sys:" + hashlib.sha256(system.encode("utf-8")).hexdigest()[:24]
