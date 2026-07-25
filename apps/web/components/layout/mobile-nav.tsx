@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import {
   Search, Network, Bell, Menu,
-  Folder, MessageSquareText, Database, Settings, LogOut, X,
+  History, MessageSquareText, Settings, LogOut, X,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -30,14 +30,13 @@ const routeActive = (pathname: string, href: string) =>
 // else lives in the More sheet, so nothing is more than two taps away.
 const TABS: Tab[] = [
   { href: '/investigate',    label: 'Investigate', icon: Search },
-  { href: '/investigations', label: 'Saved',       icon: Folder },
+  { href: '/investigations', label: 'Archive',     icon: History },
   { href: '/monitoring',     label: 'Alerts',      icon: Bell },
 ];
 
 const MORE_LINKS: { href: string; label: string; icon: LucideIcon; desc: string }[] = [
   { href: '/campaigns',  label: 'Narratives', icon: MessageSquareText, desc: 'Durable coordinated-account clusters' },
   { href: '/graph',      label: 'Graph',      icon: Network,           desc: 'Coordination network graphs' },
-  { href: '/content',    label: 'Content DB', icon: Database,          desc: 'Every scanned video' },
   { href: '/search',     label: 'Search',     icon: Search,            desc: 'Find any account or channel' },
   { href: '/settings',   label: 'Settings',   icon: Settings,          desc: 'Account, billing & alerts' },
 ];
