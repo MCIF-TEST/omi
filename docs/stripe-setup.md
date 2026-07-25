@@ -1,12 +1,18 @@
-# Stripe setup — $9.99/month for 20 credits
+# Stripe setup — $9.99/month for 20 credits (pure API, no webhooks)
 
 Everything you need to take the first real payment. Do it once in **test mode**, verify with a test
 card, then repeat the same steps in **live mode** with live keys.
 
-**There is no webhook to set up.** OmiSphere reconciles against Stripe's API: rather than waiting to
-be told what happened, the server asks Stripe which subscription exists and which invoices were
-actually paid, then grants credits for any paid invoice it hasn't already credited. Setup is three
-env vars and a price.
+**Billing mode: pure API — no webhooks.** OmiSphere reconciles against Stripe's API: rather than
+waiting to be told what happened, the server asks Stripe which subscription exists and which
+invoices were actually paid, then grants credits for any paid invoice it hasn't already credited.
+Leave `OMI_STRIPE_WEBHOOK_SECRET` unset. Do not register a webhook endpoint.
+
+Setup is three env vars on the **API** service: `OMI_STRIPE_SECRET_KEY` (`sk_…`),
+`OMI_STRIPE_PRICE_ID` (`price_…` recurring monthly), and `OMI_PUBLIC_BASE_URL` (your **web** URL).
+
+**Publishable keys (`pk_…` / `STRIPE_PUBLISHABLE_KEY`) are not used.** Checkout is Stripe-hosted;
+no Stripe.js runs in the browser. A publishable key alone cannot make Subscribe work.
 
 Two rules worth internalising before you start:
 
@@ -61,9 +67,12 @@ That is `OMI_STRIPE_PRICE_ID`.
 Dashboard → **Developers → API keys**
 
 - **Secret key** → `OMI_STRIPE_SECRET_KEY` (`sk_test_…`, later `sk_live_…`)
+- **Publishable key** → not required. Ignore it for Subscribe, or set
+  `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` on the **web** service only if you add Stripe.js later.
+  Never put a `pk_…` value in `OMI_STRIPE_SECRET_KEY`. A dashboard var named
+  `STRIPE_PUBLISHABLE_KEY` alone will not enable billing.
 
-There is no publishable key to set: checkout is hosted by Stripe, so no card details and no Stripe
-JS ever touch the browser on our domain.
+Checkout is hosted by Stripe, so no card details and no Stripe.js touch our domain today.
 
 ## 3. (Skipped — no webhook needed)
 
