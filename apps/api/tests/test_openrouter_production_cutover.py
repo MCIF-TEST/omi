@@ -164,9 +164,9 @@ def test_gpt5_mini_model_selection_reaches_the_request():
     # OpenRouter never re-ships the local base/system prompt — evidence only.
     assert [m["role"] for m in captured["body"]["messages"]] == ["user"]
     assert "You are OMI ANALYST" not in captured["body"]["messages"][0]["content"]
-    # And a preset with an explicit base-model override layers the slug onto the preset reference.
+    # Even if OMI_OPENROUTER_MODEL is set, preset mode never pins a model — dashboard owns it.
     _, captured2, _ = _run(_or_body(_valid_model_output()), settings=_prod_settings(model=_GPT5_MINI))
-    assert captured2["body"]["model"] == f"{_GPT5_MINI}@preset/{_PRESET}"
+    assert captured2["body"]["model"] == f"@preset/{_PRESET}"
 
 
 # =========================================================================== #
