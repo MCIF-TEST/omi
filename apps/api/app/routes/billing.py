@@ -83,6 +83,116 @@ def _stripe(settings: Settings):
     return stripe
 
 
+def _require_price_id(settings: Settings) -> str:
+    """Stripe Price ids look like ``price_1ABC…``. Dollar amounts like ``9.99`` are not valid."""
+    raw = (settings.stripe_price_id or "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "OMI_STRIPE_PRICE_ID is not set. In Stripe Dashboard → Product catalogue, open "
+                "your monthly recurring price and copy the id that starts with price_ (not the "
+                "dollar amount)."
+            ),
+        )
+    if not raw.startswith("price_"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"OMI_STRIPE_PRICE_ID is set to {raw!r}, which is not a Stripe Price id. "
+                "It must look like price_1ABC… (Dashboard → Product catalogue → your product → "
+                "the recurring monthly price → copy Price ID). Do not put 9.99 or $9.99 here — "
+                "the amount lives on the Price object in Stripe."
+            ),
+        )
+    return raw
+
+
+def _public_base(settings: Settings) -> str:
+    """Normalize OMI_PUBLIC_BASE_URL so success/cancel URLs never double-slash."""
+    base = (settings.public_base_url or "").strip().rstrip("/")
+    if not base:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "OMI_PUBLIC_BASE_URL is not set. Set it to your web app URL "
+                "(e.g. https://omisphere-web.onrender.com) so Stripe can return "
+                "customers after checkout."
+            ),
+        )
+    return base
+
+
+def _stripe_user_message(exc: BaseException) -> str:
+    """Safe, short message from a Stripe SDK error for the browser.
+
+    The real reasons checkout fails (wrong-mode price, deleted customer, one-off
+    price used as subscription, automatic-tax needs address, bad key) live on the
+    Stripe exception. Surfacing them is the difference between a dead-end
+    "please try again" and a fixable config error.
+    """
+    user_msg = getattr(exc, "user_message", None) or getattr(exc, "_message", None)
+    if isinstance(user_msg, str) and user_msg.strip():
+        msg = user_msg.strip()
+    else:
+        msg = str(exc).strip() or type(exc).__name__
+    if len(msg) > 280:
+        msg = msg[:277] + "..."
+    code = getattr(exc, "code", None)
+    if code and str(code) not in msg:
+        return f"{msg} (Stripe code: {code})"
+    return msg
+
+
+def _ensure_stripe_customer(stripe, user: User, *, recreate: bool = False) -> str:
+    """Return a live Stripe customer id for this user, creating one if needed.
+
+    Handles three failure modes that otherwise 502 the Subscribe button:
+      1. No customer linked yet → create one.
+      2. Linked customer was deleted / wrong Stripe mode → clear + recreate.
+      3. Passing email=None into Customer.create — some SDK paths serialize that
+         as JSON null and Stripe rejects it. Only send email when real.
+    """
+    from app.core.auth import _is_placeholder_email
+
+    if not recreate and user.stripe_customer_id:
+        try:
+            stripe.Customer.retrieve(user.stripe_customer_id)
+            return user.stripe_customer_id
+        except Exception as e:  # noqa: BLE001
+            log.warning(
+                "stale stripe customer %s for user=%s (%s); recreating",
+                user.stripe_customer_id,
+                user.id,
+                type(e).__name__,
+            )
+            user.stripe_customer_id = None
+            recreate = True
+
+    params: dict = {
+        "metadata": {"omi_user_id": str(user.id)},
+        # First create is stable; after a wipe, salt so we don't replay a deleted id
+        # via Stripe's idempotency cache.
+        "idempotency_key": (
+            f"omi-customer-{user.id}-recreate" if recreate else f"omi-customer-{user.id}"
+        ),
+    }
+    email = None if _is_placeholder_email(user.email) else (user.email or None)
+    if email:
+        params["email"] = email
+
+    try:
+        customer = stripe.Customer.create(**params)
+    except Exception as e:  # noqa: BLE001
+        log.exception("stripe customer create failed for user=%s", user.id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not create Stripe customer: {_stripe_user_message(e)}",
+        ) from e
+    user.stripe_customer_id = customer.id
+    return customer.id
+
+
 class CheckoutResponse(BaseModel):
     url: str
 
@@ -238,7 +348,19 @@ def billing_preflight(
         ))
         steps.append(
             "Create the $9.99/month recurring price in Stripe and set OMI_STRIPE_PRICE_ID to its "
-            "price_… id."
+            "price_… id (not the dollar amount)."
+        )
+    elif not price_id.startswith("price_"):
+        checks.append(PreflightCheck(
+            name="price", ok=False,
+            detail=(
+                f"OMI_STRIPE_PRICE_ID is {price_id!r} — that is not a Stripe Price id. "
+                "It must start with price_ (Dashboard → Product catalogue → recurring price → "
+                "copy Price ID). Values like 9.99 or $9.99 will never work."
+            ),
+        ))
+        steps.append(
+            "Replace OMI_STRIPE_PRICE_ID with the Price ID that starts with price_ from Stripe."
         )
     elif stripe is not None:
         try:
@@ -328,54 +450,134 @@ def create_checkout_session(
     detail ever reaches this server.
     """
     stripe = _stripe(settings)
+    base = _public_base(settings)
+    price_id = _require_price_id(settings)
+
+    # Fail fast with a clear message when the configured price cannot back a subscription.
+    # Without this, a one-off / archived / wrong-mode price only surfaces as a vague 502 at click.
+    try:
+        price = stripe.Price.retrieve(price_id)
+        recurring = getattr(price, "recurring", None)
+        if not recurring:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"OMI_STRIPE_PRICE_ID ({price_id}) is a one-off price, not a "
+                    "recurring subscription price. Create a monthly recurring price in Stripe and "
+                    "set OMI_STRIPE_PRICE_ID to its price_… id."
+                ),
+            )
+        if not bool(getattr(price, "active", False)):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"OMI_STRIPE_PRICE_ID ({price_id}) is archived in Stripe. "
+                    "Activate it or point the env var at an active recurring price."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.exception("stripe price retrieve failed for price=%s", price_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"Could not load OMI_STRIPE_PRICE_ID ({price_id}) from Stripe: {_stripe_user_message(e)}. "
+                "Confirm it is a price_… id from the SAME mode (test/live) as OMI_STRIPE_SECRET_KEY."
+            ),
+        ) from e
 
     with get_session() as session:
         user = session.get(User, current.id)
         if user is None:
             raise HTTPException(status_code=401, detail="Session invalid.")
-        customer_id = user.stripe_customer_id
-        if not customer_id:
-            # Never seed Stripe with the synthetic placeholder address a Clerk account carries before
-            # its real email resolves — Stripe would store a junk email and mail receipts nowhere.
-            # Omit it; Checkout collects a real email at payment time.
-            from app.core.auth import _is_placeholder_email
-            customer_email = None if _is_placeholder_email(user.email) else user.email
+        # Already subscribed → Customer Portal, not a second Checkout (avoids Stripe
+        # "customer already has a subscription" friction and matches the button label).
+        if user.subscription_status in PAID_STATUSES and user.stripe_customer_id:
             try:
-                customer = stripe.Customer.create(
-                    email=customer_email,
-                    metadata={"omi_user_id": str(user.id)},
-                    # A double-clicked Subscribe button must not create two Stripe customers for one
-                    # user — the second call replays the first customer instead.
-                    idempotency_key=f"omi-customer-{user.id}",
+                portal = stripe.billing_portal.Session.create(
+                    customer=user.stripe_customer_id,
+                    return_url=f"{base}/settings",
                 )
-            except Exception as e:  # noqa: BLE001 — surface a clean error, never a 500 traceback
-                log.exception("stripe customer create failed for user=%s", user.id)
+            except Exception as e:  # noqa: BLE001
+                log.exception("stripe portal session failed for user=%s", user.id)
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Could not reach Stripe to start checkout. Please try again.",
+                    detail=(
+                        f"Could not open the billing portal: {_stripe_user_message(e)}. "
+                        "Enable the Customer Portal in Stripe Dashboard → Settings → Billing."
+                    ),
                 ) from e
-            customer_id = customer.id
-            user.stripe_customer_id = customer_id
+            if not portal.url:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Stripe returned no portal URL. Check Customer Portal is enabled.",
+                )
+            return CheckoutResponse(url=portal.url)
 
+        customer_id = _ensure_stripe_customer(stripe, user)
+
+    # Build Checkout outside the DB session so a Stripe lag doesn't hold a connection.
     try:
         s = stripe.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
-            line_items=[{"price": settings.stripe_price_id, "quantity": 1}],
-            success_url=f"{settings.public_base_url}/settings?billing=success",
-            cancel_url=f"{settings.public_base_url}/settings?billing=cancel",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=f"{base}/settings?billing=success",
+            cancel_url=f"{base}/settings?billing=cancel",
             allow_promotion_codes=True,
-            # Carried through to the subscription + invoices, so the webhook can resolve the user
-            # even if the customer link is somehow missing.
+            # Lets Checkout collect name/address when the Customer row is sparse — required when
+            # Automatic Tax (or similar dashboard defaults) needs an address, and harmless otherwise.
+            billing_address_collection="auto",
+            customer_update={"address": "auto", "name": "auto"},
+            client_reference_id=str(current.id),
+            # Carried through to the subscription + invoices, so the webhook / sync can resolve the
+            # user even if the customer link is somehow missing.
             metadata={"omi_user_id": str(current.id)},
             subscription_data={"metadata": {"omi_user_id": str(current.id)}},
         )
     except Exception as e:  # noqa: BLE001
-        log.exception("stripe checkout session create failed for user=%s", current.id)
+        msg = _stripe_user_message(e)
+        log.exception("stripe checkout session create failed for user=%s: %s", current.id, msg)
+        # Stale customer that retrieve() somehow accepted but Session rejected — one automatic retry.
+        if "No such customer" in msg or "resource_missing" in msg.lower():
+            with get_session() as session:
+                user = session.get(User, current.id)
+                if user is None:
+                    raise HTTPException(status_code=401, detail="Session invalid.") from e
+                user.stripe_customer_id = None
+                customer_id = _ensure_stripe_customer(stripe, user, recreate=True)
+            try:
+                s = stripe.checkout.Session.create(
+                    mode="subscription",
+                    customer=customer_id,
+                    line_items=[{"price": price_id, "quantity": 1}],
+                    success_url=f"{base}/settings?billing=success",
+                    cancel_url=f"{base}/settings?billing=cancel",
+                    allow_promotion_codes=True,
+                    billing_address_collection="auto",
+                    customer_update={"address": "auto", "name": "auto"},
+                    client_reference_id=str(current.id),
+                    metadata={"omi_user_id": str(current.id)},
+                    subscription_data={"metadata": {"omi_user_id": str(current.id)}},
+                )
+            except Exception as e2:  # noqa: BLE001
+                log.exception("stripe checkout retry failed for user=%s", current.id)
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Could not start Stripe checkout: {_stripe_user_message(e2)}",
+                ) from e2
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not start Stripe checkout: {msg}",
+            ) from e
+
+    if not getattr(s, "url", None):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not start Stripe checkout. Please try again.",
-        ) from e
+            detail="Stripe created a session but returned no checkout URL. Check the Stripe dashboard logs.",
+        )
     return CheckoutResponse(url=s.url)
 
 
@@ -395,20 +597,26 @@ def customer_portal(
                 detail="No subscription found. Subscribe first.",
             )
         customer_id = user.stripe_customer_id
+    base = _public_base(settings)
     try:
         portal = stripe.billing_portal.Session.create(
             customer=customer_id,
-            return_url=f"{settings.public_base_url}/settings",
+            return_url=f"{base}/settings",
         )
     except Exception as e:  # noqa: BLE001
         log.exception("stripe portal session failed for user=%s", current.id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                "Could not open the billing portal. If this persists, the Customer Portal may not "
-                "be enabled in the Stripe dashboard."
+                f"Could not open the billing portal: {_stripe_user_message(e)}. "
+                "Enable the Customer Portal in Stripe Dashboard → Settings → Billing → Customer portal."
             ),
         ) from e
+    if not getattr(portal, "url", None):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Stripe returned no portal URL. Enable the Customer Portal in the Stripe dashboard.",
+        )
     return CheckoutResponse(url=portal.url)
 
 
