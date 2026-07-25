@@ -6,7 +6,7 @@ the way they are. If you change behaviour and don't update this file, the next s
 re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-25 · branch `claude/master-analyst-protocol-v1-1u8tyk` · PR
-[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1505 passed, 1 known-failing**
+[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1513 passed, 1 known-failing**
 
 > `HANDOFF.md` at the repo root is a **stale one-off** from a different branch (2026-05-29). Ignore
 > it; this file supersedes it.
@@ -183,6 +183,12 @@ subscribe. It never raises: a Stripe outage degrades to the normal 402, never a 
 
 The webhook endpoint still exists and is **inert without `OMI_STRIPE_WEBHOOK_SECRET`**. Enabling it
 is safe — both paths claim the same per-invoice row, so only one can grant.
+
+`GET /v1/billing/preflight` answers "can this deployment take a payment?" against the live Stripe
+account: it validates the key, retrieves the price to confirm it is recurring and the right amount,
+and checks the return URL. Point anyone debugging a "billing doesn't work" report at it first —
+`OMI_STRIPE_SECRET_KEY` alone is NOT enough, and a missing `OMI_STRIPE_PRICE_ID` fails only at the
+moment a customer clicks Subscribe.
 
 Four rules in `app/routes/billing.py` that must not be softened — each replaces a bug that cost or
 would have cost real money:

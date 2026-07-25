@@ -316,3 +316,121 @@ def test_a_genuinely_broke_user_still_gets_a_clean_402(client, monkeypatch):
     with pytest.raises(HTTPException) as exc:
         consume_credits(_user().id, 1, platform="x", scan_type="link", target_input=None)
     assert exc.value.status_code == 402
+
+
+# --------------------------------------------------------------------------- #
+# Preflight — "did I configure this correctly?" answered against Stripe
+# --------------------------------------------------------------------------- #
+def _preflight_stripe(monkeypatch, *, price=None, account_ok=True, price_raises=False):
+    fake = FakeStripe()
+
+    class Account:
+        @staticmethod
+        def retrieve(*a, **k):
+            if not account_ok:
+                raise RuntimeError("bad key")
+            return types.SimpleNamespace(id="acct_test_1")
+
+    class Price:
+        @staticmethod
+        def retrieve(pid, *a, **k):
+            if price_raises:
+                raise RuntimeError("No such price")
+            return price
+
+    fake.Account = Account
+    fake.Price = Price
+    _install(monkeypatch, fake)
+    return fake
+
+
+def _price_obj(*, amount=999, currency="usd", interval="month", active=True):
+    return types.SimpleNamespace(
+        unit_amount=amount, currency=currency, active=active,
+        recurring={"interval": interval} if interval else None,
+    )
+
+
+def _checks(body):
+    return {c["name"]: c for c in body["checks"]}
+
+
+def test_preflight_reports_ready_when_everything_is_set(client, monkeypatch):
+    _preflight_stripe(monkeypatch, price=_price_obj())
+    monkeypatch.setenv("OMI_PUBLIC_BASE_URL", "https://omisphere-web.onrender.com")
+    get_settings.cache_clear()
+
+    body = client.get("/v1/billing/preflight").json()
+    assert body["ready"] is True, body
+    c = _checks(body)
+    assert c["secret_key"]["ok"] and c["stripe_reachable"]["ok"] and c["price"]["ok"]
+    assert "9.99 USD per month" in c["price"]["detail"]
+
+
+def test_preflight_catches_the_secret_key_set_but_no_price(client, monkeypatch):
+    """The exact half-configured state: the key is set, so it LOOKS done, but checkout 503s."""
+    _preflight_stripe(monkeypatch, price=_price_obj())
+    monkeypatch.delenv("OMI_STRIPE_PRICE_ID", raising=False)
+    monkeypatch.setenv("OMI_PUBLIC_BASE_URL", "https://omisphere-web.onrender.com")
+    get_settings.cache_clear()
+
+    body = client.get("/v1/billing/preflight").json()
+    assert body["ready"] is False
+    c = _checks(body)
+    assert c["secret_key"]["ok"] is True
+    assert c["price"]["ok"] is False
+    assert "OMI_STRIPE_PRICE_ID" in c["price"]["detail"]
+    assert any("OMI_STRIPE_PRICE_ID" in s for s in body["next_steps"])
+
+
+def test_preflight_catches_a_one_off_price_used_for_a_subscription(client, monkeypatch):
+    _preflight_stripe(monkeypatch, price=_price_obj(interval=None))
+    monkeypatch.setenv("OMI_PUBLIC_BASE_URL", "https://omisphere-web.onrender.com")
+    get_settings.cache_clear()
+
+    body = client.get("/v1/billing/preflight").json()
+    assert body["ready"] is False
+    assert "ONE-OFF" in _checks(body)["price"]["detail"]
+
+
+def test_preflight_catches_a_price_from_the_wrong_stripe_mode(client, monkeypatch):
+    _preflight_stripe(monkeypatch, price=None, price_raises=True)
+    monkeypatch.setenv("OMI_PUBLIC_BASE_URL", "https://omisphere-web.onrender.com")
+    get_settings.cache_clear()
+
+    body = client.get("/v1/billing/preflight").json()
+    assert body["ready"] is False
+    assert any("mode" in s for s in body["next_steps"])
+
+
+def test_preflight_catches_a_bad_key(client, monkeypatch):
+    _preflight_stripe(monkeypatch, price=_price_obj(), account_ok=False)
+    get_settings.cache_clear()
+    body = client.get("/v1/billing/preflight").json()
+    assert body["ready"] is False
+    assert _checks(body)["stripe_reachable"]["ok"] is False
+
+
+def test_preflight_catches_a_return_url_left_on_localhost(client, monkeypatch):
+    """Default config would redirect a paying customer to localhost."""
+    _preflight_stripe(monkeypatch, price=_price_obj())
+    monkeypatch.setenv("OMI_PUBLIC_BASE_URL", "http://localhost:8000")
+    get_settings.cache_clear()
+
+    body = client.get("/v1/billing/preflight").json()
+    assert body["ready"] is False
+    assert _checks(body)["return_url"]["ok"] is False
+
+
+def test_preflight_never_returns_the_secret(client, monkeypatch):
+    _preflight_stripe(monkeypatch, price=_price_obj())
+    get_settings.cache_clear()
+    raw = client.get("/v1/billing/preflight").text
+    assert "sk_test_dummy" not in raw and "sk_live" not in raw
+
+
+def test_preflight_says_reconciliation_is_the_crediting_mode_with_no_webhook(client, monkeypatch):
+    _preflight_stripe(monkeypatch, price=_price_obj())
+    get_settings.cache_clear()
+    body = client.get("/v1/billing/preflight").json()
+    assert "no webhook" in _checks(body)["crediting"]["detail"]

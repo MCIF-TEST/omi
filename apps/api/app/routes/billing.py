@@ -156,6 +156,167 @@ def sync_billing(
         )
 
 
+class PreflightCheck(BaseModel):
+    name: str
+    ok: bool
+    detail: str
+
+
+class PreflightResponse(BaseModel):
+    """Can this deployment actually take a payment right now?"""
+
+    ready: bool
+    checks: list[PreflightCheck]
+    next_steps: list[str]
+
+
+@router.get("/preflight", response_model=PreflightResponse)
+def billing_preflight(
+    current: CurrentUser = Depends(require_user),
+    settings: Settings = Depends(get_settings),
+) -> PreflightResponse:
+    """Verify the billing configuration of THIS deployment, against Stripe.
+
+    Setting the env vars and hoping is the failure mode this exists to remove: the secret key alone
+    is not enough, and a price id that points at a one-off or the wrong amount fails only at the
+    moment a customer tries to pay. This actually calls Stripe with the configured key, retrieves
+    the configured price, and reports what a customer would hit.
+
+    Never returns a secret — presence, mode, and public price facts only.
+    """
+    checks: list[PreflightCheck] = []
+    steps: list[str] = []
+
+    # --- 1. Secret key -----------------------------------------------------------------------
+    key = (settings.stripe_secret_key or "").strip()
+    if not key:
+        checks.append(PreflightCheck(
+            name="secret_key", ok=False,
+            detail="OMI_STRIPE_SECRET_KEY is not set on the API service.",
+        ))
+        steps.append("Set OMI_STRIPE_SECRET_KEY (sk_test_… or sk_live_…) on the API service.")
+    else:
+        mode = "live" if key.startswith("sk_live") else "test" if key.startswith("sk_test") else "unknown"
+        checks.append(PreflightCheck(
+            name="secret_key", ok=True,
+            detail=f"Set ({mode} mode key).",
+        ))
+
+    # --- 2. Can we actually reach Stripe with it? --------------------------------------------
+    stripe = None
+    if key:
+        try:
+            import stripe as _stripe_sdk  # type: ignore
+            _stripe_sdk.api_key = key
+            acct = _stripe_sdk.Account.retrieve()
+            stripe = _stripe_sdk
+            checks.append(PreflightCheck(
+                name="stripe_reachable", ok=True,
+                detail=f"Authenticated with Stripe account {getattr(acct, 'id', '?')}.",
+            ))
+        except ImportError:
+            checks.append(PreflightCheck(
+                name="stripe_reachable", ok=False,
+                detail="The stripe SDK isn't installed in this environment.",
+            ))
+            steps.append("Redeploy the API service so `stripe` is installed from requirements.")
+        except Exception as e:  # noqa: BLE001
+            checks.append(PreflightCheck(
+                name="stripe_reachable", ok=False,
+                detail=f"Stripe rejected or could not be reached: {type(e).__name__}.",
+            ))
+            steps.append(
+                "Check the key is correct, complete, and from the same mode (test/live) as your price."
+            )
+
+    # --- 3. The price: exists, recurring, and the amount you think it is ----------------------
+    price_id = (settings.stripe_price_id or "").strip()
+    if not price_id:
+        checks.append(PreflightCheck(
+            name="price", ok=False,
+            detail="OMI_STRIPE_PRICE_ID is not set — checkout returns 503 and nobody can subscribe.",
+        ))
+        steps.append(
+            "Create the $9.99/month recurring price in Stripe and set OMI_STRIPE_PRICE_ID to its "
+            "price_… id."
+        )
+    elif stripe is not None:
+        try:
+            price = stripe.Price.retrieve(price_id)
+            recurring = getattr(price, "recurring", None)
+            interval = (recurring or {}).get("interval") if recurring else None
+            amount = getattr(price, "unit_amount", None)
+            currency = (getattr(price, "currency", "") or "").upper()
+            active = bool(getattr(price, "active", False))
+            pretty = f"{amount / 100:.2f} {currency}" if isinstance(amount, int) else "?"
+            if not recurring:
+                checks.append(PreflightCheck(
+                    name="price", ok=False,
+                    detail=f"Price {price_id} is a ONE-OFF price ({pretty}). Checkout runs in "
+                           f"subscription mode and will fail.",
+                ))
+                steps.append("Recreate the price as a RECURRING monthly price and update OMI_STRIPE_PRICE_ID.")
+            elif not active:
+                checks.append(PreflightCheck(
+                    name="price", ok=False, detail=f"Price {price_id} is archived in Stripe.",
+                ))
+                steps.append("Activate the price in Stripe, or point OMI_STRIPE_PRICE_ID at a live one.")
+            else:
+                checks.append(PreflightCheck(
+                    name="price", ok=True,
+                    detail=f"{pretty} per {interval} — this is what a customer is charged.",
+                ))
+        except Exception as e:  # noqa: BLE001
+            checks.append(PreflightCheck(
+                name="price", ok=False,
+                detail=f"Could not retrieve price {price_id}: {type(e).__name__}. It may belong to "
+                       f"the other mode (test vs live).",
+            ))
+            steps.append("Confirm OMI_STRIPE_PRICE_ID is from the SAME Stripe mode as your secret key.")
+    else:
+        checks.append(PreflightCheck(
+            name="price", ok=False, detail="Set, but could not be verified without a working key.",
+        ))
+
+    # --- 4. Where Stripe sends the customer back ---------------------------------------------
+    base = (settings.public_base_url or "").strip().rstrip("/")
+    if not base or "localhost" in base or "127.0.0.1" in base:
+        checks.append(PreflightCheck(
+            name="return_url", ok=False,
+            detail=f"OMI_PUBLIC_BASE_URL is '{base or 'unset'}' — paying customers would be "
+                   f"redirected somewhere unreachable.",
+        ))
+        steps.append(
+            "Set OMI_PUBLIC_BASE_URL to your WEB service URL (e.g. https://omisphere-web.onrender.com)."
+        )
+    else:
+        checks.append(PreflightCheck(
+            name="return_url", ok=True,
+            detail=f"Customers return to {base}/settings after paying.",
+        ))
+
+    # --- 5. What they get ---------------------------------------------------------------------
+    checks.append(PreflightCheck(
+        name="credit_grant", ok=settings.monthly_credit_grant > 0,
+        detail=f"{settings.monthly_credit_grant} credits granted per paid invoice.",
+    ))
+
+    # --- 6. Crediting mode (informational — the webhook is optional) --------------------------
+    checks.append(PreflightCheck(
+        name="crediting", ok=True,
+        detail=(
+            "Instant: the optional webhook is configured."
+            if settings.stripe_webhook_secret else
+            "API reconciliation (no webhook) — credits land on return from checkout, on the billing "
+            "page, and before any scan would be refused."
+        ),
+    ))
+
+    blocking = [c for c in checks if not c.ok and c.name in
+                ("secret_key", "stripe_reachable", "price", "return_url", "credit_grant")]
+    return PreflightResponse(ready=not blocking, checks=checks, next_steps=steps)
+
+
 @router.post("/create-checkout-session", response_model=CheckoutResponse)
 def create_checkout_session(
     current: CurrentUser = Depends(require_user),

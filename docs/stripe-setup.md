@@ -106,11 +106,55 @@ secrets belong only on the API service, which is why neither has that prefix.
 
 ## 6. Verify before you trust it
 
-**Health check.** The API logs a startup line — confirm it says billing is on:
+**Run the preflight.** This is the fastest way to know whether your deployment can actually take a
+payment. Sign in, then from the browser console on your site:
+
+```js
+await (await fetch('/api/v1/billing/preflight')).json()
+```
+
+or with curl against the API host, passing your `__session` cookie:
+
+```bash
+curl -s https://<your-api-host>/v1/billing/preflight \
+  -H "Cookie: __session=<your session cookie>" | python -m json.tool
+```
+
+It calls Stripe with your configured key and reports back:
+
+```json
+{
+  "ready": true,
+  "checks": [
+    {"name": "secret_key",       "ok": true,  "detail": "Set (test mode key)."},
+    {"name": "stripe_reachable", "ok": true,  "detail": "Authenticated with Stripe account acct_1Q…"},
+    {"name": "price",            "ok": true,  "detail": "9.99 USD per month — this is what a customer is charged."},
+    {"name": "return_url",       "ok": true,  "detail": "Customers return to https://…/settings after paying."},
+    {"name": "credit_grant",     "ok": true,  "detail": "20 credits granted per paid invoice."},
+    {"name": "crediting",        "ok": true,  "detail": "API reconciliation (no webhook) …"}
+  ],
+  "next_steps": []
+}
+```
+
+`ready: false` means **no customer can pay yet**, and `next_steps` says exactly what to set. It never
+returns your secret key. It catches the failures that otherwise only appear when a real customer
+tries to check out:
+
+- the secret key set but `OMI_STRIPE_PRICE_ID` missing — checkout 503s
+- a price that is one-off rather than recurring — subscription checkout fails
+- a price from the *other* Stripe mode (test price + live key, or vice versa)
+- an archived price
+- `OMI_PUBLIC_BASE_URL` left on localhost — paying customers redirect into nowhere
+
+**Health check.** The API also logs a startup line — confirm it says billing is on:
 
 ```
 Stripe billing: on
 ```
+
+If it says `off (free tier only)`, the API has **not** picked up your keys: either they aren't set on
+the API service, or the service hasn't been redeployed since you added them.
 
 **Test the card path.** In test mode, subscribe with Stripe's test card:
 
