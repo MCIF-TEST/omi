@@ -741,6 +741,10 @@ export interface InvestigationSummary {
   updated_at: string;
   target_id: string | null;
   verdict: InvestigationVerdict | null;
+  /** Derived platform for archive cards: youtube | x | unknown. */
+  platform?: 'youtube' | 'x' | 'unknown' | string;
+  /** Public CDN thumb when available (YouTube); null for X / unknown. */
+  thumbnail_url?: string | null;
 }
 
 export interface InvestigationsListResponse {
