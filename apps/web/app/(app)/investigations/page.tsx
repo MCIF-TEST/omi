@@ -247,6 +247,7 @@ function SectionHead({
 
 function InvestigationCard({ inv }: { inv: InvestigationSummary }) {
   const platform = normalizePlatform(inv);
+  const thumb = resolveThumbnail(inv, platform);
   const pct = Math.round(inv.overall_probability * 100);
   const concluded = inv.verdict && inv.verdict !== 'pending';
 
@@ -258,7 +259,7 @@ function InvestigationCard({ inv }: { inv: InvestigationSummary }) {
       <article className="h-full flex flex-col bg-bg-elev border border-border-1 rounded-xl overflow-hidden card-interactive transition-all duration-300 group-hover:border-border-hot group-hover:shadow-card-lg">
         <InvestigationThumb
           platform={platform}
-          thumbnailUrl={inv.thumbnail_url}
+          thumbnailUrl={thumb}
           label={inv.label}
           size="md"
         />
@@ -331,6 +332,32 @@ function normalizePlatform(inv: InvestigationSummary): string {
   return 'unknown';
 }
 
+/** Prefer API thumb; fall back to deriving YouTube hqdefault from target/url. */
+function resolveThumbnail(inv: InvestigationSummary, platform: string): string | null {
+  if (inv.thumbnail_url) return inv.thumbnail_url;
+  if (platform !== 'youtube') return null;
+  const vid = youtubeIdFrom(inv);
+  return vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : null;
+}
+
+function youtubeIdFrom(inv: InvestigationSummary): string | null {
+  const bare = /^[A-Za-z0-9_-]{11}$/;
+  if (inv.target_id && bare.test(inv.target_id)) return inv.target_id;
+  const url = inv.input_url || '';
+  const m = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i,
+  );
+  if (m) return m[1];
+  try {
+    const u = new URL(url);
+    const v = u.searchParams.get('v');
+    if (v && bare.test(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 function buildHref({ platform, q }: { platform: string; q: string }) {
   const params = new URLSearchParams();
   if (platform) params.set('platform', platform);
@@ -338,3 +365,4 @@ function buildHref({ platform, q }: { platform: string; q: string }) {
   const qs = params.toString();
   return qs ? `/investigations?${qs}` : '/investigations';
 }
+
