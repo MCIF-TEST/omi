@@ -5,8 +5,8 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-07-24 · branch `claude/master-analyst-protocol-v1-1u8tyk` · PR
-[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1469 passed, 1 known-failing**
+**Last updated:** 2026-07-25 · branch `claude/master-analyst-protocol-v1-1u8tyk` · PR
+[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1488 passed, 1 known-failing**
 
 > `HANDOFF.md` at the repo root is a **stale one-off** from a different branch (2026-05-29). Ignore
 > it; this file supersedes it.
@@ -171,6 +171,31 @@ per-account allowance needs raising.
 `compute_scan_credits = ceil(accounts / 50) × credits_per_batch[platform]`, minimum 1. **1 credit per
 50 accounts, same rate for X and YouTube** (100 accounts = 2 credits). This was an explicit product
 decision; don't "fix" the asymmetry back in.
+
+### Billing — Stripe ($9.99/mo → 20 credits)
+
+Setup walkthrough: `docs/stripe-setup.md`. Four rules in `app/routes/billing.py` that must not be
+softened — each replaces a bug that cost or would have cost real money:
+
+- **Only `invoice.paid` grants credits.** A new subscription emits `customer.subscription.created`
+  *and* `invoice.paid`; granting on both double-credits one charge. Subscription events move status
+  and renewal date only.
+- **Credits are ADDED, never "topped up to N".** The old code did `max(balance, grant)`, so a
+  subscriber renewing with ≥20 credits paid $9.99 and received **nothing**.
+- **Exactly-once is a unique index, not an `if`.** Each grant claims a `grant:<invoice_id>` row in
+  `billing_events` inside a SAVEPOINT. Event-id idempotency alone is insufficient — two *different*
+  events can describe one payment.
+- **Claim and work commit in ONE transaction.** Recording the event before running the handler meant
+  a handler failure was retried by Stripe, skipped as a duplicate, and the customer got nothing.
+
+Also: the webhook verifies with the SDK but then reads `json.loads(payload)`. In stripe ≥8 a
+`StripeObject` is **not** a dict subclass and is not JSON-serializable — persisting one into
+`payload_json` raised `TypeError` and 500'd *every real webhook* while passing any test that
+hand-builds dicts. Don't put SDK objects in the DB.
+
+The charged amount lives in the Stripe Price, never in this repo — the server sends a price id, so
+no code bug can charge the wrong number. `OMI_PUBLIC_BASE_URL` must be the **web** host: it is where
+Stripe returns the customer after payment.
 
 ### Free pre-login scan
 
