@@ -76,8 +76,8 @@
   --grad-brand: linear-gradient(90deg, var(--tier-low) 0%, var(--tier-moderate) 40%, var(--tier-elevated) 68%, var(--tier-high) 100%);
   --grad-brand-soft: linear-gradient(90deg, rgba(34,197,94,0.12) 0%, rgba(245,158,11,0.10) 40%, rgba(249,115,22,0.10) 68%, rgba(239,68,68,0.12) 100%);
 
-  /* Type */
-  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Type — next/font sets --font-inter / --font-mono / --font-display-alt on <html> */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   /* Confidence / data-sufficiency ramp — separate from action + tier. */
   --confidence-strong: #22c55e;
@@ -116,7 +116,7 @@
   html, body {
     background: var(--bg-deep);
     color: var(--text);
-    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: 'cv11', 'ss01', 'tnum';
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -184,7 +184,7 @@
     letter-spacing: -0.02em;
   }
   h3, h4 {
-    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
     letter-spacing: -0.015em;
     font-weight: 600;
   }
@@ -223,7 +223,7 @@
 }
 
 @layer components {
-  .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
+  .mono { font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace; }
   .display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
@@ -235,7 +235,7 @@
      deliberate product rather than a default system stack — while the app keeps the neutral Inter
      .display. Tight tracking + the interface's cv/ss features keep it crisp at display sizes. */
   .display-alt {
-    font-family: 'Space Grotesk', var(--font-display);
+    font-family: var(--font-display-alt), var(--font-display);
     letter-spacing: -0.025em;
     font-weight: 600;
     font-feature-settings: 'ss01', 'ss03';
@@ -277,7 +277,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
     font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.12em;
@@ -300,7 +300,7 @@
 
   /* Stat / metric value — figures are evidence: mono, tabular. */
   .stat-value {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.03em;
     line-height: 1;
@@ -430,7 +430,7 @@
 
   /* Keyboard hint — a real keycap. */
   .kbd {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 0.625rem;
     line-height: 1;
     padding: 3px 5px;
