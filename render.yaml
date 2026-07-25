@@ -80,12 +80,28 @@ services:
       # twitterapi.io key — required for Twitter/X scans (Twitter routes 503 without it).
       - key: OMI_TWITTER_API_KEY
         sync: false
+      # Stripe — $9.99/month for OMI_MONTHLY_CREDIT_GRANT credits. Full walkthrough in
+      # docs/stripe-setup.md. NO WEBHOOK IS REQUIRED: the server reconciles against Stripe's API
+      # (app/core/billing_sync.py), so the secret key below is the only credential billing needs.
+      # Dashboard-set (sync: false) and ONLY on this service — the web service compiles NEXT_PUBLIC_*
+      # into JS that every visitor downloads.
+      # sk_test_… / sk_live_…  SECRET.
       - key: OMI_STRIPE_SECRET_KEY
         sync: false
+      # OPTIONAL. Leave unset — the webhook endpoint stays inert without it, and billing works fully
+      # through API reconciliation. Set it only if you later want renewals credited the instant
+      # Stripe charges, rather than the next time the user's account is reconciled. Enabling it is
+      # safe: both paths claim the same per-invoice row, so only one can ever grant.
       - key: OMI_STRIPE_WEBHOOK_SECRET
         sync: false
+      # price_… The AMOUNT LIVES IN STRIPE. This server never sends a price, so no code bug can
+      # charge the wrong figure; changing what you charge is a dashboard edit, not a deploy.
       - key: OMI_STRIPE_PRICE_ID
         sync: false
+      # Display only — what the UI prints beside the Subscribe button. Keep it in step with the
+      # Stripe price; this string is not what gets charged.
+      - key: OMI_SUBSCRIPTION_PRICE_DISPLAY
+        value: '$9.99'
       # ---------------------------------------------------------------
       # Omi Analyst — the reasoning layer. PRODUCTION DEFAULT: OpenRouter.
       # Interprets evidence the engine already produced; never touches
@@ -176,6 +192,9 @@ services:
       # deploys so issued session cookies aren't invalidated.
       - key: OMI_SESSION_SECRET
         generateValue: true
+      # Where Stripe returns the customer after checkout — so this must be the WEB service's URL
+      # (https://omisphere-web.onrender.com), not this API host. Point it at the API and paying
+      # customers land on a 404 immediately after being charged.
       - key: OMI_PUBLIC_BASE_URL
         sync: false
 

@@ -190,11 +190,19 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
 
     # Stripe — get these from dashboard.stripe.com (use test keys until live).
+    # sk_test_… / sk_live_…  SECRET. Never expose to the browser.
     stripe_secret_key: str | None = None
+    # whsec_…  The signing secret of THIS endpoint's webhook, from the Stripe dashboard. It is what
+    # stops anyone who knows the URL from POSTing themselves credits, so an unset value disables the
+    # webhook rather than trusting unverified payloads.
     stripe_webhook_secret: str | None = None
-    # The Stripe Price ID of your $9.99/mo subscription product
-    # (e.g. ``price_1ABC...``). Created once in the Stripe dashboard.
+    # price_…  The Stripe Price of the $9.99/month subscription. Created once in the dashboard; the
+    # AMOUNT LIVES IN STRIPE, never here — this server never sends an amount, so a bug in our code
+    # cannot charge the wrong price.
     stripe_price_id: str | None = None
+    # Display-only. What the UI prints next to the subscribe button; the real charge is whatever the
+    # Stripe Price says. Keep them in agreement — this string proves nothing.
+    subscription_price_display: str = "$9.99"
 
     # -----------------------------------------------------------------------
     # LLM enhancement layer (Phase 7).
