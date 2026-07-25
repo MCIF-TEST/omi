@@ -112,15 +112,15 @@ def build_prompt(
     a = assets if assets is not None else spec.load_assets()
     tmpl = spec.template_of(a)
 
-    # --- system message: identical assembly for every stage, from package assets only -------------
+    # --- system message: assembled for HF + provenance; OpenRouter never ships it on the wire ----
     system = assemble_stage_system(lp, tmpl)
 
-    # --- user message: the stage's evidence sections, each rendered as JSON data ------------------
+    # --- user message: PURE evidence package only (headers + JSON; no instructional restate) ----
+    # OpenRouter never puts the local system on the wire — dashboard Preset owns instructions.
     sections = spec.render_sections(bundle, ctx)
     ev = [tmpl["evidence_preamble"]]
     for s in tmpl["evidence_sections"]:
         ev.append(s["header"] + "\n" + json.dumps(sections.get(s["section"], {}), ensure_ascii=False, sort_keys=True))
-    ev.append(tmpl["evidence_instruction"])
     user = "\n\n".join(ev).strip()
 
     manifest = {

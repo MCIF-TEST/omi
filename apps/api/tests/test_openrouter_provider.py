@@ -331,12 +331,21 @@ def test_forensic_trace_records_openrouter_identity():
 # =========================================================================== #
 # Direct mode (no preset) + 14-15 no regression
 # =========================================================================== #
-def test_direct_mode_sends_system_and_user_with_explicit_model():
+def test_direct_mode_sends_evidence_only_never_local_system():
+    """Even without a preset, OpenRouter never re-ships the local base/system prompt.
+
+    Instructions live on the operator's OpenRouter dashboard (preset or gateway-side
+    system). The wire carries only the investigation evidence package as a user message.
+    """
     settings = _or_settings(preset=None, model="anthropic/claude-3.5-sonnet")
     out, captured, calls = _run(_valid_model_output(), settings=settings)
     messages = captured["body"]["messages"]
-    assert [m["role"] for m in messages] == ["system", "user"]   # no preset -> send the compiled system
-    assert "You are OMI ANALYST" in messages[0]["content"]
+    assert [m["role"] for m in messages] == ["user"]
+    # Local base prompt must NOT appear on the wire
+    assert "You are OMI ANALYST" not in messages[0]["content"]
+    assert "REASONING & GOVERNANCE CONSTITUTION" not in messages[0]["content"]
+    # Evidence package still reaches the model
+    assert "A1" in messages[0]["content"] or "COMPLETE INVESTIGATION EVIDENCE" in messages[0]["content"]
     assert captured["body"]["model"] == "anthropic/claude-3.5-sonnet"
     assert out["investigation_trace"]["model_backed"] is True
 

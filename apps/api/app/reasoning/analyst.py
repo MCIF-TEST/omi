@@ -152,8 +152,9 @@ def _openrouter_transport(settings: Settings, *, timeout: float, max_retries: in
     """The ONE OpenRouter transport — build the configured ``OpenRouterReasoningProvider`` (preset or
     direct mode) and return the same ``_call(system, user, config)`` closure shape the HF transport uses,
     so the runtime is provider-agnostic. Returns raw generated text, or None on any failure (→ Floor).
-    Records the exact endpoint failure + latency into the forensic capture. Never resends the Master
-    Analyst Protocol in preset mode (the preset supplies the system prompt)."""
+    Records the exact endpoint failure + latency into the forensic capture. Never sends a local
+    system / base prompt on the OpenRouter wire — the operator's dashboard Preset owns the Master
+    Analyst Protocol; the request carries only the investigation evidence package."""
     from app.reasoning.model_providers import OpenRouterReasoningProvider
     from app.reasoning.model_providers.openrouter import OPENROUTER_URL
 

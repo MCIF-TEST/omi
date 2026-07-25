@@ -93,7 +93,6 @@ def build_prompt_package(
     for s in tmpl["evidence_sections"]:
         section = cdict.get(s["section"], {})
         ev_parts.append(s["header"] + "\n" + json.dumps(section, ensure_ascii=False, sort_keys=True))
-    ev_parts.append(tmpl["evidence_instruction"])
     user = "\n\n".join(ev_parts).strip()
 
     system_sha = "sys:" + hashlib.sha256(system.encode("utf-8")).hexdigest()[:24]
