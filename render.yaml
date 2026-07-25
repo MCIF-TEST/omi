@@ -12,8 +12,33 @@
 #   4. Add your custom domain to omisphere-web; point omisphere-api at it
 #      under a subdomain (e.g. api.yourdomain.com).
 #
-# Stripe webhook URL to register:
-#   https://api.yourdomain.com/v1/billing/webhook
+# ---------------------------------------------------------------------------
+# STRIPE — pure API billing (NO WEBHOOKS)
+# ---------------------------------------------------------------------------
+# Checkout is Stripe-hosted. Credits are granted by reconciling against Stripe's
+# API after checkout return / on the billing page / before a scan would be refused.
+# There is NO webhook to register and OMI_STRIPE_WEBHOOK_SECRET stays unset.
+#
+# Required on omisphere-api (dashboard secrets):
+#   OMI_STRIPE_SECRET_KEY   sk_test_… or sk_live_…   (SECRET — not the pk_ key)
+#   OMI_STRIPE_PRICE_ID     price_… recurring monthly, same mode as the secret
+#   OMI_PUBLIC_BASE_URL     https://<your-web-host>  (WEB URL, not the API host)
+#
+# Optional on omisphere-api:
+#   OMI_SUBSCRIPTION_PRICE_DISPLAY   $9.99   (UI label only)
+#   OMI_MONTHLY_CREDIT_GRANT         20
+#
+# NOT used by current billing:
+#   STRIPE_PUBLISHABLE_KEY / pk_… keys — Checkout never loads Stripe.js in the
+#   browser, so a publishable key does nothing for Subscribe. If you set one for
+#   future client-side Stripe features, put NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+#   on the WEB service only. Never put sk_ secrets on the web service.
+#
+# Dashboard: Settings → Billing → Customer portal → enable (for Manage subscription).
+# Verify after deploy (signed in, browser console on the web app):
+#   await (await fetch('/api/v1/billing/preflight')).json()
+# Expect ready: true.
+# ---------------------------------------------------------------------------
 
 services:
   # ---------------------------------------------------------------
@@ -80,28 +105,40 @@ services:
       # twitterapi.io key — required for Twitter/X scans (Twitter routes 503 without it).
       - key: OMI_TWITTER_API_KEY
         sync: false
-      # Stripe — $9.99/month for OMI_MONTHLY_CREDIT_GRANT credits. Full walkthrough in
-      # docs/stripe-setup.md. NO WEBHOOK IS REQUIRED: the server reconciles against Stripe's API
-      # (app/core/billing_sync.py), so the secret key below is the only credential billing needs.
-      # Dashboard-set (sync: false) and ONLY on this service — the web service compiles NEXT_PUBLIC_*
-      # into JS that every visitor downloads.
-      # sk_test_… / sk_live_…  SECRET.
+
+      # ===============================================================
+      # Stripe — pure API, no webhooks (see header comment)
+      # ===============================================================
+      # REQUIRED. Secret API key from Stripe Dashboard → Developers → API keys.
+      # Must start with sk_test_ (test mode) or sk_live_ (live mode).
+      # This is NOT the publishable key (pk_…). pk_ keys cannot create Checkout sessions.
       - key: OMI_STRIPE_SECRET_KEY
         sync: false
-      # OPTIONAL. Leave unset — the webhook endpoint stays inert without it, and billing works fully
-      # through API reconciliation. Set it only if you later want renewals credited the instant
-      # Stripe charges, rather than the next time the user's account is reconciled. Enabling it is
-      # safe: both paths claim the same per-invoice row, so only one can ever grant.
-      - key: OMI_STRIPE_WEBHOOK_SECRET
-        sync: false
-      # price_… The AMOUNT LIVES IN STRIPE. This server never sends a price, so no code bug can
-      # charge the wrong figure; changing what you charge is a dashboard edit, not a deploy.
+      # REQUIRED. Recurring monthly Price id (price_…) for $9.99/mo (or your amount).
+      # Must be from the SAME mode as OMI_STRIPE_SECRET_KEY (test vs live).
+      # Create: Product catalogue → Add product → recurring monthly → copy price id.
       - key: OMI_STRIPE_PRICE_ID
         sync: false
-      # Display only — what the UI prints beside the Subscribe button. Keep it in step with the
-      # Stripe price; this string is not what gets charged.
+      # REQUIRED for production checkout return. The WEB app URL customers land on
+      # after Stripe Checkout (no trailing slash), e.g. https://omisphere-web.onrender.com
+      # or your custom domain. If this points at the API host, paying users get a 404.
+      - key: OMI_PUBLIC_BASE_URL
+        sync: false
+      # Display only — label next to Subscribe. The real charge is the Stripe Price.
       - key: OMI_SUBSCRIPTION_PRICE_DISPLAY
         value: '$9.99'
+      # LEAVE UNSET for pure API billing. When empty, the webhook route is inert and
+      # credits come only from API reconciliation (POST /v1/billing/sync). Do not
+      # register a Stripe webhook endpoint for this deployment.
+      - key: OMI_STRIPE_WEBHOOK_SECRET
+        sync: false
+      # OPTIONAL / UNUSED by current product. Hosted Checkout does not need Stripe.js.
+      # Kept so a dashboard var named STRIPE_PUBLISHABLE_KEY is documented and harmless
+      # if present; the API never reads it for Subscribe. Prefer deleting it unless you
+      # plan a future client-side Stripe feature.
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+
       # ---------------------------------------------------------------
       # Omi Analyst — the reasoning layer. PRODUCTION DEFAULT: OpenRouter.
       # Interprets evidence the engine already produced; never touches
@@ -192,11 +229,6 @@ services:
       # deploys so issued session cookies aren't invalidated.
       - key: OMI_SESSION_SECRET
         generateValue: true
-      # Where Stripe returns the customer after checkout — so this must be the WEB service's URL
-      # (https://omisphere-web.onrender.com), not this API host. Point it at the API and paying
-      # customers land on a 404 immediately after being charged.
-      - key: OMI_PUBLIC_BASE_URL
-        sync: false
 
   # ---------------------------------------------------------------
   # Web — Next.js
@@ -226,7 +258,13 @@ services:
         value: '25'
       - key: NEXT_PUBLIC_MONTHLY_CREDITS
         value: '20'
+      # Same WEB public URL as on the API (no trailing slash). Used by the
+      # browser app for absolute links; must match where users actually land.
       - key: OMI_PUBLIC_BASE_URL
+        sync: false
+      # OPTIONAL — only if you later add Stripe.js / Elements. Hosted Checkout
+      # does not need this today. Value is pk_test_… / pk_live_… (public).
+      - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
         sync: false
       # Clerk auth (frontend). The publishable key is PUBLIC (ships in the browser
       # bundle by design) and MUST exist at build time or the static prerender throws
