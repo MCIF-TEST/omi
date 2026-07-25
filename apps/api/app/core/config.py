@@ -290,9 +290,9 @@ class Settings(BaseSettings):
     # instructions. The repository still records the local master-prompt version/hash it EXPECTS the
     # preset to hold (it does not, and cannot, cryptographically verify the remote preset content).
     openrouter_preset: str | None = None
-    # Optional model slug. In preset mode the preset defines the model; set this to intentionally
-    # override it (sent as a base model the preset layers onto). Without a preset it is required for
-    # routing — the wire still carries evidence only (no local system re-send).
+    # Optional model slug for DIRECT mode only (no preset). When OMI_OPENROUTER_PRESET is set,
+    # this is IGNORED — the OpenRouter dashboard preset fully owns model selection. Do not set
+    # OMI_OPENROUTER_MODEL in production if you want dashboard control of the model.
     openrouter_model: str | None = None
     # The model we EXPECT OpenRouter to serve (the omi-master-v1 preset routes to GPT-5 Mini). This is a
     # VERIFICATION expectation, NOT a routing directive: we never send it on the wire, so it can never

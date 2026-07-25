@@ -165,12 +165,16 @@ def _openrouter_transport(settings: Settings, *, timeout: float, max_retries: in
     except Exception:  # noqa: BLE001 — provenance is best-effort, never blocks the call
         master_hash = None
 
+    # Dashboard owns model selection when a preset is set — never layer OMI_OPENROUTER_MODEL
+    # onto "@preset/<slug>". Only pass a model slug for direct mode (no preset).
+    _or_preset = getattr(settings, "openrouter_preset", None)
+    _or_model = None if _or_preset else getattr(settings, "openrouter_model", None)
     provider = OpenRouterReasoningProvider(
         base_url=str(getattr(settings, "openrouter_base_url", OPENROUTER_URL) or OPENROUTER_URL),
-        # OpenRouter's own model slug ONLY — never the HF ``pp.model_id``. In preset mode a null model
-        # means "use the preset's model" (model_ref -> "@preset/<slug>"); in direct mode it is required.
-        model=getattr(settings, "openrouter_model", None),
-        preset=getattr(settings, "openrouter_preset", None),
+        # Never the HF ``pp.model_id``. Preset mode: model=None → wire is "@preset/<slug>" only.
+        # Direct mode (no preset): explicit model slug required by the gateway.
+        model=_or_model,
+        preset=_or_preset,
         canonical_schema=canonical_schema,
         structured_output=bool(getattr(settings, "openrouter_structured_output", True)),
         referer=getattr(settings, "openrouter_referer", None),
@@ -797,9 +801,9 @@ def _assess_core(
             # Prefer the model reference the transport ACTUALLY put on the wire (it drops a misconfigured
             # display-name model and falls back to preset-only), so the trace matches reality rather than
             # the raw configured concatenation. Fall back to the computed value if the wire never fired.
+            # Preset owns model routing — never report/layer <model>@preset/<slug>.
             _requested_model = capture.get("model_ref") or (
-                f"{_or_model}@preset/{_or_preset}" if (_or_preset and _or_model)
-                else (f"@preset/{_or_preset}" if _or_preset else _or_model))
+                f"@preset/{_or_preset}" if _or_preset else _or_model)
         else:
             _requested_model = inference.served_model
         try:

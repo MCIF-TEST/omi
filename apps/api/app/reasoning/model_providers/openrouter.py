@@ -129,25 +129,26 @@ class OpenRouterReasoningProvider:
         return "/" in model and not any(c.isspace() for c in model)
 
     def _model_ref(self) -> str:
-        """The ``model`` field: a preset reference in preset mode (optionally layering a base model), or the
-        explicit model slug in direct mode.
+        """The ``model`` field on the OpenRouter wire.
 
-        In preset mode the preset is self-sufficient (it defines the model), so ``model`` is only layered
-        on as ``<slug>@preset/<name>`` when it's a REAL slug. A misconfigured display name (e.g. someone
-        sets ``OMI_OPENROUTER_MODEL=GPT-5 Mini``) would otherwise produce the invalid model reference
-        ``GPT-5 Mini@preset/omi-master-v1`` and OpenRouter would reject EVERY request with HTTP 400 →
-        deterministic Floor. We ignore such a value (falling back to preset-only) and warn, so one bad env
-        var can't brick the whole AI path."""
+        **Preset mode (preferred):** always ``@preset/<slug>`` only. The OpenRouter dashboard
+        preset owns model selection + routing. We deliberately NEVER layer
+        ``<model>@preset/<slug>`` — that would override the operator's dashboard choice and
+        re-pin a model from env (``OMI_OPENROUTER_MODEL``). If a model env is set while a
+        preset is configured, it is ignored with a warning.
+
+        **Direct mode (no preset):** the explicit model slug is required by the gateway.
+        Prefer configuring a dashboard preset so model choice stays out of this codebase.
+        """
         if self.preset:
             slug = self.preset if self.preset.startswith("@preset/") else f"@preset/{self.preset}"
-            if self.model and not self._looks_like_slug(self.model):
+            if self.model:
                 logger.warning(
-                    "openrouter: ignoring OMI_OPENROUTER_MODEL=%r — not a valid model slug (expected "
-                    "'provider/name', e.g. 'openai/gpt-5-mini'); using preset %s alone, which already "
-                    "defines the model. Unset the variable to silence this.", self.model, slug,
+                    "openrouter: ignoring OMI_OPENROUTER_MODEL=%r — preset %s owns model selection "
+                    "on the OpenRouter dashboard. Unset OMI_OPENROUTER_MODEL so the dashboard "
+                    "fully controls which model serves.", self.model, slug,
                 )
-                return slug
-            return f"{self.model}{slug}" if self.model else slug
+            return slug
         return self.model or ""
 
     def _response_format(self) -> dict | None:

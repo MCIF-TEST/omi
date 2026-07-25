@@ -170,7 +170,7 @@ services:
       # Secret — set the value in the Render dashboard, never in this file.
       - key: OPENROUTER_API_KEY
         sync: false
-      # OMI_OPENROUTER_MODEL is intentionally UNSET: the omi-master-v1 preset
+      # OMI_OPENROUTER_MODEL is intentionally UNSET and IGNORED when a preset is set: the
       # determines the model. Set it only to intentionally override the preset.
       #
       # The model we EXPECT the preset to serve. NOT sent on the wire (so a bad
