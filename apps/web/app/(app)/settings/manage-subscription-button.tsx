@@ -28,28 +28,26 @@ const PAID = ['active', 'trialing'];
 /**
  * Subscribe / manage button + the return-from-Stripe handshake.
  *
- * There is no webhook. When Stripe sends the customer back here, we ask our API to reconcile
- * against Stripe (`POST /v1/billing/sync`), which reads what was actually paid and grants the
- * credits. That call is what completes the purchase, so it retries for a few seconds: Checkout
- * occasionally redirects a beat before the invoice is marked paid, and a paying customer must never
- * be left looking at a "Subscribe" button and their old balance.
+ * Pure API — no webhook. On return from Checkout we POST /v1/billing/sync (with the Checkout
+ * session_id when present) so the server asks Stripe what was paid and grants credits.
  */
 export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }) {
   const router = useRouter();
   const params = useSearchParams();
   const justPaid = params?.get('billing') === 'success';
   const canceled = params?.get('billing') === 'cancel';
+  const checkoutSessionId = params?.get('session_id') || null;
 
   const [status, setStatus] = useState<BillingStatus>(initial);
   const [pending, setPending] = useState(false);
-  const [settling, setSettling] = useState(justPaid && !PAID.includes(initial.subscription_status ?? ''));
+  const [settling, setSettling] = useState(
+    justPaid && !PAID.includes(initial.subscription_status ?? ''),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const active = PAID.includes(status.subscription_status ?? '');
   const pastDue = status.subscription_status === 'past_due';
 
-  // Drive the reconciliation until Stripe reports the subscription live. Bounded, so a payment that
-  // never lands stops spinning and says so instead of pretending forever.
   useEffect(() => {
     if (!settling) return;
     let tries = 0;
@@ -59,53 +57,71 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       if (cancelled) return;
       tries += 1;
       try {
-        const s = await apiClient<SyncResponse>('/v1/billing/sync', { method: 'POST' });
+        const qs = checkoutSessionId
+          ? `?session_id=${encodeURIComponent(checkoutSessionId)}`
+          : '';
+        const s = await apiClient<SyncResponse>(`/v1/billing/sync${qs}`, {
+          method: 'POST',
+          body: '{}',
+        });
         setStatus((prev) => ({
           ...prev,
           credits_remaining: s.credits_remaining,
           subscription_status: s.subscription_status,
         }));
-        if (PAID.includes(s.subscription_status ?? '')) {
+        if (PAID.includes(s.subscription_status ?? '') || s.granted > 0) {
           setSettling(false);
           router.refresh();
           return;
         }
       } catch {
-        /* keep trying — a transient error here shouldn't end the handshake */
+        /* keep trying — Stripe can lag a beat after redirect */
       }
       if (cancelled) return;
-      if (tries >= 10) { setSettling(false); return; }
-      timer = setTimeout(() => { void tick(); }, 2000);
+      // ~45s of retries: live mode invoice visibility is usually fast but not instant.
+      if (tries >= 15) {
+        setSettling(false);
+        return;
+      }
+      timer = setTimeout(() => {
+        void tick();
+      }, 2500);
     };
-    timer = setTimeout(() => { void tick(); }, 1200);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [settling, router]);
+    timer = setTimeout(() => {
+      void tick();
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [settling, router, checkoutSessionId]);
 
   const onClick = async () => {
     setError(null);
     setPending(true);
     try {
-      const path = active || pastDue ? '/v1/billing/portal' : '/v1/billing/create-checkout-session';
-      // Send an empty JSON body so proxies that reject POST + Content-Type: application/json
-      // with a zero-length body don't kill checkout before it reaches FastAPI.
+      const path =
+        active || pastDue ? '/v1/billing/portal' : '/v1/billing/create-checkout-session';
       const { url } = await apiClient<{ url: string }>(path, {
         method: 'POST',
         body: '{}',
       });
-      if (!url || typeof url !== 'string') {
-        setError('Stripe returned no checkout URL. Check billing configuration (preflight).');
+      if (!url || typeof url !== 'string' || !url.startsWith('https://')) {
+        setError(
+          'Stripe returned no checkout URL. Confirm OMI_STRIPE_SECRET_KEY, OMI_STRIPE_PRICE_ID (price_…), and OMI_PUBLIC_BASE_URL on the API service.',
+        );
         setPending(false);
         return;
       }
       window.location.href = url;
     } catch (e) {
-      // Prefer the API's detail string — after the checkout hardening it names the real Stripe
-      // problem (wrong-mode price, missing portal, etc.) instead of a generic "try again".
       let message = 'Could not start checkout.';
       if (e instanceof ApiError) {
         message = e.message || message;
-        if (e.status === 503 && !/configured|PRICE|PUBLIC_BASE/i.test(message)) {
-          message = `${message} Billing may not be fully configured — check OMI_STRIPE_SECRET_KEY, OMI_STRIPE_PRICE_ID, and OMI_PUBLIC_BASE_URL on the API service.`;
+        if (e.status === 401) {
+          message = 'You need to sign in again before subscribing.';
+        } else if (e.status === 503) {
+          message = `${message} Check API env: OMI_STRIPE_SECRET_KEY (sk_…), OMI_STRIPE_PRICE_ID (price_… not 9.99), OMI_PUBLIC_BASE_URL (web https URL).`;
         }
       }
       setError(message);
@@ -117,9 +133,10 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
     return (
       <p className="text-sm text-fg-mute">
         Card payments aren&apos;t switched on for this deployment yet. On the API service set{' '}
-        <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span>,{' '}
-        <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span>, and{' '}
-        <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web URL), then redeploy.
+        <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span> (sk_…),{' '}
+        <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span> (price_…, not 9.99), and{' '}
+        <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web https URL), then
+        redeploy. Leave webhook secret unset for pure API billing.
       </p>
     );
   }
@@ -132,7 +149,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
             ? 'Payment received — adding your credits…'
             : active
               ? `Payment received. ${status.credits_remaining} credits are on your account.`
-              : 'Payment received. Your credits will appear shortly — reload if they don’t.'}
+              : 'Payment received. If credits are not visible yet, open this page again in a moment.'}
         </p>
       )}
       {canceled && (
