@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Search, Network, MessageSquareText,
-  Activity, FileText, Settings, Folder, Database, type LucideIcon,
+  Activity, Settings, History, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Logo } from '@/components/shared/logo';
@@ -21,8 +21,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: 'Intelligence',
     items: [
-      { href: '/investigate',    label: 'Investigate',   icon: Search },
-      { href: '/investigations', label: 'Investigations',icon: Folder },
+      { href: '/investigate',    label: 'Investigate',              icon: Search },
+      { href: '/investigations', label: 'Previous investigations',  icon: History },
     ],
   },
   {
@@ -36,12 +36,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: 'Sources',
-    items: [
-      { href: '/content',        label: 'Content DB',    icon: Database },
-    ],
-  },
-  {
     label: 'Operations',
     items: [
       { href: '/monitoring',     label: 'Monitoring',    icon: Activity },
@@ -51,7 +45,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
 ];
 
 // Pre-activation (no investigations yet) the nav narrows to the value-moment
-// path: Dashboard / Investigate / Investigations / Campaigns / Settings.
+// path: Investigate / Previous investigations / Narratives / Settings.
 const NEW_USER_VISIBLE = new Set([
   '/investigate', '/investigations', '/campaigns', '/settings',
 ]);
@@ -102,7 +96,7 @@ export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
                         active ? 'text-accent-2' : 'text-fg-mute group-hover:text-fg-dim',
                       )}
                     />
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1 leading-snug">{item.label}</span>
                     {item.badge && (
                       <span className="font-mono text-[0.55rem] tracking-wider uppercase text-fg-faint border border-border-2 px-1 py-0.5 rounded">
                         {item.badge}
