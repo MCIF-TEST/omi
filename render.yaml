@@ -119,6 +119,10 @@ services:
       # Create: Product catalogue → Add product → recurring monthly → copy price id.
       - key: OMI_STRIPE_PRICE_ID
         sync: false
+      # Checkout methods while Cards may still be pending approval. Default in code is link,card
+      # (Link + Apple Pay via card wallets). Set to "link" only if card is fully blocked.
+      - key: OMI_STRIPE_PAYMENT_METHOD_TYPES
+        value: 'link,card'
       # REQUIRED for production checkout return. The WEB app URL customers land on
       # after Stripe Checkout (no trailing slash), e.g. https://omisphere-web.onrender.com
       # or your custom domain. If this points at the API host, paying users get a 404.
