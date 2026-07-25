@@ -669,6 +669,9 @@ def create_checkout_session(
             line_items=[{"price": price_id, "quantity": 1}],
             success_url=success,
             cancel_url=cancel,
+            # Explicit card — avoids "No valid payment method types" when Dashboard automatic
+            # payment methods are empty/misconfigured for the price currency (common on new Live accounts).
+            payment_method_types=["card"],
             allow_promotion_codes=True,
             # Lets Checkout collect name/address when the Customer row is sparse — required when
             # Automatic Tax (or similar dashboard defaults) needs an address, and harmless otherwise.
@@ -699,6 +702,7 @@ def create_checkout_session(
                     line_items=[{"price": price_id, "quantity": 1}],
                     success_url=success,
                     cancel_url=cancel,
+                    payment_method_types=["card"],
                     allow_promotion_codes=True,
                     billing_address_collection="auto",
                     customer_update={"address": "auto", "name": "auto"},
@@ -713,9 +717,15 @@ def create_checkout_session(
                     detail=f"Could not start Stripe checkout: {_stripe_user_message(e2)}",
                 ) from e2
         else:
+            hint = msg
+            if "payment method" in msg.lower():
+                hint = (
+                    f"{msg} Enable Cards for your price currency in Stripe Dashboard → "
+                    "Settings → Payment methods (use Live mode if OMI_STRIPE_SECRET_KEY is sk_live)."
+                )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not start Stripe checkout: {msg}",
+                detail=f"Could not start Stripe checkout: {hint}",
             ) from e
 
     if not getattr(s, "url", None):
