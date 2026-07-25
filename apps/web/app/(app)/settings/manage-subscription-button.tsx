@@ -116,7 +116,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
   if (!status.configured) {
     return (
       <p className="text-sm text-fg-mute">
-        Card payments aren't switched on for this deployment yet. On the API service set{' '}
+        Card payments aren&apos;t switched on for this deployment yet. On the API service set{' '}
         <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span>,{' '}
         <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span>, and{' '}
         <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web URL), then redeploy.
@@ -137,12 +137,12 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       )}
       {canceled && (
         <p className="text-sm text-fg-mute" role="status">
-          Checkout cancelled — you haven't been charged.
+          Checkout cancelled — you haven&apos;t been charged.
         </p>
       )}
       {pastDue && (
         <p className="text-sm text-warn">
-          Your last payment didn't go through. Update your card to keep your subscription.
+          Your last payment didn&apos;t go through. Update your card to keep your subscription.
         </p>
       )}
 
