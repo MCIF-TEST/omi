@@ -1,45 +1,155 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
- * No Clerk in middleware — on purpose.
+ * Security headers + CSP nonces + lightweight edge rate limiting + referral cookie.
  *
- * WHY: clerkMiddleware performs a server-side "handshake" (e.g. dev-browser setup for development
- * pk_test instances) by redirecting to Clerk's Frontend API and then verifying the returned handshake
- * token. That verification needs CLERK_SECRET_KEY inside the Edge runtime — and Next.js does not
- * reliably expose server secrets to Edge middleware (it inlines only NEXT_PUBLIC_* and threads other
- * keys through inconsistently). When the secret isn't there, the handshake can't complete: the browser
- * gets stuck bouncing through the handshake, the sign-in widget renders blank, and Clerk's client JS
- * throws "a client-side exception" from the half-finished handshake state. Wrapping it in try/catch
- * only hid the incomplete handshake and made it worse.
- *
- * INSTEAD: let Clerk's CLIENT handle its own handshake — it talks to the Frontend API directly from the
- * browser and does not need this middleware. Route protection is enforced server-side in
- * app/(app)/layout.tsx (getCurrentUser → redirect), which runs in the Node runtime and verifies the
- * session by forwarding the Clerk __session cookie to FastAPI (which checks it against Clerk's JWKS).
- * So middleware has no auth job left; it just passes everything through and can never break Clerk or
- * 500 the Edge.
+ * No Clerk in middleware — on purpose (see history). Clerk runs client-side only;
+ * route protection is in app/(app)/layout.tsx via FastAPI session verification.
  */
-// Referral capture. Clerk's hosted sign-up can't carry a `?ref=CODE` query param through its flow,
-// so a visitor who arrives via a referral link (e.g. /signup?ref=CODE, or any page with ?ref=) would
-// lose the code before the account is created. We stash it in a first-party cookie the moment we see
-// it; the backend reads that cookie when it provisions the Clerk account and credits the referrer.
+
 const REF_RE = /^[A-Za-z0-9_-]{4,16}$/;
 
+/** Shared static security headers (also mirrored in next.config for static assets). */
+export const SECURITY_HEADERS: Record<string, string> = {
+  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy':
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), accelerometer=(), gyroscope=(), magnetometer=()',
+  // same-origin-allow-popups: Clerk/OAuth may open auth windows; pure same-origin can break them.
+  'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+  'Cross-Origin-Resource-Policy': 'same-site',
+  // Modern best practice: disable legacy XSS auditor (CSP is the real control).
+  'X-XSS-Protection': '0',
+};
+
+/**
+ * Build a restrictive CSP. Next.js App Router injects flight scripts; when we set `x-nonce`
+ * on the request, Next applies that nonce to its inline scripts so we can avoid 'unsafe-inline'.
+ * Clerk loads from its CDN without our nonce — listed explicitly in script-src.
+ */
+export function buildContentSecurityPolicy(nonce: string): string {
+  // Clerk Frontend API host is account-specific (*.clerk.accounts.dev in test).
+  const clerkScript = [
+    'https://*.clerk.accounts.dev',
+    'https://clerk.accounts.dev',
+    'https://*.clerk.com',
+    'https://clerk.com',
+    'https://challenges.cloudflare.com',
+  ].join(' ');
+  const clerkConnect = [
+    'https://*.clerk.accounts.dev',
+    'https://api.clerk.com',
+    'https://clerk-telemetry.com',
+    'https://*.clerk.com',
+    'https://challenges.cloudflare.com',
+  ].join(' ');
+  // Stripe Checkout is a top-level redirect (not embedded); connect kept for future Elements.
+  const stripe = 'https://js.stripe.com https://api.stripe.com https://hooks.stripe.com';
+
+  return [
+    "default-src 'self'",
+    // Nonce covers Next.js flight + any nonced app scripts. No 'unsafe-inline' / 'unsafe-eval'.
+    `script-src 'self' 'nonce-${nonce}' ${clerkScript}`,
+    // Clerk + Tailwind inject styles; 'unsafe-inline' for style is far less risky than for scripts.
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com https://*.clerk.accounts.dev",
+    "font-src 'self' data:",
+    `connect-src 'self' ${clerkConnect} ${stripe} https://openrouter.ai`,
+    `frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://js.stripe.com https://hooks.stripe.com`,
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self' https://*.clerk.accounts.dev https://clerk.com",
+    "frame-ancestors 'none'",
+    'upgrade-insecure-requests',
+  ].join('; ');
+}
+
+// --- Edge rate limit (best-effort; per isolate). Scanners + abuse get 429. ---
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 120; // pages per IP per minute
+const hits = new Map<string, { count: number; reset: number }>();
+
+function rateLimit(ip: string): { ok: boolean; retryAfter: number } {
+  const now = Date.now();
+  let row = hits.get(ip);
+  if (!row || now >= row.reset) {
+    row = { count: 0, reset: now + RATE_WINDOW_MS };
+    hits.set(ip, row);
+  }
+  row.count += 1;
+  // Opportunistic cleanup
+  if (hits.size > 5_000) {
+    for (const [k, v] of hits) {
+      if (now >= v.reset) hits.delete(k);
+    }
+  }
+  if (row.count > RATE_MAX) {
+    return { ok: false, retryAfter: Math.max(1, Math.ceil((row.reset - now) / 1000)) };
+  }
+  return { ok: true, retryAfter: 0 };
+}
+
+function clientIp(req: NextRequest): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown'
+  );
+}
+
 export default function middleware(req: NextRequest) {
-  const res = NextResponse.next();
+  // Rate limit page navigations (not every static asset — matcher already narrows).
+  const { ok, retryAfter } = rateLimit(clientIp(req));
+  if (!ok) {
+    return new NextResponse('Too Many Requests', {
+      status: 429,
+      headers: {
+        'Retry-After': String(retryAfter),
+        'Content-Type': 'text/plain; charset=utf-8',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  const csp = buildContentSecurityPolicy(nonce);
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  const res = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+
+  // Apply security headers on the response (document + navigations).
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    res.headers.set(k, v);
+  }
+  res.headers.set('Content-Security-Policy', csp);
+  // Expose nonce to Server Components via request header (read with headers() in layout).
+  res.headers.set('x-nonce', nonce);
+
+  // Referral capture for Clerk sign-up (cannot carry ?ref= through hosted flow).
   const ref = req.nextUrl.searchParams.get('ref');
   if (ref && REF_RE.test(ref) && req.cookies.get('omi_ref')?.value !== ref) {
     res.cookies.set('omi_ref', ref, {
       path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 days to convert
+      maxAge: 60 * 60 * 24 * 30,
       sameSite: 'lax',
       httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
     });
   }
+
   return res;
 }
 
 export const config = {
-  // Keep the matcher tight so this runs on real page navigations, not static assets or the /api rewrite.
-  matcher: ['/((?!_next/|api/|favicon.ico|.*\\..*).*)'],
+  // Pages + HTML navigations. Skip static files Next already fingerprints.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml|json)$).*)',
+  ],
 };
