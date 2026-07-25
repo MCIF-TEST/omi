@@ -652,6 +652,7 @@ class InvestigationSummary(BaseModel):
     thumbnail_url: str | None = None
 
 
+
 class InvestigationsListResponse(BaseModel):
     investigations: list[InvestigationSummary]
 
