@@ -1,4 +1,6 @@
-"""Stripe billing: subscription checkout + webhook.
+"""Stripe billing: subscription checkout via pure API (no webhook required).
+
+Webhook endpoint remains optional and inert without OMI_STRIPE_WEBHOOK_SECRET.
 
 The product is created **once** in the Stripe dashboard:
 
@@ -33,6 +35,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -83,6 +86,28 @@ def _stripe(settings: Settings):
     return stripe
 
 
+def _billing_is_configured(settings: Settings) -> bool:
+    """True only when Subscribe can actually open a Checkout session.
+
+    Requires a secret key, a real ``price_…`` id (not a dollar amount), and a non-empty
+    public base URL. In production, localhost is treated as misconfigured so the UI
+    does not offer a button that redirects paying customers into nowhere.
+    """
+    if not (settings.stripe_secret_key or "").strip():
+        return False
+    price = (settings.stripe_price_id or "").strip()
+    if not price.startswith("price_"):
+        return False
+    base = (settings.public_base_url or "").strip()
+    if not base:
+        return False
+    if settings.env == "production" and (
+        "localhost" in base or "127.0.0.1" in base
+    ):
+        return False
+    return True
+
+
 def _require_price_id(settings: Settings) -> str:
     """Stripe Price ids look like ``price_1ABC…``. Dollar amounts like ``9.99`` are not valid."""
     raw = (settings.stripe_price_id or "").strip()
@@ -118,6 +143,14 @@ def _public_base(settings: Settings) -> str:
                 "OMI_PUBLIC_BASE_URL is not set. Set it to your web app URL "
                 "(e.g. https://omisphere-web.onrender.com) so Stripe can return "
                 "customers after checkout."
+            ),
+        )
+    if settings.env == "production" and ("localhost" in base or "127.0.0.1" in base):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"OMI_PUBLIC_BASE_URL is {base!r} — that is not reachable by paying customers. "
+                "Set it to your public web URL (https://…), not localhost."
             ),
         )
     return base
@@ -193,6 +226,74 @@ def _ensure_stripe_customer(stripe, user: User, *, recreate: bool = False) -> st
     return customer.id
 
 
+
+def _claim_checkout_session(stripe, user: User, checkout_session_id: str) -> None:
+    """Bind a completed Checkout Session to this user (pure-API purchase handshake).
+
+    Stripe's success URL can include ``{CHECKOUT_SESSION_ID}``. Retrieving that session
+    lets us link the customer *before* invoice list reconciliation, which is more reliable
+    than waiting for the invoice list alone on a slow network.
+    """
+    try:
+        cs = stripe.checkout.Session.retrieve(checkout_session_id)
+    except Exception as e:  # noqa: BLE001
+        log.warning(
+            "checkout session retrieve failed id=%s user=%s: %s",
+            checkout_session_id, user.id, type(e).__name__,
+        )
+        return
+
+    # Ownership: client_reference_id and metadata are set at session create.
+    ref = getattr(cs, "client_reference_id", None) or (
+        cs.get("client_reference_id") if isinstance(cs, dict) else None
+    )
+    meta = getattr(cs, "metadata", None) or (
+        cs.get("metadata") if isinstance(cs, dict) else None
+    ) or {}
+    if hasattr(meta, "to_dict"):
+        try:
+            meta = meta.to_dict()
+        except Exception:  # noqa: BLE001
+            meta = dict(meta) if meta else {}
+    omi_uid = None
+    if isinstance(meta, dict):
+        omi_uid = meta.get("omi_user_id")
+    for candidate in (ref, omi_uid):
+        if candidate is not None and str(candidate) != str(user.id):
+            log.warning(
+                "checkout session %s ownership mismatch for user=%s (got %s)",
+                checkout_session_id, user.id, candidate,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="That checkout session does not belong to this account.",
+            )
+
+    cust = getattr(cs, "customer", None) or (
+        cs.get("customer") if isinstance(cs, dict) else None
+    )
+    if isinstance(cust, dict):
+        cust = cust.get("id")
+    if cust and user.stripe_customer_id != cust:
+        user.stripe_customer_id = str(cust)
+        log.info("linked stripe customer %s to user=%s via checkout session", cust, user.id)
+
+
+def _customer_has_live_subscription(stripe, customer_id: str) -> bool:
+    """True if Stripe already shows an active/trialing subscription for this customer."""
+    try:
+        for status_name in ("active", "trialing"):
+            found = stripe.Subscription.list(
+                customer=customer_id, status=status_name, limit=1,
+            )
+            data = getattr(found, "data", None) or []
+            if data:
+                return True
+    except Exception:  # noqa: BLE001
+        log.exception("subscription list failed for customer=%s", customer_id)
+    return False
+
+
 class CheckoutResponse(BaseModel):
     url: str
 
@@ -224,7 +325,7 @@ def billing_status(
             raise HTTPException(status_code=401, detail="Session invalid.")
         reconcile_billing(session, user, settings=settings, reason="status")
         return BillingStatusResponse(
-            configured=bool(settings.stripe_secret_key and settings.stripe_price_id),
+            configured=_billing_is_configured(settings),
             credits_remaining=user.credits_remaining,
             subscription_status=user.subscription_status,
             subscription_renews_at=user.subscription_renews_at,
@@ -245,17 +346,29 @@ class SyncResponse(BaseModel):
 def sync_billing(
     current: CurrentUser = Depends(require_user),
     settings: Settings = Depends(get_settings),
+    session_id: str | None = None,
 ) -> SyncResponse:
     """Reconcile this user against Stripe RIGHT NOW, ignoring the throttle.
 
     This is how a purchase completes without a webhook: the browser comes back from Stripe Checkout,
     calls this, and the server asks Stripe what was actually paid. Idempotent — call it as often as
     you like; credits are keyed per invoice and granted once.
+
+    Optional ``session_id`` (from Checkout success URL ``{CHECKOUT_SESSION_ID}``) links the Stripe
+    customer immediately, which is more reliable right after payment than invoice-list lag alone.
     """
     with get_session() as session:
         user = session.get(User, current.id)
         if user is None:
             raise HTTPException(status_code=401, detail="Session invalid.")
+        if session_id and settings.stripe_secret_key:
+            try:
+                stripe = _stripe(settings)
+                _claim_checkout_session(stripe, user, session_id.strip())
+            except HTTPException:
+                raise
+            except Exception:  # noqa: BLE001
+                log.exception("optional checkout session claim failed for user=%s", current.id)
         result = reconcile_billing(session, user, settings=settings, force=True, reason="explicit")
         return SyncResponse(
             synced=bool(result["synced"]),
@@ -516,25 +629,57 @@ def create_checkout_session(
             return CheckoutResponse(url=portal.url)
 
         customer_id = _ensure_stripe_customer(stripe, user)
+        # If Stripe already has a live subscription (local status can lag), send them to the
+        # portal instead of opening a second Checkout that fails or double-bills.
+        if _customer_has_live_subscription(stripe, customer_id):
+            try:
+                portal = stripe.billing_portal.Session.create(
+                    customer=customer_id,
+                    return_url=f"{base}/settings",
+                )
+            except Exception as e:  # noqa: BLE001
+                log.exception("portal after live-sub check failed for user=%s", user.id)
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        f"You already have a subscription, but the billing portal could not open: "
+                        f"{_stripe_user_message(e)}. Enable Customer Portal in the Stripe dashboard."
+                    ),
+                ) from e
+            if not getattr(portal, "url", None):
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Stripe returned no portal URL. Enable the Customer Portal.",
+                )
+            # Mirror live status locally so the UI shows Manage next time.
+            if user.subscription_status not in PAID_STATUSES:
+                user.subscription_status = "active"
+            return CheckoutResponse(url=portal.url)
 
     # Build Checkout outside the DB session so a Stripe lag doesn't hold a connection.
+    # success_url includes {CHECKOUT_SESSION_ID} so pure-API sync can claim the session immediately.
+    success = f"{base}/settings?billing=success&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel = f"{base}/settings?billing=cancel"
+    # 30s idempotency window absorbs double-clicks without blocking a later re-subscribe.
+    checkout_idem = f"omi-checkout-{current.id}-{price_id}-{int(time.time()) // 30}"
     try:
         s = stripe.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{base}/settings?billing=success",
-            cancel_url=f"{base}/settings?billing=cancel",
+            success_url=success,
+            cancel_url=cancel,
             allow_promotion_codes=True,
             # Lets Checkout collect name/address when the Customer row is sparse — required when
             # Automatic Tax (or similar dashboard defaults) needs an address, and harmless otherwise.
             billing_address_collection="auto",
             customer_update={"address": "auto", "name": "auto"},
             client_reference_id=str(current.id),
-            # Carried through to the subscription + invoices, so the webhook / sync can resolve the
-            # user even if the customer link is somehow missing.
+            # Carried through to the subscription + invoices, so sync can resolve the user
+            # even if the customer link is somehow missing.
             metadata={"omi_user_id": str(current.id)},
             subscription_data={"metadata": {"omi_user_id": str(current.id)}},
+            idempotency_key=checkout_idem,
         )
     except Exception as e:  # noqa: BLE001
         msg = _stripe_user_message(e)
@@ -552,8 +697,8 @@ def create_checkout_session(
                     mode="subscription",
                     customer=customer_id,
                     line_items=[{"price": price_id, "quantity": 1}],
-                    success_url=f"{base}/settings?billing=success",
-                    cancel_url=f"{base}/settings?billing=cancel",
+                    success_url=success,
+                    cancel_url=cancel,
                     allow_promotion_codes=True,
                     billing_address_collection="auto",
                     customer_update={"address": "auto", "name": "auto"},
