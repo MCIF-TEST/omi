@@ -7,7 +7,9 @@ dashboard.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -25,6 +27,14 @@ from app.storage.repository import AccountRepository
 
 
 router = APIRouter(prefix="/v1/investigations", tags=["investigations"])
+
+# YouTube video IDs are 11 chars; also accept from youtu.be / shorts / live.
+_YT_ID_RE = re.compile(
+    r"(?:youtube\.com/(?:watch\?v=|embed/|shorts/|live/|v/)|youtu\.be/)"
+    r"([A-Za-z0-9_-]{11})",
+    re.IGNORECASE,
+)
+_YT_ID_BARE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 @router.get("", response_model=InvestigationsListResponse)
@@ -134,6 +144,7 @@ def _to_detail(inv) -> InvestigationDetailResponse:
 
 
 def _to_summary(inv) -> InvestigationSummary:
+    platform = _platform_of(inv)
     return InvestigationSummary(
         slug=inv.slug,
         label=inv.label,
@@ -149,4 +160,74 @@ def _to_summary(inv) -> InvestigationSummary:
         updated_at=inv.updated_at,
         target_id=inv.target_id,
         verdict=inv.verdict,
+        platform=platform,
+        thumbnail_url=_thumbnail_of(inv, platform),
     )
+
+
+def _platform_of(inv) -> str:
+    """Resolve platform from payload first, then input URL heuristics."""
+    payload = inv.payload_json or {}
+    raw = (payload.get("platform") or "").strip().lower()
+    if raw in ("x", "twitter"):
+        return "x"
+    if raw == "youtube":
+        return "youtube"
+    url = (inv.input_url or "").lower()
+    if "youtube.com" in url or "youtu.be" in url:
+        return "youtube"
+    if "twitter.com" in url or "x.com" in url or "t.co/" in url:
+        return "x"
+    # kind is rarely platform-specific; comprehensive scans on YT still carry
+    # video_id in the payload.
+    if payload.get("video_id") and not raw:
+        return "youtube"
+    return "unknown"
+
+
+def _youtube_video_id(inv) -> str | None:
+    payload = inv.payload_json or {}
+    candidates: list[str] = []
+    for key in ("video_id", "content_id", "target_id"):
+        val = payload.get(key)
+        if isinstance(val, str) and val:
+            candidates.append(val)
+    if inv.target_id:
+        candidates.append(inv.target_id)
+    for c in candidates:
+        if _YT_ID_BARE.match(c):
+            return c
+    url = inv.input_url or ""
+    m = _YT_ID_RE.search(url)
+    if m:
+        return m.group(1)
+    # watch?v= with extra params
+    try:
+        parsed = urlparse(url)
+        if "youtube.com" in (parsed.netloc or "").lower():
+            qs = parse_qs(parsed.query or "")
+            v = (qs.get("v") or [None])[0]
+            if v and _YT_ID_BARE.match(v):
+                return v
+    except Exception:
+        pass
+    return None
+
+
+def _thumbnail_of(inv, platform: str) -> str | None:
+    """Public thumbnail URL when we can derive one without paid APIs.
+
+    YouTube: hqdefault on i.ytimg.com (no API key).
+    X: no reliable public post thumb without auth — return None so the UI
+    can show a branded X placeholder.
+    """
+    payload = inv.payload_json or {}
+    for key in ("thumbnail_url", "thumb_url", "image_url"):
+        val = payload.get(key)
+        if isinstance(val, str) and val.startswith(("http://", "https://")):
+            return val
+    if platform == "youtube":
+        vid = _youtube_video_id(inv)
+        if vid:
+            return f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+    return None
