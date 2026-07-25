@@ -86,10 +86,29 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
     setPending(true);
     try {
       const path = active || pastDue ? '/v1/billing/portal' : '/v1/billing/create-checkout-session';
-      const { url } = await apiClient<{ url: string }>(path, { method: 'POST' });
+      // Send an empty JSON body so proxies that reject POST + Content-Type: application/json
+      // with a zero-length body don't kill checkout before it reaches FastAPI.
+      const { url } = await apiClient<{ url: string }>(path, {
+        method: 'POST',
+        body: '{}',
+      });
+      if (!url || typeof url !== 'string') {
+        setError('Stripe returned no checkout URL. Check billing configuration (preflight).');
+        setPending(false);
+        return;
+      }
       window.location.href = url;
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not start checkout.');
+      // Prefer the API's detail string — after the checkout hardening it names the real Stripe
+      // problem (wrong-mode price, missing portal, etc.) instead of a generic "try again".
+      let message = 'Could not start checkout.';
+      if (e instanceof ApiError) {
+        message = e.message || message;
+        if (e.status === 503 && !/configured|PRICE|PUBLIC_BASE/i.test(message)) {
+          message = `${message} Billing may not be fully configured — check OMI_STRIPE_SECRET_KEY, OMI_STRIPE_PRICE_ID, and OMI_PUBLIC_BASE_URL on the API service.`;
+        }
+      }
+      setError(message);
       setPending(false);
     }
   };
@@ -97,7 +116,10 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
   if (!status.configured) {
     return (
       <p className="text-sm text-fg-mute">
-        Card payments aren&apos;t switched on for this deployment yet.
+        Card payments aren't switched on for this deployment yet. On the API service set{' '}
+        <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span>,{' '}
+        <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span>, and{' '}
+        <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web URL), then redeploy.
       </p>
     );
   }
@@ -115,12 +137,12 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       )}
       {canceled && (
         <p className="text-sm text-fg-mute" role="status">
-          Checkout cancelled — you haven&apos;t been charged.
+          Checkout cancelled — you haven't been charged.
         </p>
       )}
       {pastDue && (
         <p className="text-sm text-warn">
-          Your last payment didn&apos;t go through. Update your card to keep your subscription.
+          Your last payment didn't go through. Update your card to keep your subscription.
         </p>
       )}
 
@@ -134,7 +156,11 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
               : `Subscribe — ${status.price_display}/mo`}
       </Button>
 
-      {error && <p className="text-xs text-danger font-mono">{error}</p>}
+      {error && (
+        <p className="text-xs text-danger font-mono whitespace-pre-wrap break-words" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
