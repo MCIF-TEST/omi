@@ -200,6 +200,11 @@ class Settings(BaseSettings):
     # AMOUNT LIVES IN STRIPE, never here — this server never sends an amount, so a bug in our code
     # cannot charge the wrong price.
     stripe_price_id: str | None = None
+    # Comma-separated Checkout payment_method_types (pure API / hosted Checkout).
+    # Default "link,card": Link works while Cards are still pending approval; `card` is also what
+    # powers Apple Pay / Google Pay wallets on Checkout (they are not separate type strings).
+    # Override via OMI_STRIPE_PAYMENT_METHOD_TYPES if needed, e.g. "link" only, or "card,link".
+    stripe_payment_method_types: str = "link,card"
     # Display-only. What the UI prints next to the subscribe button; the real charge is whatever the
     # Stripe Price says. Keep them in agreement — this string proves nothing.
     subscription_price_display: str = "$9.99"
