@@ -645,6 +645,11 @@ class InvestigationSummary(BaseModel):
     updated_at: datetime
     target_id: str | None = None
     verdict: str | None = None
+    # Derived at list-time from payload / URL — not stored columns.
+    # Platform: "youtube" | "x" | "unknown". thumbnail_url is a public CDN
+    # image when available (YouTube hqdefault); null for X/unknown.
+    platform: str = "unknown"
+    thumbnail_url: str | None = None
 
 
 class InvestigationsListResponse(BaseModel):
