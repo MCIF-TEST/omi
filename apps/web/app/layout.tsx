@@ -1,6 +1,33 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { ClerkClientProvider } from '@/components/shared/clerk-provider';
 import './globals.css';
+
+/**
+ * Self-hosted fonts via next/font (eliminates external stylesheets + SRI findings
+ * for Google Fonts / rsms.me Inter). Subsets are downloaded at build time.
+ */
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+  // Optical sizing / tabular figures are set in CSS font-feature-settings.
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-mono',
+  weight: ['400', '500', '600'],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-display-alt',
+  weight: ['400', '500', '600', '700'],
+});
 
 export const metadata: Metadata = {
   title: 'OMISPHERE — Social Authenticity Intelligence',
@@ -14,32 +41,20 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: '#09111f',
-  // Extend under the notch / home indicator so our safe-area padding can
-  // place the tab bar flush against the device edge.
   viewportFit: 'cover' as const,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Nonce set by middleware for CSP; Next.js attaches it to its own inline scripts.
+  const nonce = headers().get('x-nonce') ?? undefined;
+
   return (
-    <html lang="en">
-      <head>
-        {/* Interface + display — Inter (variable, optical). One typeface; the
-            scale carries the hierarchy. */}
-        <link rel="preconnect" href="https://rsms.me/" />
-        <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
-        {/* Evidence voice — JetBrains Mono (ids, numbers, handles, raw data). Display voice on the
-            marketing surface — Space Grotesk (a technical grotesk with real character, used via the
-            .display-alt class). Both loaded globally here so the next/font page-scoping warning
-            doesn't apply. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-        />
-      </head>
-      <body className="font-sans">
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
+    >
+      {/* No external <link rel="stylesheet"> — fonts are self-hosted via next/font. */}
+      <body className={`font-sans ${inter.className}`} data-csp-nonce={nonce || undefined}>
         {/* Clerk lives entirely on the client (see ClerkClientProvider) because this app runs no
             clerkMiddleware; nothing on the server ever calls Clerk's auth(). */}
         <ClerkClientProvider>{children}</ClerkClientProvider>
