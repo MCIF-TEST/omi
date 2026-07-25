@@ -81,14 +81,17 @@ services:
       - key: OMI_TWITTER_API_KEY
         sync: false
       # Stripe — $9.99/month for OMI_MONTHLY_CREDIT_GRANT credits. Full walkthrough in
-      # docs/stripe-setup.md. All three are dashboard-set (sync: false) and belong ONLY on this
-      # service: the web service compiles NEXT_PUBLIC_* into JS every visitor downloads.
+      # docs/stripe-setup.md. NO WEBHOOK IS REQUIRED: the server reconciles against Stripe's API
+      # (app/core/billing_sync.py), so the secret key below is the only credential billing needs.
+      # Dashboard-set (sync: false) and ONLY on this service — the web service compiles NEXT_PUBLIC_*
+      # into JS that every visitor downloads.
       # sk_test_… / sk_live_…  SECRET.
       - key: OMI_STRIPE_SECRET_KEY
         sync: false
-      # whsec_… SECRET, and per-endpoint — test mode, live mode and `stripe listen` each have a
-      # different one. It is the only thing stopping a stranger POSTing themselves credits, so the
-      # webhook refuses to act at all when it is unset.
+      # OPTIONAL. Leave unset — the webhook endpoint stays inert without it, and billing works fully
+      # through API reconciliation. Set it only if you later want renewals credited the instant
+      # Stripe charges, rather than the next time the user's account is reconciled. Enabling it is
+      # safe: both paths claim the same per-invoice row, so only one can ever grant.
       - key: OMI_STRIPE_WEBHOOK_SECRET
         sync: false
       # price_… The AMOUNT LIVES IN STRIPE. This server never sends a price, so no code bug can

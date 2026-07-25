@@ -440,6 +440,16 @@ def consume_credits(
             ))
             return u.credits_remaining
         if u.credits_remaining < credits:
+            # Last chance before refusing: ask Stripe. Credits arrive by reconciliation rather than a
+            # webhook, so a subscriber whose renewal has just been charged can be standing here with
+            # a stale local balance — and being told to "subscribe" when you already pay is the
+            # worst possible moment to be wrong. Forced (never throttled) because this is exactly
+            # the case where a stale answer is unacceptable, and best-effort: if Stripe is slow or
+            # down, reconcile_billing swallows it and we fall through to the honest 402.
+            from app.core.billing_sync import reconcile_billing
+            reconcile_billing(session, u, settings=settings, force=True, reason="insufficient_credits")
+
+        if u.credits_remaining < credits:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=(

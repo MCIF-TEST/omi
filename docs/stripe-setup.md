@@ -3,13 +3,38 @@
 Everything you need to take the first real payment. Do it once in **test mode**, verify with a test
 card, then repeat the same steps in **live mode** with live keys.
 
+**There is no webhook to set up.** OmiSphere reconciles against Stripe's API: rather than waiting to
+be told what happened, the server asks Stripe which subscription exists and which invoices were
+actually paid, then grants credits for any paid invoice it hasn't already credited. Setup is three
+env vars and a price.
+
 Two rules worth internalising before you start:
 
 - **The price lives in Stripe, not in this repo.** The API never sends an amount — it sends a Price
   ID. That means no bug in our code can charge the wrong number, and changing the price is a
   dashboard edit, not a deploy.
-- **`OMI_STRIPE_WEBHOOK_SECRET` is the only thing stopping a stranger crediting themselves.** The
-  webhook URL is public. Without the signing secret set, the endpoint refuses to act on anything.
+- **Credits are keyed to the Stripe invoice id.** Reconciling ten times grants nothing extra; a
+  renewal grants once, whenever it is first seen.
+
+### When credits actually appear
+
+Reconciliation runs at the moments where being stale would be visible:
+
+| Trigger | Why |
+|---|---|
+| Returning from Checkout | The browser calls `POST /v1/billing/sync`, which is what completes a purchase. Credits land in a second or two. |
+| Opening **Settings → Billing** | Throttled to once every 5 minutes per user. |
+| **A scan that would otherwise be refused** | Forced, never throttled. A subscriber whose renewal just went through is never told to "subscribe". |
+
+The trade-off, stated plainly: a monthly renewal is credited the next time that user's account is
+reconciled, not the instant Stripe charges the card. In practice they notice when they come back to
+use it, and the scan path syncs before it ever refuses them. In exchange there is no public endpoint
+that grants credits, no signing secret to rotate, and nothing to silently lose — a missed webhook is
+gone for good, whereas a missed sync self-heals on the next one.
+
+> Prefer instant crediting later? `POST /v1/billing/webhook` still exists and is inert until you set
+> `OMI_STRIPE_WEBHOOK_SECRET`. Enabling it changes nothing about the above — both paths compete for
+> the same per-invoice row, so only one can ever grant.
 
 ---
 
@@ -40,29 +65,10 @@ Dashboard → **Developers → API keys**
 There is no publishable key to set: checkout is hosted by Stripe, so no card details and no Stripe
 JS ever touch the browser on our domain.
 
-## 3. Create the webhook
+## 3. (Skipped — no webhook needed)
 
-Dashboard → **Developers → Webhooks → Add endpoint**
-
-- **Endpoint URL:** `https://<your-api-host>/v1/billing/webhook`
-  (the **API** service, not the web one — e.g. `https://omisphere-api.onrender.com/v1/billing/webhook`)
-- **Events to send** — exactly these five:
-
-  | Event | What it does |
-  |---|---|
-  | `invoice.paid` | **Grants the 20 credits.** The only event that adds credits. |
-  | `invoice.payment_failed` | Marks the account `past_due` so the UI asks for a new card. |
-  | `customer.subscription.created` | Records status + renewal date. |
-  | `customer.subscription.updated` | Keeps status + renewal date current. |
-  | `customer.subscription.deleted` | Marks `canceled`. Credits already paid for are kept. |
-
-  Optionally add `checkout.session.completed` — it isn't required, but it re-links a customer to a
-  user if that link is ever missing.
-
-After creating it, click **Reveal** on the signing secret (`whsec_…`) → `OMI_STRIPE_WEBHOOK_SECRET`.
-
-> The signing secret is **per endpoint**. Your test-mode and live-mode endpoints have different
-> secrets, and so does the Stripe CLI. Using the wrong one makes every webhook 400.
+Nothing to do here. Billing reads from Stripe's API, so there is no endpoint to register, no signing
+secret, and no public URL that grants credits.
 
 ## 4. Turn on the Customer Portal
 
@@ -77,9 +83,9 @@ payment methods and cancel. Without this, "Manage subscription" fails when click
 
 | Variable | Example | Notes |
 |---|---|---|
-| `OMI_STRIPE_SECRET_KEY` | `sk_test_51Q…` | **Secret.** |
-| `OMI_STRIPE_WEBHOOK_SECRET` | `whsec_…` | **Secret.** From the endpoint you created in step 3. |
+| `OMI_STRIPE_SECRET_KEY` | `sk_test_51Q…` | **Secret.** The only credential billing needs. |
 | `OMI_STRIPE_PRICE_ID` | `price_1Q…` | Not secret, but must match the price you want to charge. |
+| `OMI_STRIPE_WEBHOOK_SECRET` | *(leave unset)* | Only if you later want instant crediting. Unset = the webhook endpoint is inert. |
 | `OMI_PUBLIC_BASE_URL` | `https://omisphere-web.onrender.com` | The **web** URL. Stripe sends the customer back here after checkout — set it to the site people actually visit, not the API host, or they land on an API 404. |
 | `OMI_MONTHLY_CREDIT_GRANT` | `20` | Credits added per paid invoice. |
 | `OMI_FREE_TRIAL_CREDITS` | `3` | Credits a new signup starts with. |
@@ -117,25 +123,26 @@ After a successful test payment you should see, in order:
 1. Stripe returns you to `/settings?billing=success`.
 2. The page says "Payment received — adding your credits…" and then settles.
 3. Credits increase by **20**.
-4. Dashboard → Webhooks → your endpoint shows `invoice.paid` with a **200**.
+4. Dashboard → the customer shows a paid invoice.
 
-**Test webhooks locally** without deploying:
+**If credits don't appear**, hit the sync directly and read what it says:
 
 ```bash
-stripe login
-stripe listen --forward-to localhost:8000/v1/billing/webhook
-# use the whsec_… it prints as OMI_STRIPE_WEBHOOK_SECRET locally
-stripe trigger invoice.paid
+curl -X POST https://<your-api-host>/v1/billing/sync \
+  -H "Cookie: __session=<your session cookie>"
+# -> {"synced":true,"granted":1,"credits_added":20,"credits_remaining":20,...}
 ```
+
+`synced: false` means Stripe wasn't reachable or the account has no Stripe customer;
+`granted: 0` with `synced: true` means Stripe reports no paid invoice that isn't already credited.
 
 ---
 
 ## 7. Going live
 
-1. Flip the dashboard to **live mode** and repeat steps 1, 3 and 4 — live mode has its **own**
-   product, its own webhook endpoint, and its own signing secret.
-2. Replace `OMI_STRIPE_SECRET_KEY`, `OMI_STRIPE_WEBHOOK_SECRET` and `OMI_STRIPE_PRICE_ID` on the API
-   service with the live values.
+1. Flip the dashboard to **live mode** and repeat steps 1 and 4 — live mode has its **own** product
+   and its own Customer Portal setting.
+2. Replace `OMI_STRIPE_SECRET_KEY` and `OMI_STRIPE_PRICE_ID` on the API service with the live values.
 3. Complete one real £/$9.99 purchase yourself and confirm the credits land, then refund it from the
    dashboard. It is the only way to know the live path works end to end.
 4. Stripe requires a statement descriptor and business details before it will accept live payments —
@@ -152,8 +159,8 @@ Worth knowing when something looks odd:
 - **One invoice grants exactly once.** The grant is keyed on the Stripe invoice id and enforced by a
   unique index, so redeliveries, retries, and two different events describing the same payment can't
   double-credit.
-- **A failed webhook is retried, not swallowed.** The event is only marked processed in the same
-  transaction as the work, so if the handler fails, Stripe's retry genuinely re-runs it.
+- **Nothing is lost.** Stripe is the source of truth, so a sync that fails simply runs again and
+  catches up — including replaying every invoice missed during a long absence.
 - **Cancelling keeps your credits.** They were paid for.
-- **A payment we can't match to a user grants nothing and logs an error** naming the customer id —
-  search the API logs for `could not be matched to a user` if someone reports a missing top-up.
+- **A payment made outside our checkout still finds its owner.** If the stored customer link is
+  missing, reconciliation looks the customer up by the account's email and repairs the link.

@@ -14,16 +14,25 @@ export interface BillingStatus {
   credits_per_period: number;
 }
 
+/** What POST /v1/billing/sync returns after reconciling against Stripe. */
+interface SyncResponse {
+  synced: boolean;
+  granted: number;
+  credits_added: number;
+  credits_remaining: number;
+  subscription_status: string | null;
+}
+
 const PAID = ['active', 'trialing'];
 
 /**
  * Subscribe / manage button + the return-from-Stripe handshake.
  *
- * Stripe redirects the browser back the moment payment succeeds, but the credits arrive on a
- * WEBHOOK, which lands a beat later and out of band. Without this, a paying customer returns to a
- * page that still says "Subscribe" with their old balance — the most alarming possible moment to
- * look broken. So on `?billing=success` we poll our own status until the subscription flips, then
- * refresh the server components.
+ * There is no webhook. When Stripe sends the customer back here, we ask our API to reconcile
+ * against Stripe (`POST /v1/billing/sync`), which reads what was actually paid and grants the
+ * credits. That call is what completes the purchase, so it retries for a few seconds: Checkout
+ * occasionally redirects a beat before the invoice is marked paid, and a paying customer must never
+ * be left looking at a "Subscribe" button and their old balance.
  */
 export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }) {
   const router = useRouter();
@@ -39,17 +48,23 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
   const active = PAID.includes(status.subscription_status ?? '');
   const pastDue = status.subscription_status === 'past_due';
 
-  // Poll for the webhook to land — bounded, so a webhook that never arrives stops spinning and says
-  // so rather than pretending forever.
+  // Drive the reconciliation until Stripe reports the subscription live. Bounded, so a payment that
+  // never lands stops spinning and says so instead of pretending forever.
   useEffect(() => {
     if (!settling) return;
     let tries = 0;
+    let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
+      if (cancelled) return;
       tries += 1;
       try {
-        const s = await apiClient<BillingStatus>('/v1/billing/status');
-        setStatus(s);
+        const s = await apiClient<SyncResponse>('/v1/billing/sync', { method: 'POST' });
+        setStatus((prev) => ({
+          ...prev,
+          credits_remaining: s.credits_remaining,
+          subscription_status: s.subscription_status,
+        }));
         if (PAID.includes(s.subscription_status ?? '')) {
           setSettling(false);
           router.refresh();
@@ -58,11 +73,12 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       } catch {
         /* keep trying — a transient error here shouldn't end the handshake */
       }
-      if (tries >= 15) { setSettling(false); return; }
+      if (cancelled) return;
+      if (tries >= 10) { setSettling(false); return; }
       timer = setTimeout(() => { void tick(); }, 2000);
     };
-    timer = setTimeout(() => { void tick(); }, 1500);
-    return () => clearTimeout(timer);
+    timer = setTimeout(() => { void tick(); }, 1200);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [settling, router]);
 
   const onClick = async () => {

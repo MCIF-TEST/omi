@@ -41,6 +41,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser, require_user
+from app.core.billing_sync import reconcile_billing
 from app.core.config import Settings, get_settings
 from app.core.referrals import grant_subscription_bonus_if_due
 from app.storage.db import get_session
@@ -103,11 +104,15 @@ def billing_status(
     settings: Settings = Depends(get_settings),
 ) -> BillingStatusResponse:
     """Current billing state for the signed-in user. Always answers — when Stripe isn't configured
-    it reports ``configured: false`` so the UI can say so instead of offering a button that 503s."""
+    it reports ``configured: false`` so the UI can say so instead of offering a button that 503s.
+
+    Opening the billing page reconciles against Stripe first (throttled), so the figures shown are
+    Stripe's, not a possibly-stale local copy."""
     with get_session() as session:
         user = session.get(User, current.id)
         if user is None:
             raise HTTPException(status_code=401, detail="Session invalid.")
+        reconcile_billing(session, user, settings=settings, reason="status")
         return BillingStatusResponse(
             configured=bool(settings.stripe_secret_key and settings.stripe_price_id),
             credits_remaining=user.credits_remaining,
@@ -115,6 +120,39 @@ def billing_status(
             subscription_renews_at=user.subscription_renews_at,
             price_display=settings.subscription_price_display,
             credits_per_period=settings.monthly_credit_grant,
+        )
+
+
+class SyncResponse(BaseModel):
+    synced: bool
+    granted: int          # invoices newly credited by this call
+    credits_added: int
+    credits_remaining: int
+    subscription_status: str | None
+
+
+@router.post("/sync", response_model=SyncResponse)
+def sync_billing(
+    current: CurrentUser = Depends(require_user),
+    settings: Settings = Depends(get_settings),
+) -> SyncResponse:
+    """Reconcile this user against Stripe RIGHT NOW, ignoring the throttle.
+
+    This is how a purchase completes without a webhook: the browser comes back from Stripe Checkout,
+    calls this, and the server asks Stripe what was actually paid. Idempotent — call it as often as
+    you like; credits are keyed per invoice and granted once.
+    """
+    with get_session() as session:
+        user = session.get(User, current.id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Session invalid.")
+        result = reconcile_billing(session, user, settings=settings, force=True, reason="explicit")
+        return SyncResponse(
+            synced=bool(result["synced"]),
+            granted=int(result["granted"]),
+            credits_added=int(result["credits_added"]),
+            credits_remaining=user.credits_remaining,
+            subscription_status=user.subscription_status,
         )
 
 

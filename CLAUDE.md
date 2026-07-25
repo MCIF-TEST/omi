@@ -6,7 +6,7 @@ the way they are. If you change behaviour and don't update this file, the next s
 re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-25 · branch `claude/master-analyst-protocol-v1-1u8tyk` · PR
-[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1488 passed, 1 known-failing**
+[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1505 passed, 1 known-failing**
 
 > `HANDOFF.md` at the repo root is a **stale one-off** from a different branch (2026-05-29). Ignore
 > it; this file supersedes it.
@@ -172,10 +172,20 @@ per-account allowance needs raising.
 50 accounts, same rate for X and YouTube** (100 accounts = 2 credits). This was an explicit product
 decision; don't "fix" the asymmetry back in.
 
-### Billing — Stripe ($9.99/mo → 20 credits)
+### Billing — Stripe ($9.99/mo → 20 credits), webhook-free
 
-Setup walkthrough: `docs/stripe-setup.md`. Four rules in `app/routes/billing.py` that must not be
-softened — each replaces a bug that cost or would have cost real money:
+Setup walkthrough: `docs/stripe-setup.md`. **No webhook is configured.** `app/core/billing_sync.py`
+reconciles against Stripe's API — it reads the customer's subscription and paid invoices and grants
+any invoice not already credited. It runs on return from checkout (`POST /v1/billing/sync`, forced),
+on the billing page (throttled 5 min/user), and — the one that matters — inside `consume_credits`
+just before it would refuse a scan, so a subscriber whose renewal just landed is never told to
+subscribe. It never raises: a Stripe outage degrades to the normal 402, never a broken scan.
+
+The webhook endpoint still exists and is **inert without `OMI_STRIPE_WEBHOOK_SECRET`**. Enabling it
+is safe — both paths claim the same per-invoice row, so only one can grant.
+
+Four rules in `app/routes/billing.py` that must not be softened — each replaces a bug that cost or
+would have cost real money:
 
 - **Only `invoice.paid` grants credits.** A new subscription emits `customer.subscription.created`
   *and* `invoice.paid`; granting on both double-credits one charge. Subscription events move status
