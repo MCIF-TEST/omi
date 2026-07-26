@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ClerkClientProvider } from '@/components/shared/clerk-provider';
 import './globals.css';
 
@@ -22,15 +22,13 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ['400', '500', '600'],
 });
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-display-alt',
-  weight: ['400', '500', '600', '700'],
-});
+// Space Grotesk (the old `--font-display-alt` marketing voice) is no longer loaded: the pre-login
+// page now uses the app's own `.display` (Inter) so both sides of the login boundary read as one
+// product. `.display-alt` in globals.css still falls back to `var(--font-display)`, so any stray
+// usage degrades to Inter instead of breaking, and no visitor downloads a font nothing renders.
 
 export const metadata: Metadata = {
-  title: 'OMISPHERE — Social Authenticity Intelligence',
+  title: 'OMISPHERE · Social Authenticity Intelligence',
   description:
     'Probabilistic detection of bots, AI engagement, coordinated influence campaigns, and synthetic virality. Powered by the omi detection engine.',
   applicationName: 'OMISPHERE',
@@ -51,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
       {/* No external <link rel="stylesheet"> — fonts are self-hosted via next/font. */}
       <body className={`font-sans ${inter.className}`} data-csp-nonce={nonce || undefined}>

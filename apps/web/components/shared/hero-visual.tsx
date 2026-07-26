@@ -153,7 +153,7 @@ export function HeroVisual() {
         style={{ animation: 'hv-chip-in 0.45s cubic-bezier(0.16,1,0.3,1) both', animationDelay: '1.0s' }}
       >
         <span className="w-1.5 h-1.5 rounded-full bg-tier-elevated" />
-        Coordinated pod
+        Coordinated
       </div>
       <div
         className="absolute bottom-[12%] left-[8%] flex items-center gap-1.5 font-mono text-[0.6rem] tracking-[0.16em] uppercase text-tier-low bg-tier-low/10 border border-tier-low/35 px-2.5 py-1 rounded-full"

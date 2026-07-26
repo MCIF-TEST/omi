@@ -1,293 +1,370 @@
 import Link from 'next/link';
 import {
-  ShieldCheck, Gauge, MessagesSquare, Database,
-  CheckCircle2, ArrowRight, Fingerprint, ScanLine,
-  Link2, MousePointerClick,
+  ArrowRight, CheckCircle2, Database, Fingerprint, Gauge,
+  MessagesSquare, MousePointerClick, Radar, ScanLine,
+  ShieldCheck, Sparkles, Users,
 } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/shared/logo';
 import { Reveal } from '@/components/shared/reveal';
 import { AnimatedNumber } from '@/components/shared/animated-number';
 import { ScrollProgress } from '@/components/shared/scroll-progress';
 import { HeroVisual } from '@/components/shared/hero-visual';
+import { TierBadge } from '@/components/shared/tier-badge';
 import { DemoScanForm } from './demo-scan-form';
 import { TRIAL_CREDITS, MONTHLY_CREDITS } from '@/lib/plan';
 
+/**
+ * Pre-login front page.
+ *
+ * Deliberately built from the SAME grammar as the signed-in app rather than a separate marketing
+ * language, so a visitor recognises the product the moment they log in:
+ *
+ *   · the page-header slab from /investigations (rounded-2xl bg-bg-elev, top accent hairline,
+ *     blurred orbs, `.section-label` eyebrow, `.display` heading, mono meta row, action cluster)
+ *   · `.display` (Inter) as the heading voice, the app's own. The old Space Grotesk
+ *     `.display-alt` marketing voice was the single biggest visual tell that this page belonged
+ *     to a different product.
+ *   · figures in mono/tabular (`.stat-value`), because in this product a number is evidence
+ *   · the real `Card` / `Button` / `TierBadge` primitives rather than lookalikes
+ *   · blue compiles and purple analyzes, the color story of the investigate workspace
+ *   · the archive card grid from /investigations, carrying two genuinely public campaign reports
+ *
+ * No `overflow-hidden` on the root: it creates a scroll container that breaks the sticky header.
+ * Horizontal containment is handled by `overflow-x: clip` on html/body in globals.css.
+ */
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-bg-deep flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-bg-deep flex flex-col">
       <ScrollProgress />
 
-      {/* ── Nav ─────────────────────────────────────────────────── */}
-      <header className="relative z-20 h-14 px-6 md:px-8 flex items-center justify-between border-b border-border-1/50 bg-bg-deep/95 backdrop-blur-sm sticky top-0">
-        <Link href="/" aria-label="omisphere home">
-          <Logo />
+      {/* ── Chrome ───────────────────────────────────────────────────────────
+          Mirrors the app topbar: 14 units tall, sticky, `glass` surface on a
+          hairline, with the same mono telemetry pills. */}
+      <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 glass px-4 md:px-6 flex items-center gap-3 min-w-0">
+        <Link
+          href="/"
+          aria-label="OMISPHERE home"
+          className="shrink min-w-0 overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        >
+          <Logo size="sm" />
         </Link>
-        {/* A cold visitor has two jobs here: start, or sign back in. Pricing and
-            About live in the footer — a buying decision before the value moment
-            is a detour. Both links go straight to Clerk. */}
-        <nav className="flex items-center gap-5 font-mono text-2xs tracking-[0.14em] text-fg-mute">
-          <Link href="/sign-in" className="hover:text-fg transition-colors">Log in</Link>
+
+        <div className="hidden lg:flex items-center gap-2.5 font-mono text-2xs text-fg-mute tracking-wider shrink-0 ml-2">
+          <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev/60">
+            <span className="w-1.5 h-1.5 rounded-full bg-tier-low" aria-hidden />
+            <span>SIGNALS</span>
+            <span className="text-fg-dim tabular">8</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev/60">
+            <span>SOURCES</span>
+            <span className="text-fg-dim tabular">2</span>
+          </span>
+        </div>
+
+        <nav className="flex items-center gap-2 ml-auto shrink-0">
           <Link
-            href="/sign-up"
-            className="inline-flex items-center gap-1.5 btn-lamp text-[0.7rem] font-semibold px-3.5 py-1.5 rounded-md"
+            href="/sign-in"
+            className="font-mono text-2xs tracking-[0.14em] uppercase text-fg-mute hover:text-fg transition-colors px-3 py-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
           >
-            Start free
-            <ArrowRight size={11} />
+            Log in
+          </Link>
+          <Link href="/sign-up">
+            <Button size="sm" className="btn-glow">
+              Start free
+              <ArrowRight size={12} />
+            </Button>
           </Link>
         </nav>
       </header>
 
-      {/* ── Hero ────────────────────────────────────────────────── */}
-      <section className="aurora relative z-10 px-6 md:px-8 pt-16 md:pt-20 pb-12 max-w-6xl mx-auto w-full">
-        <div className="grid lg:grid-cols-[1fr_440px] gap-10 lg:gap-14 items-start">
+      <main className="flex-1">
+        {/* ── Hero ─────────────────────────────────────────────────────────
+            The /investigations page header, at hero scale. */}
+        <Shell className="pt-6 md:pt-8">
+          <div className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-5 py-7 md:px-8 md:py-10">
+            <span
+              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent"
+              aria-hidden
+            />
+            <span
+              className="pointer-events-none absolute -right-12 -top-12 h-52 w-52 rounded-full bg-violet/15 blur-3xl"
+              aria-hidden
+            />
+            <span
+              className="pointer-events-none absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-accent/10 blur-2xl"
+              aria-hidden
+            />
 
-          {/* Left: copy */}
-          <div className="order-2 lg:order-1 lg:pt-4">
-            <div
-              className="inline-flex items-center gap-2 font-mono text-2xs tracking-[0.18em] text-accent-2 uppercase border border-accent/20 bg-accent/[0.06] px-3 py-1.5 rounded-sm mb-8"
-              style={{ animation: 'fade-up 220ms cubic-bezier(0.16,1,0.3,1) both' }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-tier-low animate-pulse-dot" />
-              Online Media Intelligence · Private beta
-            </div>
+            <div className="relative grid lg:grid-cols-[1fr_380px] gap-8 lg:gap-12 items-center">
+              {/* Copy leads in DOM order, so on a phone (single column) the headline is the first
+                  thing on screen and the visual follows it. The old layout floated the globe above
+                  the copy, which pushed the value proposition below the fold on a 390px screen. */}
+              <div className="min-w-0">
+                {/* `.section-label` already carries a blue tick and is `flex-wrap: wrap`, so a long
+                    label plus an icon orphaned the tick onto its own line at 390px. The label stays
+                    short and the beta status rides alongside as a Badge, which wraps as one piece. */}
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="section-label">Online media intelligence</span>
+                  <Badge variant="accent">Private beta</Badge>
+                </div>
 
-            <h1
-              className="display-alt font-semibold tracking-[-0.035em] leading-[0.94] mb-7"
-              style={{
-                fontSize: 'clamp(2.5rem, 5.4vw, 4.2rem)',
-                animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both',
-                animationDelay: '60ms',
-              }}
-            >
-              See which accounts
-              <br />
-              are real — and which
-              <br />
-              were <span className="text-gradient">bought</span>.
-            </h1>
+                <h1
+                  className="display font-semibold text-fg tracking-[-0.03em] leading-[1.02] mt-4 mb-5"
+                  style={{ fontSize: 'clamp(2.1rem, 4.6vw, 3.4rem)' }}
+                >
+                  Score every account in a comment section.
+                </h1>
 
-            <p
-              className="text-base text-fg-dim leading-relaxed max-w-[490px] mb-9"
-              style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '100ms' }}
-            >
-              Paste a post from X or YouTube. OmiSphere pulls the comment section, you
-              pick the accounts to check, and each one comes back with an OMI score and
-              a plain-English read: a real person, or a bought account. Every verdict
-              shows the behavioral evidence behind it.
-            </p>
+                <p className="text-base text-fg-dim leading-relaxed max-w-[52ch] mb-7">
+                  Paste an X post or a YouTube video. OmiSphere lists everyone who commented, you
+                  pick which accounts to check, and each one comes back with a 0-to-100 score plus
+                  the behavioral evidence behind it.
+                </p>
 
-            <div
-              className="flex items-center gap-3 flex-wrap mb-9"
-              style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '150ms' }}
-            >
-              <Link
-                href="/sign-up"
-                className="inline-flex items-center gap-2 btn-lamp font-semibold px-6 py-2.5 rounded-lg text-sm"
-              >
-                Start free — {TRIAL_CREDITS} credits
-                <ArrowRight size={14} />
-              </Link>
-              {/* The pinned featured-campaign token (cmp_ + campaign_key, seeded at
-                  boot; held by test_stable_tokens_match_the_landing_page_contract so
-                  a scheme change breaks loudly instead of dead-linking). A real,
-                  disclosed case with its evidence, no account required. */}
-              <a
-                href="/rc/cmp_feat_cn_xinjiang"
-                className="inline-flex items-center gap-2 border border-border-2 text-fg-dim font-medium px-5 py-2.5 rounded-lg hover:text-fg hover:border-border-hot transition-colors text-sm"
-              >
-                See a real case — no sign-up
-              </a>
-            </div>
+                <div className="flex items-center gap-3 flex-wrap mb-7">
+                  <Link href="/sign-up">
+                    <Button size="lg" className="btn-glow">
+                      <ScanLine size={15} />
+                      Start free with {TRIAL_CREDITS} credits
+                    </Button>
+                  </Link>
+                  <Link href="/rc/cmp_feat_cn_xinjiang">
+                    <Button size="lg" variant="secondary">
+                      Open a real case
+                      <ArrowRight size={14} />
+                    </Button>
+                  </Link>
+                </div>
 
-            <div
-              className="flex items-center gap-x-6 gap-y-2 flex-wrap font-mono text-2xs text-fg-faint tracking-wider"
-              style={{ animation: 'fade-up-lg 480ms cubic-bezier(0.16,1,0.3,1) both', animationDelay: '200ms' }}
-            >
-              {[`${TRIAL_CREDITS} free credits, no card`, 'A plain-English reason on every score', 'X and YouTube'].map((t) => (
-                <span key={t} className="flex items-center gap-1.5">
-                  <CheckCircle2 size={10} className="text-tier-low shrink-0" />
-                  {t}
-                </span>
-              ))}
+                <ul className="flex items-center gap-x-5 gap-y-2 flex-wrap font-mono text-2xs text-fg-mute tracking-wider">
+                  {[
+                    `${TRIAL_CREDITS} free credits, no card`,
+                    'A written read on every account',
+                    'X and YouTube',
+                  ].map((t) => (
+                    <li key={t} className="flex items-center gap-1.5">
+                      <CheckCircle2 size={10} className="text-tier-low shrink-0" aria-hidden />
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Inset on phones: the visual's floating verdict chips are positioned off its own
+                  edges, so at full bleed the widest one ran into the slab's clip boundary. */}
+              <div className="px-6 sm:px-0">
+                <HeroVisual />
+              </div>
             </div>
           </div>
+        </Shell>
 
-          {/* Right: visualization */}
-          <div className="order-1 lg:order-2">
-            <HeroVisual />
-          </div>
-        </div>
-      </section>
-
-      {/* ── Stats strip ─────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 pb-14 max-w-6xl mx-auto w-full">
-        <Reveal from="up">
-          <div className="border-y border-border-1 py-7">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {[
-                { value: 8,    suffix: null, label: 'Behavioral signals', sub: 'read per account' },
-                { value: 100,  suffix: null, label: 'OMI score', sub: '0 real · 100 bought' },
-                { value: 2,    suffix: null, label: 'Platforms', sub: 'X · YouTube' },
-                { value: null, suffix: 'Why', label: 'Every verdict', sub: 'explained in plain English' },
-              ].map(({ value, suffix, label, sub }) => (
-                <div key={label}>
-                  <div className="display-alt text-3xl font-semibold text-fg mb-1 tabular-nums">
-                    {value !== null ? <AnimatedNumber value={value} format={false} onView /> : suffix}
+        {/* ── Signal tiles ─────────────────────────────────────────────────
+            Figures in mono/tabular, the way the app renders evidence. */}
+        <Shell className="pt-4">
+          <Reveal from="up">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {TILES.map(({ figure, animate, label, sub }) => (
+                <div
+                  key={label}
+                  className="rounded-xl border border-border-1 bg-bg-elev surface-lit px-4 py-4"
+                >
+                  <div className="stat-value text-2xl text-fg mb-2">
+                    {animate ? <AnimatedNumber value={animate} format={false} onView /> : figure}
                   </div>
-                  <div className="font-mono text-2xs text-fg-dim uppercase tracking-wider">{label}</div>
+                  <div className="font-mono text-2xs text-fg-dim uppercase tracking-wider">
+                    {label}
+                  </div>
                   <div className="font-mono text-2xs text-fg-faint mt-0.5">{sub}</div>
                 </div>
               ))}
             </div>
-          </div>
-        </Reveal>
-      </section>
+          </Reveal>
+        </Shell>
 
-      {/* ── Demo console ────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
-        <Reveal from="up">
-          <div className="border border-border-2 rounded-xl bg-bg-elev overflow-hidden">
-            <div className="px-5 py-3 border-b border-border-1/60 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-3">
-                <span className="flex gap-1.5" aria-hidden>
-                  <span className="w-2 h-2 rounded-full bg-tier-high/55" />
-                  <span className="w-2 h-2 rounded-full bg-tier-moderate/55" />
-                  <span className="w-2 h-2 rounded-full bg-tier-low/55" />
+        {/* ── Live workspace ───────────────────────────────────────────────
+            The free scan, framed like the investigate workspace panel. */}
+        <Shell className="pt-14">
+          <Reveal className="mb-5">
+            <SectionHeading
+              eyebrow="Intelligence · Workspace"
+              icon={<Radar size={11} className="text-accent" />}
+              title="Run a scan right now"
+              lede="The same engine the signed-in workspace runs. Two analyses per visitor, up to 25 accounts each, no account needed."
+            />
+          </Reveal>
+
+          <Reveal from="up">
+            <div className="rounded-2xl border border-border-1 bg-bg-elev surface-lit overflow-hidden">
+              <div className="px-4 md:px-5 py-3 border-b border-divider bg-bg/60 flex items-center justify-between flex-wrap gap-2">
+                <span className="flex items-center gap-2 font-mono text-2xs tracking-[0.16em] uppercase text-accent-text">
+                  <Radar size={13} className="text-accent" aria-hidden />
+                  Free X scan, no account
                 </span>
-                <span className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase">
-                  Free X scan — no account
+                <span className="font-mono text-2xs text-fg-faint tracking-wider uppercase">
+                  Compile · select · analyze
                 </span>
               </div>
-              <span className="font-mono text-2xs text-fg-faint tracking-wider">
-                Compile · select · analyze · up to 25 · 2 free
-              </span>
-            </div>
-            <div className="p-6 md:p-8">
-              <DemoScanForm />
-            </div>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* ── How it works ────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
-        <Reveal className="mb-8">
-          <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">How it works</p>
-          <h2 className="display-alt text-2xl md:text-3xl font-semibold tracking-tight">
-            A post goes in. Scored accounts come out.
-          </h2>
-        </Reveal>
-
-        <div className="grid md:grid-cols-3 gap-4 relative">
-          <div className="hidden md:block absolute top-[2.5rem] left-[calc(33%+0.75rem)] right-[calc(33%+0.75rem)] h-px bg-border-2" aria-hidden />
-
-          {STEPS.map((s, i) => (
-            <Reveal key={s.title} delay={i * 80} from="up">
-              <div className="border border-border-1 rounded-xl p-5 bg-bg-elev card-interactive relative">
-                <div className="absolute -top-2.5 left-5 font-mono text-[0.6rem] tracking-[0.16em] text-fg-faint uppercase bg-bg-deep border border-border-1 px-2 py-0.5">
-                  {String(i + 1).padStart(2, '0')}
-                </div>
-                <div className="w-9 h-9 border border-border-2 rounded-sm flex items-center justify-center text-fg-mute mb-4 mt-1">
-                  {s.icon}
-                </div>
-                <h3 className="text-sm font-semibold text-fg mb-2">{s.title}</h3>
-                <p className="text-sm text-fg-dim leading-relaxed">{s.body}</p>
+              <div className="p-5 md:p-7">
+                <DemoScanForm />
               </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Capabilities ────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 pb-16 max-w-5xl mx-auto w-full">
-        <Reveal className="mb-8">
-          <p className="font-mono text-2xs tracking-[0.2em] text-fg-mute uppercase mb-2">What you get</p>
-          <h2 className="display-alt text-2xl md:text-3xl font-semibold tracking-tight">
-            Evidence first. Then an analyst explains it.
-          </h2>
-        </Reveal>
-
-        <div className="border border-border-1 rounded-xl divide-y divide-border-1 overflow-hidden">
-          {CAPABILITIES.map((cap) => (
-            <Reveal key={cap.title} from="up">
-              <div className="group flex gap-4 p-5 hover:bg-bg-elev/50 transition-colors">
-                <div className="shrink-0 w-8 h-8 border border-border-2 rounded-sm flex items-center justify-center text-fg-mute group-hover:text-accent group-hover:border-accent/35 transition-colors mt-0.5">
-                  {cap.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-3 mb-1 flex-wrap">
-                    <span className="text-sm font-semibold text-fg">{cap.title}</span>
-                    {cap.tag && (
-                      <span className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-fg-faint border border-border-2 px-1.5 py-0.5 rounded-sm">
-                        {cap.tag}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-fg-dim leading-relaxed">{cap.body}</p>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Scope ───────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 pb-12 max-w-5xl mx-auto w-full">
-        <Reveal>
-          <div className="rounded-xl border border-border-1 bg-bg-elev p-6">
-            <p className="font-mono text-2xs tracking-[0.18em] uppercase text-fg-mute mb-3">Scope, plainly</p>
-            <p className="text-sm text-fg-dim leading-relaxed">
-              Today OmiSphere reads <span className="text-fg font-medium">X (Twitter)</span> and
-              <span className="text-fg font-medium"> YouTube</span> — posts, videos, and the accounts
-              that comment on them. The detection engine is platform-agnostic; Reddit and TikTok are
-              next. We would rather ship two platforms with depth than four with stubs.
-            </p>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* ── CTA ─────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-8 py-20 max-w-3xl mx-auto w-full">
-        <Reveal from="up">
-          <div className="border-t border-border-1 pt-16 text-center">
-            <p className="font-mono text-2xs tracking-[0.22em] text-fg-mute uppercase mb-5">
-              Start your first scan
-            </p>
-            <h2 className="display-alt text-3xl md:text-4xl font-semibold tracking-tight mb-5">
-              Find out who&apos;s real.
-            </h2>
-            <p className="text-sm text-fg-dim max-w-md mx-auto mb-8">
-              ${'9.99'}/month · {MONTHLY_CREDITS} credits monthly · {TRIAL_CREDITS} free to start. Cancel anytime.
-              Built for creators, brands, journalists, and platform-integrity teams.
-            </p>
-            <div className="flex items-center justify-center gap-4 flex-wrap">
-              <Link
-                href="/sign-up"
-                className="inline-flex items-center gap-2 btn-lamp font-semibold px-7 py-2.5 rounded-lg"
-              >
-                Create your free account
-                <ArrowRight size={14} />
-              </Link>
-              <Link
-                href="/pricing"
-                className="font-mono text-2xs tracking-wider text-fg-mute hover:text-fg-dim transition-colors"
-              >
-                See full pricing →
-              </Link>
             </div>
-          </div>
-        </Reveal>
-      </section>
+          </Reveal>
+        </Shell>
 
-      {/* ── Footer ──────────────────────────────────────────────── */}
-      <footer className="relative z-10 border-t border-border-1/40 px-6 md:px-8 py-8 mt-auto">
-        <div className="max-w-5xl mx-auto flex items-center justify-between flex-wrap gap-4">
-          <Logo />
-          <p className="font-mono text-2xs tracking-wider text-fg-faint">Online Media Intelligence</p>
-          <div className="flex items-center gap-px font-mono text-2xs text-fg-mute tracking-wider">
-            {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Pricing', '/pricing'], ['About', '/about']].map(([l, h]) => (
-              <Link key={h} href={h} className="px-2.5 py-1 hover:text-fg transition-colors">{l}</Link>
+        {/* ── How a scan runs ──────────────────────────────────────────────── */}
+        <Shell className="pt-14">
+          <Reveal className="mb-5">
+            <SectionHeading
+              eyebrow="Method"
+              icon={<ScanLine size={11} className="text-accent" />}
+              title="Three steps from a link to a scored account."
+            />
+          </Reveal>
+
+          <div className="grid md:grid-cols-3 gap-3">
+            {STEPS.map((s, i) => (
+              <Reveal key={s.title} delay={i * 70} from="up">
+                <Card interactive className="relative h-full p-5">
+                  <span className="absolute -top-2.5 left-5 font-mono text-[0.6rem] tracking-[0.16em] text-fg-faint uppercase bg-bg-deep border border-border-1 rounded px-2 py-0.5">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span className="grid place-items-center w-9 h-9 rounded-lg border border-border-2 bg-bg-elev-2 text-accent-text mb-4 mt-1">
+                    {s.icon}
+                  </span>
+                  <h3 className="text-sm font-semibold text-fg mb-2">{s.title}</h3>
+                  <p className="text-sm text-fg-dim leading-relaxed">{s.body}</p>
+                </Card>
+              </Reveal>
             ))}
+          </div>
+        </Shell>
+
+        {/* ── Public cases ─────────────────────────────────────────────────
+            The archive grid from /investigations, carrying two real public
+            campaign reports (seeded from Twitter's state-actor disclosures). */}
+        <Shell className="pt-14">
+          <Reveal className="mb-5">
+            <SectionHeading
+              eyebrow="Intelligence · Archive"
+              icon={<Sparkles size={11} className="text-accent" />}
+              title="Two coordinated networks, open to anyone"
+              lede="Real state-actor networks from Twitter's disclosure archive. Omi re-derived the coordination from behavior alone, then kept the evidence attached to the verdict."
+            />
+          </Reveal>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {CASES.map((c, i) => (
+              <Reveal key={c.token} delay={i * 70} from="up">
+                <CaseCard {...c} />
+              </Reveal>
+            ))}
+          </div>
+        </Shell>
+
+        {/* ── What you get ─────────────────────────────────────────────────── */}
+        <Shell className="pt-14">
+          <Reveal className="mb-5">
+            <SectionHeading
+              eyebrow="What you get"
+              icon={<Gauge size={11} className="text-accent" />}
+              title="The evidence behind every score."
+            />
+          </Reveal>
+
+          <Reveal from="up">
+            <div className="rounded-2xl border border-border-1 bg-bg-elev surface-lit divide-y divide-divider overflow-hidden">
+              {CAPABILITIES.map((cap) => (
+                <div key={cap.title} className="group flex gap-4 p-5 hover:bg-bg-elev-2 transition-colors">
+                  <span className="shrink-0 grid place-items-center w-8 h-8 mt-0.5 rounded-lg border border-border-2 bg-bg-elev-2 text-fg-mute group-hover:text-accent-text group-hover:border-border-hot transition-colors">
+                    {cap.icon}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2.5 mb-1 flex-wrap">
+                      <h3 className="text-sm font-semibold text-fg">{cap.title}</h3>
+                      {cap.tag && (
+                        <span className="font-mono text-[0.6rem] tracking-[0.12em] uppercase text-fg-faint border border-border-2 rounded px-1.5 py-0.5">
+                          {cap.tag}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-fg-dim leading-relaxed">{cap.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </Shell>
+
+        {/* ── Scope ────────────────────────────────────────────────────────── */}
+        <Shell className="pt-14">
+          <Reveal from="up">
+            <Card className="p-5 md:p-6">
+              <span className="section-label">Scope</span>
+              <p className="text-sm text-fg-dim leading-relaxed mt-3">
+                OmiSphere reads <span className="text-fg font-medium">X (Twitter)</span> and{' '}
+                <span className="text-fg font-medium">YouTube</span> today: posts, videos, and the
+                accounts that comment on them. The detection engine itself is platform-agnostic, so
+                Reddit and TikTok need an ingestion adapter rather than new detection work.
+              </p>
+            </Card>
+          </Reveal>
+        </Shell>
+
+        {/* ── Close ────────────────────────────────────────────────────────── */}
+        <Shell className="py-20">
+          <Reveal from="up">
+            <div className="border-t border-border-1 pt-14 text-center">
+              <span className="section-label justify-center">Start your first scan</span>
+              <h2 className="display text-3xl md:text-4xl font-semibold text-fg tracking-[-0.025em] mt-4 mb-4">
+                Find out who&apos;s real.
+              </h2>
+              <p className="text-sm text-fg-dim max-w-lg mx-auto leading-relaxed mb-8">
+                ${'9.99'} a month buys {MONTHLY_CREDITS} credits. {TRIAL_CREDITS} are free to start,
+                no card. Cancel whenever you like. Built for creators, brands, journalists, and
+                platform-integrity teams.
+              </p>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                <Link href="/sign-up">
+                  <Button size="lg" className="btn-glow">
+                    Create your free account
+                    <ArrowRight size={14} />
+                  </Button>
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="font-mono text-2xs tracking-wider uppercase text-fg-mute hover:text-fg-dim transition-colors px-3 py-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                >
+                  See full pricing
+                </Link>
+              </div>
+            </div>
+          </Reveal>
+        </Shell>
+      </main>
+
+      {/* ── Footer ─────────────────────────────────────────────────────────── */}
+      <footer className="border-t border-border-1/60 px-4 md:px-6 py-8">
+        <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-4">
+          <Logo size="sm" />
+          <p className="font-mono text-2xs tracking-wider uppercase text-fg-faint">
+            Online media intelligence
+          </p>
+          <div className="flex items-center gap-px font-mono text-2xs text-fg-mute tracking-wider uppercase">
+            {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Pricing', '/pricing'], ['About', '/about']].map(
+              ([label, href]) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="px-2.5 py-1.5 rounded hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                >
+                  {label}
+                </Link>
+              ),
+            )}
           </div>
         </div>
       </footer>
@@ -295,59 +372,219 @@ export function LandingPage() {
   );
 }
 
+/** One gutter, one measure, every section: the app's content column. */
+function Shell({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`px-4 md:px-6 max-w-6xl mx-auto w-full ${className}`}>{children}</section>
+  );
+}
+
+/** The app's page-header grammar: `.section-label` eyebrow over a `.display` heading. */
+function SectionHeading({
+  eyebrow,
+  icon,
+  title,
+  lede,
+}: {
+  eyebrow: string;
+  icon?: React.ReactNode;
+  title: string;
+  lede?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <span className="section-label inline-flex items-center gap-1.5">
+        {icon}
+        {eyebrow}
+      </span>
+      <h2 className="display text-xl md:text-2xl font-semibold text-fg tracking-tight mt-3">
+        {title}
+      </h2>
+      {lede && <p className="text-sm text-fg-dim leading-relaxed mt-2 max-w-2xl">{lede}</p>}
+    </div>
+  );
+}
+
+/**
+ * A public campaign report, carrying the archive card's anatomy from /investigations: TierBadge,
+ * title, summary, a coordination meter on the shared suspicion spectrum, and a mono footer.
+ *
+ * No thumbnail slot, unlike an investigation card. A campaign is a set of accounts rather than one
+ * video, so `InvestigationThumb` had nothing to show and rendered an empty 16:9 placeholder over
+ * half the card. The detector names take that space instead, which is the evidence a reader
+ * actually needs: which independent methods agreed. Every figure is the seeded value from
+ * `featured_campaigns.json`, so each card states what the engine produced.
+ */
+function CaseCard({
+  token,
+  title,
+  summary,
+  coordination,
+  confidence,
+  members,
+  methods,
+}: (typeof CASES)[number]) {
+  const pct = Math.round(coordination * 100);
+  return (
+    <Link
+      href={`/rc/${token}`}
+      className="group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+    >
+      <article className="h-full flex flex-col bg-bg-elev border border-border-1 rounded-xl card-interactive surface-lit p-5 gap-3.5 transition-all duration-300 group-hover:border-border-hot group-hover:shadow-card-lg">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <TierBadge tier="high" size="sm" />
+            <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
+              X · {methods.length} methods agree
+            </span>
+          </div>
+          <h3 className="display text-base font-semibold text-fg leading-snug group-hover:text-accent-text transition-colors">
+            {title}
+          </h3>
+          <p className="mt-1.5 text-sm text-fg-dim leading-relaxed">{summary}</p>
+        </div>
+
+        {/* The detectors that fired, named. Two of these three are discriminative, which is what
+            lets the corroboration gate carry a coordinated verdict at all. */}
+        <ul className="flex flex-wrap gap-1.5">
+          {methods.map((m) => (
+            <li
+              key={m}
+              className="font-mono text-[0.6rem] tracking-wider uppercase text-fg-mute border border-border-2 bg-bg-elev-2 rounded px-1.5 py-0.5"
+            >
+              {m.replace(/_/g, ' ')}
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-auto">
+          <div className="flex items-center justify-between font-mono text-2xs mb-1.5">
+            <span className="text-fg-mute uppercase tracking-wider">Coordination</span>
+            <span className="text-fg tabular">{pct}%</span>
+          </div>
+          <div className="h-1 bg-bg-elev-3 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-brand-gradient"
+              style={{ width: `${Math.min(100, Math.max(2, pct))}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between font-mono text-2xs text-fg-mute uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1.5 truncate">
+            <Users size={11} aria-hidden />
+            {members} accounts
+            <span className="text-border-2 mx-0.5">·</span>
+            {Math.round(confidence * 100)}% confidence
+          </span>
+          <ArrowRight
+            size={13}
+            className="text-fg-faint group-hover:text-accent group-hover:translate-x-0.5 transition-all shrink-0"
+            aria-hidden
+          />
+        </div>
+      </article>
+    </Link>
+  );
+}
+
+const TILES = [
+  { animate: 8, figure: null, label: 'Behavioral signals', sub: 'read per account' },
+  { animate: null, figure: '0-100', label: 'OMI score', sub: 'per account, not per post' },
+  { animate: 2, figure: null, label: 'Sources', sub: 'X and YouTube' },
+  { animate: 25, figure: null, label: 'Free scan cap', sub: 'accounts, no account needed' },
+] as const;
+
+/**
+ * Both entries mirror `apps/api/app/content/featured_campaigns.json`. The share tokens are pinned
+ * by `test_stable_tokens_match_the_landing_page_contract`, so a token-scheme change breaks the
+ * suite instead of dead-linking the front door.
+ */
+const CASES = [
+  {
+    token: 'cmp_feat_cn_xinjiang',
+    title: 'China · Xinjiang (CNHU disclosure)',
+    summary:
+      'A People’s Republic of China operation amplifying Xinjiang narratives, taken from Twitter’s state-actor disclosure. Three independent methods put these accounts in one cluster.',
+    coordination: 0.9991,
+    confidence: 0.7944,
+    members: 41,
+    methods: ['age_cohort', 'co_tag', 'fingerprint_cluster'],
+  },
+  {
+    token: 'cmp_feat_ru_gru_202012',
+    title: 'Russia · GRU (Dec 2020 disclosure)',
+    summary:
+      'A Russian military-intelligence network from the same disclosure archive. Shared posting fingerprints and one hashtag-amplification network carry the finding, never the disclosure label.',
+    coordination: 1.0,
+    confidence: 0.7721,
+    members: 16,
+    methods: ['co_tag', 'style_match'],
+  },
+] as const;
+
 const CAPABILITIES = [
   {
     icon: <Gauge size={15} />,
-    title: 'A per-account OMI score',
-    body: 'Every account you check gets its own 0-to-100 score for how likely it is bought or inauthentic. No blanket verdict on the whole comment section — each account is judged on its own evidence.',
+    title: 'A score for each account',
+    body:
+      'Every account you check gets its own 0-to-100 reading on how likely it was bought or automated. OmiSphere judges each one on its own evidence rather than on a blanket read of the section.',
     tag: 'core',
   },
   {
     icon: <MessagesSquare size={15} />,
-    title: 'A plain-English read on every account',
-    body: 'The omi analyst reads the evidence and tells you, in a sentence or two, why an account looks real or bought. No jargon, no black box.',
+    title: 'A written read from the analyst',
+    body:
+      'The Omi analyst works through the evidence and explains, in a sentence or two, why an account looks genuine or bought.',
     tag: null,
   },
   {
     icon: <ShieldCheck size={15} />,
     title: 'Eight behavioral signals',
-    body: 'Posting cadence, repetition, writing tells, profile metadata, personal-voice rate, engagement farming, account history, and fingerprint memory. Computed, not guessed — fast and auditable.',
+    body:
+      'Posting cadence, message repetition, writing tells, profile metadata, personal-voice rate, engagement farming, account history, and fingerprint memory. Each one is a number you can audit.',
     tag: null,
   },
   {
     icon: <MousePointerClick size={15} />,
-    title: 'Pick who to scan',
-    body: 'OmiSphere pulls the whole comment section for free. You choose the accounts worth checking, and credits go only to the ones you select.',
+    title: 'You choose who to scan',
+    body:
+      'OmiSphere lists the whole comment section for free. Credits go only to the accounts you tick.',
     tag: null,
   },
   {
     icon: <Database size={15} />,
-    title: 'A memory that sharpens with use',
-    body: 'Every scan adds a behavioral fingerprint to the database. Later scans pull priors from what came before, so repeat offenders surface faster.',
+    title: 'Fingerprints carry between scans',
+    body:
+      'Each scan stores a behavioral fingerprint, so an account you checked in March still matches when it turns up under a different post in July.',
     tag: null,
   },
   {
     icon: <Fingerprint size={15} />,
     title: 'The full evidence chain',
-    body: 'Open any score to see the raw signals that drove it — the comment, the account metadata, the cadence. Every number shows its work.',
+    body:
+      'Open any score to see what produced it: the comment, the account metadata, the posting cadence.',
     tag: null,
   },
 ];
 
 const STEPS = [
   {
-    icon: <Link2 size={16} />,
+    icon: <ScanLine size={16} />,
     title: 'Paste a post',
-    body: 'Drop in any X post or YouTube video. OmiSphere pulls its comment section — up to every account on the post.',
+    body:
+      'Drop in an X post or a YouTube video. OmiSphere reads the comment section and lists who commented, free of charge.',
   },
   {
     icon: <MousePointerClick size={16} />,
     title: 'Pick the accounts',
-    body: 'Read through the comments and select the ones you want checked. You spend credits only on the accounts you choose.',
+    body:
+      'Read the comments and tick the accounts worth checking. Credits go only to the ones you select.',
   },
   {
-    icon: <ScanLine size={16} />,
-    title: 'Read each score',
-    body: 'Each account comes back with a 0-to-100 OMI score and a plain-English reason: real person, or bought, and the evidence behind the call.',
+    icon: <Radar size={16} />,
+    title: 'Read the scores',
+    body:
+      'Each account returns a 0-to-100 OMI score, a written verdict, and the signals that produced both.',
   },
 ];

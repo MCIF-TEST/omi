@@ -4,14 +4,12 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Loader2,
-  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   ShieldAlert,
   Users,
   Network,
-  Flame,
-  Shield,
-  AlertTriangle,
   Check,
   CheckSquare,
   Square,
@@ -24,35 +22,18 @@ import {
   demoScoreSelection,
   type CommenterCandidate,
   type ComprehensiveScanResult,
+  type Tier,
 } from '@/lib/api';
 import { ScoreRing } from '@/components/shared/score-ring';
-
-const EXAMPLES = [
-  'https://x.com/elonmusk/status/1790000000000000000',
-  'https://x.com/nasa/status/1789000000000000000',
-];
+import { TierBadge } from '@/components/shared/tier-badge';
 
 /** The free tier's ceiling, mirrored from the backend (DEMO_MAX_COMMENTERS). */
 const FREE_MAX = 25;
 
-const TIER_COLOR: Record<string, string> = {
-  high: 'text-tier-high border-tier-high/40 bg-tier-high/10',
-  elevated: 'text-tier-elevated border-tier-elevated/40 bg-tier-elevated/10',
-  moderate: 'text-tier-moderate border-tier-moderate/40 bg-tier-moderate/10',
-  low: 'text-tier-low border-tier-low/40 bg-tier-low/10',
-};
-
-const TIER_ICON: Record<string, React.ReactNode> = {
-  high: <Flame size={12} />,
-  elevated: <ShieldAlert size={12} />,
-  moderate: <AlertTriangle size={12} />,
-  low: <Shield size={12} />,
-};
-
 type Phase = 'idle' | 'compiling' | 'list' | 'analyzing';
 
-/** Any failure becomes one clear, actionable line — a free scan must never look like it silently
- *  cut out. Mirrors the workspace's friendlyError, minus the signed-in-only cases. */
+/** Any failure becomes one clear, actionable line, because a free scan must never look like it
+ *  silently cut out. Mirrors the workspace's friendlyError, minus the signed-in-only cases. */
 function friendlyError(e: unknown, action: 'compile' | 'analyze'): string {
   if (e instanceof ApiError) {
     // 429 = the visitor's two free scans are spent; the backend's copy carries the CTA.
@@ -72,9 +53,13 @@ function friendlyError(e: unknown, action: 'compile' | 'analyze'): string {
 }
 
 /**
- * The free pre-login scan — the same three moves as the signed-in workspace: paste an X post,
- * COMPILE its repliers (free, no analysis), pick who to check, then ANALYZE only that selection with
- * the real engine. Blue compiles; purple runs the intelligence.
+ * The free pre-login scan. Same three moves as the signed-in workspace: paste an X post,
+ * COMPILE its repliers (free, no analysis), pick who to check, then ANALYZE only that selection
+ * with the real engine. Blue compiles; purple runs the intelligence.
+ *
+ * Styling tracks `app/(app)/investigate/commenter-select.tsx` deliberately: same input material
+ * (h-12 sunk well on a hairline), same HUD header, same selection pip, same action-bar anatomy.
+ * A visitor who scans here should find the signed-in workspace already familiar.
  */
 export function DemoScanForm() {
   const [url, setUrl] = useState('');
@@ -97,7 +82,7 @@ export function DemoScanForm() {
       const res = await demoListCommenters(url.trim());
       setRows(res.commenters);
       // Pre-select everything: the fastest path to a verdict is one click, and the free tier is
-      // already capped at 25 — deselecting is the rarer intent.
+      // already capped at 25, so deselecting is the rarer intent.
       setSelected(new Set(res.commenters.map((c) => c.external_id)));
       setPhase('list');
     } catch (e) {
@@ -145,60 +130,65 @@ export function DemoScanForm() {
   if (result) return <DemoResult result={result} onReset={reset} />;
 
   const selCount = selected.size;
+  const locked = phase === 'compiling' || phase === 'analyzing' || limitReached;
 
   return (
     <div className="space-y-4">
       {/* ── Step 1 · paste + compile ─────────────────────────────────────── */}
       <form
         onSubmit={(e) => { e.preventDefault(); void compile(); }}
-        className="flex gap-2 flex-wrap"
+        className="flex flex-col sm:flex-row gap-3"
       >
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://x.com/…/status/…"
-          disabled={phase === 'compiling' || phase === 'analyzing' || limitReached}
-          required
-          inputMode="url"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          className="flex-1 min-w-[280px] px-4 py-3 bg-bg border border-border-1 rounded-sm text-fg placeholder:text-fg-mute focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
-        />
+        <div className="relative flex-1">
+          <ScanLine
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none"
+            aria-hidden
+          />
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="Paste an X post link…"
+            aria-label="X post link"
+            disabled={locked}
+            required
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className="h-12 w-full pl-10 pr-3 text-base rounded-lg bg-bg-inset border border-border-2 text-fg
+                       placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-accent
+                       focus-visible:outline disabled:opacity-50"
+          />
+        </div>
         <button
           type="submit"
-          disabled={!url.trim() || phase === 'compiling' || phase === 'analyzing' || limitReached}
-          className="inline-flex items-center gap-2 btn-lamp font-semibold px-5 py-3 rounded-md disabled:cursor-not-allowed"
+          disabled={!url.trim() || locked}
+          className="btn-lamp h-12 w-full sm:w-auto px-6 rounded-lg font-semibold inline-flex items-center
+                     justify-center gap-2 whitespace-nowrap disabled:cursor-not-allowed"
         >
           {phase === 'compiling'
-            ? <><Loader2 size={16} className="animate-spin" /> Reading…</>
-            : <><ScanLine size={16} /> {rows.length > 0 ? 'Re-read post' : 'Compile repliers'}</>}
+            ? <><Loader2 size={16} className="animate-spin shrink-0" /> Reading…</>
+            : <><ScanLine size={16} className="shrink-0" /> {rows.length > 0 ? 'Re-read post' : 'Compile repliers'}</>}
         </button>
       </form>
 
+      {/* A format hint, not clickable examples. The two sample links that used to sit here carried
+          invented status ids, so the first thing a curious visitor clicked filled the field with a
+          post that cannot resolve and answered them with an error. */}
       {phase === 'idle' && !err && (
-        <div className="flex items-center gap-2 flex-wrap font-mono text-2xs text-fg-mute">
-          <span>Try:</span>
-          {EXAMPLES.map((u) => (
-            <button
-              key={u}
-              type="button"
-              onClick={() => setUrl(u)}
-              className="text-accent hover:underline truncate max-w-[280px]"
-            >
-              {u.replace('https://', '')}
-            </button>
-          ))}
-          <span className="text-fg-mute/70">
+        <div className="flex items-center gap-x-2 gap-y-1 flex-wrap font-mono text-2xs text-fg-mute tracking-wider">
+          <span className="text-fg-dim">x.com/&lt;account&gt;/status/&lt;id&gt;</span>
+          <span className="text-fg-faint">
             · listing repliers is free · up to {FREE_MAX} · 2 free analyses per visitor
           </span>
         </div>
       )}
 
       {phase === 'compiling' && (
-        <div className="flex items-center gap-3 p-4 rounded-sm border border-border-1 bg-bg">
-          <Radar size={18} className="text-accent radar-spin" />
+        <div className="rounded-xl border border-border-1 bg-bg-elev-2/50 p-5 flex items-center gap-4">
+          <Radar size={20} className="text-accent radar-spin shrink-0" aria-hidden />
           <div>
             <p className="text-sm text-fg">Reading the post…</p>
             <p className="text-xs text-fg-mute mt-0.5">
@@ -210,9 +200,11 @@ export function DemoScanForm() {
 
       {/* ── Step 2 · pick who to analyze ─────────────────────────────────── */}
       {phase === 'list' && rows.length > 0 && (
-        <div className="rounded-lg border border-border-1 bg-bg overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border-1 flex items-center gap-3 flex-wrap">
-            <span className="font-mono text-2xs tracking-[0.16em] uppercase text-accent">
+        <div className="rounded-xl border border-border-1 bg-bg-elev overflow-hidden">
+          {/* HUD header: same anatomy as the signed-in workspace */}
+          <div className="px-4 py-3 border-b border-divider bg-bg/60 flex items-center gap-3 flex-wrap">
+            <span className="flex items-center gap-2 font-mono text-2xs tracking-[0.16em] uppercase text-accent-text">
+              <Radar size={13} className="text-accent" aria-hidden />
               {rows.length} replier{rows.length === 1 ? '' : 's'} found
             </span>
             <span className="font-mono text-2xs tracking-[0.16em] uppercase text-violet-2">
@@ -221,9 +213,9 @@ export function DemoScanForm() {
             <button
               type="button"
               onClick={toggleAll}
-              className="ml-auto inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-sm border border-border-2 text-fg-dim hover:text-fg hover:border-border-hot transition-colors"
+              className="btn-slab ml-auto h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim"
             >
-              {allSelected ? <CheckSquare size={12} /> : <Square size={12} />}
+              {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
               {allSelected ? 'Clear' : 'Select all'}
             </button>
           </div>
@@ -242,22 +234,22 @@ export function DemoScanForm() {
                     onClick={() => toggle(r.external_id)}
                     aria-pressed={isSel}
                     aria-label={`Select ${r.handle ?? r.external_id}`}
-                    className={`row-btn w-full text-left flex items-start gap-3 px-4 py-3 border-b border-border-1 ${
+                    className={`row-btn w-full text-left flex items-start gap-3 px-4 py-3.5 border-b border-divider ${
                       isSel ? 'is-selected' : ''
                     }`}
                   >
                     <span className="min-w-0 flex-1">
                       {r.comment ? (
-                        <span className="block text-sm text-fg leading-snug line-clamp-2">{r.comment}</span>
+                        <span className="comment-text block text-fg line-clamp-2">{r.comment}</span>
                       ) : (
                         <span className="block text-sm text-fg-mute italic">Replied without text</span>
                       )}
-                      <span className="block font-mono text-2xs text-fg-mute mt-1 truncate">
+                      <span className="block font-mono text-xs text-fg-mute mt-1.5 truncate">
                         @{(r.handle ?? r.external_id).replace(/^@/, '')}
                       </span>
                     </span>
                     <span className={`pip ${isSel ? 'pip-on' : ''}`} aria-hidden>
-                      {isSel && <Check size={12} strokeWidth={3} />}
+                      {isSel && <Check size={13} strokeWidth={3} />}
                     </span>
                   </button>
                 </li>
@@ -265,15 +257,16 @@ export function DemoScanForm() {
             })}
           </ul>
 
-          <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-border-1">
-            <p className="font-mono text-2xs tracking-wider text-fg-faint">
+          <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-divider bg-bg/60">
+            <p className="font-mono text-2xs tracking-wider text-fg-faint w-full sm:w-auto">
               Free scan · up to {FREE_MAX} repliers
             </p>
             <button
               type="button"
               onClick={() => void analyze()}
               disabled={selCount === 0}
-              className="ml-auto inline-flex items-center gap-2 btn-ai font-semibold px-5 py-2.5 rounded-md disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-ai w-full sm:w-auto sm:ml-auto h-11 px-5 rounded-lg font-semibold inline-flex
+                         items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Radar size={15} />
               Analyze {selCount > 0 ? `${selCount} ` : ''}selected
@@ -284,9 +277,12 @@ export function DemoScanForm() {
 
       {/* Compiled fine, but nobody replied. */}
       {phase === 'list' && rows.length === 0 && (
-        <div className="rounded-sm border border-border-1 bg-bg p-6 text-center">
-          <p className="text-sm text-fg">No repliers on this post</p>
-          <p className="text-sm text-fg-mute mt-1">
+        <div className="rounded-xl border border-border-1 bg-bg-elev p-8 text-center">
+          <span className="mx-auto mb-4 grid place-items-center w-11 h-11 rounded-full bg-bg-elev-2 border border-border-1">
+            <Radar size={19} className="text-fg-mute" aria-hidden />
+          </span>
+          <p className="text-sm text-fg font-medium">No repliers on this post</p>
+          <p className="text-sm text-fg-mute mt-1 max-w-md mx-auto leading-relaxed">
             It may have no replies yet, or replies may be restricted. Try another post.
           </p>
         </div>
@@ -294,29 +290,33 @@ export function DemoScanForm() {
 
       {/* ── Step 3 · the real analysis ───────────────────────────────────── */}
       {phase === 'analyzing' && (
-        <div className="rounded-lg border border-violet-solid/40 bg-violet-solid/[0.06] p-5 flex items-center gap-4">
-          <Radar size={20} className="text-violet-2 radar-spin shrink-0" />
+        <div className="rounded-xl border border-violet-solid/40 bg-violet-solid/[0.06] p-5 flex items-center gap-4">
+          <Radar size={20} className="text-violet-2 radar-spin shrink-0" aria-hidden />
           <div>
             <p className="text-sm text-fg font-medium">
               Analyzing {selCount} account{selCount === 1 ? '' : 's'}…
             </p>
             <p className="text-xs text-fg-mute mt-0.5 leading-relaxed">
               Pulling each account&apos;s history, detecting coordination, then Omi writes the verdict.
-              This is the real analysis, so it can take a couple of minutes — keep this tab open.
+              This is the real analysis, so it can take a couple of minutes. Keep this tab open.
             </p>
           </div>
         </div>
       )}
 
       {err && (
-        <div className="flex items-start gap-2 p-3 bg-tier-high/10 border border-tier-high/30 rounded-sm">
-          <AlertCircle size={14} className="text-tier-high mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm text-fg">{err}</p>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 flex items-start gap-2.5"
+        >
+          <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" aria-hidden />
+          <div className="min-w-0">
+            <p className="font-mono text-2xs tracking-[0.16em] uppercase text-danger">Request failed</p>
+            <p className="text-sm text-fg-dim leading-relaxed mt-0.5">{err}</p>
             {limitReached && (
               <Link
                 href="/sign-up"
-                className="inline-flex items-center gap-1 mt-2 font-mono text-2xs tracking-wider uppercase text-accent hover:underline"
+                className="inline-flex items-center gap-1 mt-2 font-mono text-2xs tracking-wider uppercase text-accent-text hover:underline"
               >
                 Create a free account <ArrowRight size={11} />
               </Link>
@@ -334,18 +334,22 @@ export function DemoScanForm() {
         .demo-row[style] { animation-delay: calc(var(--i) * 28ms); }
         @keyframes row-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-        .row-btn { transition: background-color 140ms ease, transform 120ms ease-out; }
+        .row-btn { transition: background-color 140ms ease, box-shadow 140ms ease, transform 120ms ease-out; }
+        /* Hover gated: touch taps fire a false :hover that would stick the tint on mobile. */
         @media (hover: hover) and (pointer: fine) {
-          .row-btn:hover { background: var(--bg-elev); }
+          .row-btn:hover { background: var(--bg-elev-2); }
         }
         .row-btn:active { transform: scale(0.994); }
         .row-btn.is-selected {
-          background: color-mix(in oklab, var(--violet-solid) 12%, transparent);
+          background: color-mix(in oklab, var(--violet-solid) 13%, var(--bg-elev));
           box-shadow: inset 3px 0 0 var(--violet-2);
         }
 
+        /* The comment is the hero: bigger than the byline, comfortable to read. */
+        .comment-text { font-size: 0.95rem; line-height: 1.5; }
+
         .pip {
-          margin-top: 1px; width: 20px; height: 20px; flex: none; border-radius: 999px;
+          margin-top: 2px; width: 22px; height: 22px; flex: none; border-radius: 999px;
           border: 1.5px solid var(--border-hot); display: grid; place-items: center; color: #fff;
           transition: background 120ms ease, border-color 120ms ease;
         }
@@ -372,9 +376,7 @@ function DemoResult({
   onReset: () => void;
 }) {
   const video = result.video;
-  const tier = result.overall_tier || 'low';
-  const cls = TIER_COLOR[tier] || TIER_COLOR.low;
-  const icon = TIER_ICON[tier] || TIER_ICON.low;
+  const tier = (result.overall_tier || 'low') as Tier;
   const coordPct = Math.round((video?.coordination_score || 0) * 100);
   const flagged = useMemo(
     () => video?.commenters.filter((c) => c.tier === 'elevated' || c.tier === 'high').length || 0,
@@ -383,18 +385,15 @@ function DemoResult({
 
   return (
     <div className="space-y-5 animate-fade-up">
-      {/* Hero reveal — score ring + verdict */}
+      {/* Verdict hero: the score ring fused with the tier and the written summary */}
       <div className="flex items-center gap-5 flex-wrap">
         <ScoreRing value={video?.coordination_score || 0} tier={tier} size={104} />
         <div className="flex-1 min-w-[200px] space-y-2">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2 py-1 rounded-sm border ${cls}`}
-            >
-              {icon}
-              {tier} risk
+          <div className="flex items-center gap-2 flex-wrap">
+            <TierBadge tier={tier} size="md" />
+            <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
+              Analysis complete
             </span>
-            <span className="font-mono text-2xs text-fg-mute">Analysis complete</span>
           </div>
           <p className="text-sm text-fg leading-relaxed">{result.summary}</p>
         </div>
@@ -412,10 +411,10 @@ function DemoResult({
         <Stat label="Clusters" value={video?.clusters?.length || 0} highlight={(video?.clusters?.length || 0) > 0} />
       </div>
 
-      {/* The analyst's reading — the same model output a signed-in investigation gets. Absent when
+      {/* The analyst's reading: the same model output a signed-in investigation gets. Absent when
           the analyst is off or its call failed; the scored accounts below stand on their own. */}
       {result.analyst_assessment && (
-        <div className="rounded-sm border border-violet-solid/30 bg-violet-solid/[0.05] p-4">
+        <div className="rounded-xl border border-violet-solid/30 bg-violet-solid/[0.05] p-4">
           <p className="font-mono text-2xs tracking-[0.18em] uppercase text-violet-2 mb-2">
             Omi Analyst
           </p>
@@ -432,7 +431,7 @@ function DemoResult({
         </div>
       )}
 
-      {/* Per-account read — the whole point of the product */}
+      {/* Per-account read: the whole point of the product */}
       {video && video.commenters && (
         <div>
           <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">
@@ -445,18 +444,11 @@ function DemoResult({
               .map((c) => (
                 <div
                   key={c.external_id}
-                  className="flex items-center gap-2 p-2 bg-bg rounded-sm border border-border-1"
+                  className="flex items-center gap-2.5 p-2.5 bg-bg-inset rounded-lg border border-border-1"
                 >
-                  <span
-                    className={`inline-flex items-center gap-1 font-mono text-2xs px-1.5 py-0.5 rounded-sm border ${
-                      TIER_COLOR[c.tier] || TIER_COLOR.low
-                    }`}
-                  >
-                    {TIER_ICON[c.tier]}
-                    {c.tier}
-                  </span>
+                  <TierBadge tier={c.tier as Tier} size="sm" />
                   <span className="text-sm text-fg truncate flex-1">{c.handle}</span>
-                  <span className="font-mono text-2xs text-fg-mute tabular-nums">
+                  <span className="font-mono text-2xs text-fg-mute tabular">
                     {Math.round(c.overall_probability * 100)}%
                   </span>
                 </div>
@@ -466,22 +458,23 @@ function DemoResult({
       )}
 
       {/* CTA */}
-      <div className="border-t border-border-1 pt-5 mt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="border-t border-divider pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
         <p className="text-sm text-fg-dim text-center sm:text-left">
           <span className="text-fg font-medium">Sign up</span> to save this scan, analyze whole comment
           sections, and open the evidence behind every score.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={onReset}
-            className="font-mono text-2xs tracking-wider uppercase px-3 py-2 rounded-sm border border-border-2 text-fg-dim hover:text-fg hover:border-border-hot transition-colors"
+            className="btn-slab h-9 px-3 rounded-md font-mono text-2xs tracking-wider uppercase text-fg-dim inline-flex items-center gap-1.5"
           >
-            ← Scan another
+            <ArrowLeft size={12} />
+            Scan another
           </button>
           <Link
             href="/sign-up"
-            className="inline-flex items-center gap-2 btn-lamp font-semibold px-4 py-2 rounded-md"
+            className="btn-lamp h-9 px-4 rounded-md font-semibold text-sm inline-flex items-center gap-2"
           >
             Sign up free
             <ArrowRight size={14} />
@@ -504,16 +497,12 @@ function Stat({
   highlight?: boolean;
 }) {
   return (
-    <div className="p-3 bg-bg rounded-sm border border-border-1">
-      <div className="flex items-center gap-1 font-mono text-2xs text-fg-mute uppercase tracking-wider mb-1">
+    <div className="p-3.5 bg-bg-elev-2 rounded-xl border border-border-1 surface-lit">
+      <div className="flex items-center gap-1.5 font-mono text-2xs text-fg-mute uppercase tracking-wider mb-1.5">
         {icon}
         {label}
       </div>
-      <div
-        className={`font-mono text-lg font-semibold tabular-nums ${
-          highlight ? 'text-tier-elevated' : 'text-fg'
-        }`}
-      >
+      <div className={`stat-value text-lg ${highlight ? 'text-tier-elevated' : 'text-fg'}`}>
         {value}
       </div>
     </div>
