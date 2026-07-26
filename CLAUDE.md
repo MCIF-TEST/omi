@@ -249,8 +249,30 @@ keep it that way, and run it after touching anything that uses closures inside b
 
 Deep navy (`#09111f` / `#0e1728` / `#131e31`), blue identity (`#3b82f6` / `#5b9dff`), purple for the
 AI layer (`#8f7bf0` / `#5b3fd8`), tier colours green→amber→orange→red (authentic→bot). **No glow, no
-gradients, no glassmorphism.** Inter for interface (`.display`), JetBrains Mono for data/evidence,
-Space Grotesk for the marketing display voice (`.display-alt`, pre-login only).
+gradients, no glassmorphism.** Inter for interface (`.display`), JetBrains Mono for data/evidence.
+
+**There is one display voice now: `.display` (Inter), on both sides of the login boundary.** The
+pre-login page used to run a second voice (Space Grotesk, `.display-alt`) so it would read as
+"marketing"; the effect was that the front page looked like a different product from the app a
+visitor was about to sign into. Space Grotesk is no longer loaded at all (`app/layout.tsx`), so don't
+reach for `.display-alt` — the class survives only as an Inter fallback so stray usage degrades
+instead of breaking.
+
+The landing page (`app/landing-page.tsx`) is deliberately built from the **signed-in app's** grammar,
+not a marketing kit: the page-header slab from `/investigations` (rounded-2xl `bg-bg-elev`, top accent
+hairline, blurred orbs, `.section-label` eyebrow, `.display` heading), figures in mono/tabular
+(`.stat-value`), the real `Card` / `Button` / `Badge` / `TierBadge` primitives, and blue-compiles /
+purple-analyses. `app/demo-scan-form.tsx` tracks `investigate/commenter-select.tsx` the same way
+(same input material, HUD header, selection pip, action bar). If you restyle one, restyle both.
+
+Two traps that bit here, both verified with Playwright at 360/375/390/430px:
+
+- **`.section-label` is `inline-flex` + `flex-wrap: wrap` and already draws its own blue tick.** Give
+  it a long label *and* a leading icon and the tick+icon orphan onto their own line on a phone. Keep
+  the label short; hang status on a `Badge` beside it, which wraps as one piece.
+- **No `overflow-hidden` on a page root that holds a sticky header** — it creates a scroll container
+  and the header stops tracking the scrolled edge. Horizontal containment belongs to
+  `overflow-x: clip` on `html, body` in `globals.css` (see the mobile section above).
 
 Motion follows the `emil-design-eng` skill: transform/opacity only, custom easing
 `cubic-bezier(0.23, 1, 0.32, 1)`, <300ms for UI, `scale(0.95)` never `scale(0)`, always
