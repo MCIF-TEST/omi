@@ -32,7 +32,15 @@ export const metadata: Metadata = {
   description:
     'Probabilistic detection of bots, AI engagement, coordinated influence campaigns, and synthetic virality. Powered by the omi detection engine.',
   applicationName: 'OMISPHERE',
-  robots: { index: false, follow: false }, // private beta
+  // Indexable by default. This was `index: false, follow: false` site-wide, left over from the private
+  // beta — which meant every page, including the marketing pages, told search engines to ignore it.
+  // Any traffic spend against that captures nothing durable: no branded search, no organic entry, no
+  // compounding content.
+  //
+  // Non-public surfaces opt OUT individually rather than the whole site opting in: the signed-in app
+  // ((app)/layout.tsx), the auth screens, and the tokenised share routes (/r/, /rc/), which are
+  // unlisted-link-shareable and must never appear in an index. See also app/robots.ts.
+  robots: { index: true, follow: true },
 };
 
 export const viewport = {

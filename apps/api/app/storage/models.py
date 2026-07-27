@@ -490,6 +490,16 @@ class Investigation(Base):
     # Full serialized ComprehensiveScanResult payload. We replace this on
     # continuation batches with the merged result.
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Denormalised from payload_json at write time so LISTING investigations never loads the blob.
+    # payload_json holds every commenter's scores, evidence, posts and analyst sections — often
+    # megabytes — and the archive page asks for 100 rows at once. Deriving `platform` and a thumbnail
+    # from the payload during a list meant parsing all of it to produce two short strings: a memory
+    # and latency cliff that grows with how much a customer has actually used the product.
+    #
+    # Nullable because rows written before these columns existed hold NULL; the read path falls back
+    # to URL / target_id heuristics, which need no payload.
+    platform: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Phase 6: public sharing — opt-in, revocable token.
     share_token: Mapped[str | None] = mapped_column(String(48), nullable=True, unique=True, index=True)
     is_public: Mapped[bool] = mapped_column(Integer, default=0)

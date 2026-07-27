@@ -47,6 +47,27 @@ def _build_engine(url: str) -> Engine:
             # timeout they fail immediately with "database is locked". 30 seconds
             # is generous — any longer and the background pool would back up.
             connect_args["timeout"] = 30
+    if not url.startswith("sqlite"):
+        # Managed Postgres gets restarted for maintenance and failover, which silently kills pooled
+        # connections. Without pre-ping the next request to reuse one fails with
+        # "server closed the connection unexpectedly" until the pool turns over — an outage that looks
+        # random and recurring rather than like scheduled maintenance. pre_ping costs one cheap
+        # round-trip per checkout and removes the entire failure mode.
+        kwargs["pool_pre_ping"] = True
+        # Recycle below common proxy/server idle timeouts so we retire connections before something
+        # upstream does it for us.
+        kwargs["pool_recycle"] = 1800
+        # Sized explicitly rather than inherited (SQLAlchemy defaults to 5 + 10 overflow). Keep
+        # instances × (pool_size + max_overflow) under the database plan's connection limit, or new
+        # connections start being refused under load. Env-tunable so scaling out doesn't need a code
+        # change: OMI_DB_POOL_SIZE / OMI_DB_MAX_OVERFLOW.
+        #
+        # NB: uses the MODULE-level `os` import deliberately. A local `import os` here would make `os`
+        # a local for the whole function, so the SQLite branch above (os.makedirs) would raise
+        # UnboundLocalError before this line ever ran — the function-level-import trap in CLAUDE.md.
+        kwargs["pool_size"] = int(os.environ.get("OMI_DB_POOL_SIZE", "5"))
+        kwargs["max_overflow"] = int(os.environ.get("OMI_DB_MAX_OVERFLOW", "10"))
+
     engine = create_engine(url, connect_args=connect_args, **kwargs)
     if is_file_sqlite:
         # WAL journal mode: readers never block writers; multiple readers can
@@ -135,6 +156,10 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("investigations", "notes", "TEXT"),
     # Investigation overall confidence (derived from payload) — list readability
     ("investigations", "confidence", "DOUBLE PRECISION"),
+    # Platform + thumbnail denormalised out of payload_json so the archive list never loads the blob
+    # (see Investigation.platform). Existing rows stay NULL and fall back to URL heuristics.
+    ("investigations", "platform", "VARCHAR(16)"),
+    ("investigations", "thumbnail_url", "VARCHAR(500)"),
     # Public campaign sharing (opt-in, revocable) — distribution phase
     ("campaigns", "share_token", "VARCHAR(64)"),
     ("campaigns", "is_public", "INTEGER DEFAULT 0"),

@@ -9,7 +9,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.auth import CurrentUser, require_user
 from app.storage.db import get_session
@@ -102,7 +102,11 @@ def list_feedback(
             count_stmt = count_stmt.where(Feedback.created_at >= since)
         if until:
             count_stmt = count_stmt.where(Feedback.created_at <= until)
-        total = len(list(session.execute(count_stmt).scalars().all()))
+        # COUNT in the database. This used to load every matching row into Python and take len() of
+        # the list, so the cost of counting grew with the table instead of staying flat.
+        total = session.execute(
+            select(func.count()).select_from(count_stmt.subquery())
+        ).scalar_one()
 
         return FeedbackListOut(
             feedback=[

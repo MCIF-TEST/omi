@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
@@ -42,16 +42,76 @@ async def lifespan_monitoring(app: FastAPI):
                 pass
 
 
+# Arbitrary but fixed key identifying the monitoring pass to Postgres' advisory-lock namespace.
+# Must not change between deploys, or two versions would each think they hold the lock.
+_MONITORING_LOCK_KEY = 918_273_645
+
+
+@contextmanager
+def _leader_lock():
+    """Yield True only to the ONE instance that should run this pass.
+
+    Every instance runs this loop in its own lifespan, so without mutual exclusion N instances mean N
+    anomaly passes and N watchlist rescans per interval: duplicated customer-facing alerts and N times
+    the upstream spend. Staggering the start (which is all this used to do) spreads that out, it does not
+    prevent it.
+
+    Uses a Postgres advisory lock, which is the right primitive here for two reasons: it needs no table
+    or migration, and it is tied to the database session, so if the instance holding it crashes the lock
+    is released automatically. A lease row in a table would need expiry handling to avoid a dead leader
+    wedging monitoring permanently.
+
+    On SQLite (local dev) there is no advisory lock and no second instance either, so it yields True.
+    Any failure yields True rather than False: skipping monitoring silently is worse than occasionally
+    duplicating a pass.
+    """
+    from sqlalchemy import text
+
+    with get_session() as session:
+        bind = session.get_bind()
+        if bind.dialect.name != "postgresql":
+            yield True
+            return
+        acquired = False
+        try:
+            acquired = bool(session.execute(
+                text("SELECT pg_try_advisory_lock(:k)"), {"k": _MONITORING_LOCK_KEY},
+            ).scalar())
+        except Exception:  # noqa: BLE001 — never let lock trouble stop monitoring entirely
+            logger.warning("could not acquire the monitoring leader lock; running anyway",
+                           exc_info=True)
+            yield True
+            return
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                try:
+                    session.execute(text("SELECT pg_advisory_unlock(:k)"),
+                                    {"k": _MONITORING_LOCK_KEY})
+                except Exception:  # noqa: BLE001 — the lock also frees when the session closes
+                    pass
+
+
 async def _loop() -> None:
     settings = get_settings()
     # Stagger start so multiple replicas don't all fire at once.
     await asyncio.sleep(5)
     while True:
         try:
-            await asyncio.to_thread(run_one_pass)
+            await asyncio.to_thread(_run_one_pass_if_leader)
         except Exception:  # noqa: BLE001
             logger.exception("monitoring pass failed")
         await asyncio.sleep(settings.monitoring_interval_seconds)
+
+
+def _run_one_pass_if_leader() -> dict | None:
+    """Run the pass only if this instance wins the leader lock for it."""
+    with _leader_lock() as is_leader:
+        if not is_leader:
+            logger.debug("monitoring pass skipped — another instance holds the leader lock")
+            return None
+        return run_one_pass()
 
 
 def run_one_pass() -> dict:

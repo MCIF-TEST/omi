@@ -260,6 +260,10 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm run start
     autoDeploy: true
+    # Without this Render cannot distinguish a wedged Next process from a healthy one, so it never
+    # restarts it — a hung frontend stays hung. Shallow by design (app/healthz/route.ts): it must not
+    # touch the API or database, or a downstream slowdown becomes a restart loop here.
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_VERSION
         value: '20.18.0'

@@ -420,6 +420,20 @@ class Settings(BaseSettings):
     rate_limit_scan_max: int = 20
     rate_limit_scan_window_seconds: float = 60.0
 
+    # Largest accepted request body (BodySizeLimitMiddleware). Neither Starlette nor uvicorn caps this
+    # by default, and ten routes take an unvalidated `payload: dict`, so an oversized JSON body was
+    # parsed fully into memory — a cheap way to exhaust a small instance's RAM without an account.
+    # 1 MiB is far above anything the product sends: the largest real body is a scan selection, about
+    # 30 KB at the 1000-candidate pool cap. Env: OMI_MAX_REQUEST_BODY_BYTES.
+    max_request_body_bytes: int = 1_048_576
+
+    # Ceiling on FREE pre-login scans across all visitors per rolling 24h. The 2-per-IP reservation is a
+    # fairness control, not a spend control — IPs rotate cheaply through VPNs and mobile carriers — and
+    # every free scan is a real model call plus 25 upstream account fetches. Without this, total demo
+    # cost is unbounded exactly when marketing traffic arrives. 0 disables the cap.
+    # Env: OMI_DEMO_GLOBAL_DAILY_MAX.
+    demo_global_daily_max: int = 500
+
     # -----------------------------------------------------------------------
     # Monitoring (Phase 8)
     # -----------------------------------------------------------------------

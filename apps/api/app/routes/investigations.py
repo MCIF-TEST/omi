@@ -166,32 +166,34 @@ def _to_summary(inv) -> InvestigationSummary:
 
 
 def _platform_of(inv) -> str:
-    """Resolve platform from payload first, then input URL heuristics."""
-    payload = inv.payload_json or {}
-    raw = (payload.get("platform") or "").strip().lower()
-    if raw in ("x", "twitter"):
+    """Resolve platform WITHOUT touching payload_json.
+
+    Reads the denormalised ``platform`` column, falling back to URL / target_id heuristics for rows
+    written before that column existed. The payload is deliberately not consulted: this runs once per
+    row in the archive list, and with ``load_only()`` on that query, reading ``inv.payload_json`` here
+    would lazy-load a multi-megabyte blob per row — turning one query into an N+1 and undoing exactly
+    the problem the column was added to solve. New rows get an accurate value at write time
+    (``derive_list_fields``), where the payload is already in memory and costs nothing extra.
+    """
+    stored = (getattr(inv, "platform", None) or "").strip().lower()
+    if stored in ("x", "twitter"):
         return "x"
-    if raw == "youtube":
+    if stored == "youtube":
         return "youtube"
     url = (inv.input_url or "").lower()
     if "youtube.com" in url or "youtu.be" in url:
         return "youtube"
     if "twitter.com" in url or "x.com" in url or "t.co/" in url:
         return "x"
-    # kind is rarely platform-specific; comprehensive scans on YT still carry
-    # video_id in the payload.
-    if payload.get("video_id") and not raw:
+    # A bare 11-char target_id is a YouTube video id; X ids are numeric.
+    if inv.target_id and _YT_ID_BARE.match(inv.target_id):
         return "youtube"
     return "unknown"
 
 
 def _youtube_video_id(inv) -> str | None:
-    payload = inv.payload_json or {}
+    """Video id from target_id / input_url only — never the payload (see _platform_of)."""
     candidates: list[str] = []
-    for key in ("video_id", "content_id", "target_id"):
-        val = payload.get(key)
-        if isinstance(val, str) and val:
-            candidates.append(val)
     if inv.target_id:
         candidates.append(inv.target_id)
     for c in candidates:
@@ -221,11 +223,9 @@ def _thumbnail_of(inv, platform: str) -> str | None:
     X: no reliable public post thumb without auth — return None so the UI
     can show a branded X placeholder.
     """
-    payload = inv.payload_json or {}
-    for key in ("thumbnail_url", "thumb_url", "image_url"):
-        val = payload.get(key)
-        if isinstance(val, str) and val.startswith(("http://", "https://")):
-            return val
+    stored = getattr(inv, "thumbnail_url", None)
+    if isinstance(stored, str) and stored.startswith(("http://", "https://")):
+        return stored
     if platform == "youtube":
         vid = _youtube_video_id(inv)
         if vid:

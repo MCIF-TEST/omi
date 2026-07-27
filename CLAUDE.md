@@ -86,6 +86,41 @@ in-process state leaks between test files in general.
 
 ---
 
+## Production boot fails closed (don't soften these)
+
+`_validate_production_config` in `app/main.py` refuses the deploy rather than starting degraded. Two of
+its checks exist because the insecure state used to be the *default*:
+
+- **`OMI_REQUIRE_AUTH` must be true in production.** When false, `require_user()` does not reject — it
+  *returns* `CurrentUser(id=0, is_admin=True, credits=999999)`. So a missing env var served every
+  anonymous caller as an admin, with the admin routers, `/v1/metrics`, credit exemption and rate-limit
+  exemption all included. It was previously unchecked, and worse: the session-secret check was gated on
+  `if settings.require_auth`, so auth being off skipped its own validation.
+- **`OMI_ENV` must be one of `_KNOWN_ENVS`.** Every production check is gated on `env == "production"`
+  by exact string, so `prod`, `Production`, or an absent value silently bought CORS `*` plus a total
+  skip of the storage / secret / API-key checks. An unrecognised value is now a boot error, and
+  `OMI_ALLOW_DEGRADED_PRODUCTION` deliberately does **not** excuse it — a typo is not a degraded mode.
+
+Pinned by `tests/test_production_config_fails_closed.py`. Note `test_production_config.py` previously
+contained `test_session_secret_not_checked_when_auth_disabled`, which asserted the bypass was fine; it
+now asserts the refusal.
+
+## The archive list must never load `payload_json`
+
+`Investigation.payload_json` holds the whole scan result (every commenter's scores, evidence, posts,
+analyst sections) and the archive page requests **100 rows**. The list used to `select(Investigation)`
+and read the blob per row just to resolve a platform string and a thumbnail, so one page load
+deserialised megabytes per row — worst for the heaviest users, who are the best customers.
+
+`platform` and `thumbnail_url` are now **columns**, denormalised at write time by
+`repository._set_list_fields()` (free: the payload is already in memory there), and
+`list_user_investigations` uses `load_only()`. The trap: with `load_only()` in place, *reading*
+`inv.payload_json` in the summary builder lazy-loads the blob one row at a time — an N+1, strictly worse
+than the original. So `routes/investigations._platform_of` / `_youtube_video_id` / `_thumbnail_of` are
+deliberately payload-free and fall back to URL/`target_id` heuristics for pre-migration rows. Guarded by
+`tests/test_investigation_list_does_not_load_payload.py`, which asserts against the **SQL actually
+emitted**, not by inspection.
+
 ## Decisions that must not be undone
 
 ### Clerk runs entirely client-side
@@ -369,6 +404,13 @@ because the background pool logs exceptions instead of raising them.
 
 `python -m pyflakes app/` catches it in seconds. It currently reports **zero undefined names** —
 keep it that way, and run it after touching anything that uses closures inside background work.
+
+**The same trap has a second form, and pyflakes does NOT catch this one.** A function-level
+`import os` makes `os` local to the *entire* function, including lines *above* the import — so an
+earlier use raises `UnboundLocalError` at runtime while looking perfectly fine statically. This
+happened in `_build_engine` (`app/storage/db.py`): a local `import os` added inside the Postgres
+branch broke `os.makedirs` in the SQLite branch above it, and only a concurrency test caught it.
+If a module already imports something at the top, use it; don't re-import it inside a function.
 
 ---
 

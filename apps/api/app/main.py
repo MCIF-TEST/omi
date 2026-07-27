@@ -22,6 +22,7 @@ from app import __version__
 from app.core import background
 from app.core.config import get_settings
 from app.core.middleware import (
+    BodySizeLimitMiddleware,
     GlobalRateLimitMiddleware,
     MetricsMiddleware,
     RequestIdMiddleware,
@@ -42,6 +43,10 @@ logger = logging.getLogger("omi")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _configure_logging()
+    # Before anything else that can fail, so a boot-time error is itself reported. No-op unless a DSN
+    # is configured (app/core/observability.py).
+    from app.core.observability import init_error_tracking
+    init_error_tracking(get_settings().env, release=__version__)
     init_db()
     from app.content.seed import seed_example_content
     seed_example_content()
@@ -78,6 +83,11 @@ def _log_optional_feature_state() -> None:
     parts.append(f"SMTP email alerts: {'on (' + s.smtp_host + ')' if s.smtp_host else 'off — webhook delivery still works'}")
     parts.append(f"Stripe billing: {'on' if s.stripe_secret_key and s.stripe_price_id else 'off (free tier only)'}")
     parts.append(f"Background monitoring: {'on' if s.enable_monitoring else 'off'}")
+    from app.core.observability import error_tracking_enabled
+    parts.append(
+        "Error tracking: on" if error_tracking_enabled()
+        else "Error tracking: OFF — production failures will only appear in the log stream (set SENTRY_DSN)"
+    )
     logger.info("Optional features: %s", " | ".join(parts))
 
 
@@ -117,6 +127,9 @@ class _JsonFormatter(logging.Formatter):
 
 _DEV_SESSION_SECRET = "dev-only-change-me-please-12345678901234567890"
 _MIN_SESSION_SECRET_LENGTH = 32
+# The only accepted values for OMI_ENV. Anything else is a configuration error, never a silent
+# downgrade to development — see _validate_production_config.
+_KNOWN_ENVS = frozenset({"production", "development", "test"})
 
 
 class ProductionConfigError(RuntimeError):
@@ -144,6 +157,19 @@ def _validate_production_config(settings) -> None:
     Set ``OMI_ALLOW_DEGRADED_PRODUCTION=true`` to downgrade these to logged
     warnings — only intended for break-glass debugging.
     """
+    # An UNRECOGNISED env is refused rather than treated as development. Every check below is gated
+    # on `env == "production"` by exact string, so `prod`, `Production`, or a missing OMI_ENV silently
+    # bought CORS `*` plus a total skip of the production checks — SQLite storage accepted, the
+    # committed dev session secret accepted, missing API key accepted. A typo is a plausible way to
+    # deploy a hardened service with all its hardening off, so the closed set is enforced here.
+    if settings.env not in _KNOWN_ENVS:
+        raise ProductionConfigError(
+            f"OMI_ENV is {settings.env!r}, which is not one of {sorted(_KNOWN_ENVS)}. Refusing to "
+            f"start: an unrecognised environment is treated as NON-production, which disables the "
+            f"production safety checks and opens CORS to '*'. Set OMI_ENV=production for a live "
+            f"deploy (exact lowercase)."
+        )
+
     if settings.env != "production":
         return
 
@@ -152,6 +178,22 @@ def _validate_production_config(settings) -> None:
         "1", "true", "yes",
     )
     problems: list[str] = []
+
+    # --- 0. Authentication --------------------------------------------------
+    # The most dangerous default in the codebase. `require_auth` is False by default, and when it is
+    # False `require_user()` does not reject the request — it RETURNS a synthetic user with id=0,
+    # is_admin=True and unlimited credits (app/core/auth.py). Nothing downstream distinguishes that
+    # from a real admin, so a single absent OMI_REQUIRE_AUTH turned the whole API, including every
+    # admin router, into an unauthenticated surface. Previously this was not checked at all: the
+    # session-secret block below is gated on `if settings.require_auth`, so auth being OFF skipped its
+    # own validation. Fail closed.
+    if not settings.require_auth:
+        problems.append(
+            "OMI_REQUIRE_AUTH is not true. In production this is an AUTHENTICATION BYPASS, not a "
+            "relaxed setting: every unauthenticated request is served as user id=0 with "
+            "is_admin=True and unlimited credits, which exposes the admin routes, /v1/metrics, and "
+            "all other users' data. Set OMI_REQUIRE_AUTH=true."
+        )
 
     # --- 1. Persistent storage ----------------------------------------------
     if settings.database_url.startswith("sqlite"):
@@ -252,7 +294,12 @@ def create_app() -> FastAPI:
     # 2. Security headers (HSTS, CSP, frame, COOP, …)
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # 3. Global per-IP rate limit (scanners / abuse). Auth routes have stricter limiters.
+    # 3. Request body cap — refuse oversized payloads before anything parses them. Added before the
+    # rate limiter so the limiter ends up OUTSIDE it (Starlette makes the last-added the outermost):
+    # a flood should be throttled first, then each surviving request size-checked.
+    app.add_middleware(BodySizeLimitMiddleware)
+
+    # 4. Global per-IP rate limit (scanners / abuse). Auth routes have stricter limiters.
     app.add_middleware(GlobalRateLimitMiddleware)
 
     # 4. Compression — Cuts scan-response payloads by ~70%.

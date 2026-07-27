@@ -149,6 +149,12 @@ def list_featured_campaigns(
     return FeaturedCampaignsResponse(campaigns=out)
 
 
+# Cap on members returned in one campaign detail response. Generous enough that no real campaign is
+# visibly truncated today (the largest seeded one is 41), while bounding the response for a network
+# that grows large. Raise deliberately, alongside pagination, rather than removing.
+_MAX_MEMBERS_IN_DETAIL = 500
+
+
 def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
     """Assemble the full CampaignDetail for a key, or None if absent. Shared by
     the detail endpoint and the evidence-pack export so both read identically."""
@@ -157,9 +163,13 @@ def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
     ).scalar_one_or_none()
     if c is None:
         return None
+    # Bounded like the observations below. A campaign's member list is unbounded in principle — a
+    # genuinely large detected network can carry thousands of accounts — and this response is
+    # user-facing, so an uncapped load is a latency and memory cliff on exactly the most interesting
+    # campaigns. Ordered by times_observed, so the cap keeps the most-corroborated members.
     members = session.execute(
         select(CampaignMember).where(CampaignMember.campaign_id == c.id)
-        .order_by(desc(CampaignMember.times_observed))
+        .order_by(desc(CampaignMember.times_observed)).limit(_MAX_MEMBERS_IN_DETAIL)
     ).scalars().all()
     obs = session.execute(
         select(CampaignObservation).where(CampaignObservation.campaign_id == c.id)

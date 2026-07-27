@@ -106,6 +106,76 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class BodySizeLimitMiddleware:
+    """Reject oversized request bodies before anything parses them.
+
+    Neither Starlette nor uvicorn imposes a body limit, and ten routes accept an unvalidated
+    ``payload: dict``, so FastAPI would parse whatever arrived fully into memory. On a small instance
+    that is a cheap way to exhaust RAM, and it needs no account.
+
+    Written as raw ASGI rather than ``BaseHTTPMiddleware`` for two reasons: it must refuse
+    ``Content-Length`` before the body is ever read, and it must also count bytes as they stream, since
+    a chunked request carries no ``Content-Length`` at all and would otherwise walk straight past a
+    header-only check.
+
+    The cap applies to request bodies only. It is not a limit on responses, and GET/HEAD/DELETE are
+    unaffected because they carry no body.
+    """
+
+    def __init__(self, app, *, max_bytes: int | None = None):
+        self.app = app
+        if max_bytes is None:
+            from app.core.config import get_settings
+            max_bytes = int(get_settings().max_request_body_bytes)
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def _refuse() -> None:
+            resp = JSONResponse(
+                status_code=413,
+                content={
+                    "detail": (
+                        f"Request body too large. The limit is "
+                        f"{self.max_bytes // 1024} KiB."
+                    )
+                },
+                headers=dict(_SECURITY_HEADERS),
+            )
+            await resp(scope, receive, send)
+
+        # Declared length: refuse before reading a single byte.
+        for name, value in scope.get("headers") or []:
+            if name == b"content-length":
+                try:
+                    if int(value) > self.max_bytes:
+                        await _refuse()
+                        return
+                except ValueError:
+                    pass  # malformed header; the streaming guard below still applies
+                break
+
+        received = 0
+        exceeded = False
+
+        async def counting_receive():
+            nonlocal received, exceeded
+            message = await receive()
+            if message.get("type") == "http.request":
+                received += len(message.get("body") or b"")
+                if received > self.max_bytes:
+                    exceeded = True
+                    # Stop the stream so the app sees a truncated body rather than continuing to
+                    # buffer an unbounded upload into memory.
+                    return {"type": "http.disconnect"}
+            return message
+
+        await self.app(scope, counting_receive, send)
+
+
 class MetricsMiddleware(BaseHTTPMiddleware):
     """Capture per-route latency + counts. Cheap; samples bounded."""
 

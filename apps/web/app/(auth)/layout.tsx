@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { Logo } from '@/components/shared/logo';
 
+// Private surface (auth screens): never indexable. The root layout now opts the site IN to indexing (it was
+// site-wide noindex, left from the private beta), so anything non-public must opt back OUT here.
+export const metadata = { robots: { index: false, follow: false } };
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col bg-bg-deep grain">
