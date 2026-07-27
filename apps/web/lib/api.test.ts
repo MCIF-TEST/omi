@@ -66,3 +66,65 @@ describe('ApiError', () => {
     expect(e.body).toEqual({ detail: 'boom' });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Error messages must survive HTTP/2, where `Response.statusText` is always ''.
+// A gateway 502/504 page or a bare 500 used to produce an ApiError with an empty
+// message, so every caller rendering `e.message` showed a blank or generic error.
+// That is how a real production failure reached a user as "Failed to generate the
+// assessment." with nothing to act on.
+// ---------------------------------------------------------------------------
+describe('error messages over HTTP/2 (empty statusText)', () => {
+  const h2 = (status: number, body: string) =>
+    new Response(body, { status, statusText: '' });
+
+  it('never produces an empty message when the body has no detail', async () => {
+    let err: unknown;
+    try {
+      await _parse(h2(504, '<html>Gateway Timeout</html>'));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).message.trim().length).toBeGreaterThan(0);
+    expect((err as ApiError).message).toMatch(/504/);
+    expect((err as ApiError).message).toMatch(/timed out/i);
+  });
+
+  it('names a restarting service on 502', async () => {
+    let err: unknown;
+    try {
+      await _parse(h2(502, ''));
+    } catch (e) {
+      err = e;
+    }
+    expect((err as ApiError).message).toMatch(/502/);
+    expect((err as ApiError).message).toMatch(/unreachable|restarting/i);
+  });
+
+  it('still prefers the server detail when there is one', async () => {
+    let err: unknown;
+    try {
+      await _parse(
+        new Response(JSON.stringify({ detail: 'Omi Analyst is disabled.' }), {
+          status: 503,
+          statusText: '',
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect((err as ApiError).message).toBe('Omi Analyst is disabled.');
+  });
+
+  it('describes 429 with a retry hint', async () => {
+    let err: unknown;
+    try {
+      await _parse(h2(429, ''));
+    } catch (e) {
+      err = e;
+    }
+    expect((err as ApiError).message).toMatch(/429/);
+  });
+});
