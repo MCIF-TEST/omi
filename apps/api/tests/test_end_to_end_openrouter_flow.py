@@ -86,9 +86,15 @@ def _valid_model_output() -> dict:
         "limits_statement": "This is a probabilistic assessment; the human analyst sets the final verdict.",
         "commenter_assessments": [
             {"ref": "A1", "omi_score": 64, "suspicion_tier": "elevated",
-             "assessment": "A1 posts on a mechanically regular cadence.", "citations": ["A1"]},
+             "assessment": "A1 posts on a mechanically regular cadence, with comment timestamps landing "
+                           "suspiciously close to a fixed interval across multiple threads, a pattern more "
+                           "consistent with scheduled posting than an organic browsing habit from a real "
+                           "person replying whenever they happen to be online.", "citations": ["A1"]},
             {"ref": "A2", "omi_score": 33, "suspicion_tier": "moderate",
-             "assessment": "A2 shows a lighter footprint.", "citations": ["A2"]}],
+             "assessment": "A2 shows a noticeably lighter footprint than A1: its posting cadence is "
+                           "irregular, its follower and following counts sit in an unremarkable range, and "
+                           "there is not yet enough independently corroborating evidence to place this "
+                           "account higher than a moderate read.", "citations": ["A2"]}],
         **domains,
     }
 
