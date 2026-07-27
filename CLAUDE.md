@@ -197,6 +197,42 @@ reports success, so it could happen to a scan whose results were already saved. 
 after being reaped it logs an error naming the investigation and account count — that means the
 per-account allowance needs raising.
 
+### Rate limiting
+
+Three layers, all env-tunable (`OMI_RATE_LIMIT_*`) so a traffic spike is absorbed without a deploy:
+
+| Layer | Budget | Key | Where |
+|---|---|---|---|
+| Global | `rate_limit_global_max` (600) / 60s | **IP** | `GlobalRateLimitMiddleware` |
+| Compile | `rate_limit_compile_max` (30) / 60s | **user** | `/v1/scan/link/commenters` |
+| Scan start | `rate_limit_scan_max` (20) / 60s | **user** | `/v1/scan/link/score` |
+| Auth | 10/60s login · 5/hr signup · 5/hr reset | IP | dedicated limiters |
+
+**The global layer is keyed on IP and must stay that way.** Middleware runs *before* auth, so any user
+identity there is an unverified claim an attacker could rotate to escape the limit. Per-user budgets
+belong at the route level, where the auth dependency has already run (`rate_limit.enforce` +
+`rate_limit.user_key`).
+
+**Why 600 and not 120.** The old hardcoded 120/min was tight enough to break real customers: an open
+investigation polls the analyst every **2.5s for up to 10 minutes** (`analyst-panel.tsx`,
+`POLL_INTERVAL_MS`/`MAX_POLLS`) = ~24 req/min per user, before navigation or monitoring polls. Five
+people behind one office/VPN/mobile-carrier NAT share one key and hit 120 exactly. Don't lower it
+without redoing that arithmetic.
+
+**Compile is the limiter that protects money.** `/v1/scan/link/commenters` requires auth but charges
+**no credits** and calls the real X / YouTube API (X bills per post read), so credits cannot guard it —
+there is nothing to spend. This limiter is the only ceiling; `test_compile_is_capped_per_user_and_stops
+_upstream_calls` asserts refusal happens *before* the upstream fetch, so a 429 costs nothing.
+
+Admins and local mode (id=0, `is_admin=True`) are exempt, matching how admins skip credit consumption.
+Pinned by `test_admins_and_local_mode_are_exempt`.
+
+**Scope limit, stated plainly:** every limiter is in-process, so each budget is **per instance** and
+resets on deploy. One instance (what `render.yaml` provisions) behaves as configured; N instances give
+N× the ceiling. Making them global needs Redis behind the same `hit()` interface. These are an abuse
+guard, **not** a billing control — cost is guarded by credits and the demo's DB-backed per-IP
+reservations, both of which are correct across instances.
+
 ### Billing
 
 `compute_scan_credits = ceil(accounts / 50) × credits_per_batch[platform]`, minimum 1. **1 credit per
@@ -289,26 +325,38 @@ confirmed or released after. Counting only finished scans left a time-of-check/t
 three tabs at once meant three free scans. Reservations expire after 20 minutes so a crash can't lock
 a visitor out.
 
-**Never look the anonymous candidate list up with `.scalar_one_or_none()`.** Use
-`_demo_candidate_list()`. Anonymous compiles share one bucket (`CandidateList.user_id IS NULL`) so two
-visitors on a post reuse one X fetch. `CandidateList` has
-`UniqueConstraint("user_id", "platform", "content_id")`, which *looks* like it forbids a second row —
-it does not: `user_id` is nullable and SQL treats NULLs as **distinct** (Postgres, i.e. production,
-and SQLite). The constraint is silently inert for exactly these rows, so two concurrent compiles both
-see "no list yet" and both insert. `scalar_one_or_none()` then raised `MultipleResultsFound` straight
-out of the route as a **raw HTTP 500 on the front page** — permanently, since the rows persist, and
-for every visitor, since the bucket is global. This shipped and was live.
+### Never look a candidate list up with `.scalar_one_or_none()`
 
-`_demo_candidate_list()` picks the duplicate that already holds cached repliers (settling on the empty
-one would silently re-fetch from X on every compile, paying for it each time), ties break on lowest id
-so concurrent callers converge, and it best-effort deletes leftovers that hold **zero** candidates
-(deleting a populated one would cascade its candidates away). Guarded by
-`tests/test_demo_duplicate_candidate_list.py`.
+Use **`_candidate_list_for(session, platform, content_id, uid)`** (`scan_async.py`). All four call
+sites go through it — signed-in compile, signed-in score, demo compile, demo score.
 
-Still open, deliberately out of scope for that fix: the signed-in compile/score paths
-(`scan_async.py` ~L293 and ~L743) have the identical shape and are exposed the same way **whenever
-`uid is None`**, which is local mode (`OMI_REQUIRE_AUTH=false`, the id=0 user). Production users have
-real ids, so the constraint genuinely holds there and prod is unaffected.
+`CandidateList` has `UniqueConstraint("user_id", "platform", "content_id")`, which *looks* like it
+forbids a second row. **Two independent reasons it doesn't:**
+
+1. **NULL owners.** SQL treats NULLs as **distinct** (Postgres, i.e. production, and SQLite), so the
+   constraint is inert whenever `user_id IS NULL`. The anonymous demo bucket is entirely NULL-owned by
+   design, and local mode (`OMI_REQUIRE_AUTH=false`, the id=0 user) maps its owner to NULL too.
+2. **Databases predating the constraint.** `create_all` leaves existing tables alone, and the boot
+   upgrade pass backfills columns and `table.indexes` only. A `UniqueConstraint` lives in
+   `table.constraints`, so `_ensure_indexes` **cannot see it** and never adds it to a
+   `candidate_lists` that already existed. On such a database duplicates are possible for **real user
+   ids** as well, so this was never only a local-mode concern.
+
+Either way two concurrent compiles of one post both see "no list yet" and both insert, and
+`scalar_one_or_none()` then raised `MultipleResultsFound` out of the route as a **raw HTTP 500** —
+permanently, since the rows persist, and for the whole anonymous bucket, since every visitor shares
+it. This shipped and was live on the front page.
+
+`_candidate_list_for()` prefers the duplicate that already holds cached commenters (settling on the
+empty one would silently re-fetch upstream on every compile, paying for it each time), ties break on
+lowest id so concurrent callers converge, and it best-effort deletes leftovers holding **zero**
+candidates (deleting a populated one would cascade its candidates away). Existing poisoned rows heal on
+next touch. Guarded by `tests/test_demo_duplicate_candidate_list.py` and
+`tests/test_signed_in_duplicate_candidate_list.py`.
+
+Not done, and worth doing properly one day: actually enforcing uniqueness. It needs a **partial**
+unique index for the NULL case (`... WHERE user_id IS NULL`), and it must be preceded by a dedupe
+migration or the index build fails on live data that already has duplicates.
 
 ---
 

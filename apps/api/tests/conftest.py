@@ -26,9 +26,15 @@ def _reset_rate_limiters():
     Reset before AND after: before so the test starts clean, after so an aborted test can't leave a
     spent budget behind.
     """
+    from app.routes.scan_async import reset_scan_limiters_for_tests
+
     reset_all_limiters_for_tests()
+    # The per-route limiters are memoised and sized from settings at first use, so drop them too or a
+    # test that tightens a budget silently keeps the previous test's limiter.
+    reset_scan_limiters_for_tests()
     yield
     reset_all_limiters_for_tests()
+    reset_scan_limiters_for_tests()
 
 
 @pytest.fixture(autouse=True)
