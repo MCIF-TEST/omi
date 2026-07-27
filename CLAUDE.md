@@ -197,6 +197,42 @@ reports success, so it could happen to a scan whose results were already saved. 
 after being reaped it logs an error naming the investigation and account count — that means the
 per-account allowance needs raising.
 
+### Rate limiting
+
+Three layers, all env-tunable (`OMI_RATE_LIMIT_*`) so a traffic spike is absorbed without a deploy:
+
+| Layer | Budget | Key | Where |
+|---|---|---|---|
+| Global | `rate_limit_global_max` (600) / 60s | **IP** | `GlobalRateLimitMiddleware` |
+| Compile | `rate_limit_compile_max` (30) / 60s | **user** | `/v1/scan/link/commenters` |
+| Scan start | `rate_limit_scan_max` (20) / 60s | **user** | `/v1/scan/link/score` |
+| Auth | 10/60s login · 5/hr signup · 5/hr reset | IP | dedicated limiters |
+
+**The global layer is keyed on IP and must stay that way.** Middleware runs *before* auth, so any user
+identity there is an unverified claim an attacker could rotate to escape the limit. Per-user budgets
+belong at the route level, where the auth dependency has already run (`rate_limit.enforce` +
+`rate_limit.user_key`).
+
+**Why 600 and not 120.** The old hardcoded 120/min was tight enough to break real customers: an open
+investigation polls the analyst every **2.5s for up to 10 minutes** (`analyst-panel.tsx`,
+`POLL_INTERVAL_MS`/`MAX_POLLS`) = ~24 req/min per user, before navigation or monitoring polls. Five
+people behind one office/VPN/mobile-carrier NAT share one key and hit 120 exactly. Don't lower it
+without redoing that arithmetic.
+
+**Compile is the limiter that protects money.** `/v1/scan/link/commenters` requires auth but charges
+**no credits** and calls the real X / YouTube API (X bills per post read), so credits cannot guard it —
+there is nothing to spend. This limiter is the only ceiling; `test_compile_is_capped_per_user_and_stops
+_upstream_calls` asserts refusal happens *before* the upstream fetch, so a 429 costs nothing.
+
+Admins and local mode (id=0, `is_admin=True`) are exempt, matching how admins skip credit consumption.
+Pinned by `test_admins_and_local_mode_are_exempt`.
+
+**Scope limit, stated plainly:** every limiter is in-process, so each budget is **per instance** and
+resets on deploy. One instance (what `render.yaml` provisions) behaves as configured; N instances give
+N× the ceiling. Making them global needs Redis behind the same `hit()` interface. These are an abuse
+guard, **not** a billing control — cost is guarded by credits and the demo's DB-backed per-IP
+reservations, both of which are correct across instances.
+
 ### Billing
 
 `compute_scan_credits = ceil(accounts / 50) × credits_per_batch[platform]`, minimum 1. **1 credit per

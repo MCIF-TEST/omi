@@ -29,10 +29,14 @@ import json
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
+
+if TYPE_CHECKING:  # annotations only; the real import stays lazy inside the factories
+    from app.core.rate_limit import SlidingWindowLimiter
 
 import app.routes.scan as scan_mod
 from app.core import background
@@ -54,6 +58,52 @@ from app.storage.models import CandidateList, CommenterCandidate, DemoScanLog, S
 log = logging.getLogger("omi.scan")
 
 router = APIRouter(prefix="/v1/scan", tags=["scan"])
+
+
+def _compile_limiter() -> SlidingWindowLimiter:
+    """Per-user ceiling on the FREE compile step.
+
+    Compile requires auth but charges no credits, and it calls the real X / YouTube API (X bills per
+    post read). Credits therefore cannot guard it — there are none to spend — so without this an
+    account looping "load all" over large posts spends our upstream budget for free. Built once,
+    lazily, so the limiter is registered for the test-suite reset and reads live settings.
+    """
+    global _COMPILE_LIMITER
+    if _COMPILE_LIMITER is None:
+        from app.core.rate_limit import SlidingWindowLimiter
+
+        s = get_settings()
+        _COMPILE_LIMITER = SlidingWindowLimiter(
+            max_hits=int(s.rate_limit_compile_max),
+            per_seconds=float(s.rate_limit_compile_window_seconds),
+        )
+    return _COMPILE_LIMITER
+
+
+def _scan_limiter() -> SlidingWindowLimiter:
+    """Per-user burst ceiling on starting paid scans. Credits are the real guard; this bounds a
+    stuck client retrying, or a script racing many scans at once and pinning the background pool."""
+    global _SCAN_LIMITER
+    if _SCAN_LIMITER is None:
+        from app.core.rate_limit import SlidingWindowLimiter
+
+        s = get_settings()
+        _SCAN_LIMITER = SlidingWindowLimiter(
+            max_hits=int(s.rate_limit_scan_max),
+            per_seconds=float(s.rate_limit_scan_window_seconds),
+        )
+    return _SCAN_LIMITER
+
+
+_COMPILE_LIMITER = None
+_SCAN_LIMITER = None
+
+
+def reset_scan_limiters_for_tests() -> None:
+    """Drop the memoised limiters so a test can change the settings that size them."""
+    global _COMPILE_LIMITER, _SCAN_LIMITER
+    _COMPILE_LIMITER = None
+    _SCAN_LIMITER = None
 
 
 def _json_default(o):
@@ -320,6 +370,7 @@ def _reconstruct_injected(rows: list) -> tuple[list[dict], list[dict], list[str]
 @router.post("/link/commenters", response_model=CommenterListOut)
 def list_commenters(
     payload: dict,
+    request: Request,
     settings: Settings = Depends(get_settings),
     current: CurrentUser = Depends(require_user),
 ) -> CommenterListOut:
@@ -343,6 +394,14 @@ def list_commenters(
         )
     refresh = bool(payload.get("refresh"))
     uid = current.id if current.id != 0 else None
+
+    # Per-user ceiling, applied AFTER validation (a malformed URL shouldn't spend budget) and BEFORE
+    # any upstream fetch. Admins are exempt, mirroring how they skip credit consumption.
+    if not current.is_admin:
+        from app.core.rate_limit import enforce, user_key
+
+        enforce(_compile_limiter(), user_key(uid, request), what="commenter-list")
+
     # The compile list mirrors the whole comment section (browse + pick), so it uses the generous
     # candidate-pool caps, NOT the smaller per-scan analysis cap.
     pool_max = settings.candidate_pool_max
@@ -770,6 +829,7 @@ def scan_link_status(
 @router.post("/link/score", response_model=LinkScanJobOut, status_code=status.HTTP_202_ACCEPTED)
 def score_selection(
     payload: dict,
+    request: Request,
     settings: Settings = Depends(get_settings),
     current: CurrentUser = Depends(require_user),
 ) -> LinkScanJobOut:
@@ -796,6 +856,13 @@ def score_selection(
             detail="Paste a YouTube video or an X (Twitter) post URL.",
         )
     uid = current.id if current.id != 0 else None
+
+    # Burst ceiling before any credit is charged or worker claimed. Credits are the real cost guard;
+    # this stops a stuck client's retry loop or a script racing scans from pinning the pool.
+    if not current.is_admin:
+        from app.core.rate_limit import enforce, user_key
+
+        enforce(_scan_limiter(), user_key(uid, request), what="scan")
 
     # Reconstruct the scan input for ONLY the selected commenters from the cache (no re-fetch of the list).
     with get_session() as session:

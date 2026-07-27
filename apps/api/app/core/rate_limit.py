@@ -70,6 +70,59 @@ class SlidingWindowLimiter:
                 return 0.0
             return max(0.0, self.per_seconds - (time.monotonic() - dq[0]))
 
+    def remaining(self, key: str) -> int:
+        """Hits still available in this key's window. Read-only (does not record a hit)."""
+        cutoff = time.monotonic() - self.per_seconds
+        with self._lock:
+            dq = self._windows.get(key)
+            if not dq:
+                return self.max_hits
+            live = sum(1 for t in dq if t >= cutoff)
+            return max(0, self.max_hits - live)
+
+
+def enforce(limiter: SlidingWindowLimiter, key: str, *, what: str) -> None:
+    """Consume one hit for ``key`` or raise 429 with the headers a client needs to back off.
+
+    Use this for PER-USER limits inside a route, after the auth dependency has established who the
+    caller is — a route-level limit can trust the user id, unlike the middleware, which runs before
+    auth and so can only key on IP.
+
+    ``Retry-After`` is the standard signal; ``X-RateLimit-*`` lets a well-behaved client slow down
+    before it gets refused rather than after.
+    """
+    if limiter.hit(key):
+        return
+    retry = int(limiter.retry_after(key)) + 1
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=(
+            f"Too many {what} requests. You can make {limiter.max_hits} every "
+            f"{int(limiter.per_seconds)}s — try again in {retry}s."
+        ),
+        headers={
+            "Retry-After": str(retry),
+            "X-RateLimit-Limit": str(limiter.max_hits),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": str(retry),
+        },
+    )
+
+
+def user_key(user_id: int | None, request: Request | None = None) -> str:
+    """Rate-limit bucket for an AUTHENTICATED caller, falling back to IP.
+
+    ``user_id`` must come from a verified auth dependency. Local mode's id=0 is not a real identity,
+    so it falls back to the IP bucket rather than giving every local caller one shared budget.
+    """
+    if user_id:
+        return f"u:{user_id}"
+    if request is not None:
+        from app.core.ip import client_ip
+
+        return f"ip:{client_ip(request)}"
+    return "ip:unknown"
+
 
 def reset_all_limiters_for_tests() -> None:
     """Clear EVERY limiter's window, including per-app-instance ones the caller can't name.

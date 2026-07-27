@@ -380,6 +380,47 @@ class Settings(BaseSettings):
     ml_blend_weight: float = 0.5
 
     # -----------------------------------------------------------------------
+    # Rate limiting. All env-tunable (OMI_RATE_LIMIT_*) so a traffic spike can be
+    # absorbed WITHOUT a code deploy.
+    #
+    # IMPORTANT SCOPE LIMIT: every limiter here is in-process (app/core/rate_limit.py),
+    # so each budget is PER INSTANCE and resets on deploy. One instance, which is what
+    # render.yaml provisions today, behaves exactly as configured. Run N instances and
+    # the effective ceiling is N × these numbers. Making them global needs a shared
+    # store (Redis) behind the same `hit()` interface — the limits below are a real
+    # abuse guard, not a billing control. Cost is guarded by credits + the demo's
+    # DB-backed per-IP reservations, both of which ARE correct across instances.
+    # -----------------------------------------------------------------------
+    # Coarse per-IP ceiling on all API routes (GlobalRateLimitMiddleware). Keyed on IP
+    # because middleware runs before auth, so a user id here would be an unverified
+    # claim an attacker could rotate to escape the limit.
+    #
+    # 120/min (the previous hardcoded value) is too tight to be safe: one active
+    # investigation polls the analyst every few seconds for up to ~9 minutes (~20
+    # req/min) on top of monitoring polls and ordinary navigation, so a single power
+    # user runs ~40/min. Everyone sharing an office, school, VPN, or mobile carrier NAT
+    # shares one key — three such users tripped a limit meant for scrapers, and the
+    # product then looks broken for a paying customer. Raised with headroom; still
+    # orders of magnitude below what a scraper does.
+    rate_limit_global_max: int = 600
+    rate_limit_global_window_seconds: float = 60.0
+
+    # Per-USER ceiling on the free compile step (/v1/scan/link/commenters). This one
+    # matters disproportionately: compile requires auth but charges NO credits, and it
+    # calls the real X / YouTube API. X bills roughly $0.005 per post read, so an
+    # account looping "load all" over big posts spends OUR money at no cost to itself.
+    # Credits cannot guard it (there are none to spend), so this limiter is the only
+    # ceiling. Generous enough for genuine browsing of a large comment section.
+    rate_limit_compile_max: int = 30
+    rate_limit_compile_window_seconds: float = 60.0
+
+    # Per-USER ceiling on starting paid scans. Credits are the real guard here; this
+    # only bounds a burst (a stuck client retrying, or a script racing many scans at
+    # once and pinning the background pool).
+    rate_limit_scan_max: int = 20
+    rate_limit_scan_window_seconds: float = 60.0
+
+    # -----------------------------------------------------------------------
     # Monitoring (Phase 8)
     # -----------------------------------------------------------------------
     enable_monitoring: bool = False

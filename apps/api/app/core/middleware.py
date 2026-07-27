@@ -56,11 +56,20 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
     scraping of public endpoints that previously returned 200 with no throttle.
     """
 
-    def __init__(self, app, *, max_hits: int = 120, per_seconds: float = 60.0):
+    def __init__(self, app, *, max_hits: int | None = None, per_seconds: float | None = None):
         super().__init__(app)
+        from app.core.config import get_settings
         from app.core.rate_limit import SlidingWindowLimiter
 
-        self._limiter = SlidingWindowLimiter(max_hits=max_hits, per_seconds=per_seconds)
+        s = get_settings()
+        # Budgets come from settings so a traffic spike is absorbed by an env change, not a deploy.
+        # Explicit args still win (tests construct this directly with tight values).
+        self._limiter = SlidingWindowLimiter(
+            max_hits=int(max_hits if max_hits is not None else s.rate_limit_global_max),
+            per_seconds=float(
+                per_seconds if per_seconds is not None else s.rate_limit_global_window_seconds
+            ),
+        )
 
     async def dispatch(self, request: Request, call_next):
         # Health checks must never be throttled (Render / load balancers).
@@ -69,6 +78,10 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
 
         from app.core.ip import client_ip
 
+        # Keyed on IP deliberately. This middleware runs BEFORE auth, so any user identity available
+        # here is an unverified claim that an attacker could rotate to escape the limit. Per-user
+        # budgets belong at the route level, where the auth dependency has already run
+        # (see rate_limit.enforce / rate_limit.user_key).
         ip = client_ip(request)
         if not self._limiter.hit(ip):
             retry = int(self._limiter.retry_after(ip)) + 1
@@ -77,10 +90,20 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Too many requests — please try again shortly."},
                 headers={
                     "Retry-After": str(retry),
+                    "X-RateLimit-Limit": str(self._limiter.max_hits),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(retry),
                     **{k: v for k, v in _SECURITY_HEADERS.items()},
                 },
             )
-        return await call_next(request)
+        response = await call_next(request)
+        # Advertise the remaining budget so a client can slow down BEFORE it gets refused.
+        try:
+            response.headers["X-RateLimit-Limit"] = str(self._limiter.max_hits)
+            response.headers["X-RateLimit-Remaining"] = str(self._limiter.remaining(ip))
+        except Exception:  # noqa: BLE001 — headers are advisory, never worth failing a response
+            pass
+        return response
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
