@@ -337,10 +337,25 @@ def test_coercion_normalizes_per_account_items():
     obj = _valid_model_output()
     obj["omi_score"] = 62                                                            # overall read (fallback)
     obj["commenter_assessments"] = [
-        {"ref": "A1", "omi_score": 130, "assessment": "over-range, tier omitted"},   # clamp + derive tier
-        {"ref": "A2", "suspicion_tier": "high", "assessment": "score omitted"},        # derive score from tier
-        {"ref": "A3", "assessment": "no score, no tier"},                              # KEEP → inherit overall
-        {"assessment": "no ref"},                                                      # no ref → dropped
+        {"ref": "A1", "omi_score": 130,
+         "assessment": "This account's raw omi_score arrived over-range and its suspicion_tier was "
+                       "omitted entirely, so the coercion layer must clamp the score into the valid 0-100 "
+                       "band and derive a tier from the clamped value rather than discarding the model's "
+                       "per-account work outright."},   # clamp + derive tier
+        {"ref": "A2", "suspicion_tier": "high",
+         "assessment": "This account's suspicion_tier arrived as high but the numeric omi_score was "
+                       "omitted, so the coercion layer must derive a representative score from the tier's "
+                       "band midpoint rather than leaving the field missing or defaulting to zero."},
+        # derive score from tier
+        {"ref": "A3",
+         "assessment": "This account arrived with neither a numeric omi_score nor a suspicion_tier, so "
+                       "the coercion layer must fall back to inheriting the investigation's overall read "
+                       "rather than dropping the per-account entry or inventing an unsupported number."},
+        # KEEP → inherit overall
+        {"assessment": "This item arrived with no account alias ref at all, so it cannot be joined back "
+                       "to any real commenter identity and the coercion layer is expected to drop it "
+                       "entirely rather than keep an orphaned per-account result around."},
+        # no ref → dropped
     ]
     coerced = _coerce(obj)
     ca = {i["ref"]: i for i in coerced["commenter_assessments"]}
@@ -369,9 +384,21 @@ def test_wrapper_is_salvaged_from_per_account_results_when_the_model_omits_it():
     for core in ("verdict", "omi_score", "suspicion_tier", "headline", "assessment"):
         obj.pop(core, None)
     obj["commenter_assessments"] = [
-        {"ref": "A1", "omi_score": 12, "suspicion_tier": "low", "assessment": "reads organic.", "citations": ["A1"]},
-        {"ref": "A2", "omi_score": 82, "suspicion_tier": "high", "assessment": "amplifier profile.", "citations": ["A2"]},
-        {"ref": "A3", "omi_score": 55, "suspicion_tier": "elevated", "assessment": "thin history.", "citations": ["A3"]},
+        {"ref": "A1", "omi_score": 12, "suspicion_tier": "low",
+         "assessment": "This account reads organic across every signal reviewed: its posting cadence is "
+                       "irregular in the way a real person's browsing habits are, its follower/following "
+                       "ratio is unremarkable, and there is no independent corroboration for anything "
+                       "bought or automated about it.", "citations": ["A1"]},
+        {"ref": "A2", "omi_score": 82, "suspicion_tier": "high",
+         "assessment": "This account fits an amplifier profile: comment timing clusters tightly around "
+                       "the same narrow windows as other accounts in this thread, its history is thin "
+                       "relative to its posting volume here, and the combination is far more consistent "
+                       "with coordinated engagement than organic interest.", "citations": ["A2"]},
+        {"ref": "A3", "omi_score": 55, "suspicion_tier": "elevated",
+         "assessment": "This account has too thin a history to fully corroborate either explanation: the "
+                       "few signals available lean slightly toward inauthentic, but there is not enough "
+                       "independent evidence yet to place it higher than an elevated-but-uncertain read.",
+         "citations": ["A3"]},
     ]
     coerced = _coerce(obj)
     assert _valid_after_coercion(obj) == []                       # renders instead of floorng

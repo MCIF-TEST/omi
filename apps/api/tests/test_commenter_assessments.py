@@ -127,9 +127,15 @@ def test_output_contract_instructs_the_array():
 def test_commenter_assessments_survive_and_are_echo_joined():
     out = _run(_model_output([
         {"ref": "A1", "omi_score": 82, "suspicion_tier": "high",
-         "assessment": "A1 posts on a mechanically regular cadence.", "citations": ["A1"]},
+         "assessment": "A1 posts on a mechanically regular cadence, with comment timestamps landing "
+                       "suspiciously close to a fixed interval across multiple threads, a pattern far more "
+                       "consistent with scheduled or automated posting than an organic browsing habit from "
+                       "a real person replying whenever they happen to be online.", "citations": ["A1"]},
         {"ref": "A2", "omi_score": 40, "suspicion_tier": "moderate",
-         "assessment": "A2 has a lighter footprint; weaker signal.", "citations": ["A2"]},
+         "assessment": "A2 has a noticeably lighter footprint than A1: its posting cadence shows some "
+                       "irregularity, follower and following counts sit in an unremarkable range, and there "
+                       "is not yet enough independently corroborating evidence to push this account higher "
+                       "or lower than a moderate read at this time.", "citations": ["A2"]},
     ]))
     assert out["investigation_trace"]["model_backed"] is True
     rows = out["commenter_assessments"]
@@ -150,9 +156,15 @@ def test_commenter_assessments_survive_and_are_echo_joined():
 def test_unresolved_alias_is_kept_but_flagged():
     out = _run(_model_output([
         {"ref": "A1", "omi_score": 55, "suspicion_tier": "elevated",
-         "assessment": "A1 regular cadence.", "citations": ["A1"]},
+         "assessment": "A1 shows a regular cadence with several moderately suspicious signals: comment "
+                       "timing clusters tightly, the account's history is thin, and there is not enough "
+                       "independent corroboration to push this score higher than an elevated-but-uncertain "
+                       "read at this time.", "citations": ["A1"]},
         {"ref": "A99", "omi_score": 70, "suspicion_tier": "elevated",
-         "assessment": "phantom account not in the legend.", "citations": []},
+         "assessment": "This is a phantom account reference that does not appear anywhere in the "
+                       "evidence's alias legend, so its per-account score and reasoning cannot be resolved "
+                       "to any real commenter identity, yet the model's raw output must still be preserved "
+                       "rather than silently dropped.", "citations": []},
     ]))
     rows = out["commenter_assessments"]
     assert len(rows) == 2                                                # never dropped

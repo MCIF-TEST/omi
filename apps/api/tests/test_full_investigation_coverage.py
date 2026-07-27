@@ -124,7 +124,12 @@ def _payload(n: int) -> dict:
 def _model_output(num_assessments: int) -> dict:
     domains = {k: {"assessment": "domain reasoning", "citations": []} for k in COMPREHENSIVE_SECTION_KEYS}
     ca = [{"ref": f"A{i + 1}", "omi_score": 55, "suspicion_tier": "elevated",
-           "assessment": f"Account A{i + 1} concise read.", "citations": []}
+           "assessment": (
+               f"Account A{i + 1} was reviewed on its own evidence: its posting cadence, follower/"
+               f"following balance, and the content of its own comments were all weighed independently of "
+               f"any other account in this thread before landing on this elevated-but-uncertain read, "
+               f"which is not derived from a default or from another account's score."),
+           "citations": []}
           for i in range(num_assessments)]
     return {
         "verdict": "mixed", "omi_score": 68, "suspicion_tier": "elevated", "confidence_band": "moderate",
