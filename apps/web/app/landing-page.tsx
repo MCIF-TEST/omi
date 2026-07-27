@@ -297,6 +297,23 @@ export function LandingPage() {
               ))}
             </div>
           </Reveal>
+          <Reveal from="up">
+            <p className="text-sm text-fg-dim leading-relaxed mt-4">
+              Read more on how the{' '}
+              <Link href="/bot-detector" className="text-accent hover:underline">
+                bot detector
+              </Link>{' '}
+              works, or jump straight to the{' '}
+              <Link href="/twitter-bot-checker" className="text-accent hover:underline">
+                X (Twitter) bot checker
+              </Link>{' '}
+              or{' '}
+              <Link href="/youtube-bot-comments" className="text-accent hover:underline">
+                YouTube bot comment detection
+              </Link>
+              .
+            </p>
+          </Reveal>
         </Shell>
 
         {/* ── Scope ────────────────────────────────────────────────────────── */}
@@ -353,8 +370,16 @@ export function LandingPage() {
           <p className="font-mono text-2xs tracking-wider uppercase text-fg-faint">
             Online media intelligence
           </p>
-          <div className="flex items-center gap-px font-mono text-2xs text-fg-mute tracking-wider uppercase">
-            {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Pricing', '/pricing'], ['About', '/about']].map(
+          <div className="flex items-center gap-px flex-wrap justify-center font-mono text-2xs text-fg-mute tracking-wider uppercase">
+            {[
+              ['Bot detector', '/bot-detector'],
+              ['X bot checker', '/twitter-bot-checker'],
+              ['YouTube bot comments', '/youtube-bot-comments'],
+              ['Pricing', '/pricing'],
+              ['About', '/about'],
+              ['Terms', '/terms'],
+              ['Privacy', '/privacy'],
+            ].map(
               ([label, href]) => (
                 <Link
                   key={href}

@@ -1,10 +1,19 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
+import type { Metadata } from 'next';
 import { Check, Sparkles, Zap } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TRIAL_CREDITS } from '@/lib/plan';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Pricing — OMISPHERE' };
+export const metadata: Metadata = pageMetadata({
+  title: 'Pricing',
+  description:
+    'One plan: $9.99/month for 20 bot-detection scans across X (Twitter) and YouTube, with 3 free ' +
+    'trial credits and no card required to start.',
+  path: '/pricing',
+});
 
 const FEATURES = [
   'YouTube + X (Twitter) coordination intelligence — videos, channels, accounts',
@@ -37,8 +46,28 @@ const FAQ = [
 ];
 
 export default function PricingPage() {
+  const nonce = headers().get('x-nonce') ?? undefined;
   return (
     <div className="space-y-12">
+      {/* FAQPage structured data — makes the FAQ block below eligible for a rich "People also ask"
+          / FAQ snippet in search results, straight from the same array rendered on the page (so the
+          markup can never say something the visible copy doesn't). */}
+      <script
+        type="application/ld+json"
+        nonce={nonce}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: FAQ.map(({ q, a }) => ({
+              '@type': 'Question',
+              name: q,
+              acceptedAnswer: { '@type': 'Answer', text: a },
+            })),
+          }),
+        }}
+      />
+
       {/* Hero */}
       <header className="text-center max-w-2xl mx-auto">
         <div className="inline-flex items-center gap-2 font-mono text-2xs tracking-[0.2em] text-accent uppercase border border-accent/20 bg-accent/[0.06] px-4 py-1.5 rounded-full mb-5">
@@ -49,9 +78,8 @@ export default function PricingPage() {
           One plan. <span className="text-brand">Cancel anytime.</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
-          YouTube comment intelligence — bots, AI engagement, and coordinated
-          influence campaigns. Probabilistic. Every scan trains the OMISPHERE
-          fingerprint database.
+          Bot and coordinated-engagement intelligence for X (Twitter) and YouTube. Probabilistic.
+          Every scan trains the OMISPHERE fingerprint database.
         </p>
       </header>
 

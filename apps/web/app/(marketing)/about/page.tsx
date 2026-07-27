@@ -1,7 +1,15 @@
+import type { Metadata } from 'next';
 import { Shield, Database, Cpu, GitBranch, Scale } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'About — OMISPHERE' };
+export const metadata: Metadata = pageMetadata({
+  title: 'About',
+  description:
+    'How OMISPHERE detects bots and coordinated inauthentic behavior on X (Twitter) and YouTube: ' +
+    'evidence-based, probabilistic, never a bare bot/not-bot verdict.',
+  path: '/about',
+});
 
 const SECTIONS = [
   {
@@ -46,11 +54,12 @@ const SECTIONS = [
     title: 'Scope, plainly',
     body: (
       <>
-        Today OMISPHERE scans <span className="text-fg">YouTube</span> only — videos
-        and channels. Every &ldquo;scan&rdquo; covers a video&apos;s comment thread or a
-        single channel&apos;s recent activity, and consumes one credit. X / Twitter
-        ingestion is the next platform on the roadmap; pricing for X scans will
-        reflect that platform&apos;s higher API cost when it ships.
+        Today OMISPHERE scans <span className="text-fg">YouTube</span> and{' '}
+        <span className="text-fg">X (Twitter)</span> — videos, posts, and the accounts that comment
+        on them. Every scan covers one video&apos;s comment thread, one channel&apos;s recent
+        activity, or one post&apos;s repliers, priced the same per 50 accounts on either platform.
+        Reddit and TikTok are next; the detection engine is already platform-agnostic, so each new
+        platform needs an ingestion adapter rather than new detection work.
       </>
     ),
   },

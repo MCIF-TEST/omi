@@ -452,6 +452,49 @@ Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-m
 
 ---
 
+## SEO surface
+
+`lib/seo.ts` is the single source of truth for the site's name/description/canonical origin — the
+same "one place, never drift" pattern as `lib/plan.ts` for credit figures. Its `pageMetadata()`
+helper exists because of a real trap: **a page that sets its own `title`/`description` but not
+`openGraph`/`twitter` silently inherits the ROOT layout's `openGraph`/`twitter` verbatim** — Next's
+metadata merge is per-top-level-key, not derived. Every marketing page shared a social card for the
+*homepage* until this was caught by curling the built HTML and diffing `og:title` against the page's
+own `<title>`. Use `pageMetadata({ title, description, path })` for any new indexable page; hand-built
+metadata objects will quietly regress this.
+
+**Any inline `<script>` needs the CSP nonce or the browser silently drops it.** `middleware.ts` sets
+`script-src 'self' 'nonce-…'` with no `'unsafe-inline'`; Next attaches that nonce to its own flight
+scripts automatically, but a JSON-LD block we add ourselves does not get it for free. Read it the same
+way `app/layout.tsx` does — `headers().get('x-nonce')` — and pass `nonce={nonce}` explicitly. This is
+why the FAQPage/SoftwareApplication/Organization JSON-LD scripts across `layout.tsx`, `page.tsx`,
+`pricing/page.tsx`, and the three bot-detection pages below all read `headers()` themselves rather than
+receiving the nonce as a prop.
+
+Favicon (`app/icon.svg`) and the default social-share image (`app/opengraph-image.tsx`, generated at
+request time via `next/og` so it can never drift from the brand colors in `logo.tsx`) didn't exist
+before — every share of the site rendered a bare gray placeholder card.
+
+Three keyword-targeted content pages exist under `(marketing)/` for organic search intent, each with
+its own FAQPage JSON-LD: `/bot-detector` (broad anchor), `/twitter-bot-checker`, and
+`/youtube-bot-comments`. The X-only free demo (`DemoScanForm`) is embedded live on the first two — it
+genuinely works there — but deliberately **not** on the YouTube page, since pasting a YouTube link into
+it would just error; that page's CTA points to sign-up instead. All three, plus `/pricing` and
+`/about`, are hand-listed in `app/sitemap.ts` (see that file's own comment on why it isn't generated)
+and cross-linked from each other, the landing page footer, and the marketing footer. Copy on all of
+them follows the same evidence-based, probabilistic framing as `/about` — a score, never a bot/not-bot
+verdict — per the `omisphere-platform-guardian` skill.
+
+Fixed in the same pass: `/about`'s "Scope, plainly" section claimed YouTube-only while X had shipped
+weeks earlier (its own roadmap list two paragraphs down already showed X as live — an internal
+contradiction). And the `(marketing)` header (`justify-between`, no wrap) crushed straight into the
+wordmark below ~400px, splitting "Log in" / "Sign up" mid-word — harmless-looking since nothing
+actually overflowed (no horizontal scroll), so it was easy to miss without a mobile screenshot. Fixed
+with `flex-wrap` + `shrink-0` on the logo + `whitespace-nowrap` on every nav item, letting the row drop
+to a clean second line instead of compressing text into itself.
+
+---
+
 ## Outstanding — needs the user, not code
 
 1. **Redeploy the API service.** Picks up `pyjwt[crypto]` (logins), the `get_session` fix (>25-account

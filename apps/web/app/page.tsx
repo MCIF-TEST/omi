@@ -1,4 +1,7 @@
+import { headers } from 'next/headers';
 import { LandingPage } from './landing-page';
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/seo';
+import { MONTHLY_CREDITS } from '@/lib/plan';
 
 /**
  * The public front door. No user lookup, no API call.
@@ -18,6 +21,40 @@ import { LandingPage } from './landing-page';
  * downstream dependency. Removing `force-dynamic` here keeps that honest: if the nonce requirement ever
  * goes away, this page becomes static with no further change.
  */
+/**
+ * SoftwareApplication JSON-LD for the product itself, so a search result for a bot-detection query
+ * can render as a rich product result (name, description, price, rating surface if one is ever
+ * added) rather than a bare blue link. Reuses the same nonce the root layout reads, since this is a
+ * separate inline script and the CSP has no 'unsafe-inline'.
+ */
+function softwareApplicationJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: SITE_NAME,
+    url: SITE_URL,
+    applicationCategory: 'SecurityApplication',
+    operatingSystem: 'Web',
+    description: SITE_DESCRIPTION,
+    offers: {
+      '@type': 'Offer',
+      price: '9.99',
+      priceCurrency: 'USD',
+      description: `$9.99/month for ${MONTHLY_CREDITS} scan credits, with a free trial to start`,
+    },
+  };
+}
+
 export default function Root() {
-  return <LandingPage />;
+  const nonce = headers().get('x-nonce') ?? undefined;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        nonce={nonce}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationJsonLd()) }}
+      />
+      <LandingPage />
+    </>
+  );
 }
