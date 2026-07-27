@@ -47,11 +47,42 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ---
 
-## Known-failing test (pre-existing, not yours)
+## Known-failing tests (pre-existing, not yours)
 
-`tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a 0.032
-gate. It reproduces on an unchanged tree. **Everything else must be green:** the suite is currently
-**1458 passed, 1 failed**. If you see a second failure, you caused it.
+Current measured state: **1521 passed, 2 failed** (~4m20s). Both failures reproduce on an unchanged
+tree AND in isolation, so neither is pollution:
+
+1. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
+   0.032 gate.
+2. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
+   — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
+   builder now renders a user message that ends after the evidence sections. Looks like the test
+   trails a prompt-assembly change rather than a real regression; not yet diagnosed.
+
+**A third failure is yours.** If you see mass failures instead, see the next section first.
+
+### If the suite is suddenly red everywhere, it is probably not you
+
+Rate limits are in-process and cumulative, and `app.main` exposes a module-level `app = create_app()`
+that most test files import and **share**. `GlobalRateLimitMiddleware` builds its own limiter (120
+requests / 60s) as an instance attribute on that shared middleware, keyed on the client IP — which
+under `TestClient` is the constant `"testclient"`. So it used to count every request the entire
+session made and then answer ~everything after the 120th with 429.
+
+That presented as **118 failures/errors across ~25 unrelated files**, every one of which passed in
+isolation, because the damage was indirect: a fixture's signup came back 429, its user row never
+existed, and the test died later on `NoResultFound` — reading as a database or billing bug. Fixtures
+that cleared `SIGNUP_LIMITER`/`LOGIN_LIMITER` were clearing the wrong objects; those are module
+singletons, and the guilty limiter belonged to the middleware instance.
+
+`tests/conftest.py` now resets **all** limiters around every test via
+`app.core.rate_limit.reset_all_limiters_for_tests()`, which walks a `WeakSet` of every limiter ever
+constructed so per-app-instance ones are reachable. Don't remove that fixture, and if you add a new
+limiter it is registered automatically by `SlidingWindowLimiter.__init__`.
+
+Related smell worth knowing: files that build their own app with `create_app()` were immune to all of
+this; files doing `from app.main import app` were the victims. That shared-app import is also why
+in-process state leaks between test files in general.
 
 ---
 
@@ -257,6 +288,27 @@ The 2-per-IP limit uses **reservations**: a row is written *before* the minutes-
 confirmed or released after. Counting only finished scans left a time-of-check/time-of-use hole —
 three tabs at once meant three free scans. Reservations expire after 20 minutes so a crash can't lock
 a visitor out.
+
+**Never look the anonymous candidate list up with `.scalar_one_or_none()`.** Use
+`_demo_candidate_list()`. Anonymous compiles share one bucket (`CandidateList.user_id IS NULL`) so two
+visitors on a post reuse one X fetch. `CandidateList` has
+`UniqueConstraint("user_id", "platform", "content_id")`, which *looks* like it forbids a second row —
+it does not: `user_id` is nullable and SQL treats NULLs as **distinct** (Postgres, i.e. production,
+and SQLite). The constraint is silently inert for exactly these rows, so two concurrent compiles both
+see "no list yet" and both insert. `scalar_one_or_none()` then raised `MultipleResultsFound` straight
+out of the route as a **raw HTTP 500 on the front page** — permanently, since the rows persist, and
+for every visitor, since the bucket is global. This shipped and was live.
+
+`_demo_candidate_list()` picks the duplicate that already holds cached repliers (settling on the empty
+one would silently re-fetch from X on every compile, paying for it each time), ties break on lowest id
+so concurrent callers converge, and it best-effort deletes leftovers that hold **zero** candidates
+(deleting a populated one would cascade its candidates away). Guarded by
+`tests/test_demo_duplicate_candidate_list.py`.
+
+Still open, deliberately out of scope for that fix: the signed-in compile/score paths
+(`scan_async.py` ~L293 and ~L743) have the identical shape and are exposed the same way **whenever
+`uid is None`**, which is local mode (`OMI_REQUIRE_AUTH=false`, the id=0 user). Production users have
+real ids, so the constraint genuinely holds there and prod is unaffected.
 
 ---
 

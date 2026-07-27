@@ -5,8 +5,30 @@ from concurrent.futures import Future
 import pytest
 
 from app.core import background
+from app.core.rate_limit import reset_all_limiters_for_tests
 from app.narrative.embeddings import set_embedder_for_tests
 from app.storage.db import reset_db_for_tests
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Give every test the full request budget.
+
+    Rate limits are in-process and cumulative, and `app.main` exposes a module-level
+    `app = create_app()` that most test files import and share. The worst offender is
+    GlobalRateLimitMiddleware's own limiter (120 requests / 60s, keyed on the client IP, which is the
+    constant "testclient" under TestClient): it is an instance attribute on the shared middleware, so
+    it counted every request the whole session made and then 429'd essentially everything after the
+    120th. The damage did not look like throttling either — a fixture's signup would come back 429,
+    the user row would never exist, and the test failed later with `NoResultFound`, which reads as a
+    database or billing bug in a file that passes perfectly on its own.
+
+    Reset before AND after: before so the test starts clean, after so an aborted test can't leave a
+    spent budget behind.
+    """
+    reset_all_limiters_for_tests()
+    yield
+    reset_all_limiters_for_tests()
 
 
 @pytest.fixture(autouse=True)
