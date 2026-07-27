@@ -32,7 +32,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 import app.routes.scan as scan_mod
 from app.core import background
@@ -1106,6 +1106,58 @@ def _release_demo_scan(row_id: int | None) -> None:
         log.exception("demo: could not release free scan %s", row_id)
 
 
+def _demo_candidate_list(session, content_id: str):
+    """THE anonymous candidate list for an X post, tolerating duplicates. Returns None if there is none.
+
+    Deliberately NOT ``.scalar_one_or_none()``, which is what this replaced. Anonymous compiles share
+    one bucket (``user_id IS NULL``) so two visitors on the same post reuse a single replier fetch.
+    ``CandidateList`` carries ``UniqueConstraint("user_id", "platform", "content_id")``, which LOOKS
+    like it makes a second row impossible — but ``user_id`` is nullable and SQL treats NULLs as
+    DISTINCT (in PostgreSQL, which is production, and in SQLite), so that constraint is silently inert
+    for exactly these rows. Two concurrent compiles of one post therefore both see "no list yet" and
+    both insert, and every later request raised ``MultipleResultsFound`` straight out of the route as
+    an HTTP 500. Permanently, because the rows persist, and for every visitor, because the bucket is
+    global. That was a 500 on the front page's only free sample.
+
+    When duplicates exist, prefer the row that already holds cached repliers: those were paid for with
+    a real X fetch, and settling on an empty duplicate would silently re-fetch on every compile. Ties
+    break on the lowest id so concurrent callers converge on the same row.
+    """
+    rows = list(session.execute(
+        select(CandidateList).where(
+            CandidateList.platform == "x",
+            CandidateList.content_id == content_id,
+            CandidateList.user_id.is_(None),
+        ).order_by(CandidateList.id)
+    ).scalars().all())
+    if len(rows) <= 1:
+        return rows[0] if rows else None
+
+    counts = dict(session.execute(
+        select(CommenterCandidate.list_id, func.count(CommenterCandidate.id))
+        .where(CommenterCandidate.list_id.in_([r.id for r in rows]))
+        .group_by(CommenterCandidate.list_id)
+    ).all())
+    keep = max(rows, key=lambda r: (counts.get(r.id, 0), -r.id))
+    log.warning(
+        "demo: %d anonymous candidate lists for x/%s (ids=%s); using id=%s with %d cached repliers",
+        len(rows), content_id, [r.id for r in rows], keep.id, counts.get(keep.id, 0),
+    )
+
+    # Collapse the leftovers so the post stops being ambiguous, but only ones holding NO repliers —
+    # deleting a populated list would cascade its candidates away and throw out a paid fetch. Strictly
+    # best-effort: recovery already succeeded above, and tidying must never fail the request.
+    try:
+        for row in rows:
+            if row.id != keep.id and counts.get(row.id, 0) == 0:
+                session.delete(row)
+        session.flush()
+    except Exception:  # noqa: BLE001 — cleanup is a bonus, never the caller's problem
+        log.warning("demo: could not collapse duplicate candidate lists for x/%s", content_id,
+                    exc_info=True)
+    return keep
+
+
 def _demo_classify_x_post(url: str) -> str:
     """Validate + classify a free-scan URL. The free scan is X-only, on a specific post. Returns the
     tweet id, or raises the appropriate 400."""
@@ -1147,9 +1199,8 @@ def scan_demo_commenters(
 
         # Anonymous candidate lists live in the shared user_id=None bucket, keyed by the post — two
         # visitors scanning the same post reuse one cached replier list (one X fetch, not two).
-        cond = [CandidateList.platform == "x", CandidateList.content_id == content_id,
-                CandidateList.user_id.is_(None)]
-        cl = session.execute(select(CandidateList).where(*cond)).scalar_one_or_none()
+        # Duplicate-tolerant on purpose; see _demo_candidate_list.
+        cl = _demo_candidate_list(session, content_id)
         if cl is None:
             cl = CandidateList(user_id=None, platform="x", content_id=content_id, content_url=url)
             session.add(cl)
@@ -1255,9 +1306,7 @@ def scan_demo_score(
         if _demo_scans_used(session, ip_hash) >= DEMO_FREE_SCANS_PER_IP:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_DEMO_LIMIT_MSG)
 
-        cond = [CandidateList.platform == "x", CandidateList.content_id == content_id,
-                CandidateList.user_id.is_(None)]
-        cl = session.execute(select(CandidateList).where(*cond)).scalar_one_or_none()
+        cl = _demo_candidate_list(session, content_id)
         if cl is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
