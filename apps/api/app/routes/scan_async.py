@@ -225,6 +225,68 @@ def _fetch_and_cache_commenters(
     return fetched_now
 
 
+def _candidate_list_for(session, platform: str, content_id: str, uid: int | None):
+    """THE candidate list for one (platform, content, owner), tolerating duplicates. None if absent.
+
+    Deliberately NOT ``.scalar_one_or_none()``, which is what this replaced at every call site.
+    ``CandidateList`` carries ``UniqueConstraint("user_id", "platform", "content_id")``, which LOOKS
+    like it makes a second row impossible. Two separate reasons it can fail to:
+
+    * **``user_id IS NULL`` rows.** SQL treats NULLs as DISTINCT (in PostgreSQL, which is production,
+      and in SQLite), so the constraint is silently inert for them. The anonymous demo bucket is
+      entirely NULL-owned by design, and local mode (``OMI_REQUIRE_AUTH=false``, the id=0 user) maps
+      its owner to NULL too.
+    * **Databases predating the constraint.** ``create_all`` leaves existing tables alone and the boot
+      upgrade pass only backfills columns and ``table.indexes``; a ``UniqueConstraint`` lives in
+      ``table.constraints``, so it is never added to a ``candidate_lists`` that already existed. On
+      such a database duplicates are possible for REAL user ids as well.
+
+    Either way two concurrent compiles of one post both see "no list yet" and both insert, and
+    ``scalar_one_or_none()`` then raised ``MultipleResultsFound`` straight out of the route as a raw
+    HTTP 500 — permanently, since the rows persist, and for the anonymous bucket globally, since every
+    visitor shares it. That shipped as a 500 on the front page's only free sample.
+
+    When duplicates exist, prefer the row that already holds cached commenters: those were paid for
+    with a real upstream fetch, and settling on an empty duplicate would silently re-fetch on every
+    compile. Ties break on the lowest id so concurrent callers converge on the same row.
+    """
+    owner = CandidateList.user_id.is_(None) if uid is None else CandidateList.user_id == uid
+    rows = list(session.execute(
+        select(CandidateList).where(
+            CandidateList.platform == platform,
+            CandidateList.content_id == content_id,
+            owner,
+        ).order_by(CandidateList.id)
+    ).scalars().all())
+    if len(rows) <= 1:
+        return rows[0] if rows else None
+
+    counts = dict(session.execute(
+        select(CommenterCandidate.list_id, func.count(CommenterCandidate.id))
+        .where(CommenterCandidate.list_id.in_([r.id for r in rows]))
+        .group_by(CommenterCandidate.list_id)
+    ).all())
+    keep = max(rows, key=lambda r: (counts.get(r.id, 0), -r.id))
+    log.warning(
+        "duplicate candidate lists: %d for %s/%s owner=%s (ids=%s); using id=%s with %d cached "
+        "commenters", len(rows), platform, content_id, uid if uid is not None else "anonymous",
+        [r.id for r in rows], keep.id, counts.get(keep.id, 0),
+    )
+
+    # Collapse the leftovers so the post stops being ambiguous, but only ones holding NO commenters —
+    # deleting a populated list would cascade its candidates away and throw out a paid fetch. Strictly
+    # best-effort: recovery already succeeded above, and tidying must never fail the request.
+    try:
+        for row in rows:
+            if row.id != keep.id and counts.get(row.id, 0) == 0:
+                session.delete(row)
+        session.flush()
+    except Exception:  # noqa: BLE001 — cleanup is a bonus, never the caller's problem
+        log.warning("could not collapse duplicate candidate lists for %s/%s", platform, content_id,
+                    exc_info=True)
+    return keep
+
+
 def _reconstruct_injected(rows: list) -> tuple[list[dict], list[dict], list[str]]:
     """Rebuild the injected-scan inputs from cached ``CommenterCandidate`` rows: the selected commenters'
     raw meta and their comments (each comment's ISO timestamp re-parsed to a real ``datetime`` — the
@@ -288,9 +350,8 @@ def list_commenters(
     first_page = settings.candidate_first_page
 
     with get_session() as session:
-        cond = [CandidateList.platform == platform, CandidateList.content_id == content_id]
-        cond.append(CandidateList.user_id.is_(None) if uid is None else CandidateList.user_id == uid)
-        cl = session.execute(select(CandidateList).where(*cond)).scalar_one_or_none()
+        # Duplicate-tolerant on purpose; see _candidate_list_for.
+        cl = _candidate_list_for(session, platform, content_id, uid)
         if cl is None:
             cl = CandidateList(user_id=uid, platform=platform, content_id=content_id, content_url=url)
             session.add(cl)
@@ -738,9 +799,7 @@ def score_selection(
 
     # Reconstruct the scan input for ONLY the selected commenters from the cache (no re-fetch of the list).
     with get_session() as session:
-        cond = [CandidateList.platform == platform, CandidateList.content_id == content_id]
-        cond.append(CandidateList.user_id.is_(None) if uid is None else CandidateList.user_id == uid)
-        cl = session.execute(select(CandidateList).where(*cond)).scalar_one_or_none()
+        cl = _candidate_list_for(session, platform, content_id, uid)
         if cl is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1106,58 +1165,6 @@ def _release_demo_scan(row_id: int | None) -> None:
         log.exception("demo: could not release free scan %s", row_id)
 
 
-def _demo_candidate_list(session, content_id: str):
-    """THE anonymous candidate list for an X post, tolerating duplicates. Returns None if there is none.
-
-    Deliberately NOT ``.scalar_one_or_none()``, which is what this replaced. Anonymous compiles share
-    one bucket (``user_id IS NULL``) so two visitors on the same post reuse a single replier fetch.
-    ``CandidateList`` carries ``UniqueConstraint("user_id", "platform", "content_id")``, which LOOKS
-    like it makes a second row impossible — but ``user_id`` is nullable and SQL treats NULLs as
-    DISTINCT (in PostgreSQL, which is production, and in SQLite), so that constraint is silently inert
-    for exactly these rows. Two concurrent compiles of one post therefore both see "no list yet" and
-    both insert, and every later request raised ``MultipleResultsFound`` straight out of the route as
-    an HTTP 500. Permanently, because the rows persist, and for every visitor, because the bucket is
-    global. That was a 500 on the front page's only free sample.
-
-    When duplicates exist, prefer the row that already holds cached repliers: those were paid for with
-    a real X fetch, and settling on an empty duplicate would silently re-fetch on every compile. Ties
-    break on the lowest id so concurrent callers converge on the same row.
-    """
-    rows = list(session.execute(
-        select(CandidateList).where(
-            CandidateList.platform == "x",
-            CandidateList.content_id == content_id,
-            CandidateList.user_id.is_(None),
-        ).order_by(CandidateList.id)
-    ).scalars().all())
-    if len(rows) <= 1:
-        return rows[0] if rows else None
-
-    counts = dict(session.execute(
-        select(CommenterCandidate.list_id, func.count(CommenterCandidate.id))
-        .where(CommenterCandidate.list_id.in_([r.id for r in rows]))
-        .group_by(CommenterCandidate.list_id)
-    ).all())
-    keep = max(rows, key=lambda r: (counts.get(r.id, 0), -r.id))
-    log.warning(
-        "demo: %d anonymous candidate lists for x/%s (ids=%s); using id=%s with %d cached repliers",
-        len(rows), content_id, [r.id for r in rows], keep.id, counts.get(keep.id, 0),
-    )
-
-    # Collapse the leftovers so the post stops being ambiguous, but only ones holding NO repliers —
-    # deleting a populated list would cascade its candidates away and throw out a paid fetch. Strictly
-    # best-effort: recovery already succeeded above, and tidying must never fail the request.
-    try:
-        for row in rows:
-            if row.id != keep.id and counts.get(row.id, 0) == 0:
-                session.delete(row)
-        session.flush()
-    except Exception:  # noqa: BLE001 — cleanup is a bonus, never the caller's problem
-        log.warning("demo: could not collapse duplicate candidate lists for x/%s", content_id,
-                    exc_info=True)
-    return keep
-
-
 def _demo_classify_x_post(url: str) -> str:
     """Validate + classify a free-scan URL. The free scan is X-only, on a specific post. Returns the
     tweet id, or raises the appropriate 400."""
@@ -1199,8 +1206,8 @@ def scan_demo_commenters(
 
         # Anonymous candidate lists live in the shared user_id=None bucket, keyed by the post — two
         # visitors scanning the same post reuse one cached replier list (one X fetch, not two).
-        # Duplicate-tolerant on purpose; see _demo_candidate_list.
-        cl = _demo_candidate_list(session, content_id)
+        # Duplicate-tolerant on purpose; see _candidate_list_for.
+        cl = _candidate_list_for(session, "x", content_id, None)
         if cl is None:
             cl = CandidateList(user_id=None, platform="x", content_id=content_id, content_url=url)
             session.add(cl)
@@ -1306,7 +1313,7 @@ def scan_demo_score(
         if _demo_scans_used(session, ip_hash) >= DEMO_FREE_SCANS_PER_IP:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_DEMO_LIMIT_MSG)
 
-        cl = _demo_candidate_list(session, content_id)
+        cl = _candidate_list_for(session, "x", content_id, None)
         if cl is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

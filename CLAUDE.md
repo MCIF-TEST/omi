@@ -289,26 +289,38 @@ confirmed or released after. Counting only finished scans left a time-of-check/t
 three tabs at once meant three free scans. Reservations expire after 20 minutes so a crash can't lock
 a visitor out.
 
-**Never look the anonymous candidate list up with `.scalar_one_or_none()`.** Use
-`_demo_candidate_list()`. Anonymous compiles share one bucket (`CandidateList.user_id IS NULL`) so two
-visitors on a post reuse one X fetch. `CandidateList` has
-`UniqueConstraint("user_id", "platform", "content_id")`, which *looks* like it forbids a second row —
-it does not: `user_id` is nullable and SQL treats NULLs as **distinct** (Postgres, i.e. production,
-and SQLite). The constraint is silently inert for exactly these rows, so two concurrent compiles both
-see "no list yet" and both insert. `scalar_one_or_none()` then raised `MultipleResultsFound` straight
-out of the route as a **raw HTTP 500 on the front page** — permanently, since the rows persist, and
-for every visitor, since the bucket is global. This shipped and was live.
+### Never look a candidate list up with `.scalar_one_or_none()`
 
-`_demo_candidate_list()` picks the duplicate that already holds cached repliers (settling on the empty
-one would silently re-fetch from X on every compile, paying for it each time), ties break on lowest id
-so concurrent callers converge, and it best-effort deletes leftovers that hold **zero** candidates
-(deleting a populated one would cascade its candidates away). Guarded by
-`tests/test_demo_duplicate_candidate_list.py`.
+Use **`_candidate_list_for(session, platform, content_id, uid)`** (`scan_async.py`). All four call
+sites go through it — signed-in compile, signed-in score, demo compile, demo score.
 
-Still open, deliberately out of scope for that fix: the signed-in compile/score paths
-(`scan_async.py` ~L293 and ~L743) have the identical shape and are exposed the same way **whenever
-`uid is None`**, which is local mode (`OMI_REQUIRE_AUTH=false`, the id=0 user). Production users have
-real ids, so the constraint genuinely holds there and prod is unaffected.
+`CandidateList` has `UniqueConstraint("user_id", "platform", "content_id")`, which *looks* like it
+forbids a second row. **Two independent reasons it doesn't:**
+
+1. **NULL owners.** SQL treats NULLs as **distinct** (Postgres, i.e. production, and SQLite), so the
+   constraint is inert whenever `user_id IS NULL`. The anonymous demo bucket is entirely NULL-owned by
+   design, and local mode (`OMI_REQUIRE_AUTH=false`, the id=0 user) maps its owner to NULL too.
+2. **Databases predating the constraint.** `create_all` leaves existing tables alone, and the boot
+   upgrade pass backfills columns and `table.indexes` only. A `UniqueConstraint` lives in
+   `table.constraints`, so `_ensure_indexes` **cannot see it** and never adds it to a
+   `candidate_lists` that already existed. On such a database duplicates are possible for **real user
+   ids** as well, so this was never only a local-mode concern.
+
+Either way two concurrent compiles of one post both see "no list yet" and both insert, and
+`scalar_one_or_none()` then raised `MultipleResultsFound` out of the route as a **raw HTTP 500** —
+permanently, since the rows persist, and for the whole anonymous bucket, since every visitor shares
+it. This shipped and was live on the front page.
+
+`_candidate_list_for()` prefers the duplicate that already holds cached commenters (settling on the
+empty one would silently re-fetch upstream on every compile, paying for it each time), ties break on
+lowest id so concurrent callers converge, and it best-effort deletes leftovers holding **zero**
+candidates (deleting a populated one would cascade its candidates away). Existing poisoned rows heal on
+next touch. Guarded by `tests/test_demo_duplicate_candidate_list.py` and
+`tests/test_signed_in_duplicate_candidate_list.py`.
+
+Not done, and worth doing properly one day: actually enforcing uniqueness. It needs a **partial**
+unique index for the NULL case (`... WHERE user_id IS NULL`), and it must be preceded by a dedupe
+migration or the index build fails on live data that already has duplicates.
 
 ---
 
