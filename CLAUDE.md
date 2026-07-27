@@ -172,6 +172,33 @@ per-account allowance needs raising.
 50 accounts, same rate for X and YouTube** (100 accounts = 2 credits). This was an explicit product
 decision; don't "fix" the asymmetry back in.
 
+**There are two separate free tiers, and neither one is derived from the other.** Confusing them is
+the easy mistake, because both get called "the free scans":
+
+| | Who | Amount | Where it lives |
+|---|---|---|---|
+| Pre-login demo | Any visitor, metered per IP | **2 scans**, ≤25 accounts each | `DEMO_FREE_SCANS_PER_IP` + `DEMO_MAX_COMMENTERS`, hardcoded in `app/routes/scan_async.py` / `scan.py`, test-pinned |
+| Signup trial | A new account | **3 credits**, then they pay | `OMI_FREE_TRIAL_CREDITS` in `render.yaml` (code default in `config.py` also 3) |
+
+The signup trial was **25**, then 5, now **3** — an explicit product decision (2026-07). At the
+1-credit-per-50-accounts rate with `OMI_SCAN_MAX_COMMENTERS=150`, 3 credits is one full 150-account
+investigation *or* three small ≤50-account ones. Don't raise it back without being asked.
+
+Two traps around this value:
+
+- **It is set twice and nothing at runtime reconciles them.** The API grants
+  `OMI_FREE_TRIAL_CREDITS`; the web service separately prints `NEXT_PUBLIC_TRIAL_CREDITS`, which Next
+  inlines into the landing/pricing/sign-up copy at build time. Edit one and the site simply lies to
+  customers. `tests/test_deployed_credit_contract.py` now fails on that drift (same check for the
+  `*_MONTHLY_*` pair). Everything in the web app reads `lib/plan.ts`, so there is no third copy.
+- **The Render dashboard can hold a different value than `render.yaml`.** A blueprint sync re-applies
+  what is committed, so `render.yaml` is the source of truth and a hand-edited dashboard value is
+  temporary. If the live grant disagrees with the repo, the repo wins on the next deploy.
+
+The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0) runs on **both** the
+Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
+limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
+
 ### Billing — Stripe ($9.99/mo → 20 credits), webhook-free
 
 Setup walkthrough: `docs/stripe-setup.md`. **No webhook is configured.** `app/core/billing_sync.py`

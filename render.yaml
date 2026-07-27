@@ -82,15 +82,28 @@ services:
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
         value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
-      # Validation-window trial: 25 credits = two X batch investigations (10
-      # each) + change, so a first real user can run their own case AND return
-      # for a second one. Abuse stays bounded: repeat signups from an IP that
-      # already created an account get NO trial credits (referral/IP-fraud
-      # guard), signups are rate-limited to 5/hour/IP, and 25 credits is at
-      # most ~$7 of X API spend. Keep NEXT_PUBLIC_TRIAL_CREDITS (web service,
-      # below) in sync so displayed copy never lies.
+      # Signup trial: 3 credits, then they pay. Scans bill at ceil(accounts / 50)
+      # credits (min 1, see compute_scan_credits) and OMI_SCAN_MAX_COMMENTERS is
+      # 150 below, so 3 credits buys EITHER one full 150-account investigation OR
+      # three small ones of up to 50 accounts each.
+      #
+      # This is not the only free path, and the two are metered independently:
+      # the pre-login front page gives every visitor 2 real scans of up to 25
+      # accounts (DEMO_FREE_SCANS_PER_IP in app/routes/scan_async.py and
+      # DEMO_MAX_COMMENTERS in app/routes/scan.py, both hardcoded and test-pinned,
+      # NOT driven by this variable). That is "try it before signing up"; these 3
+      # credits are "just signed up". Changing one never changes the other.
+      #
+      # Abuse guard: a signup from an IP that already claimed a trial gets 0
+      # credits, on both the Clerk path (app/core/auth.py) and the legacy path
+      # (app/routes/auth.py). Note the 5/hour/IP signup rate limit protects only
+      # the legacy POST /v1/auth/signup route; Clerk signups do not pass through
+      # it, so the per-IP trial suppression is the real guard there.
+      #
+      # Keep NEXT_PUBLIC_TRIAL_CREDITS (web service, below) equal to this value or
+      # the displayed copy lies about what a new account gets.
       - key: OMI_FREE_TRIAL_CREDITS
-        value: '25'
+        value: '3'
       - key: OMI_SUPER_ADMIN_EMAILS
         value: 'andrewexiga@gmail.com,landonnorris116@gmail.com,exigahayden1@gmail.com,couldbewiser@yahoo.com'
       - key: OMI_SCAN_MAX_COMMENTERS
@@ -259,7 +272,7 @@ services:
       # time into marketing/UI copy). MUST match OMI_FREE_TRIAL_CREDITS and
       # OMI_MONTHLY_CREDIT_GRANT on omisphere-api, or the site lies.
       - key: NEXT_PUBLIC_TRIAL_CREDITS
-        value: '25'
+        value: '3'
       - key: NEXT_PUBLIC_MONTHLY_CREDITS
         value: '20'
       # Same WEB public URL as on the API (no trailing slash). Used by the
