@@ -6,6 +6,7 @@ operations easy to mock in tests.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -23,6 +24,54 @@ from app.storage.models import Account, CommenterEngagement, Scan, ScanLog, Vide
 # ``AccountRepository.ensure_local_user_id`` so investigations can be persisted
 # and listed even when no real authentication is configured.
 LOCAL_USER_EMAIL = "local@omi.local"
+
+
+_YT_BARE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def _set_list_fields(inv, payload: dict | None) -> None:
+    """Denormalise ``platform`` + ``thumbnail_url`` onto the row from the payload in hand.
+
+    Called wherever ``payload_json`` is written, so the archive list can render without loading the
+    blob (see ``Investigation.platform`` and ``list_user_investigations``). Doing it here is free: the
+    payload is already parsed in memory at this point. Doing it at read time was the bug — it forced
+    every list request to deserialise every payload.
+
+    Best-effort and non-fatal: a row that cannot be classified keeps NULL and the read path falls back
+    to URL heuristics. Never worth failing a scan that has already been paid for.
+    """
+    payload = payload or {}
+    try:
+        raw = str(payload.get("platform") or "").strip().lower()
+        platform = None
+        if raw in ("x", "twitter"):
+            platform = "x"
+        elif raw == "youtube":
+            platform = "youtube"
+        else:
+            url = str(getattr(inv, "input_url", "") or "").lower()
+            if "youtube.com" in url or "youtu.be" in url:
+                platform = "youtube"
+            elif "twitter.com" in url or "x.com" in url or "t.co/" in url:
+                platform = "x"
+            elif payload.get("video_id"):
+                platform = "youtube"
+        if platform:
+            inv.platform = platform
+
+        for key in ("thumbnail_url", "thumb_url", "image_url"):
+            val = payload.get(key)
+            if isinstance(val, str) and val.startswith(("http://", "https://")):
+                inv.thumbnail_url = val[:500]
+                return
+        if inv.platform == "youtube" and not inv.thumbnail_url:
+            for cand in (payload.get("video_id"), payload.get("content_id"),
+                         getattr(inv, "target_id", None)):
+                if isinstance(cand, str) and _YT_BARE_ID.match(cand):
+                    inv.thumbnail_url = f"https://i.ytimg.com/vi/{cand}/hqdefault.jpg"
+                    return
+    except Exception:  # noqa: BLE001 — denormalisation is a read optimisation, never a write blocker
+        pass
 
 
 def overall_confidence_from_payload(payload: dict | None) -> float | None:
@@ -155,14 +204,39 @@ class AccountRepository:
             payload_json=payload_json,
             batch_count=1,
         )
+        _set_list_fields(inv, payload_json)
         self.session.add(inv)
         self.session.flush()
         return inv
 
     def list_user_investigations(self, user_id: int, limit: int = 50):
+        """Investigation rows for the archive list, WITHOUT ``payload_json``.
+
+        ``payload_json`` is a JSON column holding the whole scan result — every commenter's scores,
+        evidence, posts and analyst sections, often megabytes — and the archive page requests 100 rows
+        at a time. Selecting the full entity meant transferring and deserialising all of it to render
+        cards that need a label, a tier and a percentage, which is a memory cliff on a small instance
+        and gets worse the more a customer has scanned.
+
+        ``load_only`` names the columns the summary actually uses. Anything reading a column that is
+        not in this list will trigger a lazy per-row SELECT, so the summary builder
+        (``routes/investigations._to_summary``) is deliberately payload-free.
+        """
+        from sqlalchemy.orm import load_only
+
         from app.storage.models import Investigation
         stmt = (
             select(Investigation)
+            .options(load_only(
+                Investigation.id, Investigation.slug, Investigation.user_id,
+                Investigation.label, Investigation.input_url, Investigation.kind,
+                Investigation.overall_probability, Investigation.overall_tier,
+                Investigation.confidence, Investigation.summary,
+                Investigation.quota_used, Investigation.batch_count,
+                Investigation.created_at, Investigation.updated_at,
+                Investigation.target_id, Investigation.verdict,
+                Investigation.platform, Investigation.thumbnail_url,
+            ))
             .where(Investigation.user_id == user_id)
             .order_by(Investigation.created_at.desc())
             .limit(limit)
@@ -185,6 +259,9 @@ class AccountRepository:
         from datetime import datetime, timezone
         inv.payload_json = payload_json
         inv.confidence = overall_confidence_from_payload(payload_json)
+        # Re-derive on every payload write: a continuation batch replaces the merged payload, and a
+        # later batch can be the first one that reveals the platform or a usable thumbnail.
+        _set_list_fields(inv, payload_json)
         inv.quota_used = (inv.quota_used or 0) + quota_used_delta
         inv.batch_count = (inv.batch_count or 1) + 1
         if overall_probability is not None:

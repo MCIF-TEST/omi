@@ -123,8 +123,22 @@ export function AnalystPanel({ slug }: { slug: string }) {
       } catch (e) {
         if (e instanceof ApiError && e.status === 503) {
           setDisabled(true);
+        } else if (e instanceof ApiError) {
+          // Carries the server's own detail, or a status-specific description (lib/api.ts). Either way
+          // it names something actionable rather than "it failed".
+          setError(e.message);
+        } else if (e instanceof TypeError) {
+          // fetch() rejects with TypeError only when the request never completed — the connection was
+          // refused, reset, or cut mid-flight. That is a different problem from the server saying no,
+          // and it used to be reported with the same generic sentence, which hid the distinction that
+          // matters most when diagnosing: was the API even reached?
+          setError(
+            'Lost the connection to the analysis service before it answered. The generation often ' +
+            'keeps running on the server — reload in a minute to pick it up. If it keeps happening, ' +
+            'the API may be restarting.',
+          );
         } else {
-          setError(e instanceof ApiError ? e.message : 'Failed to generate the assessment.');
+          setError(e instanceof Error && e.message ? e.message : 'Failed to generate the assessment.');
         }
         setPending(false);
       }

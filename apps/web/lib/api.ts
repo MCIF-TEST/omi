@@ -14,6 +14,28 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Human-readable fallback when the server sent no usable `detail`.
+ *
+ * Says what the status actually means AND keeps the code visible, so a support conversation can start
+ * from "504 at the gateway" instead of "it said it failed".
+ */
+export function describeHttpFailure(status: number): string {
+  if (status === 401) return 'Your session expired (401). Sign in again and retry.';
+  if (status === 403) return 'This account is not allowed to do that (403).';
+  if (status === 404) return 'Not found (404).';
+  if (status === 413) return 'That request was too large (413).';
+  if (status === 429) return 'Too many requests (429). Wait a moment and retry.';
+  if (status === 502 || status === 503) {
+    return `The service was unreachable (${status}). It may be restarting — retry in a moment.`;
+  }
+  if (status === 504) {
+    return 'The request timed out at the gateway (504). The work may still be running on the server.';
+  }
+  if (status >= 500) return `The server errored (${status}). This has been logged.`;
+  return `Request failed (${status}).`;
+}
+
 /** Shared response parser. Underscore-prefixed because the server module
  *  re-uses it; not intended as a public API. */
 export async function _parse<T>(res: Response): Promise<T> {
@@ -21,11 +43,16 @@ export async function _parse<T>(res: Response): Promise<T> {
   const parsed = text ? _tryJson(text) : { ok: true as const, value: undefined };
   const body = parsed.ok ? parsed.value : text;
   if (!res.ok) {
-    const detail =
+    const serverDetail =
       (body && typeof body === 'object' && 'detail' in body && typeof (body as any).detail === 'string')
         ? (body as any).detail
-        : res.statusText;
-    throw new ApiError(res.status, detail, body);
+        : '';
+    // Never fall back to `res.statusText`: it is ALWAYS an empty string over HTTP/2, which production
+    // serves. Any error that isn't JSON-with-a-detail — a gateway 502/504 HTML page, a dropped
+    // upstream, a bare 500 — therefore produced an ApiError with an empty message, and callers that
+    // render `e.message` showed a blank or generic error with no way to tell what happened. That is
+    // how a real failure reached a user as "Failed to generate the assessment." with no diagnosis.
+    throw new ApiError(res.status, serverDetail || describeHttpFailure(res.status), body);
   }
   // A 2xx response whose body arrived but doesn't parse as JSON means the
   // response was truncated or replaced by a gateway/proxy error page — common

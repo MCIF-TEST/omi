@@ -75,14 +75,25 @@ def test_blank_youtube_key_in_production_is_refused():
         _validate_production_config(settings)
 
 
-def test_session_secret_not_checked_when_auth_disabled():
-    # require_auth=False is a documented "local mode" — the dev secret is
-    # harmless because there are no sessions to forge.
+def test_production_refuses_to_start_with_auth_disabled():
+    """Was: "session secret is not checked when auth is disabled".
+
+    That test asserted the vulnerability. `require_auth=False` is a documented local mode, but in
+    PRODUCTION it is an authentication bypass: `require_user()` does not reject the request, it returns
+    a synthetic user with id=0, is_admin=True and unlimited credits, which exposes every admin route
+    and every other user's data. The old assertion also depended on the same flag, so auth being off
+    skipped its own validation — the check could never fire on the one configuration that needed it.
+
+    Production now refuses to boot. The dev secret being "harmless because there are no sessions to
+    forge" was true and beside the point: with auth off there is nothing to forge because there is
+    nothing to authenticate. See tests/test_production_config_fails_closed.py.
+    """
     settings = _prod_settings(
         session_secret=_DEV_SESSION_SECRET,
         require_auth=False,
     )
-    _validate_production_config(settings)
+    with pytest.raises(ProductionConfigError):
+        _validate_production_config(settings)
 
 
 def test_multiple_issues_aggregated_into_one_error(caplog):

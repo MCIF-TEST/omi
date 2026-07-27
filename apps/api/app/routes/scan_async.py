@@ -1184,6 +1184,46 @@ def _demo_scans_used(session, ip_hash: str) -> int:
     return len(rows)
 
 
+def _demo_scans_today(session) -> int:
+    """Free demo scans started across ALL visitors in the last 24h (succeeded + in-flight).
+
+    Counts the same rows ``_demo_scans_used`` does, without the IP filter. Takes the CALLER's session
+    rather than opening its own: both call sites are already inside a ``with get_session()`` block, and
+    the in-memory test database is a single shared connection, so a nested session would have the inner
+    one committing and closing a connection the outer block is still using.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    return int(session.execute(
+        select(func.count()).select_from(DemoScanLog).where(DemoScanLog.created_at >= cutoff)
+    ).scalar_one() or 0)
+
+
+def _enforce_global_demo_budget(session, settings: Settings) -> None:
+    """Refuse a free scan once the whole site has spent its daily demo budget.
+
+    The 2-per-IP reservation is a fairness control, not a spend control: IPs are effectively free to
+    rotate through VPNs and mobile networks, so per-IP alone leaves total cost unbounded. Each free scan
+    is a real model call plus 25 upstream account fetches, and paid traffic is exactly the condition that
+    makes abusing it worthwhile.
+
+    This is the ceiling on the whole free tier. It is deliberately a DB count rather than an in-process
+    counter, so it stays correct across instances and restarts — the same reason the per-IP guard uses
+    reservations. Env: OMI_DEMO_GLOBAL_DAILY_MAX (0 disables the cap).
+    """
+    limit = int(getattr(settings, "demo_global_daily_max", 0) or 0)
+    if limit <= 0:
+        return
+    used = _demo_scans_today(session)
+    if used < limit:
+        return
+    log.warning("demo: global daily budget spent (%d/%d in 24h) — refusing free scans", used, limit)
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=("The free demo has reached its limit for today. Create a free account to keep "
+                "scanning, or try again tomorrow."),
+    )
+
+
 def _reserve_demo_scan(ip_hash: str, content_id: str, user_agent: str) -> int | None:
     """Claim one of the IP's free scans BEFORE the work starts. Returns the reservation's row id, which
     the caller must either confirm (``_confirm_demo_scan``) or release (``_release_demo_scan``)."""
@@ -1270,6 +1310,9 @@ def scan_demo_commenters(
     with get_session() as session:
         if _demo_scans_used(session, ip_hash) >= DEMO_FREE_SCANS_PER_IP:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_DEMO_LIMIT_MSG)
+        # Site-wide spend ceiling, checked after the per-visitor one so a returning visitor still
+        # gets the clearer "you've used your two" message rather than a global-capacity message.
+        _enforce_global_demo_budget(session, settings)
 
         # Anonymous candidate lists live in the shared user_id=None bucket, keyed by the post — two
         # visitors scanning the same post reuse one cached replier list (one X fetch, not two).
@@ -1379,6 +1422,9 @@ def scan_demo_score(
     with get_session() as session:
         if _demo_scans_used(session, ip_hash) >= DEMO_FREE_SCANS_PER_IP:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_DEMO_LIMIT_MSG)
+        # Site-wide spend ceiling, checked after the per-visitor one so a returning visitor still
+        # gets the clearer "you've used your two" message rather than a global-capacity message.
+        _enforce_global_demo_budget(session, settings)
 
         cl = _candidate_list_for(session, "x", content_id, None)
         if cl is None:

@@ -100,6 +100,19 @@ function clientIp(req: NextRequest): string {
   );
 }
 
+/**
+ * Whether the request carries something that looks like a session.
+ *
+ * Clerk stores `__session` on the app's own domain, suffixed (`__session_<hash>`) on dev instances;
+ * `omi_session` is the legacy cookie path. Presence is all this needs to decide a redirect — see the
+ * call site for why verification would be the wrong tool here.
+ */
+function hasSessionCookie(req: NextRequest): boolean {
+  return req.cookies.getAll().some(
+    (c) => c.name === '__session' || c.name.startsWith('__session_') || c.name === 'omi_session',
+  );
+}
+
 export default function middleware(req: NextRequest) {
   // Rate limit page navigations (not every static asset — matcher already narrows).
   const { ok, retryAfter } = rateLimit(clientIp(req));
@@ -112,6 +125,18 @@ export default function middleware(req: NextRequest) {
         ...SECURITY_HEADERS,
       },
     });
+  }
+
+  // Send an already-signed-in visitor straight to the workspace, so the landing page itself needs no
+  // user lookup and can stay static/CDN-cacheable. It previously did this server-side by awaiting
+  // /v1/auth/me on every anonymous visit, putting the API and database in the critical path of the
+  // page traffic is bought for.
+  //
+  // Cookie PRESENCE only — no verification, and none needed. This is a convenience redirect, not an
+  // access control: /investigate performs the real server-side session check and bounces an invalid
+  // cookie to sign-in. Nothing is granted here, so a forged cookie buys an attacker a redirect.
+  if (req.nextUrl.pathname === '/' && hasSessionCookie(req)) {
+    return NextResponse.redirect(new URL('/investigate', req.url));
   }
 
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');

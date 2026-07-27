@@ -1,3 +1,7 @@
+
+// Private surface (tokenised share routes (/r/, /rc/) — unlisted by token, not by auth): never indexable. The root layout now opts the site IN to indexing (it was
+// site-wide noindex, left from the private beta), so anything non-public must opt back OUT here.
+export const metadata = { robots: { index: false, follow: false } };
 /**
  * Public route group — no app shell, no nav, no auth gate.
  * Used for shareable reports at /r/[token].
