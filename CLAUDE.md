@@ -5,8 +5,13 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-07-25 · branch `claude/master-analyst-protocol-v1-1u8tyk` · PR
-[#130](https://github.com/MCIF-TEST/omi/pull/130) (draft) · suite **1513 passed, 1 known-failing**
+**Last updated:** 2026-07-28 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
+`main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
+**1580 passed, 2 failed** (6m06s), both pre-existing and listed below.
+
+> Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
+> whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
+> N behind` means your work landed and you should restart from `origin/main` rather than build on it.
 
 > `HANDOFF.md` at the repo root is a **stale one-off** from a different branch (2026-05-29). Ignore
 > it; this file supersedes it.
@@ -49,8 +54,8 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **1521 passed, 2 failed** (~4m20s). Both failures reproduce on an unchanged
-tree AND in isolation, so neither is pollution:
+Current measured state: **1580 passed, 2 failed** (6m06s, 2026-07-28). Both failures reproduce on an
+unchanged tree AND in isolation, so neither is pollution:
 
 1. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
    0.032 gate.
@@ -60,6 +65,12 @@ tree AND in isolation, so neither is pollution:
    trails a prompt-assembly change rather than a real regression; not yet diagnosed.
 
 **A third failure is yours.** If you see mass failures instead, see the next section first.
+
+**Count depends on collection order.** A run during the launch-readiness work reported *13* failures;
+11 of those were order-dependent analyst tests that adding new test files shifted into a different
+order, not regressions. A clean run in the default order gives the 2 above. If you see extra
+failures, re-run the specific files in isolation before believing you caused them — and note that
+this order sensitivity is itself a latent problem nobody has fixed yet.
 
 ### If the suite is suddenly red everywhere, it is probably not you
 
@@ -301,23 +312,61 @@ The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0)
 Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
 limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
 
-### Billing — Stripe ($9.99/mo → 20 credits), webhook-free
+### Billing — Stripe ($9.99/mo → 20 credits), webhook + API backstop
 
-Setup walkthrough: `docs/stripe-setup.md`. **No webhook is configured.** `app/core/billing_sync.py`
-reconciles against Stripe's API — it reads the customer's subscription and paid invoices and grants
-any invoice not already credited. It runs on return from checkout (`POST /v1/billing/sync`, forced),
-on the billing page (throttled 5 min/user), and — the one that matters — inside `consume_credits`
-just before it would refuse a scan, so a subscriber whose renewal just landed is never told to
-subscribe. It never raises: a Stripe outage degrades to the normal 402, never a broken scan.
+Setup walkthrough: `docs/stripe-setup.md`. **Credits arrive by two independent routes, on purpose.**
 
-The webhook endpoint still exists and is **inert without `OMI_STRIPE_WEBHOOK_SECRET`**. Enabling it
-is safe — both paths claim the same per-invoice row, so only one can grant.
+1. **Webhook (primary).** Stripe pushes `invoice.paid` to `POST /v1/billing/webhook` and credits land
+   in seconds. Inert until `OMI_STRIPE_WEBHOOK_SECRET` is set — an unverified webhook is an open door
+   to anyone who wants to grant themselves credits, so no secret means it acks 200 and grants nothing.
+2. **API reconciliation (backstop).** `app/core/billing_sync.py` reads the customer's subscription and
+   paid invoices and grants any invoice not already credited. Runs on return from checkout
+   (`POST /v1/billing/sync`, forced), on the billing page (throttled 5 min/user), and — the one that
+   matters — inside `consume_credits` just before it would refuse a scan, so a subscriber whose
+   renewal just landed is never told to subscribe. Never raises: a Stripe outage degrades to the
+   normal 402, never a broken scan.
+
+**Do not delete the backstop now that the webhook works.** A webhook can be registered against the
+wrong host, killed by a rotated secret, or exhaust its retries during an outage; reconciliation is
+what stops any of those becoming a customer who paid and got nothing. Running both is safe for
+exactly one reason: **both claim the same per-invoice row**, so whichever arrives first grants and the
+other loses the unique-index race. Pinned by
+`tests/test_billing_webhook_primary.py::test_webhook_and_reconciliation_never_both_credit_the_same_invoice`.
+
+`WEBHOOK_EVENTS` in `billing.py` is the single source of truth for what to tick in the Stripe
+dashboard, and `test_webhook_events_match_the_dispatch_table` asserts it equals what `_dispatch`
+actually handles. Add a handler without adding it there and the dashboard is never told to send that
+event — the feature is dead on arrival, silently.
+
+**The webhook URL is the API host, not `OMI_PUBLIC_BASE_URL`.** That variable is the *web* app, where
+Stripe returns the customer. Registering the web host as the webhook endpoint is the most common way
+this fails, and it fails quietly. `GET /v1/billing/preflight` prints the correct URL for the
+deployment it runs on — but call it **directly on the API host**: through the web app's `/api` proxy
+it sees the web host, detects that, and refuses to print a URL rather than printing a wrong one.
 
 `GET /v1/billing/preflight` answers "can this deployment take a payment?" against the live Stripe
 account: it validates the key, retrieves the price to confirm it is recurring and the right amount,
 and checks the return URL. Point anyone debugging a "billing doesn't work" report at it first —
 `OMI_STRIPE_SECRET_KEY` alone is NOT enough, and a missing `OMI_STRIPE_PRICE_ID` fails only at the
 moment a customer clicks Subscribe.
+
+Its three `webhook_*` checks are **deliberately non-blocking**: without a webhook, reconciliation
+still credits every payment, so `ready` stays true and the checks report degraded-but-working.
+`webhook_delivery` is the one that catches a webhook nobody tested — it reports the last real event
+this deployment received, and excludes reconciliation's own `credit_grant:` rows from the same table
+so it can never claim a healthy webhook on a server that has never received one.
+
+Two pieces of middleware sit in front of the webhook and neither currently breaks it, but both are
+worth knowing before you change them:
+
+- **`BodySizeLimitMiddleware` (1 MiB) only counts bytes — it does not rewrite them**, which is why
+  raw-body signature verification still works. If it ever buffered or re-emitted the body, every
+  delivery would fail verification. Note the failure mode if a payload *did* exceed the cap: the body
+  is truncated, the signature no longer matches, Stripe gets a 400 and retries into the same wall.
+  Subscription invoices are nowhere near 1 MiB, so this is theoretical today.
+- **The global rate limit (600/min per IP) applies to the webhook**, keyed on Stripe's sending IP. At
+  this product's volume it will never be reached, and a 429 is safe because Stripe retries — but if
+  you ever see delayed crediting during a burst, that is where to look first.
 
 Four rules in `app/routes/billing.py` that must not be softened — each replaces a bug that cost or
 would have cost real money:
@@ -454,14 +503,35 @@ Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-m
 
 ## Outstanding — needs the user, not code
 
-1. **Redeploy the API service.** Picks up `pyjwt[crypto]` (logins), the `get_session` fix (>25-account
-   investigations produce an assessment at all), and the scan watchdog. Nothing else on this branch
-   matters until this happens.
+1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
+   redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
+   are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly
+   on the API host. Until then billing works, just not instantly: reconciliation carries it.
 2. **Clerk dashboard:** Configure → User & authentication → Email, phone, username → **Username OFF,
    Phone Optional.** Otherwise sign-up dead-ends on `/sign-up/continue`. This is config, not code.
-3. **Rotate the secrets** pasted into chat earlier in this session (`CLERK_SECRET_KEY`,
+3. **Rotate the secrets** pasted into chat in an earlier session (`CLERK_SECRET_KEY`,
    `OMI_DATABASE_URL`, `OMI_TWITTER_API_KEY`, `OMI_YOUTUBE_API_KEY`, `OPENROUTER_API_KEY`,
    `OMI_SESSION_SECRET`). Never commit them.
+
+### Launch-readiness findings still open
+
+Closed 14 of 20 in `fbbd096`; these 7 were left because each needs a decision, money, or a
+measurement that cannot be taken from a sandbox. Recorded here because a commit message is not
+somewhere anyone looks:
+
+| | Why it is still open |
+|---|---|
+| OMI-04 dependency pinning | A lockfile generated in this sandbox may not match the production interpreter. |
+| OMI-09 infra sizing | Postgres 256MB + starter plans. Spends your money. |
+| OMI-10 browser → API directly | Touches the auth cookie flow; wants its own change and real verification. |
+| OMI-11 Redis | For rate limits / cache / metrics. Needs a service provisioned. |
+| OMI-13 durable job queue | Same, plus an architecture change. |
+| OMI-16 analyst token ceiling | The right number comes from your production `output_tokens`. |
+| OMI-20 analytics | A vendor choice — and your privacy policy promises no third-party analytics. |
+
+Also partial: **OMI-07** — the landing page no longer awaits `/v1/auth/me`, but it is still
+per-request because the root layout reads `headers()` for the CSP nonce. Trading a nonce CSP for CDN
+caching is a judgement call nobody has made.
 
 ### Unverified / worth measuring
 
