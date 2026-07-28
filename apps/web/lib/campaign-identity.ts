@@ -1,7 +1,7 @@
 /**
  * Campaign member identity helpers.
  *
- * Some campaign sources — notably platform state-actor disclosure archives —
+ * Some campaign sources, notably platform state-actor disclosure archives,
  * ANONYMIZE low-follower accounts by hashing their handles before release. The
  * fixture stores that hash in both `account_external_id` and `handle`, so a
  * naive `handle || account_external_id` render shows the hash as if it were a
@@ -10,7 +10,7 @@
  * Detection is deliberately conservative so it can NEVER hide a real handle:
  * a member is treated as anonymized only when there is no distinct human handle
  * AND the identifier itself looks like a disclosure hash (base64 characters or
- * implausibly long) — never a normal @handle, a numeric id, or a YouTube
+ * implausibly long), never a normal @handle, a numeric id, or a YouTube
  * `UC…` channel id.
  */
 

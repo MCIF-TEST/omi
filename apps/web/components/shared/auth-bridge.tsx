@@ -5,7 +5,7 @@ import { useAuth, useClerk } from '@clerk/nextjs';
 import { Loader2, TriangleAlert } from 'lucide-react';
 
 // The loop-breaker. It renders on an auth page (sign-in / sign-up) ONLY when Clerk reports the visitor
-// is already signed in — which means they were bounced here by the app's server-side guard, i.e. Clerk
+// is already signed in, which means they were bounced here by the app's server-side guard, i.e. Clerk
 // and the server disagree about the session (a token that hasn't propagated to the server cookie yet, a
 // flaky network mid-handshake, or a dev-instance quirk). Left alone, Clerk's <SignIn> would silently
 // redirect back to the app, the app would bounce back here, and the browser would throttle into a blank
@@ -21,7 +21,7 @@ export function AuthBridge() {
 
   useEffect(() => {
     if (!isLoaded) return; // wait for Clerk before deciding anything
-    // If we've already tried once this cycle and landed back here, stop auto-retrying — show controls.
+    // If we've already tried once this cycle and landed back here, stop auto-retrying. Show controls.
     const prior = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(FLAG) : null;
     if (prior) {
       setStuck(true);
@@ -41,7 +41,7 @@ export function AuthBridge() {
       try {
         await getToken();
       } catch {
-        /* proceed anyway — the reload + server guard is the source of truth */
+        /* proceed anyway, the reload + server guard is the source of truth */
       }
       if (!cancelled) window.location.assign('/investigate');
     })();
@@ -75,7 +75,7 @@ export function AuthBridge() {
   };
 
   if (!stuck) {
-    // The one-shot auto attempt is in flight — show a calm "finishing" state, never a bounce.
+    // The one-shot auto attempt is in flight. Show a calm "finishing" state, never a bounce.
     return (
       <div className="flex flex-col items-center gap-3 py-8 text-center">
         <Loader2 size={20} className="animate-spin text-accent" />
@@ -90,7 +90,7 @@ export function AuthBridge() {
       <div className="space-y-1.5">
         <h2 className="display text-lg font-semibold text-fg">Almost there</h2>
         <p className="text-sm text-fg-mute max-w-xs">
-          You&apos;re signed in, but we couldn&apos;t open your workspace — often a brief network hiccup.
+          You&apos;re signed in, but we couldn&apos;t open your workspace, often a brief network hiccup.
           Try again, or sign out and back in.
         </p>
       </div>

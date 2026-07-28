@@ -6,7 +6,7 @@
   "generated_by": "app.reasoning.prompts.export.comment_template_manifest",
   "manifest_version": "v1",
   "output_schema_hash": "csch:6a66a9f21883e028f41bc9aeb217f0ea",
-  "response_contract_hash": "crc:1aa831cb9e94430d51c0fc89e4df8019",
+  "response_contract_hash": "crc:6421d8038b374bc8f8dd456bde7f08d8",
   "response_format": "json_object",
   "schema_ref": "comment_analysis_v1",
   "source_of_truth": "GitHub app.reasoning.prompts.comment_template (do not hand-edit)",
@@ -70,10 +70,10 @@
         ]
       }
     },
-    "response_contract": "Emit exactly one JSON object valid against the comment-analysis response schema. It is a comment-section assessment (echoing the engine's thread suspicion_probability/suspicion_tier, never recomputed) whose 'comment_analyses' array holds one structured CommentAnalysis per comment. Each CommentAnalysis is structured reasoning only \u2014 no markdown, no prose commentary, no UI formatting. Cite only evidence ids from the comment evidence. Always include counter-evidence and named uncertainty. The human analyst sets the final verdict.",
-    "system_task": "# COMMENT ANALYSIS TASK\nYou are reasoning about the INDIVIDUAL COMMENTS in a comment section. The deterministic engine has produced the evidence; you interpret it. For EACH comment in the evidence bundle, assess its authenticity, the likelihood it is part of manipulation, and the behavioral, linguistic, and engagement signals \u2014 citing only the provided evidence. Then summarize the comment section as one assessment that ECHOES the engine's thread number (never recompute it). Describe behavior, not people; use probabilistic language; always record counter-evidence and uncertainty.",
+    "response_contract": "Emit exactly one JSON object valid against the comment-analysis response schema. It is a comment-section assessment (echoing the engine's thread suspicion_probability/suspicion_tier, never recomputed) whose 'comment_analyses' array holds one structured CommentAnalysis per comment. Each CommentAnalysis is structured reasoning only, no markdown, no prose commentary, no UI formatting. Cite only evidence ids from the comment evidence. Always include counter-evidence and named uncertainty. The human analyst sets the final verdict.",
+    "system_task": "# COMMENT ANALYSIS TASK\nYou are reasoning about the INDIVIDUAL COMMENTS in a comment section. The deterministic engine has produced the evidence; you interpret it. For EACH comment in the evidence bundle, assess its authenticity, the likelihood it is part of manipulation, and the behavioral, linguistic, and engagement signals. Citing only the provided evidence. Then summarize the comment section as one assessment that ECHOES the engine's thread number (never recompute it). Describe behavior, not people; use probabilistic language; always record counter-evidence and uncertainty.",
     "version": "ctmpl-v1"
   },
-  "template_hash": "ctmpl:212352b0beac79ac6225108816083c76",
+  "template_hash": "ctmpl:ca39523a42d2da439a76f7a1d378962a",
   "template_version": "ctmpl-v1"
 }

@@ -42,7 +42,7 @@ const MORE_LINKS: { href: string; label: string; icon: LucideIcon; desc: string 
 ];
 
 // Pre-activation, the More sheet narrows to the value-moment path (Campaigns +
-// Settings) — mirrors the desktop sidebar's gating so a new user can't wander
+// Settings). Mirrors the desktop sidebar's gating so a new user can't wander
 // into empty analysis surfaces before their first investigation.
 const NEW_USER_MORE = new Set(['/campaigns', '/settings']);
 
@@ -54,7 +54,7 @@ export function MobileNav({ email, isNewUser = false }: { email: string; isNewUs
     ? MORE_LINKS.filter((l) => NEW_USER_MORE.has(l.href))
     : MORE_LINKS;
 
-  // Unread alert count for the Alerts tab badge — same source as the topbar.
+  // Unread alert count for the Alerts tab badge, same source as the topbar.
   const alerts = usePolling<AlertsResponse>(
     useCallback(() => apiClient<AlertsResponse>('/v1/monitoring/alerts?unread=true&limit=1'), []),
     60_000,
@@ -74,7 +74,7 @@ export function MobileNav({ email, isNewUser = false }: { email: string; isNewUs
   const moreActive = moreLinks.some((l) => routeActive(pathname, l.href));
 
   const onLogout = async () => {
-    // Clerk owns the session now — sign out through Clerk and land on the marketing home.
+    // Clerk owns the session now. Sign out through Clerk and land on the marketing home.
     try { await signOut({ redirectUrl: '/' }); } catch { /* ignore */ }
   };
 

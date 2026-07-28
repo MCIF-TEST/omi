@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { BookOpen, X } from 'lucide-react';
 
 /**
- * "How to read this" — a dismissible first-view comprehension aid on the
+ * "How to read this", a dismissible first-view comprehension aid on the
  * campaign report surfaces. Phase 3 made the value moment visible; this turns
  * "saw a campaign" into "understood why it's trustworthy" by naming the
  * reading order (corroboration → evidence for/against → recurrence).
  *
  * Client-only and self-gating via localStorage so it appears once and never
- * nags — no backend, no new system. ``storageKey`` lets the campaign-detail
+ * nags, no backend, no new system. ``storageKey`` lets the campaign-detail
  * and public-report instances dismiss independently.
  */
 export function HowToRead({ storageKey }: { storageKey: string }) {
@@ -54,7 +54,7 @@ export function HowToRead({ storageKey }: { storageKey: string }) {
           needs a discriminative detector (fingerprint, co-engagement, co-tag) or
           two independent methods agreeing. A{' '}
           <span className="text-tier-moderate">supporting-only</span> campaign is
-          capped at MODERATE — Omi will not overclaim.
+          capped at MODERATE. Omi will not overclaim.
         </li>
         <li>
           <span className="text-fg">Evidence for and against, together.</span>{' '}
@@ -64,7 +64,7 @@ export function HowToRead({ storageKey }: { storageKey: string }) {
         </li>
         <li>
           <span className="text-fg">Recurrence over time.</span> The timeline
-          shows whether this group keeps acting together — a campaign that
+          shows whether this group keeps acting together, a campaign that
           returns is stronger evidence than a one-off cluster.
         </li>
       </ol>

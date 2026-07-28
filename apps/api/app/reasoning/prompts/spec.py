@@ -2,7 +2,7 @@
 
 A ``PromptSpec`` is the unit of the Intelligence Optimization Framework: the *content* of an
 AI analyst's instruction (the template) plus the metadata that makes prompt evolution
-measurable and reviewable — version, content hash, authorship, model compatibility, reasoning
+measurable and reviewable. Version, content hash, authorship, model compatibility, reasoning
 objectives, constraints, and the output contract it targets. AI-backed analysts execute from a
 ``PromptSpec`` resolved out of the registry, never from embedded prompt text, so every reasoning
 run is attributable to a specific, content-addressed prompt version.
@@ -32,7 +32,7 @@ class PromptSpec:
 
     @property
     def prompt_hash(self) -> str:
-        """Content address of the prompt's behavioral content — stable across runs/processes."""
+        """Content address of the prompt's behavioral content. Stable across runs/processes."""
         return digest(
             {
                 "analyst": self.analyst,

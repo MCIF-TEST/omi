@@ -3,8 +3,8 @@ import { pct, tierColor, tierBg, timeAgo } from './format';
 
 describe('pct', () => {
   it('renders an em dash for null/undefined', () => {
-    expect(pct(null)).toBe('—');
-    expect(pct(undefined)).toBe('—');
+    expect(pct(null)).toBe(', ');
+    expect(pct(undefined)).toBe(', ');
   });
   it('rounds a 0..1 ratio to a percent', () => {
     expect(pct(0)).toBe('0%');

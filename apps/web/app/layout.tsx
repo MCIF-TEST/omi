@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     'Probabilistic detection of bots, AI engagement, coordinated influence campaigns, and synthetic virality. Powered by the omi detection engine.',
   applicationName: 'OMISPHERE',
   // Indexable by default. This was `index: false, follow: false` site-wide, left over from the private
-  // beta — which meant every page, including the marketing pages, told search engines to ignore it.
+  // beta, which meant every page, including the marketing pages, told search engines to ignore it.
   // Any traffic spend against that captures nothing durable: no branded search, no organic entry, no
   // compounding content.
   //
@@ -59,7 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
-      {/* No external <link rel="stylesheet"> — fonts are self-hosted via next/font. */}
+      {/* No external <link rel="stylesheet">. Fonts are self-hosted via next/font. */}
       <body className={`font-sans ${inter.className}`} data-csp-nonce={nonce || undefined}>
         {/* Clerk lives entirely on the client (see ClerkClientProvider) because this app runs no
             clerkMiddleware; nothing on the server ever calls Clerk's auth(). */}

@@ -7,7 +7,7 @@ import { ThreatBreakdown } from './threat-breakdown';
 
 /**
  * Lazily fetches the OmiScore intelligence verdict for a single account and
- * renders the threat breakdown. Used in the commenter detail panel — the
+ * renders the threat breakdown. Used in the commenter detail panel, the
  * account is already persisted by the scan, so this is a cheap read.
  *
  * Silently renders nothing if the account has no OmiScore yet (404) so it
@@ -35,7 +35,7 @@ export function CommenterThreatPanel({
       })
       .catch(() => {
         if (cancelled) return;
-        // 404 (no scan history) or any error — hide the section silently
+        // 404 (no scan history) or any error. Hide the section silently
         // so it never disrupts the detail layout.
         setState('empty');
       });

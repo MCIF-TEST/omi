@@ -4,8 +4,8 @@ import { env } from '@/lib/env';
 /**
  * Crawl rules. Public marketing pages are indexable; everything that is private or link-shared is not.
  *
- * `/r/` and `/rc/` are the tokenised share routes. They carry no auth by design — anyone with the link
- * can read the report — so keeping them out of an index is the only thing preserving "unlisted".
+ * `/r/` and `/rc/` are the tokenised share routes. They carry no auth by design. Anyone with the link
+ * can read the report, so keeping them out of an index is the only thing preserving "unlisted".
  * Disallowing them here is belt to the per-route `robots: { index: false }` braces, because a crawler
  * that never fetches the page never sees the meta tag.
  */

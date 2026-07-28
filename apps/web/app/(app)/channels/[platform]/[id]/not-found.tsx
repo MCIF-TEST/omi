@@ -8,7 +8,7 @@ export default function ChannelNotFound() {
       <CardLabel>Not found</CardLabel>
       <CardTitle>Channel not in database</CardTitle>
       <p className="text-sm text-fg-dim mb-5">
-        This channel has not been scanned yet. Scan one of their videos first — the
+        This channel has not been scanned yet. Scan one of their videos first, the
         channel intelligence view is built automatically from video scan data.
       </p>
       <Link href="/content">

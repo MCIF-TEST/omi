@@ -18,7 +18,7 @@ import { CampaignShareBlock } from './share-block';
 import { HowToRead } from '@/components/shared/how-to-read';
 import { isAnonymizedMember, hasAnonymizedMembers, ANONYMIZED_PROVENANCE_NOTE } from '@/lib/campaign-identity';
 
-export const metadata = { title: 'Campaign — OMISPHERE' };
+export const metadata = { title: 'Campaign. OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 const KNOWN_METHODS = [
@@ -94,7 +94,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
       {/* First-view comprehension aid (dismissible, once). */}
       <HowToRead storageKey="campaign-detail" />
 
-      {/* Featured-example context — a worked example is framed as such so it
+      {/* Featured-example context, a worked example is framed as such so it
           can never be mistaken for the user's own scan output. */}
       {detail.campaign_key.startsWith('feat_') && (
         <div className="flex items-start gap-2.5 border border-accent/25 bg-accent/[0.05] rounded-md px-4 py-3">
@@ -103,7 +103,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             <span className="text-accent font-mono text-2xs uppercase tracking-wider mr-2">Featured example</span>
             A real influence operation from the platform&apos;s own disclosure
             archives, seeded so you can explore how Omi reads coordination.
-            Your own scans appear alongside —{' '}
+            Your own scans appear alongside, {' '}
             <Link href="/investigate" className="text-accent hover:underline">run one now</Link>.
           </p>
         </div>
@@ -132,7 +132,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         </p>
       </header>
 
-      {/* Hero — score / confidence / corroboration. NEVER one number on its own. */}
+      {/* Hero. Score / confidence / corroboration. NEVER one number on its own. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <HeroPanel
           label="Coordination"
@@ -150,9 +150,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           headline={`${Math.round(detail.confidence * 100)}%`}
           tone={detail.confidence >= 0.7 ? 'ok' : detail.confidence >= 0.4 ? 'moderate' : 'mute'}
           sub={
-            detail.confidence >= 0.7 ? 'high — independent detectors agree'
+            detail.confidence >= 0.7 ? 'high. Independent detectors agree'
               : detail.confidence >= 0.4 ? 'moderate'
-              : 'low — thin evidence'
+              : 'low, thin evidence'
           }
           rightLabel={`${detail.methods.length} method${detail.methods.length === 1 ? '' : 's'}`}
         />
@@ -183,9 +183,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
               </div>
               <p className="text-sm text-fg-dim leading-relaxed">
                 Only one non-discriminative detector (
-                {detail.methods.join(', ') || '—'}
+                {detail.methods.join(', ') || ', '}
                 ) fired on this group. Under the Phase-3 corroboration gate,
-                the score is capped at MODERATE — the same fix that took
+                the score is capped at MODERATE: the same fix that took
                 campaign-level FPR on legitimate-coordination controls to
                 zero. The cluster is real; the interpretation is not yet
                 confirmed.
@@ -195,15 +195,15 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         </Card>
       )}
 
-      {/* Evidence pack — the citable, portable artifact (carries the trust */}
+      {/* Evidence pack, the citable, portable artifact (carries the trust */}
       {/* contract: corroboration status, evidence-for/against, methodology, */}
       {/* and the observation-not-verdict disclaimer travel with the file). */}
       <ExportBlock campaignKey={detail.campaign_key} corroborated={corroborated} />
 
-      {/* Public report — revocable, token-gated, read-only link for distribution. */}
+      {/* Public report. Revocable, token-gated, read-only link for distribution. */}
       <CampaignShareBlock campaignKey={detail.campaign_key} initialToken={detail.share_token} />
 
-      {/* Evidence for / against — side by side */}
+      {/* Evidence for / against. Side by side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <EvidenceForPanel detail={detail} />
         <EvidenceAgainstPanel
@@ -342,7 +342,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
 }
 
 // ---------------------------------------------------------------------------
-// Sub-panels — inline (matches narrative idiom).
+// Sub-panels. Inline (matches narrative idiom).
 // ---------------------------------------------------------------------------
 
 function ExportBlock({
@@ -350,7 +350,7 @@ function ExportBlock({
 }: { campaignKey: string; corroborated: boolean }) {
   // Plain download anchors hit the same-origin /api rewrite, which carries the
   // auth cookie; the endpoint's Content-Disposition triggers the download.
-  // No client state needed — mirrors the investigation share/export idiom.
+  // No client state needed. Mirrors the investigation share/export idiom.
   const base = `/api/v1/campaigns/${encodeURIComponent(campaignKey)}/export`;
   return (
     <Card>
@@ -361,8 +361,8 @@ function ExportBlock({
             Evidence pack
           </div>
           <p className="text-sm text-fg-dim max-w-xl">
-            Download a citable record of this campaign — members, methods,
-            evidence for and against, recurrence, and the corroboration status —
+            Download a citable record of this campaign. Members, methods,
+            evidence for and against, recurrence, and the corroboration status, 
             with the methodology and the &ldquo;observation, not verdict&rdquo;
             framing included{corroborated ? '' : ' (this campaign is flagged supporting-only)'}.
             Markdown for a report; JSON for archival or tooling.
@@ -469,7 +469,7 @@ function EvidenceAgainstPanel({
                 <div>
                   Trend: weakening. Latest score{' '}
                   {Math.round(coordination_score * 100)}% is below the campaign
-                  max of {Math.round(max_coordination_score * 100)}% — recent
+                  max of {Math.round(max_coordination_score * 100)}%. Recent
                   observations were less coordinated than earlier ones.
                 </div>
               </li>

@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/shared/logo';
 import { Reveal } from '@/components/shared/reveal';
 import { AnimatedNumber } from '@/components/shared/animated-number';
@@ -105,10 +104,13 @@ export function LandingPage() {
               <div className="min-w-0">
                 {/* `.section-label` already carries a blue tick and is `flex-wrap: wrap`, so a long
                     label plus an icon orphaned the tick onto its own line at 390px. The label stays
-                    short and the beta status rides alongside as a Badge, which wraps as one piece. */}
+                    short and the beta status rides alongside in its own span, which wraps as one
+                    piece. */}
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="section-label">Online media intelligence</span>
-                  <Badge variant="accent">Private beta</Badge>
+                  <span className="font-mono text-2xs tracking-wider uppercase text-accent-text">
+                    Private beta
+                  </span>
                 </div>
 
                 <h1

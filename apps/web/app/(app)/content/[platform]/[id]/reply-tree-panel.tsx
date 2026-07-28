@@ -23,7 +23,7 @@ import {
 } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 
-// Pod colour palette — keep in sync with the radial-graph community palette so
+// Pod colour palette. Keep in sync with the radial-graph community palette so
 // users get visual continuity between the two coordination views.
 const POD_COLORS = [
   '#c0734e', '#4f8fd6', '#4a9e6f', '#b06ad0',

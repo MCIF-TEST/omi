@@ -16,7 +16,7 @@ import {
   type MlScorerStatus,
 } from '@/lib/api';
 
-export const metadata = { title: 'Engine Intelligence — OMISPHERE' };
+export const metadata = { title: 'Engine Intelligence. OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -50,7 +50,7 @@ export default async function EnginePage() {
         </p>
         <h1 className="text-2xl font-semibold text-fg tracking-tight">Engine intelligence</h1>
         <p className="mt-2 text-sm text-fg-dim max-w-2xl leading-relaxed">
-          The engine&apos;s measured quality on curated, version-locked benchmarks —
+          The engine&apos;s measured quality on curated, version-locked benchmarks, 
           the synthetic counterpart to the{' '}
           <Link href="/settings/calibration" className="text-accent hover:underline">
             real-label calibration
@@ -64,7 +64,7 @@ export default async function EnginePage() {
       {/* Learned (ML) scorer status */}
       <MlStatusCard ml={ml} />
 
-      {/* 1 — Single-account accuracy */}
+      {/* 1. Single-account accuracy */}
       <Card>
         <CardLabel>seed_v1 · single-account accuracy</CardLabel>
         {!seed ? (
@@ -91,14 +91,14 @@ export default async function EnginePage() {
             <p className="mt-4 text-sm text-fg-dim leading-relaxed">
               The single-account engine is deliberately conservative: it under-flags
               sparse-history accounts rather than risk a false accusation. That is a
-              floor, not the product — the rescue and memory benchmarks below show how
+              floor, not the product, the rescue and memory benchmarks below show how
               coordination and accumulated history recover that recall.
             </p>
           </>
         )}
       </Card>
 
-      {/* 2 — Coordination detection */}
+      {/* 2. Coordination detection */}
       <Card>
         <CardLabel>coordination_v1 · cross-account detection</CardLabel>
         {!coord ? (
@@ -125,7 +125,7 @@ export default async function EnginePage() {
         )}
       </Card>
 
-      {/* 3 — Coordination rescue (the bridge) */}
+      {/* 3. Coordination rescue (the bridge) */}
       <Card>
         <CardLabel>coordination_rescue_v1 · within-scan recall rescue</CardLabel>
         {!rescue ? (
@@ -162,7 +162,7 @@ export default async function EnginePage() {
         )}
       </Card>
 
-      {/* 4 — Memory learning curve */}
+      {/* 4. Memory learning curve */}
       <Card>
         <CardLabel>memory_v1 · across-scan learning</CardLabel>
         {!memory ? (
@@ -186,7 +186,7 @@ export default async function EnginePage() {
             </div>
 
             <h3 className="mt-5 mb-2 font-mono text-2xs text-fg-mute uppercase tracking-wider">
-              Learning curves — adjusted probability vs. reference-store size [{memory.store_sizes.join(', ')}]
+              Learning curves: adjusted probability vs. reference-store size [{memory.store_sizes.join(', ')}]
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {memory.per_scenario.map((s) => {
@@ -218,7 +218,7 @@ export default async function EnginePage() {
               fills with previously-seen accounts. Bad accounts in a known-bad
               neighborhood climb into a flagged tier; a clean account in a
               previously-cleared neighborhood is nudged <em>down</em>; an account that
-              matches nothing stays flat — the memory signal is conservative when it
+              matches nothing stays flat, the memory signal is conservative when it
               has no evidence.
             </p>
           </>
@@ -299,7 +299,7 @@ function MlStatusCard({ ml }: { ml: MlScorerStatus | null }) {
           </div>
           <p className="mt-4 text-sm text-fg-dim leading-relaxed">
             The learned scorer is the vision&apos;s answer to under-flagging sparse
-            accounts — it combines weak, low-confidence signals jointly in a way the
+            accounts, it combines weak, low-confidence signals jointly in a way the
             hand-weighted aggregator cannot. It ships dormant and safe: train a model
             offline, point <span className="font-mono text-fg-mute">OMI_ML_MODEL_PATH</span> at
             the artifact, set <span className="font-mono text-fg-mute">OMI_USE_ML_SCORER=true</span>,
@@ -318,7 +318,7 @@ function hoodColor(h: string): string {
 function Unavailable() {
   return (
     <p className="text-sm text-fg-dim italic">
-      Benchmark unavailable — the scoreboard endpoint did not respond.
+      Benchmark unavailable, the scoreboard endpoint did not respond.
     </p>
   );
 }

@@ -13,7 +13,7 @@ import {
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
 
-export const metadata = { title: 'Narratives — OMISPHERE' };
+export const metadata = { title: 'Narratives. OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 const SORTS: { value: CampaignSort; label: string }[] = [
@@ -48,7 +48,7 @@ function parseMinScore(s: string | undefined): number {
   return n;
 }
 
-// Persistent per-campaign hue — navigate coordination by colour, not just label.
+// Persistent per-campaign hue. Navigate coordination by colour, not just label.
 function clusterIndex(key: string): number {
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
@@ -93,8 +93,8 @@ export default async function CampaignsPage({ searchParams }: PageProps) {
               Coordinated account groups
             </h1>
             <p className="text-sm text-fg-dim mt-1.5 max-w-2xl leading-relaxed">
-              Durable clusters of accounts acting together across scans —
-              <span className="text-fg-dim"> observations, not verdicts.</span> Every
+              Durable clusters of accounts acting together across scans.
+              <span className="text-fg-dim"> Observations, not verdicts.</span> Every
               score carries its evidence; uncorroborated clusters are capped at MODERATE.
             </p>
           </div>
@@ -184,7 +184,7 @@ function CampaignCard({ campaign: c, rank }: { campaign: CampaignSummary; rank: 
             <span className="font-mono text-2xs text-fg-faint tabular">#{rank}</span>
             {c.campaign_key.startsWith('feat_') && (
               <span
-                title="A real, disclosed influence operation seeded as a worked example — not one of your scans."
+                title="A real, disclosed influence operation seeded as a worked example, not one of your scans."
                 className="inline-flex items-center font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-full border border-accent/40 bg-accent/10 text-accent"
               >
                 example
@@ -193,7 +193,7 @@ function CampaignCard({ campaign: c, rank }: { campaign: CampaignSummary; rank: 
             <StatusPill status={c.status} />
             {!corroborated && (
               <span
-                title="Only one supporting detector fired — capped at MODERATE under the corroboration gate"
+                title="Only one supporting detector fired. Capped at MODERATE under the corroboration gate"
                 className="inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-full border border-tier-moderate/40 bg-tier-moderate/10 text-tier-moderate"
               >
                 <AlertTriangle size={10} />
@@ -212,7 +212,7 @@ function CampaignCard({ campaign: c, rank }: { campaign: CampaignSummary; rank: 
           <span className="text-fg-dim">{evidenceText || 'coordination'}</span>
         </p>
 
-        {/* Score bar — the headline (max, not current) */}
+        {/* Score bar, the headline (max, not current) */}
         <div className="mb-4">
           <div className="flex items-center justify-between font-mono text-2xs mb-1.5">
             <span className="text-fg-mute uppercase tracking-wider">Max coordination</span>

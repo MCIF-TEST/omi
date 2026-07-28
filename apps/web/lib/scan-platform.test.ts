@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveScanPlatform, accountScanEndpoint } from './scan-platform';
 
-describe('resolveScanPlatform — deep-scan routing (X/YouTube fall-through defect)', () => {
+describe('resolveScanPlatform. Deep-scan routing (X/YouTube fall-through defect)', () => {
   it('Case A: investigation X + commenter platform missing → routes to X', () => {
     expect(resolveScanPlatform('x', undefined)).toBe('x');
     expect(resolveScanPlatform('x', null)).toBe('x');
@@ -22,7 +22,7 @@ describe('resolveScanPlatform — deep-scan routing (X/YouTube fall-through defe
     expect(accountScanEndpoint(resolveScanPlatform(undefined, undefined))).toBeNull();
   });
 
-  it('investigation platform is authoritative — commenter platform never silently overrides it', () => {
+  it('investigation platform is authoritative. Commenter platform never silently overrides it', () => {
     expect(resolveScanPlatform('youtube', 'x')).toBe('youtube');
     expect(resolveScanPlatform('x', 'youtube')).toBe('x');
   });

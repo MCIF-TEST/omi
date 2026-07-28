@@ -1,4 +1,4 @@
-"""Intelligence Library — seed knowledge entries (Sprint 025, Phase 2).
+"""Intelligence Library. Seed knowledge entries (Sprint 025, Phase 2).
 
 Practical, interlinked investigative expertise across every category. Each entry is real tradecraft
 grounded in OmiSphere's evidence model (discriminative vs non-discriminative methods, the
@@ -31,7 +31,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        category="coordination_techniques", confidence="established",
        definition="Multiple accounts acting together while misrepresenting their identity, "
                   "independence, or intent to manipulate perception.",
-       purpose="The platform's central hostile concept — the thing coordination analysis exists to "
+       purpose="The platform's central hostile concept, the thing coordination analysis exists to "
                "distinguish from legitimate, open coordination.",
        indicators=("discriminative coordination (fingerprint/co-engagement/co-tag) across accounts",
                    "concealed common control or funding", "manufactured appearance of independence"),
@@ -53,7 +53,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        definition="Groups that agree to reciprocally like/comment/share each other's content to "
                   "game engagement-based ranking.",
        purpose="A common, often semi-legitimate coordination technique that must be read through the "
-               "gate — reciprocal engagement alone is weakly discriminative.",
+               "gate. Reciprocal engagement alone is weakly discriminative.",
        indicators=("dense reciprocal co-engagement edges", "synchronized early engagement bursts",
                    "the same small set boosting each other across unrelated content"),
        counter_indicators=("a genuine tight-knit community that also engages organically",
@@ -70,7 +70,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        confidence="established",
        definition="Grouping accounts by shared device/behavioral fingerprints that are hard to fake "
                   "and rarely coincide by chance.",
-       purpose="A DISCRIMINATIVE method — strong enough to corroborate a coordinated read on its own "
+       purpose="A DISCRIMINATIVE method. Strong enough to corroborate a coordinated read on its own "
                "axis (unlike style or timing).",
        indicators=("shared rare fingerprints across nominally independent accounts",
                    "clusters that persist across sessions"),
@@ -133,7 +133,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
     _e(id="new_account_cohorts", title="New-account Cohorts", category="behavioral_archetypes",
        confidence="emerging",
        definition="Clusters of accounts created in the same narrow window, sometimes preceding a push.",
-       purpose="A weak, corroborating metadata signal — never decisive alone.",
+       purpose="A weak, corroborating metadata signal, never decisive alone.",
        indicators=("synchronized creation timestamps", "sparse history then sudden coordinated activity"),
        counter_indicators=("a platform growth event or campaign onboarding real new users",),
        evidence_requirements=("age_cohort clustering plus a discriminative corroborator",),
@@ -144,13 +144,13 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        platforms=("x", "youtube"), investigation_types=("campaign", "comment_section"),
        tags=("age_cohort", "new_accounts", "creation_burst", "metadata"),
        specialists=("metadata_analyst",)),
-    # ---- behavioral archetypes (Phase B1 — the Behavioral Intelligence Library) ------ #
+    # ---- behavioral archetypes (Phase B1, the Behavioral Intelligence Library) ------ #
     _e(id="engagement_farming", title="Engagement Farming", category="behavioral_archetypes",
        confidence="established",
        definition="Accounts that mass-produce low-effort interactions (likes, generic replies, "
                   "follow-backs) to build metrics or boost targets, rather than to communicate.",
        purpose="Names the high-volume/low-content behavioral signature so it is read as a metric "
-               "strategy — which may be spammy but is not automatically coordinated or hostile.",
+               "strategy, which may be spammy but is not automatically coordinated or hostile.",
        indicators=("interaction volume far above content volume", "generic, interchangeable replies",
                    "engagement spread thinly across many unrelated targets"),
        counter_indicators=("a genuinely chatty superfan with topical, contextual replies",
@@ -166,7 +166,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        specialists=("behavior_analyst",)),
     _e(id="reply_farms", title="Reply Farms", category="behavioral_archetypes", confidence="established",
        definition="Clusters of accounts whose output is dominated by early, formulaic replies to "
-                  "high-visibility targets — riding reach, seeding narratives, or selling visibility.",
+                  "high-visibility targets. Riding reach, seeding narratives, or selling visibility.",
        purpose="A behavioral pattern that becomes coordination evidence only when the SAME cluster "
                "repeats across targets with discriminative links.",
        indicators=("reply-heavy output aimed at trending/priority targets within minutes",
@@ -175,7 +175,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
                            "notification-driven superfans of one creator"),
        evidence_requirements=("cross-target recurrence of the SAME accounts (co_engagement)",
                               "template evidence (duplicate_phrasing) as corroboration"),
-       limitations=("speed alone is weak — notifications make organic replies fast too",),
+       limitations=("speed alone is weak. Notifications make organic replies fast too",),
        false_positive_risks=("reading one creator's fast fandom as a farm",),
        constitutional_constraints=(_C_GATE, _C_EVID),
        relationships=("engagement_farming", "engagement_pods", "spam_campaigns"),
@@ -186,15 +186,15 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        category="investigative_heuristics", confidence="established",
        definition="Reading an account's inter-post timing distribution: human cadence is bursty and "
                   "circadian; mechanical cadence is regular; hybrid shows both regimes.",
-       purpose="The behavioral analyst's core timing lens — classifying cadence WITHOUT treating "
+       purpose="The behavioral analyst's core timing lens. Classifying cadence WITHOUT treating "
                "regularity itself as guilt.",
        indicators=("near-constant inter-post intervals over long windows (mechanical)",
                    "no sleep window across weeks (always-on)",
-                   "bimodal regimes — scheduled backbone plus human bursts (hybrid)"),
+                   "bimodal regimes. Scheduled backbone plus human bursts (hybrid)"),
        counter_indicators=("disclosed schedulers produce mechanical cadence legitimately",
                            "shift workers and global teams break circadian expectations"),
        evidence_requirements=("temporal contributions over an adequate window (weeks, not hours)",
-                              "corroboration before any hostile read — cadence is single-axis"),
+                              "corroboration before any hostile read. Cadence is single-axis"),
        limitations=("cadence classifies HOW an account posts, never WHY; thin windows mislead",),
        false_positive_risks=("night-shift humans, cross-timezone teams, benign schedulers",),
        constitutional_constraints=(_C_GATE, "cadence alone caps at 'suspicious'; never coordinated"),
@@ -217,7 +217,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
                            "life events cause real topic pivots"),
        evidence_requirements=("account_age + history-density evidence from the metadata facet",
                               "a discriminative corroborator before any hostile read"),
-       limitations=("aging evidence is contextual — it seasons other signals, never decides",),
+       limitations=("aging evidence is contextual, it seasons other signals, never decides",),
        false_positive_risks=("ageism against new accounts; misreading a comeback as an activation",),
        constitutional_constraints=(_C_GATE, "no ageism: new or dormant is not inauthentic by itself"),
        relationships=("new_account_cohorts", "behavior_evolution", "posting_cadence_analysis"),
@@ -226,14 +226,14 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        specialists=("behavior_analyst", "metadata_analyst")),
     _e(id="behavior_evolution", title="Behavior Evolution & Campaign Drift",
        category="behavioral_archetypes", confidence="emerging",
-       definition="How behavior changes over time — organic accounts drift gradually; operated "
+       definition="How behavior changes over time. Organic accounts drift gradually; operated "
                   "accounts and campaigns shift in synchronized steps (retooling, new playbooks, "
                   "post-detection adaptation).",
        purpose="Moves the analyst from snapshot reads to trajectory reads: WHEN behavior changed, "
                "and whether the change was synchronized across accounts.",
        indicators=("step-function behavior changes shared by a cluster at the same time",
                    "coordinated tooling signatures appearing/vanishing together",
-                   "post-flag adaptation — evasive changes right after enforcement events"),
+                   "post-flag adaptation. Evasive changes right after enforcement events"),
        counter_indicators=("platform feature launches shift everyone's behavior at once",
                            "organic trend adoption spreads fast but raggedly, not in lockstep"),
        evidence_requirements=("longitudinal observations (memory ledger / repeated scans)",
@@ -250,7 +250,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        definition="Accounts mixing automation and human control: scheduled backbone posts with "
                   "human replies, human-written content amplified by automation, or operator-"
                   "assisted cyborg accounts.",
-       purpose="Prevents the binary human/bot error — the most common real-world configuration is "
+       purpose="Prevents the binary human/bot error, the most common real-world configuration is "
                "hybrid, and each regime must be read separately.",
        indicators=("two distinct behavioral regimes in one account (mechanical + human)",
                    "instant automated amplification of manually-written posts",
@@ -258,7 +258,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        counter_indicators=("professional creators legitimately mix schedulers with live engagement",),
        evidence_requirements=("regime separation in the temporal/behavior facets",
                               "intent evidence (deception, coordination) before any hostile read"),
-       limitations=("hybridity describes mechanics, not intent — most hybrids are legitimate",),
+       limitations=("hybridity describes mechanics, not intent, most hybrids are legitimate",),
        false_positive_risks=("flagging every scheduler-plus-human creator as a cyborg operation",),
        constitutional_constraints=(_C_COUNTER, _C_GATE),
        relationships=("benign_automation", "bot_amplification", "posting_cadence_analysis"),
@@ -267,18 +267,18 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        specialists=("behavior_analyst", "temporal_analyst")),
     _e(id="spam_campaigns", title="Spam Campaigns", category="behavioral_archetypes",
        confidence="established",
-       definition="Commercially-motivated mass posting — link drops, promo templates, scam funnels — "
+       definition="Commercially-motivated mass posting. Link drops, promo templates, scam funnels, "
                   "high-volume, low-targeting, profit-driven rather than narrative-driven.",
        purpose="Separates commercial spam (volume, links, indifference to context) from influence "
-               "operations (narrative, targeting, persistence) — different threats, different reads.",
+               "operations (narrative, targeting, persistence). Different threats, different reads.",
        indicators=("templated posts with payload links across unrelated contexts",
-                   "indifference to context — the same promo regardless of thread topic",
+                   "indifference to context, the same promo regardless of thread topic",
                    "throwaway accounts with no persona investment"),
        counter_indicators=("legitimate marketing from disclosed brand accounts",
                            "affiliate creators posting links within their own communities"),
        evidence_requirements=("duplicate_phrasing + cross-context repetition",
                               "co_tag/co_engagement corroboration for the campaign claim"),
-       limitations=("spam is often uncoordinated volume from one actor — check independence",),
+       limitations=("spam is often uncoordinated volume from one actor. Check independence",),
        false_positive_risks=("brand marketing and affiliate posting read as spam rings",),
        constitutional_constraints=(_C_GATE, _C_EVID),
        relationships=("reply_farms", "coordinated_inauthentic_behavior", "engagement_farming"),
@@ -290,17 +290,17 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        definition="Behavior shaped to defeat detection: randomized posting jitter, engagement "
                   "throttling under thresholds, persona warming before deployment, split operations "
                   "across account cohorts.",
-       purpose="Keeps the analyst honest about adaptation — detectors train adversaries — while "
+       purpose="Keeps the analyst honest about adaptation. Detectors train adversaries, while "
                "forbidding the paranoid inversion where looking-normal becomes suspicious.",
        indicators=("statistically too-perfect randomness in timing (anti-pattern jitter)",
                    "activity that tracks known detection thresholds suspiciously closely",
                    "warming arcs: long low-risk organic mimicry, then synchronized pivot to task"),
-       counter_indicators=("normal human irregularity — most normal-looking accounts ARE normal",),
+       counter_indicators=("normal human irregularity, most normal-looking accounts ARE normal",),
        evidence_requirements=("evasion claims need POSITIVE evidence (threshold-tracking, warming "
                               "pivots), never the absence of other signals",
                               "discriminative corroboration before any hostile read"),
        limitations=("unfalsifiable if misused: 'no signal' must never become the signal",),
-       false_positive_risks=("the paranoid inversion — treating normalcy as evidence of evasion",),
+       false_positive_risks=("the paranoid inversion. Treating normalcy as evidence of evasion",),
        constitutional_constraints=(_C_EVID, _C_COUNTER,
                                    "absence of evidence is never evidence of evasion"),
        relationships=("behavior_evolution", "sockpuppets", "precision_frontier"),
@@ -310,7 +310,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
     # ---- bot behaviors -------------------------------------------------------------- #
     _e(id="bot_amplification", title="Bot Amplification", category="bot_behaviors", confidence="established",
        definition="Automated accounts inflating reach/engagement of target content.",
-       purpose="A canonical hostile automation pattern — but must be separated from benign automation.",
+       purpose="A canonical hostile automation pattern, but must be separated from benign automation.",
        indicators=("mechanical cadence, minimal original content, high amplification ratio",
                    "fingerprint/co-engagement links across the bot set"),
        counter_indicators=("disclosed bots (news tickers), verified automation, human-like variability"),
@@ -324,7 +324,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        specialists=("behavior_analyst", "temporal_analyst", "network_analyst")),
     _e(id="benign_automation", title="Benign Automation", category="bot_behaviors", confidence="established",
        definition="Legitimate scheduled/automated posting (news feeds, cross-posters, disclosed bots).",
-       purpose="The precision-frontier twin of bot amplification — protects legitimate automation.",
+       purpose="The precision-frontier twin of bot amplification. Protects legitimate automation.",
        indicators=("disclosed automation, consistent legitimate purpose, stable long history",),
        counter_indicators=("concealment of automation combined with a manipulation target",),
        evidence_requirements=("evidence of disclosure/legitimacy; absence of discriminative coordination",),
@@ -338,14 +338,14 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
     # ---- legitimate community patterns + false positives + organic --------------------- #
     _e(id="legitimate_coordination", title="Legitimate Coordination",
        category="legitimate_community_patterns", confidence="established",
-       definition="Open, authentic coordination — newsrooms on-message, fan communities, official "
+       definition="Open, authentic coordination. Newsrooms on-message, fan communities, official "
                   "campaigns, benign scheduling.",
        purpose="The precision frontier's positive model: coordination that must NEVER read as hostile.",
        indicators=("disclosed/known group identity, high member authenticity, long independent histories",),
        counter_indicators=("concealed control, fabricated independence, discriminative deception signals"),
        evidence_requirements=("member authenticity/history; a legitimate-coordination prior in memory"),
        limitations=("legitimacy raises the bar for a hostile read but does not preclude investigation",),
-       false_positive_risks=("this IS the false-positive class — err toward not flagging it",),
+       false_positive_risks=("this IS the false-positive class. Err toward not flagging it",),
        constitutional_constraints=(_C_COUNTER, _C_MEM, _C_GATE),
        relationships=("precision_frontier", "coordinated_inauthentic_behavior", "benign_automation",
                       "organic_virality"),
@@ -355,7 +355,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
     _e(id="precision_frontier", title="The Precision Frontier", category="false_positive_patterns",
        confidence="established",
        definition="The discipline that legitimate coordination and benign automation must not be "
-                  "read as hostile — false positives here are the most costly error.",
+                  "read as hostile. False positives here are the most costly error.",
        purpose="Encodes OmiSphere's core trust principle as reusable knowledge.",
        indicators=("a hostile pattern present but with a strong benign explanation unrebutted",),
        counter_indicators=("discriminative, corroborated deception that the benign story cannot explain",),
@@ -409,7 +409,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        indicators=("narrow templated authorship, synchronized pushes, low distinct-author breadth",),
        counter_indicators=("broad diverse authorship; organic reaction curves",),
        evidence_requirements=("narrative inauthenticity_score + coordination corroboration",),
-       limitations=("message-cluster grain differs from account-campaign grain — don't conflate",),
+       limitations=("message-cluster grain differs from account-campaign grain. Don't conflate",),
        false_positive_risks=("a genuinely popular message with some amplification is still mostly organic",),
        constitutional_constraints=(_C_GATE, _C_COUNTER),
        relationships=("organic_virality", "astroturfing", "consensus_illusion", "bot_amplification"),
@@ -449,7 +449,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
     _e(id="coordinated_campaign", title="Coordinated Campaign", category="campaign_types",
        confidence="established",
        definition="A materialized cluster of accounts acting together over time toward a shared goal "
-                  "— which may be hostile OR legitimate.",
+                  ", which may be hostile OR legitimate.",
        purpose="Frames the campaign grain and forces the legitimate-vs-hostile determination.",
        indicators=("persistent membership, shared methods, coordinated observations over time",),
        counter_indicators=("high mean member authenticity, disclosed legitimate purpose",),
@@ -466,7 +466,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        confidence="emerging",
        definition="Similarity of writing style across accounts, suggesting shared authorship or "
                   "templates.",
-       purpose="A NON-discriminative deception indicator — corroborating, never decisive.",
+       purpose="A NON-discriminative deception indicator. Corroborating, never decisive.",
        indicators=("rare verbatim templates repeated across many independent accounts",),
        counter_indicators=("common phrasing, shared register, ESL patterns, a single pair only",),
        evidence_requirements=("style_match plus a discriminative corroborator for any hostile read",),
@@ -542,7 +542,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        specialists=("calibration_analyst", "risk_analyst")),
     _e(id="independent_corroboration", title="Independent Corroboration", category="osint_techniques",
        confidence="established",
-       definition="Requiring evidence from independent axes/sources before raising confidence — "
+       definition="Requiring evidence from independent axes/sources before raising confidence. "
                   "avoiding double-counting one observation.",
        purpose="Core OSINT tradecraft mirrored by the memory system's independence rule.",
        indicators=("agreement across behavior, network, timing, and metadata that are truly independent",),
@@ -563,7 +563,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        indicators=("single_axis_capped flag set on the bundle",),
        counter_indicators=("multiple independent discriminative axes present",),
        evidence_requirements=("check the corroboration facet before assigning a high band",),
-       limitations=("a capped read can still be correct — cap confidence, not curiosity",),
+       limitations=("a capped read can still be correct. Cap confidence, not curiosity",),
        false_positive_risks=("ignoring the cap yields inflated coordinated verdicts",),
        constitutional_constraints=(_C_GATE, "single-axis or non-discriminative caps at 'moderate'"),
        relationships=("discriminative_corroboration_gate", "confidence_bands", "temporal_synchrony"),
@@ -574,7 +574,7 @@ SEED_ENTRIES: tuple[KnowledgeEntry, ...] = (
        confidence="established",
        definition="Mapping evidence strength + quantity to a calibrated band (insufficient / low / "
                   "moderate / high), independent of accusation severity.",
-       purpose="Keeps confidence honest — thin data means low confidence even for alarming patterns.",
+       purpose="Keeps confidence honest, thin data means low confidence even for alarming patterns.",
        indicators=("high band only with >=1 discriminative, non-single-axis method and adequate data",),
        counter_indicators=("thin data, abstained detectors, single-axis evidence",),
        evidence_requirements=("corroboration state + data quantity, not the severity of the claim",),

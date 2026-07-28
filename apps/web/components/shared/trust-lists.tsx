@@ -1,12 +1,12 @@
 import { ShieldCheck, AlertTriangle, Check, Minus } from 'lucide-react';
 
 /**
- * TrustList — one column of an evidence-for / evidence-weakening split. The
+ * TrustList, one column of an evidence-for / evidence-weakening split. The
  * platform's discipline is that no verdict is shown without BOTH what supports
  * it and what weakens it; this is the presentational half of that contract.
  * Each item carries an icon (check = a signal that fired / supports; dash = a
  * caveat / silent signal), and the column is faintly tinted to its meaning so
- * the two read as distinct at a glance — never colour alone. Empty states are
+ * the two read as distinct at a glance, never colour alone. Empty states are
  * explicit so absence of counter-evidence is itself visible.
  */
 export function TrustList({
@@ -50,12 +50,12 @@ export function TrustList({
   );
 }
 
-/** The two columns side by side — evidence-for and evidence-weakening. */
+/** The two columns side by side. Evidence-for and evidence-weakening. */
 export function EvidenceForAgainst({
   forItems,
   againstItems,
   forEmpty = 'No specific supporting reasons recorded.',
-  againstEmpty = 'No data-quality caveats — confidence is well-supported.',
+  againstEmpty = 'No data-quality caveats. Confidence is well-supported.',
 }: {
   forItems: readonly string[];
   againstItems: readonly string[];

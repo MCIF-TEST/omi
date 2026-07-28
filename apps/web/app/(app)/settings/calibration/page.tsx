@@ -9,7 +9,7 @@ import {
   type CalibrationEvaluation,
 } from '@/lib/api';
 
-export const metadata = { title: 'Calibration — OMISPHERE' };
+export const metadata = { title: 'Calibration. OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 export default async function CalibrationPage() {
@@ -45,7 +45,7 @@ export default async function CalibrationPage() {
         <h1 className="text-2xl font-semibold text-fg tracking-tight">Calibration</h1>
         <p className="mt-2 text-sm text-fg-dim max-w-2xl leading-relaxed">
           Live calibration metrics from the labels you and other admins have
-          attached to accounts. Updates as soon as a label is saved — no
+          attached to accounts. Updates as soon as a label is saved, no
           extra YouTube quota consumed (the harness uses persisted scan
           results, not fresh API calls).
         </p>
@@ -101,25 +101,25 @@ export default async function CalibrationPage() {
         <CardLabel>Methodology</CardLabel>
         <p className="text-sm text-fg-dim leading-relaxed mb-3">
           For each labeled account we look at the most recent persisted{' '}
-          <code className="font-mono text-accent">Scan</code> row — what the engine returned during
+          <code className="font-mono text-accent">Scan</code> row. What the engine returned during
           its last evaluation. We compare:
         </p>
         <ul className="text-sm text-fg-dim space-y-2 mb-4 ml-4 list-disc">
           <li>
-            <span className="text-fg">Tier accuracy</span> — exact match between predicted tier
+            <span className="text-fg">Tier accuracy</span>. Exact match between predicted tier
             and labeled <span className="font-mono text-accent">expected_tier</span>.
           </li>
           <li>
-            <span className="text-fg">Brier score</span> — mean squared error between the engine&apos;s
+            <span className="text-fg">Brier score</span>. Mean squared error between the engine&apos;s
             probability and the midpoint of the labeled tier (lower is better).
           </li>
           <li>
-            <span className="text-fg">Per-tier precision / recall / F1</span> — surfaces which
+            <span className="text-fg">Per-tier precision / recall / F1</span>. Surfaces which
             tiers we systematically over- or under-predict.
           </li>
           <li>
-            <span className="text-fg">Per-label accuracy</span> — &ldquo;we get bots right 80% of the
-            time but only human-vs-spam right 40% of the time&rdquo; — the diagnostic.
+            <span className="text-fg">Per-label accuracy</span>. &ldquo;we get bots right 80% of the
+            time but only human-vs-spam right 40% of the time&rdquo;, the diagnostic.
           </li>
         </ul>
         <p className="text-sm text-fg-dim leading-relaxed">

@@ -9,7 +9,7 @@ import { type GraphEdge, type GraphNode, type Tier } from '@/lib/api';
  * by Louvain community; ring assignment is BFS-based (1-hop inner, 2+
  * hop outer).
  *
- * Zero dependencies, no physics, deterministic placement — but with
+ * Zero dependencies, no physics, deterministic placement, but with
  * glow, curved edges, hover-tracing, and a live focal pulse.
  */
 
@@ -122,7 +122,7 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
           })}
         </g>
 
-        {/* Edges — curved, bundled toward center */}
+        {/* Edges. Curved, bundled toward center */}
         <g>
           {edges.map((e, i) => {
             const pa = positions[e.a];
@@ -245,7 +245,7 @@ function truncate(s: string, n: number) {
 }
 
 // ---------------------------------------------------------------------------
-// Layout computation — deterministic radial placement
+// Layout computation. Deterministic radial placement
 // ---------------------------------------------------------------------------
 
 interface LayoutResult {

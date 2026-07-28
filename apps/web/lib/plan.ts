@@ -1,5 +1,5 @@
 /**
- * Plan facts shown in marketing/UI copy — single source of truth so the
+ * Plan facts shown in marketing/UI copy. Single source of truth so the
  * displayed numbers can never drift from the deployed configuration.
  *
  * NEXT_PUBLIC_TRIAL_CREDITS is inlined at build time (works in server AND

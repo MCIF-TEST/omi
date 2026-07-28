@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
   try {
     const body = await apiServer<PublicReportResponse>(`/r/${encodeURIComponent(params.token)}`);
     return {
-      title: `${body.view.meta.label} — OMISPHERE Report`,
+      title: `${body.view.meta.label}. OMISPHERE Report`,
       description: body.view.verdict.summary?.slice(0, 200),
     };
   } catch {
@@ -43,7 +43,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
 
   return (
     <div className="min-h-screen bg-bg-deep report-page">
-      {/* Top banner — hidden on print */}
+      {/* Top banner. Hidden on print */}
       <div className="no-print border-b border-border-1 bg-bg-elev/60 backdrop-blur sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/" aria-label="OMISPHERE home">
@@ -217,7 +217,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
                       <td className="px-4 py-3 mono text-right text-fg align-top">
                         {Math.round((c.overall_probability || 0) * 100)}%
                       </td>
-                      <td className="px-4 py-3 text-fg-dim align-top">{c.intent_label || '—'}</td>
+                      <td className="px-4 py-3 text-fg-dim align-top">{c.intent_label || ', '}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -295,14 +295,14 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
               </p>
               <p className="text-sm text-fg-dim leading-relaxed">
                 Report ID <span className="mono text-fg">{v.meta.slug}</span> · generated{' '}
-                {v.meta.created_at?.slice(0, 10) || '—'}.
+                {v.meta.created_at?.slice(0, 10) || ', '}.
                 Re-validate by re-scanning the source URL on{' '}
                 <a href="/" className="text-accent hover:underline">omisphere.ai</a>.
               </p>
             </div>
           </div>
           <p className="font-mono text-2xs tracking-wider uppercase text-fg-mute report-muted leading-relaxed">
-            All output is probabilistic and evidence-bearing — never a definitive judgement about
+            All output is probabilistic and evidence-bearing, never a definitive judgement about
             the account or person behind it.
           </p>
         </footer>

@@ -1,18 +1,18 @@
-// OmiSphere hero — a wireframe globe under an authenticity scan.
+// OmiSphere hero, a wireframe globe under an authenticity scan.
 //
 // The story it tells: a real post's engagement is a mix of genuine people (calm green nodes,
-// scattered, each wired straight to the post) and BOUGHT accounts that move together — tight pods of
+// scattered, each wired straight to the post) and BOUGHT accounts that move together. Tight pods of
 // red/orange nodes linked to each other by dashed "coordination" edges, all converging on the same
 // post. A blue OMI sweep rotates over the globe, flagging the bought pods as it passes. Pure SVG + CSS
 // keyframes (hv-*), all GPU transform/opacity, and the keyframes are disabled under reduced-motion
-// (see globals.css) — so nothing moves for users who ask it not to.
+// (see globals.css), so nothing moves for users who ask it not to.
 export function HeroVisual() {
   return (
     <div
       className="relative w-full aspect-square max-w-[520px] mx-auto select-none pointer-events-none"
       aria-hidden
     >
-      {/* Ambient depth behind the sphere — blue identity + a whisper of the purple AI layer. */}
+      {/* Ambient depth behind the sphere. Blue identity + a whisper of the purple AI layer. */}
       <div className="absolute inset-[6%]  rounded-full bg-accent/[0.14] blur-[76px]" />
       <div className="absolute inset-[26%] rounded-full bg-violet/[0.12] blur-[52px]" />
 
@@ -48,7 +48,7 @@ export function HeroVisual() {
         <circle cx="220" cy="220" r="200" fill="url(#hv-globe)" />
         <circle cx="220" cy="220" r="200" stroke="url(#hv-rim)" strokeWidth="1.5" />
 
-        {/* Wireframe sphere — meridians + parallels in faint blue */}
+        {/* Wireframe sphere. Meridians + parallels in faint blue */}
         <g clipPath="url(#hv-clip)" stroke="#5b9dff" fill="none">
           <g strokeOpacity="0.10" strokeWidth="0.7">
             {[55, 110, 165].map((r) => <ellipse key={`m${r}`} cx="220" cy="220" rx={r} ry="200" />)}
@@ -58,13 +58,13 @@ export function HeroVisual() {
           <circle cx="220" cy="220" r="188" strokeOpacity="0.07" strokeWidth="0.6" strokeDasharray="4 8" />
         </g>
 
-        {/* OMI scan sweep — rotates over the globe */}
+        {/* OMI scan sweep. Rotates over the globe */}
         <g clipPath="url(#hv-clip)" style={{ transformOrigin: '220px 220px', animation: 'hv-radar 9s linear infinite' }}>
           <path d="M220,220 L420,220 A200,200 0 0,0 220,20 Z" fill="url(#hv-sweep)" />
           <line x1="220" y1="220" x2="420" y2="220" stroke="#5b9dff" strokeWidth="1.4" strokeOpacity="0.5" />
         </g>
 
-        {/* ── Coordination edges (dashed amber/red) — bought pods acting together ── */}
+        {/* ── Coordination edges (dashed amber/red). Bought pods acting together ── */}
         <g strokeLinecap="round">
           {/* pod A (top-left) */}
           <line x1="120" y1="95"  x2="95"  y2="146" stroke="#ef4444" strokeWidth="0.9" strokeOpacity="0.45" strokeDasharray="3 4" />
@@ -83,7 +83,7 @@ export function HeroVisual() {
           <line x1="220" y1="220" x2="158" y2="122" stroke="#f97316" strokeWidth="0.9" strokeOpacity="0.34" strokeDasharray="3 4" />
           <line x1="220" y1="220" x2="332" y2="150" stroke="#ef4444" strokeWidth="0.9" strokeOpacity="0.34" strokeDasharray="3 4" />
           <line x1="220" y1="220" x2="255" y2="350" stroke="#f97316" strokeWidth="0.8" strokeOpacity="0.30" strokeDasharray="3 5" />
-          {/* genuine — solid, quiet blue */}
+          {/* genuine. Solid, quiet blue */}
           <line x1="220" y1="220" x2="185" y2="150" stroke="#3b82f6" strokeWidth="0.8" strokeOpacity="0.40" />
           <line x1="220" y1="220" x2="286" y2="212" stroke="#3b82f6" strokeWidth="0.8" strokeOpacity="0.40" />
           <line x1="220" y1="220" x2="160" y2="266" stroke="#3b82f6" strokeWidth="0.7" strokeOpacity="0.32" />
@@ -140,7 +140,7 @@ export function HeroVisual() {
         <circle cx="220" cy="220" r="202" stroke="url(#hv-rim)" strokeWidth="1" />
       </svg>
 
-      {/* Floating verdict chips — the read the scan produced */}
+      {/* Floating verdict chips, the read the scan produced */}
       <div
         className="absolute top-[13%] left-[13%] flex items-center gap-1.5 font-mono text-[0.6rem] tracking-[0.16em] uppercase text-tier-high bg-tier-high/10 border border-tier-high/35 px-2.5 py-1 rounded-full"
         style={{ animation: 'hv-chip-in 0.45s cubic-bezier(0.16,1,0.3,1) both', animationDelay: '0.7s' }}

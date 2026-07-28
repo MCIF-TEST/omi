@@ -28,7 +28,7 @@ export async function generateMetadata({
 }: {
   params: { platform: string; id: string };
 }) {
-  return { title: `Author ${params.id} — OMISPHERE` };
+  return { title: `Author ${params.id}. OMISPHERE` };
 }
 
 const RISK_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
@@ -95,8 +95,8 @@ export default async function AuthorPresencePage({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
           <Stat label="Content seen on" value={data.content_count} icon={<Layers size={11} />} />
           <Stat label="Total comments" value={data.total_comments} icon={<MessageCircle size={11} />} />
-          <Stat label="First seen" value={data.first_seen ? timeAgo(data.first_seen) : '—'} icon={<Calendar size={11} />} />
-          <Stat label="Last seen" value={data.last_seen ? timeAgo(data.last_seen) : '—'} icon={<Calendar size={11} />} />
+          <Stat label="First seen" value={data.first_seen ? timeAgo(data.first_seen) : '-'} icon={<Calendar size={11} />} />
+          <Stat label="Last seen" value={data.last_seen ? timeAgo(data.last_seen) : '-'} icon={<Calendar size={11} />} />
         </div>
       </header>
 

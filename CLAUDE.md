@@ -494,6 +494,25 @@ Two traps that bit here, both verified with Playwright at 360/375/390/430px:
   and the header stops tracking the scrolled edge. Horizontal containment belongs to
   `overflow-x: clip` on `html, body` in `globals.css` (see the mobile section above).
 
+### No em dashes, and no decorative badges
+
+Two house rules, both enforced by the product owner's explicit decision (2026-07-28):
+
+- **No em dashes (`—`) or en dashes (`–`) anywhere in `apps/web`, in the prompt sources, or in the
+  compiled protocol.** Use a comma, colon, semicolon, parentheses, or two sentences. A hyphen inside
+  a compound word or a numeric range (`0-100`, `25-50%`) is correct and stays. The rule reaches the
+  analyst too: the constitution's PUNCTUATION bullet forbids them in generated prose, because the
+  model's assessments render directly on the site and would otherwise reintroduce them on every scan.
+  Never "fix" a dash by deleting the character: `link — we compile` becomes `linkwe compile`. Rewrite
+  the punctuation.
+  Two traps found doing this the first time: em dashes are also used as **"no value" placeholders** in
+  tables (`?? '—'`), which must become `'-'` and not a comma; and **paired** dashes around an
+  appositive must become paired commas, not a full stop that leaves a fragment.
+- **`components/ui/badge.tsx` is deleted.** The 9 decorative status chips are now plain
+  `font-mono text-2xs uppercase` spans that keep the semantic colour and drop the pill.
+  **`TierBadge` is NOT a badge in this sense and stays** — it carries the LOW/MODERATE/ELEVATED/HIGH
+  result, which is the product's primary output, not decoration.
+
 Motion follows the `emil-design-eng` skill: transform/opacity only, custom easing
 `cubic-bezier(0.23, 1, 0.32, 1)`, <300ms for UI, `scale(0.95)` never `scale(0)`, always
 reduced-motion guarded.

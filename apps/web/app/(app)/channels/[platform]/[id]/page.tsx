@@ -24,7 +24,7 @@ export async function generateMetadata({
 }: {
   params: { platform: string; id: string };
 }) {
-  return { title: `Channel Intelligence — OMISPHERE` };
+  return { title: `Channel Intelligence. OMISPHERE` };
 }
 
 const TIER_CONFIG: Record<string, { label: string; cls: string; barCls: string }> = {
@@ -125,7 +125,7 @@ export default async function ChannelIntelligencePage({
           />
           <Stat
             label="Avg coordination"
-            value={avgCoord !== null ? `${Math.round(avgCoord * 100)}%` : '—'}
+            value={avgCoord !== null ? `${Math.round(avgCoord * 100)}%` : '-'}
             icon={<TrendingUp size={11} />}
           />
           <Stat
@@ -133,7 +133,7 @@ export default async function ChannelIntelligencePage({
             value={
               data.avg_comments_per_video > 0
                 ? Math.round(data.avg_comments_per_video).toLocaleString()
-                : '—'
+                : '-'
             }
             icon={<Activity size={11} />}
           />
@@ -142,13 +142,13 @@ export default async function ChannelIntelligencePage({
             value={
               data.returning_commenter_ratio > 0
                 ? `${Math.round(data.returning_commenter_ratio * 100)}%`
-                : '—'
+                : '-'
             }
             icon={<Repeat size={11} />}
           />
           <Stat
             label="Last scanned"
-            value={data.last_scanned_at ? timeAgo(data.last_scanned_at) : '—'}
+            value={data.last_scanned_at ? timeAgo(data.last_scanned_at) : '-'}
           />
         </div>
       </header>
@@ -159,7 +159,7 @@ export default async function ChannelIntelligencePage({
           <CardLabel className="mb-4">Audience composition</CardLabel>
           {totalCommenters === 0 ? (
             <p className="text-sm text-fg-dim">
-              No audience data yet — scan some videos from this channel first.
+              No audience data yet. Scan some videos from this channel first.
             </p>
           ) : (
             <div className="space-y-3">

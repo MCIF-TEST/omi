@@ -14,7 +14,7 @@ function required(name: string, value: string | undefined): string {
 }
 
 // Render's fromService.hostport returns a bare host:port with no scheme.
-// Render's internal service mesh is plain HTTP — bare host:port always gets http://.
+// Render's internal service mesh is plain HTTP: bare host:port always gets http://.
 function resolveApiOrigin(): string {
   const raw = process.env.OMI_API_ORIGIN ?? 'http://127.0.0.1:8000';
   if (/^https?:\/\//i.test(raw)) return raw.replace(/\/$/, '');
@@ -26,6 +26,6 @@ export const env = {
   // same Render service group this can be an internal hostname.
   API_ORIGIN: resolveApiOrigin(),
 
-  // Publicly visible — included in pages.
+  // Publicly visible. Included in pages.
   PUBLIC_BASE_URL: required('OMI_PUBLIC_BASE_URL', process.env.OMI_PUBLIC_BASE_URL ?? 'http://localhost:3000'),
 } as const;

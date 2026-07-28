@@ -77,7 +77,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
           return;
         }
       } catch {
-        /* keep trying — Stripe can lag a beat after redirect */
+        /* keep trying. Stripe can lag a beat after redirect */
       }
       if (cancelled) return;
       // ~45s of retries: live mode invoice visibility is usually fast but not instant.
@@ -149,7 +149,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       {justPaid && (
         <p className="text-sm text-tier-low" role="status">
           {settling
-            ? 'Payment received — adding your credits…'
+            ? 'Payment received. Adding your credits…'
             : active
               ? `Payment received. ${status.credits_remaining} credits are on your account.`
               : 'Payment received. If credits are not visible yet, open this page again in a moment.'}
@@ -157,7 +157,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       )}
       {canceled && (
         <p className="text-sm text-fg-mute" role="status">
-          Checkout cancelled — you haven&apos;t been charged.
+          Checkout cancelled. You haven&apos;t been charged.
         </p>
       )}
       {pastDue && (
@@ -173,7 +173,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
             ? 'Update payment method'
             : active
               ? 'Manage subscription'
-              : `Subscribe — ${status.price_display}/mo`}
+              : `Subscribe for ${status.price_display}/mo`}
       </Button>
 
       {error && (

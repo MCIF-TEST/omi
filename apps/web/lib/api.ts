@@ -1,9 +1,9 @@
 /**
- * Typed HTTP client for the omi FastAPI service — CLIENT-SAFE.
+ * Typed HTTP client for the omi FastAPI service. CLIENT-SAFE.
  *
  * Exports `apiClient` (browser-side, uses /api/* rewrite for same-origin
  * cookies) and all the shared types. No imports of `next/headers` or
- * other server-only modules — this file gets bundled into the browser.
+ * other server-only modules, this file gets bundled into the browser.
  *
  * Server components import `apiServer` from `./api-server` (NOT this file).
  */
@@ -27,7 +27,7 @@ export function describeHttpFailure(status: number): string {
   if (status === 413) return 'That request was too large (413).';
   if (status === 429) return 'Too many requests (429). Wait a moment and retry.';
   if (status === 502 || status === 503) {
-    return `The service was unreachable (${status}). It may be restarting — retry in a moment.`;
+    return `The service was unreachable (${status}). It may be restarting. Retry in a moment.`;
   }
   if (status === 504) {
     return 'The request timed out at the gateway (504). The work may still be running on the server.';
@@ -48,14 +48,14 @@ export async function _parse<T>(res: Response): Promise<T> {
         ? (body as any).detail
         : '';
     // Never fall back to `res.statusText`: it is ALWAYS an empty string over HTTP/2, which production
-    // serves. Any error that isn't JSON-with-a-detail — a gateway 502/504 HTML page, a dropped
-    // upstream, a bare 500 — therefore produced an ApiError with an empty message, and callers that
+    // serves. Any error that isn't JSON-with-a-detail, a gateway 502/504 HTML page, a dropped
+    // upstream, a bare 500. Therefore produced an ApiError with an empty message, and callers that
     // render `e.message` showed a blank or generic error with no way to tell what happened. That is
     // how a real failure reached a user as "Failed to generate the assessment." with no diagnosis.
     throw new ApiError(res.status, serverDetail || describeHttpFailure(res.status), body);
   }
   // A 2xx response whose body arrived but doesn't parse as JSON means the
-  // response was truncated or replaced by a gateway/proxy error page — common
+  // response was truncated or replaced by a gateway/proxy error page. Common
   // when a long scan exceeds an upstream timeout and the connection is cut
   // after the status line. Silently returning the raw string here used to
   // leave callers with `data` set to an unrenderable string, so the UI showed
@@ -64,7 +64,7 @@ export async function _parse<T>(res: Response): Promise<T> {
     throw new ApiError(
       res.status,
       'The server returned an incomplete response. The request may have ' +
-        'timed out — try again, and reduce the batch size if it persists.',
+        'timed out. Try again, and reduce the batch size if it persists.',
       body,
     );
   }
@@ -88,7 +88,7 @@ export async function apiClient<T>(
     const token = await clerk?.session?.getToken?.();
     if (token) authHeader = { authorization: `Bearer ${token}` };
   } catch {
-    /* Clerk not ready / signed out — fall back to the cookie */
+    /* Clerk not ready / signed out. Fall back to the cookie */
   }
   const res = await fetch(`/api${path}`, {
     ...init,
@@ -103,7 +103,7 @@ export async function apiClient<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Select-then-scan — the compile (free list) + score (paid selection) flow.
+// Select-then-scan, the compile (free list) + score (paid selection) flow.
 // ---------------------------------------------------------------------------
 export interface CommenterCandidate {
   external_id: string;
@@ -155,7 +155,7 @@ export function scoreSelection(url: string, selected: string[]): Promise<ScoreJo
 }
 
 // ---------------------------------------------------------------------------
-// The free pre-login scan — the SAME compile → select → analyze flow as above,
+// The free pre-login scan, the SAME compile → select → analyze flow as above,
 // anonymous, X-only, capped at 25 repliers, two scans per visitor.
 // ---------------------------------------------------------------------------
 
@@ -179,7 +179,7 @@ export function demoScoreSelection(
 }
 
 // ---------------------------------------------------------------------------
-// Feedback — any signed-in user submits; admins read a searchable queue.
+// Feedback, any signed-in user submits; admins read a searchable queue.
 // ---------------------------------------------------------------------------
 export interface FeedbackEntry {
   id: number;
@@ -205,7 +205,7 @@ export function listFeedback(params: { q?: string; user?: string; limit?: number
 }
 
 // ---------------------------------------------------------------------------
-// Shared response types (mirror app/schemas.py — kept thin until Phase 1.5
+// Shared response types (mirror app/schemas.py. Kept thin until Phase 1.5
 // generates types from OpenAPI directly).
 // ---------------------------------------------------------------------------
 
@@ -274,7 +274,7 @@ export type CoordinationLabel =
   | 'unscored';
 
 // ---------------------------------------------------------------------------
-// Campaigns — mirrors apps/api/app/routes/campaigns.py (CampaignSummary /
+// Campaigns. Mirrors apps/api/app/routes/campaigns.py (CampaignSummary /
 // CampaignDetail / CampaignMemberOut / CampaignObservationOut).
 //
 // The Campaign is the durable, evolving record of a coordinated account
@@ -338,7 +338,7 @@ export interface CampaignsResponse {
 
 export type CampaignSort = 'recent' | 'score' | 'size' | 'recurrence';
 
-/** Detector taxonomy — mirrors aggregate.DISCRIMINATIVE_DETECTORS exactly.
+/** Detector taxonomy. Mirrors aggregate.DISCRIMINATIVE_DETECTORS exactly.
  *  Discriminative detectors can carry a maximal verdict alone; supporting
  *  detectors need corroboration (≥1 discriminative OR ≥2 distinct supporting).
  *  Used to render the "supporting evidence only" trust badge. */
@@ -355,7 +355,7 @@ export function isCorroborated(methods: readonly string[]): boolean {
   return false;
 }
 
-// Public campaign sharing — mirrors apps/api/app/routes/campaigns.py.
+// Public campaign sharing. Mirrors apps/api/app/routes/campaigns.py.
 export interface CampaignShareResponse {
   campaign_key: string;
   share_token: string;
@@ -402,12 +402,12 @@ export interface CampaignReportResponse {
   view: CampaignReportView;
 }
 
-// Founder learning (master-plan Phase 4) — mirrors apps/api/app/routes/learning.py.
+// Founder learning (master-plan Phase 4). Mirrors apps/api/app/routes/learning.py.
 export interface WtpPromptStatus {
   show_wtp: boolean;
 }
 
-// Featured campaigns — real, disclosed influence operations seeded for first-run
+// Featured campaigns. Real, disclosed influence operations seeded for first-run
 // value (mirrors apps/api/app/routes/campaigns.py FeaturedCampaign).
 export interface FeaturedCampaign extends CampaignSummary {
   blurb: string | null;
@@ -548,7 +548,7 @@ export interface NarrativeDetail {
 }
 
 // ---------------------------------------------------------------------------
-// Scan / investigation payload (mirrors apps/api/app/schemas.py — kept light).
+// Scan / investigation payload (mirrors apps/api/app/schemas.py. Kept light).
 // ---------------------------------------------------------------------------
 
 export interface SignalResult {
@@ -559,7 +559,7 @@ export interface SignalResult {
   sub_signals: Record<string, number>;
   /**
    * Supplemental signals (e.g. ai_writing) are computed and shown for context
-   * but excluded from the suspicion score — AI-assisted writing is not evidence
+   * but excluded from the suspicion score. AI-assisted writing is not evidence
    * of inauthenticity. Render these distinctly so a high reading can't be
    * mistaken for a risk contribution.
    */
@@ -586,7 +586,7 @@ export interface CommenterScanResult {
   reasons: string[];
   weak_signals: string[];
   score_adjustments: string[];
-  /** Raw profile metadata — the objective facts the analyst reasons from (and the account view can
+  /** Raw profile metadata, the objective facts the analyst reasons from (and the account view can
    *  show). `null` means the platform genuinely didn't return the field, not zero/false. */
   follower_count?: number | null;
   following_count?: number | null;
@@ -605,7 +605,7 @@ export interface CommenterScanResult {
   }>;
   activity_total: number;
   signals: SignalResult[];
-  /** Signed per-detector attribution: what RAISED vs LOWERED the score —
+  /** Signed per-detector attribution: what RAISED vs LOWERED the score, 
    *  including the exculpatory "community" footprint. Optional: empty on cached
    *  commenters and absent from investigations saved before this shipped. */
   contributions?: DetectorContribution[];
@@ -616,7 +616,7 @@ export interface DetectorContribution {
   headline: string;
   probability: number;
   confidence: number;
-  impact: number; // share of total score movement, 0–1
+  impact: number; // share of total score movement, 0-1
   direction: 'raises' | 'lowers' | 'neutral';
   supplemental: boolean;
   evidence: string | null;
@@ -663,7 +663,7 @@ export interface FullVideoScanResult {
     tier: Tier;
     summary: string;
   };
-  // P3.1.6 — the AI-native Comment Analysis compatibility output. Present only when Comment
+  // P3.1.6, the AI-native Comment Analysis compatibility output. Present only when Comment
   // Analysis is enabled; the UI consumes this in preference to the deterministic thread_scan.
   comment_analysis?: {
     overall_probability: number;
@@ -726,7 +726,7 @@ export interface ComprehensiveScanResult {
   investigation_slug: string | null;
   /** The Omi Analyst's reading, inlined on the response. Signed-in scans leave this null and poll
    *  /v1/investigations/{slug}/analyst instead; the anonymous free scan has no saved investigation
-   *  to poll, so it carries the assessment here. Null when the analyst is off or the call failed —
+   *  to poll, so it carries the assessment here. Null when the analyst is off or the call failed, 
    *  the deterministic result above is unaffected. */
   analyst_assessment?: AnalystAssessment | null;
 }
@@ -768,7 +768,7 @@ export interface InvestigationSummary {
   updated_at: string;
   target_id: string | null;
   verdict: InvestigationVerdict | null;
-  /** youtube | x | unknown — derived at list time for archive cards. */
+  /** youtube | x | unknown. Derived at list time for archive cards. */
   platform: string;
   /** Public CDN thumb (YouTube hqdefault) when available; null for X/unknown. */
   thumbnail_url: string | null;
@@ -811,7 +811,7 @@ export interface CommentaryResponse {
   cached: boolean;
 }
 
-// Omi Analyst — structured, evidence-bounded assessment of an investigation.
+// Omi Analyst. Structured, evidence-bounded assessment of an investigation.
 // Feature-flagged OFF by default; the route returns 503 when disabled, 202 while
 // generating (poll again), and 200 with `assessment` when ready. `assessment`
 // mirrors ml/analyst/analyst_response_schema.json.
@@ -856,13 +856,13 @@ export interface CommenterAssessment {
   resolved: boolean;
   handle?: string;
   external_id?: string;
-  // Raw account metadata (from the scan) — shown alongside the AI's per-account score.
+  // Raw account metadata (from the scan). Shown alongside the AI's per-account score.
   follower_count?: number;
   following_count?: number;
   account_created_at?: string;
   post_count?: number;
   engine_probability?: number;
-  /** @deprecated legacy engine field — replaced by omi_score + engine_probability */
+  /** @deprecated legacy engine field. Replaced by omi_score + engine_probability */
   suspicion_probability?: number;
 }
 
@@ -890,11 +890,11 @@ export interface CompletionStatus {
 
 export interface AnalystAssessment {
   verdict: string;
-  /** THE OMI SCORE — the analyst's single composite authenticity-risk score, 0–100 (higher = stronger
+  /** THE OMI SCORE: the analyst's single composite authenticity-risk score, 0-100 (higher = stronger
    *  evidence of inauthentic/coordinated behavior). The only investigation score. */
   omi_score: number;
   suspicion_tier: string;
-  /** DEPRECATED — the legacy 0–1 inauthenticity probability. Superseded by omi_score; may be absent. */
+  /** DEPRECATED: the legacy 0-1 inauthenticity probability. Superseded by omi_score; may be absent. */
   suspicion_probability?: number;
   confidence_band: string;
   confidence_rationale: string;
@@ -913,7 +913,7 @@ export interface AnalystAssessment {
    *  batches are still landing and the client should keep polling. */
   batching?: { total: number; done: number; batch_size: number; complete: boolean };
   // The engine's corroboration state, echoed onto the assessment (overlaid from the deterministic
-  // Floor, never model-fabricated — apps/api runtime.py). It bounds the coordination read: a maximal
+  // Floor, never model-fabricated. Apps/api runtime.py). It bounds the coordination read: a maximal
   // 'coordinated' verdict requires >=1 discriminative method AND single_axis_capped === false.
   corroboration?: {
     discriminative_methods: string[];
@@ -931,12 +931,12 @@ export interface AnalystAssessment {
   // `assessment` + `citations` keyed by an account alias; OmiSphere echo-joins the real identity
   // (`handle`, `external_id`) and the engine's `suspicion_tier`/`suspicion_probability` (never
   // model-fabricated). `resolved` is false when the model cited an alias that didn't map to a known
-  // commenter — surfaced with a flag, never dropped. Empty/absent when the model produced none.
+  // commenter. Surfaced with a flag, never dropped. Empty/absent when the model produced none.
   commenter_assessments?: CommenterAssessment[];
   // Full-investigation completion status (Phase 5H): whether every commenter received AI reasoning.
   completion?: CompletionStatus;
   // The six domain-reasoning sections of the single comprehensive Mistral response (present when the
-  // comprehensive path produced them). Rendered as views over ONE inference — never fetched per panel.
+  // comprehensive path produced them). Rendered as views over ONE inference, never fetched per panel.
   comprehensive_sections?: ComprehensiveSections;
   // Structural + citation-resolution report for the six domain sidecars (apps/api
   // governor/comprehensive.py:validate_comprehensive_sections). Per-section `resolved`/`unresolved`
@@ -957,7 +957,7 @@ export interface AnalystAssessment {
   };
   // Forensic + production-verification trace for the ONE inference. `model_backed` gates whether the
   // model authored this assessment (true) or the deterministic Floor stood in (false); the UI must
-  // never present Floor prose as AI reasoning — it keys off this. The remaining fields power the
+  // never present Floor prose as AI reasoning, it keys off this. The remaining fields power the
   // dev-only Production Verification panel (Phase 5C): they prove which gateway/model served the
   // investigation, whether validation passed, and the latency/token/cost of the call. No secrets.
   investigation_trace?: {
@@ -975,7 +975,7 @@ export interface AnalystAssessment {
     served_model_verified?: boolean | null;  // true = served model IS the expected one; false = swapped; null = n/a
     openrouter_preset?: string | null;    // "omi-master-v1"
     master_prompt_version?: string | null;
-    master_prompt_hash?: string | null;   // "map:…" — what Omi expects the preset to contain
+    master_prompt_hash?: string | null;   // "map:…". What Omi expects the preset to contain
     canonical_schema_id?: string | null;
     // pipeline-stage flags
     request_completed?: boolean;
@@ -994,7 +994,7 @@ export interface AnalystAssessment {
     total_tokens?: number | null;
     response_status?: number | null;
     endpoint_error?: string | null;
-    // Phase 5H — full-investigation completion (also on `completion`, mirrored here for the trace panel)
+    // Phase 5H. Full-investigation completion (also on `completion`, mirrored here for the trace panel)
     finish_reason?: string | null;
     max_output_tokens?: number | null;
     commenters_total?: number | null;
@@ -1168,7 +1168,7 @@ export interface CommunitiesResponse {
   communities: CommunityOut[];
 }
 
-// User-curated named graphs — /v1/graphs/*
+// User-curated named graphs. /v1/graphs/*
 export interface UserGraphMemberOut {
   id: number;
   external_id: string;
@@ -1216,7 +1216,7 @@ export interface AccountHistoryResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 10 — Content Intelligence types
+// Phase 10. Content Intelligence types
 // ---------------------------------------------------------------------------
 
 export interface ContentEntitySummary {
@@ -1334,7 +1334,7 @@ export interface AuthorPresenceResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 12 — Ground-truth labels
+// Phase 12. Ground-truth labels
 // ---------------------------------------------------------------------------
 
 export const LABEL_KINDS = [
@@ -1464,7 +1464,7 @@ export interface MemoryBenchmarkReport {
   per_scenario: MemoryScenarioReport[];
 }
 
-// Learned (ML) scorer status — /v1/intelligence/ml-status (admin)
+// Learned (ML) scorer status. /v1/intelligence/ml-status (admin)
 export interface MlScorerStatus {
   active: boolean;
   enabled_flag: boolean;
@@ -1606,7 +1606,7 @@ export interface ChannelAudienceComposition {
 }
 
 // ---------------------------------------------------------------------------
-// Phase C — Reply tree + engagement pods
+// Phase C. Reply tree + engagement pods
 // ---------------------------------------------------------------------------
 
 export interface ReplyTreeNode {
@@ -1674,7 +1674,7 @@ export interface ChannelIntelligenceResponse {
 
 // ---------------------------------------------------------------------------
 // OmiScore intelligence layer  (/v1/intelligence/*)
-// Mirrors app/intelligence/schemas.py. The flat 0–100 fields are the stable
+// Mirrors app/intelligence/schemas.py. The flat 0-100 fields are the stable
 // public contract; `dimensions` is the explainability layer.
 // ---------------------------------------------------------------------------
 
@@ -1683,10 +1683,10 @@ export type RiskLevel = 'low' | 'medium' | 'high';
 export interface DimensionContribution {
   detector: string;
   label: string;
-  /** Detector probability AFTER any inversion the dimension applies (0–1). */
+  /** Detector probability AFTER any inversion the dimension applies (0-1). */
   contribution_probability: number;
   confidence: number;
-  /** Share of the dimension this detector accounted for, 0–1. */
+  /** Share of the dimension this detector accounted for, 0-1. */
   weight_share: number;
   evidence: string[];
 }
@@ -1695,13 +1695,13 @@ export interface IntelligenceDimension {
   key: string;
   label: string;
   description: string;
-  /** 0–100 in the dimension's own direction. */
+  /** 0-100 in the dimension's own direction. */
   score: number;
   confidence: number;
   is_risk: boolean;
   /**
    * Contextual dimensions (e.g. AI-generated content) are reported for
-   * information but excluded from the composite risk score — AI-assisted
+   * information but excluded from the composite risk score. AI-assisted
    * writing is not by itself a sign of inauthenticity. Render distinctly.
    */
   is_contextual?: boolean;
@@ -1710,7 +1710,7 @@ export interface IntelligenceDimension {
 
 export interface OmiScore {
   schema_version: number;
-  // Flat public contract (all 0–100)
+  // Flat public contract (all 0-100)
   omi_score: number;
   authenticity_score: number;
   coordination_probability: number;
@@ -1732,7 +1732,7 @@ export interface OmiScore {
  * The threat dimension keys that actually contribute to the composite risk
  * score, in canonical display order. Two dimensions are deliberately NOT here
  * (see CONTEXT_KEYS): AI generation (AI-assisted writing is not evidence of
- * inauthenticity) and amplification (a behavioral proxy with no reach data —
+ * inauthenticity) and amplification (a behavioral proxy with no reach data, 
  * counting it would overclaim and double-count coordination). Both inform
  * without raising risk. Mirrors the backend's is_contextual classification.
  */
@@ -1752,13 +1752,13 @@ export type ContextKey = (typeof CONTEXT_KEYS)[number];
 export const THREAT_META: Record<ThreatKey | ContextKey, { label: string; short: string; caveat?: string }> = {
   coordination_probability:  { label: 'Coordinated activity',   short: 'Coordination' },
   // Honesty: amplification is a BEHAVIORAL proxy (re-weighted coordination /
-  // engagement / timing), not measured reach — like/view/follower-velocity data
+  // engagement / timing), not measured reach. Like/view/follower-velocity data
   // is not yet ingested. Surface that plainly rather than overclaiming
   // "artificial amplification" the engine cannot actually evidence.
   amplification_probability: {
     label: 'Amplification (behavioral proxy)',
     short: 'Amplification',
-    caveat: 'Behavioral proxy — inferred from coordination, engagement and timing, not measured reach (likes / views / follower velocity are not yet ingested). Read as a behavioral signal, not confirmed reach inflation.',
+    caveat: 'Behavioral proxy. Inferred from coordination, engagement and timing, not measured reach (likes / views / follower velocity are not yet ingested). Read as a behavioral signal, not confirmed reach inflation.',
   },
   spam_probability:          { label: 'Spam behavior',          short: 'Spam' },
   ai_generation_probability: { label: 'AI-generated content',   short: 'AI generation' },

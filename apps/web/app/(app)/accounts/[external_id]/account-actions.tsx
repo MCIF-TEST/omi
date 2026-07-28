@@ -10,7 +10,7 @@ interface Props {
   externalId: string;
   platform: string;
   handle: string;
-  /** csvRows() returns the CSV body — pulled from the server-rendered history table. */
+  /** csvRows() returns the CSV body. Pulled from the server-rendered history table. */
   csvRows: () => string;
 }
 

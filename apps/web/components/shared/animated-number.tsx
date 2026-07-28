@@ -14,7 +14,7 @@ interface AnimatedNumberProps {
 }
 
 /**
- * Counts up to `value` with an ease-out curve — a small dopamine hit on
+ * Counts up to `value` with an ease-out curve, a small dopamine hit on
  * every stat. Respects prefers-reduced-motion (jumps straight to value)
  * and can defer until scrolled into view.
  */
@@ -45,7 +45,7 @@ export function AnimatedNumber({
       const start = performance.now();
       const tick = (now: number) => {
         const t = Math.min(1, (now - start) / duration);
-        // easeOutExpo — fast then settles
+        // easeOutExpo. Fast then settles
         const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
         setDisplay(Math.round(eased * value));
         if (t < 1) requestAnimationFrame(tick);

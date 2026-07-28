@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Previous investigations — OMISPHERE' };
+export const metadata = { title: 'Previous investigations. OMISPHERE' };
 
 /**
  * Content DB was merged into Previous investigations.

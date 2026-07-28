@@ -33,7 +33,7 @@ export async function generateMetadata({
 }: {
   params: { platform: string; id: string };
 }) {
-  return { title: `${params.platform}/${params.id} — Content Intelligence` };
+  return { title: `${params.platform}/${params.id}. Content Intelligence` };
 }
 
 const RISK_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string; barCls: string }> = {
@@ -219,13 +219,13 @@ export default async function ContentEntityPage({
         </div>
       )}
 
-      {/* Longitudinal evolution chart — only meaningful with 2+ batches */}
+      {/* Longitudinal evolution chart. Only meaningful with 2+ batches */}
       {batches.length >= 2 && <EvolutionChart batches={batches} />}
 
       {/* What changed since last scan */}
       <DiffPanel platform={e.platform} contentId={e.content_id} totalBatches={e.total_batches} />
 
-      {/* Phase C — Reply tree + engagement pods */}
+      {/* Phase C. Reply tree + engagement pods */}
       <ReplyTreePanel platform={e.platform} contentId={e.content_id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

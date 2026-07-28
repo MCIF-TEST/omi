@@ -12,7 +12,7 @@ import { env } from '@/lib/env';
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
-  return { title: `Investigation ${params.slug} — OMISPHERE` };
+  return { title: `Investigation ${params.slug}. OMISPHERE` };
 }
 
 export default async function InvestigationPage({ params }: { params: { slug: string } }) {
@@ -69,7 +69,7 @@ export default async function InvestigationPage({ params }: { params: { slug: st
           </div>
         </div>
 
-        {/* Inline metadata strip — run identity only. The suspicion read now lives
+        {/* Inline metadata strip. Run identity only. The suspicion read now lives
             in the Omi Analyst assessment below (the deterministic engine still runs
             underneath to supply the evidence the model reasons over). */}
         <div className="relative mt-6 pt-5 border-t border-border-1/60 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">

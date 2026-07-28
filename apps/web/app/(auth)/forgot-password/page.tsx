@@ -3,7 +3,7 @@ import { KeyRound } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ForgotPasswordForm } from './forgot-password-form';
 
-export const metadata = { title: 'Reset password — OMISPHERE' };
+export const metadata = { title: 'Reset password. OMISPHERE' };
 
 export default function ForgotPasswordPage() {
   return (

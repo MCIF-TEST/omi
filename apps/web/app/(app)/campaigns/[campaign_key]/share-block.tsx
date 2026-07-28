@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { apiClient, ApiError, type CampaignShareResponse } from '@/lib/api';
 
 /**
- * Public sharing for a campaign — mint a revocable, token-gated, read-only
+ * Public sharing for a campaign. Mint a revocable, token-gated, read-only
  * report at /rc/{token} (no login). Mirrors the investigation share block;
  * the absolute URL is built client-side from the current origin.
  */
@@ -71,7 +71,7 @@ export function CampaignShareBlock({
       {!token ? (
         <>
           <p className="text-sm text-fg-dim max-w-xl mb-3">
-            Publish a read-only report at a stable URL — verdict, confidence,
+            Publish a read-only report at a stable URL: verdict, confidence,
             evidence for and against, members, and the recurrence timeline,
             with no login required and no other campaigns exposed. Revocable at
             any time. Built for sharing a finding with an editor, co-investigator,

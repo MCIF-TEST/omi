@@ -48,7 +48,7 @@ export function RescanButton({
 
   const label = hasContinuation ? '+ New batch' : 'Rescan from start';
   const subtitle = hasContinuation
-    ? 'Resumes from cursor — fetches only new comments'
+    ? 'Resumes from cursor. Fetches only new comments'
     : 'Re-reads from page 1 (dedupes existing)';
 
   return (

@@ -59,7 +59,7 @@ export function Reveal({
 
   return (
     <Tag
-      // @ts-expect-error — ref typing across the polymorphic Tag union
+      // @ts-expect-error. Ref typing across the polymorphic Tag union
       ref={ref}
       style={{ transitionDelay: shown ? `${delay}ms` : '0ms' }}
       className={cn(

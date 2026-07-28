@@ -1,7 +1,7 @@
 import { Shield, Database, Cpu, GitBranch, Scale } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
-export const metadata = { title: 'About — OMISPHERE' };
+export const metadata = { title: 'About. OMISPHERE' };
 
 const SECTIONS = [
   {
@@ -13,7 +13,7 @@ const SECTIONS = [
         result is a probability with an explicit evidence chain. We never accuse, we
         never claim certainty, and we never tell you a person is a bot. We tell you
         that certain observable patterns are consistent with synthetic or coordinated
-        behavior — and we show you exactly what those patterns are.
+        behavior, and we show you exactly what those patterns are.
       </>
     ),
   },
@@ -23,7 +23,7 @@ const SECTIONS = [
     body: (
       <>
         Every scan adds a behavioral fingerprint to OMISPHERE&apos;s database. Future scans
-        pull priors from that growing set. The platform sharpens with every use — and
+        pull priors from that growing set. The platform sharpens with every use, and
         the intelligence belongs to its users collectively.
       </>
     ),
@@ -35,7 +35,7 @@ const SECTIONS = [
       <>
         Under the hood, the detection engine is called{' '}
         <span className="mono text-accent">omi</span>. It runs locally with
-        no LLM calls in the per-scan path — pure Python heuristics, embeddings, and
+        no LLM calls in the per-scan path. Pure Python heuristics, embeddings, and
         graph algorithms. LLMs are reserved for optional report generation, never the
         core scoring.
       </>
@@ -46,7 +46,7 @@ const SECTIONS = [
     title: 'Scope, plainly',
     body: (
       <>
-        Today OMISPHERE scans <span className="text-fg">YouTube</span> only — videos
+        Today OMISPHERE scans <span className="text-fg">YouTube</span> only. Videos
         and channels. Every &ldquo;scan&rdquo; covers a video&apos;s comment thread or a
         single channel&apos;s recent activity, and consumes one credit. X / Twitter
         ingestion is the next platform on the roadmap; pricing for X scans will
@@ -77,8 +77,8 @@ export default function AboutPage() {
           <span className="text-brand">Campaign Intelligence</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
-          OMISPHERE detects coordinated account groups — influence operations,
-          engagement farms, artificial amplification networks — on YouTube and
+          OMISPHERE detects coordinated account groups. Influence operations,
+          engagement farms, artificial amplification networks, on YouTube and
           X (Twitter). Every finding is a probability with its confidence,
           evidence for, evidence against, and corroboration status; a maximal
           verdict requires either a discriminative signal (shared fingerprints,
@@ -104,19 +104,19 @@ export default function AboutPage() {
         ))}
       </div>
 
-      {/* Platform roadmap — relocated from the dashboard: "what's coming" is
+      {/* Platform roadmap. Relocated from the dashboard: "what's coming" is
           marketing context, not workspace content. */}
       <Card>
         <h2 className="text-base font-semibold text-fg mb-1.5">Platform roadmap</h2>
         <p className="text-sm text-fg-dim mb-4">
-          Depth over breadth — deep coordination intelligence on the platforms
+          Depth over breadth. Deep coordination intelligence on the platforms
           that matter most.
         </p>
         <ul className="space-y-2 text-sm">
-          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">YouTube</span> <span className="text-fg-dim">— live: full comment analysis, channel intelligence, coordination detection</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">X / Twitter</span> <span className="text-fg-dim">— live: account fingerprinting, hashtag/amplification networks, campaign detection</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">— planned: subreddit coordination, post + comment analysis</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">TikTok</span> <span className="text-fg-dim">— planned: comment-section analysis, creator audience intelligence</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">YouTube</span> <span className="text-fg-dim">, live: full comment analysis, channel intelligence, coordination detection</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">X / Twitter</span> <span className="text-fg-dim">, live: account fingerprinting, hashtag/amplification networks, campaign detection</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">, planned: subreddit coordination, post + comment analysis</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">TikTok</span> <span className="text-fg-dim">, planned: comment-section analysis, creator audience intelligence</span></span></li>
         </ul>
       </Card>
     </article>

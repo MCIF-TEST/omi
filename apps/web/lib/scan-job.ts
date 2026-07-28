@@ -1,10 +1,10 @@
 /**
- * Async single-link scan client — CLIENT-SAFE.
+ * Async single-link scan client. CLIENT-SAFE.
  *
  * Wraps the backend's async job endpoints (`/v1/scan/link/start` +
  * `/v1/scan/link/status/{job_id}`): the whole scan runs on the backend's
  * background pool, so the only client-side fetches are the quick start POST and
- * short status polls — nothing here holds a connection open for the scan's
+ * short status polls, nothing here holds a connection open for the scan's
  * duration, so it can't trip a proxy timeout (the "reaches the last step then
  * shows no result" failure).
  */
@@ -51,7 +51,7 @@ export async function runLinkScanJob(
     body: JSON.stringify(body),
   });
   if (!shouldContinue()) throw new ScanCancelledError();
-  onStatus?.(job); // real backend state ('queued') — drives an honest progress UI
+  onStatus?.(job); // real backend state ('queued'). Drives an honest progress UI
 
   return pollLinkScanJob(job.job_id, shouldContinue, onStatus);
 }
@@ -61,7 +61,7 @@ export async function runLinkScanJob(
  * WITHOUT starting a new one. The job runs on the backend's pool and saves its
  * investigation regardless of the UI, so a scan the user navigated away from is
  * still finishing server-side; resuming it makes the result reappear instead of
- * looking cancelled. Polling-only — never consumes a credit.
+ * looking cancelled. Polling-only, never consumes a credit.
  */
 export async function resumeLinkScanJob(
   jobId: string,
@@ -96,7 +96,7 @@ async function pollLinkScanJob(
   }
   throw new ApiError(
     504,
-    'The scan is taking longer than expected. It may still be finishing — ' +
+    'The scan is taking longer than expected. It may still be finishing. ' +
       'check your recent investigations in a moment.',
   );
 }

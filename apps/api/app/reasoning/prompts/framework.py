@@ -1,23 +1,23 @@
-"""The Specialist Intelligence Framework (Omi Intelligence Program — Phase A1).
+"""The Specialist Intelligence Framework (Omi Intelligence Program. Phase A1).
 
 The permanent framework every current and future AI specialist inherits. It does NOT replace the
 Specialist Library (``specialists.SpecialistSpec`` remains the authored source of each specialist's
-mission and thirteen prompt sections) — it EXTENDS it. A :class:`SpecialistProfile` composes the
+mission and thirteen prompt sections), it EXTENDS it. A :class:`SpecialistProfile` composes the
 mandated dimensions:
 
-* IDENTITY      — name, mission, tier, responsibilities, authority, dependencies
-* REASONING     — objectives, inputs, outputs, decision workflow, evidence prioritization,
+* IDENTITY: name, mission, tier, responsibilities, authority, dependencies
+* REASONING: objectives, inputs, outputs, decision workflow, evidence prioritization,
                   counter-evidence workflow, memory/context usage, uncertainty, calibration,
                   escalation, termination
-* GOVERNANCE    — Governor compatibility, constitutional requirements, evidence/citation rules,
+* GOVERNANCE. Governor compatibility, constitutional requirements, evidence/citation rules,
                   memory boundaries, explainability, hallucination prevention
-* TECHNICAL     — prompt version + hash, JSON schema, output contract, context requirements,
+* TECHNICAL: prompt version + hash, JSON schema, output contract, context requirements,
                   retrieval strategy, token budget, model compatibility
-* QUALITY       — success criteria, failure modes, anti-patterns, edge cases, FP/FN risks
-* VALIDATION    — unit tests, benchmark cases, Gold-Corpus coverage, Shadow Mode, replay, regression
-* DOCUMENTATION — handbook, examples, counterexamples
+* QUALITY: success criteria, failure modes, anti-patterns, edge cases, FP/FN risks
+* VALIDATION: unit tests, benchmark cases, Gold-Corpus coverage, Shadow Mode, replay, regression
+* DOCUMENTATION: handbook, examples, counterexamples
 
-``lift()`` derives a COMPLETE profile from an existing ``SpecialistSpec`` (single source of truth —
+``lift()`` derives a COMPLETE profile from an existing ``SpecialistSpec`` (single source of truth, 
 identity/reasoning/governance come from the authored spec; quality/validation/technical/
 documentation are derived by tier + output kind, overridable per specialist), so the thirteen
 existing specialists inherit the framework with zero re-authoring and zero duplication.
@@ -54,7 +54,7 @@ _AUTHORITY_BY_TIER = {
 
 # Framework-level derivation tables (tier / output-kind driven; overridable per specialist). ---- #
 _ANTI_PATTERNS = {
-    "finding": ("verdict smuggling — a finding that reads like a ruling",
+    "finding": ("verdict smuggling, a finding that reads like a ruling",
                 "citing a supplemental signal as raising evidence",
                 "restating one observation as many findings (double-counting)"),
     "critique": ("contrarianism without cited exculpatory evidence",
@@ -66,10 +66,10 @@ _ANTI_PATTERNS = {
                "presenting a past conclusion as present ground truth"),
 }
 _EDGE_CASES = (
-    "thin data — most detectors abstained; correct output is calibrated uncertainty",
-    "empty facet — the specialist's lens has no evidence; emit nothing rather than invent",
-    "conflicting evidence — raising and lowering signals of similar weight; report both",
-    "single-axis-capped bundle — confidence and labels are capped by construction",
+    "thin data, most detectors abstained; correct output is calibrated uncertainty",
+    "empty facet, the specialist's lens has no evidence; emit nothing rather than invent",
+    "conflicting evidence. Raising and lowering signals of similar weight; report both",
+    "single-axis-capped bundle. Confidence and labels are capped by construction",
 )
 _FALSE_NEGATIVE_RISKS = (
     "over-gating: demanding corroboration so strict that real coordination is missed",
@@ -92,14 +92,14 @@ _EXAMPLES = {
     "ruling": ("one schema-valid analyst assessment object (verdict, echoed number, evidence_for/"
                "against, uncertainty, what_would_change_this, corroboration)"),
     "memory": ('{"priors":[{"type":"BehavioralArchetype","label":"bursty posting archetype",'
-               '"influence":"supports","stability":0.8,"note":"institutional memory — background, '
+               '"influence":"supports","stability":0.8,"note":"institutional memory. Background, '
                'never proof"}],"uncertainty":[]}'),
 }
 _COUNTEREXAMPLES = {
-    "finding": 'a finding citing "ev:fabricated123" — unresolvable ref; whole output invalid → floor',
-    "critique": "a critique with direction='raises' — critiques may lower or bound, never raise",
-    "ruling": 'a ruling with suspicion_probability != the engine number — Governor REJECT',
-    "memory": 'a prior carrying evidence_refs — memory-boundary violation; dropped',
+    "finding": 'a finding citing "ev:fabricated123". Unresolvable ref; whole output invalid → floor',
+    "critique": "a critique with direction='raises'. Critiques may lower or bound, never raise",
+    "ruling": 'a ruling with suspicion_probability != the engine number. Governor REJECT',
+    "memory": 'a prior carrying evidence_refs. Memory-boundary violation; dropped',
 }
 
 
@@ -182,7 +182,7 @@ class Documentation:
 
 @dataclass(frozen=True)
 class SpecialistProfile:
-    """One specialist's complete framework record — every mandated dimension, one object."""
+    """One specialist's complete framework record, every mandated dimension, one object."""
 
     key: str
     execution: str                             # model | deterministic-code
@@ -293,10 +293,10 @@ def validate_profile(profile: SpecialistProfile) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
-# lift() — derive a complete profile from an authored SpecialistSpec (the inheritance path)
+# lift(). Derive a complete profile from an authored SpecialistSpec (the inheritance path)
 # --------------------------------------------------------------------------- #
 def _knowledge_reading_list(key: str) -> tuple[int, tuple[str, ...]]:
-    """(entry count, categories) from the Intelligence Library — lazily, never raising."""
+    """(entry count, categories) from the Intelligence Library. Lazily, never raising."""
     try:
         from app.reasoning.knowledge import default_library, specialist_dependencies
 
@@ -304,7 +304,7 @@ def _knowledge_reading_list(key: str) -> tuple[int, tuple[str, ...]]:
         ids = specialist_dependencies(lib).get(key, [])
         cats = sorted({lib.get(i).category for i in ids})
         return len(ids), tuple(cats)
-    except Exception:  # noqa: BLE001 — knowledge layer optional at import time
+    except Exception:  # noqa: BLE001. Knowledge layer optional at import time
         return 0, ()
 
 
@@ -329,7 +329,7 @@ def lift(spec: SpecialistSpec, **overrides) -> SpecialistProfile:
 
     Identity/reasoning/governance come from the authored spec (single source of truth); quality,
     validation, technical, and documentation are framework defaults derived by tier + output kind.
-    Any dimension can be overridden by keyword (``quality=...``) — the template hook future
+    Any dimension can be overridden by keyword (``quality=...``), the template hook future
     specialists use. Never edits the spec; never duplicates authored content."""
     from .registry import default_registry
 
@@ -339,7 +339,7 @@ def lift(spec: SpecialistSpec, **overrides) -> SpecialistProfile:
 
 
 # --------------------------------------------------------------------------- #
-# Tier-3 code-backed profiles — Governor + Floor are never prompt- or model-driven
+# Tier-3 code-backed profiles. Governor + Floor are never prompt- or model-driven
 # --------------------------------------------------------------------------- #
 def _code_backed(key: str, title: str, mission: str, responsibilities: tuple[str, ...],
                  outputs: str, workflow: tuple[str, ...]) -> SpecialistProfile:
@@ -352,13 +352,13 @@ def _code_backed(key: str, title: str, mission: str, responsibilities: tuple[str
             objectives=(mission,), inputs=("the council ruling + the Evidence Bundle",),
             outputs=outputs, decision_workflow=workflow,
             evidence_prioritization="rule-based; no interpretation",
-            counter_evidence_workflow="not applicable — validation, not reasoning",
+            counter_evidence_workflow="not applicable. Validation, not reasoning",
             memory_usage="none; operates only on the ruling + bundle",
             context_usage="none beyond the ruling + bundle",
             uncertainty_handling="deterministic: a rule either fires or it does not",
-            confidence_calibration="not applicable — binary validation",
+            confidence_calibration="not applicable. Binary validation",
             escalation="REJECT hands the case to the deterministic Floor" if key == "governor"
-            else "none — the Floor is the terminal guarantee",
+            else "none, the Floor is the terminal guarantee",
             termination="always terminates with a deterministic result",
         ),
         governance=Governance(
@@ -370,13 +370,13 @@ def _code_backed(key: str, title: str, mission: str, responsibilities: tuple[str
             memory_boundaries="rejects any prior cited as evidence",
             explainability="emits a ValidationTrace (vt:) with violation codes"
             if key == "governor" else "fully deterministic and replayable",
-            hallucination_prevention="cannot hallucinate — no generation, code only",
+            hallucination_prevention="cannot hallucinate, no generation, code only",
         ),
         technical=Technical(prompt_version=None, prompt_hash=None,
                             json_schema=_JSON_SCHEMA["ruling"], output_contract="validation_trace"
                             if key == "governor" else "analyst_assessment",
                             context_requirements=("ruling", "bundle"),
-                            retrieval_strategy="none — pure function of ruling + bundle",
+                            retrieval_strategy="none. Pure function of ruling + bundle",
                             token_budget=0 or 1, model_compatibility=()),
         quality=Quality(
             success_criteria=("every ruling validated; zero ungoverned outputs ship",),
@@ -384,40 +384,40 @@ def _code_backed(key: str, title: str, mission: str, responsibilities: tuple[str
                            "Orchestrator, no bypass path)",),
             anti_patterns=("softening validation to raise permit rates",),
             edge_cases=_EDGE_CASES,
-            false_positive_risks=("over-rejection would only ever degrade to the Floor — safe",),
+            false_positive_risks=("over-rejection would only ever degrade to the Floor. Safe",),
             false_negative_risks=("an under-specified rule missing a violation class",),
         ),
         validation=Validation(
             unit_tests=f"tests must cover: every violation class fires; '{key}' cannot be bypassed",
             benchmark_cases="Governor verdict asserted on every Gold-Corpus evaluation",
-            gold_corpus_coverage=("all categories — the gate runs on every case",),
+            gold_corpus_coverage=("all categories, the gate runs on every case",),
             shadow_mode="validates both production and shadow rulings identically",
             replay="pure function: identical input -> identical trace",
             regression="any permit/reject flip on the corpus is a regression",
         ),
         documentation=Documentation(
-            handbook=f"{title} — Tier 3, CODE-BACKED. {mission} Never prompt- or model-driven.",
+            handbook=f"{title}. Tier 3, CODE-BACKED. {mission} Never prompt- or model-driven.",
             example="Governor.validate(ruling, bundle) -> ValidationTrace(permit)" if key == "governor"
             else "FloorJudge.run(view) -> always-valid deterministic Ruling",
-            counterexample="a prompt-driven governor — unconstitutional; validation must be code",
+            counterexample="a prompt-driven governor. Unconstitutional; validation must be code",
         ),
     )
 
 
 GOVERNOR_PROFILE = _code_backed(
     "governor", "OMI GOVERNOR",
-    "Validate every council ruling against the constitution — mandatory, deterministic, unskippable.",
+    "Validate every council ruling against the constitution. Mandatory, deterministic, unskippable.",
     ("re-check citations, number echo, corroboration gate, counter-evidence, banned phrasing",
      "PERMIT or REJECT with an auditable ValidationTrace",
      "on REJECT, route to the deterministic Floor"),
-    "ValidationTrace (vt:) — permit/reject + violation codes",
+    "ValidationTrace (vt:). Permit/reject + violation codes",
     ("receive the ruling + bundle", "run every constitutional check in code",
      "emit the trace; REJECT -> Floor"),
 )
 
 FLOOR_PROFILE = _code_backed(
     "floor", "OMI FLOOR",
-    "Guarantee a valid, governed assessment exists no matter what fails above — the deterministic "
+    "Guarantee a valid, governed assessment exists no matter what fails above, the deterministic "
     "always-on judge of last resort.",
     ("produce a schema-valid, echo-preserving assessment from the bundle alone",
      "serve as the fallback for provider failure, invalid output, or Governor REJECT"),
@@ -433,7 +433,7 @@ FLOOR_PROFILE = _code_backed(
 def new_specialist(spec: SpecialistSpec, *, registry=None, **overrides) -> SpecialistProfile:
     """THE TEMPLATE. A future specialist (strategy_analyst, investigation_planner, ...) authors ONE
     ``SpecialistSpec`` (its thirteen sections); the framework derives everything else. Pass a
-    ``registry`` to also version its prompt through the ONE Prompt Registry (inert — it activates
+    ``registry`` to also version its prompt through the ONE Prompt Registry (inert, it activates
     nothing). Returns the complete, validated profile; raises on incompleteness so an unfinished
     specialist cannot enter the system."""
     from .specialists import to_prompt_spec
@@ -470,11 +470,11 @@ def _lift_with(spec: SpecialistSpec, ps, n_know: int, know_cats: tuple[str, ...]
                                   "an empty exculpatory column must be stated, never silent",
         memory_usage=spec.memory_usage,
         context_usage="structured evidence via the projected bundle; prior_context as labeled "
-                      "background; knowledge reading list as expertise — none of it citable proof",
+                      "background; knowledge reading list as expertise. None of it citable proof",
         uncertainty_handling="name what is unknown, what data was thin, and what would change the "
                              "read; indistinguishability is itself a finding",
         confidence_calibration=spec.confidence_calibration,
-        escalation="surface ambiguity to the Judge as explicit uncertainty — never force a call; "
+        escalation="surface ambiguity to the Judge as explicit uncertainty, never force a call; "
                    "a Governor REJECT escalates to the deterministic Floor",
         termination="emit a valid artifact or nothing; on any failure the council degrades "
                     "gracefully (drop artifact -> judge -> floor), never a malformed output",
@@ -522,7 +522,7 @@ def _lift_with(spec: SpecialistSpec, ps, n_know: int, know_cats: tuple[str, ...]
         regression="full backend suite green; control FPR non-increasing on the Gold Corpus",
     )
     documentation = Documentation(
-        handbook=f"{spec.title} — Tier {spec.tier} {spec.output_kind} specialist. {spec.mission}",
+        handbook=f"{spec.title}. Tier {spec.tier} {spec.output_kind} specialist. {spec.mission}",
         example=_EXAMPLES[spec.output_kind], counterexample=_COUNTEREXAMPLES[spec.output_kind],
     )
     fields = {"identity": identity, "reasoning": reasoning, "governance": governance,
@@ -533,7 +533,7 @@ def _lift_with(spec: SpecialistSpec, ps, n_know: int, know_cats: tuple[str, ...]
 
 
 def example_investigation_planner() -> SpecialistProfile:
-    """The worked TEMPLATE EXAMPLE — a future Tier-2 specialist built with ``new_specialist``.
+    """The worked TEMPLATE EXAMPLE: a future Tier-2 specialist built with ``new_specialist``.
 
     INERT by construction: not registered in the default registry, not in the council, not
     activated, not exported. It exists so a contributor can see exactly how little a new
@@ -541,7 +541,7 @@ def example_investigation_planner() -> SpecialistProfile:
     spec = SpecialistSpec(
         key="investigation_planner", title="OMI INVESTIGATION PLANNER", tier=2, output_kind="critique",
         mission="Plan the investigation: decide which lenses matter for THIS subject, what evidence "
-                "would be decisive, and what to collect next — advising, never ruling.",
+                "would be decisive, and what to collect next. Advising, never ruling.",
         responsibilities=("rank the open hypotheses by decisiveness of available evidence",
                           "identify the single most informative next collection step",
                           "flag lenses whose evidence is missing so their silence is not misread"),
@@ -580,7 +580,7 @@ def example_investigation_planner() -> SpecialistProfile:
 # --------------------------------------------------------------------------- #
 # Per-specialist deep-library overrides (Phase B1 pattern): a specialist's intelligence library
 # (behavioral.py, ...) registers a provider returning ``lift`` overrides, so its authored
-# methodology / failure / evaluation dimensions replace the derived defaults — one source, no
+# methodology / failure / evaluation dimensions replace the derived defaults, one source, no
 # duplication, and the catalog/handbook automatically carry the deep record.
 _PROFILE_OVERRIDES: dict[str, Any] = {}
 
@@ -591,7 +591,7 @@ def register_profile_overrides(key: str, provider) -> None:
 
 
 def framework_profiles() -> list[SpecialistProfile]:
-    """Every governed specialist's framework profile: the 13 library specialists (lifted — zero
+    """Every governed specialist's framework profile: the 13 library specialists (lifted. Zero
     re-authoring, deep-library overrides applied where registered) + the 2 code-backed Tier-3
     guarantees. Deterministic order by key."""
     lifted = [
@@ -617,24 +617,24 @@ def validate_framework() -> list[str]:
 
 
 def framework_hash() -> str:
-    """Content address of the entire framework — drift-detectable, versionable."""
+    """Content address of the entire framework. Drift-detectable, versionable."""
     return digest({"version": FRAMEWORK_VERSION,
                    "profiles": [p.to_record() for p in framework_profiles()]}, prefix="sf:")
 
 
 def render_handbook() -> str:
-    """The Specialist Handbook + contributor documentation — generated from the framework so it can
+    """The Specialist Handbook + contributor documentation. Generated from the framework so it can
     never drift from code. GitHub-side engineering doc (committed, drift-guarded)."""
     profiles = framework_profiles()
     lines = [
-        "# OMI Specialist Intelligence Framework — Handbook",
+        "# OMI Specialist Intelligence Framework. Handbook",
         "",
         f"> GENERATED from `app.reasoning.prompts.framework` (framework {FRAMEWORK_VERSION}, "
         f"`{framework_hash()}`, constitution {CONSTITUTION_VERSION}). Do not hand-edit; "
         "regenerate via `python -m app.reasoning.prompts.export`.",
         "",
         "Every AI specialist inherits this framework. Authored content lives in ONE place (the "
-        "specialist's `SpecialistSpec` — its thirteen prompt sections); the framework derives "
+        "specialist's `SpecialistSpec`, its thirteen prompt sections); the framework derives "
         "identity, reasoning workflow, governance, technical, quality, validation, and "
         "documentation dimensions from it. GitHub is the single source of truth; Hugging Face "
         "receives the synchronized catalog through the existing publish workflow.",
@@ -643,7 +643,7 @@ def render_handbook() -> str:
         "",
         "1. Author a `SpecialistSpec` in `app/reasoning/prompts/specialists.py` (13 sections).",
         "2. Add it to `SPECIALISTS`; the library registers it in the ONE Prompt Registry as "
-        "`lib-v1` (inert — nothing activates).",
+        "`lib-v1` (inert, nothing activates).",
         "3. `framework.lift(spec)` now yields its complete profile automatically; override any "
         "derived dimension by keyword if the defaults do not fit.",
         "4. Add its knowledge reading list (entries in `app/reasoning/knowledge/entries.py` naming "
@@ -653,7 +653,7 @@ def render_handbook() -> str:
         "GitHub Actions publish workflow synchronizes Hugging Face.",
         "",
         "A worked example lives in `framework.example_investigation_planner()` (inert). "
-        "Counterexample: a prompt-driven Governor — validation is code, never generation.",
+        "Counterexample: a prompt-driven Governor. Validation is code, never generation.",
         "",
         "## Directory conventions",
         "",
@@ -670,7 +670,7 @@ def render_handbook() -> str:
     for p in profiles:
         t = p.technical
         lines += [
-            f"### {p.identity.title} (`{p.key}`) — Tier {p.identity.tier} · {p.execution}",
+            f"### {p.identity.title} (`{p.key}`). Tier {p.identity.tier} · {p.execution}",
             "",
             f"- **Mission:** {p.identity.mission}",
             f"- **Authority:** {p.identity.authority}",

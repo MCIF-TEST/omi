@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
   try {
     const body = await apiServer<CampaignReportResponse>(`/rc/${encodeURIComponent(params.token)}`);
     return {
-      title: `${body.view.meta.name} — OMISPHERE Campaign Report`,
+      title: `${body.view.meta.name}. OMISPHERE Campaign Report`,
       description: `Coordinated-account group: ${body.view.verdict.member_count} accounts, ${Math.round(body.view.verdict.max_coordination_score * 100)}% coordination.`,
     };
   } catch {
@@ -52,7 +52,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-bg-deep report-page">
-      {/* Top banner — hidden on print */}
+      {/* Top banner. Hidden on print */}
       <div className="no-print border-b border-border-1 bg-bg-elev/60 backdrop-blur sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/" aria-label="OMISPHERE home">
@@ -94,16 +94,16 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
           </h1>
           <p className="mt-1 font-mono text-xs text-fg-faint report-muted">
             {v.verdict.member_count} accounts · seen {v.verdict.observation_count}× ·
-            first detected {v.meta.first_detected_at?.slice(0, 10) || '—'} ·
-            last seen {v.meta.last_seen_at?.slice(0, 10) || '—'}
+            first detected {v.meta.first_detected_at?.slice(0, 10) || ', '} ·
+            last seen {v.meta.last_seen_at?.slice(0, 10) || ', '}
           </p>
         </header>
 
-        {/* First-view comprehension aid (dismissible, once) — the public
+        {/* First-view comprehension aid (dismissible, once), the public
             report is many visitors' very first contact with Omi. */}
         <HowToRead storageKey="public-report" />
 
-        {/* Verdict — score + confidence + corroboration, never a bare number */}
+        {/* Verdict. Score + confidence + corroboration, never a bare number */}
         <section className="report-card bg-bg-elev border border-border-1 rounded-md p-8">
           <div className="font-mono text-2xs tracking-[0.18em] uppercase text-accent report-accent mb-3">
             Coordination verdict
@@ -118,7 +118,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
               <div className="font-mono text-2xs uppercase tracking-wider text-fg-mute report-muted mb-1">Confidence</div>
               <div className="text-4xl font-bold mono text-fg tracking-tight leading-none">{confPct}%</div>
               <div className="mt-1 font-mono text-2xs text-fg-mute report-muted">
-                {confPct >= 70 ? 'high' : confPct >= 40 ? 'moderate' : 'low — thin evidence'}
+                {confPct >= 70 ? 'high' : confPct >= 40 ? 'moderate' : 'low, thin evidence'}
               </div>
             </div>
             <div>
@@ -140,7 +140,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
           </div>
           {!corroborated && (
             <p className="mt-5 text-sm text-fg-dim leading-relaxed border-l-2 border-tier-moderate/50 pl-3">
-              Only one non-discriminative detector fired — capped at MODERATE under the
+              Only one non-discriminative detector fired. Capped at MODERATE under the
               corroboration gate. The cluster is real; the interpretation is not yet confirmed.
             </p>
           )}
@@ -227,7 +227,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
                       </td>
                       <td className="px-4 py-3 mono text-right text-fg-dim align-top">{m.times_observed}×</td>
                       <td className="px-4 py-3 text-fg-dim align-top">
-                        {(m.methods || []).map((x) => METHOD_LABEL[x] || x).join(', ') || '—'}
+                        {(m.methods || []).map((x) => METHOD_LABEL[x] || x).join(', ') || ', '}
                       </td>
                     </tr>
                   ))}
@@ -260,7 +260,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
                     </span>
                   </div>
                   <div className="mt-1 font-mono text-2xs text-fg-mute report-muted">
-                    {(o.methods || []).map((x) => METHOD_LABEL[x] || x).join(', ') || '—'}
+                    {(o.methods || []).map((x) => METHOD_LABEL[x] || x).join(', ') || ', '}
                   </div>
                 </li>
               ))}
@@ -276,12 +276,12 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
           <p className="text-sm text-fg-dim leading-relaxed">{v.methodology}</p>
         </section>
 
-        {/* First-run conversion + cross-navigation — the anonymous visitor just
+        {/* First-run conversion + cross-navigation, the anonymous visitor just
             experienced the value moment; offer the next step without friction. */}
         <section className="no-print border border-accent/25 bg-accent/[0.05] rounded-md p-5">
           <p className="text-sm text-fg leading-relaxed mb-3">
             This report was generated by OMISPHERE from the platform&apos;s own
-            disclosure data — coordination re-derived from behaviour, with the
+            disclosure data. Coordination re-derived from behaviour, with the
             evidence and the counter-evidence in one place.
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -289,7 +289,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
               href="/signup"
               className="inline-flex items-center gap-1.5 btn-lamp font-semibold px-4 h-9 rounded-md text-sm"
             >
-              Investigate your own target — free
+              Investigate your own target. Free
             </Link>
             {(v.other_featured ?? []).map((o) => (
               <a
@@ -314,7 +314,7 @@ export default async function PublicCampaignReportPage({ params }: PageProps) {
               <p className="text-sm text-fg-dim leading-relaxed">
                 Campaign <span className="mono text-fg">{v.meta.campaign_key}</span>
                 {v.meta.published_at && <> · published {v.meta.published_at.slice(0, 10)}</>}.
-                Observations, not verdicts — re-validate on{' '}
+                Observations, not verdicts. Re-validate on{' '}
                 <a href="/" className="text-accent hover:underline">omisphere.ai</a>.
               </p>
             </div>

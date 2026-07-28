@@ -24,7 +24,7 @@ export default function Error({
       <div className="max-w-md w-full text-center space-y-5">
         <h1 className="display text-2xl font-semibold tracking-tight text-fg">Something went wrong</h1>
         <p className="text-sm text-fg-mute">
-          This page hit an unexpected error. It&apos;s usually temporary — try again, or head back and
+          This page hit an unexpected error. It&apos;s usually temporary. Try again, or head back and
           reopen it.
         </p>
         <div className="flex items-center justify-center gap-3">

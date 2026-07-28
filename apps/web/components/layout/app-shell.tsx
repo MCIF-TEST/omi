@@ -34,15 +34,15 @@ export async function AppShell({ user, children }: AppShellProps) {
   return (
     <div className="min-h-screen flex flex-col bg-bg-deep grain relative">
       <Topbar user={user} engineStatus={engineStatus} />
-      {/* User-visible banner — everyone sees it, no env-var jargon. */}
+      {/* User-visible banner. Everyone sees it, no env-var jargon. */}
       {engineStatus && (
         <ServiceDegradedBanner youtubeConfigured={engineStatus.youtube_configured} />
       )}
-      {/* Admin diagnostics — env-var names, action items. */}
+      {/* Admin diagnostics. Env-var names, action items. */}
       {engineStatus?.storage_ephemeral && user.is_admin && (
         <div className="bg-danger/15 border-b border-danger/40 px-4 md:px-6 py-2 text-xs font-mono text-danger">
           ⚠ Admin: database is ephemeral (SQLite). Every redeploy wipes all user
-          accounts and saved investigations — provision Postgres and set{' '}
+          accounts and saved investigations. Provision Postgres and set{' '}
           <code className="bg-bg/40 px-1 rounded-sm">OMI_DATABASE_URL</code> before going live.
         </div>
       )}
@@ -63,7 +63,7 @@ export async function AppShell({ user, children }: AppShellProps) {
         </main>
       </div>
 
-      {/* Thumb-reachable primary navigation — phones only. */}
+      {/* Thumb-reachable primary navigation. Phones only. */}
       <MobileNav email={user.email} isNewUser={isNewUser} />
     </div>
   );

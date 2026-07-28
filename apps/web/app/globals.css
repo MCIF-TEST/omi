@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 /* =====================================================================
-   OMISPHERE — DESIGN LANGUAGE v2  ·  "INTELLIGENCE"
+   OMISPHERE. DESIGN LANGUAGE v2  ·  "INTELLIGENCE"
    Software for intelligence analysts. Deep blue is the identity; royal
    purple is the intelligence layer. OpenAI × Linear × Stripe × Palantir.
 
    Rules (binding)
      · Blue is the identity (~85%). Purple is the AI/intelligence layer
-       (~10%) — selected tabs, active investigation, AI features, premium.
+       (~10%). Selected tabs, active investigation, AI features, premium.
        Status colour is the remaining ~5%. Purple must feel special; it
        never dominates and never blends into blue.
      · No neon. No glow. No glassmorphism. No cyan, hot pink, or rainbow.
@@ -17,12 +17,12 @@
      · Elevation by tone + hairline, not shadow or glow.
      · Every colour communicates purpose. Decoration is not a purpose.
 
-   Voices  ·  Inter          — the entire interface, including display
-              JetBrains Mono — evidence: ids, numbers, handles, raw data
+   Voices  ·  Inter, the entire interface, including display
+              JetBrains Mono. Evidence: ids, numbers, handles, raw data
    ===================================================================== */
 
 :root {
-  /* Surfaces — deep navy graphite ramp */
+  /* Surfaces. Deep navy graphite ramp */
   --bg-deep:    #09111f;   /* app background            */
   --bg:         #0e1728;   /* secondary background      */
   --bg-elev:    #131e31;   /* panel surface (cards)     */
@@ -37,29 +37,29 @@
   --border-hot: #3c4f70;   /* hover emphasis   */
   --divider:    #1c2a3f;   /* quiet rule line  */
 
-  /* Text — slate ramp on navy. AA on the surfaces:
+  /* Text. Slate ramp on navy. AA on the surfaces:
      dim ~11:1, mute ~6.5:1, faint ~3.5:1 (faint = non-essential only). */
   --text:       #f8fafc;
   --text-dim:   #cbd5e1;
   --text-mute:  #94a3b8;
   --text-faint: #64748b;
 
-  /* Accent — BLUE. The identity: focus, active, links, primary action. */
-  --accent:      #3b82f6;   /* primary blue — 4.5:1, AA text on surfaces  */
+  /* Accent. BLUE. The identity: focus, active, links, primary action. */
+  --accent:      #3b82f6;   /* primary blue. 4.5:1, AA text on surfaces  */
   --accent-2:    #5b9dff;   /* hover / bright / blue-as-text (6.1:1)       */
   --accent-text: #5b9dff;   /* blue used AS TEXT                          */
   --accent-dim:  #2d6edf;   /* pressed                                    */
   --accent-soft: #dcebff;   /* soft tint (rare, on-blue contexts)          */
 
-  /* Intelligence — ROYAL PURPLE. The AI layer only. Special, never dominant. */
-  --violet:      #8f7bf0;   /* purple AS TEXT / identity — 4.98:1 AA       */
+  /* Intelligence. ROYAL PURPLE. The AI layer only. Special, never dominant. */
+  --violet:      #8f7bf0;   /* purple AS TEXT / identity. 4.98:1 AA       */
   --violet-2:    #a896f5;   /* brighter purple text (6.6:1)                */
   --violet-dim:  #5b3fd8;   /* primary purple FILL (AI actions, active)    */
   --violet-solid:   #5b3fd8;   /* AI action button background              */
   --violet-solid-2: #7052f0;   /* AI action hover                         */
   --violet-soft:    #e7e2ff;   /* soft purple tint (rare)                 */
 
-  /* Status / suspicion tiers — the semantic spectrum. Always dot + label.
+  /* Status / suspicion tiers, the semantic spectrum. Always dot + label.
      Authentic → suspicious → highly suspicious, plus an elevated step. */
   --tier-low:      #22c55e;   /* authentic / success   */
   --tier-moderate: #f59e0b;   /* suspicious / warning   */
@@ -70,21 +70,21 @@
   --danger: var(--tier-high);
   --unknown: #64748b;         /* unknown / no signal (neutral slate) */
 
-  /* The suspicion ramp — a DATA legend for probability meters (low→high),
+  /* The suspicion ramp, a DATA legend for probability meters (low→high),
      matching the network scale (authentic→highly-suspicious). Never a brand
      mark, never blue+purple. Appears only where the scale IS the subject. */
   --grad-brand: linear-gradient(90deg, var(--tier-low) 0%, var(--tier-moderate) 40%, var(--tier-elevated) 68%, var(--tier-high) 100%);
   --grad-brand-soft: linear-gradient(90deg, rgba(34,197,94,0.12) 0%, rgba(245,158,11,0.10) 40%, rgba(249,115,22,0.10) 68%, rgba(239,68,68,0.12) 100%);
 
-  /* Type — next/font sets --font-inter / --font-mono / --font-display-alt on <html> */
+  /* Type. Next/font sets --font-inter / --font-mono / --font-display-alt on <html> */
   --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
-  /* Confidence / data-sufficiency ramp — separate from action + tier. */
+  /* Confidence / data-sufficiency ramp. Separate from action + tier. */
   --confidence-strong: #22c55e;
   --confidence-medium: #f59e0b;
   --confidence-weak:   #64748b;
 
-  /* Cluster-identity palette — persistent categorical hue per cluster.
+  /* Cluster-identity palette. Persistent categorical hue per cluster.
      Anchored in blue/purple/slate with muted supporting hues (no neon,
      no rainbow); CVD-aware, ≥3:1 on --bg-elev. */
   --cluster-1: #3b82f6;  /* blue     (selected)  */
@@ -96,7 +96,7 @@
   --cluster-7: #64748b;  /* slate                */
   --cluster-8: #ec6a5a;  /* muted coral          */
 
-  /* Evidence-syntax palette — raw source data (JSON / logs / diffs). */
+  /* Evidence-syntax palette. Raw source data (JSON / logs / diffs). */
   --ev-string:  #4ade80;   /* green   */
   --ev-key:     #5b9dff;   /* blue    */
   --ev-number:  #a896f5;   /* purple  */
@@ -104,7 +104,7 @@
   --ev-error:   #ef4444;
   --ev-meta:    #64748b;
 
-  /* Motion — subtle, purposeful, fast. */
+  /* Motion. Subtle, purposeful, fast. */
   --ease-omi:  cubic-bezier(0.16, 1, 0.3, 1);
   --ease-mech: cubic-bezier(0.4, 0, 0.2, 1);
   --dur-hover: 0.14s;
@@ -139,10 +139,10 @@
   }
 
   /* iOS Safari zooms the whole page in when you focus a form control whose text is under 16px, and
-     it does NOT zoom back out when you leave — which is how the app ends up magnified and pannable
+     it does NOT zoom back out when you leave, which is how the app ends up magnified and pannable
      after a single tap on a search box. Keeping every control at 16px on touch screens removes the
      trigger entirely, and is why this is a min-width query: the tighter desktop type is deliberate
-     and unaffected. Do not "fix" this by disabling pinch-zoom — people who need to magnify text
+     and unaffected. Do not "fix" this by disabling pinch-zoom. People who need to magnify text
      must still be able to. */
   @media (max-width: 767px), (pointer: coarse) {
     input, textarea, select {
@@ -177,7 +177,7 @@
   hr { border: 0; height: 1px;
        background: linear-gradient(90deg, transparent, var(--divider) 18%, var(--divider) 82%, transparent); }
 
-  /* Display voice — Inter, tight. The scale carries hierarchy, not a serif. */
+  /* Display voice. Inter, tight. The scale carries hierarchy, not a serif. */
   h1, h2 {
     font-family: var(--font-display);
     font-weight: 600;
@@ -204,7 +204,7 @@
     background-clip: content-box;
   }
 
-  /* Structural grid — a faint blueprint under dense surfaces (opt-in). */
+  /* Structural grid, a faint blueprint under dense surfaces (opt-in). */
   .bg-grid {
     background-image:
       linear-gradient(rgba(203, 213, 225, 0.02) 1px, transparent 1px),
@@ -212,7 +212,7 @@
     background-size: 64px 64px, 64px 64px;
   }
 
-  /* Film grain retired — clean, not textured. Kept as a no-op. */
+  /* Film grain retired. Clean, not textured. Kept as a no-op. */
   .grain::after { content: none; display: none; }
 
   :focus-visible {
@@ -230,9 +230,9 @@
     font-weight: 600;
   }
 
-  /* Marketing display voice — Space Grotesk. A technical grotesk with genuine character (open
+  /* Marketing display voice. Space Grotesk. A technical grotesk with genuine character (open
      apertures, the distinctive single-storey 'a' and 'g'), so the pre-login page reads as a real,
-     deliberate product rather than a default system stack — while the app keeps the neutral Inter
+     deliberate product rather than a default system stack. While the app keeps the neutral Inter
      .display. Tight tracking + the interface's cv/ss features keep it crisp at display sizes. */
   .display-alt {
     font-family: var(--font-display-alt), var(--font-display);
@@ -241,12 +241,12 @@
     font-feature-settings: 'ss01', 'ss03';
   }
 
-  /* Wordmark — flat, no gradient. OMI carries the blue; SPHERE stays ink. */
+  /* Wordmark. Flat, no gradient. OMI carries the blue; SPHERE stays ink. */
   .text-gradient,
   .text-brand { color: var(--accent-text); }
   .text-silver { color: var(--text); }
 
-  /* Thermal text — a genuine spectrum figure on the suspicion axis only. */
+  /* Thermal text, a genuine spectrum figure on the suspicion axis only. */
   .text-thermal {
     background: var(--grad-brand);
     -webkit-background-clip: text;
@@ -254,13 +254,13 @@
     -webkit-text-fill-color: transparent;
   }
 
-  /* "glass" is now a SOLID elevated surface — no glassmorphism, no blur. */
+  /* "glass" is now a SOLID elevated surface, no glassmorphism, no blur. */
   .glass {
     background: var(--bg-elev-2);
     border: 1px solid var(--border-2);
   }
 
-  /* Accent-edged panel — a single quiet hairline, never a rainbow border. */
+  /* Accent-edged panel, a single quiet hairline, never a rainbow border. */
   .gradient-border {
     position: relative;
     background: var(--bg-elev);
@@ -268,11 +268,11 @@
     border-radius: 10px;
   }
 
-  /* Atmosphere retired — no decorative wash (kept as a no-op wrapper). */
+  /* Atmosphere retired, no decorative wash (kept as a no-op wrapper). */
   .aurora { position: relative; isolation: isolate; }
   .aurora::before { content: none; }
 
-  /* Section label — uppercase sans eyebrow with a short blue tick. */
+  /* Section label. Uppercase sans eyebrow with a short blue tick. */
   .section-label {
     display: inline-flex;
     align-items: center;
@@ -298,7 +298,7 @@
     align-self: center;
   }
 
-  /* Stat / metric value — figures are evidence: mono, tabular. */
+  /* Stat / metric value. Figures are evidence: mono, tabular. */
   .stat-value {
     font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
     font-variant-numeric: tabular-nums;
@@ -313,7 +313,7 @@
     background: linear-gradient(90deg, transparent, var(--divider) 18%, var(--divider) 82%, transparent);
   }
 
-  /* Interactive card — hairline brighten + a whisper of surface lift. */
+  /* Interactive card. Hairline brighten + a whisper of surface lift. */
   .card-interactive {
     transition: border-color var(--dur-hover) ease, background-color var(--dur-hover) ease;
   }
@@ -322,10 +322,10 @@
     background-color: var(--bg-elev-2);
   }
 
-  /* Inset-hairline elevation — the canonical raised slab (tone + hairline). */
+  /* Inset-hairline elevation, the canonical raised slab (tone + hairline). */
   .inset-hairline { box-shadow: inset 0 0 0 1px var(--border); }
 
-  /* Inset well — code/evidence/JSON sunk into a card. */
+  /* Inset well. Code/evidence/JSON sunk into a card. */
   .surface-inset {
     background: var(--bg-inset);
     border: 1px solid var(--border);
@@ -334,7 +334,7 @@
 
   .tabular { font-variant-numeric: tabular-nums; }
 
-  /* Cluster-identity dot — colour set inline via --c (a --cluster-N value). */
+  /* Cluster-identity dot. Colour set inline via --c (a --cluster-N value). */
   .cluster-dot {
     width: 8px; height: 8px; border-radius: 9999px;
     background: var(--c, var(--text-mute));
@@ -345,7 +345,7 @@
   /* ── Button materials ─────────────────────────────────────────────────────
      Flat, quiet, purposeful. 1px of real travel on press. No glow. */
 
-  /* Primary action — solid blue (the identity). */
+  /* Primary action. Solid blue (the identity). */
   .btn-lamp {
     background: var(--accent);
     color: #ffffff;
@@ -362,7 +362,7 @@
     box-shadow: none;
   }
 
-  /* AI action — solid royal purple (the intelligence layer). */
+  /* AI action. Solid royal purple (the intelligence layer). */
   .btn-ai {
     background: var(--violet-solid);
     color: #ffffff;
@@ -373,7 +373,7 @@
   .btn-ai:hover:not(:disabled) { background: var(--violet-solid-2); }
   .btn-ai:active:not(:disabled) { transform: translateY(1px); background: var(--violet-dim); }
 
-  /* Secondary action — transparent, hairline border, tonal hover. */
+  /* Secondary action. Transparent, hairline border, tonal hover. */
   .btn-slab {
     background: transparent;
     border: 1px solid var(--border-2);
@@ -382,25 +382,25 @@
   .btn-slab:hover:not(:disabled) { border-color: var(--border-hot); background: var(--bg-elev-2); }
   .btn-slab:active:not(:disabled) { transform: translateY(1px); }
 
-  /* Top light-catch — the single subtle "raised" cue. */
+  /* Top light-catch, the single subtle "raised" cue. */
   .surface-lit { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03); }
 
-  /* Status light — a solid dot (no emitting glow). */
+  /* Status light, a solid dot (no emitting glow). */
   .status-dot { }
 
-  /* Legacy alias — quiet blue hairline on hover, no glow. */
+  /* Legacy alias. Quiet blue hairline on hover, no glow. */
   .btn-glow { transition: box-shadow 0.14s ease, background 0.12s ease; }
   .btn-glow:hover { box-shadow: inset 0 0 0 1px var(--accent-dim); }
   .btn-glow:active { transform: translateY(1px); }
 
-  /* Dialog entrance — arrives, doesn't just appear. */
+  /* Dialog entrance. Arrives, doesn't just appear. */
   .dialog-panel { animation: dialog-in 0.16s var(--ease-omi); }
   @keyframes dialog-in {
     from { opacity: 0; transform: translateY(6px) scale(0.99); }
     to   { opacity: 1; transform: translateY(0)   scale(1); }
   }
 
-  /* Sidebar nav item — quiet ink; blue rail + faint blue wash when active. */
+  /* Sidebar nav item. Quiet ink; blue rail + faint blue wash when active. */
   .nav-item {
     display: flex;
     align-items: center;
@@ -428,7 +428,7 @@
     background: var(--accent);
   }
 
-  /* Keyboard hint — a real keycap. */
+  /* Keyboard hint, a real keycap. */
   .kbd {
     font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 0.625rem;
@@ -585,7 +585,7 @@
 }
 
 /* =====================================================================
-   Mobile — bottom tab bar, sheet, safe areas, tactile feedback.
+   Mobile. Bottom tab bar, sheet, safe areas, tactile feedback.
    ===================================================================== */
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

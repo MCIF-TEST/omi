@@ -2,7 +2,6 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { Target, ArrowRight, Clock, Gauge, MessageSquarePlus } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { getCurrentUser } from '@/lib/auth';
 import { apiServer } from '@/lib/api-server';
 import { ManageSubscriptionButton, type BillingStatus } from './manage-subscription-button';
@@ -10,7 +9,7 @@ import { NotificationsBlock } from './notifications-block';
 import { ReferralBlock } from './referral-block';
 import { DeleteAccountButton } from './delete-account-button';
 
-export const metadata = { title: 'Settings — OMISPHERE' };
+export const metadata = { title: 'Settings. OMISPHERE' };
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -45,10 +44,10 @@ export default async function SettingsPage() {
             label="Subscription"
             value={
               user.subscription_status === 'active'
-                ? <Badge variant="accent">Active</Badge>
+                ? <span className="font-mono text-2xs tracking-wider uppercase text-accent-text">Active</span>
                 : user.subscription_status === 'canceled'
-                  ? <Badge variant="warn">Canceled</Badge>
-                  : <Badge variant="neutral">Free trial</Badge>
+                  ? <span className="font-mono text-2xs tracking-wider uppercase text-warn">Canceled</span>
+                  : <span className="font-mono text-2xs tracking-wider uppercase text-fg-dim">Free trial</span>
             }
           />
           <Row
@@ -56,7 +55,7 @@ export default async function SettingsPage() {
             value={
               user.subscription_renews_at
                 ? new Date(user.subscription_renews_at).toLocaleDateString()
-                : '—'
+                : '-'
             }
           />
         </dl>
@@ -65,14 +64,14 @@ export default async function SettingsPage() {
       <Card>
         <CardLabel>Billing</CardLabel>
         {/* Figures come from the API, which reads them from the same settings that drive the actual
-            charge and grant — so this card cannot drift from what a customer is really billed. */}
+            charge and grant, so this card cannot drift from what a customer is really billed. */}
         <CardTitle>
           {billing.price_display} / month · {billing.credits_per_period} credits
         </CardTitle>
         <p className="text-sm text-fg-dim mb-5">
           {billing.subscription_status === 'active' || billing.subscription_status === 'trialing'
             ? `${billing.credits_per_period} credits are added each month. Update your card or cancel any time from Stripe.`
-            : `${billing.credits_per_period} credits a month — one credit covers up to 50 accounts, so that is up to ${(billing.credits_per_period * 50).toLocaleString()} accounts analysed.`}
+            : `${billing.credits_per_period} credits a month, one credit covers up to 50 accounts, so that is up to ${(billing.credits_per_period * 50).toLocaleString()} accounts analysed.`}
         </p>
         <Suspense fallback={null}>
           <ManageSubscriptionButton initial={billing} />
@@ -118,7 +117,7 @@ export default async function SettingsPage() {
                 <div>
                   <div className="text-fg font-medium">Feedback queue</div>
                   <div className="text-xs text-fg-dim mt-0.5">
-                    Everything users have sent — searchable by keyword or email.
+                    Everything users have sent. Searchable by keyword or email.
                   </div>
                 </div>
               </div>
@@ -133,7 +132,7 @@ export default async function SettingsPage() {
                 <div>
                   <div className="text-fg font-medium">Engine intelligence</div>
                   <div className="text-xs text-fg-dim mt-0.5">
-                    Benchmark scoreboard — accuracy, coordination rescue, and the
+                    Benchmark scoreboard. Accuracy, coordination rescue, and the
                     memory learning curve.
                   </div>
                 </div>

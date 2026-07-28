@@ -100,7 +100,7 @@ export function SignupForm() {
             type="text"
             autoComplete="off"
             maxLength={16}
-            placeholder="Optional — get your friend an extra credit"
+            placeholder="Optional. Get your friend an extra credit"
             value={referralCode}
             onChange={(e) => setReferralCode(e.target.value)}
           />

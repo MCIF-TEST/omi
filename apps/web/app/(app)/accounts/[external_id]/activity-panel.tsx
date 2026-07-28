@@ -88,7 +88,7 @@ export function AccountActivityPanel({ platform, externalId }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Heatmap up top — visual pattern read */}
+      {/* Heatmap up top. Visual pattern read */}
       <PostingHeatmap comments={data.comments} />
 
       <Card>

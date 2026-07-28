@@ -22,19 +22,19 @@ import {
 
 const POLL_INTERVAL_MS = 2500;
 // Opening an investigation loads its SAVED assessment: a model-backed result shows immediately (no
-// re-run), and while a generation is still in flight — the one scheduled at scan time, or the
-// backend's one-shot auto-heal of an inconclusive/floored result — we hold the loading screen and
+// re-run), and while a generation is still in flight, the one scheduled at scan time, or the
+// backend's one-shot auto-heal of an inconclusive/floored result. We hold the loading screen and
 // poll until it lands. We never force a re-run from here. ~520s of polling matches the server's
 // 500s generation timeout, so the wait ends when the real result does.
 // ~10 min of polling. A batched run issues its OpenRouter calls ONE AT A TIME (so the first accounts
-// land as early as possible), which means the wall-clock total grows with the batch count — but this
+// land as early as possible), which means the wall-clock total grows with the batch count, but this
 // budget RESETS every time a new batch's results land (see the 'partial' branch), so it is really
 // "10 minutes without visible progress". A scan that keeps delivering batches is never cut off here.
 const MAX_POLLS = 240;
 
 // Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
 // URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.
-// Purely a read-only diagnostic surface over the existing forensic trace — it changes no data.
+// Purely a read-only diagnostic surface over the existing forensic trace, it changes no data.
 function verificationEnabled(): boolean {
   if (process.env.NEXT_PUBLIC_OMI_VERIFY_MODE === '1') return true;
   if (typeof window === 'undefined') return false;
@@ -46,7 +46,7 @@ function verificationEnabled(): boolean {
  * Minimum UI to exercise the Omi Analyst endpoint (Sprint 001).
  * POST -> 503 (disabled) | 202 (generating -> poll) | 200 (assessment).
  * The assessment is a recommendation bounded by the engine's evidence; it never
- * recomputes a score. Off by default — the disabled state degrades gracefully.
+ * recomputes a score. Off by default, the disabled state degrades gracefully.
  */
 export function AnalystPanel({ slug }: { slug: string }) {
   const [assessment, setAssessment] = useState<AnalystAssessment | null>(null);
@@ -89,7 +89,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
     const step = async (doRefresh: boolean): Promise<void> => {
       try {
         const r = await post(doRefresh);
-        // A SAVED assessment (model-backed, or the deterministic floor) is the previous result — show
+        // A SAVED assessment (model-backed, or the deterministic floor) is the previous result. Show
         // it as-is. We never force a re-run on open; the backend alone decides when an inconclusive
         // (floored) result is worth regenerating, and does so exactly once, returning 202 while it runs.
         if (r.status === 'ready' && r.assessment) {
@@ -100,7 +100,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
           return;
         }
         // Batched run in progress: render the finished batches' accounts NOW (first-to-last) and
-        // keep polling for the rest. Every batch that lands resets the poll budget — a many-batch
+        // keep polling for the rest. Every batch that lands resets the poll budget, a many-batch
         // scan visibly making progress is never timed out.
         if (r.status === 'partial' && r.assessment) {
           const done = r.assessment.batching?.done ?? 0;
@@ -112,10 +112,10 @@ export function AnalystPanel({ slug }: { slug: string }) {
           setProvider(r.provider ?? null);
           setGeneratedAt(r.generated_at ?? null);
         }
-        // 202 generating — a scan-time generation or the backend's one-shot auto-heal is in flight.
+        // 202 generating, a scan-time generation or the backend's one-shot auto-heal is in flight.
         // Hold the loading screen and poll until it lands.
         if (polls++ >= MAX_POLLS) {
-          setError('The AI analysis is taking longer than usual. It keeps running on the server — reload in a moment to pick it up.');
+          setError('The AI analysis is taking longer than usual. It keeps running on the server. Reload in a moment to pick it up.');
           setPending(false);
           return;
         }
@@ -128,13 +128,13 @@ export function AnalystPanel({ slug }: { slug: string }) {
           // it names something actionable rather than "it failed".
           setError(e.message);
         } else if (e instanceof TypeError) {
-          // fetch() rejects with TypeError only when the request never completed — the connection was
+          // fetch() rejects with TypeError only when the request never completed, the connection was
           // refused, reset, or cut mid-flight. That is a different problem from the server saying no,
           // and it used to be reported with the same generic sentence, which hid the distinction that
           // matters most when diagnosing: was the API even reached?
           setError(
             'Lost the connection to the analysis service before it answered. The generation often ' +
-            'keeps running on the server — reload in a minute to pick it up. If it keeps happening, ' +
+            'keeps running on the server. Reload in a minute to pick it up. If it keeps happening, ' +
             'the API may be restarting.',
           );
         } else {
@@ -148,7 +148,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
   };
 
   // Auto-load on mount: the analyst now runs server-side for every investigation
-  // (scheduled at scan time), so surface its cached assessment automatically — the AI
+  // (scheduled at scan time), so surface its cached assessment automatically, the AI
   // reading is part of the report, not a manual action. A cached result returns
   // immediately (no new model call); 503 degrades to the graceful "not enabled" notice.
   useEffect(() => {
@@ -178,11 +178,11 @@ export function AnalystPanel({ slug }: { slug: string }) {
           <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
           Omi Analyst reasoning isn&apos;t enabled on this server yet. The structured,
           evidence-bounded assessment becomes available once the reasoning layer is
-          turned on — the investigation evidence above is unaffected.
+          turned on, the investigation evidence above is unaffected.
         </p>
       ) : pending && !assessment ? (
         // The analyst runs automatically for every investigation. Hold a real loading screen while
-        // the OpenRouter response is on its way — it fills in the moment the result lands. Once a
+        // the OpenRouter response is on its way, it fills in the moment the result lands. Once a
         // batched run's FIRST batch lands, the partial assessment renders below instead (with a
         // progress strip), so results appear first-to-last while later batches still generate.
         <AnalystLoading elapsedSec={elapsedSec} />
@@ -202,7 +202,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
             />
           )}
           <AssessmentView a={assessment} slug={slug} />
-          {/* The same live state repeated where the results END — the user reading down the list
+          {/* The same live state repeated where the results END: the user reading down the list
               reaches the last scored account here, and needs to know more are still coming rather
               than assuming the scan stopped short. */}
           {assessment.batching && !assessment.batching.complete && (
@@ -211,7 +211,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
               scored={assessment.commenter_assessments?.length ?? 0}
             />
           )}
-          {/* Finished, but a batch produced nothing — say so plainly rather than letting a short list
+          {/* Finished, but a batch produced nothing. Say so plainly rather than letting a short list
               read as the whole answer, and offer the retry that would fill it in. */}
           {assessment.batching
             && assessment.batching.complete
@@ -251,7 +251,7 @@ function BatchProgressStrip({
 }: {
   batching: NonNullable<AnalystAssessment['batching']>;
   elapsedSec: number;
-  /** Accounts actually returned so far — the real count, not done × batch_size (the final batch is
+  /** Accounts actually returned so far, the real count, not done × batch_size (the final batch is
    *  usually partial, which would overstate it). */
   scored: number;
 }) {
@@ -261,7 +261,7 @@ function BatchProgressStrip({
       <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
         <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2 flex items-center gap-1.5">
           <Loader2 size={11} className="animate-spin" />
-          Scoring in batches — {batching.done} of {batching.total} done
+          Scoring in batches: {batching.done} of {batching.total} done
         </span>
         <span className="font-mono text-2xs text-fg-mute tabular-nums">
           {scored} account{scored === 1 ? '' : 's'} scored · {elapsedSec}s
@@ -285,7 +285,7 @@ function BatchProgressStrip({
 
 /**
  * The bottom bookend of a batched run. Someone reading down the results reaches the end of the
- * scored accounts here — without this, a 100-account scan showing 25 results looks finished-and-short
+ * scored accounts here, without this, a 100-account scan showing 25 results looks finished-and-short
  * rather than still-running.
  */
 function BatchTrailingNotice({
@@ -304,7 +304,7 @@ function BatchTrailingNotice({
       <Loader2 size={13} className="animate-spin text-violet-2 shrink-0" />
       <p className="text-2xs text-fg-dim leading-relaxed">
         <span className="text-fg-dim font-medium">{scored} account{scored === 1 ? '' : 's'} analyzed.</span>{' '}
-        Still analyzing the rest — {remaining} more batch{remaining === 1 ? '' : 'es'} to go. New
+        Still analyzing the rest. {remaining} more batch{remaining === 1 ? '' : 'es'} to go. New
         accounts appear here as each batch lands; you don&apos;t need to wait on this page.
       </p>
     </div>
@@ -313,7 +313,7 @@ function BatchTrailingNotice({
 
 /**
  * The run finished, but one or more batches came back empty (a failed model call), so some selected
- * accounts have no assessment. Stating that is the honest thing to do — a silently short list reads
+ * accounts have no assessment. Stating that is the honest thing to do, a silently short list reads
  * as "these were all the accounts". The retry re-runs the generation for the whole investigation.
  */
 function IncompleteCoverageNotice({
@@ -353,7 +353,7 @@ function verdictLabel(v: string): string {
 
 // The corroboration methods, and which of them are DISCRIMINATIVE of coordination (a maximal
 // 'coordinated' read requires >=1 discriminative method AND single_axis_capped === false). Mirrors
-// the backend gate — surfaced here so the panel shows WHY a coordinated read is (or isn't) permitted.
+// the backend gate. Surfaced here so the panel shows WHY a coordinated read is (or isn't) permitted.
 const METHOD_LABELS: Record<string, string> = {
   fingerprint_cluster: 'fingerprint',
   co_engagement: 'co-engagement',
@@ -365,8 +365,8 @@ const METHOD_LABELS: Record<string, string> = {
 };
 const DISCRIMINATIVE_METHODS = new Set(['fingerprint_cluster', 'co_engagement', 'co_tag']);
 
-// The engine's corroboration state (echoed onto the assessment). Rendered as structured chips — the
-// discriminative methods that fired, plus the single-axis-cap and convergence flags — so the reader
+// The engine's corroboration state (echoed onto the assessment). Rendered as structured chips, the
+// discriminative methods that fired, plus the single-axis-cap and convergence flags, so the reader
 // can see the coordination gate directly instead of inferring it from prose.
 function CorroborationStrip({ corr }: { corr?: AnalystAssessment['corroboration'] }) {
   if (!corr) return null;
@@ -410,7 +410,7 @@ function CorroborationStrip({ corr }: { corr?: AnalystAssessment['corroboration'
   );
 }
 
-// Supplemental signals (e.g. AI-writing) — reported as neutral context that carries ZERO suspicion
+// Supplemental signals (e.g. AI-writing). Reported as neutral context that carries ZERO suspicion
 // weight. Surfaced as its own labeled block so it can never be mistaken for incriminating evidence.
 function SupplementalContext({ items }: { items?: { signal: string; note: string }[] }) {
   if (!items || items.length === 0) return null;
@@ -422,7 +422,7 @@ function SupplementalContext({ items }: { items?: { signal: string; note: string
           <li key={i} className="text-xs text-fg-dim flex gap-2 leading-relaxed">
             <span className="text-fg-mute">◇</span>
             <span>
-              <span className="text-fg-mute font-mono">{it.signal}</span> — {it.note}
+              <span className="text-fg-mute font-mono">{it.signal}</span>. {it.note}
             </span>
           </li>
         ))}
@@ -445,7 +445,7 @@ function LegitimateHypothesis({ text }: { text?: string | null }) {
 
 // Whether the AI (OpenRouter) actually authored this assessment. Prefer the explicit trace flag; fall back to the
 // governance provider string for assessments persisted before the trace existed. When false, the
-// synthesis prose is the deterministic Floor's — it must NEVER be shown as AI reasoning.
+// synthesis prose is the deterministic Floor's, it must NEVER be shown as AI reasoning.
 function isModelBacked(a: AnalystAssessment): boolean {
   if (typeof a.investigation_trace?.model_backed === 'boolean') return a.investigation_trace.model_backed;
   const provider = a.governance?.provider ?? '';
@@ -458,13 +458,13 @@ function isModelBacked(a: AnalystAssessment): boolean {
 // the latency/token/cost of the call. Gated by verificationEnabled(); never shown to normal users and
 // never alters any data. No secrets are present in the trace it reads.
 function fmtMs(v?: number | null): string {
-  return typeof v === 'number' ? `${Math.round(v)} ms` : '—';
+  return typeof v === 'number' ? `${Math.round(v)} ms` : '-';
 }
 function fmtCost(v?: number | null): string {
-  return typeof v === 'number' ? `$${v.toFixed(6)}` : '—';
+  return typeof v === 'number' ? `$${v.toFixed(6)}` : '-';
 }
 function yn(v: boolean | undefined | null): string {
-  return v === true ? 'yes' : v === false ? 'no' : '—';
+  return v === true ? 'yes' : v === false ? 'no' : '-';
 }
 
 function VerificationPanel({
@@ -476,45 +476,45 @@ function VerificationPanel({
   const isOpenRouter = (t.provider ?? '').toLowerCase() === 'openrouter'
     || /openrouter/i.test(provider ?? '');
   const rows: [string, React.ReactNode][] = [
-    ['Provider', t.provider ?? provider ?? '—'],
-    ['Served model', t.served_model ?? t.requested_model ?? '—'],
+    ['Provider', t.provider ?? provider ?? '-'],
+    ['Served model', t.served_model ?? t.requested_model ?? '-'],
     ['Served model verified', t.served_model_verified == null
-      ? '—'
+      ? '-'
       : t.served_model_verified
-        ? `yes — ${t.served_model_expected ?? 'expected model'}`
-        : `NO — expected ${t.served_model_expected ?? '?'}, served ${t.served_model ?? '?'}`],
-    ['Preset', t.openrouter_preset ?? '—'],
-    ['Protocol version', t.master_prompt_version ?? '—'],
-    ['Protocol hash', t.master_prompt_hash ?? '—'],
-    ['Schema id / version', `${t.canonical_schema_id ?? '—'} / v${(a as { schema_version?: number }).schema_version ?? '—'}`],
+        ? `yes. ${t.served_model_expected ?? 'expected model'}`
+        : `NO: expected ${t.served_model_expected ?? '?'}, served ${t.served_model ?? '?'}`],
+    ['Preset', t.openrouter_preset ?? '-'],
+    ['Protocol version', t.master_prompt_version ?? '-'],
+    ['Protocol hash', t.master_prompt_hash ?? '-'],
+    ['Schema id / version', `${t.canonical_schema_id ?? '-'} / v${(a as { schema_version?: number }).schema_version ?? '-'}`],
     ['Model-backed', yn(t.model_backed)],
     ['Request completed', yn(t.request_completed)],
     ['JSON received', yn(t.json_received)],
     ['Validation passed', yn(t.validation_passed)],
-    ['Governor verdict', t.governor_verdict ?? '—'],
+    ['Governor verdict', t.governor_verdict ?? '-'],
     ['Fallback used', yn(!aiBacked)],
-    ['Fallback reason', t.fallback_reason ?? '—'],
+    ['Fallback reason', t.fallback_reason ?? '-'],
     ['Latency', fmtMs(t.endpoint_latency_ms)],
-    ['Input tokens', t.input_tokens ?? '—'],
-    ['Output tokens', t.output_tokens ?? '—'],
-    ['Total tokens', t.total_tokens ?? '—'],
+    ['Input tokens', t.input_tokens ?? '-'],
+    ['Output tokens', t.output_tokens ?? '-'],
+    ['Total tokens', t.total_tokens ?? '-'],
     ['Estimated cost', fmtCost(t.endpoint_cost_usd)],
-    ['OpenRouter request id', t.endpoint_request_id ?? '—'],
-    ['HTTP status', t.response_status ?? '—'],
-    ['Endpoint error', t.endpoint_error ?? '—'],
-    ['Generated at', generatedAt ?? '—'],
-    // Phase 5H — full-investigation completion certification
-    ['— completion —', ''],
-    ['Completion', c ? (c.complete ? 'complete' : `incomplete: ${c.incomplete_kind ?? '—'}`) : '—'],
+    ['OpenRouter request id', t.endpoint_request_id ?? '-'],
+    ['HTTP status', t.response_status ?? '-'],
+    ['Endpoint error', t.endpoint_error ?? '-'],
+    ['Generated at', generatedAt ?? '-'],
+    // Phase 5H. Full-investigation completion certification
+    ['completion', ''],
+    ['Completion', c ? (c.complete ? 'complete' : `incomplete: ${c.incomplete_kind ?? '-'}`) : '-'],
     ['Commenters analyzed / expected',
-      c ? `${c.assessed_commenters} / ${c.represented_commenters + c.omitted_input_commenters}` : '—'],
+      c ? `${c.assessed_commenters} / ${c.represented_commenters + c.omitted_input_commenters}` : '-'],
     ['Stopped on token limit', yn(c?.stopped_on_token_limit)],
     ['JSON complete', yn(c?.json_complete)],
     ['Schema valid', yn(c?.schema_valid)],
     ['Governor valid', yn(c?.governor_valid)],
-    ['Completion budget', c?.max_output_tokens ?? t.max_output_tokens ?? '—'],
-    ['Actual output size', c?.output_tokens ?? '—'],
-    ['Est. remaining commenters', c?.estimated_remaining_commenters ?? '—'],
+    ['Completion budget', c?.max_output_tokens ?? t.max_output_tokens ?? '-'],
+    ['Actual output size', c?.output_tokens ?? '-'],
+    ['Est. remaining commenters', c?.estimated_remaining_commenters ?? '-'],
   ];
   return (
     <details className="mt-4 rounded-sm border border-dashed border-accent/40 bg-bg-elev-2/40 open:bg-bg-elev-2">
@@ -553,7 +553,7 @@ function VerificationPanel({
   );
 }
 
-// THE OMI SCORE — the single composite authenticity-risk score (0–100), the investigation's headline
+// THE OMI SCORE: the single composite authenticity-risk score (0-100), the investigation's headline
 // figure. Higher = stronger evidence of inauthentic/coordinated behavior. Rendered as the number plus a
 // tier-colored bar (score/100). This is the only investigation score; the legacy inauthenticity
 // probability is retired.
@@ -561,7 +561,7 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
   const s = Math.max(0, Math.min(100, Math.round(score ?? 0)));
   return (
     <div className="flex items-center gap-3">
-      <div className="flex items-baseline gap-1 shrink-0" title="OMI score — composite authenticity-risk, 0–100.">
+      <div className="flex items-baseline gap-1 shrink-0" title="OMI score. Composite authenticity-risk, 0-100.">
         <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute mr-1">OMI</span>
         <span className="stat-value text-2xl font-semibold text-fg tabular-nums">{s}</span>
         <span className="font-mono text-2xs text-fg-mute">/100</span>
@@ -573,7 +573,7 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
 
 function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   // Product-cutover rule: only AI-authored (OpenRouter) assessments render as AI reasoning. If the model
-  // was not reached, the deterministic Floor stood in — we must NOT present its synthesized verdict /
+  // was not reached, the deterministic Floor stood in. We must NOT present its synthesized verdict /
   // headline / assessment / evidence as though the AI wrote it.
   if (!isModelBacked(a)) return <AiUnavailable a={a} />;
 
@@ -596,7 +596,7 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
           )}
         </div>
 
-        {/* THE OMI SCORE — the analyst's single composite authenticity-risk score (0–100), the headline
+        {/* THE OMI SCORE: the analyst's single composite authenticity-risk score (0-100), the headline
             figure. Replaces the legacy inauthenticity probability. Rendered as the big number + a
             tier-colored bar. */}
         <OmiScore score={a.omi_score} tier={a.suspicion_tier as Tier} />
@@ -644,7 +644,7 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   );
 }
 
-// The AI analysis couldn't be produced for this investigation (rare — the pipeline auto-retries a fresh
+// The AI analysis couldn't be produced for this investigation (rare, the pipeline auto-retries a fresh
 // model call once). Users see a clean, friendly notice; the technical forensic diagnostic is shown ONLY
 // in dev/verification mode. We never present the deterministic Floor's synthesis as if the AI wrote it.
 function AiUnavailable({ a }: { a: AnalystAssessment }) {
@@ -654,7 +654,7 @@ function AiUnavailable({ a }: { a: AnalystAssessment }) {
     <div className="text-sm text-fg-dim flex items-start gap-2">
       <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
       <span>
-        The AI analysis for this investigation isn’t ready yet. It runs automatically — please check back
+        The AI analysis for this investigation isn’t ready yet. It runs automatically. Please check back
         in a moment or scan again shortly.
         {verbose && <AiUnavailableDiagnostics t={t} governanceProvider={a.governance?.provider} />}
       </span>
@@ -680,7 +680,7 @@ function AiUnavailableDiagnostics(
       : t.endpoint_error ? 'gateway error'
       : 'unknown');
   const diagnostics: [string, string][] = [
-    ['provider', t.provider ?? governanceProvider ?? '—'],
+    ['provider', t.provider ?? governanceProvider ?? '-'],
     ['reason', reason],
     ...(status !== null ? [['http status', String(status)] as [string, string]] : []),
     ...(t.endpoint_error ? [['error', t.endpoint_error] as [string, string]] : []),
@@ -721,7 +721,7 @@ const DOMAIN_PANELS: { key: keyof ComprehensiveSections; title: string }[] = [
 ];
 
 // The six per-domain reasoning sections of the single comprehensive AI response. Each panel is a
-// pure view over the already-loaded assessment — expanding a panel triggers NO request (no per-panel
+// pure view over the already-loaded assessment. Expanding a panel triggers NO request (no per-panel
 // inference). Sections the model left empty are shown as "no reasoning provided" rather than hidden.
 function DomainReasoning({
   sections,
@@ -802,11 +802,11 @@ function DomainPanel({
 }
 
 // Per-account (per-commenter) AI assessments from the ONE comprehensive response. Each card pairs the
-// model's per-account reasoning with the engine's echoed tier/probability (joined server-side — the model
+// model's per-account reasoning with the engine's echoed tier/probability (joined server-side, the model
 // never emits a per-account number). When the model produced none, an honest empty state is shown instead
 // of any deterministic fallback. `resolved: false` items (alias didn't map to a known commenter) are
 // summarized as a count rather than shown as fabricated identities.
-// Completion statistics — always shown so the user knows the AI coverage of THIS investigation
+// Completion statistics, always shown so the user knows the AI coverage of THIS investigation
 // (expected vs analyzed, the dynamic budget, actual output). Never hides an incomplete investigation.
 function CompletionStats({ c }: { c: CompletionStatus }) {
   const expected = c.represented_commenters + c.omitted_input_commenters;
@@ -849,7 +849,7 @@ function CompletionBanner({ c }: { c?: CompletionStatus }) {
   );
 }
 
-// Compact raw-metadata line for one account — the objective facts (followers, age, posts) the AI
+// Compact raw-metadata line for one account, the objective facts (followers, age, posts) the AI
 // scored from, shown beside its OMI score. Only renders the facts that were collected.
 function accountAgeDays(iso?: string): number | null {
   if (!iso) return null;
@@ -886,7 +886,7 @@ function CommenterAssessments({
       {resolved.length === 0 ? (
         <p className="text-xs text-fg-faint leading-relaxed flex items-start gap-2">
           <TriangleAlert size={13} className="mt-0.5 shrink-0 text-fg-mute" />
-          The AI did not return a per-account reading for this investigation — a large investigation can
+          The AI did not return a per-account reading for this investigation, a large investigation can
           exceed a single response.
         </p>
       ) : (
@@ -900,7 +900,7 @@ function CommenterAssessments({
                 <span className="text-sm font-medium text-fg break-all">{r.handle ?? r.ref}</span>
                 {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
                 {typeof r.omi_score === 'number' && (
-                  <span className="flex items-baseline gap-1 ml-auto" title="This account's OMI score (0–100).">
+                  <span className="flex items-baseline gap-1 ml-auto" title="This account's OMI score (0-100).">
                     <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">OMI</span>
                     <span className="stat-value text-base font-semibold text-fg tabular-nums">
                       {Math.max(0, Math.min(100, Math.round(r.omi_score)))}
@@ -970,10 +970,10 @@ function EvidenceList({
                 <div className="flex gap-2">
                   <span className={mark.cls}>{mark.sym}</span>
                   <span>
-                    <span className="text-fg-mute font-mono">{it.signal}</span> — {it.claim}
+                    <span className="text-fg-mute font-mono">{it.signal}</span>. {it.claim}
                   </span>
                 </div>
-                {/* impact = the detector's share of total score movement (echoed) — shown as a bar. */}
+                {/* impact = the detector's share of total score movement (echoed). Shown as a bar. */}
                 {typeof it.impact === 'number' && (
                   <div className="mt-1 pl-5 max-w-[180px]">
                     <ProbabilityBar value={it.impact} size="sm" />

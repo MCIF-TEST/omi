@@ -8,7 +8,7 @@ export function PrintButton() {
     <button
       onClick={() => window.print()}
       className="font-mono text-2xs tracking-wider uppercase px-2.5 h-7 inline-flex items-center gap-1.5 border border-accent-dim bg-accent/10 text-accent rounded-sm hover:bg-accent/20 transition-colors"
-      aria-label="Save as PDF — uses browser's print-to-PDF"
+      aria-label="Save as PDF: uses browser's print-to-PDF"
       title="Save as PDF (Cmd/Ctrl+P)"
     >
       <Printer size={11} /> Save as PDF

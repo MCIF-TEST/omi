@@ -12,7 +12,7 @@
   "generated_by": "app.reasoning.prompts.export.investigation_summary_template_manifest",
   "manifest_version": "v1",
   "output_schema_descriptor_hash": "issch:e4a9a11d765475b6fdb0b5e521219abd",
-  "response_contract_hash": "isrc:a0e34d398a9182361f127771ce9e4c88",
+  "response_contract_hash": "isrc:bc8e3d09a03b9c819a10715658f44785",
   "response_format": "json_object",
   "reuses_existing_schema": true,
   "schema_ref": "schema/analyst_response_schema.json",
@@ -47,7 +47,7 @@
         "section": "weak_signals"
       },
       {
-        "header": "## Institutional-memory context (background only \u2014 never proof)",
+        "header": "## Institutional-memory context (background only, never proof)",
         "section": "memory"
       },
       {
@@ -89,10 +89,10 @@
       "schema_id": "analyst_response_v1",
       "type": "investigation_summary_assessment"
     },
-    "response_contract": "Emit exactly one JSON object valid against the Omi analyst response schema (schema/analyst_response_schema.json). ECHO the engine's suspicion_probability and suspicion_tier (never recompute them). Produce the analyst reasoning fields: verdict (a RECOMMENDATION in Omi's verdict vocabulary, never a persisted truth), confidence_band and confidence_rationale, a concise headline, the assessment prose, evidence_for and evidence_against (each an array of structured evidence items citing only bundle evidence), uncertainty, what_would_change_this, corroboration, and limits_statement \u2014 plus coordination_label, supplemental_context, and legitimate_hypothesis where warranted. Always include counter-evidence and named uncertainty. Cite only evidence from the investigation evidence bundle. Output only the JSON.",
-    "system_task": "# INVESTIGATION SUMMARY TASK\nYou are producing the OVERALL INVESTIGATION assessment \u2014 the synthesis across the whole investigation. The deterministic engine has already measured the evidence; you reason over it. Weigh the investigation-level signal (the engine's overall suspicion probability and tier, which you ECHO and never recompute), the cross-account coordination digest (score, tier, whether the score was single-axis-capped, which discriminative methods fired), the strongest signed contribution drivers, the account roll-up (how many accounts, how many reach each suspicion band), the cross-links that connect the inputs, the data-quality caveats, and the institutional-memory context (background only \u2014 never proof, never citable). Synthesize ONE assessment that explains the overall read, names the evidence for AND against, states what is uncertain, and gives a recommendation for the human analyst. Describe behavior, not people; use probabilistic language; coordinated legitimate behavior (newsrooms, on-message officials) and benign automation are NOT hostile \u2014 weigh the legitimate hypothesis. The human analyst sets the final verdict.",
+    "response_contract": "Emit exactly one JSON object valid against the Omi analyst response schema (schema/analyst_response_schema.json). ECHO the engine's suspicion_probability and suspicion_tier (never recompute them). Produce the analyst reasoning fields: verdict (a RECOMMENDATION in Omi's verdict vocabulary, never a persisted truth), confidence_band and confidence_rationale, a concise headline, the assessment prose, evidence_for and evidence_against (each an array of structured evidence items citing only bundle evidence), uncertainty, what_would_change_this, corroboration, and limits_statement, plus coordination_label, supplemental_context, and legitimate_hypothesis where warranted. Always include counter-evidence and named uncertainty. Cite only evidence from the investigation evidence bundle. Output only the JSON.",
+    "system_task": "# INVESTIGATION SUMMARY TASK\nYou are producing the OVERALL INVESTIGATION assessment, the synthesis across the whole investigation. The deterministic engine has already measured the evidence; you reason over it. Weigh the investigation-level signal (the engine's overall suspicion probability and tier, which you ECHO and never recompute), the cross-account coordination digest (score, tier, whether the score was single-axis-capped, which discriminative methods fired), the strongest signed contribution drivers, the account roll-up (how many accounts, how many reach each suspicion band), the cross-links that connect the inputs, the data-quality caveats, and the institutional-memory context (background only, never proof, never citable). Synthesize ONE assessment that explains the overall read, names the evidence for AND against, states what is uncertain, and gives a recommendation for the human analyst. Describe behavior, not people; use probabilistic language; coordinated legitimate behavior (newsrooms, on-message officials) and benign automation are NOT hostile. Weigh the legitimate hypothesis. The human analyst sets the final verdict.",
     "version": "istmpl-v1"
   },
-  "template_hash": "istmpl:458d6fef327db0b803d907ca63bebdc1",
+  "template_hash": "istmpl:ec755599d6ce4a458549c611255739b8",
   "template_version": "istmpl-v1"
 }

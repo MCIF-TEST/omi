@@ -1,5 +1,5 @@
 /**
- * Server-side auth helpers — resolve the current user from the omi_session
+ * Server-side auth helpers. Resolve the current user from the omi_session
  * cookie by asking FastAPI's /v1/auth/me endpoint.
  *
  * Cached per-request via React's `cache()` so multiple components in the
@@ -23,7 +23,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 export async function requireUser(): Promise<User> {
   const u = await getCurrentUser();
   if (!u) {
-    // We don't redirect here — let the caller decide. The middleware
+    // We don't redirect here. Let the caller decide. The middleware
     // already handles unauth on protected routes.
     throw new ApiError(401, 'Not authenticated');
   }

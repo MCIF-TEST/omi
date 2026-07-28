@@ -49,7 +49,7 @@ export function DiffPanel({ platform, contentId, totalBatches }: Props) {
       .then(setDiff)
       .catch((err) => {
         if (err instanceof ApiError && err.status === 409) {
-          // Not enough batches — hide panel
+          // Not enough batches. Hide panel
         } else {
           setError(err instanceof ApiError ? err.message : 'Failed to load diff');
         }

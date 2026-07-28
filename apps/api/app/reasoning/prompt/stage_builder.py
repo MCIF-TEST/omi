@@ -1,9 +1,9 @@
-"""The ONE Canonical (stage) Prompt Builder — assemble every reasoning stage's prompt identically.
+"""The ONE Canonical (stage) Prompt Builder. Assemble every reasoning stage's prompt identically.
 
 ``build_prompt(stage, bundle)`` is the single prompt-assembly implementation for every AI reasoning
 stage (comment, commenter_history, and every future stage). It is **stage-agnostic**: it knows nothing
-about any particular stage. A stage registers a small :class:`StagePromptSpec` — its package assets,
-its evidence-section rendering, its schema ref, and its manifest fields — and the builder does the
+about any particular stage. A stage registers a small :class:`StagePromptSpec`, its package assets,
+its evidence-section rendering, its schema ref, and its manifest fields, and the builder does the
 identical assembly for all of them:
 
     system  = omi_analyst base + constitution + knowledge library
@@ -14,14 +14,14 @@ identical assembly for all of them:
 
 Two invariants this module upholds:
 
-1. **No embedded stage prompt text** — every task/contract/section-header that is STAGE-specific comes
+1. **No embedded stage prompt text**, every task/contract/section-header that is STAGE-specific comes
    from the stage's package template (loaded via the spec). Only stage-invariant structural glue
    (``"# OUTPUT CONTRACT\\n"`` and the section labels) lives here, identical for every stage.
-2. **It obtains everything through the Package Loader** — the shared base prompt / constitution /
+2. **It obtains everything through the Package Loader**, the shared base prompt / constitution /
    framework / knowledge come from :func:`load_package`; the stage template/contract/schema come from
    the stage's loader accessor. The builder imports no prompt/template source module.
 
-No model, no endpoint, no inference — the builder only assembles.
+No model, no endpoint, no inference, the builder only assembles.
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ _RESPONSE_FORMAT = "json_object"
 
 @dataclass(frozen=True)
 class StagePromptSpec:
-    """A stage's contribution to the canonical builder — everything that varies BETWEEN stages, and
+    """A stage's contribution to the canonical builder. Everything that varies BETWEEN stages, and
     nothing that is shared. The builder holds one of these per registered stage and performs the
     identical assembly for all of them. A stage registers its spec via :func:`register_stage_prompt`;
     the builder itself never imports or names any stage."""
@@ -59,7 +59,7 @@ _STAGE_REGISTRY: dict[str, StagePromptSpec] = {}
 
 
 def assemble_stage_system(lp, tmpl: dict) -> str:
-    """The ONE system-message assembly shared by every stage — the stable instruction hierarchy the
+    """The ONE system-message assembly shared by every stage, the stable instruction hierarchy the
     model receives: the omi_analyst base prompt + constitution + knowledge library + the stage task +
     the stage output contract. Factored out so a caller that needs the compiled system WITHOUT running
     an inference (e.g. the Master Analyst Protocol asset compiled for an OpenRouter Preset) produces
@@ -68,12 +68,12 @@ def assemble_stage_system(lp, tmpl: dict) -> str:
     The specialist-council framework is deliberately NOT injected into the model instructions: the
     single-inference architecture has one Lead Investigator, not a 13-specialist council, so the
     council catalog would contradict that identity and spend tokens on unused metadata. The framework
-    remains internal — still loaded, still content-hashed, and still recorded in the manifest
-    (``framework_hash``) — so provenance and drift protection are unchanged."""
+    remains internal. Still loaded, still content-hashed, and still recorded in the manifest
+    (``framework_hash``), so provenance and drift protection are unchanged."""
     return "\n\n".join([
         lp.system_prompt,
         "# REASONING & GOVERNANCE CONSTITUTION\n" + lp.constitution,
-        "# KNOWLEDGE LIBRARY (reference doctrine — concepts, terminology, investigative context; "
+        "# KNOWLEDGE LIBRARY (reference doctrine. Concepts, terminology, investigative context; "
         "never evidence, never citable, never proof)\n"
         + json.dumps(lp.knowledge()[:_KNOWLEDGE_LIMIT], ensure_ascii=False, sort_keys=True),
         tmpl["system_task"],
@@ -116,7 +116,7 @@ def build_prompt(
     system = assemble_stage_system(lp, tmpl)
 
     # --- user message: PURE evidence package only (headers + JSON; no instructional restate) ----
-    # OpenRouter never puts the local system on the wire — dashboard Preset owns instructions.
+    # OpenRouter never puts the local system on the wire. Dashboard Preset owns instructions.
     sections = spec.render_sections(bundle, ctx)
     ev = [tmpl["evidence_preamble"]]
     for s in tmpl["evidence_sections"]:

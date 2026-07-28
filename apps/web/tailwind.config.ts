@@ -60,7 +60,7 @@ const config: Config = {
         'ev-meta':     'var(--ev-meta)',
       },
       fontFamily: {
-        // CSS variables injected by next/font on <html> (self-hosted — no CDN CSS).
+        // CSS variables injected by next/font on <html> (self-hosted, no CDN CSS).
         sans:    ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         display: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono:    ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
@@ -95,7 +95,7 @@ const config: Config = {
       },
       backgroundImage: {
         // The suspicion spectrum (authentic→highly-suspicious) as a DATA legend
-        // for probability meters — never a brand mark, never blue+purple.
+        // for probability meters, never a brand mark, never blue+purple.
         'brand-gradient': 'linear-gradient(90deg, #22c55e 0%, #f59e0b 40%, #f97316 68%, #ef4444 100%)',
       },
       transitionTimingFunction: {
