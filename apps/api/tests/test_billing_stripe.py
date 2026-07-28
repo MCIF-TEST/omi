@@ -99,7 +99,7 @@ def test_a_paid_invoice_grants_the_monthly_credits(client):
 
 def test_renewal_ADDS_credits_and_never_flattens_a_balance(client):
     """The bug this replaces: credits were assigned with max(balance, grant). A subscriber who
-    renewed holding 20+ credits paid $9.99 and received NOTHING, because max(25, 20) == 25."""
+    renewed holding 20+ credits paid the full price and received NOTHING, because max(25, 20) == 25."""
     _set_credits(25)
     assert _send(client, _invoice_paid("evt_2", "in_2")).status_code == 200
     assert _credits() == 45, "a paid renewal must add its credits on top of the existing balance"
@@ -313,7 +313,7 @@ def test_billing_status_reports_the_configured_price_and_grant(client):
     body = r.json()
     assert body["configured"] is True
     assert body["credits_per_period"] == 20
-    assert body["price_display"] == "$9.99"
+    assert body["price_display"] == "$14.99"
 
 
 def test_an_unconfigured_server_acks_webhooks_instead_of_making_stripe_retry(monkeypatch):

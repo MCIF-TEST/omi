@@ -87,6 +87,25 @@ def test_displayed_monthly_credits_match_the_granted_monthly_credits():
     )
 
 
+def test_displayed_price_matches_the_price_the_api_reports():
+    """The price is quoted in two places and nothing at runtime reconciles them.
+
+    The API serves OMI_SUBSCRIPTION_PRICE_DISPLAY on /v1/billing/status (the settings page reads
+    it); the pricing page prints NEXT_PUBLIC_SUBSCRIPTION_PRICE, inlined at build time. Both are
+    display-only, so neither can charge the wrong amount, but they can advertise one, which is worse
+    than useless on a pricing page. The real charge is the Stripe Price behind OMI_STRIPE_PRICE_ID
+    and is deliberately not knowable from this repo.
+    """
+    api = _env_value("OMI_SUBSCRIPTION_PRICE_DISPLAY")
+    web = _env_value("NEXT_PUBLIC_SUBSCRIPTION_PRICE")
+    assert api == web, (
+        f"the API reports {api!r} as the price (OMI_SUBSCRIPTION_PRICE_DISPLAY, omisphere-api) "
+        f"while the pricing page prints {web!r} (NEXT_PUBLIC_SUBSCRIPTION_PRICE, omisphere-web). "
+        f"One of them is lying to customers. Both must also match the amount on the Stripe Price "
+        f"that OMI_STRIPE_PRICE_ID points at, which /v1/billing/preflight verifies against Stripe."
+    )
+
+
 def test_trial_grant_is_a_sane_trial():
     """A trial is a taste, not a free month. Catches a fat-fingered extra digit."""
     granted = _env_int("OMI_FREE_TRIAL_CREDITS")

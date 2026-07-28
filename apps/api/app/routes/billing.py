@@ -23,7 +23,7 @@ have run.
 The product is created **once** in the Stripe dashboard:
 
     Product: "OmiSphere Monthly"
-    Price:   $9.99 USD / month, recurring  ->  copy the price_… id into OMI_STRIPE_PRICE_ID
+    Price:   $14.99 USD / month, recurring  ->  copy the price_… id into OMI_STRIPE_PRICE_ID
 
 Each paid invoice grants ``settings.monthly_credit_grant`` credits (20).
 
@@ -170,7 +170,7 @@ def _billing_is_configured(settings: Settings) -> bool:
 
 
 def _require_price_id(settings: Settings) -> str:
-    """Stripe Price ids look like ``price_1ABC…``. Dollar amounts like ``9.99`` are not valid."""
+    """Stripe Price ids look like ``price_1ABC…``. Dollar amounts are not valid."""
     raw = (settings.stripe_price_id or "").strip()
     if not raw:
         raise HTTPException(
@@ -187,7 +187,7 @@ def _require_price_id(settings: Settings) -> str:
             detail=(
                 f"OMI_STRIPE_PRICE_ID is set to {raw!r}, which is not a Stripe Price id. "
                 "It must look like price_1ABC… (Dashboard → Product catalogue → your product → "
-                "the recurring monthly price → copy Price ID). Do not put 9.99 or $9.99 here — "
+                "the recurring monthly price → copy Price ID). Do not put 14.99 or $14.99 here, "
                 "the amount lives on the Price object in Stripe."
             ),
         )
@@ -366,7 +366,7 @@ class BillingStatusResponse(BaseModel):
     credits_remaining: int
     subscription_status: str | None
     subscription_renews_at: datetime | None
-    price_display: str               # e.g. "$9.99"
+    price_display: str               # e.g. "$14.99"
     credits_per_period: int          # e.g. 20
 
 
@@ -567,7 +567,7 @@ def billing_preflight(
             detail="OMI_STRIPE_PRICE_ID is not set — checkout returns 503 and nobody can subscribe.",
         ))
         steps.append(
-            "Create the $9.99/month recurring price in Stripe and set OMI_STRIPE_PRICE_ID to its "
+            "Create the $14.99/month recurring price in Stripe and set OMI_STRIPE_PRICE_ID to its "
             "price_… id (not the dollar amount)."
         )
     elif not price_id.startswith("price_"):
@@ -576,7 +576,7 @@ def billing_preflight(
             detail=(
                 f"OMI_STRIPE_PRICE_ID is {price_id!r} — that is not a Stripe Price id. "
                 "It must start with price_ (Dashboard → Product catalogue → recurring price → "
-                "copy Price ID). Values like 9.99 or $9.99 will never work."
+                "copy Price ID). Values like 14.99 or $14.99 will never work."
             ),
         ))
         steps.append(

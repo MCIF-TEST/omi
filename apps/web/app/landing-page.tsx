@@ -13,7 +13,7 @@ import { ScrollProgress } from '@/components/shared/scroll-progress';
 import { HeroVisual } from '@/components/shared/hero-visual';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { DemoScanForm } from './demo-scan-form';
-import { TRIAL_CREDITS, MONTHLY_CREDITS } from '@/lib/plan';
+import { TRIAL_CREDITS, MONTHLY_CREDITS, SUBSCRIPTION_PRICE } from '@/lib/plan';
 
 /**
  * Pre-login front page.
@@ -306,7 +306,7 @@ export function LandingPage() {
                 Find out who&apos;s real.
               </h2>
               <p className="text-sm text-fg-dim max-w-lg mx-auto leading-relaxed mb-8">
-                ${'9.99'} a month buys {MONTHLY_CREDITS} credits. {TRIAL_CREDITS} are free to start,
+                {SUBSCRIPTION_PRICE} a month buys {MONTHLY_CREDITS} credits. {TRIAL_CREDITS} are free to start,
                 no card. Cancel whenever you like. Built for creators, brands, journalists, and
                 platform-integrity teams.
               </p>

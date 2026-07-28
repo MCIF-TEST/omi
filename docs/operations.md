@@ -31,7 +31,7 @@ YouTube Data API v3
    |---|---|
    | `OMI_YOUTUBE_API_KEY` | console.cloud.google.com (Data API v3) |
    | `OMI_STRIPE_SECRET_KEY` | dashboard.stripe.com (test then live) |
-   | `OMI_STRIPE_PRICE_ID` | Created in Stripe — $9.99/mo recurring |
+   | `OMI_STRIPE_PRICE_ID` | Created in Stripe, $14.99/mo recurring |
    | `OMI_STRIPE_WEBHOOK_SECRET` | After registering webhook below |
    | `OMI_SESSION_SECRET` | `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
    | `OMI_PUBLIC_BASE_URL` | `https://omisphere-api.onrender.com` until custom domain lands |
