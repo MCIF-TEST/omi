@@ -84,12 +84,13 @@ def test_featured_path_not_captured_as_campaign_key():
 
 
 def test_stable_tokens_match_the_landing_page_contract():
-    """The marketing landing page hardcodes the Xinjiang featured token
-    (`/rc/cmp_feat_cn_xinjiang`) as its primary no-signup CTA — the shortest
-    path to the value moment. The token scheme is stable BY DESIGN
-    (featured.py: ``cmp_`` + campaign_key); this pins it so any change to the
-    scheme or the fixture keys breaks loudly instead of dead-linking the
-    front door."""
+    """The token scheme is stable BY DESIGN (featured.py: ``cmp_`` + campaign_key).
+
+    The landing page no longer links to these: the coordinated-events surface was removed from the
+    web app pending a proper detection algorithm, so nothing user-facing references a share token
+    today. The API, the seeds and the scheme are deliberately kept intact for that work, and this
+    pins them so a silent change to the scheme or the fixture keys is caught before the surface
+    comes back."""
     keys = featured_keys()
     assert "feat_cn_xinjiang" in keys and "feat_ru_gru_202012" in keys
     with get_session() as s:

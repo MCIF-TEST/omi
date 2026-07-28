@@ -74,16 +74,15 @@ export default function AboutPage() {
         <span className="section-label mb-3">About</span>
         <h1 className="display text-3xl md:text-4xl font-semibold tracking-tight leading-tight mt-3">
           Evidence-based{' '}
-          <span className="text-brand">Campaign Intelligence</span>
+          <span className="text-brand">Account Authenticity Intelligence</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
-          OMISPHERE detects coordinated account groups. Influence operations,
-          engagement farms, artificial amplification networks, on YouTube and
-          X (Twitter). Every finding is a probability with its confidence,
-          evidence for, evidence against, and corroboration status; a maximal
-          verdict requires either a discriminative signal (shared fingerprints,
-          co-engagement, co-tag networks) or multiple independent methods
-          agreeing. Built for OSINT researchers, investigative journalists, and
+          OMISPHERE scores the accounts in a comment section: how likely each
+          one is bought, farmed, or automated rather than a real person, on
+          YouTube and X (Twitter). Every finding is a probability with its
+          confidence, the evidence for it, the evidence against it, and a plain
+          English explanation of why the account scored the way it did. Built
+          for OSINT researchers, investigative journalists, and
           trust-&amp;-safety teams.
         </p>
       </header>
@@ -113,9 +112,9 @@ export default function AboutPage() {
           that matter most.
         </p>
         <ul className="space-y-2 text-sm">
-          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">YouTube</span> <span className="text-fg-dim">, live: full comment analysis, channel intelligence, coordination detection</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">X / Twitter</span> <span className="text-fg-dim">, live: account fingerprinting, hashtag/amplification networks, campaign detection</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">, planned: subreddit coordination, post + comment analysis</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">YouTube</span> <span className="text-fg-dim">, live: full comment analysis, per-account scoring, channel intelligence</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">X / Twitter</span> <span className="text-fg-dim">, live: per-account scoring, account fingerprinting, posting-history analysis</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">, planned: post + comment analysis</span></span></li>
           <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">TikTok</span> <span className="text-fg-dim">, planned: comment-section analysis, creator audience intelligence</span></span></li>
         </ul>
       </Card>

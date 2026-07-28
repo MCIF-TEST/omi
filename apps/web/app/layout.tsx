@@ -30,7 +30,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'OMISPHERE · Social Authenticity Intelligence',
   description:
-    'Probabilistic detection of bots, AI engagement, coordinated influence campaigns, and synthetic virality. Powered by the omi detection engine.',
+    'Probabilistic detection of bots, bought engagement, and AI-written replies in any comment section. Powered by the omi detection engine.',
   applicationName: 'OMISPHERE',
   // Indexable by default. This was `index: false, follow: false` site-wide, left over from the private
   // beta, which meant every page, including the marketing pages, told search engines to ignore it.
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   // compounding content.
   //
   // Non-public surfaces opt OUT individually rather than the whole site opting in: the signed-in app
-  // ((app)/layout.tsx), the auth screens, and the tokenised share routes (/r/, /rc/), which are
+  // ((app)/layout.tsx), the auth screens, and the tokenised share route (/r/), which is
   // unlisted-link-shareable and must never appear in an index. See also app/robots.ts.
   robots: { index: true, follow: true },
 };

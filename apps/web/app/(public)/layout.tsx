@@ -1,5 +1,5 @@
 
-// Private surface (tokenised share routes (/r/, /rc/). Unlisted by token, not by auth): never indexable. The root layout now opts the site IN to indexing (it was
+// Private surface (the tokenised share route /r/. Unlisted by token, not by auth): never indexable. The root layout now opts the site IN to indexing (it was
 // site-wide noindex, left from the private beta), so anything non-public must opt back OUT here.
 export const metadata = { robots: { index: false, follow: false } };
 /**

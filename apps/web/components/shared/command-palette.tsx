@@ -23,7 +23,6 @@ interface PaletteItem {
 
 const NAV_ITEMS: PaletteItem[] = [
   { id: 'nav-investigate',  label: 'New scan',    icon: <Search size={14} />,           href: '/investigate', group: 'Navigate', hint: 'Paste a URL to begin' },
-  { id: 'nav-narratives',   label: 'Narratives',  icon: <MessageSquareText size={14} />, href: '/campaigns',   group: 'Navigate' },
   { id: 'nav-graph',        label: 'Graph',       icon: <Network size={14} />,          href: '/graph',       group: 'Navigate' },
   { id: 'nav-settings',     label: 'Settings',    icon: <Settings size={14} />,         href: '/settings',    group: 'Navigate' },
 ];

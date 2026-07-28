@@ -7,9 +7,8 @@ import { TRIAL_CREDITS } from '@/lib/plan';
 export const metadata = { title: 'Pricing. OMISPHERE' };
 
 const FEATURES = [
-  'YouTube + X (Twitter) coordination intelligence. Videos, channels, accounts',
-  'Six cross-account coordination detectors (fingerprint, co-engagement, co-tag, style, temporal-semantic, age-cohort)',
-  'Corroboration-gated Campaign records. Durable, evolving, evidence-bearing',
+  'YouTube + X (Twitter) account intelligence. Videos, channels, accounts',
+  'Eight behavioral signals per account (posting cadence, content repetition, AI-writing patterns, profile metadata, personal voice, engagement farming, fingerprint match)',
   'Per-commenter activity drilldown. See what flagged accounts actually wrote',
   'Saved investigations. Shareable, exportable as Markdown / JSON / PDF',
   'Watchlist alerts. Get notified when a tracked channel\'s tier changes',
@@ -49,9 +48,9 @@ export default function PricingPage() {
           One plan. <span className="text-brand">Cancel anytime.</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
-          YouTube comment intelligence. Bots, AI engagement, and coordinated
-          influence campaigns. Probabilistic. Every scan trains the OMISPHERE
-          fingerprint database.
+          Comment-section intelligence. Bots, bought engagement, and AI-written
+          replies. Probabilistic. Every scan trains the OMISPHERE fingerprint
+          database.
         </p>
       </header>
 

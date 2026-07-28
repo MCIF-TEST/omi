@@ -273,71 +273,6 @@ export type CoordinationLabel =
   | 'manipulation_network'
   | 'unscored';
 
-// ---------------------------------------------------------------------------
-// Campaigns. Mirrors apps/api/app/routes/campaigns.py (CampaignSummary /
-// CampaignDetail / CampaignMemberOut / CampaignObservationOut).
-//
-// The Campaign is the durable, evolving record of a coordinated account
-// group: observations and evidence, never a verdict. ``status`` is
-// 'observed' on first detection and 'recurring' once observation_count > 1.
-// Discriminative methods (fingerprint_cluster / co_engagement / co_tag) carry
-// a maximal verdict on their own; supporting-only campaigns (style_match /
-// temporal_semantic / age_cohort) are corroboration-gated and surface as
-// "supporting evidence only" in the UI.
-// ---------------------------------------------------------------------------
-
-export type CampaignStatus = 'observed' | 'recurring';
-
-export interface CampaignSummary {
-  campaign_key: string;
-  name: string;
-  platform: string;
-  coordination_score: number;
-  max_coordination_score: number;
-  confidence: number;
-  member_count: number;
-  observation_count: number;
-  methods: string[];
-  hashtags: string[];
-  mentions: string[];
-  status: CampaignStatus;
-  first_detected_at: string;
-  last_seen_at: string;
-  // Opt-in public sharing (null / false until shared).
-  share_token: string | null;
-  is_public: boolean;
-}
-
-export interface CampaignMemberOut {
-  account_external_id: string;
-  handle: string | null;
-  times_observed: number;
-  methods: string[];
-}
-
-export interface CampaignObservationOut {
-  observed_at: string;
-  context_id: string | null;
-  coordination_score: number;
-  member_count: number;
-  methods: string[];
-  evidence: string[];
-}
-
-export interface CampaignDetail extends CampaignSummary {
-  evidence: string[];
-  theme: string | null;
-  members: CampaignMemberOut[];
-  observations: CampaignObservationOut[];
-}
-
-export interface CampaignsResponse {
-  campaigns: CampaignSummary[];
-  total: number;
-}
-
-export type CampaignSort = 'recent' | 'score' | 'size' | 'recurrence';
-
 /** Detector taxonomy. Mirrors aggregate.DISCRIMINATIVE_DETECTORS exactly.
  *  Discriminative detectors can carry a maximal verdict alone; supporting
  *  detectors need corroboration (≥1 discriminative OR ≥2 distinct supporting).
@@ -355,66 +290,9 @@ export function isCorroborated(methods: readonly string[]): boolean {
   return false;
 }
 
-// Public campaign sharing. Mirrors apps/api/app/routes/campaigns.py.
-export interface CampaignShareResponse {
-  campaign_key: string;
-  share_token: string;
-  is_public: boolean;
-  published_at: string | null;
-  public_url: string;
-}
-
-export interface CampaignReportView {
-  meta: {
-    campaign_key: string;
-    name: string;
-    platform: string;
-    status: string;
-    generator: string;
-    published_at: string | null;
-    first_detected_at: string | null;
-    last_seen_at: string | null;
-  };
-  verdict: {
-    max_coordination_score: number;
-    coordination_score: number;
-    confidence: number;
-    member_count: number;
-    observation_count: number;
-    corroborated: boolean;
-    discriminative_methods: string[];
-    methods: string[];
-  };
-  evidence_for: string[];
-  evidence_against: string[];
-  hashtags: string[];
-  mentions: string[];
-  members: CampaignMemberOut[];
-  observations: CampaignObservationOut[];
-  methodology: string;
-  disclaimer: string;
-  /** Present only on featured example reports: the other featured campaign(s)
-   *  an anonymous visitor can hop to without an account. */
-  other_featured?: { name: string; share_token: string }[];
-}
-
-export interface CampaignReportResponse {
-  view: CampaignReportView;
-}
-
 // Founder learning (master-plan Phase 4). Mirrors apps/api/app/routes/learning.py.
 export interface WtpPromptStatus {
   show_wtp: boolean;
-}
-
-// Featured campaigns. Real, disclosed influence operations seeded for first-run
-// value (mirrors apps/api/app/routes/campaigns.py FeaturedCampaign).
-export interface FeaturedCampaign extends CampaignSummary {
-  blurb: string | null;
-}
-
-export interface FeaturedCampaignsResponse {
-  campaigns: FeaturedCampaign[];
 }
 
 export interface NarrativeOut {

@@ -494,6 +494,32 @@ Two traps that bit here, both verified with Playwright at 360/375/390/430px:
   and the header stops tracking the scrolled edge. Horizontal containment belongs to
   `overflow-x: clip` on `html, body` in `globals.css` (see the mobile section above).
 
+### The coordinated-events surface is removed from the product, not from the code
+
+Product decision (2026-07-28): the campaigns UI shipped clusters the engine had not earned the right
+to call coordinated, so it is gone from the site pending a real detection algorithm.
+
+**Deleted (web only):** `app/(app)/campaigns/*`, the public report route `app/(public)/rc/*`,
+`lib/campaign-identity.ts`, `components/shared/how-to-read.tsx` (its only caller was the campaign
+detail page), the featured China/Russia cases and `CaseCard` on the landing page, the campaign types
+in `lib/api.ts`, and the nav entries.
+
+**Deliberately KEPT:** the entire backend. `app/campaigns/`, `app/routes/campaigns.py`, the
+coordination detectors, the Campaign models, `featured_campaigns.json` and their tests all still run
+and are still green. That is the foundation the future algorithm builds on, so do not "tidy it up"
+because nothing in the UI imports it. `/rc/<token>` is still a live **API** route, which is why
+`tests/test_featured_campaigns.py` passes unchanged.
+
+`/narratives` is a placeholder that says "Coming soon: narrative / campaign detector". It is
+**admin-only and gated on the server** (`if (!user?.is_admin) notFound()`), because hiding the nav
+link alone would leave the route answering to anyone who typed the URL. `adminOnly` on a nav item in
+`sidebar.tsx` / `mobile-nav.tsx` is presentation only; the page is the access control.
+
+One live reference remains on purpose: `campaign_reasoning` ("Campaign analysis") in
+`analyst-panel.tsx` and `lib/api.ts`. That is a section of the **analyst's own response schema**, not
+the campaigns feature. Removing it means a protocol change, a recompile, and a re-paste of the
+OpenRouter preset.
+
 ### No em dashes, and no decorative badges
 
 Two house rules, both enforced by the product owner's explicit decision (2026-07-28):

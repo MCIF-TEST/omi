@@ -15,7 +15,7 @@ export async function AppShell({ user, children }: AppShellProps) {
   let engineStatus: EngineStatus | undefined;
   // Pre-activation focus: until the user has run a first investigation, the
   // nav hides the secondary analysis/ops surfaces so the path to the value
-  // moment (featured campaign → first scan) has no detours. Fails open: if
+  // moment (landing page → first scan) has no detours. Fails open: if
   // the probe errors, show the full nav rather than over-hiding.
   let isNewUser = false;
   try {
@@ -54,7 +54,7 @@ export async function AppShell({ user, children }: AppShellProps) {
         </div>
       )}
       <div className="flex-1 flex relative z-10">
-        <Sidebar isNewUser={isNewUser} />
+        <Sidebar isNewUser={isNewUser} isAdmin={user.is_admin} />
         <main className="flex-1 min-w-0">
           {/* Bottom padding clears the mobile tab bar (+ home-indicator inset). */}
           <div className="max-w-[1440px] mx-auto px-4 py-5 md:px-6 md:py-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 animate-fade-up">
@@ -64,7 +64,7 @@ export async function AppShell({ user, children }: AppShellProps) {
       </div>
 
       {/* Thumb-reachable primary navigation. Phones only. */}
-      <MobileNav email={user.email} isNewUser={isNewUser} />
+      <MobileNav email={user.email} isNewUser={isNewUser} isAdmin={user.is_admin} />
     </div>
   );
 }
