@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.ml.datasets.adapters import _parse_text_detection_v1
 from app.ml.datasets.botscore_reference import botscore_distribution, score_to_tier
 from app.ml.datasets.discovery import discover
@@ -11,6 +13,14 @@ from app.ml.datasets.paths import default_datasets_dir
 _FSM_CSV = "Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0.csv"
 _FSM_XLSX = "Datasets/Fake Social Media Account Detection Dataset/fake_social_media_global_2.0_with_missing.xlsx"
 _AI_V1 = "ai vs human text/ai_human_detection_v1.csv"
+
+# The corpus is no longer committed (LFS budget — see CLAUDE.md). Tests that read
+# the real files run against a local checkout when present and skip otherwise.
+# The pure-parsing tests below stay unconditional: they need no data on disk.
+_needs_corpus = pytest.mark.skipif(
+    not (default_datasets_dir() / "Datasets").is_dir(),
+    reason="datasets/ corpus not checked out (see CLAUDE.md)",
+)
 
 
 # --- AI-set salvage ---------------------------------------------------------
@@ -26,6 +36,7 @@ def test_ai_detection_skips_api_error_rows_keeps_clean():
     assert ok is not None and ok.is_ai is False
 
 
+@_needs_corpus
 def test_ai_detection_v1_unquarantined():
     man = load_manifest(default_datasets_dir())
     assert man.status(_AI_V1) == "validation"
@@ -35,6 +46,7 @@ def test_ai_detection_v1_unquarantined():
 
 # --- FSM xlsx -> csv unlock --------------------------------------------------
 
+@_needs_corpus
 def test_fsm_csv_unlocked_balanced_and_routed():
     root = default_datasets_dir()
     man = load_manifest(root)
@@ -46,6 +58,7 @@ def test_fsm_csv_unlocked_balanced_and_routed():
 
 # --- botscore reference ------------------------------------------------------
 
+@_needs_corpus
 def test_botscore_reference_distribution():
     d = botscore_distribution(default_datasets_dir() / "Datasets" / "activity_botscore.csv")
     assert d["n"] > 10_000

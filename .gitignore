@@ -27,10 +27,15 @@ apps/api/data/
 apps/web/data/
 .docker-data/
 
-# Dataset ingestion runtime artifacts (provenance is per-DB / per-run; the
-# source datasets themselves are committed, these generated outputs are not)
-datasets/.omi_ingest_ledger.json
-datasets/_generated/
+# The dataset corpus is NOT committed. It was ~862 MB and its LFS objects blew
+# the GitHub LFS budget, which broke `git clone` mid-checkout and stopped Render
+# deploying entirely. It is offline training/eval data — the API never reads it at
+# runtime, and dataset discovery returns an empty set when the folder is absent.
+#
+# Keep a local copy here to run the ml/ pipeline or the corpus-backed tests (they
+# skip themselves when it is missing). It must not go back into git: put large
+# corpora in object storage or the Hugging Face datasets ml/ already syncs to.
+datasets/
 *.joblib
 
 # Editor

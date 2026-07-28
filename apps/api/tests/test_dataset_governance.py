@@ -23,7 +23,19 @@ from app.ml.public_import import PublicRecord
 
 
 # --- Manifest quarantine over the real committed datasets --------------------
+#
+# The corpus is no longer committed (it was ~862 MB and its LFS objects blew the
+# GitHub LFS budget, which broke deploys entirely — see CLAUDE.md). These run
+# against a local checkout of the data when one is present and skip otherwise;
+# the manifest PARSING logic is covered unconditionally by the quality-gate
+# tests below, which build their records in-process.
+_HAS_CORPUS = (default_datasets_dir() / "Datasets").is_dir()
+_needs_corpus = pytest.mark.skipif(
+    not _HAS_CORPUS, reason="datasets/ corpus not checked out (see CLAUDE.md)"
+)
 
+
+@_needs_corpus
 def test_manifest_quarantines_committed_poison():
     # Manifest-only (the full tree is now multi-GB; the manifest→discover→
     # supported link is covered by test_headerless_bot_adapters + the ingest
@@ -37,6 +49,7 @@ def test_manifest_quarantines_committed_poison():
     assert not manifest.is_excluded(err) and manifest.status(err) == "validation"
 
 
+@_needs_corpus
 def test_manifest_keeps_vouched_training_files_supported():
     manifest = load_manifest(default_datasets_dir())
     assert manifest.status(

@@ -1,10 +1,20 @@
-*.zip filter=lfs diff=lfs merge=lfs -text
-*.mkv filter=lfs diff=lfs merge=lfs -text
-*.exe filter=lfs diff=lfs merge=lfs -text
-*.bin filter=lfs diff=lfs merge=lfs -text
-*.gz filter=lfs diff=lfs merge=lfs -text
-*.mp4 filter=lfs diff=lfs merge=lfs -text
-*.mov filter=lfs diff=lfs merge=lfs -text
-*.avi filter=lfs diff=lfs merge=lfs -text
-*.psd filter=lfs diff=lfs merge=lfs -text
-*.tar filter=lfs diff=lfs merge=lfs -text
+# Git LFS is deliberately NOT used in this repository.
+#
+# It used to track *.zip / *.gz / *.tar and friends for the ~862 MB dataset
+# corpus under datasets/. That corpus blew the account's GitHub LFS budget, and
+# because a clone has to smudge LFS pointers to check out the working tree, the
+# failure was total: GitHub refused to serve the objects, `git clone` failed
+# mid-checkout, and Render could not deploy AT ALL. Not a slow build — no build.
+#
+#     batch response: This repository exceeded its LFS budget.
+#     error: external filter 'git-lfs filter-process' failed
+#
+# So the tracking patterns are gone rather than merely unused. Left in place they
+# are a loaded gun: committing any new .zip/.gz/.tar would silently re-enter LFS,
+# hit the same exhausted budget, and take deploys down again — with an error
+# message that points at git, not at this decision.
+#
+# If you need large files again, do NOT re-add LFS patterns here without first
+# confirming the LFS budget. Keep big corpora out of the repo entirely (object
+# storage, or the Hugging Face datasets the ml/ pipeline already syncs to).
+* text=auto eol=lf

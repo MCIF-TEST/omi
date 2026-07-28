@@ -7,7 +7,8 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-28 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1580 passed, 2 failed** (6m06s), both pre-existing and listed below.
+**1572 passed, 8 skipped, 2 failed** (4m28s), both failures pre-existing and listed below.
+The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -31,7 +32,8 @@ as production concerns, not exercises. Wasted OpenRouter spend is real money.
 |---|---|
 | `apps/api` | FastAPI + SQLAlchemy. Python ≥3.11. The engine, the analyst, all routes. |
 | `apps/web` | Next.js 14 App Router + Tailwind. Clerk auth. |
-| `ml/`, `datasets/` | Prompt mirrors + training data. Drift-guarded against `apps/api`. |
+| `ml/` | Prompt mirrors + the offline training pipeline. Drift-guarded against `apps/api`. |
+| `datasets/` | Training corpus — **not committed** (gitignored; see "The dataset corpus is not in git"). |
 | `docs/` | Architecture, design system, ops. |
 
 ### Commands
@@ -54,7 +56,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **1580 passed, 2 failed** (6m06s, 2026-07-28). Both failures reproduce on an
+Current measured state: **1572 passed, 8 skipped, 2 failed** (4m28s, 2026-07-28). Both failures reproduce on an
 unchanged tree AND in isolation, so neither is pollution:
 
 1. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
@@ -548,6 +550,40 @@ caching is a judgement call nobody has made.
   once you can see real outputs.
 
 ---
+
+## The dataset corpus is not in git, and must not go back
+
+`datasets/` (~862 MB) was committed with its archives in **Git LFS**. The account's LFS budget was
+exceeded, and because `git clone` must smudge LFS pointers to check out the working tree, the failure
+was **total**: GitHub refused to serve the objects, the clone died mid-checkout, and Render could not
+deploy at all. Not a slow build — no build.
+
+```
+batch response: This repository exceeded its LFS budget.
+error: external filter 'git-lfs filter-process' failed
+fatal: ... smudge filter lfs failed
+==> Unable to clone https://github.com/MCIF-TEST/omi
+```
+
+The corpus is offline training/eval data. **The API never reads it at runtime** — it boots fine
+without it and `discover()` returns an empty set rather than raising, which is what made removal
+safe. It is now `.gitignore`d, and the LFS tracking patterns are deleted from `.gitattributes` rather
+than merely unused: left in place, committing any new `.zip`/`.gz`/`.tar` would silently re-enter LFS,
+hit the same exhausted budget, and take deploys down again with an error pointing at git rather than
+at this decision.
+
+Two consequences worth knowing:
+
+- **Deleting at HEAD fixes the clone, not the quota.** The LFS objects still exist in history, so the
+  budget stays consumed until the history is rewritten (`git filter-repo`) or a data pack is bought.
+  Clones work because nothing at HEAD needs smudging any more.
+- **Nothing was lost.** Every file remains in git history and is recoverable
+  (`git show <pre-removal-sha>:datasets/...`). Keep a local copy under `datasets/` to run the `ml/`
+  pipeline; the tests that read real corpus files skip themselves when it is absent
+  (`_needs_corpus` in `test_dataset_governance.py` / `test_phase1_free_wins.py`).
+
+If large files are ever needed again, put them in object storage or the Hugging Face datasets the
+`ml/` pipeline already syncs to — not in this repo.
 
 ## Environment notes
 
