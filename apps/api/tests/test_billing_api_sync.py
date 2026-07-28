@@ -430,7 +430,18 @@ def test_preflight_never_returns_the_secret(client, monkeypatch):
 
 
 def test_preflight_says_reconciliation_is_the_crediting_mode_with_no_webhook(client, monkeypatch):
+    """No webhook secret is a DEGRADED but working state, not a broken one.
+
+    Reconciliation still credits every payment, so preflight must keep reporting ready — while
+    saying plainly that the instant path is off.
+    """
     _preflight_stripe(monkeypatch, price=_price_obj())
+    monkeypatch.setenv("OMI_PUBLIC_BASE_URL", "https://omisphere-web.onrender.com")
     get_settings.cache_clear()
     body = client.get("/v1/billing/preflight").json()
-    assert "no webhook" in _checks(body)["crediting"]["detail"]
+    c = _checks(body)
+    assert "reconciliation only" in c["crediting"]["detail"]
+    assert c["webhook_secret"]["ok"] is False
+    assert "inert" in c["webhook_secret"]["detail"]
+    # Degraded, not blocking: money still arrives correctly.
+    assert body["ready"] is True, body

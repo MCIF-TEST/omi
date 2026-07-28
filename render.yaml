@@ -13,16 +13,36 @@
 #      under a subdomain (e.g. api.yourdomain.com).
 #
 # ---------------------------------------------------------------------------
-# STRIPE — pure API billing (NO WEBHOOKS)
+# STRIPE — webhook crediting, with API reconciliation as the backstop
 # ---------------------------------------------------------------------------
-# Checkout is Stripe-hosted. Credits are granted by reconciling against Stripe's
-# API after checkout return / on the billing page / before a scan would be refused.
-# There is NO webhook to register and OMI_STRIPE_WEBHOOK_SECRET stays unset.
+# Checkout is Stripe-hosted. Credits arrive by TWO routes on purpose:
+#   1. WEBHOOK (primary)  — Stripe pushes invoice.paid; credits land in seconds.
+#   2. API reconciliation — asks Stripe what was actually paid, on return from
+#      checkout, on the billing page, and before a scan would be refused.
+# Both claim the same per-invoice row, so only one can ever grant. Keep both: a
+# webhook can be misregistered or its secret rotated out of sync, and the
+# backstop is what stops that becoming a customer who paid and got nothing.
 #
 # Required on omisphere-api (dashboard secrets):
-#   OMI_STRIPE_SECRET_KEY   sk_test_… or sk_live_…   (SECRET — not the pk_ key)
-#   OMI_STRIPE_PRICE_ID     price_… recurring monthly, same mode as the secret
-#   OMI_PUBLIC_BASE_URL     https://<your-web-host>  (WEB URL, not the API host)
+#   OMI_STRIPE_SECRET_KEY     sk_test_… or sk_live_…   (SECRET — not the pk_ key)
+#   OMI_STRIPE_PRICE_ID       price_… recurring monthly, same mode as the secret
+#   OMI_PUBLIC_BASE_URL       https://<your-web-host>  (WEB URL, not the API host)
+#   OMI_STRIPE_WEBHOOK_SECRET whsec_…  (from the endpoint you register, below)
+#
+# Registering the webhook:
+#   Stripe Dashboard → Developers → Webhooks → Add endpoint
+#   URL:    https://<your-API-host>/v1/billing/webhook
+#           ^ the API host, NOT OMI_PUBLIC_BASE_URL (that is the web app).
+#   Events: invoice.paid, invoice.payment_failed,
+#           customer.subscription.created, customer.subscription.updated,
+#           customer.subscription.deleted, checkout.session.completed
+#   Then copy the endpoint's SIGNING SECRET (whsec_…) into
+#   OMI_STRIPE_WEBHOOK_SECRET and redeploy the API.
+#
+# GET /v1/billing/preflight prints the exact URL and event list for THIS
+# deployment, and reports whether Stripe has ever actually reached it. Call it
+# directly on the API host — through the web app's /api proxy it cannot tell
+# which host to give you, and says so rather than printing a wrong one.
 #
 # Optional on omisphere-api:
 #   OMI_SUBSCRIPTION_PRICE_DISPLAY   $9.99   (UI label only)
@@ -120,7 +140,7 @@ services:
         sync: false
 
       # ===============================================================
-      # Stripe — pure API, no webhooks (see header comment)
+      # Stripe — webhook crediting + API backstop (see header comment)
       # ===============================================================
       # REQUIRED. Secret API key from Stripe Dashboard → Developers → API keys.
       # Must start with sk_test_ (test mode) or sk_live_ (live mode).
@@ -144,9 +164,10 @@ services:
       # Display only — label next to Subscribe. The real charge is the Stripe Price.
       - key: OMI_SUBSCRIPTION_PRICE_DISPLAY
         value: '$9.99'
-      # LEAVE UNSET for pure API billing. When empty, the webhook route is inert and
-      # credits come only from API reconciliation (POST /v1/billing/sync). Do not
-      # register a Stripe webhook endpoint for this deployment.
+      # REQUIRED for instant crediting. The SIGNING SECRET (whsec_…) shown on the
+      # endpoint's page in Stripe — not the API key, not the endpoint id. While
+      # empty the webhook route is inert (acks with 200, credits nothing) and
+      # billing still works via API reconciliation, just not instantly.
       - key: OMI_STRIPE_WEBHOOK_SECRET
         sync: false
       # OPTIONAL / UNUSED by current product. Hosted Checkout does not need Stripe.js.

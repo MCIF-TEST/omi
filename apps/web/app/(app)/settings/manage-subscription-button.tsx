@@ -28,8 +28,10 @@ const PAID = ['active', 'trialing'];
 /**
  * Subscribe / manage button + the return-from-Stripe handshake.
  *
- * Pure API — no webhook. On return from Checkout we POST /v1/billing/sync (with the Checkout
- * session_id when present) so the server asks Stripe what was paid and grants credits.
+ * Credits normally arrive by webhook before the browser gets back here. This handshake is the
+ * backstop: on return from Checkout we POST /v1/billing/sync (with the Checkout session_id when
+ * present) so the server asks Stripe what was paid and grants anything the webhook didn't. Both
+ * paths claim the same per-invoice row, so this can never double-credit.
  */
 export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }) {
   const router = useRouter();
@@ -136,7 +138,8 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
         <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span> (sk_…),{' '}
         <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span> (price_…, not 9.99), and{' '}
         <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web https URL), then
-        redeploy. Leave webhook secret unset for pure API billing.
+        redeploy. For instant crediting also register the webhook and set{' '}
+        <span className="font-mono text-2xs">OMI_STRIPE_WEBHOOK_SECRET</span> (whsec_…).
       </p>
     );
   }

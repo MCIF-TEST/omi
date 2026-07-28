@@ -1,6 +1,24 @@
-"""Stripe billing: subscription checkout via pure API (no webhook required).
+"""Stripe billing: subscription checkout, credited by webhook with an API backstop.
 
-Webhook endpoint remains optional and inert without OMI_STRIPE_WEBHOOK_SECRET.
+CREDITS ARRIVE BY TWO ROUTES AND THAT IS DELIBERATE
+The webhook (``POST /v1/billing/webhook``) is the PRIMARY path: Stripe pushes
+``invoice.paid`` and credits land in seconds. It is inert until
+``OMI_STRIPE_WEBHOOK_SECRET`` is set, because an unverified webhook is an open
+door to anyone who wants to grant themselves credits.
+
+API reconciliation (``app/core/billing_sync.py``) is the BACKSTOP, and removing
+it would be a mistake even with webhooks working. A webhook can be missed: the
+endpoint can be registered against the wrong host, the secret can be rotated out
+of sync, Stripe can exhaust its retries during an outage. Reconciliation asks
+Stripe what was actually paid, and it runs at the three moments that matter — on
+return from checkout, on the billing page, and inside ``consume_credits`` just
+before a scan would be refused. That last one is why a subscriber whose renewal
+just landed is never told to subscribe.
+
+Running both is safe for exactly one reason: **both claim the same per-invoice
+row** (see ``_grant_credits_once``). Whichever arrives first grants; the other
+loses the unique-index race and does nothing. Neither path trusts the other to
+have run.
 
 The product is created **once** in the Stripe dashboard:
 
@@ -36,7 +54,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -62,6 +80,26 @@ GRANTING_BILLING_REASONS = (
     "subscription_cycle",    # the recurring monthly charge
     "subscription_create",   # the first charge
     "subscription_update",   # plan change / proration
+)
+
+# The events to tick when registering the endpoint in the Stripe dashboard.
+#
+# This is the ONE list: /preflight prints it for the operator and
+# test_webhook_events_match_the_dispatch_table asserts it equals what `_dispatch` actually handles.
+# Selecting fewer in Stripe silently drops that behaviour; selecting more just costs a stored row,
+# since anything unrecognised is recorded and acknowledged without action.
+#
+# `invoice.paid` is the only one that moves credits — everything else moves status, renewal date, or
+# the customer link. Do not add a second granting event: a new subscription emits BOTH
+# `customer.subscription.created` and `invoice.paid`, and crediting on both bills once but grants
+# twice.
+WEBHOOK_EVENTS = (
+    "invoice.paid",
+    "invoice.payment_failed",
+    "customer.subscription.created",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+    "checkout.session.completed",
 )
 
 
@@ -414,10 +452,56 @@ class PreflightResponse(BaseModel):
     ready: bool
     checks: list[PreflightCheck]
     next_steps: list[str]
+    # Everything needed to register the endpoint in the Stripe dashboard, so the operator does not
+    # have to reconstruct it by hand (getting the host wrong is the usual failure).
+    webhook_url: str | None = None
+    webhook_events: list[str] = []
+
+
+def _request_origin(request: Request) -> str:
+    """Best-effort public origin of THIS service, from the request that reached it.
+
+    Render terminates TLS at its proxy, so the ASGI scheme can read `http` while the world sees
+    `https`; X-Forwarded-Proto is the truth. Returns "" when the host cannot be determined rather
+    than guessing, so callers can say "unknown" instead of printing a wrong URL confidently.
+    """
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or (request.url.hostname or "")
+    ).split(",")[0].strip()
+    if not host:
+        return ""
+    proto = (
+        request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    ).split(",")[0].strip()
+    return f"{proto}://{host}"
+
+
+def _webhook_delivery(session: Session) -> tuple[datetime | None, str | None, int]:
+    """(when the last real Stripe event landed, its type, how many landed in the last 24h).
+
+    Grant markers share this table but are not deliveries — they are written by whichever path
+    granted, including reconciliation — so they are excluded by their `credit_grant:` type prefix.
+    Counting them would report a healthy webhook on a deployment that has never received one.
+    """
+    real = ~BillingEvent.event_type.like("credit_grant:%")
+    row = (
+        session.query(BillingEvent)
+        .filter(real)
+        .order_by(BillingEvent.created_at.desc())
+        .first()
+    )
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    recent = session.query(BillingEvent).filter(real, BillingEvent.created_at >= since).count()
+    if row is None:
+        return None, None, 0
+    return row.created_at, row.event_type, recent
 
 
 @router.get("/preflight", response_model=PreflightResponse)
 def billing_preflight(
+    request: Request,
     current: CurrentUser = Depends(require_user),
     settings: Settings = Depends(get_settings),
 ) -> PreflightResponse:
@@ -559,20 +643,119 @@ def billing_preflight(
         detail=f"{settings.monthly_credit_grant} credits granted per paid invoice.",
     ))
 
-    # --- 6. Crediting mode (informational — the webhook is optional) --------------------------
+    # --- 6. The webhook: the primary crediting path -------------------------------------------
+    # Derived from the request rather than from config, because there is no env var holding the
+    # API's own public URL and hand-typing it into Stripe is where this usually goes wrong.
+    origin = _request_origin(request)
+    webhook_url = f"{origin}/v1/billing/webhook" if origin else None
+
+    # Preflight is commonly called through the web app's /api proxy, in which case the host we just
+    # derived is the WEB host — registering that in Stripe points the webhook at a service that does
+    # not implement it. Detect it instead of printing a confidently wrong URL.
+    web_host = (settings.public_base_url or "").strip().rstrip("/").split("://")[-1]
+    proxied = bool(origin and web_host and origin.split("://")[-1] == web_host)
+    if proxied:
+        checks.append(PreflightCheck(
+            name="webhook_url", ok=False,
+            detail=(
+                f"Cannot determine the API's public URL: this request arrived via {origin}, which is "
+                f"OMI_PUBLIC_BASE_URL (the WEB host). Call /v1/billing/preflight directly on the API "
+                f"host to get the URL to register."
+            ),
+        ))
+        steps.append(
+            "Open https://<your-api-host>/v1/billing/preflight directly (not through the web app) "
+            "to read the exact webhook URL."
+        )
+        webhook_url = None
+    elif webhook_url:
+        checks.append(PreflightCheck(
+            name="webhook_url", ok=True,
+            detail=f"Register this endpoint in Stripe: {webhook_url}",
+        ))
+
+    if not settings.stripe_webhook_secret:
+        checks.append(PreflightCheck(
+            name="webhook_secret", ok=False,
+            detail=(
+                "OMI_STRIPE_WEBHOOK_SECRET is not set, so the webhook route is inert and returns 200 "
+                "without crediting. Credits currently arrive only by API reconciliation, which is "
+                "slower but correct."
+            ),
+        ))
+        steps.append(
+            "Stripe Dashboard → Developers → Webhooks → Add endpoint, then set the signing secret "
+            "(whsec_…) as OMI_STRIPE_WEBHOOK_SECRET on the API service and redeploy."
+        )
+    else:
+        secret = settings.stripe_webhook_secret.strip()
+        looks_right = secret.startswith("whsec_")
+        checks.append(PreflightCheck(
+            name="webhook_secret", ok=looks_right,
+            detail=(
+                "Set — signatures are verified and the webhook credits on invoice.paid."
+                if looks_right else
+                "Set, but it does not start with 'whsec_'. A signing secret is not the API key and "
+                "not the endpoint id; every delivery will fail signature verification."
+            ),
+        ))
+        if not looks_right:
+            steps.append(
+                "Copy the SIGNING SECRET (whsec_…) from the endpoint's page in Stripe, not the key."
+            )
+
+    # Has Stripe ever actually reached us? Configuration can be perfect and delivery still fail —
+    # wrong host, a firewall, an endpoint registered in the other Stripe mode.
+    try:
+        with get_session() as s:
+            last_at, last_type, recent = _webhook_delivery(s)
+    except Exception:  # noqa: BLE001 — a diagnostic must never be the thing that breaks
+        last_at, last_type, recent = None, None, 0
+
+    if last_at is None:
+        checks.append(PreflightCheck(
+            name="webhook_delivery",
+            # Only a problem once the secret is set: with no secret, zero deliveries is expected.
+            ok=not settings.stripe_webhook_secret,
+            detail=(
+                "No Stripe event has ever been received by this deployment."
+                + ("" if not settings.stripe_webhook_secret else
+                   " The secret is set, so either the endpoint is not registered, points at the "
+                   "wrong host, or belongs to the other Stripe mode. Use 'Send test webhook' in the "
+                   "dashboard to check.")
+            ),
+        ))
+    else:
+        checks.append(PreflightCheck(
+            name="webhook_delivery", ok=True,
+            detail=(
+                f"Last event {last_type} at {last_at.isoformat()} · {recent} in the last 24h."
+            ),
+        ))
+
+    # --- 7. Crediting mode --------------------------------------------------------------------
     checks.append(PreflightCheck(
         name="crediting", ok=True,
         detail=(
-            "Instant: the optional webhook is configured."
+            "Webhook (instant) with API reconciliation as the backstop."
             if settings.stripe_webhook_secret else
-            "API reconciliation (no webhook) — credits land on return from checkout, on the billing "
-            "page, and before any scan would be refused."
+            "API reconciliation only — credits land on return from checkout, on the billing page, "
+            "and before any scan would be refused."
         ),
     ))
 
+    # webhook_secret and webhook_delivery are deliberately NOT blocking: reconciliation still
+    # credits every payment without them, so a deployment with no webhook can take money correctly.
+    # They report degraded-but-working, which is exactly what it is.
     blocking = [c for c in checks if not c.ok and c.name in
                 ("secret_key", "stripe_reachable", "price", "return_url", "credit_grant")]
-    return PreflightResponse(ready=not blocking, checks=checks, next_steps=steps)
+    return PreflightResponse(
+        ready=not blocking,
+        checks=checks,
+        next_steps=steps,
+        webhook_url=webhook_url,
+        webhook_events=list(WEBHOOK_EVENTS),
+    )
 
 
 @router.post("/create-checkout-session", response_model=CheckoutResponse)

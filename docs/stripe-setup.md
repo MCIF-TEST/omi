@@ -1,15 +1,20 @@
-# Stripe setup — $9.99/month for 20 credits (pure API, no webhooks)
+# Stripe setup — $9.99/month for 20 credits (webhook + API backstop)
 
 Everything you need to take the first real payment. Do it once in **test mode**, verify with a test
 card, then repeat the same steps in **live mode** with live keys.
 
-**Billing mode: pure API — no webhooks.** OmiSphere reconciles against Stripe's API: rather than
-waiting to be told what happened, the server asks Stripe which subscription exists and which
-invoices were actually paid, then grants credits for any paid invoice it hasn't already credited.
-Leave `OMI_STRIPE_WEBHOOK_SECRET` unset. Do not register a webhook endpoint.
+**Billing mode: webhook first, API reconciliation as the safety net.** Stripe pushes `invoice.paid`
+to our webhook and credits land in seconds. Independently, the server also asks Stripe which
+subscription exists and which invoices were actually paid, and grants any it hasn't already credited.
 
-Setup is three env vars on the **API** service: `OMI_STRIPE_SECRET_KEY` (`sk_…`),
-`OMI_STRIPE_PRICE_ID` (`price_…` recurring monthly), and `OMI_PUBLIC_BASE_URL` (your **web** URL).
+Keeping both is deliberate, and they cannot fight: **every grant claims the same per-invoice row**,
+so whichever path arrives first grants and the other does nothing. The webhook makes it instant; the
+reconciliation means a webhook you forgot to register, pointed at the wrong host, or whose secret you
+rotated is an inconvenience rather than a customer who paid and got nothing.
+
+Setup is four env vars on the **API** service: `OMI_STRIPE_SECRET_KEY` (`sk_…`),
+`OMI_STRIPE_PRICE_ID` (`price_…` recurring monthly), `OMI_PUBLIC_BASE_URL` (your **web** URL), and
+`OMI_STRIPE_WEBHOOK_SECRET` (`whsec_…`, from step 3).
 
 **Publishable keys (`pk_…` / `STRIPE_PUBLISHABLE_KEY`) are not used.** Checkout is Stripe-hosted;
 no Stripe.js runs in the browser. A publishable key alone cannot make Subscribe work.
@@ -24,23 +29,21 @@ Two rules worth internalising before you start:
 
 ### When credits actually appear
 
-Reconciliation runs at the moments where being stale would be visible:
-
 | Trigger | Why |
 |---|---|
-| Returning from Checkout | The browser calls `POST /v1/billing/sync`, which is what completes a purchase. Credits land in a second or two. |
+| **Stripe sends `invoice.paid`** | The primary path. Credits land within seconds of the charge, including monthly renewals nobody is watching. |
+| Returning from Checkout | The browser calls `POST /v1/billing/sync`. Completes the purchase even if the webhook is slow or missing. |
 | Opening **Settings → Billing** | Throttled to once every 5 minutes per user. |
 | **A scan that would otherwise be refused** | Forced, never throttled. A subscriber whose renewal just went through is never told to "subscribe". |
 
-The trade-off, stated plainly: a monthly renewal is credited the next time that user's account is
-reconciled, not the instant Stripe charges the card. In practice they notice when they come back to
-use it, and the scan path syncs before it ever refuses them. In exchange there is no public endpoint
-that grants credits, no signing secret to rotate, and nothing to silently lose — a missed webhook is
-gone for good, whereas a missed sync self-heals on the next one.
+Only `invoice.paid` grants credits. A new subscription emits **both**
+`customer.subscription.created` and `invoice.paid` — crediting on both would charge once and grant
+twice, so the subscription events move status and renewal date only.
 
-> Prefer instant crediting later? `POST /v1/billing/webhook` still exists and is inert until you set
-> `OMI_STRIPE_WEBHOOK_SECRET`. Enabling it changes nothing about the above — both paths compete for
-> the same per-invoice row, so only one can ever grant.
+If you ever want to turn the webhook off, delete `OMI_STRIPE_WEBHOOK_SECRET`: the endpoint goes
+inert (acks with 200, grants nothing) and reconciliation carries billing on its own. Renewals are
+then credited the next time that user's account is reconciled rather than the instant they are
+charged — which the scan path always does before refusing anyone.
 
 ---
 
@@ -74,10 +77,43 @@ Dashboard → **Developers → API keys**
 
 Checkout is hosted by Stripe, so no card details and no Stripe.js touch our domain today.
 
-## 3. (Skipped — no webhook needed)
+## 3. Register the webhook
 
-Nothing to do here. Billing reads from Stripe's API, so there is no endpoint to register, no signing
-secret, and no public URL that grants credits.
+Dashboard → **Developers → Webhooks → Add endpoint**
+
+**Endpoint URL:** `https://<your-API-host>/v1/billing/webhook`
+
+> This is the **API** host, not `OMI_PUBLIC_BASE_URL` (that is the web app, where Stripe returns the
+> *customer*). Pointing the webhook at the web host is the most common way this fails, and it fails
+> silently — Stripe reports delivery to a service that has no such route.
+>
+> Don't type it from memory. `GET /v1/billing/preflight`, called **directly on the API host**, prints
+> the exact URL and event list for your deployment.
+
+**Events to send** — exactly these six:
+
+| Event | What it does |
+|---|---|
+| `invoice.paid` | **Grants the credits.** The only event that moves the balance. |
+| `invoice.payment_failed` | Marks the account `past_due` so the UI can prompt for a new card. |
+| `customer.subscription.created` | Records status + renewal date. |
+| `customer.subscription.updated` | Same, on plan change or renewal. |
+| `customer.subscription.deleted` | Marks it cancelled. Credits already bought are kept. |
+| `checkout.session.completed` | Binds the Stripe customer to the account. Grants nothing. |
+
+Selecting fewer silently drops that behaviour; selecting more is harmless, as anything unrecognised
+is recorded and acknowledged without action.
+
+Then open the endpoint you just created, reveal the **Signing secret** (`whsec_…`), and set it as
+`OMI_STRIPE_WEBHOOK_SECRET` on the API service. **Redeploy** — the secret is read at boot.
+
+> Until that secret is set the endpoint is inert: it returns 200 and grants nothing, so Stripe won't
+> retry for three days against a deployment that isn't ready. Billing still works via reconciliation
+> in the meantime.
+
+**Verify it:** use **Send test webhook** on the endpoint page, then call `/v1/billing/preflight`
+again — `webhook_delivery` should report the event and its timestamp. If it still says nothing has
+ever been received, the endpoint is registered against the wrong host or the other Stripe mode.
 
 ## 4. Turn on the Customer Portal
 
@@ -94,7 +130,7 @@ payment methods and cancel. Without this, "Manage subscription" fails when click
 |---|---|---|
 | `OMI_STRIPE_SECRET_KEY` | `sk_test_51Q…` | **Secret.** The only credential billing needs. |
 | `OMI_STRIPE_PRICE_ID` | `price_1Q…` | Not secret, but must match the price you want to charge. |
-| `OMI_STRIPE_WEBHOOK_SECRET` | *(leave unset)* | Only if you later want instant crediting. Unset = the webhook endpoint is inert. |
+| `OMI_STRIPE_WEBHOOK_SECRET` | `whsec_1Q…` | **Secret.** The signing secret from the endpoint in step 3 — not the API key, not the endpoint id. Unset = the webhook is inert and crediting falls back to reconciliation. |
 | `OMI_PUBLIC_BASE_URL` | `https://omisphere-web.onrender.com` | The **web** URL. Stripe sends the customer back here after checkout — set it to the site people actually visit, not the API host, or they land on an API 404. |
 | `OMI_MONTHLY_CREDIT_GRANT` | `20` | Credits added per paid invoice. |
 | `OMI_FREE_TRIAL_CREDITS` | `3` | Credits a new signup starts with. |
@@ -122,6 +158,10 @@ payment. Sign in, then from the browser console on your site:
 await (await fetch('/api/v1/billing/preflight')).json()
 ```
 
+> Called this way it reaches the API through the web app's `/api` proxy, so it cannot tell which host
+> to register the webhook against and will say so rather than print a wrong one. To get the webhook
+> URL, use the curl form below against the API host directly.
+
 or with curl against the API host, passing your `__session` cookie:
 
 ```bash
@@ -134,27 +174,42 @@ It calls Stripe with your configured key and reports back:
 ```json
 {
   "ready": true,
+  "webhook_url": "https://<your-api-host>/v1/billing/webhook",
+  "webhook_events": ["invoice.paid", "invoice.payment_failed", "…"],
   "checks": [
-    {"name": "secret_key",       "ok": true,  "detail": "Set (test mode key)."},
-    {"name": "stripe_reachable", "ok": true,  "detail": "Authenticated with Stripe account acct_1Q…"},
-    {"name": "price",            "ok": true,  "detail": "9.99 USD per month — this is what a customer is charged."},
-    {"name": "return_url",       "ok": true,  "detail": "Customers return to https://…/settings after paying."},
-    {"name": "credit_grant",     "ok": true,  "detail": "20 credits granted per paid invoice."},
-    {"name": "crediting",        "ok": true,  "detail": "API reconciliation (no webhook) …"}
+    {"name": "secret_key",        "ok": true,  "detail": "Set (test mode key)."},
+    {"name": "stripe_reachable",  "ok": true,  "detail": "Authenticated with Stripe account acct_1Q…"},
+    {"name": "price",             "ok": true,  "detail": "9.99 USD per month — this is what a customer is charged."},
+    {"name": "return_url",        "ok": true,  "detail": "Customers return to https://…/settings after paying."},
+    {"name": "credit_grant",      "ok": true,  "detail": "20 credits granted per paid invoice."},
+    {"name": "webhook_url",       "ok": true,  "detail": "Register this endpoint in Stripe: https://…/v1/billing/webhook"},
+    {"name": "webhook_secret",    "ok": true,  "detail": "Set — signatures are verified and the webhook credits on invoice.paid."},
+    {"name": "webhook_delivery",  "ok": true,  "detail": "Last event invoice.paid at 2026-07-28T… · 3 in the last 24h."},
+    {"name": "crediting",         "ok": true,  "detail": "Webhook (instant) with API reconciliation as the backstop."}
   ],
   "next_steps": []
 }
 ```
 
 `ready: false` means **no customer can pay yet**, and `next_steps` says exactly what to set. It never
-returns your secret key. It catches the failures that otherwise only appear when a real customer
-tries to check out:
+returns your secret key or signing secret. It catches the failures that otherwise only appear when a
+real customer tries to check out:
 
 - the secret key set but `OMI_STRIPE_PRICE_ID` missing — checkout 503s
 - a price that is one-off rather than recurring — subscription checkout fails
 - a price from the *other* Stripe mode (test price + live key, or vice versa)
 - an archived price
 - `OMI_PUBLIC_BASE_URL` left on localhost — paying customers redirect into nowhere
+
+The three `webhook_*` checks are reported but **deliberately not blocking**: with no webhook,
+reconciliation still credits every payment correctly, so the deployment is degraded rather than
+broken. Read them as "is instant crediting live?", not "can I take money?".
+
+`webhook_delivery` is the one that catches a webhook nobody has tested. Config can look perfect and
+delivery still fail — wrong host, a firewall, an endpoint registered in the other Stripe mode — and
+this is the only check that proves Stripe has actually reached this deployment. Grant markers written
+by reconciliation are excluded from it, so it cannot report a healthy webhook on a server that has
+never received one.
 
 **Health check.** The API also logs a startup line — confirm it says billing is on:
 
