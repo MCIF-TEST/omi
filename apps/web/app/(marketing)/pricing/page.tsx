@@ -4,23 +4,22 @@ import { Card, CardLabel } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TRIAL_CREDITS } from '@/lib/plan';
 
-export const metadata = { title: 'Pricing — OMISPHERE' };
+export const metadata = { title: 'Pricing. OMISPHERE' };
 
 const FEATURES = [
-  'YouTube + X (Twitter) coordination intelligence — videos, channels, accounts',
-  'Six cross-account coordination detectors (fingerprint, co-engagement, co-tag, style, temporal-semantic, age-cohort)',
-  'Corroboration-gated Campaign records — durable, evolving, evidence-bearing',
-  'Per-commenter activity drilldown — see what flagged accounts actually wrote',
-  'Saved investigations — shareable, exportable as Markdown / JSON / PDF',
-  'Watchlist alerts — get notified when a tracked channel\'s tier changes',
-  'Cross-scan fingerprint memory — every scan adds priors for the next',
+  'YouTube + X (Twitter) account intelligence. Videos, channels, accounts',
+  'Eight behavioral signals per account (posting cadence, content repetition, AI-writing patterns, profile metadata, personal voice, engagement farming, fingerprint match)',
+  'Per-commenter activity drilldown. See what flagged accounts actually wrote',
+  'Saved investigations. Shareable, exportable as Markdown / JSON / PDF',
+  'Watchlist alerts. Get notified when a tracked channel\'s tier changes',
+  'Cross-scan fingerprint memory, every scan adds priors for the next',
   'Cancel from your account at any time',
 ];
 
 const FAQ = [
   {
     q: 'What does an investigation cost?',
-    a: 'One credit per 50 commenters (on YouTube) or repliers (on X/Twitter) scanned — so a 50-account scan is 1 credit and a 150-account scan is 3. YouTube and X are priced the same. The exact cost is shown next to the Scan button before you run anything, and you are never charged if a scan fails. Re-scanning the same URL later, or pulling additional batches, costs the same per-50 rate again.',
+    a: 'One credit per 50 commenters (on YouTube) or repliers (on X/Twitter) scanned, so a 50-account scan is 1 credit and a 150-account scan is 3. YouTube and X are priced the same. The exact cost is shown next to the Scan button before you run anything, and you are never charged if a scan fails. Re-scanning the same URL later, or pulling additional batches, costs the same per-50 rate again.',
   },
   {
     q: 'What about Reddit / TikTok / Instagram?',
@@ -32,7 +31,7 @@ const FAQ = [
   },
   {
     q: 'Beyond 20 scans / month?',
-    a: 'Reach out via the contact form — we can set up a higher-tier plan for research labs, brand-safety teams, and platform-integrity groups. Subscriptions are billed monthly; no annual lock-in.',
+    a: 'Reach out via the contact form. We can set up a higher-tier plan for research labs, brand-safety teams, and platform-integrity groups. Subscriptions are billed monthly; no annual lock-in.',
   },
 ];
 
@@ -49,9 +48,9 @@ export default function PricingPage() {
           One plan. <span className="text-brand">Cancel anytime.</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
-          YouTube comment intelligence — bots, AI engagement, and coordinated
-          influence campaigns. Probabilistic. Every scan trains the OMISPHERE
-          fingerprint database.
+          Comment-section intelligence. Bots, bought engagement, and AI-written
+          replies. Probabilistic. Every scan trains the OMISPHERE fingerprint
+          database.
         </p>
       </header>
 

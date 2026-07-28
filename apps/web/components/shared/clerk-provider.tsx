@@ -5,7 +5,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 // Client-only Clerk provider.
 //
 // WHY a client boundary: this app runs NO clerkMiddleware (it can't get the secret into the Edge
-// runtime — see middleware.ts). Clerk's App Router integration assumes middleware, and its
+// runtime. See middleware.ts). Clerk's App Router integration assumes middleware, and its
 // server-side pieces (auth(), the server ClerkProvider's dynamic state, <SignedIn>/<SignedOut>) throw
 // "clerkMiddleware() was not detected" when it's missing. Rendering ClerkProvider inside a client
 // component keeps ALL of Clerk on the client: the provider, useAuth(), <SignIn>/<SignUp>, and

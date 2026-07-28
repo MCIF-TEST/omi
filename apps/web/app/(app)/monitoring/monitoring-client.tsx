@@ -4,8 +4,8 @@ import { useCallback } from 'react';
 import { Activity, Bell, Eye, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { apiClient, type AlertsResponse, type FeedResponse, type WatchlistsResponse } from '@/lib/api';
+import { cn } from '@/lib/cn';
 import { usePolling } from '@/lib/use-polling';
 import { timeAgo } from '@/lib/format';
 import { WatchlistForm } from './watchlist-form';
@@ -76,9 +76,13 @@ export function MonitoringClient() {
             {feed.data!.items.map((a) => (
               <li key={a.id} className="px-2 py-3">
                 <div className="flex items-baseline gap-3 mb-1 flex-wrap">
-                  <Badge variant={a.severity === 'high' ? 'danger' : a.severity === 'elevated' ? 'warn' : 'accent'}>
+                  <span className={cn(
+                    'font-mono text-2xs tracking-wider uppercase',
+                    a.severity === 'high' ? 'text-danger'
+                      : a.severity === 'elevated' ? 'text-warn' : 'text-accent-text',
+                  )}>
                     {a.kind.replace(/_/g, ' ')}
-                  </Badge>
+                  </span>
                   <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
                     {a.severity}
                   </span>
@@ -121,9 +125,13 @@ export function MonitoringClient() {
                 className={`px-2 py-3 ${a.read_at ? 'opacity-60' : ''}`}
               >
                 <div className="flex items-baseline gap-3 mb-1 flex-wrap">
-                  <Badge variant={a.severity === 'high' ? 'danger' : a.severity === 'elevated' ? 'warn' : 'accent'}>
+                  <span className={cn(
+                    'font-mono text-2xs tracking-wider uppercase',
+                    a.severity === 'high' ? 'text-danger'
+                      : a.severity === 'elevated' ? 'text-warn' : 'text-accent-text',
+                  )}>
                     {a.kind.replace(/_/g, ' ')}
-                  </Badge>
+                  </span>
                   <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
                     {a.severity}
                   </span>
@@ -160,7 +168,7 @@ export function MonitoringClient() {
         <div className="mt-6">
           {(watchlists.data?.watchlists?.length ?? 0) === 0 ? (
             <p className="text-sm text-fg-dim">
-              No watchlists yet. Add a YouTube channel or X account above —
+              No watchlists yet. Add a YouTube channel or X account above.
               OMISPHERE tracks its tier and pings you when it changes.
             </p>
           ) : (

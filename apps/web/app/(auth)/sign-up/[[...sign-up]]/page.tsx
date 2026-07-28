@@ -3,11 +3,11 @@ import { SignUp } from '@clerk/nextjs';
 import { TRIAL_CREDITS } from '@/lib/plan';
 import { AuthFormGate } from '@/components/shared/auth-form-gate';
 
-export const metadata = { title: 'Create account — OMISPHERE' };
+export const metadata = { title: 'Create account. OMISPHERE' };
 
-// Clerk-hosted sign-up (Google, Apple, X, email/phone — whatever is enabled in the Clerk dashboard),
+// Clerk-hosted sign-up (Google, Apple, X, email/phone. Whatever is enabled in the Clerk dashboard),
 // dropped into the app's centered auth shell. Loop guard runs CLIENT-side via AuthFormGate (useAuth),
-// never Clerk's <SignedIn>/<SignedOut> — those call auth() server-side and would throw here because
+// never Clerk's <SignedIn>/<SignedOut>, those call auth() server-side and would throw here because
 // this app runs no clerkMiddleware.
 export default function SignUpPage() {
   return (

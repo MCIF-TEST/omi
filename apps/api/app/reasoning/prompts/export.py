@@ -1,10 +1,10 @@
-"""Prompt synchronization manifest — GitHub registry -> Hugging Face (Sprint 023).
+"""Prompt synchronization manifest. GitHub registry -> Hugging Face (Sprint 023).
 
 Generates the authoritative prompt manifest that the Hugging Face deployment package carries so the
 deployed AI (and any auditor) can verify prompt integrity: every registered prompt's analyst,
 version, active flag, content hash, and output contract, plus the constitution version + hash and
 the specialist-library status. The manifest is generated FROM the ONE Prompt Registry (the single
-source of truth), so it can never drift from what the runtime actually resolves — a committed copy
+source of truth), so it can never drift from what the runtime actually resolves, a committed copy
 lives under ``ml/analyst/hf_repo/prompts/`` and a drift-guard test regenerates + compares it.
 
 This does NOT publish full specialist prompt bodies to HF: the deployed V1 uses only the
@@ -92,7 +92,7 @@ def manifest_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Prompt Catalog — complete per-prompt metadata (Sprint 024, Phase 2)
+# Prompt Catalog. Complete per-prompt metadata (Sprint 024, Phase 2)
 # --------------------------------------------------------------------------- #
 CATALOG_VERSION = "v1"
 CATALOG_PATH = (
@@ -111,7 +111,7 @@ _EVIDENCE_RULE = (
 
 
 def _framework_block(key: str) -> dict:
-    """The Specialist Intelligence Framework dimensions for one specialist (Phase A1) — derived
+    """The Specialist Intelligence Framework dimensions for one specialist (Phase A1). Derived
     from the ONE framework module so the catalog carries the complete inherited record."""
     from .framework import framework_profiles
 
@@ -169,7 +169,7 @@ def _specialist_entry(spec, reg) -> dict:
 def prompt_catalog() -> dict:
     """The complete per-prompt metadata catalog (Phase 2): mission, inputs, outputs, constraints,
     evidence / citation / memory / context rules, Governor compatibility, JSON schema, version,
-    prompt hash, constitution version, and dependencies — for the active production prompt and each
+    prompt hash, constitution version, and dependencies, for the active production prompt and each
     of the 13 specialists. Generated from the registry + specialist library (single source of
     truth), so it mirrors runtime exactly and is drift-guarded. Complements ``prompt_manifest`` (the
     hash index) with full metadata."""
@@ -177,7 +177,7 @@ def prompt_catalog() -> dict:
     omi = reg.resolve("omi_analyst")
     production = {
         "key": "omi_analyst",
-        "role": "active production judge prompt — the ONLY prompt the deployed V1 uses",
+        "role": "active production judge prompt, the ONLY prompt the deployed V1 uses",
         "version": reg.active_version("omi_analyst"),
         "prompt_hash": omi.prompt_hash,
         "expected_output_contract": omi.expected_output_contract,
@@ -230,7 +230,7 @@ def catalog_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Intelligence Library manifest — publish the knowledge alongside prompts (Sprint 025, Phase 5)
+# Intelligence Library manifest. Publish the knowledge alongside prompts (Sprint 025, Phase 5)
 # --------------------------------------------------------------------------- #
 KNOWLEDGE_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "knowledge" / "knowledge_manifest.json"
@@ -239,7 +239,7 @@ KNOWLEDGE_PATH = (
 
 def knowledge_manifest() -> dict:
     """The Intelligence Library published alongside the prompts: per-entry metadata + content hash,
-    the category taxonomy, the specialist dependency map, and the library hash — generated FROM the
+    the category taxonomy, the specialist dependency map, and the library hash. Generated FROM the
     library (single source of truth). Full entry bodies stay canonical in GitHub (not duplicated);
     this index is the drift-guarded HF mirror."""
     from app.reasoning.knowledge import (
@@ -287,7 +287,7 @@ def knowledge_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Prompt Template + Response Contract — the assembly asset published to HF (Phase P1.1)
+# Prompt Template + Response Contract, the assembly asset published to HF (Phase P1.1)
 # --------------------------------------------------------------------------- #
 PROMPT_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts" / "prompt_template.json"
@@ -341,7 +341,7 @@ def prompt_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Comment-Analysis Prompt Template + Output Schema — published to HF (Phase P3.1)
+# Comment-Analysis Prompt Template + Output Schema. Published to HF (Phase P3.1)
 # --------------------------------------------------------------------------- #
 COMMENT_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts" / "comment_prompt_template.json"
@@ -399,7 +399,7 @@ def comment_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Commenter-History Prompt Template + Output Schema — published to HF (Phase P3.2)
+# Commenter-History Prompt Template + Output Schema. Published to HF (Phase P3.2)
 # --------------------------------------------------------------------------- #
 COMMENTER_HISTORY_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts"
@@ -459,7 +459,7 @@ def commenter_history_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Investigation-Summary Prompt Template — published to HF (Phase P3.4)
+# Investigation-Summary Prompt Template. Published to HF (Phase P3.4)
 # --------------------------------------------------------------------------- #
 INVESTIGATION_SUMMARY_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts"
@@ -524,7 +524,7 @@ def investigation_summary_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Comprehensive-Investigation Prompt Template — published to HF (single-inference architecture)
+# Comprehensive-Investigation Prompt Template. Published to HF (single-inference architecture)
 # --------------------------------------------------------------------------- #
 COMPREHENSIVE_INVESTIGATION_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "hf_repo" / "prompts"
@@ -592,7 +592,7 @@ def comprehensive_investigation_template_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Master Analyst Protocol preset artifact — the paste-ready OpenRouter preset (Phase 5B deploy)
+# Master Analyst Protocol preset artifact, the paste-ready OpenRouter preset (Phase 5B deploy)
 # --------------------------------------------------------------------------- #
 MASTER_PRESET_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "omi_master_v1_preset.txt"
@@ -603,7 +603,7 @@ MASTER_PRESET_MANIFEST_PATH = (
 
 
 def master_preset_text() -> str:
-    """The EXACT text the ``omi-master-v1`` OpenRouter preset must contain as its system prompt —
+    """The EXACT text the ``omi-master-v1`` OpenRouter preset must contain as its system prompt, 
     byte-identical to the compiled Master Analyst Protocol (``compile_master_analyst_protocol().text``
     == the comprehensive ``pp.system``). Generated, never hand-authored: the repository stays the
     source of truth and the recorded ``master_prompt_hash`` stays honest."""
@@ -614,7 +614,7 @@ def master_preset_text() -> str:
 
 def master_preset_manifest() -> dict:
     """Deployment manifest for the ``omi-master-v1`` preset: the protocol identity (name / version /
-    content hash / size) the operator verifies after pasting, plus usage notes. Metadata only — the
+    content hash / size) the operator verifies after pasting, plus usage notes. Metadata only, the
     protocol text itself stays vendor-neutral; the intended production model is deployment config."""
     from app.reasoning.prompts.master_protocol import master_analyst_protocol_identity
 
@@ -658,7 +658,7 @@ def master_preset_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Specialist Framework handbook — GitHub-side contributor doc (Phase A1)
+# Specialist Framework handbook. GitHub-side contributor doc (Phase A1)
 # --------------------------------------------------------------------------- #
 HANDBOOK_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "SPECIALIST_FRAMEWORK.md"
@@ -666,7 +666,7 @@ HANDBOOK_PATH = (
 
 
 def write_handbook(path: Path | None = None) -> Path:
-    """Write the generated Specialist Framework handbook (drift-guarded; GitHub-only doc —
+    """Write the generated Specialist Framework handbook (drift-guarded; GitHub-only doc, 
     engineering documentation, not a deployment artifact)."""
     from .framework import render_handbook
 
@@ -686,7 +686,7 @@ def handbook_matches_committed() -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Behavioral Intelligence Library handbook — GitHub-side doc (Phase B1)
+# Behavioral Intelligence Library handbook. GitHub-side doc (Phase B1)
 # --------------------------------------------------------------------------- #
 BEHAVIORAL_HANDBOOK_PATH = (
     Path(__file__).resolve().parents[5] / "ml" / "analyst" / "BEHAVIORAL_ANALYST.md"

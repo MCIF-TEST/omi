@@ -2,11 +2,10 @@ import Link from 'next/link';
 import {
   ArrowRight, CheckCircle2, Database, Fingerprint, Gauge,
   MessagesSquare, MousePointerClick, Radar, ScanLine,
-  ShieldCheck, Sparkles, Users,
+  ShieldCheck, Users,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/shared/logo';
 import { Reveal } from '@/components/shared/reveal';
 import { AnimatedNumber } from '@/components/shared/animated-number';
@@ -30,7 +29,6 @@ import { TRIAL_CREDITS, MONTHLY_CREDITS } from '@/lib/plan';
  *   · figures in mono/tabular (`.stat-value`), because in this product a number is evidence
  *   · the real `Card` / `Button` / `TierBadge` primitives rather than lookalikes
  *   · blue compiles and purple analyzes, the color story of the investigate workspace
- *   · the archive card grid from /investigations, carrying two genuinely public campaign reports
  *
  * No `overflow-hidden` on the root: it creates a scroll container that breaks the sticky header.
  * Horizontal containment is handled by `overflow-x: clip` on html/body in globals.css.
@@ -105,10 +103,13 @@ export function LandingPage() {
               <div className="min-w-0">
                 {/* `.section-label` already carries a blue tick and is `flex-wrap: wrap`, so a long
                     label plus an icon orphaned the tick onto its own line at 390px. The label stays
-                    short and the beta status rides alongside as a Badge, which wraps as one piece. */}
+                    short and the beta status rides alongside in its own span, which wraps as one
+                    piece. */}
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="section-label">Online media intelligence</span>
-                  <Badge variant="accent">Private beta</Badge>
+                  <span className="font-mono text-2xs tracking-wider uppercase text-accent-text">
+                    Private beta
+                  </span>
                 </div>
 
                 <h1
@@ -131,12 +132,15 @@ export function LandingPage() {
                       Start free with {TRIAL_CREDITS} credits
                     </Button>
                   </Link>
-                  <Link href="/rc/cmp_feat_cn_xinjiang">
+                  {/* The free scan below is the second call to action: it is the strongest one on
+                      the page (no signup, real result), so the button jumps to it rather than
+                      competing with it. */}
+                  <a href="#try">
                     <Button size="lg" variant="secondary">
-                      Open a real case
+                      Try a free scan
                       <ArrowRight size={14} />
                     </Button>
-                  </Link>
+                  </a>
                 </div>
 
                 <ul className="flex items-center gap-x-5 gap-y-2 flex-wrap font-mono text-2xs text-fg-mute tracking-wider">
@@ -186,8 +190,9 @@ export function LandingPage() {
         </Shell>
 
         {/* ── Live workspace ───────────────────────────────────────────────
-            The free scan, framed like the investigate workspace panel. */}
-        <Shell className="pt-14">
+            The free scan, framed like the investigate workspace panel. The id is the target of
+            the hero's secondary call to action. */}
+        <Shell id="try" className="pt-14">
           <Reveal className="mb-5">
             <SectionHeading
               eyebrow="Intelligence · Workspace"
@@ -238,28 +243,6 @@ export function LandingPage() {
                   <h3 className="text-sm font-semibold text-fg mb-2">{s.title}</h3>
                   <p className="text-sm text-fg-dim leading-relaxed">{s.body}</p>
                 </Card>
-              </Reveal>
-            ))}
-          </div>
-        </Shell>
-
-        {/* ── Public cases ─────────────────────────────────────────────────
-            The archive grid from /investigations, carrying two real public
-            campaign reports (seeded from Twitter's state-actor disclosures). */}
-        <Shell className="pt-14">
-          <Reveal className="mb-5">
-            <SectionHeading
-              eyebrow="Intelligence · Archive"
-              icon={<Sparkles size={11} className="text-accent" />}
-              title="Two coordinated networks, open to anyone"
-              lede="Real state-actor networks from Twitter's disclosure archive. Omi re-derived the coordination from behavior alone, then kept the evidence attached to the verdict."
-            />
-          </Reveal>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {CASES.map((c, i) => (
-              <Reveal key={c.token} delay={i * 70} from="up">
-                <CaseCard {...c} />
               </Reveal>
             ))}
           </div>
@@ -373,9 +356,19 @@ export function LandingPage() {
 }
 
 /** One gutter, one measure, every section: the app's content column. */
-function Shell({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function Shell({
+  children,
+  className = '',
+  id,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  id?: string;
+}) {
   return (
-    <section className={`px-4 md:px-6 max-w-6xl mx-auto w-full ${className}`}>{children}</section>
+    <section id={id} className={`px-4 md:px-6 max-w-6xl mx-auto w-full ${className}`}>
+      {children}
+    </section>
   );
 }
 
@@ -405,122 +398,11 @@ function SectionHeading({
   );
 }
 
-/**
- * A public campaign report, carrying the archive card's anatomy from /investigations: TierBadge,
- * title, summary, a coordination meter on the shared suspicion spectrum, and a mono footer.
- *
- * No thumbnail slot, unlike an investigation card. A campaign is a set of accounts rather than one
- * video, so `InvestigationThumb` had nothing to show and rendered an empty 16:9 placeholder over
- * half the card. The detector names take that space instead, which is the evidence a reader
- * actually needs: which independent methods agreed. Every figure is the seeded value from
- * `featured_campaigns.json`, so each card states what the engine produced.
- */
-function CaseCard({
-  token,
-  title,
-  summary,
-  coordination,
-  confidence,
-  members,
-  methods,
-}: (typeof CASES)[number]) {
-  const pct = Math.round(coordination * 100);
-  return (
-    <Link
-      href={`/rc/${token}`}
-      className="group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-    >
-      <article className="h-full flex flex-col bg-bg-elev border border-border-1 rounded-xl card-interactive surface-lit p-5 gap-3.5 transition-all duration-300 group-hover:border-border-hot group-hover:shadow-card-lg">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <TierBadge tier="high" size="sm" />
-            <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
-              X · {methods.length} methods agree
-            </span>
-          </div>
-          <h3 className="display text-base font-semibold text-fg leading-snug group-hover:text-accent-text transition-colors">
-            {title}
-          </h3>
-          <p className="mt-1.5 text-sm text-fg-dim leading-relaxed">{summary}</p>
-        </div>
-
-        {/* The detectors that fired, named. Two of these three are discriminative, which is what
-            lets the corroboration gate carry a coordinated verdict at all. */}
-        <ul className="flex flex-wrap gap-1.5">
-          {methods.map((m) => (
-            <li
-              key={m}
-              className="font-mono text-[0.6rem] tracking-wider uppercase text-fg-mute border border-border-2 bg-bg-elev-2 rounded px-1.5 py-0.5"
-            >
-              {m.replace(/_/g, ' ')}
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-auto">
-          <div className="flex items-center justify-between font-mono text-2xs mb-1.5">
-            <span className="text-fg-mute uppercase tracking-wider">Coordination</span>
-            <span className="text-fg tabular">{pct}%</span>
-          </div>
-          <div className="h-1 bg-bg-elev-3 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-brand-gradient"
-              style={{ width: `${Math.min(100, Math.max(2, pct))}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between font-mono text-2xs text-fg-mute uppercase tracking-wider">
-          <span className="inline-flex items-center gap-1.5 truncate">
-            <Users size={11} aria-hidden />
-            {members} accounts
-            <span className="text-border-2 mx-0.5">·</span>
-            {Math.round(confidence * 100)}% confidence
-          </span>
-          <ArrowRight
-            size={13}
-            className="text-fg-faint group-hover:text-accent group-hover:translate-x-0.5 transition-all shrink-0"
-            aria-hidden
-          />
-        </div>
-      </article>
-    </Link>
-  );
-}
-
 const TILES = [
   { animate: 8, figure: null, label: 'Behavioral signals', sub: 'read per account' },
   { animate: null, figure: '0-100', label: 'OMI score', sub: 'per account, not per post' },
   { animate: 2, figure: null, label: 'Sources', sub: 'X and YouTube' },
   { animate: 25, figure: null, label: 'Free scan cap', sub: 'accounts, no account needed' },
-] as const;
-
-/**
- * Both entries mirror `apps/api/app/content/featured_campaigns.json`. The share tokens are pinned
- * by `test_stable_tokens_match_the_landing_page_contract`, so a token-scheme change breaks the
- * suite instead of dead-linking the front door.
- */
-const CASES = [
-  {
-    token: 'cmp_feat_cn_xinjiang',
-    title: 'China · Xinjiang (CNHU disclosure)',
-    summary:
-      'A People’s Republic of China operation amplifying Xinjiang narratives, taken from Twitter’s state-actor disclosure. Three independent methods put these accounts in one cluster.',
-    coordination: 0.9991,
-    confidence: 0.7944,
-    members: 41,
-    methods: ['age_cohort', 'co_tag', 'fingerprint_cluster'],
-  },
-  {
-    token: 'cmp_feat_ru_gru_202012',
-    title: 'Russia · GRU (Dec 2020 disclosure)',
-    summary:
-      'A Russian military-intelligence network from the same disclosure archive. Shared posting fingerprints and one hashtag-amplification network carry the finding, never the disclosure label.',
-    coordination: 1.0,
-    confidence: 0.7721,
-    members: 16,
-    methods: ['co_tag', 'style_match'],
-  },
 ] as const;
 
 const CAPABILITIES = [

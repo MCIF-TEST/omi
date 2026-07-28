@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * Security headers + CSP nonces + lightweight edge rate limiting + referral cookie.
  *
- * No Clerk in middleware — on purpose (see history). Clerk runs client-side only;
+ * No Clerk in middleware, on purpose (see history). Clerk runs client-side only;
  * route protection is in app/(app)/layout.tsx via FastAPI session verification.
  */
 
@@ -27,7 +27,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
 /**
  * Build a restrictive CSP. Next.js App Router injects flight scripts; when we set `x-nonce`
  * on the request, Next applies that nonce to its inline scripts so we can avoid 'unsafe-inline'.
- * Clerk loads from its CDN without our nonce — listed explicitly in script-src.
+ * Clerk loads from its CDN without our nonce. Listed explicitly in script-src.
  */
 export function buildContentSecurityPolicy(nonce: string): string {
   // Clerk Frontend API host is account-specific (*.clerk.accounts.dev in test).
@@ -104,7 +104,7 @@ function clientIp(req: NextRequest): string {
  * Whether the request carries something that looks like a session.
  *
  * Clerk stores `__session` on the app's own domain, suffixed (`__session_<hash>`) on dev instances;
- * `omi_session` is the legacy cookie path. Presence is all this needs to decide a redirect — see the
+ * `omi_session` is the legacy cookie path. Presence is all this needs to decide a redirect. See the
  * call site for why verification would be the wrong tool here.
  */
 function hasSessionCookie(req: NextRequest): boolean {
@@ -114,7 +114,7 @@ function hasSessionCookie(req: NextRequest): boolean {
 }
 
 export default function middleware(req: NextRequest) {
-  // Rate limit page navigations (not every static asset — matcher already narrows).
+  // Rate limit page navigations (not every static asset. Matcher already narrows).
   const { ok, retryAfter } = rateLimit(clientIp(req));
   if (!ok) {
     return new NextResponse('Too Many Requests', {
@@ -132,7 +132,7 @@ export default function middleware(req: NextRequest) {
   // /v1/auth/me on every anonymous visit, putting the API and database in the critical path of the
   // page traffic is bought for.
   //
-  // Cookie PRESENCE only — no verification, and none needed. This is a convenience redirect, not an
+  // Cookie PRESENCE only, no verification, and none needed. This is a convenience redirect, not an
   // access control: /investigate performs the real server-side session check and bounces an invalid
   // cookie to sign-in. Nothing is granted here, so a forged cookie buys an attacker a redirect.
   if (req.nextUrl.pathname === '/' && hasSessionCookie(req)) {

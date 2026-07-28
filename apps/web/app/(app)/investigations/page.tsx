@@ -11,7 +11,7 @@ import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
-export const metadata = { title: 'Previous investigations — OMISPHERE' };
+export const metadata = { title: 'Previous investigations. OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 const CHIP = 'font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-full border transition-colors';
@@ -75,7 +75,7 @@ export default async function InvestigationsPage({
               Previous investigations
             </h1>
             <p className="text-sm text-fg-dim mt-1.5 max-w-xl leading-relaxed">
-              Your personal archive of every scan — YouTube videos and X posts with
+              Your personal archive of every scan. YouTube videos and X posts with
               thumbnails, verdicts, and evidence in one place.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3 font-mono text-2xs text-fg-mute uppercase tracking-wider">
@@ -187,7 +187,7 @@ export default async function InvestigationsPage({
                 tone="open"
                 label="Open"
                 count={open.length}
-                hint="Still in play — pick up where you left off"
+                hint="Still in play. Pick up where you left off"
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
                 {open.map((inv) => (
@@ -270,7 +270,7 @@ function InvestigationCard({ inv }: { inv: InvestigationSummary }) {
               <TierBadge tier={inv.overall_tier} size="sm" />
               {inv.confidence != null && inv.confidence < 0.4 && (
                 <span
-                  title={`Low confidence (${Math.round(inv.confidence * 100)}%) — limited data backed this verdict.`}
+                  title={`Low confidence (${Math.round(inv.confidence * 100)}%). Limited data backed this verdict.`}
                   className="font-mono text-[0.55rem] tracking-wider uppercase text-confidence-weak border border-border-2 rounded-full px-1.5 py-px"
                 >
                   low conf

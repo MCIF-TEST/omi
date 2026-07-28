@@ -1,9 +1,9 @@
-"""Intelligence Optimization Framework — prompt registry (Sprint 008).
+"""Intelligence Optimization Framework. Prompt registry (Sprint 008).
 
 Versioned, content-addressed prompts with config-driven selection, rollback, experiments, and
 comparison. AI-backed analysts execute from a registered :class:`PromptSpec` rather than
 embedded text, so reasoning quality can be improved through measurable, version-controlled
-prompt evolution — without touching the architecture or any constitutional guarantee.
+prompt evolution, without touching the architecture or any constitutional guarantee.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from .registry import (
     compare_prompts,
     default_registry,
 )
-from .behavioral import (  # noqa: F401 — importing registers the behavioral framework overrides
+from .behavioral import (  # noqa: F401. Importing registers the behavioral framework overrides
     BEHAVIORAL_LIBRARY_VERSION,
     behavior_v2_prompt_spec,
     render_behavioral_handbook,
@@ -55,18 +55,18 @@ from .specialists import (
 __all__ = [
     "PromptSpec", "PromptRegistry", "PromptExperiment",
     "compare_prompts", "default_registry",
-    # Phase 3 — constitutional building blocks
+    # Phase 3. Constitutional building blocks
     "CONSTITUTION", "CONSTITUTION_VERSION", "ConstitutionBlock",
     "constitution_hash", "constitution_text",
-    # Phase 2 — specialist prompt library
+    # Phase 2. Specialist prompt library
     "LIBRARY_VERSION", "SPECIALISTS", "SpecialistSpec",
     "register_specialist_library", "render", "specialist_prompt_specs",
-    # Phase A1 — the Specialist Intelligence Framework
+    # Phase A1, the Specialist Intelligence Framework
     "FRAMEWORK_VERSION", "SpecialistProfile", "framework_profiles", "framework_hash",
     "lift", "new_specialist", "validate_framework",
-    # Phase B1 — the Behavioral Intelligence Library (reference implementation)
+    # Phase B1, the Behavioral Intelligence Library (reference implementation)
     "BEHAVIORAL_LIBRARY_VERSION", "behavior_v2_prompt_spec", "render_behavioral_handbook",
-    # Phase P1.1 — the Prompt Template + Response Contract assembly asset
+    # Phase P1.1, the Prompt Template + Response Contract assembly asset
     "PROMPT_TEMPLATE_VERSION", "RESPONSE_CONTRACT", "assembly_template", "response_contract",
     "template_hash", "contract_hash",
 ]

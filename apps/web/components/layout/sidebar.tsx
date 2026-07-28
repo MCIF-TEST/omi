@@ -15,6 +15,8 @@ interface NavItem {
   icon: LucideIcon;
   badge?: string;
   disabled?: boolean;
+  /** Admin-only. The page itself re-checks on the server; this only hides the link. */
+  adminOnly?: boolean;
 }
 
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
@@ -26,13 +28,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // Narratives = the durable coordinated-account clusters (formerly "Campaigns");
-    // the separate message-cluster Narratives tab was merged into this one unified tab.
-    // Graph is the cross-scan account network.
+    // Graph is the cross-scan account network. The coordinated-account cluster
+    // surface was removed pending a proper coordinated-events algorithm.
     label: 'Coordination',
     items: [
-      { href: '/campaigns',      label: 'Narratives',    icon: MessageSquareText },
       { href: '/graph',          label: 'Graph',         icon: Network },
+      { href: '/narratives',     label: 'Narratives',    icon: MessageSquareText, adminOnly: true },
     ],
   },
   {
@@ -45,19 +46,30 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
 ];
 
 // Pre-activation (no investigations yet) the nav narrows to the value-moment
-// path: Investigate / Previous investigations / Narratives / Settings.
+// path: Investigate / Previous investigations / Settings.
 const NEW_USER_VISIBLE = new Set([
-  '/investigate', '/investigations', '/campaigns', '/settings',
+  '/investigate', '/investigations', '/settings',
 ]);
 
-function visibleGroups(isNewUser: boolean) {
-  if (!isNewUser) return NAV_GROUPS;
-  return NAV_GROUPS
+function visibleGroups(isNewUser: boolean, isAdmin: boolean) {
+  // Admin-only items are filtered first, so a non-admin never sees the link at all. The page
+  // re-checks server-side, so hiding it here is presentation, not the access control.
+  const groups = NAV_GROUPS
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.adminOnly || isAdmin) }))
+    .filter((g) => g.items.length > 0);
+  if (!isNewUser) return groups;
+  return groups
     .map((g) => ({ ...g, items: g.items.filter((i) => NEW_USER_VISIBLE.has(i.href)) }))
     .filter((g) => g.items.length > 0);
 }
 
-export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
+export function Sidebar({
+  isNewUser = false,
+  isAdmin = false,
+}: {
+  isNewUser?: boolean;
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname();
 
   return (
@@ -69,7 +81,7 @@ export function Sidebar({ isNewUser = false }: { isNewUser?: boolean }) {
 
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-6">
-        {visibleGroups(isNewUser).map((group) => (
+        {visibleGroups(isNewUser, isAdmin).map((group) => (
           <div key={group.label}>
             <div className="px-2.5 mb-2 select-none">
               <span className="font-mono text-[0.6rem] tracking-[0.22em] text-fg-faint uppercase">

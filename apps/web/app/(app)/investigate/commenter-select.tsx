@@ -29,7 +29,7 @@ function readScan(): ActiveScan | null {
 }
 
 /**
- * Turn any failure into a clear, actionable line — a compile/scan must never look like it silently
+ * Turn any failure into a clear, actionable line, a compile/scan must never look like it silently
  * "cut out". Maps every HTTP status the backend can return (and a dropped network) to plain English.
  */
 function friendlyError(e: unknown, action: 'compile' | 'scan'): string {
@@ -49,10 +49,10 @@ function friendlyError(e: unknown, action: 'compile' | 'scan'): string {
         return 'Too many requests right now. Wait a few seconds and try again.';
       case 502:
       case 503:
-        // Backend sends a specific reason (missing key, provider down, private post) — surface it.
+        // Backend sends a specific reason (missing key, provider down, private post). Surface it.
         return e.message || 'The scanning service is temporarily unavailable. Please try again shortly.';
       case 504:
-        return 'The request took too long. It may still be working — try again in a moment.';
+        return 'The request took too long. It may still be working. Try again in a moment.';
       default:
         return e.message || `Something went wrong (${e.status}). Please try again.`;
     }
@@ -126,15 +126,15 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
     }
   }, [url, rows.length]);
 
-  // One-tap paste — reads the clipboard straight into the link field. Especially clean on mobile,
+  // One-tap paste. Reads the clipboard straight into the link field. Especially clean on mobile,
   // where pasting normally means long-press → menu → Paste. Silently no-ops if the browser blocks
-  // clipboard reads (permissions / non-HTTPS) — the user can still paste by hand.
+  // clipboard reads (permissions / non-HTTPS), the user can still paste by hand.
   const pasteFromClipboard = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) setUrl(text.trim());
     } catch {
-      /* clipboard unavailable — no-op */
+      /* clipboard unavailable. No-op */
     }
   }, []);
 
@@ -172,7 +172,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
         setPlatform(res.platform);
         setRows(res.commenters);
         setHasMore(res.has_more);
-        setRevealFrom(res.total); // bulk load — don't fire per-row reveals for hundreds of rows
+        setRevealFrom(res.total); // bulk load. Don't fire per-row reveals for hundreds of rows
         if (!res.has_more || res.fetched_now === 0) break;
       }
     } catch (e) {
@@ -192,7 +192,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
       if (runRef.current !== runId) return;
       const slug = done.investigation_slug || fallbackSlug;
       if (done.status !== 'done' || !slug) {
-        throw new Error(done.error || 'The scan finished but produced no investigation. Your credits were refunded — try again.');
+        throw new Error(done.error || 'The scan finished but produced no investigation. Your credits were refunded. Try again.');
       }
       clearScan();
       router.push(`/investigations/${slug}`);
@@ -226,7 +226,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
 
   // On mount: re-attach to an in-flight score job the user navigated away from (the backend kept
   // running and saved its investigation, so resuming the poll restores the redirect). Otherwise,
-  // arriving with a URL (e.g. "Scan more commenters" on an investigation) compiles immediately —
+  // arriving with a URL (e.g. "Scan more commenters" on an investigation) compiles immediately, 
   // the list is cached server-side, so it comes back instantly and costs nothing.
   useEffect(() => {
     const saved = readScan();
@@ -280,7 +280,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
               className="h-12 w-full pl-10 pr-14 sm:pr-24 text-base rounded-lg bg-bg-inset border border-border-2 text-fg
                          placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline"
             />
-            {/* Auto-paste — one tap drops the copied link in. A big win on mobile, where pasting is fiddly. */}
+            {/* Auto-paste, one tap drops the copied link in. A big win on mobile, where pasting is fiddly. */}
             {!url.trim() ? (
               <button
                 type="button"
@@ -288,7 +288,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
                 aria-label="Paste link from clipboard"
                 className="btn-slab absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-2.5 sm:px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-accent-text"
               >
-                {/* Icon-only on phones — the word costs ~45px that the placeholder needs to stay
+                {/* Icon-only on phones, the word costs ~45px that the placeholder needs to stay
                     readable, and the icon + aria-label already say what it does. */}
                 <ClipboardPaste size={14} className="shrink-0" />
                 <span className="hidden sm:inline">Paste</span>
@@ -320,7 +320,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
           </button>
         </form>
         <p className="mt-2.5 font-mono text-2xs tracking-wider text-fg-faint">
-          Listing the commenters is free — no scoring, no credits. You choose who to scan next.
+          Listing the commenters is free, no scoring, no credits. You choose who to scan next.
         </p>
       </Card>
 
@@ -379,7 +379,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
                 </button>
               </div>
             </div>
-            {/* Filter — a full comment section can be hundreds of rows; find a handle or phrase fast. */}
+            {/* Filter, a full comment section can be hundreds of rows; find a handle or phrase fast. */}
             {rows.length > 8 && (
               <div className="relative">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none" />
@@ -415,7 +415,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
               {visibleRows.map((r, i) => {
                 const isSel = selected.has(r.external_id);
                 // Only newly-compiled rows animate, and only the first ~40 of them (never a filtered
-                // view) — a few hundred simultaneous entrances would stutter.
+                // view), a few hundred simultaneous entrances would stutter.
                 const fresh = !query.trim() && i >= revealFrom && i - revealFrom < 40;
                 return (
                   <li
@@ -435,7 +435,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
                       <Avatar src={r.avatar_url} handle={r.handle ?? r.external_id} />
 
                       <span className="min-w-0 flex-1">
-                        {/* The comment is the hero — it's what you read to decide who to scan. */}
+                        {/* The comment is the hero. It's what you read to decide who to scan. */}
                         {r.comment ? (
                           <span className="comment-text block text-fg line-clamp-3">{r.comment}</span>
                         ) : (
@@ -457,7 +457,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
                         </span>
                       </span>
 
-                      {/* Selection pip — fills with a spring when picked. */}
+                      {/* Selection pip. Fills with a spring when picked. */}
                       {!r.scanned && (
                         <span className={`pip ${isSel ? 'pip-on' : ''}`} aria-hidden>
                           {isSel && <Check size={13} strokeWidth={3} />}
@@ -470,10 +470,10 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
             </ul>
           </div>
 
-          {/* action bar — on mobile the Scan button goes full-width + sticks to the bottom of the card */}
+          {/* action bar, on mobile the Scan button goes full-width + sticks to the bottom of the card */}
           <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-divider bg-bg/60 sticky bottom-0">
             <p className="font-mono text-2xs tracking-wider text-fg-faint w-full sm:w-auto">
-              {hasMore ? 'More available — “Add 100” or “Load all” to pull the rest.' : 'Whole comment section loaded.'}
+              {hasMore ? 'More available. “Add 100” or “Load all” to pull the rest.' : 'Whole comment section loaded.'}
             </p>
             <button
               onClick={() => void scan()}
@@ -487,7 +487,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
         </div>
       )}
 
-      {/* Compile succeeded but the post has no listable commenters — say so instead of going blank. */}
+      {/* Compile succeeded but the post has no listable commenters. Say so instead of going blank. */}
       {phase === 'list' && rows.length === 0 && (
         <div className="rounded-xl border border-border-1 bg-bg-elev p-8 text-center">
           <span className="mx-auto mb-4 grid place-items-center w-11 h-11 rounded-full bg-bg-elev-2 border border-border-1">
@@ -526,7 +526,7 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
           92% { opacity: 0.9; }
           100% { transform: translateY(62vh); opacity: 0; }
         }
-        /* content-visibility lets the browser skip rendering off-screen rows — the whole comment
+        /* content-visibility lets the browser skip rendering off-screen rows, the whole comment
            section (up to ~1000 rows) scrolls smoothly without a virtualization library. */
         .commenter-row { content-visibility: auto; contain-intrinsic-size: auto 76px; }
         .commenter-row.reveal {
@@ -548,10 +548,10 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
         }
         .row-btn.is-scanned { opacity: 0.5; cursor: default; }
 
-        /* The comment — the hero. Bigger and brighter than the byline, comfortable to read. */
+        /* The comment, the hero. Bigger and brighter than the byline, comfortable to read. */
         .comment-text { font-size: 0.95rem; line-height: 1.5; }
 
-        /* Selection pip — the fun beat: an empty ring that fills with a spring when you pick someone. */
+        /* Selection pip, the fun beat: an empty ring that fills with a spring when you pick someone. */
         .pip {
           margin-top: 2px; width: 22px; height: 22px; flex: none; border-radius: 999px;
           border: 1.5px solid var(--border-hot); display: grid; place-items: center; color: #fff;
@@ -599,7 +599,7 @@ function Avatar({ src, handle }: { src?: string | null; handle: string }) {
   );
 }
 
-// The compile placeholder — a calm scanning indicator while the list is read.
+// The compile placeholder, a calm scanning indicator while the list is read.
 function CompilingState() {
   return (
     <div className="rounded-xl border border-border-1 bg-bg-elev-2/50 p-8 flex items-center gap-4">
@@ -619,7 +619,7 @@ function CompilingState() {
   );
 }
 
-// The scan-in-progress state — the intelligence step is running on the selection.
+// The scan-in-progress state, the intelligence step is running on the selection.
 function ScanningState({ count }: { count: number }) {
   return (
     <div className="rounded-xl border border-violet-solid/40 bg-violet-solid/[0.06] p-8">
@@ -634,7 +634,7 @@ function ScanningState({ count }: { count: number }) {
           </p>
           <p className="text-xs text-fg-mute mt-0.5">
             Pulling each account&apos;s history, detecting coordination, then Omi writes the verdict. This can take a
-            couple of minutes — you&apos;ll be taken to the investigation when it&apos;s ready.
+            couple of minutes. You&apos;ll be taken to the investigation when it&apos;s ready.
           </p>
         </div>
       </div>

@@ -3,12 +3,12 @@
 import { cn } from '@/lib/cn';
 
 /**
- * ConfidenceBand — a verdict is a number AND its uncertainty, never a bare
+ * ConfidenceBand, a verdict is a number AND its uncertainty, never a bare
  * point estimate. Plots the probability on a 0..1 track with an uncertainty
  * halo whose width grows as confidence falls: high confidence -> a sharp tick;
  * low confidence -> a wide band the investigator can SEE is tentative.
  *
- * `confidence` here is "data sufficiency" — how much evidence backed the
+ * `confidence` here is "data sufficiency". How much evidence backed the
  * estimate (the mean of the detectors' self-reported confidence). It is a
  * surfacing of values the engine already computes, not a new score.
  */
@@ -32,7 +32,7 @@ export function ConfidenceBand({
   // Confidence reads as DESATURATION (not a tier hue, which would collide with the
   // probability colour): high = crisp/opaque, low = faint + muted label.
   const confLabel =
-    cCl >= 0.7 ? 'high' : cCl >= 0.4 ? 'moderate' : 'low — thin evidence';
+    cCl >= 0.7 ? 'high' : cCl >= 0.4 ? 'moderate' : 'low, thin evidence';
   const confText =
     cCl >= 0.7 ? 'text-fg' : cCl >= 0.4 ? 'text-fg-dim' : 'text-confidence-weak';
   const bandOpacity = 0.14 + cCl * 0.22; // 0.14 (tentative) → 0.36 (firm)
@@ -43,7 +43,7 @@ export function ConfidenceBand({
         <span>{label}</span>
         <span
           className={cn('tabular', confText)}
-          title="How much data backed this estimate (mean detector confidence). Low confidence means the verdict is tentative — treat it cautiously, not as firm."
+          title="How much data backed this estimate (mean detector confidence). Low confidence means the verdict is tentative. Treat it cautiously, not as firm."
         >
           confidence {Math.round(cCl * 100)}% · {confLabel}
         </span>

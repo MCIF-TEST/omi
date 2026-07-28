@@ -32,12 +32,12 @@ export function PostingHeatmap({ comments }: Props) {
 
   if (max === 0) return null;
 
-  // Active range — find earliest and latest hours with any activity
+  // Active range. Find earliest and latest hours with any activity
   const activeHours = HOURS.filter((h) => grid.some((row) => row[h] > 0));
   const earliestHr = activeHours[0];
   const latestHr = activeHours[activeHours.length - 1];
 
-  // Coverage % — what fraction of all 168 (day × hour) buckets have activity
+  // Coverage %. What fraction of all 168 (day × hour) buckets have activity
   let nonEmpty = 0;
   for (const row of grid) for (const v of row) if (v > 0) nonEmpty++;
   const coverage = Math.round((nonEmpty / 168) * 100);
@@ -62,7 +62,7 @@ export function PostingHeatmap({ comments }: Props) {
         <div className="flex items-center gap-2">
           <Clock size={14} className="text-accent" />
           <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
-            Posting pattern — when they comment
+            Posting pattern. When they comment
           </p>
         </div>
         <div className="flex items-center gap-4 font-mono text-2xs">
@@ -109,7 +109,7 @@ export function PostingHeatmap({ comments }: Props) {
                           ? 'rgba(245,241,232,0.04)'
                           : `rgba(217, 164, 74, ${Math.max(0.15, intensity)})`,
                     }}
-                    title={`${day} ${h}:00 — ${count} comment${count === 1 ? '' : 's'}`}
+                    title={`${day} ${h}:00. ${count} comment${count === 1 ? '' : 's'}`}
                   />
                 );
               })}
@@ -123,7 +123,7 @@ export function PostingHeatmap({ comments }: Props) {
         <div className="flex items-center gap-2">
           <span className="uppercase tracking-wider">Activity range</span>
           <span className="tabular-nums text-fg-dim">
-            {String(earliestHr).padStart(2, '0')}:00 – {String(latestHr).padStart(2, '0')}:59 UTC
+            {String(earliestHr).padStart(2, '0')}:00. {String(latestHr).padStart(2, '0')}:59 UTC
           </span>
         </div>
         <div className="flex items-center gap-1.5">

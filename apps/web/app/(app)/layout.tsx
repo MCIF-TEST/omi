@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect('/sign-in');
   return (
     <>
-      {/* Reaching here means the SERVER verified the session — clear any auth-recovery flag so a later
+      {/* Reaching here means the SERVER verified the session. Clear any auth-recovery flag so a later
           unrelated bounce starts fresh instead of jumping to the manual "stuck" controls. */}
       <AuthBridgeReset />
       <AppShell user={user}>{children}</AppShell>

@@ -13,9 +13,9 @@ const CATEGORIES = [
 ] as const;
 
 /**
- * Persistent feedback control — a subtle button that lives in the header on every page (including
+ * Persistent feedback control, a subtle button that lives in the header on every page (including
  * deep inside an investigation). Opens a lightweight modal: a category, a message, submit. Sends to
- * the admin-only feedback queue. Fails soft — never blocks the user.
+ * the admin-only feedback queue. Fails soft, never blocks the user.
  */
 export function FeedbackButton() {
   const pathname = usePathname() || '';
@@ -77,7 +77,7 @@ export function FeedbackButton() {
                 <span className="mx-auto mb-3 grid place-items-center w-11 h-11 rounded-full bg-tier-low/15 text-tier-low">
                   <Check size={22} />
                 </span>
-                <p className="text-sm text-fg font-medium">Thanks — got it.</p>
+                <p className="text-sm text-fg font-medium">Thanks. Got it.</p>
                 <p className="text-xs text-fg-mute mt-1">Your feedback went straight to the team.</p>
               </div>
             ) : (

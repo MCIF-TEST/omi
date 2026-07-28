@@ -1,8 +1,8 @@
-"""Prompt Template + Response Contract — the canonical assembly ASSET (Phase P1.1).
+"""Prompt Template + Response Contract, the canonical assembly ASSET (Phase P1.1).
 
 This is a **package asset**, exactly like the constitution (``constitution.py``) and the
 ``omi_analyst`` system prompt (the registry): it holds the *scaffolding text* the Prompt Builder
-assembles the final prompt FROM — the block ordering, the section headers, the evidence-presentation
+assembles the final prompt FROM: the block ordering, the section headers, the evidence-presentation
 preamble, the data-vs-instruction guards, and the **response contract**. Keeping it here (not in the
 builder) is what lets the Canonical Prompt Builder embed **zero** prompt text: the builder only
 fills these named slots with the other package assets and the InvestigationContext evidence.
@@ -19,28 +19,28 @@ from app.evidence.bundle import digest
 PROMPT_TEMPLATE_VERSION = "tmpl-v1"
 
 # --------------------------------------------------------------------------- #
-# System prompt assembly — ordered blocks. Each block names the package asset that fills its
+# System prompt assembly. Ordered blocks. Each block names the package asset that fills its
 # ``slot`` and carries the ``header`` + ``preamble`` that frame it. The builder invents none of this.
 # --------------------------------------------------------------------------- #
 _SYSTEM_BLOCKS: tuple[dict, ...] = (
-    # The omi_analyst registry system prompt, verbatim (no header — it opens the prompt).
+    # The omi_analyst registry system prompt, verbatim (no header, it opens the prompt).
     {"slot": "system_prompt", "header": "", "preamble": ""},
     {"slot": "constitution",
-     "header": "# REASONING & GOVERNANCE CONSTITUTION (authoritative — binding on every judgment)",
+     "header": "# REASONING & GOVERNANCE CONSTITUTION (authoritative. Binding on every judgment)",
      "preamble": "Reason strictly within these constitutional rules. The Governor re-checks them "
                  "after you answer."},
     {"slot": "specialist_framework",
      "header": "# SPECIALIST INVESTIGATION FRAMEWORK (the reasoning discipline you inherit)",
      "preamble": "Follow this framework's decision workflow, escalation, and termination discipline."},
     {"slot": "knowledge_library",
-     "header": "# KNOWLEDGE LIBRARY (reference — reason FROM this; cite ONLY the evidence, never this)",
+     "header": "# KNOWLEDGE LIBRARY (reference. Reason FROM this; cite ONLY the evidence, never this)",
      "preamble": ""},
     {"slot": "response_contract",
      "header": "# OUTPUT CONTRACT",
      "preamble": ""},
 )
 
-# The consolidated response contract (was embedded in prompt_builder.py — now the canonical asset).
+# The consolidated response contract (was embedded in prompt_builder.py. Now the canonical asset).
 RESPONSE_CONTRACT = (
     "Emit exactly one JSON object valid against the response schema "
     "(schema/analyst_response_schema.json). Echo the engine's numbers; never recompute or move a "
@@ -50,7 +50,7 @@ RESPONSE_CONTRACT = (
 )
 
 # --------------------------------------------------------------------------- #
-# Evidence (user) message assembly — the InvestigationContext sections, in this order, each under
+# Evidence (user) message assembly, the InvestigationContext sections, in this order, each under
 # its header. The builder fills each with the InvestigationContext data (never instructions).
 # --------------------------------------------------------------------------- #
 _EVIDENCE_PREAMBLE = (
@@ -99,7 +99,7 @@ def response_contract() -> str:
 
 
 def template_hash() -> str:
-    """Content address of the assembly template — changes iff any scaffolding text/order changes."""
+    """Content address of the assembly template. Changes iff any scaffolding text/order changes."""
     return digest(assembly_template(), prefix="tmpl:")
 
 

@@ -1,10 +1,10 @@
-"""The Prompt Registry (Sprint 008) — versioning, selection, rollback, comparison.
+"""The Prompt Registry (Sprint 008). Versioning, selection, rollback, comparison.
 
 The registry is the single source of truth for AI-analyst prompts. It records, per analyst,
 every versioned :class:`PromptSpec` and which version is *active*. Selection is
 configuration-driven: an analyst executes the active version unless a caller (or settings)
 pins a specific one, so promoting, A/B-testing, or **rolling back** a prompt is a config/version
-change — never a code edit. The default registry seeds the shipped prompts; ``compare_prompts``
+change, never a code edit. The default registry seeds the shipped prompts; ``compare_prompts``
 and ``PromptExperiment`` support controlled prompt evolution.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ _BEHAVIOR_V1 = (
     "You are OMI BEHAVIOR ANALYST, a Tier-1 specialist inside a constitutional reasoning "
     "council. You receive behavioral evidence items (each with a stable id) and optional "
     "prior context. For each informative behavioral signal, emit a short, probabilistic "
-    "finding. RULES: cite ONLY the provided evidence ids — never invent an id; prior context "
+    "finding. RULES: cite ONLY the provided evidence ids, never invent an id; prior context "
     "is background, NOT proof, and must never be cited as evidence; never assert a verdict or "
     "a probability number; expose uncertainty honestly. Output ONE JSON object: "
     '{"findings":[{"signal":"...","claim":"...","direction":"raises|lowers|neutral",'
@@ -43,7 +43,7 @@ _BEHAVIOR_V2 = (
     "council. You are given behavioral evidence items (each with a stable id) and optional "
     "prior context. Emit one finding per informative signal, ordered strongest first, and "
     "weigh exculpatory (lowering) evidence as carefully as incriminating (raising) evidence. "
-    "RULES: cite ONLY the provided evidence ids — never invent an id; prior context is "
+    "RULES: cite ONLY the provided evidence ids, never invent an id; prior context is "
     "background, NOT proof, and must never be cited as evidence; never assert a verdict or a "
     "probability number; state uncertainty explicitly when the signal is thin. Output ONE JSON "
     'object: {"findings":[{"signal":"...","claim":"...","direction":"raises|lowers|neutral",'
@@ -63,14 +63,14 @@ _BEHAVIOR_OBJECTIVES = (
 )
 
 # --------------------------------------------------------------------------- #
-# The production OMI ANALYST prompt (Sprint 016). Previously embedded — read at
-# runtime from ml/analyst/analyst_system_prompt_v1.md — now owned by the registry
+# The production OMI ANALYST prompt (Sprint 016). Previously embedded. Read at
+# runtime from ml/analyst/analyst_system_prompt_v1.md. Now owned by the registry
 # as the single runtime source of truth. The ml/ spec doc + the HF model card are
 # mirrors of this asset (a drift-guard test fails CI if they diverge).
 # --------------------------------------------------------------------------- #
 _OMI_ANALYST_V1 = _load_asset("omi_analyst_v1.txt")
 _OMI_ANALYST_CONSTRAINTS = (
-    "evidence, not verdict — every claim traces to a provided evidence item; never fabricate",
+    "evidence, not verdict, every claim traces to a provided evidence item; never fabricate",
     "probabilistic language only; never assert a verdict or move the engine number",
     "describe behavior, not people; pseudonymous references only",
     "echo the engine number; never raise suspicion above engine + corroboration",
@@ -173,7 +173,7 @@ def compare_prompts(a: PromptSpec, b: PromptSpec) -> dict:
 
 
 def default_registry() -> PromptRegistry:
-    """A freshly-seeded registry with the shipped prompts. Deterministic and side-effect-free —
+    """A freshly-seeded registry with the shipped prompts. Deterministic and side-effect-free, 
     the active version is the conservative default (behavior ``v1``); config selects otherwise."""
     reg = PromptRegistry()
     reg.register(PromptSpec(
@@ -197,15 +197,15 @@ def default_registry() -> PromptRegistry:
         reasoning_objectives=_OMI_ANALYST_OBJECTIVES, constraints=_OMI_ANALYST_CONSTRAINTS,
         expected_output_contract="analyst_assessment",
     ), activate=True)
-    # AI Readiness — the permanent Specialist Prompt Library (13 specialists, version ``lib-v1``).
+    # AI Readiness, the permanent Specialist Prompt Library (13 specialists, version ``lib-v1``).
     # Additive + inert: registered but NOT activated over any live prompt, so behavior_analyst and
     # omi_analyst keep their active v1 (deterministic replay preserved) and no execution path
     # resolves the new keys unless explicitly selected. The registry is still the ONE source of
-    # truth — the library lives here, not in a parallel store.
+    # truth, the library lives here, not in a parallel store.
     from .specialists import register_specialist_library
 
     register_specialist_library(reg)
-    # Phase B1 — the Behavioral Intelligence Library's improved prompt, versioned as lib-v2.
+    # Phase B1, the Behavioral Intelligence Library's improved prompt, versioned as lib-v2.
     # Inert like the rest of the library: registered, content-addressed, NOT activated (the live
     # behavior_analyst v1 stays active; deterministic replay untouched).
     from .behavioral import behavior_v2_prompt_spec

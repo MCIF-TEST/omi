@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { SignIn } from '@clerk/nextjs';
 import { AuthFormGate } from '@/components/shared/auth-form-gate';
 
-export const metadata = { title: 'Sign in — OMISPHERE' };
+export const metadata = { title: 'Sign in. OMISPHERE' };
 
-// Clerk-hosted sign-in (Google, Apple, X, email/phone — whatever is enabled in the Clerk dashboard),
+// Clerk-hosted sign-in (Google, Apple, X, email/phone. Whatever is enabled in the Clerk dashboard),
 // dropped into the app's centered auth shell. Global theming lives in app/layout.tsx; the heading and
 // the switch-to-sign-up link are ours so the page reads as part of the product, not a bolted-on widget.
 //
-// Loop guard runs CLIENT-side (AuthFormGate/useAuth), never via Clerk's <SignedIn>/<SignedOut> — those
+// Loop guard runs CLIENT-side (AuthFormGate/useAuth), never via Clerk's <SignedIn>/<SignedOut>, those
 // call auth() on the server and would throw here because this app runs no clerkMiddleware. The gate
 // shows <SignIn> when signed out, and AuthBridge (recovery) when Clerk reports the visitor already
 // signed in on this page (they were bounced here), so the form never loops back into the app.

@@ -25,7 +25,7 @@ export function DeleteAccountButton({ email }: { email: string }) {
         method: 'DELETE',
         body: JSON.stringify({ confirm_email: confirm.trim() }),
       });
-      // Account + session are gone — send them to the landing page.
+      // Account + session are gone. Send them to the landing page.
       router.refresh();
       router.push('/');
     } catch (e) {

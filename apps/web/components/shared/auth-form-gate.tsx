@@ -9,11 +9,11 @@ import { AuthBridge } from './auth-bridge';
  * Client-side auth gate for the sign-in / sign-up pages.
  *
  * We deliberately do NOT use Clerk's <SignedIn>/<SignedOut> here: those resolve auth state on the
- * SERVER via auth(), which requires clerkMiddleware — and this app runs no Clerk middleware (it can't
+ * SERVER via auth(), which requires clerkMiddleware, and this app runs no Clerk middleware (it can't
  * get the secret into the Edge runtime, see middleware.ts). Rendering them server-side throws
  * "auth() was called but Clerk can't detect usage of clerkMiddleware()", a server-side exception on
  * the whole page. useAuth() reads the browser's Clerk instance instead, so it works with no
- * middleware and never touches server auth — no SSR throw.
+ * middleware and never touches server auth, no SSR throw.
  *
  * Behavior mirrors the intended loop guard: show the sign-in/up form only when signed out; when Clerk
  * reports the visitor already signed in on an auth page (they were bounced here), render AuthBridge to
@@ -30,8 +30,8 @@ export function AuthFormGate({ children }: { children: React.ReactNode }) {
     );
   }
   // Only engage the loop recovery on the BASE auth path. Clerk runs multi-step flows under sub-routes
-  // — /sign-up/continue (collect required fields), /sign-in/sso-callback (OAuth return),
-  // /sign-in/factor-two (MFA), email/phone verification — and on those the child <SignIn>/<SignUp>
+  //. /sign-up/continue (collect required fields), /sign-in/sso-callback (OAuth return),
+  // /sign-in/factor-two (MFA), email/phone verification, and on those the child <SignIn>/<SignUp>
   // MUST render to finish the flow. Hijacking a sub-route with AuthBridge would strand the user
   // mid-signup. So the recovery only triggers when the visitor is fully signed in AND sitting on the
   // plain /sign-in or /sign-up entry (the only place the redirect loop can form).

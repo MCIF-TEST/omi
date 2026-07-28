@@ -30,7 +30,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         method: 'POST',
         body: JSON.stringify({ token, password }),
       });
-      // Reset logs the user in — go straight to the app.
+      // Reset logs the user in. Go straight to the app.
       router.refresh();
       router.push('/investigate');
     } catch (e) {

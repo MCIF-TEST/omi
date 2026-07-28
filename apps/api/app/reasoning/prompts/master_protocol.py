@@ -1,9 +1,9 @@
-"""The Omi Master Analyst Protocol — the repository-owned, versioned, content-hashed instruction set.
+"""The Omi Master Analyst Protocol, the repository-owned, versioned, content-hashed instruction set.
 
 Phase 2 establishes the deployment/versioning seam for delivering Omi's stable instruction hierarchy to
 an OpenRouter Preset. The Master Analyst Protocol is NOT a newly authored prompt: it is the EXACT compiled
-comprehensive-investigation SYSTEM message Omi already sends — the omi_analyst base prompt + constitution +
-specialist framework + knowledge library + the comprehensive task + the ONE canonical output contract —
+comprehensive-investigation SYSTEM message Omi already sends, the omi_analyst base prompt + constitution +
+specialist framework + knowledge library + the comprehensive task + the ONE canonical output contract, 
 assembled through the same shared assembler the runtime uses (:func:`assemble_stage_system`). Because it is
 the same assembly over the same package assets, ``compile_master_analyst_protocol().text`` is byte-identical
 to the ``pp.system`` the Hugging Face path delivers, and its hash equals the ``system_prompt_sha`` recorded

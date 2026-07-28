@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * Reusable loading scaffolds for route-level loading.tsx files. Each mirrors
- * the *shape* of the page it stands in for — a header, then content — so the
+ * the *shape* of the page it stands in for, a header, then content, so the
  * transition into real data is calm rather than a jarring pop-in.
  *
  * All pieces are aria-hidden via Skeleton; the wrappers add role="status"

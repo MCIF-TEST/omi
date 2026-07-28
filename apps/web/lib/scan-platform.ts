@@ -31,5 +31,5 @@ export function resolveScanPlatform(
 export function accountScanEndpoint(p: ScanPlatform): string | null {
   if (p === 'x') return '/v1/scan/twitter/account';
   if (p === 'youtube') return '/v1/scan/youtube/account';
-  return null; // unknown — caller must not scan
+  return null; // unknown. Caller must not scan
 }

@@ -21,7 +21,7 @@ type State =
   | { kind: 'error'; message: string };
 
 const LABEL_DISPLAY: Record<string, { label: string; hint: string }> = {
-  bot:              { label: 'Bot',              hint: 'Pure automation — no human in the loop.' },
+  bot:              { label: 'Bot',              hint: 'Pure automation, no human in the loop.' },
   human:            { label: 'Human',            hint: 'Real person, organic behavior.' },
   unclear:          { label: 'Unclear',          hint: 'Genuinely ambiguous; flagged for review.' },
   commercial_spam:  { label: 'Commercial spam',  hint: 'Affiliate / promotional / dropshipping.' },
@@ -32,7 +32,7 @@ const LABEL_DISPLAY: Record<string, { label: string; hint: string }> = {
 };
 
 /**
- * Ground-truth label widget. Admin-only — non-admins see nothing.
+ * Ground-truth label widget. Admin-only. Non-admins see nothing.
  *
  * The label says what the OPERATOR thinks this account actually is, and
  * what tier the engine SHOULD have returned. Feeds directly into the
@@ -158,7 +158,7 @@ export function LabelWidget({ platform, externalId }: Props) {
       <p className="text-xs text-fg-dim mb-4 leading-relaxed">
         Disagree with what the engine returned? Label this account so the
         calibration harness can score the engine against your judgment. Stored
-        as ground truth — feeds the <code className="font-mono text-accent">/v1/labels/calibration/evaluate</code> endpoint.
+        as ground truth. Feeds the <code className="font-mono text-accent">/v1/labels/calibration/evaluate</code> endpoint.
       </p>
 
       {/* Label kind */}

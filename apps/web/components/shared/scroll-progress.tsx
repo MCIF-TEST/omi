@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 /**
  * Thin gradient progress bar pinned to the top of the viewport that
- * fills as the page scrolls. Pure decoration — a small signal of
+ * fills as the page scrolls. Pure decoration, a small signal of
  * "this site is alive." Hidden from assistive tech.
  */
 export function ScrollProgress() {

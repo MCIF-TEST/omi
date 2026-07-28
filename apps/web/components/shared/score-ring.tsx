@@ -26,7 +26,7 @@ const RING: Record<Tier | 'none', string> = {
 
 /**
  * Circular probability gauge. The stroke sweeps to its value with an
- * ease-out curve when it enters view — a satisfying, legible alternative
+ * ease-out curve when it enters view, a satisfying, legible alternative
  * to a flat bar for headline scores.
  */
 export function ScoreRing({

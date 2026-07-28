@@ -65,7 +65,7 @@
     {
       "category": "behavioral_archetypes",
       "confidence": "established",
-      "content_hash": "ie:e1f5964875ecc3fce779b22524412500",
+      "content_hash": "ie:c94f47cd2fc2dab15edfed4a51d7f40b",
       "id": "account_aging_behavior",
       "investigation_types": [
         "account"
@@ -97,7 +97,7 @@
     {
       "category": "deception_indicators",
       "confidence": "emerging",
-      "content_hash": "ie:4c6751d747073ee0893fc88546e11e24",
+      "content_hash": "ie:4cd3bddee80a268468022b34c4a59596",
       "id": "adversarial_evasion",
       "investigation_types": [
         "account",
@@ -194,7 +194,7 @@
     {
       "category": "behavioral_archetypes",
       "confidence": "emerging",
-      "content_hash": "ie:6979a6a289d7a55fc3707fc6d5d14cfe",
+      "content_hash": "ie:f5392f68e6fcc84864db669d9b257256",
       "id": "behavior_evolution",
       "investigation_types": [
         "campaign",
@@ -227,7 +227,7 @@
     {
       "category": "bot_behaviors",
       "confidence": "established",
-      "content_hash": "ie:7f58cac4607655a759559588b1d85a45",
+      "content_hash": "ie:987adbf88711f7a8ef1507c11326482b",
       "id": "benign_automation",
       "investigation_types": [
         "account",
@@ -259,7 +259,7 @@
     {
       "category": "bot_behaviors",
       "confidence": "established",
-      "content_hash": "ie:3f71a26958e7fd008f6f41744abbd247",
+      "content_hash": "ie:7a840ceb72f481bc8f94ef3b2e2f9f3c",
       "id": "bot_amplification",
       "investigation_types": [
         "narrative",
@@ -322,7 +322,7 @@
     {
       "category": "confidence_calibration",
       "confidence": "established",
-      "content_hash": "ie:ea68e548cf7be223218b926f9f2a0d40",
+      "content_hash": "ie:b9d58baf40d8bf56da2b80216da71ae2",
       "id": "confidence_bands",
       "investigation_types": [
         "comment_section",
@@ -384,7 +384,7 @@
     {
       "category": "campaign_types",
       "confidence": "established",
-      "content_hash": "ie:612fa1f5032354604fb25188de9293bf",
+      "content_hash": "ie:127bcea450bb886890a961ae49c35441",
       "id": "coordinated_campaign",
       "investigation_types": [
         "campaign"
@@ -413,7 +413,7 @@
     {
       "category": "coordination_techniques",
       "confidence": "established",
-      "content_hash": "ie:800b42fbe27307f73272f50ef6e59802",
+      "content_hash": "ie:d275d93a79e60edbf2e7052df8b43bac",
       "id": "coordinated_inauthentic_behavior",
       "investigation_types": [
         "campaign",
@@ -487,7 +487,7 @@
     {
       "category": "behavioral_archetypes",
       "confidence": "established",
-      "content_hash": "ie:cec15ae7e6abd057b5f0bcd706c3cb8b",
+      "content_hash": "ie:24738141af607b39c62663f85bdb5a99",
       "id": "engagement_farming",
       "investigation_types": [
         "account",
@@ -518,7 +518,7 @@
     {
       "category": "coordination_techniques",
       "confidence": "established",
-      "content_hash": "ie:f3e0dadfbacdc6f355089d3af4f72efe",
+      "content_hash": "ie:a2b218cdee9aa6b3b42143f786498c94",
       "id": "engagement_pods",
       "investigation_types": [
         "comment_section",
@@ -551,7 +551,7 @@
     {
       "category": "coordination_techniques",
       "confidence": "established",
-      "content_hash": "ie:049cb33fc768f380e2ea6ca95bea8461",
+      "content_hash": "ie:f9e53b8ffd67e5b2917e3ba43bfd50cc",
       "id": "fingerprint_clustering",
       "investigation_types": [
         "comment_section",
@@ -581,7 +581,7 @@
     {
       "category": "behavioral_archetypes",
       "confidence": "established",
-      "content_hash": "ie:fe8314ae8bde2ce6676350e900a58c54",
+      "content_hash": "ie:141928d2f4c68a7c0dc897904924e6f2",
       "id": "hybrid_operation",
       "investigation_types": [
         "account"
@@ -612,7 +612,7 @@
     {
       "category": "osint_techniques",
       "confidence": "established",
-      "content_hash": "ie:5a59e9d61d69cb03c05b1bbe58f4892c",
+      "content_hash": "ie:09285c18124125142a48dfb24f130ea7",
       "id": "independent_corroboration",
       "investigation_types": [
         "campaign",
@@ -643,7 +643,7 @@
     {
       "category": "legitimate_community_patterns",
       "confidence": "established",
-      "content_hash": "ie:806a0457d22b380dc00128c7d1f1cbb2",
+      "content_hash": "ie:ecb84cbe049c2c9fb89c1e759744ddca",
       "id": "legitimate_coordination",
       "investigation_types": [
         "campaign",
@@ -677,7 +677,7 @@
     {
       "category": "narrative_amplification",
       "confidence": "established",
-      "content_hash": "ie:97d79d224dd7175d11a8f1c031177857",
+      "content_hash": "ie:a6386961487227f7bfc126d5781c3346",
       "id": "manufactured_amplification",
       "investigation_types": [
         "narrative"
@@ -708,7 +708,7 @@
     {
       "category": "behavioral_archetypes",
       "confidence": "emerging",
-      "content_hash": "ie:4544ba35ebec57ba79a8c8f180f3f1c3",
+      "content_hash": "ie:ec758a5800b13b984fb28accdefaabb1",
       "id": "new_account_cohorts",
       "investigation_types": [
         "campaign",
@@ -824,7 +824,7 @@
     {
       "category": "investigative_heuristics",
       "confidence": "established",
-      "content_hash": "ie:e23ef8c2bca3efc6a1d4b7b83a8a8cd2",
+      "content_hash": "ie:b0f7f65b2ea14f9a5b79eb2ead3e13d9",
       "id": "posting_cadence_analysis",
       "investigation_types": [
         "account"
@@ -858,7 +858,7 @@
     {
       "category": "false_positive_patterns",
       "confidence": "established",
-      "content_hash": "ie:3f9e879a7f9e6c7694cdb9deb2b9b753",
+      "content_hash": "ie:cc1fab93c67273a9f4d5ec5093836dd3",
       "id": "precision_frontier",
       "investigation_types": [
         "campaign",
@@ -893,7 +893,7 @@
     {
       "category": "behavioral_archetypes",
       "confidence": "established",
-      "content_hash": "ie:330c7152b33983a5854a1b7540ed83c6",
+      "content_hash": "ie:636f3a19e682b2247d67b230a89b257e",
       "id": "reply_farms",
       "investigation_types": [
         "comment_section"
@@ -953,7 +953,7 @@
     {
       "category": "confidence_calibration",
       "confidence": "established",
-      "content_hash": "ie:61f244dd4816f019358ebc1cbaf081bb",
+      "content_hash": "ie:f83ee465ea9ade89a70522fe77f76eb6",
       "id": "single_axis_cap",
       "investigation_types": [
         "comment_section",
@@ -1016,7 +1016,7 @@
     {
       "category": "behavioral_archetypes",
       "confidence": "established",
-      "content_hash": "ie:850405e3dd3e4c63c02fced2e5e9925b",
+      "content_hash": "ie:3b3fdc6695be2b2dafc4bd89cfcca4a8",
       "id": "spam_campaigns",
       "investigation_types": [
         "comment_section",
@@ -1048,7 +1048,7 @@
     {
       "category": "deception_indicators",
       "confidence": "emerging",
-      "content_hash": "ie:54b99c8eaa6614bbcd1b6d7bc07a3947",
+      "content_hash": "ie:3d5b70d7f69022e9e70ca51f4df46d48",
       "id": "stylometric_matching",
       "investigation_types": [
         "comment_section"
@@ -1109,7 +1109,7 @@
     }
   ],
   "generated_by": "app.reasoning.prompts.export.knowledge_manifest",
-  "library_hash": "il:36e59878c0a66620a157f58d721ce1ef",
+  "library_hash": "il:d7bb313aad24f355e549845484bab079",
   "manifest_version": "v1",
   "source_of_truth": "GitHub app.reasoning.knowledge.default_library (do not hand-edit)",
   "specialist_dependencies": {

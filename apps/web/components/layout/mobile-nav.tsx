@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import {
-  Search, Network, Bell, Menu,
-  History, MessageSquareText, Settings, LogOut, X,
+  Search, Network, MessageSquareText, Bell, Menu,
+  History, Settings, LogOut, X,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -34,27 +34,39 @@ const TABS: Tab[] = [
   { href: '/monitoring',     label: 'Alerts',      icon: Bell },
 ];
 
-const MORE_LINKS: { href: string; label: string; icon: LucideIcon; desc: string }[] = [
-  { href: '/campaigns',  label: 'Narratives', icon: MessageSquareText, desc: 'Durable coordinated-account clusters' },
+const MORE_LINKS: {
+  href: string; label: string; icon: LucideIcon; desc: string; adminOnly?: boolean;
+}[] = [
   { href: '/graph',      label: 'Graph',      icon: Network,           desc: 'Coordination network graphs' },
+  { href: '/narratives', label: 'Narratives', icon: MessageSquareText, desc: 'Coming soon: narrative / campaign detector', adminOnly: true },
   { href: '/search',     label: 'Search',     icon: Search,            desc: 'Find any account or channel' },
   { href: '/settings',   label: 'Settings',   icon: Settings,          desc: 'Account, billing & alerts' },
 ];
 
-// Pre-activation, the More sheet narrows to the value-moment path (Campaigns +
-// Settings) — mirrors the desktop sidebar's gating so a new user can't wander
-// into empty analysis surfaces before their first investigation.
-const NEW_USER_MORE = new Set(['/campaigns', '/settings']);
+// Pre-activation, the More sheet narrows to the value-moment path (Settings
+// only). Mirrors the desktop sidebar's gating so a new user can't wander into
+// empty analysis surfaces before their first investigation.
+const NEW_USER_MORE = new Set(['/settings']);
 
-export function MobileNav({ email, isNewUser = false }: { email: string; isNewUser?: boolean }) {
+export function MobileNav({
+  email,
+  isNewUser = false,
+  isAdmin = false,
+}: {
+  email: string;
+  isNewUser?: boolean;
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname() || '';
   const { signOut } = useClerk();
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Admin-only entries drop out first; the page re-checks on the server, so this is presentation.
+  const allowed = MORE_LINKS.filter((l) => !l.adminOnly || isAdmin);
   const moreLinks = isNewUser
-    ? MORE_LINKS.filter((l) => NEW_USER_MORE.has(l.href))
-    : MORE_LINKS;
+    ? allowed.filter((l) => NEW_USER_MORE.has(l.href))
+    : allowed;
 
-  // Unread alert count for the Alerts tab badge — same source as the topbar.
+  // Unread alert count for the Alerts tab badge, same source as the topbar.
   const alerts = usePolling<AlertsResponse>(
     useCallback(() => apiClient<AlertsResponse>('/v1/monitoring/alerts?unread=true&limit=1'), []),
     60_000,
@@ -74,7 +86,7 @@ export function MobileNav({ email, isNewUser = false }: { email: string; isNewUs
   const moreActive = moreLinks.some((l) => routeActive(pathname, l.href));
 
   const onLogout = async () => {
-    // Clerk owns the session now — sign out through Clerk and land on the marketing home.
+    // Clerk owns the session now. Sign out through Clerk and land on the marketing home.
     try { await signOut({ redirectUrl: '/' }); } catch { /* ignore */ }
   };
 

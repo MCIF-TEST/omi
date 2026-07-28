@@ -18,7 +18,7 @@ const THREAT_ICON: Record<ThreatKey | ContextKey, React.ReactNode> = {
   ai_generation_probability: <Bot size={13} />,
 };
 
-// Probability (0–100) → tier color, matching the detector-breakdown convention.
+// Probability (0-100) → tier color, matching the detector-breakdown convention.
 function probColor(p: number) {
   if (p >= 75) return { bar: 'bg-tier-high',     text: 'text-tier-high' };
   if (p >= 50) return { bar: 'bg-tier-elevated', text: 'text-tier-elevated' };
@@ -70,7 +70,7 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
         </div>
       </div>
 
-      {/* Threat dimension bars — only the dimensions that feed the risk score */}
+      {/* Threat dimension bars. Only the dimensions that feed the risk score */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {THREAT_KEYS.map((key) => {
           const dim = score.dimensions.find((d) => d.key === key);
@@ -90,7 +90,7 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
         })}
       </div>
 
-      {/* Contextual signals — reported for information, NOT part of the risk score.
+      {/* Contextual signals. Reported for information, NOT part of the risk score.
           AI-assisted writing is not evidence of inauthenticity (it false-positives
           on ESL, formal, and Grammarly/LLM-assisted writers), so it is shown as
           context that never raises suspicion on its own. */}
@@ -148,7 +148,7 @@ function ThreatBar({
   caveat?: string;
 }) {
   const [open, setOpen] = useState(false);
-  // Contextual signals are never colored as risk — they read as neutral
+  // Contextual signals are never colored as risk. They read as neutral
   // information regardless of magnitude, so a high "AI generation" reading
   // can't masquerade as a high-risk bar.
   const { bar, text } = contextual

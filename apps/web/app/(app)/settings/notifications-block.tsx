@@ -75,7 +75,7 @@ export function NotificationsBlock() {
       <p className="text-sm text-fg-dim mb-5 max-w-xl">
         Alerts trigger when a watched account or narrative crosses your tier threshold.
         Email goes to <span className="text-fg font-mono">{prefs.email}</span>.
-        Webhook is fired as a JSON POST to any URL you provide — useful for Slack, Discord,
+        Webhook is fired as a JSON POST to any URL you provide. Useful for Slack, Discord,
         or your own automation.
       </p>
 

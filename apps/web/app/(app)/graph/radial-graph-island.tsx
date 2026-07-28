@@ -56,8 +56,8 @@ export function RadialGraphIsland({ data }: { data: AccountSubgraphResponse }) {
               </div>
 
               <dl className="space-y-px rounded-lg overflow-hidden border border-border-1">
-                <Row label="Tier"  value={selected.tier ?? '—'} />
-                <Row label="Score" value={selected.last_score != null ? `${Math.round(selected.last_score * 100)}%` : '—'} />
+                <Row label="Tier"  value={selected.tier ?? '-'} />
+                <Row label="Score" value={selected.last_score != null ? `${Math.round(selected.last_score * 100)}%` : '-'} />
                 <Row label="Community" value={`#${selected.community_id}`} />
               </dl>
 

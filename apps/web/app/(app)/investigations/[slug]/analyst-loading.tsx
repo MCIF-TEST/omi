@@ -3,7 +3,7 @@
 import { Brain } from 'lucide-react';
 
 // The stages the analyst actually works through in its single pass over the evidence. Shown as an
-// honest description of the work, not fabricated per-step completion — a soft sweep passes over the
+// honest description of the work, not fabricated per-step completion, a soft sweep passes over the
 // list so the panel reads as alive while the one model call runs.
 const STAGES = [
   'Reading the raw evidence for every account',
@@ -27,7 +27,7 @@ export function AnalystLoading({
   const slow = elapsedSec >= 75;
   return (
     <div className="rounded-lg border border-border-1 bg-bg-elev-2/50 overflow-hidden">
-      {/* Header — real state + real elapsed time (no fake percentage) */}
+      {/* Header. Real state + real elapsed time (no fake percentage) */}
       <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-divider">
         <span className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-violet-2 animate-pulse-dot" />
@@ -53,12 +53,12 @@ export function AnalystLoading({
           </div>
         </div>
 
-        {/* Indeterminate bar — blue, honest: it moves while the call runs, it claims no known percentage */}
+        {/* Indeterminate bar. Blue, honest: it moves while the call runs, it claims no known percentage */}
         <div className="h-1 rounded-full bg-bg-inset overflow-hidden" role="progressbar" aria-label="AI analysis in progress">
           <div className="analyst-indeterminate h-full w-1/3 rounded-full bg-accent" />
         </div>
 
-        {/* The stages the analyst works through — a soft sweep marks the moving focus */}
+        {/* The stages the analyst works through, a soft sweep marks the moving focus */}
         <ol className="space-y-2 analyst-sweep">
           {STAGES.map((s, i) => (
             <li key={i} className="flex items-center gap-2.5 text-fg-mute" style={{ ['--i' as string]: i }}>

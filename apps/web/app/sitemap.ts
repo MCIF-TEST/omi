@@ -6,7 +6,7 @@ import { env } from '@/lib/env';
  *
  * Deliberately hand-listed rather than generated: everything else in this app is either behind auth or
  * reachable only by an unlisted share token, and a sitemap that enumerated those would defeat the point
- * of them being unlisted. If a new marketing page is added, add it here — a missing entry costs a little
+ * of them being unlisted. If a new marketing page is added, add it here, a missing entry costs a little
  * discovery time, whereas a wrong entry publishes something private.
  */
 export default function sitemap(): MetadataRoute.Sitemap {

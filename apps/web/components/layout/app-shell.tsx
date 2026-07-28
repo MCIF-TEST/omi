@@ -15,7 +15,7 @@ export async function AppShell({ user, children }: AppShellProps) {
   let engineStatus: EngineStatus | undefined;
   // Pre-activation focus: until the user has run a first investigation, the
   // nav hides the secondary analysis/ops surfaces so the path to the value
-  // moment (featured campaign → first scan) has no detours. Fails open: if
+  // moment (landing page → first scan) has no detours. Fails open: if
   // the probe errors, show the full nav rather than over-hiding.
   let isNewUser = false;
   try {
@@ -34,15 +34,15 @@ export async function AppShell({ user, children }: AppShellProps) {
   return (
     <div className="min-h-screen flex flex-col bg-bg-deep grain relative">
       <Topbar user={user} engineStatus={engineStatus} />
-      {/* User-visible banner — everyone sees it, no env-var jargon. */}
+      {/* User-visible banner. Everyone sees it, no env-var jargon. */}
       {engineStatus && (
         <ServiceDegradedBanner youtubeConfigured={engineStatus.youtube_configured} />
       )}
-      {/* Admin diagnostics — env-var names, action items. */}
+      {/* Admin diagnostics. Env-var names, action items. */}
       {engineStatus?.storage_ephemeral && user.is_admin && (
         <div className="bg-danger/15 border-b border-danger/40 px-4 md:px-6 py-2 text-xs font-mono text-danger">
           ⚠ Admin: database is ephemeral (SQLite). Every redeploy wipes all user
-          accounts and saved investigations — provision Postgres and set{' '}
+          accounts and saved investigations. Provision Postgres and set{' '}
           <code className="bg-bg/40 px-1 rounded-sm">OMI_DATABASE_URL</code> before going live.
         </div>
       )}
@@ -54,7 +54,7 @@ export async function AppShell({ user, children }: AppShellProps) {
         </div>
       )}
       <div className="flex-1 flex relative z-10">
-        <Sidebar isNewUser={isNewUser} />
+        <Sidebar isNewUser={isNewUser} isAdmin={user.is_admin} />
         <main className="flex-1 min-w-0">
           {/* Bottom padding clears the mobile tab bar (+ home-indicator inset). */}
           <div className="max-w-[1440px] mx-auto px-4 py-5 md:px-6 md:py-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 animate-fade-up">
@@ -63,8 +63,8 @@ export async function AppShell({ user, children }: AppShellProps) {
         </main>
       </div>
 
-      {/* Thumb-reachable primary navigation — phones only. */}
-      <MobileNav email={user.email} isNewUser={isNewUser} />
+      {/* Thumb-reachable primary navigation. Phones only. */}
+      <MobileNav email={user.email} isNewUser={isNewUser} isAdmin={user.is_admin} />
     </div>
   );
 }

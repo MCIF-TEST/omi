@@ -44,7 +44,7 @@ describe('_parse', () => {
 
   it('throws an incomplete-response error on a 2xx body that is not JSON', async () => {
     // A long scan that exceeds an upstream timeout can return 200 with the
-    // connection cut mid-body — the JSON never closes.
+    // connection cut mid-body, the JSON never closes.
     let err: unknown;
     try {
       await _parse(res('{"partial": tru', { status: 200 }));

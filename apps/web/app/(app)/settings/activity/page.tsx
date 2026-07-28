@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { apiServer } from '@/lib/api-server';
 import { type ActivityLogResponse } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Activity log — OMISPHERE' };
+export const metadata = { title: 'Activity log. OMISPHERE' };
 
 const SCAN_TYPE_LABELS: Record<string, string> = {
   comprehensive: 'Comprehensive',
@@ -90,13 +89,13 @@ export default async function ActivityPage({
                       {entry.target_input ? (
                         <span className="font-mono text-xs">{entry.target_input}</span>
                       ) : (
-                        <span className="text-fg-faint">—</span>
+                        <span className="text-fg-faint">-</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
-                      <Badge variant="neutral">
+                      <span className="font-mono text-2xs tracking-wider uppercase text-fg-dim">
                         {SCAN_TYPE_LABELS[entry.scan_type] ?? entry.scan_type}
-                      </Badge>
+                      </span>
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs text-fg-dim whitespace-nowrap">
                       {entry.credits_cost}

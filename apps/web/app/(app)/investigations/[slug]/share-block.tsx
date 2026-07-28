@@ -64,7 +64,7 @@ export function ShareBlock({ slug, initialToken, publicBaseUrl }: Props) {
           <p className="text-sm text-fg-dim mb-4 max-w-xl">
             Mint a share link to publish a read-only report at a stable URL.
             Recipients see the verdict, cross-links, top flagged commenters,
-            and full evidence — no login required, no other investigations
+            and full evidence, no login required, no other investigations
             exposed. Revocable at any time.
           </p>
           <Button onClick={mint} disabled={pending}>
@@ -76,7 +76,7 @@ export function ShareBlock({ slug, initialToken, publicBaseUrl }: Props) {
         <>
           <CardTitle>Shareable</CardTitle>
           <p className="text-sm text-fg-dim mb-4">
-            Anyone with this link can view the report — verdict, evidence, methodology.
+            Anyone with this link can view the report. Verdict, evidence, methodology.
             Recipients can save a PDF or download Markdown/JSON for their own files.
             Revoking instantly disables the link.
           </p>

@@ -1,4 +1,4 @@
-export const metadata = { title: 'Terms — OMISPHERE' };
+export const metadata = { title: 'Terms. OMISPHERE' };
 
 export default function TermsPage() {
   return (
@@ -38,7 +38,7 @@ export default function TermsPage() {
         partial months.
       </Section>
 
-      <Section title="What OMISPHERE's output is — and is not">
+      <Section title="What OMISPHERE's output is, and is not">
         All output is <strong>probabilistic</strong> and provided{' '}
         <strong>for research and informational purposes only</strong>. Scores are
         statistical estimates based on observable patterns. They are never a

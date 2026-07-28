@@ -20,7 +20,7 @@ export default function ContentNotFound() {
         <CardTitle>This content has never been scanned</CardTitle>
         <p className="text-sm text-fg-dim max-w-md mb-4">
           OMISPHERE only tracks content that someone has actively scanned. Run
-          a scan from the Investigate page and this entity will appear here —
+          a scan from the Investigate page and this entity will appear here, 
           along with every batch, comment, and coordination signal collected
           from it across all users.
         </p>

@@ -5,7 +5,6 @@ import {
   Brain, BarChart2, Video, ArrowRight,
 } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Sparkline } from '@/components/shared/sparkline';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ScoreRing } from '@/components/shared/score-ring';
@@ -61,7 +60,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
     /* analysis is optional */
   }
 
-  // OmiScore — the unified, explainable intelligence verdict over the most
+  // OmiScore, the unified, explainable intelligence verdict over the most
   // recent persisted scan. Cheap read path: no re-scan, no quota.
   let omiscore: OmiScore | null = null;
   try {
@@ -69,11 +68,11 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
       `/v1/intelligence/account/${platform}/${encodeURIComponent(external_id)}`,
     );
   } catch {
-    /* optional — hidden when the account has no scan history */
+    /* optional. Hidden when the account has no scan history */
   }
 
   // If this account is the author of any scanned content, expose a link to
-  // the channel-level intelligence view. Cheap probe — endpoint 404s when
+  // the channel-level intelligence view. Cheap probe. Endpoint 404s when
   // there's no data, in which case we hide the link.
   let channel: ChannelIntelligenceResponse | null = null;
   try {
@@ -94,7 +93,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
 
   return (
     <div className="space-y-6 max-w-5xl">
-      {/* Sticky action bar — rescan / watch / export — ALWAYS visible */}
+      {/* Sticky action bar. Rescan / watch / export, ALWAYS visible */}
       <AccountActionsClient
         externalId={history.external_id}
         platform={platform}
@@ -131,7 +130,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </header>
       </div>
 
-      {/* Channel-level intelligence link — only shown when this account owns content */}
+      {/* Channel-level intelligence link. Only shown when this account owns content */}
       {channel && (
         <Link
           href={`/channels/${platform}/${encodeURIComponent(history.external_id)}`}
@@ -156,7 +155,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </Link>
       )}
 
-      {/* OmiScore intelligence — unified, explainable threat breakdown */}
+      {/* OmiScore intelligence. Unified, explainable threat breakdown */}
       {omiscore && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
@@ -200,7 +199,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           </div>
           <p className="mt-3 text-sm text-fg-dim">{latest.summary}</p>
 
-          {/* Confidence band — verdict is a number AND an uncertainty, never */}
+          {/* Confidence band. Verdict is a number AND an uncertainty, never */}
           {/* just a number on its own. The data already lives on the scan. */}
           <div className="mt-4">
             <ConfidenceBand
@@ -209,7 +208,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
             />
           </div>
 
-          {/* Why this verdict — evidence for / evidence weakening. Both lists */}
+          {/* Why this verdict. Evidence for / evidence weakening. Both lists */}
           {/* are already on the HistoricalScan payload (reasons, weak_signals); */}
           {/* the engine computes them, Phase 6 just surfaces them. */}
           {(latest.reasons.length > 0 || latest.weak_signals.length > 0) && (
@@ -224,7 +223,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
                 tone="weakening"
                 title="Evidence weakening / uncertainty"
                 items={latest.weak_signals}
-                empty="No data-quality caveats — confidence is well-supported."
+                empty="No data-quality caveats. Confidence is well-supported."
               />
             </div>
           )}
@@ -256,7 +255,9 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
             <div className="flex items-center gap-3 mb-3">
               <TrendIcon dir={history.trend.direction} />
               <CardTitle className="m-0 capitalize">{history.trend.direction}</CardTitle>
-              <Badge variant="neutral">{history.trend.sample_size} scans</Badge>
+              <span className="font-mono text-2xs tracking-wider uppercase text-fg-dim">
+                {history.trend.sample_size} scans
+              </span>
             </div>
             <p className="text-sm text-fg-dim">{history.trend.summary}</p>
             <div className="mt-4 grid grid-cols-3 gap-4 text-2xs font-mono uppercase tracking-wider text-fg-mute">
@@ -291,10 +292,10 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
         </div>
       </Card>
 
-      {/* Account activity — heatmap + searchable comment feed */}
+      {/* Account activity. Heatmap + searchable comment feed */}
       <AccountActivityPanel platform={platform} externalId={history.external_id} />
 
-      {/* Scan history table — every row expands to show that scan's signals */}
+      {/* Scan history table, every row expands to show that scan's signals */}
       <Card>
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <CardLabel className="m-0">
@@ -334,22 +335,22 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
       <Card>
         <CardLabel>Profile snapshot</CardLabel>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-          <Row label="Followers" value={history.follower_count?.toLocaleString() ?? '—'} />
+          <Row label="Followers" value={history.follower_count?.toLocaleString() ?? '-'} />
           <Row
             label="Account created"
             value={history.account_created_at
               ? new Date(history.account_created_at).toLocaleDateString()
-              : '—'}
+              : '-'}
           />
           <Row
             label="First seen by OMISPHERE"
             value={history.first_seen_at
               ? new Date(history.first_seen_at).toLocaleDateString()
-              : '—'}
+              : '-'}
           />
           <Row
             label="Last scanned"
-            value={history.last_scanned_at ? timeAgo(history.last_scanned_at) : '—'}
+            value={history.last_scanned_at ? timeAgo(history.last_scanned_at) : '-'}
           />
           {history.bio && (
             <div className="sm:col-span-2">
@@ -437,4 +438,4 @@ function TrendIcon({ dir }: { dir: AccountHistoryResponse['trend']['direction'] 
   }
 }
 // ConfidenceBand + TrustList now live in @/components/shared (reused by the
-// scan-result Synthesis hero too) — imported at the top of this file.
+// scan-result Synthesis hero too). Imported at the top of this file.

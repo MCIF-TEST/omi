@@ -107,7 +107,7 @@
         "slot": "system_prompt"
       },
       {
-        "header": "# REASONING & GOVERNANCE CONSTITUTION (authoritative \u2014 binding on every judgment)",
+        "header": "# REASONING & GOVERNANCE CONSTITUTION (authoritative. Binding on every judgment)",
         "preamble": "Reason strictly within these constitutional rules. The Governor re-checks them after you answer.",
         "slot": "constitution"
       },
@@ -117,7 +117,7 @@
         "slot": "specialist_framework"
       },
       {
-        "header": "# KNOWLEDGE LIBRARY (reference \u2014 reason FROM this; cite ONLY the evidence, never this)",
+        "header": "# KNOWLEDGE LIBRARY (reference. Reason FROM this; cite ONLY the evidence, never this)",
         "preamble": "",
         "slot": "knowledge_library"
       },
@@ -129,6 +129,6 @@
     ],
     "version": "tmpl-v1"
   },
-  "template_hash": "tmpl:26b2b4227fc5cb441bea6398ed76e5bb",
+  "template_hash": "tmpl:4e2228fbdb5f51836196dd2b31f89126",
   "template_version": "tmpl-v1"
 }

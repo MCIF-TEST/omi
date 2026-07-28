@@ -1,4 +1,4 @@
-export const metadata = { title: 'Privacy — OMISPHERE' };
+export const metadata = { title: 'Privacy. OMISPHERE' };
 
 export default function PrivacyPage() {
   return (
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
 
       <Section title="Account data we collect">
         <ul className="list-disc list-inside space-y-1">
-          <li>Your email address — for login, account recovery, and billing receipts.</li>
+          <li>Your email address, for login, account recovery, and billing receipts.</li>
           <li>
             A one-way <span className="font-mono">bcrypt</span> hash of your
             password. We never store or see your actual password.
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
           <li>
             A small first-party log of product actions (viewing a featured
             example, exporting or sharing a report, a public report being
-            opened, and your optional answer to one feedback question) — used
+            opened, and your optional answer to one feedback question). Used
             only to learn what users find useful. No IP addresses, no device
             fingerprinting, no session recording, and no third-party analytics
             of any kind.
@@ -62,7 +62,7 @@ export default function PrivacyPage() {
           <li>To run detections and present results to you.</li>
           <li>
             To improve accuracy over time. Behavioral fingerprints derived from
-            scans feed a shared detection database — the core of how OMISPHERE
+            scans feed a shared detection database, the core of how OMISPHERE
             gets smarter as more content is analyzed.
           </li>
           <li>To meter credits, process subscriptions, and prevent abuse.</li>
@@ -81,8 +81,8 @@ export default function PrivacyPage() {
         third parties for their own purposes. We rely on a small set of
         subprocessors to operate the service: Stripe (payments), our hosting
         and managed-database providers (application + storage), an optional SMTP
-        provider (alert and account emails), and — only when you explicitly
-        generate analyst commentary on an investigation — Anthropic&apos;s API
+        provider (alert and account emails), and. Only when you explicitly
+        generate analyst commentary on an investigation. Anthropic&apos;s API
         for that single request.
       </Section>
 

@@ -20,7 +20,7 @@ export default function AccountNotFound() {
         <CardTitle>No scan history for this account</CardTitle>
         <p className="text-sm text-fg-dim max-w-md mb-4">
           This account hasn&apos;t been scanned yet, or the identifier is
-          invalid. Account profiles are built from scans — run one to populate
+          invalid. Account profiles are built from scans. Run one to populate
           this page, or check that the channel ID is correct.
         </p>
         <Link

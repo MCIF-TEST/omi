@@ -1,10 +1,10 @@
-"""The Behavioral Intelligence Library (Omi Intelligence Program — Phase B1).
+"""The Behavioral Intelligence Library (Omi Intelligence Program. Phase B1).
 
-The complete institutional reasoning system for behavioral investigations — the REFERENCE
+The complete institutional reasoning system for behavioral investigations, the REFERENCE
 IMPLEMENTATION every future specialist library follows. It creates NO new infrastructure: the
 knowledge lives in the Intelligence Library (8 new behavioral entries), the deep methodology /
 failure / evaluation dimensions are authored as **framework overrides** (the hook Phase A1 built
-for exactly this), the improved prompt is a NEW registry version (``lib-v2``, inert — the live
+for exactly this), the improved prompt is a NEW registry version (``lib-v2``, inert, the live
 ``v1`` stays active), and the handbook is a generated, drift-guarded doc.
 
 The pattern for future specialists (coordination, narrative, ...):
@@ -36,7 +36,7 @@ BEHAVIORAL_LIBRARY_VERSION = "v1"
 MISSION = {
     "purpose": BEHAVIOR.mission,
     "scope": "per-subject behavioral evidence: cadence, engagement patterns, content-production "
-             "shape, history/aging, regime changes — never cross-account adjudication (that is the "
+             "shape, history/aging, regime changes, never cross-account adjudication (that is the "
              "coordination lens) and never verdicts (that is the Judge).",
     "responsibilities": BEHAVIOR.responsibilities,
     "authority": "interpret evidence into cited findings; no verdicts, no score movement",
@@ -45,24 +45,24 @@ MISSION = {
                      "knowledge reading list (13 behavioral entries)", "PriorContext (background)"),
 }
 
-# The deterministic behavioral decision workflow — the playbook's spine.
+# The deterministic behavioral decision workflow, the playbook's spine.
 DECISION_WORKFLOW = (
-    "INVENTORY — list which behavioral facets are present vs absent (cadence, engagement, content "
+    "INVENTORY: list which behavioral facets are present vs absent (cadence, engagement, content "
     "shape, history); an absent facet is recorded as missing, never inferred",
-    "CLASSIFY CADENCE — human (bursty, circadian) / mechanical (regular) / hybrid (two regimes) / "
+    "CLASSIFY CADENCE: human (bursty, circadian) / mechanical (regular) / hybrid (two regimes) / "
     "insufficient-window; regularity itself is never guilt (posting_cadence_analysis)",
-    "CLASSIFY PRODUCTION — original content vs amplification vs reply-dominance ratios "
+    "CLASSIFY PRODUCTION: original content vs amplification vs reply-dominance ratios "
     "(engagement_farming, reply_farms)",
-    "READ HISTORY SHAPE — age vs density, dormancy-activation arcs, pivots "
+    "READ HISTORY SHAPE: age vs density, dormancy-activation arcs, pivots "
     "(account_aging_behavior); trajectory beats snapshot when memory offers one (behavior_evolution)",
-    "MATCH ARCHETYPES — map the observed shape to the knowledge base (bot_amplification, "
+    "MATCH ARCHETYPES: map the observed shape to the knowledge base (bot_amplification, "
     "benign_automation, hybrid_operation, spam_campaigns, sockpuppets) citing the evidence that "
     "fits AND the counter-indicators that do not",
-    "HUNT COUNTER-EVIDENCE — for every raising finding, actively test its benign twin (scheduler, "
+    "HUNT COUNTER-EVIDENCE, for every raising finding, actively test its benign twin (scheduler, "
     "power user, community manager, shift-worker, returning user) before emitting",
-    "CALIBRATE — one finding per informative signal, strongest first; confidence tracks data "
+    "CALIBRATE: one finding per informative signal, strongest first; confidence tracks data "
     "quantity + window length; single-axis behavior caps at moderate",
-    "EMIT — cited findings + explicit uncertainty; escalate ambiguity to the Judge, never force it",
+    "EMIT: cited findings + explicit uncertainty; escalate ambiguity to the Judge, never force it",
 )
 
 EVIDENCE_PRIORITIZATION = (
@@ -74,10 +74,10 @@ EVIDENCE_PRIORITIZATION = (
 
 BEHAVIOR_CLASSIFICATION = {
     "human": "bursty, circadian, context-responsive, variable production",
-    "mechanical": "regular intervals, always-on, context-indifferent — automation, NOT hostility",
-    "hybrid": "two separable regimes (scheduled backbone + human engagement) — read each regime "
+    "mechanical": "regular intervals, always-on, context-indifferent. Automation, NOT hostility",
+    "hybrid": "two separable regimes (scheduled backbone + human engagement). Read each regime "
               "separately; most hybrids are legitimate creators",
-    "insufficient": "window too thin to classify — say so; never classify from hours of data",
+    "insufficient": "window too thin to classify. Say so; never classify from hours of data",
 }
 
 # --------------------------------------------------------------------------- #
@@ -86,14 +86,14 @@ BEHAVIOR_CLASSIFICATION = {
 FAILURE_LIBRARY = {
     "failure_modes": BEHAVIOR.failure_modes + (
         "binary human/bot thinking that misses hybrid operations",
-        "snapshot bias — classifying trajectory questions from one capture",
-        "window blindness — cadence claims from hours of data",
+        "snapshot bias. Classifying trajectory questions from one capture",
+        "window blindness. Cadence claims from hours of data",
     ),
     "biases": (
         "automation-equals-hostile bias (benign_automation is the twin of bot_amplification)",
         "regularity-equals-guilt bias (schedulers, shift workers, global teams)",
         "ageism (new or dormant accounts read as inauthentic per se)",
-        "paranoid inversion (normal-looking behavior read as evasion — forbidden: absence of "
+        "paranoid inversion (normal-looking behavior read as evasion. Forbidden: absence of "
         "evidence is never evidence of evasion)",
     ),
     "hallucination_risks": (
@@ -128,11 +128,11 @@ EVALUATION_LIBRARY = {
     "benchmark_cases": ("bot_amplification_burst (hostile: mechanical amplification + co_engagement)",
                         "engagement_farm_replies (hostile: farming + duplicate phrasing + co_engagement)",
                         "benign_scheduler_news (control: mechanical cadence, verified history, NO "
-                        "discriminative method — must never read hostile)",
+                        "discriminative method. Must never read hostile)",
                         "hybrid_creator_mixed (mixed: two regimes, no deception evidence)",
                         "ai_assisted_authentic (control: supplemental ai_writing carries no weight)",
                         "ambiguous_thin_data (edge: abstained detectors -> calibrated uncertainty)"),
-    "adversarial_cases": ("adversarial_evasion knowledge entry — threshold-tracking + warming arcs; "
+    "adversarial_cases": ("adversarial_evasion knowledge entry. Threshold-tracking + warming arcs; "
                           "evaluation must include normal accounts to prove the paranoid inversion "
                           "does not fire",),
     "gold_corpus_mappings": ("behavioral_archetypes", "bot_behaviors", "deception_indicators",
@@ -143,7 +143,7 @@ EVALUATION_LIBRARY = {
 }
 
 # --------------------------------------------------------------------------- #
-# Framework overrides — the reference implementation of Phase A1's override hook
+# Framework overrides, the reference implementation of Phase A1's override hook
 # --------------------------------------------------------------------------- #
 def _reasoning_override() -> Reasoning:
     base = lift(BEHAVIOR).reasoning
@@ -153,7 +153,7 @@ def _reasoning_override() -> Reasoning:
         evidence_prioritization=EVIDENCE_PRIORITIZATION,
         counter_evidence_workflow="for every raising finding, test its benign twin from the "
                                   "knowledge base (scheduler/power-user/community-manager/returning-"
-                                  "user) and cite the outcome — silence about the twin is a failure",
+                                  "user) and cite the outcome. Silence about the twin is a failure",
         memory_usage=base.memory_usage,
         context_usage=base.context_usage,
         uncertainty_handling="classify explicitly as 'insufficient' when the window is thin; name "
@@ -174,8 +174,8 @@ def _quality_override() -> Quality:
         failure_modes=FAILURE_LIBRARY["failure_modes"],
         anti_patterns=base.anti_patterns + FAILURE_LIBRARY["biases"],
         edge_cases=base.edge_cases + (
-            "hybrid account — two regimes must be separated, not averaged",
-            "dormant-then-active account — comeback vs activation needs history evidence",
+            "hybrid account, two regimes must be separated, not averaged",
+            "dormant-then-active account. Comeback vs activation needs history evidence",
         ),
         false_positive_risks=base.false_positive_risks + tuple(FAILURE_LIBRARY["false_positive_scenarios"]),
         false_negative_risks=tuple(FAILURE_LIBRARY["false_negative_scenarios"]),
@@ -200,13 +200,13 @@ def _documentation_override() -> Documentation:
         handbook=base.handbook + " Deep library: ml/analyst/BEHAVIORAL_ANALYST.md "
                  "(methodology, knowledge base, playbook, failure + evaluation libraries).",
         example=base.example,
-        counterexample="a finding that reads 'mechanical cadence therefore bot' — regularity is "
+        counterexample="a finding that reads 'mechanical cadence therefore bot'. Regularity is "
                        "never guilt; the benign twin (scheduler) was not tested",
     )
 
 
 def profile_overrides() -> dict:
-    """The behavior_analyst framework overrides — applied by ``framework.framework_profiles()``."""
+    """The behavior_analyst framework overrides. Applied by ``framework.framework_profiles()``."""
     return {
         "reasoning": _reasoning_override(),
         "quality": _quality_override(),
@@ -220,12 +220,12 @@ register_profile_overrides("behavior_analyst", profile_overrides)
 
 
 # --------------------------------------------------------------------------- #
-# 8. Prompt improvement — lib-v2 (evidence-justified, inert; live v1 untouched)
+# 8. Prompt improvement. Lib-v2 (evidence-justified, inert; live v1 untouched)
 # --------------------------------------------------------------------------- #
 # Justification (evidence, not taste): S025/B1 grew the behavioral knowledge base (5 -> 13
 # entries) and the failure library documented two recurring FP classes the lib-v1 sections do not
 # guard (hybrid mis-averaging; regularity-as-guilt). lib-v2 adds the classification taxonomy, the
-# benign-twin discipline, and the window rule — nothing else changes. Same contract, same
+# benign-twin discipline, and the window rule, nothing else changes. Same contract, same
 # constitution, same output schema; deterministic replay unaffected (nothing resolves lib-v2).
 BEHAVIOR_V2 = SpecialistSpec(
     key=BEHAVIOR.key, title=BEHAVIOR.title, tier=BEHAVIOR.tier, output_kind=BEHAVIOR.output_kind,
@@ -241,7 +241,7 @@ BEHAVIOR_V2 = SpecialistSpec(
         "read history shape (dormancy-activation, pivots, age-vs-density) as corroborating context",
     ),
     forbidden_reasoning=BEHAVIOR.forbidden_reasoning + (
-        "never treat regularity, automation, or a new/dormant account as guilt by itself — test "
+        "never treat regularity, automation, or a new/dormant account as guilt by itself. Test "
         "the benign twin (scheduler, power user, returning user) before any raising finding",
         "never classify cadence from a thin window; say 'insufficient' instead",
     ),
@@ -279,7 +279,7 @@ def behavior_v2_prompt_spec() -> PromptSpec:
 
 
 # --------------------------------------------------------------------------- #
-# 7. Documentation — the Behavioral Analyst Handbook (generated, drift-guarded)
+# 7. Documentation, the Behavioral Analyst Handbook (generated, drift-guarded)
 # --------------------------------------------------------------------------- #
 def _knowledge_section() -> list[str]:
     try:
@@ -288,7 +288,7 @@ def _knowledge_section() -> list[str]:
         idx = KnowledgeIndex()
         lines = []
         for e in idx.for_specialist("behavior_analyst"):
-            lines.append(f"- **{e.title}** (`{e.id}`, {e.category}, {e.confidence}) — {e.definition}")
+            lines.append(f"- **{e.title}** (`{e.id}`, {e.category}, {e.confidence}). {e.definition}")
         return lines
     except Exception:  # noqa: BLE001
         return ["- (knowledge library unavailable)"]
@@ -299,7 +299,7 @@ def render_behavioral_handbook() -> str:
         return "\n".join(f"- {it}" for it in items)
     v2 = behavior_v2_prompt_spec()
     return "\n".join([
-        "# OMI Behavioral Analyst — Intelligence Library & Handbook",
+        "# OMI Behavioral Analyst. Intelligence Library & Handbook",
         "",
         f"> GENERATED from `app.reasoning.prompts.behavioral` (library {BEHAVIORAL_LIBRARY_VERSION}, "
         f"constitution {CONSTITUTION_VERSION}). Do not hand-edit; regenerate via "
@@ -319,7 +319,7 @@ def render_behavioral_handbook() -> str:
         f"**Evidence prioritization.** {EVIDENCE_PRIORITIZATION}",
         "",
         "**Behavior classification.**",
-        _b(f"**{k}** — {v}" for k, v in BEHAVIOR_CLASSIFICATION.items()),
+        _b(f"**{k}**. {v}" for k, v in BEHAVIOR_CLASSIFICATION.items()),
         "",
         "## 3. Behavioral Knowledge Base (the reading list)",
         *_knowledge_section(),
@@ -347,9 +347,9 @@ def render_behavioral_handbook() -> str:
         "3. ARCHETYPES: fits hybrid_operation; benign twin = creator with a scheduler.",
         "4. COUNTER-EVIDENCE: verified history, topical replies, no discriminative coordination -> "
         "benign twin SURVIVES.",
-        "5. EMIT: neutral finding — 'two-regime hybrid consistent with scheduled publishing plus "
+        "5. EMIT: neutral finding. 'two-regime hybrid consistent with scheduled publishing plus "
         "live engagement; no coordination corroboration' + uncertainty on content-shape thinness.",
-        "Counterexample (what NOT to emit): 'mechanical cadence therefore bot' — regularity is "
+        "Counterexample (what NOT to emit): 'mechanical cadence therefore bot'. Regularity is "
         "never guilt; the twin was never tested.",
         "",
         "## 7. Prompt versions",

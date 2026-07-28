@@ -135,7 +135,9 @@ def test_behavioral_handbook_generated_and_drift_guarded():
                     "Failure Library", "Evaluation Library", "reasoning walkthrough",
                     "Prompt versions"):
         assert section in text, section
-    assert "Counterexample" in text and "regularity is" in text   # worked counterexample
+    # The worked counterexample must be present. Matched case-insensitively: whether "regularity"
+    # opens a sentence or continues one is a punctuation choice, not the thing under test.
+    assert "Counterexample" in text and "regularity is" in text.lower()
 
 
 def test_catalog_and_manifest_carry_the_behavioral_library():

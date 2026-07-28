@@ -17,7 +17,7 @@ interface Props {
  *
  * Green when everything is fine; yellow when one capability is degraded;
  * red when scanning won't work at all. Clicking opens a small popover
- * with the human-readable status — admins get diagnostic detail, regular
+ * with the human-readable status. Admins get diagnostic detail, regular
  * users get a friendly "scanning is temporarily unavailable" message.
  */
 export function ServiceHealthPill({
@@ -44,10 +44,10 @@ export function ServiceHealthPill({
       severity: 'medium',
       user: 'Your saved investigations may not persist between sessions yet.',
       admin:
-        'Database is SQLite on ephemeral disk. Provision Postgres and set OMI_DATABASE_URL before launch — every redeploy wipes user data.',
+        'Database is SQLite on ephemeral disk. Provision Postgres and set OMI_DATABASE_URL before launch, every redeploy wipes user data.',
     });
   }
-  // YouTube quota pressure — only meaningful if YouTube is configured.
+  // YouTube quota pressure. Only meaningful if YouTube is configured.
   // ≥80% used in last 24h is a yellow warning; ≥95% is a red warning.
   if (youtubeConfigured && quotaUsedToday !== undefined && quotaDailyLimit && quotaDailyLimit > 0) {
     const pct = quotaUsedToday / quotaDailyLimit;

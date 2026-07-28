@@ -1,13 +1,13 @@
-"""Instruction-tuning dataset design (AI Readiness — Phase 6).
+"""Instruction-tuning dataset design (AI Readiness. Phase 6).
 
 The SCHEMA and builder for a future OMI ANALYST instruction-tuning corpus. This module **does not
-train anything** — it defines the shape of a training example and converts already-produced,
+train anything**, it defines the shape of a training example and converts already-produced,
 Governor-gated investigations into LoRA/SFT-ready records, so the day fine-tuning is on the table
 the data pipeline already exists and is quality-gated.
 
-Each example captures the full investigative context — raw investigation, Evidence Bundle, memory
+Each example captures the full investigative context. Raw investigation, Evidence Bundle, memory
 context, reasoning trace, counter-evidence, final assessment, confidence, Governor outcome, ground
-truth — and exports to the chat-format SFT record (system/user/assistant messages + metadata) that
+truth, and exports to the chat-format SFT record (system/user/assistant messages + metadata) that
 TRL-style LoRA trainers consume directly. Quality gate: only Governor-PERMITTED examples that carry
 ground truth are trainable, mirroring the institutional-memory learning loop. Deterministic
 train/validation split by content hash, so the holdout is stable and replayable.
@@ -24,7 +24,7 @@ TRAINING_SCHEMA_VERSION = "v1"
 
 @dataclass(frozen=True)
 class TrainingExample:
-    """One instruction-tuning example — the complete, replayable record of an investigation and its
+    """One instruction-tuning example, the complete, replayable record of an investigation and its
     governed assessment, plus the ground truth needed for supervised learning. Immutable."""
 
     id: str
@@ -42,7 +42,7 @@ class TrainingExample:
     @property
     def trainable(self) -> bool:
         """A training example is admissible only if the Governor PERMITTED it and it carries ground
-        truth — the same quality bar the memory learning loop applies. Rejected or unlabeled
+        truth, the same quality bar the memory learning loop applies. Rejected or unlabeled
         investigations are excluded from the tuning corpus."""
         return self.governor_outcome.get("verdict") == "permit" and bool(self.ground_truth)
 
@@ -55,7 +55,7 @@ class TrainingExample:
 
 
 def dataset_schema() -> dict:
-    """The machine-readable schema — the required fields, their meaning, and the export format —
+    """The machine-readable schema, the required fields, their meaning, and the export format, 
     that a future LoRA/SFT pipeline validates against."""
     return {
         "version": TRAINING_SCHEMA_VERSION,
@@ -153,7 +153,7 @@ class TrainingDataset:
         return [self._examples[k] for k in sorted(self._examples)]
 
     def trainable(self) -> list[TrainingExample]:
-        """Only Governor-permitted, ground-truthed examples — the admissible tuning corpus."""
+        """Only Governor-permitted, ground-truthed examples, the admissible tuning corpus."""
         return [ex for ex in self.all() if ex.trainable]
 
     def to_sft_records(self, *, trainable_only: bool = True) -> list[dict]:

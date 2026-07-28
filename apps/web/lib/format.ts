@@ -1,7 +1,7 @@
 import { type Tier } from './api';
 
 export function pct(n: number | null | undefined): string {
-  if (n == null) return '—';
+  if (n == null) return ', ';
   return `${Math.round(n * 100)}%`;
 }
 

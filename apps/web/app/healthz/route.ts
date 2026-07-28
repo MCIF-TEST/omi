@@ -6,7 +6,7 @@
  * while the API is fine.
  *
  * Deliberately shallow: it answers "is this process still serving?" and nothing else. It must not call
- * the API or the database — a health check that depends on downstream services turns one dependency's
+ * the API or the database, a health check that depends on downstream services turns one dependency's
  * slowness into a restart loop here, which is strictly worse than reporting healthy while degraded.
  */
 export const dynamic = 'force-dynamic';

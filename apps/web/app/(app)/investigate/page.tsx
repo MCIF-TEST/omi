@@ -1,6 +1,6 @@
 import { CommenterSelect } from './commenter-select';
 
-export const metadata = { title: 'Investigate — OMISPHERE' };
+export const metadata = { title: 'Investigate. OMISPHERE' };
 
 export default function InvestigatePage({
   searchParams,

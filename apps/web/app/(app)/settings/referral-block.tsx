@@ -18,7 +18,7 @@ export function ReferralBlock({ referralCode, creditsEarned }: ReferralBlockProp
   // Use the current origin so the link works whether the user is on the
   // marketing domain, a preview deploy, or localhost during testing.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  // Point straight at the Clerk sign-up page (which renders) rather than /signup (which redirects) —
+  // Point straight at the Clerk sign-up page (which renders) rather than /signup (which redirects), 
   // the middleware captures ?ref into the omi_ref cookie on the rendered page, so the referral code
   // reliably survives into account creation (a redirect could drop the just-set cookie).
   const link = `${origin}/sign-up?ref=${referralCode}`;
