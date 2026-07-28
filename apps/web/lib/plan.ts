@@ -19,4 +19,4 @@ export const MONTHLY_CREDITS = Number(process.env.NEXT_PUBLIC_MONTHLY_CREDITS ||
  * charge the wrong number. It CAN advertise the wrong number, which is why the pricing page reads
  * this instead of hardcoding a figure, and why test_deployed_credit_contract fails on drift.
  */
-export const SUBSCRIPTION_PRICE = process.env.NEXT_PUBLIC_SUBSCRIPTION_PRICE || '$14.99';
+export const SUBSCRIPTION_PRICE = process.env.NEXT_PUBLIC_SUBSCRIPTION_PRICE || '$13.99';

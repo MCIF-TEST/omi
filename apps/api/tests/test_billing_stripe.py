@@ -313,7 +313,7 @@ def test_billing_status_reports_the_configured_price_and_grant(client):
     body = r.json()
     assert body["configured"] is True
     assert body["credits_per_period"] == 20
-    assert body["price_display"] == "$14.99"
+    assert body["price_display"] == "$13.99"
 
 
 def test_an_unconfigured_server_acks_webhooks_instead_of_making_stripe_retry(monkeypatch):

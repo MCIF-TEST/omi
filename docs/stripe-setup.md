@@ -1,4 +1,4 @@
-# Stripe setup: $14.99/month for 20 credits (webhook + API backstop)
+# Stripe setup: $13.99/month for 20 credits (webhook + API backstop)
 
 Everything you need to take the first real payment. Do it once in **test mode**, verify with a test
 card, then repeat the same steps in **live mode** with live keys.
@@ -55,7 +55,7 @@ Stripe Dashboard → **Product catalogue → Add product**
 |---|---|
 | Name | `OmiSphere Monthly` |
 | Description | `20 analysis credits per month` |
-| Price | `14.99` **USD** |
+| Price | `13.99` **USD** |
 | Billing period | **Monthly** (recurring) |
 
 Save, then open the price and copy its id — it looks like `price_1QxxxxxxxxxxxxxxxxxxXXXX`.
@@ -134,7 +134,7 @@ payment methods and cancel. Without this, "Manage subscription" fails when click
 | `OMI_PUBLIC_BASE_URL` | `https://omisphere-web.onrender.com` | The **web** URL. Stripe sends the customer back here after checkout — set it to the site people actually visit, not the API host, or they land on an API 404. |
 | `OMI_MONTHLY_CREDIT_GRANT` | `20` | Credits added per paid invoice. |
 | `OMI_FREE_TRIAL_CREDITS` | `3` | Credits a new signup starts with. |
-| `OMI_SUBSCRIPTION_PRICE_DISPLAY` | `$14.99` | Display only. Keep it in step with the Stripe price. |
+| `OMI_SUBSCRIPTION_PRICE_DISPLAY` | `$13.99` | Display only. Keep it in step with the Stripe price. |
 
 ### Web service (`omisphere-web`)
 
@@ -142,7 +142,7 @@ payment methods and cancel. Without this, "Manage subscription" fails when click
 |---|---|---|
 | `NEXT_PUBLIC_MONTHLY_CREDITS` | `20` | Marketing copy only. Must match `OMI_MONTHLY_CREDIT_GRANT`. |
 | `NEXT_PUBLIC_TRIAL_CREDITS` | `3` | Must match `OMI_FREE_TRIAL_CREDITS`. |
-| `NEXT_PUBLIC_SUBSCRIPTION_PRICE` | `$14.99` | Pricing-page copy only. Must match `OMI_SUBSCRIPTION_PRICE_DISPLAY`. |
+| `NEXT_PUBLIC_SUBSCRIPTION_PRICE` | `$13.99` | Pricing-page copy only. Must match `OMI_SUBSCRIPTION_PRICE_DISPLAY`. |
 
 **Never put `OMI_STRIPE_SECRET_KEY` or `OMI_STRIPE_WEBHOOK_SECRET` on the web service.** Anything
 prefixed `NEXT_PUBLIC_` is compiled into JavaScript that every visitor downloads; the two Stripe
@@ -180,7 +180,7 @@ It calls Stripe with your configured key and reports back:
   "checks": [
     {"name": "secret_key",        "ok": true,  "detail": "Set (test mode key)."},
     {"name": "stripe_reachable",  "ok": true,  "detail": "Authenticated with Stripe account acct_1Q…"},
-    {"name": "price",             "ok": true,  "detail": "14.99 USD per month — this is what a customer is charged."},
+    {"name": "price",             "ok": true,  "detail": "13.99 USD per month — this is what a customer is charged."},
     {"name": "return_url",        "ok": true,  "detail": "Customers return to https://…/settings after paying."},
     {"name": "credit_grant",      "ok": true,  "detail": "20 credits granted per paid invoice."},
     {"name": "webhook_url",       "ok": true,  "detail": "Register this endpoint in Stripe: https://…/v1/billing/webhook"},
@@ -252,7 +252,7 @@ curl -X POST https://<your-api-host>/v1/billing/sync \
 1. Flip the dashboard to **live mode** and repeat steps 1 and 4 — live mode has its **own** product
    and its own Customer Portal setting.
 2. Replace `OMI_STRIPE_SECRET_KEY` and `OMI_STRIPE_PRICE_ID` on the API service with the live values.
-3. Complete one real $14.99 purchase yourself and confirm the credits land, then refund it from the
+3. Complete one real $13.99 purchase yourself and confirm the credits land, then refund it from the
    dashboard. It is the only way to know the live path works end to end.
 4. Stripe requires a statement descriptor and business details before it will accept live payments —
    Settings → Business.

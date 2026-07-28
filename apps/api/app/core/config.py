@@ -207,7 +207,7 @@ class Settings(BaseSettings):
     stripe_payment_method_types: str = "link,card"
     # Display-only. What the UI prints next to the subscribe button; the real charge is whatever the
     # Stripe Price says. Keep them in agreement — this string proves nothing.
-    subscription_price_display: str = "$14.99"
+    subscription_price_display: str = "$13.99"
 
     # -----------------------------------------------------------------------
     # LLM enhancement layer (Phase 7).

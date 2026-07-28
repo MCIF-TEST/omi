@@ -314,7 +314,7 @@ The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0)
 Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
 limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
 
-### Billing: Stripe ($14.99/mo, 20 credits), webhook + API backstop
+### Billing: Stripe ($13.99/mo, 20 credits), webhook + API backstop
 
 Setup walkthrough: `docs/stripe-setup.md`. **Credits arrive by two independent routes, on purpose.**
 

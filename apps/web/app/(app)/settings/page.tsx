@@ -22,7 +22,7 @@ export default async function SettingsPage() {
     credits_remaining: user.credits_remaining,
     subscription_status: user.subscription_status ?? null,
     subscription_renews_at: null,
-    price_display: '$14.99',
+    price_display: '$13.99',
     credits_per_period: 20,
   }));
 
