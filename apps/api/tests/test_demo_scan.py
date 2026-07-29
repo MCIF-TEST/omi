@@ -161,20 +161,19 @@ def test_score_rejects_ids_that_are_not_in_the_list(client):
 # --------------------------------------------------------------------------- #
 # The free-scan budget: two per IP, ever
 # --------------------------------------------------------------------------- #
-def test_two_free_scans_per_ip_then_429(client):
+def test_one_free_scan_per_ip_then_429(client):
     ip = "10.0.0.3"
     assert _run_full_scan(client, ip).status_code == 200
-    assert _run_full_scan(client, ip, OTHER_TWEET_URL).status_code == 200
 
-    third = _run_full_scan(client, ip)
-    assert third.status_code == 429
+    second = _run_full_scan(client, ip, OTHER_TWEET_URL)
+    assert second.status_code == 429
     # The message points at signup so the UI can surface the upgrade CTA.
-    assert "account" in third.json()["detail"].lower()
+    assert "account" in second.json()["detail"].lower()
 
 
-def test_the_budget_is_two(client):
-    """Pins the advertised number — the landing page copy and this constant must agree."""
-    assert DEMO_FREE_SCANS_PER_IP == 2
+def test_the_budget_is_one(client):
+    """Pins the advertised number: the landing page copy and this constant must agree."""
+    assert DEMO_FREE_SCANS_PER_IP == 1
 
 
 def test_compile_is_refused_once_the_budget_is_spent(client):
@@ -184,8 +183,6 @@ def test_compile_is_refused_once_the_budget_is_spent(client):
     # assertion below fail for a reason that has nothing to do with what this test is about.
     first = _run_full_scan(client, ip)
     assert first.status_code == 200, first.text
-    second = _run_full_scan(client, ip, OTHER_TWEET_URL)
-    assert second.status_code == 200, second.text
 
     resp = _compile(client, ip)
     assert resp.status_code == 429
@@ -195,33 +192,35 @@ def test_an_in_flight_scan_holds_its_place_in_the_budget(client):
     """The limit must count scans that are RUNNING, not just finished ones.
 
     A demo scan takes minutes. If the budget only counted completed scans, firing several requests at
-    once from one IP would let every one of them pass the check before any had written a row — a free
-    unlimited scan for anyone willing to open three tabs."""
+    once from one IP would let every one of them pass the check before any had written a row, a free
+    unlimited scan for anyone willing to open two tabs."""
     from app.routes import scan_async as SA
     from app.storage.db import get_session
 
     ip_hash = SA.scan_mod._hash_ip("10.0.0.60")
     with get_session() as session:
-        # Two scans in flight (reserved, not yet finished) = the whole budget.
         assert SA._demo_scans_used(session, ip_hash) == 0
+
+    # ONE scan in flight (reserved, not yet finished) is the whole budget.
     r1 = SA._reserve_demo_scan(ip_hash, "111", "ua")
-    r2 = SA._reserve_demo_scan(ip_hash, "222", "ua")
-    with get_session() as session:
-        assert SA._demo_scans_used(session, ip_hash) == 2
-
-    # A third request from that IP is refused while the first two are still running.
-    assert _compile(client, "10.0.0.60").status_code == 429
-
-    # One fails: its place is handed back and the visitor can scan again.
-    SA._release_demo_scan(r1)
     with get_session() as session:
         assert SA._demo_scans_used(session, ip_hash) == 1
+
+    # A second request from that IP is refused while the first is still running.
+    assert _compile(client, "10.0.0.60").status_code == 429
+
+    # It fails: its place is handed back and the visitor can scan again.
+    SA._release_demo_scan(r1)
+    with get_session() as session:
+        assert SA._demo_scans_used(session, ip_hash) == 0
     assert _compile(client, "10.0.0.60").status_code == 200
 
-    # The other succeeds: permanently spent.
+    # The retry succeeds: permanently spent, and the budget is now closed.
+    r2 = SA._reserve_demo_scan(ip_hash, "222", "ua")
     SA._confirm_demo_scan(r2)
     with get_session() as session:
         assert SA._demo_scans_used(session, ip_hash) == 1
+    assert _compile(client, "10.0.0.60").status_code == 429
 
 
 def test_a_reservation_orphaned_by_a_crash_expires(client):
@@ -249,13 +248,12 @@ def test_different_ips_have_independent_budgets(client):
 
 
 def test_a_failed_analyze_does_not_spend_a_free_scan(client):
-    """Only a SUCCESSFUL analyze burns one of the two — a bad selection must not cost the visitor."""
+    """Only a SUCCESSFUL analyze burns the budget: a bad selection must not cost the visitor."""
     ip = "10.0.0.8"
     _compile(client, ip)
     assert _score(client, ip, ["not_a_real_replier"]).status_code == 400
-    # Both free scans are still available.
+    # The free scan is still available.
     assert _run_full_scan(client, ip).status_code == 200
-    assert _run_full_scan(client, ip, OTHER_TWEET_URL).status_code == 200
 
 
 # --------------------------------------------------------------------------- #

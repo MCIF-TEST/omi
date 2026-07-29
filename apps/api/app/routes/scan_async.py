@@ -1142,13 +1142,13 @@ def _run_link_scan_job(
 # --------------------------------------------------------------------------- #
 # Free anonymous demo — the SAME select-then-scan flow the signed-in workspace
 # uses (compile the repliers → pick who to analyze → run the REAL engine +
-# OpenRouter analyst), but X-only, capped at 25 repliers, and limited to TWO
-# full scans per IP address, ever. No auth, no credits.
+# OpenRouter analyst), but X-only, capped at 25 repliers, and limited to ONE
+# full scan per IP address, ever. No auth, no credits.
 # --------------------------------------------------------------------------- #
-DEMO_FREE_SCANS_PER_IP = 2
+DEMO_FREE_SCANS_PER_IP = 1
 
 _DEMO_LIMIT_MSG = (
-    "You've used both of your free scans. Create a free account to keep scanning, "
+    "You've used your free scan. Create a free account to keep scanning, "
     "pick more accounts, save your results, and unlock the full platform."
 )
 
@@ -1405,7 +1405,7 @@ def scan_demo_score(
 ) -> ComprehensiveScanResult:
     """FREE anonymous ANALYZE step — runs the REAL engine (histories + detection + the OpenRouter analyst)
     on the visitor's SELECTED repliers, exactly like the signed-in scan, but synchronously and capped at
-    25. Consumes ONE of the IP's two free scans on success; a failed attempt does not."""
+    25. Consumes the IP's one free scan on success; a failed attempt does not."""
     url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
     content_id = _demo_classify_x_post(url)
 

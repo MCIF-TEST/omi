@@ -156,7 +156,7 @@ export function scoreSelection(url: string, selected: string[]): Promise<ScoreJo
 
 // ---------------------------------------------------------------------------
 // The free pre-login scan, the SAME compile → select → analyze flow as above,
-// anonymous, X-only, capped at 25 repliers, two scans per visitor.
+// anonymous, X-only, capped at 25 repliers, ONE scan per visitor.
 // ---------------------------------------------------------------------------
 
 /** FREE (no account): list an X post's repliers so a visitor can pick who to analyze. */

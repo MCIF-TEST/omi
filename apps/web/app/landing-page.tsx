@@ -198,7 +198,7 @@ export function LandingPage() {
               eyebrow="Intelligence · Workspace"
               icon={<Radar size={11} className="text-accent" />}
               title="Run a scan right now"
-              lede="The same engine the signed-in workspace runs. Two analyses per visitor, up to 25 accounts each, no account needed."
+              lede="The same engine the signed-in workspace runs. One free analysis per visitor, up to 25 accounts, no account needed."
             />
           </Reveal>
 

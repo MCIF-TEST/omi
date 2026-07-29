@@ -130,8 +130,8 @@ def test_the_pre_login_free_scans_are_independent_of_the_signup_grant():
     from app.routes.scan import DEMO_MAX_COMMENTERS
     from app.routes.scan_async import DEMO_FREE_SCANS_PER_IP
 
-    assert DEMO_FREE_SCANS_PER_IP == 2, (
-        "the pre-login front page is specified as two free scans per visitor; this constant is the "
+    assert DEMO_FREE_SCANS_PER_IP == 1, (
+        "the pre-login front page is specified as ONE free scan per visitor; this constant is the "
         "only thing enforcing that and it is not read from settings or render.yaml"
     )
     assert DEMO_MAX_COMMENTERS == 25, (
