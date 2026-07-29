@@ -8,7 +8,7 @@ export const metadata = { title: 'Pricing. OMISPHERE' };
 
 const FEATURES = [
   'YouTube + X (Twitter) account intelligence. Videos, channels, accounts',
-  'Eight behavioral signals per account (posting cadence, content repetition, AI-writing patterns, profile metadata, personal voice, engagement farming, fingerprint match)',
+  'Eight behavioral signals scored per account (posting rhythm, content repetition, machine-written prose, profile coherence, personal voice, engagement farming, account maturity, history authenticity), each with its own score and the reason behind it',
   'Per-commenter activity drilldown. See what flagged accounts actually wrote',
   'Saved investigations. Shareable, exportable as Markdown / JSON / PDF',
   'Watchlist alerts. Get notified when a tracked channel\'s tier changes',

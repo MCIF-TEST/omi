@@ -5,9 +5,9 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-07-28 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
+**Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1572 passed, 8 skipped, 2 failed** (4m28s), both failures pre-existing and listed below.
+**1586 passed, 8 skipped, 2 failed** (6m02s), both failures pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -179,6 +179,52 @@ Three landmines here, all previously live bugs:
   prevents that.
 - **Analyst work runs on `background.submit_slow`**, a pool of its own. It holds a worker for the
   whole run, and on the shared pool it starved the *scan* jobs.
+
+### The eight signals are scored by the MODEL, not the engine
+
+Product direction (2026-07-29): per-signal scoring is back, but the **model** produces it. Every
+account in `commenter_assessments` now carries `signals` (exactly eight) and `confidence` alongside
+its `omi_score`. The detector still computes its own signals underneath and is still what
+`OmiScore` is built from; nothing in the UI surfaces those any more.
+
+```
+temporal · semantic · ai_writing · profile · voice · engagement · account_maturity · history_authenticity
+```
+
+Six carry over from the old heuristics engine. **`memory` and `coordination` were deliberately
+dropped** and `account_maturity` / `history_authenticity` put in their place: the model sees one
+account's raw metadata and history, so a cross-scan fingerprint match and a cross-account
+coordination read are things it cannot derive. Asking it to score them would have produced
+confident fabrication in the two slots a customer is least able to check.
+
+Four things here that must not be undone:
+
+- **`score: null` is not `0`.** Null means the evidence that dimension needs was never collected
+  (rhythm cannot be read off an account with no posting history). Zero means "this dimension looks
+  like a real person". The schema is `["integer", "null"]` on purpose, `_normalise_signals` preserves
+  the distinction, and the UI renders `n/a` over an empty track rather than a low-tier bar. Collapsing
+  them turns "we could not tell" into an exoneration.
+- **All eight, always, in canonical order.** `_normalise_signals` (`analyst.py`) drops unknown names,
+  keeps the first of any duplicate, and materialises anything the model omitted as `score: None`. That
+  is what lets `SignalBreakdown` render eight rows unconditionally instead of branching per account.
+  An optional or short list would let the model quietly skip the dimensions it finds hardest, which
+  are exactly the ones a reader wants explained.
+- **The name list is declared twice, in two languages, and nothing at runtime reconciles them.**
+  `COMPREHENSIVE_SIGNAL_NAMES` (Python) against `ACCOUNT_SIGNAL_KEYS` + `ACCOUNT_SIGNAL_META`
+  (`apps/web/lib/api.ts`). Rename one side and the frontend's metadata lookup misses, the row is
+  filtered out, and the account silently renders with seven dimensions and no error anywhere.
+  `tests/test_signal_names_contract.py` fails on that drift, including order.
+- **`confidence` is an integer and may not be null.** How much evidence arrived is always knowable,
+  unlike an individual dimension's score.
+
+`SignalBreakdown` (`components/shared/signal-breakdown.tsx`) is shared by the signed-in investigation
+view and the pre-login demo, so the free scan shows the same eight. The demo falls back to the engine
+list only when the analyst produced nothing, which is the documented degraded case (a model failure
+still returns every deterministic score, and a free scan must not come back empty).
+
+The **live model will not emit any of this until the recompiled protocol is pasted into the
+OpenRouter preset** (`omi-master-v1`). Until then the schema accepts the old shape, every account
+renders without a breakdown, and nothing errors.
 
 ### Evidence completeness — what the model is allowed to see
 

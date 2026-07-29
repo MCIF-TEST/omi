@@ -25,6 +25,7 @@ import {
   type Tier,
 } from '@/lib/api';
 import { ScoreRing } from '@/components/shared/score-ring';
+import { SignalBreakdown } from '@/components/shared/signal-breakdown';
 import { TierBadge } from '@/components/shared/tier-badge';
 
 /** The free tier's ceiling, mirrored from the backend (DEMO_MAX_COMMENTERS). */
@@ -382,6 +383,16 @@ function DemoResult({
     () => video?.commenters.filter((c) => c.tier === 'elevated' || c.tier === 'high').length || 0,
     [video],
   );
+  // The analyst's own per-account rows, highest OMI score first. Unresolved aliases are dropped
+  // here rather than flagged: the free scan is a shop window, not the forensic view.
+  const scoredAccounts = useMemo(
+    () =>
+      [...(result.analyst_assessment?.commenter_assessments ?? [])]
+        .filter((r) => r.resolved && typeof r.omi_score === 'number')
+        .sort((a, b) => (b.omi_score ?? 0) - (a.omi_score ?? 0))
+        .slice(0, 5),
+    [result.analyst_assessment],
+  );
 
   return (
     <div className="space-y-5 animate-fade-up">
@@ -431,30 +442,63 @@ function DemoResult({
         </div>
       )}
 
-      {/* Per-account read: the whole point of the product */}
-      {video && video.commenters && (
+      {/* Per-account read: the whole point of the product. Prefer the analyst's rows, which carry
+          the account's OMI score and the eight dimensions behind it. The engine list below is the
+          fallback for the documented degraded case: a model failure still returns every
+          deterministic score, and a free scan must never come back empty-handed. */}
+      {scoredAccounts.length > 0 ? (
         <div>
           <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">
             Top repliers by suspicion
           </p>
           <div className="space-y-1.5">
-            {[...video.commenters]
-              .sort((a, b) => b.overall_probability - a.overall_probability)
-              .slice(0, 5)
-              .map((c) => (
-                <div
-                  key={c.external_id}
-                  className="flex items-center gap-2.5 p-2.5 bg-bg-inset rounded-lg border border-border-1"
-                >
-                  <TierBadge tier={c.tier as Tier} size="sm" />
-                  <span className="text-sm text-fg truncate flex-1">{c.handle}</span>
-                  <span className="font-mono text-2xs text-fg-mute tabular">
-                    {Math.round(c.overall_probability * 100)}%
+            {scoredAccounts.map((r) => (
+              <div
+                key={r.external_id ?? r.ref}
+                className="p-2.5 bg-bg-inset rounded-lg border border-border-1 space-y-2"
+              >
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
+                  <span className="text-sm text-fg break-all flex-1 min-w-0">
+                    {r.handle ?? r.ref}
                   </span>
+                  {typeof r.omi_score === 'number' && (
+                    <span className="font-mono text-2xs text-fg-mute tabular-nums shrink-0">
+                      OMI {Math.max(0, Math.min(100, Math.round(r.omi_score)))}
+                    </span>
+                  )}
                 </div>
-              ))}
+                <SignalBreakdown signals={r.signals} confidence={r.confidence} />
+              </div>
+            ))}
           </div>
         </div>
+      ) : (
+        video &&
+        video.commenters && (
+          <div>
+            <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">
+              Top repliers by suspicion
+            </p>
+            <div className="space-y-1.5">
+              {[...video.commenters]
+                .sort((a, b) => b.overall_probability - a.overall_probability)
+                .slice(0, 5)
+                .map((c) => (
+                  <div
+                    key={c.external_id}
+                    className="flex items-center gap-2.5 p-2.5 bg-bg-inset rounded-lg border border-border-1"
+                  >
+                    <TierBadge tier={c.tier as Tier} size="sm" />
+                    <span className="text-sm text-fg truncate flex-1">{c.handle}</span>
+                    <span className="font-mono text-2xs text-fg-mute tabular">
+                      {Math.round(c.overall_probability * 100)}%
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )
       )}
 
       {/* CTA */}

@@ -6,6 +6,7 @@ import { Card, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { AnalystLoading } from './analyst-loading';
+import { SignalBreakdown } from '@/components/shared/signal-breakdown';
 import {
   apiClient,
   ApiError,
@@ -918,6 +919,7 @@ function CommenterAssessments({
               {r.assessment && (
                 <p className="text-xs text-fg-dim leading-relaxed whitespace-pre-line">{r.assessment}</p>
               )}
+              <SignalBreakdown signals={r.signals} confidence={r.confidence} />
               {r.citations.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {r.citations.map((c, i) => (
