@@ -868,27 +868,38 @@ def create_checkout_session(
     cancel = f"{base}/settings?billing=cancel"
     # 30s idempotency window absorbs double-clicks without blocking a later re-subscribe.
     checkout_idem = f"omi-checkout-{current.id}-{price_id}-{int(time.time()) // 30}"
+
+    def _session_args(cust: str) -> dict:
+        """Everything a Checkout Session needs except the payment methods.
+
+        Built once so the retries below cannot drift from the first attempt. A retry that quietly
+        dropped, say, the metadata would produce a payment nothing could attribute to a user.
+        """
+        return {
+            "mode": "subscription",
+            "customer": cust,
+            "line_items": [{"price": price_id, "quantity": 1}],
+            "success_url": success,
+            "cancel_url": cancel,
+            "allow_promotion_codes": True,
+            # Lets Checkout collect name/address when the Customer row is sparse: required when
+            # Automatic Tax (or similar dashboard defaults) needs an address, harmless otherwise.
+            "billing_address_collection": "auto",
+            "customer_update": {"address": "auto", "name": "auto"},
+            "client_reference_id": str(current.id),
+            # Carried through to the subscription + invoices, so sync can resolve the user
+            # even if the customer link is somehow missing.
+            "metadata": {"omi_user_id": str(current.id)},
+            "subscription_data": {"metadata": {"omi_user_id": str(current.id)}},
+        }
+
     try:
         s = stripe.checkout.Session.create(
-            mode="subscription",
-            customer=customer_id,
-            line_items=[{"price": price_id, "quantity": 1}],
-            success_url=success,
-            cancel_url=cancel,
             # link + card by default (see _payment_method_types / OMI_STRIPE_PAYMENT_METHOD_TYPES).
             # Link works while Cards are pending approval; card enables Apple Pay / Google Pay wallets.
             payment_method_types=_payment_method_types(settings),
-            allow_promotion_codes=True,
-            # Lets Checkout collect name/address when the Customer row is sparse — required when
-            # Automatic Tax (or similar dashboard defaults) needs an address, and harmless otherwise.
-            billing_address_collection="auto",
-            customer_update={"address": "auto", "name": "auto"},
-            client_reference_id=str(current.id),
-            # Carried through to the subscription + invoices, so sync can resolve the user
-            # even if the customer link is somehow missing.
-            metadata={"omi_user_id": str(current.id)},
-            subscription_data={"metadata": {"omi_user_id": str(current.id)}},
             idempotency_key=checkout_idem,
+            **_session_args(customer_id),
         )
     except Exception as e:  # noqa: BLE001
         msg = _stripe_user_message(e)
@@ -903,18 +914,8 @@ def create_checkout_session(
                 customer_id = _ensure_stripe_customer(stripe, user, recreate=True)
             try:
                 s = stripe.checkout.Session.create(
-                    mode="subscription",
-                    customer=customer_id,
-                    line_items=[{"price": price_id, "quantity": 1}],
-                    success_url=success,
-                    cancel_url=cancel,
                     payment_method_types=_payment_method_types(settings),
-                    allow_promotion_codes=True,
-                    billing_address_collection="auto",
-                    customer_update={"address": "auto", "name": "auto"},
-                    client_reference_id=str(current.id),
-                    metadata={"omi_user_id": str(current.id)},
-                    subscription_data={"metadata": {"omi_user_id": str(current.id)}},
+                    **_session_args(customer_id),
                 )
             except Exception as e2:  # noqa: BLE001
                 log.exception("stripe checkout retry failed for user=%s", current.id)
@@ -922,15 +923,33 @@ def create_checkout_session(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"Could not start Stripe checkout: {_stripe_user_message(e2)}",
                 ) from e2
+        elif "payment method" in msg.lower() or "payment_method_types" in msg.lower():
+            # One of the methods we ASKED for is not activated on this Stripe account. The usual
+            # case is a new account where Cards are still pending review while Link is live.
+            #
+            # Retry once WITHOUT payment_method_types: Stripe then offers whatever the account has
+            # actually enabled in Dashboard -> Settings -> Payment methods. That is a better source
+            # of truth than a list hardcoded here, and it means a pending capability delays nothing
+            # rather than losing the sale outright.
+            log.warning(
+                "checkout rejected our payment_method_types (%s) for user=%s: %s. Retrying with the "
+                "account's own enabled methods.",
+                _payment_method_types(settings), current.id, msg,
+            )
+            try:
+                s = stripe.checkout.Session.create(**_session_args(customer_id))
+            except Exception as e2:  # noqa: BLE001
+                log.exception("stripe checkout payment-method fallback failed for user=%s", current.id)
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        f"Could not start Stripe checkout: {_stripe_user_message(e2)} "
+                        "No payment method is enabled on this Stripe account. Enable Link and/or "
+                        "Cards under Dashboard -> Settings -> Payment methods."
+                    ),
+                ) from e2
         else:
             hint = msg
-            if "payment method" in msg.lower():
-                hint = (
-                    f"{msg} In Live mode enable Link and/or Cards under Dashboard → Settings → "
-                    "Payment methods. Apple Pay needs Cards + a verified domain "
-                    "(Settings → Payment method domains). Or set OMI_STRIPE_PAYMENT_METHOD_TYPES=link "
-                    "if only Link is approved."
-                )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Could not start Stripe checkout: {hint}",
