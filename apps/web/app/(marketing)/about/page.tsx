@@ -73,8 +73,8 @@ export default function AboutPage() {
       <header>
         <span className="section-label mb-3">About</span>
         <h1 className="display text-3xl md:text-4xl font-semibold tracking-tight leading-tight mt-3">
-          Evidence-based{' '}
-          <span className="text-brand">Account Authenticity Intelligence</span>
+          Purpose-built bot detection.{' '}
+          <span className="text-brand">Not a wrapper around a chatbot.</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
           OMISPHERE scores the accounts in a comment section: how likely each

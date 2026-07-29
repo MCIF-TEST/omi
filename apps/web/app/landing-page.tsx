@@ -254,7 +254,8 @@ export function LandingPage() {
             <SectionHeading
               eyebrow="What you get"
               icon={<Gauge size={11} className="text-accent" />}
-              title="The evidence behind every score."
+              title="Purpose-built bot detection. Not a wrapper around a chatbot."
+              lede="Every score comes from an engine built for this one job, and every score shows the evidence it rests on."
             />
           </Reveal>
 
