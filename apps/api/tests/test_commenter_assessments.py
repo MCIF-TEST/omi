@@ -107,12 +107,49 @@ def test_schema_carries_optional_commenter_assessments_array():
     assert COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY in s["properties"]
     assert COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY not in s["required"]   # optional — channel-only never fails
     item = s["properties"][COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY]["items"]
-    # AI-first per-account scoring: each account carries its OWN omi_score + tier (the AI produces them)
-    assert item["required"] == ["ref", "omi_score", "suspicion_tier", "assessment"]
+    # AI-first per-account scoring: each account carries its OWN omi_score + tier (the AI produces
+    # them), the eight-dimension breakdown behind that score, and one confidence for the account.
+    assert item["required"] == [
+        "ref", "omi_score", "suspicion_tier", "confidence", "signals", "assessment",
+    ]
     assert item["properties"]["omi_score"]["type"] == "integer"
     assert item["properties"]["omi_score"]["maximum"] == 100
     assert item["properties"]["suspicion_tier"]["enum"] == ["low", "moderate", "elevated", "high"]
     assert "suspicion_probability" not in item["properties"]
+
+
+def test_every_account_must_carry_all_eight_signals():
+    """Exactly eight, no more and no fewer.
+
+    An optional or short list would let the model quietly skip the dimensions it finds hard, which
+    are precisely the ones a reader wants explained.
+    """
+    from app.reasoning.prompts.comprehensive_investigation_template import (
+        COMPREHENSIVE_SIGNAL_NAMES,
+    )
+    s = comprehensive_investigation_canonical_schema()
+    item = s["properties"][COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY]["items"]
+    sig = item["properties"]["signals"]
+
+    assert sig["minItems"] == len(COMPREHENSIVE_SIGNAL_NAMES) == 8
+    assert sig["maxItems"] == 8
+    assert sig["items"]["properties"]["name"]["enum"] == list(COMPREHENSIVE_SIGNAL_NAMES)
+    assert sig["items"]["required"] == ["name", "score", "reason"]
+
+
+def test_a_signal_score_may_be_null_but_confidence_may_not():
+    """null score = "this dimension's evidence was never collected", which must stay expressible.
+
+    Forcing a number there would make the model invent one for an account with no posting history,
+    turning "we could not tell" into a measurement. Account confidence is different: it is always
+    knowable, because how much evidence arrived is always knowable.
+    """
+    s = comprehensive_investigation_canonical_schema()
+    item = s["properties"][COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY]["items"]
+
+    assert item["properties"]["signals"]["items"]["properties"]["score"]["type"] == ["integer", "null"]
+    assert item["properties"]["confidence"]["type"] == "integer"
+    assert item["properties"]["confidence"]["maximum"] == 100
 
 
 def test_output_contract_instructs_the_array():
