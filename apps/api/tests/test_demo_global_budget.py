@@ -1,6 +1,6 @@
 """The free demo needs a site-wide spend ceiling, not just a per-visitor one.
 
-``DEMO_FREE_SCANS_PER_IP = 2`` is a fairness control: it stops one visitor monopolising the demo. It is
+``DEMO_FREE_SCANS_PER_IP = 1`` is a fairness control: it stops one visitor monopolising the demo. It is
 not a spend control, because IPs rotate cheaply through VPNs and mobile carriers. Every free scan is a
 real model call plus 25 upstream account fetches, so with per-IP alone the total cost of the free tier
 is unbounded — and paid traffic is exactly the condition that makes abusing it worth someone's time.

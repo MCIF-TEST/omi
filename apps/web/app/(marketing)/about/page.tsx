@@ -73,8 +73,8 @@ export default function AboutPage() {
       <header>
         <span className="section-label mb-3">About</span>
         <h1 className="display text-3xl md:text-4xl font-semibold tracking-tight leading-tight mt-3">
-          Evidence-based{' '}
-          <span className="text-brand">Account Authenticity Intelligence</span>
+          Purpose-built bot detection.{' '}
+          <span className="text-brand">Not a wrapper around a chatbot.</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
           OMISPHERE scores the accounts in a comment section: how likely each
@@ -114,8 +114,8 @@ export default function AboutPage() {
         <ul className="space-y-2 text-sm">
           <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">YouTube</span> <span className="text-fg-dim">, live: full comment analysis, per-account scoring, channel intelligence</span></span></li>
           <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">X / Twitter</span> <span className="text-fg-dim">, live: per-account scoring, account fingerprinting, posting-history analysis</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">, planned: post + comment analysis</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">TikTok</span> <span className="text-fg-dim">, planned: comment-section analysis, creator audience intelligence</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">, coming soon November 1st: post + comment analysis</span></span></li>
+          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">TikTok</span> <span className="text-fg-dim">, coming soon November 1st: comment-section analysis, creator audience intelligence</span></span></li>
         </ul>
       </Card>
     </article>

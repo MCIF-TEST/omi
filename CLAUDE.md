@@ -292,7 +292,7 @@ the easy mistake, because both get called "the free scans":
 
 | | Who | Amount | Where it lives |
 |---|---|---|---|
-| Pre-login demo | Any visitor, metered per IP | **2 scans**, ≤25 accounts each | `DEMO_FREE_SCANS_PER_IP` + `DEMO_MAX_COMMENTERS`, hardcoded in `app/routes/scan_async.py` / `scan.py`, test-pinned |
+| Pre-login demo | Any visitor, metered per IP | **1 scan**, ≤25 accounts | `DEMO_FREE_SCANS_PER_IP` + `DEMO_MAX_COMMENTERS`, hardcoded in `app/routes/scan_async.py` / `scan.py`, test-pinned |
 | Signup trial | A new account | **3 credits**, then they pay | `OMI_FREE_TRIAL_CREDITS` in `render.yaml` (code default in `config.py` also 3) |
 
 The signup trial was **25**, then 5, now **3** — an explicit product decision (2026-07). At the
@@ -410,7 +410,7 @@ Stripe returns the customer after payment.
 
 ### Free pre-login scan
 
-Same select-then-scan shape as the signed-in app, X-only, capped at 25 repliers, **2 scans per IP**:
+Same select-then-scan shape as the signed-in app, X-only, capped at 25 repliers, **1 scan per IP**:
 
 - `POST /v1/scan/demo/commenters` — compile (free, no auth)
 - `POST /v1/scan/demo/score` — analyse the selection, runs the **real** engine + a real OpenRouter

@@ -23,7 +23,7 @@ const FAQ = [
   },
   {
     q: 'What about Reddit / TikTok / Instagram?',
-    a: 'YouTube and X (Twitter) are live today. Reddit and TikTok are on the roadmap and require their own API access. The detection engine is platform-agnostic; the missing piece is ingestion. We\'d rather ship two platforms with depth than four with stubs.',
+    a: 'YouTube and X (Twitter) are live today. Reddit and TikTok are coming November 1st. The detection engine is platform-agnostic; the missing piece is ingestion, not detection. We\'d rather ship platforms with depth than with stubs.',
   },
   {
     q: 'What if YouTube\'s quota is exhausted?',

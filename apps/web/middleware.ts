@@ -56,7 +56,9 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com https://*.clerk.accounts.dev",
     "font-src 'self' data:",
-    `connect-src 'self' ${clerkConnect} ${stripe} https://openrouter.ai`,
+    // The analyst runs server-side on the API, so the BROWSER never reaches the model
+    // vendor. Allowing it here widened the policy for nothing.
+    `connect-src 'self' ${clerkConnect} ${stripe}`,
     `frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://js.stripe.com https://hooks.stripe.com`,
     "worker-src 'self' blob:",
     "object-src 'none'",

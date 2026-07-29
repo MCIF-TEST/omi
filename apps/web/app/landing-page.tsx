@@ -198,7 +198,7 @@ export function LandingPage() {
               eyebrow="Intelligence · Workspace"
               icon={<Radar size={11} className="text-accent" />}
               title="Run a scan right now"
-              lede="The same engine the signed-in workspace runs. Two analyses per visitor, up to 25 accounts each, no account needed."
+              lede="The same engine the signed-in workspace runs. One free analysis per visitor, up to 25 accounts, no account needed."
             />
           </Reveal>
 
@@ -254,7 +254,8 @@ export function LandingPage() {
             <SectionHeading
               eyebrow="What you get"
               icon={<Gauge size={11} className="text-accent" />}
-              title="The evidence behind every score."
+              title="Purpose-built bot detection. Not a wrapper around a chatbot."
+              lede="Every score comes from an engine built for this one job, and every score shows the evidence it rests on."
             />
           </Reveal>
 
@@ -290,8 +291,10 @@ export function LandingPage() {
               <p className="text-sm text-fg-dim leading-relaxed mt-3">
                 OmiSphere reads <span className="text-fg font-medium">X (Twitter)</span> and{' '}
                 <span className="text-fg font-medium">YouTube</span> today: posts, videos, and the
-                accounts that comment on them. The detection engine itself is platform-agnostic, so
-                Reddit and TikTok need an ingestion adapter rather than new detection work.
+                accounts that comment on them. <span className="text-fg font-medium">Reddit</span> and{' '}
+                <span className="text-fg font-medium">TikTok</span> arrive November 1st: the
+                detection engine is already platform-agnostic, so they need an ingestion adapter
+                rather than new detection work.
               </p>
             </Card>
           </Reveal>

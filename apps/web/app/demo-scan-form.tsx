@@ -36,7 +36,7 @@ type Phase = 'idle' | 'compiling' | 'list' | 'analyzing';
  *  silently cut out. Mirrors the workspace's friendlyError, minus the signed-in-only cases. */
 function friendlyError(e: unknown, action: 'compile' | 'analyze'): string {
   if (e instanceof ApiError) {
-    // 429 = the visitor's two free scans are spent; the backend's copy carries the CTA.
+    // 429 = the visitor's free scan is spent; the backend's copy carries the CTA.
     if (e.status === 429 || e.status === 400) return e.message;
     if (e.status === 404) return 'That post could not be found. Check the link and try again.';
     if (e.status === 502 || e.status === 503) {
