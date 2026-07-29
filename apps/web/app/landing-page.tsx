@@ -290,8 +290,10 @@ export function LandingPage() {
               <p className="text-sm text-fg-dim leading-relaxed mt-3">
                 OmiSphere reads <span className="text-fg font-medium">X (Twitter)</span> and{' '}
                 <span className="text-fg font-medium">YouTube</span> today: posts, videos, and the
-                accounts that comment on them. The detection engine itself is platform-agnostic, so
-                Reddit and TikTok need an ingestion adapter rather than new detection work.
+                accounts that comment on them. <span className="text-fg font-medium">Reddit</span> and{' '}
+                <span className="text-fg font-medium">TikTok</span> arrive November 1st: the
+                detection engine is already platform-agnostic, so they need an ingestion adapter
+                rather than new detection work.
               </p>
             </Card>
           </Reveal>
