@@ -338,6 +338,51 @@ def _served_model_matches(served: str | None, expected: str | None) -> bool | No
     return got == exp or got.startswith(exp) or exp.startswith(got)
 
 
+def _clamp_int(value, *, lo: int = 0, hi: int = 100) -> int | None:
+    """An integer inside [lo, hi], or None. Never raises: a model can emit a string, a float or junk."""
+    if value is None:
+        return None
+    try:
+        return max(lo, min(hi, int(round(float(value)))))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalise_signals(raw) -> list[dict]:
+    """The eight per-account dimensions, in canonical order, whatever the model actually sent.
+
+    Defensive on purpose. This is model output reaching persistence and then the UI, so it is
+    normalised rather than trusted: unknown names are dropped, duplicates keep the first, and a
+    dimension the model omitted is materialised with ``score: None``. The UI can then render eight
+    rows unconditionally instead of branching per account.
+
+    ``score: None`` is meaningful and must survive: it means the evidence for that dimension was
+    never collected, which is different from scoring it zero. Collapsing the two would turn "we
+    could not tell" into "this looks genuine", which is the exact overclaim the protocol forbids.
+    """
+    from app.reasoning.prompts.comprehensive_investigation_template import (
+        COMPREHENSIVE_SIGNAL_NAMES,
+    )
+
+    seen: dict[str, dict] = {}
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if name not in COMPREHENSIVE_SIGNAL_NAMES or name in seen:
+            continue
+        reason = item.get("reason")
+        seen[name] = {
+            "name": name,
+            "score": _clamp_int(item.get("score")),
+            "reason": reason.strip() if isinstance(reason, str) and reason.strip() else None,
+        }
+    return [
+        seen.get(name, {"name": name, "score": None, "reason": None})
+        for name in COMPREHENSIVE_SIGNAL_NAMES
+    ]
+
+
 def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
     """Join each model-authored per-account assessment (keyed by alias) with the account's real identity.
     AI-first: the per-account OMI score + tier are the MODEL'S (it reasons them from that account's raw
@@ -367,6 +412,8 @@ def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> 
             "ref": alias,
             "omi_score": omi_score,
             "suspicion_tier": it.get("suspicion_tier"),
+            "confidence": _clamp_int(it.get("confidence")),
+            "signals": _normalise_signals(it.get("signals")),
             "assessment": it.get("assessment"),
             "citations": it.get("citations") or [],
             "resolved": commenter is not None,

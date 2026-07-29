@@ -100,11 +100,112 @@ _SECTION_SCHEMA: dict = {
 # alias, its bounded probabilistic reasoning, and citations, never a suspicion number. OmiSphere joins
 # the engine's tier/probability + real identity from the alias legend AFTER validation, so the model
 # never fabricates a per-account score. Keyed to the aliases in the evidence's alias legend.
+# The eight dimensions the model scores for EVERY account, in this order.
+#
+# This tuple is the canonical list: the prompt enumerates it, the backend validates against it, and
+# the UI labels from it. Adding, renaming or reordering one is a protocol change (new preset, new
+# hash, re-paste in the dashboard), never a copy tweak.
+#
+# Six carry over from the original detector set. `account_maturity` and `history_authenticity`
+# replace the old `memory` and `coordination`, which were NOT derivable from what the model sees:
+# memory needed cross-scan fingerprints from our database, and coordination needed cross-post
+# clustering that this protocol explicitly forbids scoring on (co-occurrence inside one comment
+# section is expected, not evidence).
+COMPREHENSIVE_SIGNAL_NAMES: tuple[str, ...] = (
+    "temporal",
+    "semantic",
+    "ai_writing",
+    "profile",
+    "voice",
+    "engagement",
+    "account_maturity",
+    "history_authenticity",
+)
+
+_SIGNAL_GUIDE = (
+    "temporal: posting rhythm. Machine-regular intervals, bursts, or a dead account that woke to "
+    "post here. | "
+    "semantic: content repetition. Templated or near-verbatim text REUSED across this account's own "
+    "history. | "
+    "ai_writing: machine-written prose. Generic, fluent, personality-free phrasing. Fluent writing "
+    "alone is NOT a tell; people write well. | "
+    "profile: profile metadata coherence. Age against follower/following balance, bio presence, "
+    "verification, display name shape. | "
+    "voice: personal voice. Lived specificity, opinions, references to a real life, versus "
+    "interchangeable filler. | "
+    "engagement: engagement farming. One-line praise, emoji-only replies, follow-for-follow, "
+    "'link in bio', DM-to-earn, giveaway and crypto pitches. | "
+    "account_maturity: age against what it has actually built. A years-old account with real "
+    "audience and history is mature; a days-old account following thousands is not. | "
+    "history_authenticity: does the posting history read like one real person's life, with varied "
+    "topics and continuity, or like filler assembled to look populated."
+)
+
+_SIGNAL_ITEM_SCHEMA: dict = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["name", "score", "reason"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "enum": list(COMPREHENSIVE_SIGNAL_NAMES),
+            "description": "which dimension this is; use these exact strings, all eight, in this order",
+        },
+        "score": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 100,
+            "description": (
+                "how strongly THIS dimension points to a BOUGHT/INAUTHENTIC account, 0-100, same "
+                "direction as omi_score (0 = this dimension looks like a genuine person, 100 = a "
+                "strong bought tell). Use null, NOT a number, when the evidence this dimension needs "
+                "was never collected, e.g. temporal/semantic/voice on an account whose posting "
+                "history is empty. A null with an honest reason is correct; a guessed number is "
+                "fabrication. Never score a dimension from another account's evidence."
+            ),
+        },
+        "reason": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 240,
+            "description": (
+                "ONE plain-English sentence a non-technical reader understands, naming the concrete "
+                "fact from THIS account that produced the score. When score is null, say exactly "
+                "what was missing ('no posting history was collected'). Never a bare metric, never "
+                "the dimension name restated."
+            ),
+        },
+    },
+}
+
 _COMMENTER_ASSESSMENT_ITEM_SCHEMA: dict = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["ref", "omi_score", "suspicion_tier", "assessment"],
+    "required": ["ref", "omi_score", "suspicion_tier", "confidence", "signals", "assessment"],
     "properties": {
+        "signals": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "description": (
+                "EXACTLY the eight dimensions below, every one present, in this order, for EVERY "
+                "account. This is the breakdown behind omi_score: score each dimension first, then "
+                "let omi_score follow from them. A dimension you cannot judge takes score null with "
+                "a reason saying so, never a filler number and never omission. "
+                + _SIGNAL_GUIDE
+            ),
+            "items": json.loads(json.dumps(_SIGNAL_ITEM_SCHEMA)),
+        },
+        "confidence": {
+            "type": "integer", "minimum": 0, "maximum": 100,
+            "description": (
+                "how much evidence backed THIS ACCOUNT'S read as a whole, 0-100. One number per "
+                "account, NOT per dimension. Driven by how much was actually collected: an account "
+                "with a full profile and a deep posting history is high confidence, an account with "
+                "no history and a null-heavy signal list is LOW confidence even when the omi_score "
+                "is confident-looking. Low confidence is not low suspicion; they are independent."
+            ),
+        },
         "ref": {
             "type": "string", "minLength": 1,
             "description": "the account alias (e.g. A1) this assessment is about; MUST resolve in the alias legend",
@@ -272,7 +373,18 @@ _OUTPUT_EXAMPLE = (
     '"campaign_reasoning": {"assessment": "No established campaign, and cross-post coordination is out of '
     'scope here, at most two low-effort promotional accounts, judged on their own profiles.", '
     '"citations": ["A2", "A3"]}, "commenter_assessments": '
-    '[{"ref": "A1", "omi_score": 12, "suspicion_tier": "low", "assessment": "A years-old account with a '
+    '[{"ref": "A1", "omi_score": 12, "suspicion_tier": "low", "confidence": 88, "signals": '
+    '[{"name": "temporal", "score": 8, "reason": "Posts land at ordinary irregular hours over '
+    'several years."}, {"name": "semantic", "score": 5, "reason": "No repeated or templated '
+    'phrasing across its own posts."}, {"name": "ai_writing", "score": 10, "reason": "Casual, '
+    'uneven phrasing with typos, not machine-smooth."}, {"name": "profile", "score": 12, '
+    '"reason": "Four-year-old account, 1,240 followers against 380 following, real bio."}, '
+    '{"name": "voice", "score": 6, "reason": "Mentions its own job and city across several '
+    'posts."}, {"name": "engagement", "score": 9, "reason": "Replies are conversational, no '
+    'follow-for-follow or link-in-bio pitches."}, {"name": "account_maturity", "score": 7, '
+    '"reason": "Four years old with a built audience and continuous history."}, {"name": '
+    '"history_authenticity", "score": 10, "reason": "Varied topics over years that read as one '
+    'person\'s life."}], "assessment": "A years-old account with a '
     "normal balance of followers to following and a varied, everyday posting history, it reads like a "
     'genuine person.", "citations": ["A1"]}, {"ref": "A2", "omi_score": 82, "suspicion_tier": "high", '
     '"assessment": "A brand-new account that follows several thousand others while almost no one follows '
@@ -409,6 +521,12 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "are STRONG tells; a varied, original, lived-in history leans genuine; (3) WEIGH genuine-vs-bought "
     "and pick the INTEGER 0-100 this account's own evidence earns. Derived from the tells that actually "
     "fired, never from a default, a round-number habit, another account's score, or the overall read; "
+    "(3b) SCORE THE EIGHT DIMENSIONS for this account in 'signals', every one present, each with its "
+    "own 0-100 and a one-sentence reason naming the fact behind it. Score the eight FIRST and let the "
+    "account's omi_score follow from them: a high omi_score must be explainable by which dimensions "
+    "fired. A dimension whose evidence was never collected takes score null with a reason saying so, "
+    "never a filler number. Then set 'confidence' (0-100) for how much evidence backed this account "
+    "overall, low when the signal list is null-heavy; "
     "(4) WRITE its 1-3 sentence plain-English reason quoting at least two of ITS OWN concrete facts, "
     "specific enough that it could not be pasted under any other account. Only after every account has "
     "completed the loop do you write the cross-account sections and the executive synthesis.\n"

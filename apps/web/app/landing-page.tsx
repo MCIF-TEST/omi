@@ -427,7 +427,7 @@ const CAPABILITIES = [
     icon: <ShieldCheck size={15} />,
     title: 'Eight behavioral signals',
     body:
-      'Posting cadence, message repetition, writing tells, profile metadata, personal-voice rate, engagement farming, account history, and fingerprint memory. Each one is a number you can audit.',
+      'Posting rhythm, content repetition, machine-written prose, profile coherence, personal voice, engagement farming, account maturity, and history authenticity. Each one comes back as its own 0-to-100 score with the reason behind it.',
     tag: null,
   },
   {

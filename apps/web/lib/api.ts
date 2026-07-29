@@ -720,6 +720,72 @@ export interface ComprehensiveSections {
   campaign_reasoning?: ComprehensiveSection;
 }
 
+// The eight dimensions the analyst scores each account on, in the order it must return them
+// (apps/api app.reasoning.prompts.comprehensive_investigation_template.COMPREHENSIVE_SIGNAL_NAMES).
+// The backend normalises whatever the model sends into exactly these eight, in this order, so the UI
+// can render eight rows unconditionally.
+export const ACCOUNT_SIGNAL_KEYS = [
+  'temporal',
+  'semantic',
+  'ai_writing',
+  'profile',
+  'voice',
+  'engagement',
+  'account_maturity',
+  'history_authenticity',
+] as const;
+export type AccountSignalKey = (typeof ACCOUNT_SIGNAL_KEYS)[number];
+
+// Reader-facing name + one line of "what is this dimension" for each. Kept in sync with the
+// _SIGNAL_GUIDE the model reads, so the explanation a customer sees matches what was scored.
+export const ACCOUNT_SIGNAL_META: Record<AccountSignalKey, { label: string; description: string }> = {
+  temporal: {
+    label: 'Posting rhythm',
+    description: 'Machine-regular intervals, sudden bursts, or a dormant account that woke up to post here.',
+  },
+  semantic: {
+    label: 'Content repetition',
+    description: 'Templated or near-identical text reused across the same account\'s own history.',
+  },
+  ai_writing: {
+    label: 'Machine-written prose',
+    description: 'Generic, fluent, personality-free phrasing. Writing well is not a tell on its own.',
+  },
+  profile: {
+    label: 'Profile coherence',
+    description: 'Account age against the follower and following balance, bio, verification, display name.',
+  },
+  voice: {
+    label: 'Personal voice',
+    description: 'Lived specifics and real opinions, versus interchangeable filler.',
+  },
+  engagement: {
+    label: 'Engagement farming',
+    description: 'One-line praise, emoji-only replies, follow-for-follow, link-in-bio and giveaway pitches.',
+  },
+  account_maturity: {
+    label: 'Account maturity',
+    description: 'Age measured against what the account has actually built: audience, history, continuity.',
+  },
+  history_authenticity: {
+    label: 'History authenticity',
+    description: 'Whether the posting history reads like one real life or like filler assembled to look populated.',
+  },
+};
+
+// One scored dimension behind an account's OMI score. `score` is 0-100 in the SAME direction as the
+// OMI score (0 = reads like a genuine person, 100 = a strong bought tell).
+//
+// `score: null` is meaningful and is NOT zero: it means the evidence this dimension needs was never
+// collected (an account with no posting history cannot be scored on rhythm). Rendering it as 0 would
+// turn "we could not tell" into "this looks genuine", which is exactly the overclaim the protocol
+// forbids. `reason` is the model's one plain-English sentence naming the fact that produced the score.
+export interface AccountSignal {
+  name: AccountSignalKey;
+  score: number | null;
+  reason: string | null;
+}
+
 // One per-account reasoning row from the comprehensive response, after the backend echo-join. `ref` is
 // the account alias the model cited; identity + engine numbers are joined server-side (echo discipline).
 export interface CommenterAssessment {
@@ -729,6 +795,13 @@ export interface CommenterAssessment {
   // secondary reference, never the account's score.
   omi_score?: number;
   suspicion_tier?: Tier;
+  // The eight dimensions behind this account's OMI score, always all eight and always in
+  // ACCOUNT_SIGNAL_KEYS order (the backend normalises the model's array before persisting). Absent
+  // only on assessments generated before per-signal scoring shipped.
+  signals?: AccountSignal[];
+  // How much evidence this account's read rests on, 0-100. Distinct from the score: a confident 12
+  // and an uncertain 12 are different findings. Always knowable, so never null.
+  confidence?: number;
   assessment: string;
   citations: string[];
   resolved: boolean;
