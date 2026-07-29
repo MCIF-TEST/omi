@@ -33,7 +33,13 @@ const PAID = ['active', 'trialing'];
  * present) so the server asks Stripe what was paid and grants anything the webhook didn't. Both
  * paths claim the same per-invoice row, so this can never double-credit.
  */
-export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }) {
+export function ManageSubscriptionButton({
+  initial,
+  isAdmin = false,
+}: {
+  initial: BillingStatus;
+  isAdmin?: boolean;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const justPaid = params?.get('billing') === 'success';
@@ -110,7 +116,9 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       });
       if (!url || typeof url !== 'string' || !url.startsWith('https://')) {
         setError(
-          'Stripe returned no checkout URL. Confirm OMI_STRIPE_SECRET_KEY, OMI_STRIPE_PRICE_ID (price_…), and OMI_PUBLIC_BASE_URL on the API service.',
+          isAdmin
+            ? 'Stripe returned no checkout URL. Confirm OMI_STRIPE_SECRET_KEY, OMI_STRIPE_PRICE_ID (price_…), and OMI_PUBLIC_BASE_URL on the API service.'
+            : 'Checkout could not be opened. Nothing has been charged. Please try again shortly.',
         );
         setPending(false);
         return;
@@ -123,7 +131,11 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
         if (e.status === 401) {
           message = 'You need to sign in again before subscribing.';
         } else if (e.status === 503) {
-          message = `${message} Check API env: OMI_STRIPE_SECRET_KEY (sk_…), OMI_STRIPE_PRICE_ID (price_…, not a dollar amount), OMI_PUBLIC_BASE_URL (web https URL).`;
+          // The 503 body already explains the misconfiguration; only an admin can act on the
+          // env-var detail, and only an admin should be reading it.
+          message = isAdmin
+            ? `${message} Check API env: OMI_STRIPE_SECRET_KEY (sk_…), OMI_STRIPE_PRICE_ID (price_…, not a dollar amount), OMI_PUBLIC_BASE_URL (web https URL).`
+            : 'Subscriptions are temporarily unavailable. Nothing has been charged.';
         }
       }
       setError(message);
@@ -132,14 +144,23 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
   };
 
   if (!status.configured) {
-    return (
+    // Two audiences, two messages. A customer gets a plain apology; only an admin sees the env-var
+    // names, because the old text showed every user OMI_STRIPE_SECRET_KEY and read as though card
+    // payments were a product limitation rather than a server that has not been configured.
+    return isAdmin ? (
       <p className="text-sm text-fg-mute">
-        Card payments aren&apos;t switched on for this deployment yet. On the API service set{' '}
-        <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span> (sk_…),{' '}
-        <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span> (price_…, not a dollar amount), and{' '}
-        <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web https URL), then
-        redeploy. For instant crediting also register the webhook and set{' '}
-        <span className="font-mono text-2xs">OMI_STRIPE_WEBHOOK_SECRET</span> (whsec_…).
+        Billing is not configured on this deployment. On the API service set{' '}
+        <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span> (sk_…) and{' '}
+        <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span> (a price_… id, not a dollar
+        amount), plus <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web
+        https URL), then redeploy. Call{' '}
+        <span className="font-mono text-2xs">/v1/billing/preflight</span> on the API host to see
+        which one is missing.
+      </p>
+    ) : (
+      <p className="text-sm text-fg-mute">
+        Subscriptions are not available just yet. Your existing credits still work, and nothing has
+        been charged. Please check back shortly.
       </p>
     );
   }

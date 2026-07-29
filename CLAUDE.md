@@ -358,6 +358,21 @@ still credits every payment, so `ready` stays true and the checks report degrade
 this deployment received, and excludes reconciliation's own `credit_grant:` rows from the same table
 so it can never claim a healthy webhook on a server that has never received one.
 
+**Checkout survives a payment method Stripe has not approved yet.** A new Stripe account commonly has
+Link live while Cards are still in review, and asking for `payment_method_types=[link, card]` makes
+Stripe reject the whole Session: the account can take money, our hardcoded list is what refuses it.
+So a payment-method rejection retries once **without** `payment_method_types`, which makes Stripe
+offer whatever the dashboard actually has enabled. `OMI_STRIPE_PAYMENT_METHOD_TYPES` (default
+`link,card`) is still the explicit override. Pinned by
+`tests/test_billing_checkout_payment_methods.py`, which also asserts the retry keeps the metadata:
+a fallback that dropped `omi_user_id` would produce a paid invoice crediting nobody.
+
+**The "not configured" state has two messages, chosen by `is_admin`.** It used to show every
+customer `OMI_STRIPE_SECRET_KEY` and say "Card payments aren't switched on", which reads as a product
+limitation rather than an unconfigured server, and confused the product owner into thinking Stripe
+had blocked cards. Customers now get a plain apology; only admins see env-var names, on all three
+branches (unconfigured, no-URL, 503).
+
 Two pieces of middleware sit in front of the webhook and neither currently breaks it, but both are
 worth knowing before you change them:
 

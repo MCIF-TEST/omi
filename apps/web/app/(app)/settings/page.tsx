@@ -74,7 +74,7 @@ export default async function SettingsPage() {
             : `${billing.credits_per_period} credits a month, one credit covers up to 50 accounts, so that is up to ${(billing.credits_per_period * 50).toLocaleString()} accounts analysed.`}
         </p>
         <Suspense fallback={null}>
-          <ManageSubscriptionButton initial={billing} />
+          <ManageSubscriptionButton initial={billing} isAdmin={user.is_admin} />
         </Suspense>
       </Card>
 
