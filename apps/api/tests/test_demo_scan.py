@@ -287,6 +287,42 @@ def test_the_free_scan_runs_the_real_analyst_and_inlines_its_reading(client, mon
     assert body["analyst_assessment"]["headline"] == "Three accounts look bought."
 
 
+def test_the_demo_never_ships_the_admin_only_signal_breakdown(client, monkeypatch):
+    """A demo visitor is anonymous, so never an admin.
+
+    The eight-dimension breakdown is admin-only while the feature is unfinished, and this is an
+    UNAUTHENTICATED route, so `is_admin=True` must not be reachable on it at all. The per-account OMI
+    score, tier and written read still come back: that is what the visitor is here to see.
+    """
+    from app.reasoning import analyst as A
+
+    def fake_assess(payload, *, ref, platform, settings=None, capture=None):
+        return {
+            "headline": "Two accounts look bought.", "assessment": "Reasoning here.",
+            "commenter_assessments": [{
+                "ref": "A1", "handle": "@a", "omi_score": 88, "suspicion_tier": "high",
+                "confidence": 90, "resolved": True,
+                "signals": [{"name": "temporal", "score": 90, "reason": "machine-regular cadence"}],
+                "assessment": "Posts on a mechanically regular cadence.", "citations": ["A1"],
+            }],
+        }
+
+    monkeypatch.setattr(A, "analyst_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr(A, "assess_payload", fake_assess)
+
+    listing = _compile(client, "10.0.0.53").json()
+    picked = [c["external_id"] for c in listing["commenters"]][:2]
+    body = _score(client, "10.0.0.53", picked).json()
+
+    row = body["analyst_assessment"]["commenter_assessments"][0]
+    assert "signals" not in row, "the demo leaked the admin-only signal breakdown"
+    assert "confidence" not in row
+    # What the visitor IS meant to see is untouched.
+    assert row["omi_score"] == 88
+    assert row["suspicion_tier"] == "high"
+    assert row["assessment"].startswith("Posts on a mechanically regular")
+
+
 def test_a_failing_analyst_still_returns_the_scan(client, monkeypatch):
     """The assessment is a bonus on top of a finished scan. If the model call fails, the visitor
     still gets every deterministic per-account score — and has still spent only one free scan."""

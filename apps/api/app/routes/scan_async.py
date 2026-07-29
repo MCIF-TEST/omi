@@ -1394,7 +1394,10 @@ def _demo_assessment(result, settings: Settings) -> dict | None:
         return None
     if assessment is None:
         log.info("demo: analyst returned no assessment (disabled, unconfigured, or call failed)")
-    return assessment
+    # A demo visitor is anonymous, so never an admin: the eight-signal breakdown is filtered out the
+    # same way it is for a signed-in customer. Hardcoded rather than plumbed from a user, because
+    # there is no user here and `is_admin=True` must not be reachable on an unauthenticated route.
+    return _analyst.assessment_for_viewer(assessment, is_admin=False)
 
 
 @router.post("/demo/score", response_model=ComprehensiveScanResult)

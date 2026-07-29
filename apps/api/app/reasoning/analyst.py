@@ -1148,6 +1148,41 @@ def cached_assessment(inv) -> dict | None:
     return None
 
 
+#: Per-account fields behind the admin gate. The eight-signal breakdown is an UNFINISHED feature
+#: (product decision 2026-07-29): a customer sees each account's OMI score, tier and written read,
+#: and not the per-dimension scoring behind it. `confidence` is part of the same block and goes with
+#: it. Flip the feature on by emptying this set; nothing else needs touching.
+ADMIN_ONLY_ACCOUNT_FIELDS = frozenset({"signals", "confidence"})
+
+
+def assessment_for_viewer(assessment: dict | None, *, is_admin: bool) -> dict | None:
+    """The assessment as this viewer is allowed to see it.
+
+    Filtered on SERVE, never on persist, and that distinction is the whole point. The signals stay
+    in ``payload_json``, so the day the breakdown ships to customers every investigation already
+    generated has one, and no model output anyone paid for is thrown away. Stripping at persist time
+    would make the gate irreversible for all history.
+
+    It also stops a 150-account investigation shipping the better part of 150 KB of JSON that the
+    page renders nowhere: eight dimensions per account, each with a reason up to 240 chars.
+
+    Returns a copy. Mutating the cached entry in place would poison it for the next reader (it is the
+    live ``payload_json`` object) and could be flushed back to the database by SQLAlchemy.
+    """
+    if is_admin or not isinstance(assessment, dict):
+        return assessment
+    rows = assessment.get("commenter_assessments")
+    if not isinstance(rows, list) or not rows:
+        return assessment
+    out = dict(assessment)
+    out["commenter_assessments"] = [
+        {k: v for k, v in r.items() if k not in ADMIN_ONLY_ACCOUNT_FIELDS}
+        if isinstance(r, dict) else r
+        for r in rows
+    ]
+    return out
+
+
 def entry_is_model_backed(entry: dict | None) -> bool:
     """Whether a CACHED analyst entry is a real model-backed assessment (vs the deterministic Floor).
     Prefer the explicit trace flag; fall back to the provider label for entries persisted before it."""
