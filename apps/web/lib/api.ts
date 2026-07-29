@@ -846,12 +846,12 @@ export interface AnalystAssessment {
     evidence_represented_accounts?: number | null;
     evidence_omitted_accounts?: number | null;
     // transport / model provenance
-    provider?: string;                    // "openrouter" | "huggingface"
+    provider?: string;                    // the analyst backend that served this run
     requested_model?: string | null;      // e.g. "@preset/omi-master-v1"
     served_model?: string | null;         // the model the gateway actually ran, e.g. "openai/gpt-5-mini"
-    served_model_expected?: string | null;   // the model we expect OpenRouter to serve (GPT-5 Mini)
+    served_model_expected?: string | null;   // the model this deployment expects to be served
     served_model_verified?: boolean | null;  // true = served model IS the expected one; false = swapped; null = n/a
-    openrouter_preset?: string | null;    // "omi-master-v1"
+    openrouter_preset?: string | null;    // the compiled protocol preset id
     master_prompt_version?: string | null;
     master_prompt_hash?: string | null;   // "map:…". What Omi expects the preset to contain
     canonical_schema_id?: string | null;
@@ -864,7 +864,7 @@ export interface AnalystAssessment {
     comprehensive_structurally_valid?: boolean;
     canonical_validation_errors?: string[] | null;  // why a 200 model response failed schema → Floor
     // call metrics (authoritative gateway usage)
-    endpoint_request_id?: string | null;  // OpenRouter generation id
+    endpoint_request_id?: string | null;  // upstream generation id
     endpoint_latency_ms?: number | null;
     endpoint_cost_usd?: number | null;
     input_tokens?: number | null;

@@ -14,7 +14,7 @@ const STAGES = [
 
 /**
  * The AI-analysis loading screen. It appears the moment an investigation opens and stays until the
- * OpenRouter response lands, so a two-minute read feels deliberate rather than broken. Blue is the
+ * model response lands, so a two-minute read feels deliberate rather than broken. Blue is the
  * identity; purple marks the AI. No glow, no glass.
  */
 export function AnalystLoading({

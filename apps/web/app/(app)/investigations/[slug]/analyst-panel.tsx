@@ -26,7 +26,7 @@ const POLL_INTERVAL_MS = 2500;
 // backend's one-shot auto-heal of an inconclusive/floored result. We hold the loading screen and
 // poll until it lands. We never force a re-run from here. ~520s of polling matches the server's
 // 500s generation timeout, so the wait ends when the real result does.
-// ~10 min of polling. A batched run issues its OpenRouter calls ONE AT A TIME (so the first accounts
+// ~10 min of polling. A batched run issues its model calls ONE AT A TIME (so the first accounts
 // land as early as possible), which means the wall-clock total grows with the batch count, but this
 // budget RESETS every time a new batch's results land (see the 'partial' branch), so it is really
 // "10 minutes without visible progress". A scan that keeps delivering batches is never cut off here.
@@ -182,7 +182,7 @@ export function AnalystPanel({ slug }: { slug: string }) {
         </p>
       ) : pending && !assessment ? (
         // The analyst runs automatically for every investigation. Hold a real loading screen while
-        // the OpenRouter response is on its way, it fills in the moment the result lands. Once a
+        // the model response is on its way, it fills in the moment the result lands. Once a
         // batched run's FIRST batch lands, the partial assessment renders below instead (with a
         // progress strip), so results appear first-to-last while later batches still generate.
         <AnalystLoading elapsedSec={elapsedSec} />
@@ -443,7 +443,7 @@ function LegitimateHypothesis({ text }: { text?: string | null }) {
   );
 }
 
-// Whether the AI (OpenRouter) actually authored this assessment. Prefer the explicit trace flag; fall back to the
+// Whether the AI model actually authored this assessment. Prefer the explicit trace flag; fall back to the
 // governance provider string for assessments persisted before the trace existed. When false, the
 // synthesis prose is the deterministic Floor's, it must NEVER be shown as AI reasoning.
 function isModelBacked(a: AnalystAssessment): boolean {
@@ -473,8 +473,6 @@ function VerificationPanel({
   const t = a.investigation_trace ?? {};
   const c = a.completion;
   const aiBacked = t.model_backed === true;
-  const isOpenRouter = (t.provider ?? '').toLowerCase() === 'openrouter'
-    || /openrouter/i.test(provider ?? '');
   const rows: [string, React.ReactNode][] = [
     ['Provider', t.provider ?? provider ?? '-'],
     ['Served model', t.served_model ?? t.requested_model ?? '-'],
@@ -499,7 +497,7 @@ function VerificationPanel({
     ['Output tokens', t.output_tokens ?? '-'],
     ['Total tokens', t.total_tokens ?? '-'],
     ['Estimated cost', fmtCost(t.endpoint_cost_usd)],
-    ['OpenRouter request id', t.endpoint_request_id ?? '-'],
+    ['Request id', t.endpoint_request_id ?? '-'],
     ['HTTP status', t.response_status ?? '-'],
     ['Endpoint error', t.endpoint_error ?? '-'],
     ['Generated at', generatedAt ?? '-'],
@@ -528,7 +526,7 @@ function VerificationPanel({
             }`}
           >
             {aiBacked
-              ? `🟢 AI Investigation (${isOpenRouter ? 'OpenRouter' : (t.provider ?? 'model')})`
+              ? '🟢 AI Investigation'
               : '🟡 Deterministic Floor'}
           </span>
           <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">
@@ -572,14 +570,14 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
 }
 
 function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
-  // Product-cutover rule: only AI-authored (OpenRouter) assessments render as AI reasoning. If the model
+  // Product-cutover rule: only AI-authored assessments render as AI reasoning. If the model
   // was not reached, the deterministic Floor stood in. We must NOT present its synthesized verdict /
   // headline / assessment / evidence as though the AI wrote it.
   if (!isModelBacked(a)) return <AiUnavailable a={a} />;
 
   return (
     <div className="space-y-5">
-      {/* ── LEAD INVESTIGATOR SYNTHESIS (Omi Analyst · OpenRouter) ─────────── */}
+      {/* ── LEAD INVESTIGATOR SYNTHESIS (Omi Analyst) ──────────────────────── */}
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <TierBadge tier={a.suspicion_tier as Tier} />
