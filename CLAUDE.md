@@ -445,6 +445,22 @@ The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0)
 Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
 limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
 
+### The paid plan is called "Omi Premium Member"
+
+`PLAN_NAME` in `apps/web/lib/plan.ts` is the single source, used by the pricing card, the landing
+page's closing pitch, the settings billing card, the subscription status row (an active subscriber is
+shown the membership name rather than the word "Active"), and the subscribe button ("Become an Omi
+Premium Member · $13.99/mo").
+
+Deliberately **not** an env var, unlike the credit and price figures. Those exist as env vars because
+they can disagree with what the server actually charges and grants; a plan name cannot, so a second
+copy in Render would be a liability rather than a safeguard.
+
+**It does need to match the product name in the Stripe dashboard**, which is a dashboard change and
+not a code one. The site names the plan, then Stripe Checkout shows whatever the product is called,
+and a customer seeing two different names at the moment they hand over a card reasonably wonders what
+they are buying. Nothing in the repo can detect that drift.
+
 ### Billing: Stripe ($13.99/mo, 20 credits), webhook + API backstop
 
 Setup walkthrough: `docs/stripe-setup.md`. **Credits arrive by two independent routes, on purpose.**
