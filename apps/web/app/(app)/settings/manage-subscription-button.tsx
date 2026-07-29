@@ -123,7 +123,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
         if (e.status === 401) {
           message = 'You need to sign in again before subscribing.';
         } else if (e.status === 503) {
-          message = `${message} Check API env: OMI_STRIPE_SECRET_KEY (sk_…), OMI_STRIPE_PRICE_ID (price_… not 9.99), OMI_PUBLIC_BASE_URL (web https URL).`;
+          message = `${message} Check API env: OMI_STRIPE_SECRET_KEY (sk_…), OMI_STRIPE_PRICE_ID (price_…, not a dollar amount), OMI_PUBLIC_BASE_URL (web https URL).`;
         }
       }
       setError(message);
@@ -136,7 +136,7 @@ export function ManageSubscriptionButton({ initial }: { initial: BillingStatus }
       <p className="text-sm text-fg-mute">
         Card payments aren&apos;t switched on for this deployment yet. On the API service set{' '}
         <span className="font-mono text-2xs">OMI_STRIPE_SECRET_KEY</span> (sk_…),{' '}
-        <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span> (price_…, not 9.99), and{' '}
+        <span className="font-mono text-2xs">OMI_STRIPE_PRICE_ID</span> (price_…, not a dollar amount), and{' '}
         <span className="font-mono text-2xs">OMI_PUBLIC_BASE_URL</span> (your web https URL), then
         redeploy. For instant crediting also register the webhook and set{' '}
         <span className="font-mono text-2xs">OMI_STRIPE_WEBHOOK_SECRET</span> (whsec_…).

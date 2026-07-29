@@ -11,3 +11,12 @@ export const TRIAL_CREDITS = Number(process.env.NEXT_PUBLIC_TRIAL_CREDITS || 3);
 
 /** Credits granted monthly while a subscription is active (OMI_MONTHLY_CREDIT_GRANT). */
 export const MONTHLY_CREDITS = Number(process.env.NEXT_PUBLIC_MONTHLY_CREDITS || 20);
+
+/**
+ * What the subscription costs, as displayed. Mirrors the API's
+ * OMI_SUBSCRIPTION_PRICE_DISPLAY, which is itself display-only: the amount a customer is actually
+ * charged lives in the Stripe Price that OMI_STRIPE_PRICE_ID points at, so no value here can ever
+ * charge the wrong number. It CAN advertise the wrong number, which is why the pricing page reads
+ * this instead of hardcoding a figure, and why test_deployed_credit_contract fails on drift.
+ */
+export const SUBSCRIPTION_PRICE = process.env.NEXT_PUBLIC_SUBSCRIPTION_PRICE || '$13.99';

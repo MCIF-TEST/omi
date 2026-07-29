@@ -196,7 +196,7 @@ class Settings(BaseSettings):
     # stops anyone who knows the URL from POSTing themselves credits, so an unset value disables the
     # webhook rather than trusting unverified payloads.
     stripe_webhook_secret: str | None = None
-    # price_…  The Stripe Price of the $9.99/month subscription. Created once in the dashboard; the
+    # price_…  The Stripe Price of the monthly subscription. Created once in the dashboard; the
     # AMOUNT LIVES IN STRIPE, never here — this server never sends an amount, so a bug in our code
     # cannot charge the wrong price.
     stripe_price_id: str | None = None
@@ -207,7 +207,7 @@ class Settings(BaseSettings):
     stripe_payment_method_types: str = "link,card"
     # Display-only. What the UI prints next to the subscribe button; the real charge is whatever the
     # Stripe Price says. Keep them in agreement — this string proves nothing.
-    subscription_price_display: str = "$9.99"
+    subscription_price_display: str = "$13.99"
 
     # -----------------------------------------------------------------------
     # LLM enhancement layer (Phase 7).

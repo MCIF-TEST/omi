@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Check, Sparkles, Zap } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TRIAL_CREDITS } from '@/lib/plan';
+import { TRIAL_CREDITS, SUBSCRIPTION_PRICE } from '@/lib/plan';
 
 export const metadata = { title: 'Pricing. OMISPHERE' };
 
@@ -62,7 +62,7 @@ export default function PricingPage() {
           <div className="relative">
             <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
               <span className="stat-value text-5xl font-bold tracking-tight">
-                <span className="text-brand">$9.99</span>
+                <span className="text-brand">{SUBSCRIPTION_PRICE}</span>
                 <span className="text-base text-fg-dim font-normal ml-1.5">/month</span>
               </span>
               <span className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-[0.16em] text-accent uppercase border border-accent/30 bg-accent/10 px-3 py-1.5 rounded-full">

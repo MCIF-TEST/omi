@@ -45,7 +45,7 @@
 # which host to give you, and says so rather than printing a wrong one.
 #
 # Optional on omisphere-api:
-#   OMI_SUBSCRIPTION_PRICE_DISPLAY   $9.99   (UI label only)
+#   OMI_SUBSCRIPTION_PRICE_DISPLAY   $13.99  (UI label only)
 #   OMI_MONTHLY_CREDIT_GRANT         20
 #
 # NOT used by current billing:
@@ -147,7 +147,7 @@ services:
       # This is NOT the publishable key (pk_…). pk_ keys cannot create Checkout sessions.
       - key: OMI_STRIPE_SECRET_KEY
         sync: false
-      # REQUIRED. Recurring monthly Price id (price_…) for $9.99/mo (or your amount).
+      # REQUIRED. Recurring monthly Price id (price_…) for $13.99/mo (or your amount).
       # Must be from the SAME mode as OMI_STRIPE_SECRET_KEY (test vs live).
       # Create: Product catalogue → Add product → recurring monthly → copy price id.
       - key: OMI_STRIPE_PRICE_ID
@@ -163,7 +163,7 @@ services:
         sync: false
       # Display only — label next to Subscribe. The real charge is the Stripe Price.
       - key: OMI_SUBSCRIPTION_PRICE_DISPLAY
-        value: '$9.99'
+        value: '$13.99'
       # REQUIRED for instant crediting. The SIGNING SECRET (whsec_…) shown on the
       # endpoint's page in Stripe — not the API key, not the endpoint id. While
       # empty the webhook route is inert (acks with 200, credits nothing) and
@@ -300,6 +300,11 @@ services:
         value: '3'
       - key: NEXT_PUBLIC_MONTHLY_CREDITS
         value: '20'
+      # Pricing-page copy only. The real charge is the Stripe Price behind
+      # OMI_STRIPE_PRICE_ID; this must match OMI_SUBSCRIPTION_PRICE_DISPLAY on the
+      # API or the site advertises a number customers are not charged.
+      - key: NEXT_PUBLIC_SUBSCRIPTION_PRICE
+        value: '$13.99'
       # Same WEB public URL as on the API (no trailing slash). Used by the
       # browser app for absolute links; must match where users actually land.
       - key: OMI_PUBLIC_BASE_URL
