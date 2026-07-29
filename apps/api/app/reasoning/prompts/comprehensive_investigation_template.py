@@ -390,10 +390,11 @@ _OUTPUT_EXAMPLE = (
     '"assessment": "A brand-new account that follows several thousand others while almost no one follows '
     "it back, with no real posting history beyond a couple of near-identical promotional replies, a "
     'profile much more consistent with a promotional amplifier than an ordinary user.", "citations": '
-    '["A2"]}, {"ref": "A3", "omi_score": 55, "suspicion_tier": "elevated", "assessment": "A fairly new '
-    "account with very little posting history and one promotional-sounding reply, so it is hard to read "
-    "confidently; its wording loosely echoes another promotional account (A2), which nudges the score up "
-    'a little, but it is judged mainly on its own thin evidence.", "citations": ["A3"]}]}'
+    '["A2"]}, {"ref": "A3", "omi_score": 38, "suspicion_tier": "moderate", "assessment": "A fairly new '
+    "account whose posting history was not collected, so the only things to read are its profile and one "
+    "promotional-sounding reply, and a young account with a thin profile is ordinary enough that it "
+    "cannot be scored higher than this without the behavioural evidence that was never gathered.\", "
+    '"citations": ["A3"]}]}'
 )
 
 
@@ -518,9 +519,22 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "amplifier shape, strongest on a young account with little content; an empty or engagement-only "
     "history (nothing but one-line praise/emoji/reactions), templated or verbatim-repeated content, and "
     "spam/scam/promo intent ('link in bio', 'DM to earn', 'follow for follow', giveaway/crypto pitches) "
-    "are STRONG tells; a varied, original, lived-in history leans genuine; (3) WEIGH genuine-vs-bought "
-    "and pick the INTEGER 0-100 this account's own evidence earns. Derived from the tells that actually "
-    "fired, never from a default, a round-number habit, another account's score, or the overall read; "
+    "are STRONG tells; a varied, original, lived-in history leans genuine. Sort what you found into "
+    "DISCRIMINATIVE tells (hard to produce by accident: text reused across its own posts, scheduler-"
+    "regular intervals, a history with no topical continuity, explicit farming or scam templates, a "
+    "profile contradicting its own metadata) and AMBIENT traits that are ordinary among real people "
+    "(few followers, a new account, few posts, no bio, unverified, short or enthusiastic comments, "
+    "emoji, agreement with the post, fluent or formal prose, consistent times of day, a plain handle). "
+    "Ambient traits alone cap the account in the moderate band, however many of them you count; "
+    "(3) WEIGH genuine-vs-bought and pick the INTEGER 0-100 this account's own evidence earns. Start "
+    "from the base rate, which is that most commenters are real, and move up only as far as named cells "
+    "force you. Before writing 50 or more, name the most plausible innocent explanation and find the "
+    "cell that rules it out; if none does, stay at 49 or below and say which question the evidence "
+    "could not answer. 50-74 needs two INDEPENDENT discriminative tells (restatements of one "
+    "observation count once); 75-100 needs several that converge AND a reason the innocent explanation "
+    "fails. An account whose history was never collected cannot exceed 49 on profile metadata alone. "
+    "Derived from the tells that actually fired, never from a default, a round-number habit, another "
+    "account's score, or the overall read; and between two defensible numbers take the lower; "
     "(3b) SCORE THE EIGHT DIMENSIONS for this account in 'signals', every one present, each with its "
     "own 0-100 and a one-sentence reason naming the fact behind it. Score the eight FIRST and let the "
     "account's omi_score follow from them: a high omi_score must be explainable by which dimensions "
@@ -530,6 +544,14 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "(4) WRITE its 1-3 sentence plain-English reason quoting at least two of ITS OWN concrete facts, "
     "specific enough that it could not be pasted under any other account. Only after every account has "
     "completed the loop do you write the cross-account sections and the executive synthesis.\n"
+    "  (5) THE DISTRIBUTION CHECK, once, after the last account and before you write anything else. Look "
+    "at the scores you just produced as a set. A real comment section comes out mostly low with a few "
+    "genuine outliers. If more than roughly a third of the accounts landed at 50 or above, go back "
+    "through those accounts and, for each, name the specific discriminative cell that earned it; lower "
+    "the ones where you can only point at ambient traits. Do the same for any account you put at 75 or "
+    "above without being able to say why the innocent explanation fails. A mostly-high set of scores is "
+    "far more often a calibration failure than a captured section, and correcting it here is part of the "
+    "method, not an admission of error.\n"
     "  ★ account_reasoning + commenter_assessments, THE MISSION. Every account gets its own omi_score "
     "(0-100) + suspicion_tier in commenter_assessments, derived in its own Dossier Loop pass, two "
     "accounts that commented on the same post can and usually do score differently, because real "

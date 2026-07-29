@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1593 passed, 8 skipped, 2 failed** (5m55s), both failures pre-existing and listed below.
+**1633 passed, 8 skipped, 2 failed** (5m53s), both failures pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -251,6 +251,65 @@ still returns every deterministic score, and a free scan must not come back empt
 The **live model will not emit any of this until the recompiled protocol is pasted into the
 OpenRouter preset** (`omi-master-v1`). Until then the schema accepts the old shape, every account
 renders without a breakdown, and nothing errors.
+
+### The breakdown is admin-only while it is unfinished
+
+Product decision (2026-07-29): a customer sees each account's OMI score, tier and written read. The
+eight-dimension scoring behind it is **admin-only** for now. `ADMIN_ONLY_ACCOUNT_FIELDS` in
+`analyst.py` is the whole gate (`signals` + `confidence`); empty that set to ship the feature.
+
+**Filtered on SERVE, never on persist**, and that is the load-bearing part. The signals stay in
+`payload_json`, so the day the breakdown ships every investigation already generated has one and no
+model output anyone paid for is discarded. Stripping at persist time would make the gate irreversible
+for all history. It also stops a 150-account investigation shipping ~150 KB of JSON the page renders
+nowhere.
+
+`assessment_for_viewer()` returns a **copy**, including new row dicts. It is handed the live
+`payload_json` object, so filtering in place would strip the signals from the row SQLAlchemy may flush
+back: one customer page view would permanently delete the data, for admins too.
+
+Applied at all four return sites in `routes/reasoning.py`, and hardcoded `is_admin=False` on the demo
+(`scan_async._demo_assessment`) because that route is unauthenticated and `True` must not be reachable
+there. `tests/test_signals_are_admin_only.py` includes a **source-level guard** that fails if any route
+reads `entry["assessment"]` without passing it through the filter, since a fifth return path added
+later would leak silently.
+
+No frontend gate is needed: `SignalBreakdown` already renders nothing when `signals` is absent, which
+is also how it handles investigations generated before per-signal scoring existed.
+
+### Score discipline: a high score has to be earned (constitution v9)
+
+The analyst was too willing to hand out elevated and high scores. The fix is deliberately **not** a cap
+on the numbers, which would just relocate the error. `_SCORE_DISCIPLINE` (`constitution.py`) makes a
+high score expensive to reach:
+
+- **Start from the base rate.** Most commenters are real. Every account starts low and moves up only as
+  named cells force it.
+- **The two errors are not equal.** Calling a real person bought is the expensive mistake, because the
+  customer cannot check it and one bad high score discredits every other number on the page. On
+  balanced evidence the lower score is *correct*, not merely cautious.
+- **Ambient traits vs discriminative evidence.** Few followers, a new account, no bio, unverified,
+  short or enthusiastic comments, emoji, agreement, fluent or formal prose, consistent posting hours, a
+  plain handle: all ordinary among real people, all named individually, and they cap the account in the
+  moderate band however many you stack. Fluent writing is called out explicitly, since treating it as a
+  tell systematically misjudges people who write well and second-language speakers (who often write
+  *more* formally, not less).
+- **Convergence by band.** 50-74 needs two *independent* discriminative indicators; 75-100 needs several
+  converging plus a statable reason the innocent explanation fails. Three restatements of one
+  observation count once.
+- **The alternative-explanation test** gates anything at 50 or above, and **thin evidence caps at 49**
+  (an account whose history was never collected cannot be strongly accused on profile metadata alone).
+- **No contagion**, and a **distribution self-check** as step (5) of the Dossier Loop: a mostly-high run
+  is more often a calibration failure than a captured section.
+
+Two things this also fixed: the worked example used to score A3 at 55 *explicitly because its wording
+echoed another promotional account*, teaching exactly the contagion the protocol forbids (now a capped
+moderate read that names what was not collected); and the constitution block count moved 15 → 16, which
+is pinned in `test_ai_readiness.py`.
+
+Pinned by `tests/test_score_discipline.py` (27 tests). Protocol recompiled to
+**`map:fd41662f467d671b1285c2ef`, 71,370 chars**, zero em dashes, all drift guards green.
+`package_hash` pin moved to `pkg:2e379bd6e51621295b927a13`.
 
 ### Evidence completeness — what the model is allowed to see
 

@@ -1,6 +1,6 @@
 # OMI Behavioral Analyst. Intelligence Library & Handbook
 
-> GENERATED from `app.reasoning.prompts.behavioral` (library v1, constitution v8). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`. This is the REFERENCE IMPLEMENTATION every future specialist library follows.
+> GENERATED from `app.reasoning.prompts.behavioral` (library v1, constitution v9). Do not hand-edit; regenerate via `python -m app.reasoning.prompts.export`. This is the REFERENCE IMPLEMENTATION every future specialist library follows.
 
 ## 1. Mission
 - **Purpose:** Interpret a subject's behavioral signals into cited, probabilistic findings. What the behavior is consistent with, weighed both ways, without ever asserting a verdict.
@@ -105,6 +105,6 @@ Subject: account posting every 30 minutes for six weeks, with fast human replies
 Counterexample (what NOT to emit): 'mechanical cadence therefore bot'. Regularity is never guilt; the twin was never tested.
 
 ## 7. Prompt versions
-- live `v1` (active, unchanged) · library `lib-v1` (inert) · **`lib-v2`** (inert, this library's improvement) `ph:cbd2eb54ca88229383c9e6d83cc1e3fc`
+- live `v1` (active, unchanged) · library `lib-v1` (inert) · **`lib-v2`** (inert, this library's improvement) `ph:fa943ca376a82fb2b0302dcf8a0104a5`
 - lib-v2 adds: explicit cadence classification + windows, archetype matching with counter-indicators, the benign-twin discipline, history-shape reading. Contract, constitution, and output schema unchanged.
 
