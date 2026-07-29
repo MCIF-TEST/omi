@@ -232,6 +232,24 @@ def coerce_comprehensive_model_output(
         _overall = None
     ca = out.get("commenter_assessments")
     if isinstance(ca, list):
+        # Everything the item schema declares beyond the load-bearing four rides through untouched.
+        #
+        # This was a hardcoded allow-list, and that made it a silent field shredder: any property
+        # added to the per-account schema afterwards reached this function and left it deleted. That
+        # is exactly what happened to `signals` and `confidence` — the model returned all eight
+        # scored dimensions, this dropped them on the floor, and every account rendered eight "n/a"
+        # rows with nothing failing anywhere to say so. Driving the passthrough off the schema means
+        # the next field added does not depend on anyone remembering this line.
+        #
+        # Passing through raw is safe because these are declared properties (so the
+        # additionalProperties filter downstream still accepts the object) and because the values
+        # are normalised later: analyst._normalise_signals rebuilds the eight in canonical order from
+        # whatever arrived, and _clamp_int bounds the confidence.
+        _COERCED_HERE = ("ref", "omi_score", "suspicion_tier", "assessment", "citations")
+        _item_props: dict = (
+            ((props.get("commenter_assessments") or {}).get("items") or {}).get("properties") or {}
+        )
+        _passthrough = tuple(k for k in _item_props if k not in _COERCED_HERE)
         clean_ca: list[dict] = []
         for item in ca:
             if not isinstance(item, dict):
@@ -257,6 +275,9 @@ def coerce_comprehensive_model_output(
             keep = {"ref": ref, "omi_score": score, "suspicion_tier": tier, "assessment": assessment}
             if isinstance(item.get("citations"), list):
                 keep["citations"] = item["citations"]
+            for _k in _passthrough:
+                if _k in item:
+                    keep[_k] = item[_k]
             clean_ca.append(keep)
         out["commenter_assessments"] = clean_ca
 

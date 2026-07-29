@@ -216,3 +216,152 @@ def test_response_without_the_array_still_validates():
     out = _run(_model_output(None))
     assert out["investigation_trace"]["model_backed"] is True           # optional — absence is fine
     assert out["commenter_assessments"] == []
+
+
+# =========================================================================== #
+# The eight model-scored signals, END TO END
+#
+# These exist because the first cut of per-signal scoring was tested only at the two ends: the
+# schema declared `signals`/`confidence`, and `_normalise_signals` was unit-tested in isolation.
+# Nothing asserted that a model response carrying signals still had them by the time the assessment
+# was served. It did not: `coerce_comprehensive_object` built each per-account row from a hardcoded
+# four-field allow-list, so both new fields were deleted in between. Every account rendered eight
+# "n/a" rows and nothing failed anywhere to say so.
+#
+# So: assert against the SERVED assessment, never against an intermediate.
+# =========================================================================== #
+from app.reasoning.prompts.comprehensive_investigation_template import (  # noqa: E402
+    COMPREHENSIVE_SIGNAL_NAMES,
+)
+
+_LONG_REASON = "an ordinary reading with nothing unusual in it either way"
+
+
+def _signals(**overrides) -> list[dict]:
+    """All eight at score 20, with named dimensions overridden."""
+    return [
+        {"name": n, "score": overrides.get(n, 20), "reason": _LONG_REASON}
+        for n in COMPREHENSIVE_SIGNAL_NAMES
+    ]
+
+
+def _scored_account(ref: str, **over) -> dict:
+    row = {
+        "ref": ref, "omi_score": 40, "suspicion_tier": "moderate", "confidence": 70,
+        "signals": _signals(),
+        "assessment": ("A steady account with an unremarkable posting history and no strong tells "
+                       "in either direction, so it lands mid-range on the evidence available."),
+        "citations": [ref],
+    }
+    row.update(over)
+    return row
+
+
+def _a1(out: dict) -> dict:
+    return next(r for r in out["commenter_assessments"] if r["ref"] == "A1")
+
+
+def test_the_eight_signals_reach_the_served_assessment():
+    """The regression test for the field shredder. Signals and confidence must survive the whole
+    path: model response, structural coercion, echo-join, served assessment."""
+    out = _run(_model_output([_scored_account("A1")]))
+
+    row = _a1(out)
+    assert row["confidence"] == 70
+    assert [s["name"] for s in row["signals"]] == list(COMPREHENSIVE_SIGNAL_NAMES)
+    assert all(s["score"] == 20 for s in row["signals"])
+    assert all(s["reason"] == _LONG_REASON for s in row["signals"])
+
+
+def test_a_dimension_the_model_omitted_arrives_null_not_zero():
+    """Seven returned, eight rendered. The missing one is explicitly unscored, because zero would
+    read as "this dimension looks like a real person" rather than "we never collected it"."""
+    out = _run(_model_output([_scored_account("A1", signals=_signals()[:7])]))
+
+    signals = _a1(out)["signals"]
+    assert len(signals) == 8
+    missing = COMPREHENSIVE_SIGNAL_NAMES[7]
+    by_name = {s["name"]: s for s in signals}
+    assert by_name[missing]["score"] is None
+    assert all(by_name[n]["score"] == 20 for n in COMPREHENSIVE_SIGNAL_NAMES[:7])
+
+
+def test_an_explicit_null_score_survives_as_null():
+    """The documented case: no posting history collected, so rhythm is unscorable. Must stay null
+    all the way to the UI rather than being coerced to a number anywhere along the path."""
+    sig = _signals()
+    sig[0] = {"name": COMPREHENSIVE_SIGNAL_NAMES[0], "score": None,
+              "reason": "no posting history was collected for this account"}
+    out = _run(_model_output([_scored_account("A1", signals=sig)]))
+
+    first = _a1(out)["signals"][0]
+    assert first["score"] is None
+    assert "no posting history" in first["reason"]
+
+
+def test_junk_scores_are_bounded_rather_than_dropped():
+    """A model that returns 900 or 42.7 has still made a real judgment about that dimension. Clamp
+    and round it; dropping the row would cost the reader a dimension over a formatting slip."""
+    sig = _signals()
+    sig[0] = {**sig[0], "score": 900}
+    sig[1] = {**sig[1], "score": 42.7}
+    out = _run(_model_output([_scored_account("A1", signals=sig)]))
+
+    scores = {s["name"]: s["score"] for s in _a1(out)["signals"]}
+    assert scores[COMPREHENSIVE_SIGNAL_NAMES[0]] == 100
+    assert scores[COMPREHENSIVE_SIGNAL_NAMES[1]] == 43
+
+
+def test_an_unknown_dimension_name_is_dropped_and_its_slot_left_unscored():
+    """The model inventing a ninth dimension must not shift the other eight or smuggle in a row the
+    UI has no metadata for. The slot it displaced reports honestly as unscored."""
+    sig = _signals()
+    sig[0] = {"name": "vibes", "score": 50, "reason": "a dimension that does not exist in the list"}
+    out = _run(_model_output([_scored_account("A1", signals=sig)]))
+
+    signals = _a1(out)["signals"]
+    assert [s["name"] for s in signals] == list(COMPREHENSIVE_SIGNAL_NAMES)
+    assert signals[0]["score"] is None
+
+
+def test_a_missing_signal_block_does_not_floor_the_investigation():
+    """A non-compliant account degrades alone. The whole run falling back to the Floor would mean a
+    customer paid for an AI investigation and got deterministic prose because one account's array
+    was malformed."""
+    out = _run(_model_output([
+        _scored_account("A1", signals="not-a-list", confidence="high"),
+        _scored_account("A2"),
+    ]))
+
+    assert out["investigation_trace"]["model_backed"] is True
+    assert len(out["commenter_assessments"]) == 2
+    bad = _a1(out)
+    assert [s["name"] for s in bad["signals"]] == list(COMPREHENSIVE_SIGNAL_NAMES)
+    assert all(s["score"] is None for s in bad["signals"])
+    assert bad["confidence"] is None                       # unparseable, so honestly absent
+    good = next(r for r in out["commenter_assessments"] if r["ref"] == "A2")
+    assert all(s["score"] == 20 for s in good["signals"])   # its neighbour is untouched
+
+
+def test_the_coercion_passes_through_every_declared_per_account_field():
+    """The class-level guard, not just the instance.
+
+    `coerce_comprehensive_object` used to rebuild each per-account row from a hardcoded field list,
+    which silently deleted anything added to the schema later. It is now driven by the schema, so
+    this asserts the general property: every property the item schema declares survives coercion.
+    A future field then cannot be lost by nobody remembering to update that list.
+    """
+    from app.governor.comprehensive import coerce_comprehensive_model_output
+
+    schema = comprehensive_investigation_canonical_schema()
+    item_props = schema["properties"][COMPREHENSIVE_COMMENTER_ASSESSMENTS_KEY]["items"]["properties"]
+
+    coerced = coerce_comprehensive_model_output(
+        _model_output([_scored_account("A1")]),
+        schema=schema, section_keys=COMPREHENSIVE_SECTION_KEYS,
+    )
+    row = coerced["commenter_assessments"][0]
+    assert set(item_props) - set(row) == set(), (
+        "coercion dropped per-account fields the schema declares: "
+        f"{sorted(set(item_props) - set(row))}"
+    )

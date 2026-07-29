@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1586 passed, 8 skipped, 2 failed** (6m02s), both failures pre-existing and listed below.
+**1593 passed, 8 skipped, 2 failed** (5m55s), both failures pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -216,6 +216,32 @@ Four things here that must not be undone:
   `tests/test_signal_names_contract.py` fails on that drift, including order.
 - **`confidence` is an integer and may not be null.** How much evidence arrived is always knowable,
   unlike an individual dimension's score.
+
+**The coercion layer used to be a silent field shredder, and this cost a whole feature once.**
+`coerce_comprehensive_model_output` (`app/governor/comprehensive.py`) rebuilds each per-account row
+before the echo-join. It did that from a **hardcoded four-field allow-list**
+(`ref` / `omi_score` / `suspicion_tier` / `assessment` + optional `citations`), so `signals` and
+`confidence` arrived from the model and left deleted. Everything downstream worked perfectly on the
+empty input: `_normalise_signals` dutifully materialised eight `None` rows and the UI rendered eight
+`n/a`s for every account, with nothing failing anywhere to say so. It shipped green because the
+tests covered the two ends (the schema declares the fields; `_normalise_signals` works in isolation)
+and nothing asserted the middle.
+
+The passthrough is now **driven by the item schema**, so a field added later cannot be lost by
+anyone forgetting that line. Two rules follow:
+
+- **Assert against the SERVED assessment, not an intermediate.** `test_commenter_assessments.py`
+  now runs the full `assess_payload` path with a mocked transport for every signal case.
+  `test_the_coercion_passes_through_every_declared_per_account_field` is the class-level guard.
+- The **evidence-item** loop right above it still uses a hardcoded keep list
+  (`signal`/`claim`/`evidence_refs` + `direction`/`impact`). That currently covers every property in
+  its schema, so there is no bug today, but it is the same latent trap. Add a field to the evidence
+  item schema and you must add it there too.
+
+Verified behaviour on malformed model output (none of it floors the investigation, each account
+degrades alone): 7 signals returned renders 8 with the last null; an unknown dimension name is
+dropped and its slot left unscored; 900 clamps to 100; 42.7 rounds to 43; an explicit null survives
+as null; `signals: "not-a-list"` gives eight nulls and leaves neighbouring accounts untouched.
 
 `SignalBreakdown` (`components/shared/signal-breakdown.tsx`) is shared by the signed-in investigation
 view and the pre-login demo, so the free scan shows the same eight. The demo falls back to the engine
