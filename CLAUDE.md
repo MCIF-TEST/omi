@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1633 passed, 8 skipped, 2 failed** (5m53s), both failures pre-existing and listed below.
+**1659 passed, 8 skipped, 2 failed** (6m11s), both failures pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -307,9 +307,61 @@ echoed another promotional account*, teaching exactly the contagion the protocol
 moderate read that names what was not collected); and the constitution block count moved 15 → 16, which
 is pinned in `test_ai_readiness.py`.
 
-Pinned by `tests/test_score_discipline.py` (27 tests). Protocol recompiled to
-**`map:fd41662f467d671b1285c2ef`, 71,370 chars**, zero em dashes, all drift guards green.
-`package_hash` pin moved to `pkg:2e379bd6e51621295b927a13`.
+### Write so a stranger can verify you (constitution v10)
+
+**The results get posted publicly, into Twitter comment sections, about named real accounts.** That is
+the design constraint behind v10, and it should stay in mind for anything touching the analyst's prose:
+a per-account sentence is not a dashboard readout, it is a published claim about a person who can read
+it. A false positive is a harm to them and it discredits every other score in the same report.
+
+`_CHECKABLE_CLAIMS`:
+
+- **Compute, do not eyeball.** State the following-to-followers ratio as a figure, the age in days or
+  years, the post count as a number. LLMs are unreliable at ratio and date arithmetic and will
+  cheerfully describe an imbalance that is not there; forcing the computed number improves the
+  reasoning *and* makes the claim auditable.
+- **Quote, do not paraphrase.** Any claim about what an account wrote carries a short verbatim quote.
+  "If you cannot quote it, you cannot claim it."
+- **The hedge goes in the words, not only in the number.** A sentence gets screenshotted without the
+  confidence score beside it, so thin evidence has to be admitted *in the sentence*.
+- **Name what would overturn it** for anything at 50 or above. This is what makes it a finding rather
+  than an accusation.
+- **Never assert identity or intent**, and never imply knowledge of ownership, payment, networks, DMs,
+  or other platforms. None of that is in the bundle.
+
+`_CONFUSABLE_ACCOUNTS` names the legitimate shapes that resemble the tells, because a generic
+instruction to be careful does not stop a model reading a small fan account as a farm: a business or
+brand, a fan/hobby account, a news or aggregator feed, a real person who is new, a dormant account
+that came back, a private person with a tiny footprint, someone writing in a second language or a
+non-Latin script (**digits in a handle are auto-appended by platforms and are never a tell**), and an
+account whose opinion is unpopular or which simply agrees with the post. Recognising one is framed as
+a **correct finding**, not a failure to find something, so the model does not reach for a score.
+
+Dossier Loop gained step **(3c) coherence**: the `omi_score` must be explainable by the eight
+dimensions, and when the number is high and the dimensions are not, *the number is wrong*.
+
+**The worked example was contradicting the schema.** It showed all eight signals for A1 and **none**
+for A2 and A3, while the schema declares them required on every account. Models copy examples over
+schemas, so that was an open invitation to skip the block. All three accounts now carry eight, and the
+example teaches the semantics: A2 (82, high) has six elevated dimensions on different kinds of evidence
+plus one honest `null` (four posts is too few to read a rhythm), while A3 (38, moderate) has five
+`null`s and confidence 30, demonstrating that a null-heavy list must drag confidence down.
+
+`BANNED_PHRASES` extended with certainty ("proves that", "undoubtedly"), identity and intent ("was
+hired", "is operated by", "real identity"). **Note its reach:** the Governor's S9 lint sees only the
+investigation-level `headline`/`assessment`/evidence claims, *not* `commenter_assessments[].assessment`,
+and the comprehensive path runs `adjudication="schema_only"` so the Governor is not gating the model's
+prose at all on the live route. **The protocol is the only real control today.** Extending enforcement
+to per-account text is worth doing and is not done.
+
+Pinned by `tests/test_score_discipline.py` (53 tests). Protocol recompiled to
+**`map:461301d1a47061e711ce082c`, 80,583 chars**, zero em dashes, all drift guards green. Pins moved:
+constitution block count 16 → 18, `package_hash` → `pkg:118b279d16cd37662b7e101d`.
+
+**Cost note:** the protocol has grown 64,808 → 80,583 chars (roughly 20k input tokens) and is sent on
+every batch, so a 150-account investigation pays it six times. Worth watching if OpenRouter spend
+climbs, and worth resisting the urge to keep appending doctrine: past some length the model follows
+each individual instruction *less* reliably, so additions should replace rather than accumulate.
 
 ### Evidence completeness — what the model is allowed to see
 

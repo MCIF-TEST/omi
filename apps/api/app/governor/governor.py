@@ -17,9 +17,25 @@ from .audit import ValidationTrace
 CONSTITUTION_VERSION = 1
 
 # Immutable-core banned phrasings (behavior, not persons; probabilistic, not absolute).
+#: Phrasings that assert identity, intent, or certainty rather than describing measured behaviour.
+#: These matter more than they look: per-account prose gets quoted publicly, about named real
+#: accounts, and the difference between "is a bot" and "behaves consistently with automation" is the
+#: difference between an accusation and a finding.
+#:
+#: NOTE ON REACH. This lint (Governor stage S9) sees the investigation-level `headline`, `assessment`
+#: and evidence claims. It does NOT see `commenter_assessments[].assessment`, and the comprehensive
+#: path runs with adjudication="schema_only", so on the live route the Governor is not gating the
+#: model's prose at all. The protocol's `checkable_claims` block is what actually holds this line
+#: today. Extending enforcement to per-account text is worth doing and is not done here.
 BANNED_PHRASES = (
     "is a bot", "are bots", "is fake", "definitely fake", "this person",
     "paid troll", "confirmed bot", "100% bot", "guilty", "without a doubt",
+    # Certainty
+    "proves that", "proof that", "no doubt", "certainly a", "undoubtedly",
+    "clearly a bot", "obviously a bot", "beyond question",
+    # Identity and intent, which the evidence can never establish
+    "was hired", "was paid to", "is employed by", "works for a farm",
+    "is operated by", "the owner of this account", "real identity",
 )
 
 _BANDS = {"insufficient": 0, "low": 1, "moderate": 2, "high": 3}

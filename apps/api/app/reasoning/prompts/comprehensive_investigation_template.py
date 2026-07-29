@@ -387,13 +387,38 @@ _OUTPUT_EXAMPLE = (
     'person\'s life."}], "assessment": "A years-old account with a '
     "normal balance of followers to following and a varied, everyday posting history, it reads like a "
     'genuine person.", "citations": ["A1"]}, {"ref": "A2", "omi_score": 82, "suspicion_tier": "high", '
-    '"assessment": "A brand-new account that follows several thousand others while almost no one follows '
-    "it back, with no real posting history beyond a couple of near-identical promotional replies, a "
-    'profile much more consistent with a promotional amplifier than an ordinary user.", "citations": '
-    '["A2"]}, {"ref": "A3", "omi_score": 38, "suspicion_tier": "moderate", "assessment": "A fairly new '
-    "account whose posting history was not collected, so the only things to read are its profile and one "
-    "promotional-sounding reply, and a young account with a thin profile is ordinary enough that it "
-    "cannot be scored higher than this without the behavioural evidence that was never gathered.\", "
+    '"confidence": 82, "signals": [{"name": "temporal", "score": null, "reason": "Only four posts were '
+    'collected, too few to read a posting rhythm from."}, {"name": "semantic", "score": 95, "reason": '
+    '"The identical sentence about potential and a bio link appears on four separate days."}, '
+    '{"name": "ai_writing", "score": 40, "reason": "Short promotional phrasing that a person could just '
+    'as easily have typed."}, {"name": "profile", "score": 88, "reason": "Follows 4,300 while 11 follow '
+    'back, about 390 to 1, on a nine-day-old account."}, {"name": "voice", "score": 78, "reason": "No '
+    'reference to a job, a place, or anything about its own life."}, {"name": "engagement", "score": '
+    '90, "reason": "Every collected post points at a bio link rather than saying anything."}, '
+    '{"name": "account_maturity", "score": 85, "reason": "Nine days old with no audience and four '
+    'posts, so nothing has been built."}, {"name": "history_authenticity", "score": 80, "reason": "The '
+    'whole collected history is one sentence repeated, not a life."}], '
+    '"assessment": "Posted the identical sentence \\"Huge potential here, link in bio\\" on four '
+    "separate days, and follows 4,300 accounts while 11 follow back, a ratio of roughly 390 to 1, on an "
+    "account created 9 days before this post. Three independent things point the same way and none is "
+    "explained by a new user finding their feet, which is why this sits high rather than moderate. A "
+    'history of varied posts written fresh would overturn it.", "citations": '
+    '["A2"]}, {"ref": "A3", "omi_score": 38, "suspicion_tier": "moderate", "confidence": 30, '
+    '"signals": [{"name": "temporal", "score": null, "reason": "No posting history was collected, so '
+    'there is no rhythm to read."}, {"name": "semantic", "score": null, "reason": "No posts were '
+    'collected, so repetition cannot be checked."}, {"name": "ai_writing", "score": null, "reason": '
+    '"One short reply is not enough text to judge how it was written."}, {"name": "profile", "score": '
+    '35, "reason": "47 followers against 210 following, about 4 to 1, which is unremarkable."}, '
+    '{"name": "voice", "score": null, "reason": "No posting history was collected, so there is nothing '
+    'to hear a voice in."}, {"name": "engagement", "score": 30, "reason": "One promotional-sounding '
+    'reply, a single data point rather than a pattern."}, {"name": "account_maturity", "score": 55, '
+    '"reason": "24 days old with a small audience, young but not implausibly so."}, '
+    '{"name": "history_authenticity", "score": null, "reason": "The posting history that would answer '
+    'this was never gathered."}], "assessment": "Created 24 '
+    "days before this post, with 47 followers against 210 following, a ratio of about 4 to 1 that is "
+    "unremarkable. Its posting history was not collected, so this is a weak read on profile metadata "
+    "alone, and a new account with a thin profile is also exactly what a real person who just joined "
+    "looks like. Seeing whether its posts repeat the same text would move this either way.\", "
     '"citations": ["A3"]}]}'
 )
 
@@ -541,9 +566,22 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "fired. A dimension whose evidence was never collected takes score null with a reason saying so, "
     "never a filler number. Then set 'confidence' (0-100) for how much evidence backed this account "
     "overall, low when the signal list is null-heavy; "
-    "(4) WRITE its 1-3 sentence plain-English reason quoting at least two of ITS OWN concrete facts, "
-    "specific enough that it could not be pasted under any other account. Only after every account has "
-    "completed the loop do you write the cross-account sections and the executive synthesis.\n"
+    "(3c) CHECK YOUR OWN COHERENCE before moving on. The omi_score must be explainable by the eight "
+    "you just wrote: if the score is 50 or more, at least two dimensions must be substantially "
+    "elevated, and if it is 75 or more, several must be, each on a different kind of evidence. If the "
+    "number is high and the dimensions are not, the number is wrong, not the dimensions. Also check it "
+    "against the confusable shapes: a business, a fan account, a news feed, a new user, a returning "
+    "user, a small private account, someone writing in a second language. If the account fits one, "
+    "name that in the assessment and score the behaviour rather than the resemblance; "
+    "(4) WRITE its 1-3 sentence plain-English reason. Lead with the single most checkable concrete "
+    "fact, state computed figures rather than impressions of them (the following-to-followers ratio as "
+    "a number, the age in days or years), put any claim about what it wrote in a SHORT verbatim quote, "
+    "and if the evidence was thin say so in the sentence itself rather than only in the confidence "
+    "number, because the sentence will be read without the number beside it. At 50 or above, also name "
+    "the one observation that would most change the read. Quote at least two of ITS OWN concrete "
+    "facts, specific enough that it could not be pasted under any other account. Only after every "
+    "account has completed the loop do you write the cross-account sections and the executive "
+    "synthesis.\n"
     "  (5) THE DISTRIBUTION CHECK, once, after the last account and before you write anything else. Look "
     "at the scores you just produced as a set. A real comment section comes out mostly low with a few "
     "genuine outliers. If more than roughly a third of the accounts landed at 50 or above, go back "
