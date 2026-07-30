@@ -1080,6 +1080,21 @@ export interface ReportVerdict {
   convergence_score: number;
 }
 
+/**
+ * One row of the full scanned-account table on a public report.
+ *
+ * Deliberately lighter than `ReportCommenter`: no summary, reasons, or recent_activity. Those are
+ * per-account evidence blobs, and carrying them for a whole comment section would multiply the
+ * response by data the table never renders.
+ */
+export interface ReportCommenterRow {
+  handle: string;
+  external_id: string;
+  tier: Tier;
+  overall_probability: number;
+  intent_label: string | null;
+}
+
 export interface ReportCommenter {
   handle: string;
   external_id: string;
@@ -1107,6 +1122,9 @@ export interface ReportView {
   focus_account: any | null;
   top_flagged: ReportCommenter[];
   total_flagged: number;
+  /** EVERY account the report scored, worst first, not just the flagged ones. */
+  all_commenters?: ReportCommenterRow[];
+  total_scanned?: number;
   video: any | null;
   methodology: string;
   stats: Record<string, string | number>;

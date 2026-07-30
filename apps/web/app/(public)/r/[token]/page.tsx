@@ -207,8 +207,50 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
           </section>
         )}
 
-        {/* Top flagged commenters */}
-        {v.top_flagged.length > 0 && (
+        {/* Every account scanned, worst first. A list of only the flagged ones reads as a hit list
+            and hides the most reassuring thing in the report: that most of the section came back
+            clean. Falls back to the flagged-only list for reports generated before the full list
+            was carried. */}
+        {(v.all_commenters?.length ?? 0) > 0 ? (
+          <section>
+            <div className="font-mono text-2xs tracking-[0.18em] uppercase text-accent report-accent mb-3">
+              Accounts scanned · {v.total_scanned ?? v.all_commenters!.length}
+              {v.total_flagged > 0 && (
+                <span className="text-fg-mute report-muted"> · {v.total_flagged} flagged</span>
+              )}
+            </div>
+            {/* Wide content scrolls inside its own container; the page body never pans sideways. */}
+            <div className="report-card bg-bg-elev border border-border-1 rounded-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-bg">
+                    <tr className="text-left font-mono text-2xs tracking-[0.16em] uppercase text-fg-mute report-muted">
+                      <th className="px-4 py-2.5 font-normal">Handle</th>
+                      <th className="px-4 py-2.5 font-normal">Tier</th>
+                      <th className="px-4 py-2.5 font-normal text-right">Prob.</th>
+                      <th className="px-4 py-2.5 font-normal">Intent</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {v.all_commenters!.map((c) => (
+                      <tr key={c.external_id} className="border-t border-border-1">
+                        <td className="px-4 py-3 font-medium text-fg align-top break-all">{c.handle}</td>
+                        <td className="px-4 py-3 align-top"><TierBadge tier={c.tier} size="sm" /></td>
+                        <td className="px-4 py-3 mono text-right text-fg align-top tabular-nums">
+                          {Math.round((c.overall_probability || 0) * 100)}%
+                        </td>
+                        <td className="px-4 py-3 text-fg-dim align-top">{c.intent_label || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p className="mt-2 font-mono text-2xs tracking-wider uppercase text-fg-mute report-muted leading-relaxed">
+              Every account listed here was scored on its own evidence. A low tier is a finding too.
+            </p>
+          </section>
+        ) : v.top_flagged.length > 0 && (
           <section>
             <div className="font-mono text-2xs tracking-[0.18em] uppercase text-accent report-accent mb-3">
               Flagged commenters · {v.total_flagged}

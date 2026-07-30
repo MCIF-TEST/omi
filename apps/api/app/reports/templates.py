@@ -33,6 +33,7 @@ def build_report_view(
     the full ComprehensiveScanResult that was stored at scan time.
     """
     flagged = _flagged_commenters(payload)
+    everyone = _all_commenters(payload)
     commentary = None
     if investigation.get("commentary_text"):
         commentary = {
@@ -76,6 +77,11 @@ def build_report_view(
         "focus_account": _summarize_focus_account(payload.get("focus_account")),
         "top_flagged": flagged[: 10 if template == "evidence" else 5],
         "total_flagged": len(flagged),
+        # Every account scored, worst first. The report leads with this now: a list of only the
+        # flagged ones reads as an accusation, while the full list reads as analysis and makes the
+        # clean majority visible.
+        "all_commenters": everyone,
+        "total_scanned": _scanned_count(payload),
         "video": _summarize_video(payload.get("video"), template),
         "methodology": _methodology_note(),
         "stats": _stats_block(
@@ -162,16 +168,18 @@ def render_markdown(
                 add(f"- {r}")
         add("")
 
-    if v["top_flagged"]:
-        add(f"## Top flagged commenters · {v['total_flagged']} total")
+    # Every account scored, worst first. The export has to match what the page shows, or someone who
+    # downloads the report as evidence has a different document from the one they read.
+    if v["all_commenters"]:
+        add(f"## Accounts scanned · {v['total_scanned']} total, {v['total_flagged']} flagged")
         add("")
         add("| Handle | Tier | Probability | Intent |")
         add("|---|---|---|---|")
-        for c in v["top_flagged"]:
+        for c in v["all_commenters"]:
             add(
                 f"| {c['handle']} | {c['tier']} | "
                 f"{int(round(c['overall_probability']*100))}% | "
-                f"{c.get('intent_label') or '—'} |"
+                f"{c.get('intent_label') or '-'} |"
             )
         add("")
 
@@ -230,6 +238,45 @@ def _top_cross_links(payload: dict, *, n: int = 3) -> list[dict]:
     return sorted(
         links, key=lambda l: _SEVERITY_RANK.get(l.get("severity"), 0), reverse=True,
     )[:n]
+
+
+#: Hard ceiling on the full account list in one report. Above the operator scan cap (150) so it is
+#: never reached in practice; it exists so a pathological payload cannot produce an unbounded response.
+_ALL_COMMENTERS_CAP = 250
+
+
+def _all_commenters(payload: dict) -> list[dict[str, Any]]:
+    """EVERY account this report scored, worst first, not just the flagged ones.
+
+    Showing only flagged accounts made the report read as a hit list and hid the most reassuring
+    thing in it: that most of the section came back clean. A reader who can see 240 low-tier rows
+    understands the 12 elevated ones as a finding rather than as the product flagging everything.
+
+    Deliberately LIGHTER than ``_flagged_commenters``: no ``reasons`` and no ``recent_activity``. Those
+    are per-account evidence blobs, and carrying them for every account would multiply the public
+    response by the size of the whole comment section for data the table never renders.
+    """
+    video = payload.get("video") or {}
+    rows = [c for c in (video.get("commenters") or []) if isinstance(c, dict)]
+    rows.sort(
+        key=lambda c: (
+            _TIER_RANK.get(c.get("tier"), 0),
+            c.get("coordination_adjusted_probability") or c.get("overall_probability") or 0,
+        ),
+        reverse=True,
+    )
+    return [
+        {
+            "handle": c.get("handle"),
+            "external_id": c.get("external_id"),
+            "tier": c.get("tier") or "low",
+            "overall_probability": (
+                c.get("coordination_adjusted_probability") or c.get("overall_probability") or 0
+            ),
+            "intent_label": c.get("intent_label"),
+        }
+        for c in rows[:_ALL_COMMENTERS_CAP]
+    ]
 
 
 def _flagged_commenters(payload: dict) -> list[dict[str, Any]]:

@@ -429,3 +429,95 @@ def test_the_methodology_note_describes_the_signals_that_actually_exist():
     # The doctrine that matters most to a sceptical reader is stated, not implied.
     assert "several independent indicators" in note
     assert "probabilistic" in note
+
+
+# =========================================================================== #
+# The report lists EVERY account it scored, not just the flagged ones
+# =========================================================================== #
+def test_the_report_lists_every_account_scanned_including_the_clean_ones():
+    """A list of only flagged accounts reads as a hit list, and it hides the most reassuring thing in
+    the report: that most of the section came back clean. It also makes the product look like it
+    flags everything, which is the opposite of what the scoring discipline is for."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)
+
+        view = tc.get(f"/r/{token}").json()["view"]
+        handles = [c["handle"] for c in view["all_commenters"]]
+        assert handles == ["@a", "@b"], "worst first, and the low-tier account is present"
+        assert view["total_scanned"] == 2
+        # The flagged summary still exists for the sections that use it.
+        assert view["total_flagged"] == 1
+        assert [c["handle"] for c in view["top_flagged"]] == ["@a"]
+
+
+def test_the_full_list_is_sorted_worst_first():
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        with get_session() as s:
+            from app.storage.repository import AccountRepository
+            AccountRepository(s).create_investigation(
+                user_id=owner, slug="inv_sort01", label="Sorted", input_url="https://x.com/p/1",
+                target_id="1", kind="comprehensive", overall_probability=0.5,
+                overall_tier="moderate", summary="s", quota_used=1,
+                payload_json={"video": {"commenters": [
+                    {"external_id": "lo", "handle": "@lo", "tier": "low", "overall_probability": 0.05},
+                    {"external_id": "hi", "handle": "@hi", "tier": "high", "overall_probability": 0.91},
+                    {"external_id": "mid", "handle": "@mid", "tier": "moderate",
+                     "overall_probability": 0.44},
+                ]}},
+            )
+            inv = s.execute(select(Investigation).where(
+                Investigation.slug == "inv_sort01")).scalar_one()
+            inv.share_token, inv.is_public = token, 1
+
+        rows = tc.get(f"/r/{token}").json()["view"]["all_commenters"]
+        assert [c["handle"] for c in rows] == ["@hi", "@mid", "@lo"]
+
+
+def test_the_full_list_stays_light():
+    """No per-account evidence blobs on the full list. Carrying `recent_activity` for every account in
+    a 150-account comment section would multiply the public response by data the table never renders."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)
+
+        row = tc.get(f"/r/{token}").json()["view"]["all_commenters"][0]
+        assert set(row) == {"handle", "external_id", "tier", "overall_probability", "intent_label"}
+        assert "recent_activity" not in row and "reasons" not in row
+
+
+def test_the_markdown_export_lists_everyone_too():
+    """Someone who downloads the report as evidence must have the same document they read. A page and
+    an export that disagree about who was scanned is worse than either alone."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)
+
+        md = tc.get(f"/r/{token}/markdown").text
+        assert "Accounts scanned" in md
+        assert "@a" in md and "@b" in md, "the clean account must appear in the export as well"
+
+
+def test_a_report_with_no_commenters_renders_without_the_table():
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        with get_session() as s:
+            from app.storage.repository import AccountRepository
+            AccountRepository(s).create_investigation(
+                user_id=owner, slug="inv_empty1", label="Empty", input_url="https://x.com/p/2",
+                target_id="2", kind="comprehensive", overall_probability=0.0, overall_tier="low",
+                summary="none", quota_used=0, payload_json={"video": {"commenters": []}},
+            )
+            inv = s.execute(select(Investigation).where(
+                Investigation.slug == "inv_empty1")).scalar_one()
+            inv.share_token, inv.is_public = token, 1
+
+        view = tc.get(f"/r/{token}").json()["view"]
+        assert view["all_commenters"] == []
+        assert view["total_scanned"] == 0

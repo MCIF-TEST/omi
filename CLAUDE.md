@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1680 passed, 8 skipped, 1 failed** (5m43s), the failure pre-existing and listed below.
+**1685 passed, 8 skipped, 1 failed** (5m46s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -552,6 +552,20 @@ about it that must not change:
   non-existent `EventLog.token` and would have silently returned `None` forever.
 - **`_scanned_count`** prefers `commenter_count` and falls back to `len(commenters)`, because a
   payload with commenters but no count rendered "0 of 312", which reads as a broken product.
+
+**The report lists EVERY account it scored, not just the flagged ones** (`_all_commenters`, rendered
+as "Accounts scanned · N · M flagged"). A flagged-only list read as a hit list and hid the most
+reassuring thing in the report, which is that most of the section came back clean; it also made the
+product look like it flags everything, the opposite of what the score discipline is for. Sorted worst
+first, so the findings still lead.
+
+That list is deliberately **lighter** than `top_flagged`: no `reasons`, no `recent_activity`. Those are
+per-account evidence blobs and carrying them for a whole 150-account section would multiply the public
+response by data the table never renders. `_ALL_COMMENTERS_CAP` (250) sits above the operator scan cap
+so it is unreachable in practice and exists only so a pathological payload cannot produce an unbounded
+response. The page falls back to the flagged-only table for reports generated before the full list was
+carried, and the **markdown export lists everyone too**: a page and an export that disagree about who
+was scanned is worse than either alone.
 
 **Nothing on this page may be estimated.** It is a report about fabricated engagement: one invented
 number beside the real ones discredits all of them, and it only takes one screenshot. That rules out
