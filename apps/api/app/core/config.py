@@ -149,7 +149,7 @@ class Settings(BaseSettings):
     # When False, all scans are unauthenticated and unlimited (local-mode).
     require_auth: bool = False
     # Free trial credits handed out at signup.
-    free_trial_credits: int = 3
+    free_trial_credits: int = 1
     # Credits added when a subscription becomes active or renews.
     monthly_credit_grant: int = 20
 

@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { AlertTriangle, Check, CheckSquare, ClipboardPaste, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
+import { TRIAL_CREDITS_LABEL } from '@/lib/plan';
 
 type Phase = 'idle' | 'compiling' | 'list' | 'scanning';
 
@@ -72,7 +74,15 @@ function friendlyError(e: unknown, action: 'compile' | 'scan'): string {
  * SCORE only the selection (paid). Blue compiles; purple runs the intelligence. The scanner-sweep +
  * staggered row reveal make the compile feel like an instrument reading the post, not a spinner.
  */
-export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
+export function CommenterSelect({
+  initialUrl = '',
+  claimedSlug = '',
+}: {
+  initialUrl?: string;
+  /** Set when the visitor arrived through the shared-report funnel (see /welcome). Its presence is
+   *  what makes this page explain where their report went and what their free credit is for. */
+  claimedSlug?: string;
+}) {
   const router = useRouter();
   const [url, setUrl] = useState(initialUrl);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -259,6 +269,27 @@ export function CommenterSelect({ initialUrl = '' }: { initialUrl?: string }) {
           </span>
         )}
       </header>
+
+      {/* Arrived through the shared-report funnel: say where the report went, and what to do next.
+          Without this the pre-filled URL and the already-scanned rows look arbitrary. */}
+      {claimedSlug && (
+        <div className="rounded-lg border border-accent/30 bg-accent/[0.06] px-4 py-3.5 flex items-start gap-3">
+          <Check size={15} className="text-accent mt-0.5 shrink-0" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-fg">
+              <span className="font-medium">That report is saved to your account.</span>{' '}
+              <Link href={`/investigations/${claimedSlug}`} className="text-accent-text hover:underline">
+                Open it
+              </Link>
+              , or pick more accounts below to check on the same post.
+            </p>
+            <p className="text-xs text-fg-dim leading-relaxed mt-1">
+              Accounts the original report already covered are marked as scanned. Your{' '}
+              {TRIAL_CREDITS_LABEL} covers up to 50 more.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Input ─────────────────────────────────────────────────────────── */}
       <Card>

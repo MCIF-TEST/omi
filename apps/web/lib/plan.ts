@@ -7,7 +7,15 @@
  * OMI_FREE_TRIAL_CREDITS (see render.yaml, where both are set side by side).
  * Defaults match the API's config default so local dev stays truthful.
  */
-export const TRIAL_CREDITS = Number(process.env.NEXT_PUBLIC_TRIAL_CREDITS || 3);
+export const TRIAL_CREDITS = Number(process.env.NEXT_PUBLIC_TRIAL_CREDITS || 1);
+
+/**
+ * The trial figure is configurable, so the copy around it has to agree with whatever it is set to.
+ * Hardcoding "credits" read fine at 3 and became "1 free credits" the moment the trial was cut to
+ * one, in five separate places. Use these rather than writing the noun out.
+ */
+export const CREDIT_NOUN = TRIAL_CREDITS === 1 ? 'credit' : 'credits';
+export const TRIAL_CREDITS_LABEL = `${TRIAL_CREDITS} free ${CREDIT_NOUN}`;
 
 /**
  * What the paid plan is called, everywhere it is named.

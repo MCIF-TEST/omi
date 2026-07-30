@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Check, Sparkles, Zap } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TRIAL_CREDITS, SUBSCRIPTION_PRICE, PLAN_NAME } from '@/lib/plan';
+import { TRIAL_CREDITS_LABEL, SUBSCRIPTION_PRICE, PLAN_NAME } from '@/lib/plan';
 
 export const metadata = { title: 'Pricing. OMISPHERE' };
 
@@ -76,7 +76,7 @@ export default function PricingPage() {
 
             <p className="font-mono text-2xs tracking-wider text-tier-low uppercase mb-6 flex items-center gap-1.5">
               <Sparkles size={11} />
-              {TRIAL_CREDITS} free trial credits on signup · no card required
+              {TRIAL_CREDITS_LABEL} on signup · no card required
             </p>
 
             <ul className="space-y-3 mb-8">

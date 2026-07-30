@@ -160,6 +160,9 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     # (see Investigation.platform). Existing rows stay NULL and fall back to URL heuristics.
     ("investigations", "platform", "VARCHAR(16)"),
     ("investigations", "thumbnail_url", "VARCHAR(500)"),
+    # Funnel: which shared report a claimed copy came from (see Investigation.claimed_from_token).
+    # Existing rows stay NULL, which correctly means "not claimed from anyone".
+    ("investigations", "claimed_from_token", "VARCHAR(48)"),
     # Public campaign sharing (opt-in, revocable) — distribution phase
     ("campaigns", "share_token", "VARCHAR(64)"),
     ("campaigns", "is_public", "INTEGER DEFAULT 0"),

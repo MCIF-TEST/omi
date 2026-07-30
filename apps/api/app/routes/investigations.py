@@ -8,10 +8,12 @@ dashboard.
 from __future__ import annotations
 
 import re
+import secrets
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
 from app.core.auth import CurrentUser, require_user
 from app.schemas import (
@@ -23,6 +25,7 @@ from app.schemas import (
     VerdictUpdate,
 )
 from app.storage.db import get_session
+from app.storage.models import Investigation
 from app.storage.repository import AccountRepository
 
 
@@ -231,3 +234,108 @@ def _thumbnail_of(inv, platform: str) -> str | None:
         if vid:
             return f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Funnel: claim a shared report into your own archive
+# ---------------------------------------------------------------------------
+class ClaimRequest(BaseModel):
+    share_token: str = Field(min_length=8, max_length=48)
+
+
+class ClaimResponse(BaseModel):
+    slug: str                 # the CALLER'S copy, not the original
+    label: str
+    input_url: str            # the post to scan more of, for /investigate?url=
+    platform: str | None
+    already_claimed: bool     # True when this token was claimed by this user before
+
+
+@router.post("/claim", response_model=ClaimResponse)
+def claim_shared_investigation(
+    body: ClaimRequest,
+    current: CurrentUser = Depends(require_user),
+) -> ClaimResponse:
+    """Copy a publicly shared investigation into the caller's own archive.
+
+    This is the top of the funnel. A visitor lands on someone else's ``/r/<token>`` report, signs up
+    from it, and the report they were reading becomes the first thing in THEIR archive, with the
+    source URL ready to scan more of. Without this the signup is a dead end: they arrive at an empty
+    dashboard and have to find the post again themselves.
+
+    What a claim does NOT do:
+
+    * It does not move or change the original. The owner keeps their investigation, their share token,
+      and their history untouched. This is a copy.
+    * **It does not copy ``share_token``.** That column is unique and drives the ``/r/<token>`` lookup,
+      so two rows carrying one token would either fail the insert or make the public report ambiguous.
+      The copy is private until its new owner shares it themselves.
+    * It grants no credits and spends none. Reading someone's report is free; scanning is what costs.
+
+    Idempotent per (user, token) via ``claimed_from_token``: claiming twice returns the existing copy
+    rather than duplicating a ``payload_json`` that is routinely megabytes. That matters because the
+    web app fires this on a page load it cannot guarantee happens only once (a refresh, a double
+    mount in development, a retried request).
+    """
+    from sqlalchemy import select
+
+    token = body.share_token.strip()
+    with get_session() as session:
+        repo = AccountRepository(session)
+        owner_id = repo.local_user_id() if current.id == 0 else current.id
+        if owner_id is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail="Sign in to save this report.")
+
+        # Already claimed by this user? Hand back the copy they already have.
+        existing = session.execute(
+            select(Investigation).where(
+                Investigation.user_id == owner_id,
+                Investigation.claimed_from_token == token,
+            ).order_by(Investigation.id.asc())
+        ).scalars().first()
+        if existing is not None:
+            return ClaimResponse(
+                slug=existing.slug, label=existing.label, input_url=existing.input_url,
+                platform=_platform_of(existing), already_claimed=True,
+            )
+
+        source = session.execute(
+            select(Investigation).where(
+                Investigation.share_token == token,
+                Investigation.is_public == 1,
+            )
+        ).scalar_one_or_none()
+        if source is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="That report is no longer shared, so it cannot be saved.",
+            )
+        # Claiming your own report would put a duplicate in your archive for no reason.
+        if source.user_id == owner_id:
+            return ClaimResponse(
+                slug=source.slug, label=source.label, input_url=source.input_url,
+                platform=_platform_of(source), already_claimed=True,
+            )
+
+        payload = source.payload_json or {}
+        copy = repo.create_investigation(
+            user_id=owner_id,
+            slug="inv_" + secrets.token_hex(4),
+            label=source.label,
+            input_url=source.input_url,
+            target_id=source.target_id,
+            kind=source.kind,
+            overall_probability=source.overall_probability or 0.0,
+            overall_tier=source.overall_tier or "low",
+            summary=source.summary or "",
+            quota_used=0,                       # the caller paid no quota for this
+            payload_json=payload,
+        )
+        copy.confidence = source.confidence
+        copy.claimed_from_token = token
+        session.flush()
+        return ClaimResponse(
+            slug=copy.slug, label=copy.label, input_url=copy.input_url,
+            platform=_platform_of(copy), already_claimed=False,
+        )

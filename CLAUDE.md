@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1659 passed, 8 skipped, 2 failed** (6m11s), both failures pre-existing and listed below.
+**1674 passed, 8 skipped, 1 failed** (5m18s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -476,7 +476,7 @@ the easy mistake, because both get called "the free scans":
 | | Who | Amount | Where it lives |
 |---|---|---|---|
 | Pre-login demo | Any visitor, metered per IP | **1 scan**, ≤25 accounts | `DEMO_FREE_SCANS_PER_IP` + `DEMO_MAX_COMMENTERS`, hardcoded in `app/routes/scan_async.py` / `scan.py`, test-pinned |
-| Signup trial | A new account | **3 credits**, then they pay | `OMI_FREE_TRIAL_CREDITS` in `render.yaml` (code default in `config.py` also 3) |
+| Signup trial | A new account | **1 credit**, then they pay | `OMI_FREE_TRIAL_CREDITS` in `render.yaml` (code default in `config.py` also 1) |
 
 The signup trial was **25**, then 5, now **3** — an explicit product decision (2026-07). At the
 1-credit-per-50-accounts rate with `OMI_SCAN_MAX_COMMENTERS=150`, 3 credits is one full 150-account
@@ -496,6 +496,65 @@ Two traps around this value:
 The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0) runs on **both** the
 Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
 limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
+
+### The shared-report funnel
+
+A shared report (`/r/<token>`) is the highest-intent surface this product has: someone is reading an
+analysis of a post they care about. Three CTAs carry them into signup, all saying **"Scan more comments
+on this post"** and all `no-print` (the report doubles as an exportable document, and a signup pitch
+inside a PDF someone is using as evidence undermines what made it credible):
+
+| Placement | Where | Component |
+|---|---|---|
+| Strip | under the top bar, before any scrolling | `ScanMoreStrip` |
+| Rail | sticky beside the article, `xl` and above only | `ScanMoreRail` |
+| Footer | end of the report, where the reader is deciding | `ScanMoreFooter` |
+
+Each links to `/sign-up?claim=<token>`. **The token is the whole point.** Drop it and signup still
+converts but lands them on an empty dashboard with no idea which post they came from.
+
+**The flow:** `/r/<token>` → `/sign-up?claim=<token>` → `/welcome?claim=<token>` → `POST
+/v1/investigations/claim` → `/investigate?url=<source>&claimed=<slug>`.
+
+The token has **two carriers** because Clerk runs multi-step sign-ups across its own sub-routes
+(`/sign-up/continue`, email verification, an OAuth round trip) and a query param does not reliably
+survive all of them: `fallbackRedirectUrl` is the happy path, and `RememberClaim` mirrors it into
+**sessionStorage** (not localStorage: a stale token surviving for weeks would silently claim a report
+during an unrelated future signup).
+
+`POST /v1/investigations/claim` copies the shared investigation into the caller's archive. Four things
+about it that must not change:
+
+- **`share_token` is NOT copied.** It is unique and drives the `/r/<token>` lookup, so a second row
+  holding it would either fail the insert or make the public report ambiguous for every visitor,
+  breaking the very link that produced the signup. The copy is private until its owner shares it.
+- **Idempotent per (user, token)** via the `claimed_from_token` column, because `ClaimHandoff` fires
+  from a page load nobody can guarantee happens once (a refresh, React 18's double mount, a retried
+  request) and `payload_json` is routinely megabytes. `claimed_from_token` is deliberately **not
+  unique**: many people claiming one shared report is the entire point.
+- **The original is untouched** and **no credits move**. Reading is free; scanning is what costs.
+- **`/claim` is declared after `/{slug}`** and is safe only because `{slug}` is GET and PATCH while
+  claim is POST. Adding `POST /v1/investigations/{slug}` later would shadow it silently;
+  `test_claim_shared_investigation.py` asserts against that.
+
+`ClaimHandoff` never dead-ends: a revoked token (the owner unshared it between the click and the
+signup) is the expected failure, so it offers the normal investigate flow rather than showing a new
+customer an error page.
+
+The arrival banner on `/investigate` is gated on `?claimed=`, and it matters: without it the
+pre-filled URL and the already-scanned rows look arbitrary. Accounts the original report covered
+already come back marked `scanned` by the compile step, so "scan more" is literally what the page
+offers.
+
+**The signup trial is 1 credit** (was 3, was 25). One credit covers up to 50 accounts, so a funnel
+signup gets exactly one real scan of the post they arrived from, then they subscribe. Set in **four**
+places and `test_deployed_credit_contract.py` fails on drift between the env pair:
+`OMI_FREE_TRIAL_CREDITS` + `NEXT_PUBLIC_TRIAL_CREDITS` in `render.yaml`, `config.py`'s default, and
+`plan.ts`'s default.
+
+Copy around that number goes through **`TRIAL_CREDITS_LABEL`** / **`CREDIT_NOUN`** (`lib/plan.ts`).
+Hardcoding "credits" read fine at 3 and became "1 free credits" in five places the moment the trial
+was cut, so don't write the noun out.
 
 ### The paid plan is called "Omi Premium Member"
 

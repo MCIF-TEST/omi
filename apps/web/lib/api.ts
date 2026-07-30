@@ -155,6 +155,34 @@ export function scoreSelection(url: string, selected: string[]): Promise<ScoreJo
 }
 
 // ---------------------------------------------------------------------------
+// Funnel: claim a shared report you arrived from.
+// ---------------------------------------------------------------------------
+
+/** The caller's own copy of a shared investigation, after claiming it. */
+export interface ClaimedInvestigation {
+  slug: string;
+  label: string;
+  /** The post the report is about, so the app can send them to /investigate?url=... */
+  input_url: string;
+  platform: string | null;
+  /** True when this token was already claimed by this account (a refresh, a retried request). */
+  already_claimed: boolean;
+}
+
+/**
+ * Copy a publicly shared investigation into the signed-in user's own archive.
+ *
+ * Safe to call more than once: the server keys the claim on (user, token) and returns the copy that
+ * already exists rather than duplicating a payload that is routinely megabytes.
+ */
+export function claimSharedInvestigation(shareToken: string): Promise<ClaimedInvestigation> {
+  return apiClient<ClaimedInvestigation>('/v1/investigations/claim', {
+    method: 'POST',
+    body: JSON.stringify({ share_token: shareToken }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The free pre-login scan, the SAME compile → select → analyze flow as above,
 // anonymous, X-only, capped at 25 repliers, ONE scan per visitor.
 // ---------------------------------------------------------------------------

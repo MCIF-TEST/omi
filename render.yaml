@@ -123,7 +123,7 @@ services:
       # Keep NEXT_PUBLIC_TRIAL_CREDITS (web service, below) equal to this value or
       # the displayed copy lies about what a new account gets.
       - key: OMI_FREE_TRIAL_CREDITS
-        value: '3'
+        value: '1'
       - key: OMI_SUPER_ADMIN_EMAILS
         value: 'andrewexiga@gmail.com,landonnorris116@gmail.com,exigahayden1@gmail.com,couldbewiser@yahoo.com'
       - key: OMI_SCAN_MAX_COMMENTERS
@@ -297,7 +297,7 @@ services:
       # time into marketing/UI copy). MUST match OMI_FREE_TRIAL_CREDITS and
       # OMI_MONTHLY_CREDIT_GRANT on omisphere-api, or the site lies.
       - key: NEXT_PUBLIC_TRIAL_CREDITS
-        value: '3'
+        value: '1'
       - key: NEXT_PUBLIC_MONTHLY_CREDITS
         value: '20'
       # Pricing-page copy only. The real charge is the Stripe Price behind
