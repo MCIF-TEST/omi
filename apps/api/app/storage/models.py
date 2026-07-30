@@ -514,6 +514,14 @@ class Investigation(Base):
     verdict: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     concluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Funnel: the share token this row was CLAIMED from, when a visitor arrived on someone else's
+    # public report and signed up from it. Set on the COPY, never on the original, and it is what
+    # makes claiming idempotent: a second claim of the same token by the same user returns the copy
+    # that already exists instead of duplicating a payload that can run to megabytes.
+    #
+    # Deliberately NOT unique: the same report can be claimed by many different visitors, which is
+    # the entire point of the funnel.
+    claimed_from_token: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

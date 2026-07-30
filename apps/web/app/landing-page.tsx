@@ -13,7 +13,7 @@ import { ScrollProgress } from '@/components/shared/scroll-progress';
 import { HeroVisual } from '@/components/shared/hero-visual';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { DemoScanForm } from './demo-scan-form';
-import { TRIAL_CREDITS, MONTHLY_CREDITS, SUBSCRIPTION_PRICE, PLAN_NAME } from '@/lib/plan';
+import { TRIAL_CREDITS, TRIAL_CREDITS_LABEL, CREDIT_NOUN, MONTHLY_CREDITS, SUBSCRIPTION_PRICE, PLAN_NAME } from '@/lib/plan';
 
 /**
  * Pre-login front page.
@@ -129,7 +129,7 @@ export function LandingPage() {
                   <Link href="/sign-up">
                     <Button size="lg" className="btn-glow">
                       <ScanLine size={15} />
-                      Start free with {TRIAL_CREDITS} credits
+                      Start free with {TRIAL_CREDITS} {CREDIT_NOUN}
                     </Button>
                   </Link>
                   {/* The free scan below is the second call to action: it is the strongest one on
@@ -145,7 +145,7 @@ export function LandingPage() {
 
                 <ul className="flex items-center gap-x-5 gap-y-2 flex-wrap font-mono text-2xs text-fg-mute tracking-wider">
                   {[
-                    `${TRIAL_CREDITS} free credits, no card`,
+                    `${TRIAL_CREDITS_LABEL}, no card`,
                     'A written read on every account',
                     'X and YouTube',
                   ].map((t) => (
@@ -310,8 +310,8 @@ export function LandingPage() {
               </h2>
               <p className="text-sm text-fg-dim max-w-lg mx-auto leading-relaxed mb-8">
                 {PLAN_NAME} is {SUBSCRIPTION_PRICE} a month and buys {MONTHLY_CREDITS} credits.{' '}
-                {TRIAL_CREDITS} are free to start, no card. Cancel whenever you like. Built for
-                creators, brands, journalists, and platform-integrity teams.
+                You start with {TRIAL_CREDITS_LABEL}, no card. Cancel whenever you like. Built
+                for creators, brands, journalists, and platform-integrity teams.
               </p>
               <div className="flex items-center justify-center gap-3 flex-wrap">
                 <Link href="/sign-up">

@@ -7,6 +7,7 @@ import { Logo } from '@/components/shared/logo';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { PrintButton, CopyLinkButton } from './print-button';
+import { ScanMoreStrip, ScanMoreRail, ScanMoreFooter } from './scan-more-cta';
 
 interface PageProps {
   params: { token: string };
@@ -74,7 +75,13 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
         </div>
       </div>
 
-      <article className="max-w-3xl mx-auto px-6 py-12 space-y-10">
+      {/* Funnel, placement 1 of 3: seen before any scrolling. */}
+      <ScanMoreStrip token={params.token} />
+
+      {/* At xl there is room for a sticky rail beside the report; below that the grid collapses and
+          the article keeps its own centering exactly as before. */}
+      <div className="mx-auto max-w-3xl xl:max-w-6xl xl:grid xl:grid-cols-[minmax(0,1fr)_264px] xl:gap-10 xl:px-6">
+      <article className="max-w-3xl px-6 py-12 space-y-10 xl:px-0">
         {/* Header */}
         <header>
           <div className="flex items-baseline justify-between gap-4 flex-wrap mb-4">
@@ -285,6 +292,9 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
           <p className="text-sm text-fg-dim leading-relaxed">{v.methodology}</p>
         </section>
 
+        {/* Funnel, placement 3 of 3: the reader has finished and is deciding. */}
+        <ScanMoreFooter token={params.token} />
+
         {/* Verification + footer */}
         <footer className="pt-8 border-t border-border-1 space-y-4">
           <div className="report-card bg-bg-elev/50 border border-border-1 rounded-md p-4 flex items-start gap-3">
@@ -307,6 +317,10 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
           </p>
         </footer>
       </article>
+
+        {/* Funnel, placement 2 of 3: follows the reader down the page on wide screens. */}
+        <ScanMoreRail token={params.token} />
+      </div>
     </div>
   );
 }
