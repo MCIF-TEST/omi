@@ -7,7 +7,7 @@ import { Logo } from '@/components/shared/logo';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { PrintButton, CopyLinkButton } from './print-button';
-import { ScanMoreStrip, ScanMoreRail, ScanMoreFooter } from './scan-more-cta';
+import { ScanMoreStrip, ScanMoreRail, ScanMoreFooter, type Coverage } from './scan-more-cta';
 
 interface PageProps {
   params: { token: string };
@@ -41,6 +41,13 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
   }
   const v = body.view;
   const pct = Math.round(v.verdict.overall_probability * 100);
+  // What this report leaves out, as facts rather than adjectives. Absent values stay absent: the CTAs
+  // fall back to a qualitative line rather than inventing a total.
+  const coverage: Coverage = {
+    scanned: v.meta.commenters_scanned ?? 0,
+    available: v.meta.commenters_available ?? null,
+    readCount: v.meta.read_count ?? null,
+  };
 
   return (
     <div className="min-h-screen bg-bg-deep report-page">
@@ -76,7 +83,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
       </div>
 
       {/* Funnel, placement 1 of 3: seen before any scrolling. */}
-      <ScanMoreStrip token={params.token} />
+      <ScanMoreStrip token={params.token} coverage={coverage} />
 
       {/* At xl there is room for a sticky rail beside the report; below that the grid collapses and
           the article keeps its own centering exactly as before. */}
@@ -293,7 +300,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
         </section>
 
         {/* Funnel, placement 3 of 3: the reader has finished and is deciding. */}
-        <ScanMoreFooter token={params.token} />
+        <ScanMoreFooter token={params.token} coverage={coverage} />
 
         {/* Verification + footer */}
         <footer className="pt-8 border-t border-border-1 space-y-4">
@@ -319,7 +326,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
       </article>
 
         {/* Funnel, placement 2 of 3: follows the reader down the page on wide screens. */}
-        <ScanMoreRail token={params.token} />
+        <ScanMoreRail token={params.token} coverage={coverage} />
       </div>
     </div>
   );

@@ -1057,6 +1057,20 @@ export interface ReportMeta {
   published_at: string | null;
   batch_count: number;
   quota_used: number;
+  /**
+   * Funnel facts on a shared report. Each is real or absent, never estimated.
+   *
+   * `commenters_available` is how many commenters were COMPILED for the post against
+   * `commenters_scanned`, so the gap is a checkable statement of what the report leaves out. It is
+   * null on investigations saved before it was recorded. `read_count` is the deduped public-view
+   * count for this token.
+   *
+   * Nothing here may be filled in with a guess. This is a page about fabricated engagement; an
+   * invented number on it would discredit every real number beside it.
+   */
+  commenters_scanned?: number;
+  commenters_available?: number | null;
+  read_count?: number | null;
 }
 
 export interface ReportVerdict {

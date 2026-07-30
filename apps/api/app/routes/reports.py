@@ -122,6 +122,31 @@ def _resolve(token: str) -> Investigation:
     return inv
 
 
+def _read_count(token: str) -> int | None:
+    """How many distinct readers this shared report has had, from the existing deduped view log.
+
+    Real social proof or none: returns None on any failure rather than a zero that would read as
+    "nobody has looked at this". The presentation layer also hides it below a threshold, because a
+    report read three times makes the product look dead.
+    """
+    from sqlalchemy import func, select as _select
+
+    from app.storage.models import EventLog
+
+    # The token lives INSIDE payload_json; EventLog has no token column. The JSON path comparison
+    # renders as json_extract on SQLite and ->> on Postgres, so one query covers both.
+    try:
+        with get_session() as session:
+            return int(session.execute(
+                _select(func.count()).select_from(EventLog).where(
+                    EventLog.kind == "public_report_view",
+                    EventLog.payload_json["token"].as_string() == token,
+                )
+            ).scalar_one() or 0)
+    except Exception:
+        return None
+
+
 def _investigation_to_dict(inv: Investigation) -> dict:
     return {
         "slug": inv.slug,
@@ -136,6 +161,8 @@ def _investigation_to_dict(inv: Investigation) -> dict:
         "commentary_text": inv.commentary_text,
         "commentary_provider": inv.commentary_provider,
         "commentary_generated_at": inv.commentary_generated_at,
+        # Funnel: how much of the post this report actually covers (see Investigation.commenters_available).
+        "commenters_available": getattr(inv, "commenters_available", None),
     }
 
 
@@ -147,9 +174,13 @@ def public_report_view(
 ) -> PublicReportResponse:
     """Render the report data for the Next.js public page."""
     inv = _resolve(token)
+    meta = _investigation_to_dict(inv)
+    # Counted BEFORE this request is recorded, so the number a reader sees is other people, not
+    # themselves. Off-by-one here would be the kind of small dishonesty this page cannot afford.
+    meta["read_count"] = _read_count(token)
     view = build_report_view(
         template=template,
-        investigation=_investigation_to_dict(inv),
+        investigation=meta,
         payload=inv.payload_json or {},
     )
     # Q3 (founder learning): was the shared link actually read? Deduped per

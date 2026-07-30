@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1674 passed, 8 skipped, 1 failed** (5m18s), the failure pre-existing and listed below.
+**1680 passed, 8 skipped, 1 failed** (5m43s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -536,6 +536,31 @@ about it that must not change:
 - **`/claim` is declared after `/{slug}`** and is safe only because `{slug}` is GET and PATCH while
   claim is POST. Adding `POST /v1/investigations/{slug}` later would shadow it silently;
   `test_claim_shared_investigation.py` asserts against that.
+
+**The funnel argues with facts, never with pressure.** Three numbers, each real or absent:
+
+- **`Investigation.commenters_available`** is how many commenters were COMPILED for the post, set at
+  scan time from the candidate-list row count (free there, and the read path needs no join). Against
+  the scanned count it produces the line the whole funnel rests on: *"checked 25 of the 312 accounts
+  that commented, 287 have not been looked at."* NULL on rows written before it existed, and the CTAs
+  fall back to a qualitative sentence rather than inventing a denominator. Copied on claim, or the
+  claimer's own report forgets the gap.
+- **`read_count`** is the deduped `public_report_view` count for the token, counted BEFORE the current
+  request is logged so a first visitor is never told they are the second. Hidden below 25 reads,
+  because a low number reads as "nobody cares". **The token lives inside `payload_json`, not in a
+  column** (`EventLog` has none), so the query is a JSON path comparison; the first version compared a
+  non-existent `EventLog.token` and would have silently returned `None` forever.
+- **`_scanned_count`** prefers `commenter_count` and falls back to `len(commenters)`, because a
+  payload with commenters but no count rendered "0 of 312", which reads as a broken product.
+
+**Nothing on this page may be estimated.** It is a report about fabricated engagement: one invented
+number beside the real ones discredits all of them, and it only takes one screenshot. That rules out
+fake scarcity, countdown timers, and invented view counts, and it is a business argument rather than a
+stylistic one.
+
+The **methodology note** on the public report described `memory` and `coordination` as two of the
+eight long after they were replaced, so a sceptical reader checking the product's own description
+found it wrong about itself. It now names the real eight and states the convergence rule.
 
 `ClaimHandoff` never dead-ends: a revoked token (the owner unshared it between the click and the
 signup) is the expected failure, so it offers the normal investigate flow rather than showing a new

@@ -51,6 +51,14 @@ def build_report_view(
             "published_at": _iso(investigation.get("published_at")),
             "batch_count": investigation.get("batch_count", 1),
             "quota_used": investigation.get("quota_used", 0),
+            # Funnel facts. Both are real or absent, never estimated: `commenters_available` is the
+            # compiled total for the post (NULL on rows written before it was recorded) and
+            # `read_count` is the deduped public-view count for this token. The page shows each only
+            # when it has one, because a made-up number on a report about fake engagement is the one
+            # lie that would discredit everything else on the page.
+            "commenters_scanned": _scanned_count(payload),
+            "commenters_available": investigation.get("commenters_available"),
+            "read_count": investigation.get("read_count"),
         },
         "commentary": commentary,
         "verdict": {
@@ -70,7 +78,9 @@ def build_report_view(
         "total_flagged": len(flagged),
         "video": _summarize_video(payload.get("video"), template),
         "methodology": _methodology_note(),
-        "stats": _stats_block(payload),
+        "stats": _stats_block(
+            payload, commenters_available=investigation.get("commenters_available"),
+        ),
     }
 
 
@@ -284,26 +294,47 @@ def _summarize_video(video: dict | None, template: Template) -> dict | None:
     }
 
 
-def _stats_block(payload: dict) -> dict[str, Any]:
+def _scanned_count(payload: dict) -> int:
+    """How many commenters this report actually scored.
+
+    Prefers the recorded `commenter_count` and falls back to the length of the commenters list,
+    because a payload carrying commenters but no count would otherwise render "0 of 312", which reads
+    as a broken product rather than a partial report.
+    """
     video = payload.get("video") or {}
-    return {
-        "Commenters scanned": video.get("commenter_count", 0),
+    count = video.get("commenter_count")
+    if isinstance(count, int) and count > 0:
+        return count
+    return len(video.get("commenters") or [])
+
+
+def _stats_block(payload: dict, *, commenters_available: int | None = None) -> dict[str, Any]:
+    video = payload.get("video") or {}
+    scanned = _scanned_count(payload)
+    out: dict[str, Any] = {
+        "Commenters scanned": (
+            f"{scanned} of {commenters_available}"
+            if commenters_available and commenters_available > scanned
+            else scanned
+        ),
         "Fresh / cached": f"{video.get('fresh_count', 0)} / {video.get('cached_count', 0)}",
         "Cross-links detected": len(payload.get("cross_links") or []),
         "YouTube quota used": payload.get("quota_used", 0),
         "Coordination clusters": len(video.get("clusters") or []),
     }
+    return out
 
 
 def _methodology_note() -> str:
     return (
-        "OMISPHERE combines eight per-account detectors "
-        "(temporal, semantic, AI-writing, profile, voice, engagement, "
-        "memory, coordination) via a calibrated log-odds aggregator with "
-        "convergence bonuses and a single-signal cap. Five cross-account "
-        "detectors then look for coordination clusters across all "
-        "commenters. Every score is a probability with an explicit "
-        "evidence chain — never a definitive judgement."
+        "OMISPHERE scores every account on eight behavioural dimensions: posting rhythm, "
+        "content repetition, machine-written prose, profile coherence, personal voice, "
+        "engagement farming, account maturity, and history authenticity. Each account is judged "
+        "on its own evidence, and a high score requires several independent indicators that "
+        "converge, not one unusual-looking trait. Ordinary traits that are common among real "
+        "people (a new account, few followers, a short comment) cannot on their own produce a "
+        "high score. Every score is probabilistic and carries the evidence behind it, never a "
+        "definitive judgement about the account or the person using it."
     )
 
 

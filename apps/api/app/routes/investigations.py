@@ -333,6 +333,10 @@ def claim_shared_investigation(
             payload_json=payload,
         )
         copy.confidence = source.confidence
+        # The copy is the same investigation of the same post, so it knows the same thing about how
+        # much of that post was left unchecked. Without this the claimer's own report forgets the gap,
+        # and so does any link they later share themselves.
+        copy.commenters_available = source.commenters_available
         copy.claimed_from_token = token
         session.flush()
         return ClaimResponse(

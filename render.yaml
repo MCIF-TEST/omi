@@ -156,9 +156,11 @@ services:
       # (Link + Apple Pay via card wallets). Set to "link" only if card is fully blocked.
       - key: OMI_STRIPE_PAYMENT_METHOD_TYPES
         value: 'link,card'
-      # REQUIRED for production checkout return. The WEB app URL customers land on
-      # after Stripe Checkout (no trailing slash), e.g. https://omisphere-web.onrender.com
-      # or your custom domain. If this points at the API host, paying users get a 404.
+      # REQUIRED. The WEB app URL customers land on after Stripe Checkout AND the origin every
+      # shared report link is built from, no trailing slash. Set it to the CUSTOM DOMAIN
+      # (https://omisphere.online), not the onrender.com host: this string is what gets pasted into
+      # comment sections, so the onrender host makes every promoted link look like a staging URL.
+      # If it points at the API host instead, paying customers get a 404 after checkout.
       - key: OMI_PUBLIC_BASE_URL
         sync: false
       # Display only — label next to Subscribe. The real charge is the Stripe Price.
@@ -305,8 +307,9 @@ services:
       # API or the site advertises a number customers are not charged.
       - key: NEXT_PUBLIC_SUBSCRIPTION_PRICE
         value: '$13.99'
-      # Same WEB public URL as on the API (no trailing slash). Used by the
-      # browser app for absolute links; must match where users actually land.
+      # Same WEB public URL as on the API (no trailing slash), i.e. https://omisphere.online.
+      # Used for absolute links, including the /r/<token> share URL the Share block copies, so a
+      # stale value here is what makes promoted links point at the wrong host.
       - key: OMI_PUBLIC_BASE_URL
         sync: false
       # OPTIONAL — only if you later add Stripe.js / Elements. Hosted Checkout

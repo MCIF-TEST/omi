@@ -322,3 +322,110 @@ def test_the_claim_route_is_not_shadowed_by_the_slug_route():
     assert "/v1/investigations/{slug}" not in post_paths, (
         "a POST /{slug} route now shadows POST /claim; move the claim route above it"
     )
+
+
+# =========================================================================== #
+# Funnel facts on the public report: real numbers or none at all
+# =========================================================================== #
+def test_the_report_states_how_much_of_the_post_it_actually_covers():
+    """"Checked 25 of the 312 accounts that commented" is the whole argument for signing up, and it
+    is checkable by anyone. It has to come from a recorded total, never an estimate."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)
+        with get_session() as s:
+            inv = s.execute(select(Investigation).where(
+                Investigation.share_token == token)).scalar_one()
+            inv.commenters_available = 312          # what the compile step found
+
+        meta = tc.get(f"/r/{token}").json()["view"]["meta"]
+        assert meta["commenters_available"] == 312
+        assert meta["commenters_scanned"] == 2      # the payload's two commenters
+        # And the visible stats line carries the gap rather than a bare count.
+        stats = tc.get(f"/r/{token}").json()["view"]["stats"]
+        assert stats["Commenters scanned"] == "2 of 312"
+
+
+def test_a_report_with_no_recorded_total_says_nothing_rather_than_guessing():
+    """Investigations saved before the total was recorded must not have one invented for them. The
+    page falls back to a qualitative line; it does not estimate."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)   # commenters_available left NULL
+
+        view = tc.get(f"/r/{token}").json()["view"]
+        assert view["meta"]["commenters_available"] is None
+        assert view["stats"]["Commenters scanned"] == 2   # plain count, no fabricated denominator
+
+
+def test_the_gap_is_hidden_when_the_report_covered_everything():
+    """No gap, no claim. Saying "2 of 2 have not been looked at" would be nonsense."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)
+        with get_session() as s:
+            inv = s.execute(select(Investigation).where(
+                Investigation.share_token == token)).scalar_one()
+            inv.commenters_available = 2          # everyone who commented was scanned
+
+        assert tc.get(f"/r/{token}").json()["view"]["stats"]["Commenters scanned"] == 2
+
+
+def test_the_read_count_is_real_and_counts_other_people_not_the_current_reader():
+    """Social proof has to be a fact. It is also counted BEFORE this request is logged, so a first
+    visitor is never told they are the second."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)
+
+        first = tc.get(f"/r/{token}").json()["view"]["meta"]["read_count"]
+        assert first == 0, "the first reader must not be counted as a prior view"
+        # Views are deduped per (token, IP) per 10 minutes, so a distinct client is needed.
+        tc.get(f"/r/{token}", headers={"X-Forwarded-For": "203.0.113.9"})
+        second = tc.get(f"/r/{token}", headers={"X-Forwarded-For": "203.0.113.10"}
+                        ).json()["view"]["meta"]["read_count"]
+        assert second >= 1
+
+
+def test_a_claimed_copy_inherits_the_coverage_total():
+    """The copy is the same investigation, so it knows the same thing about the post. Without this the
+    claimer's own report would forget how much of the post was left unchecked."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)
+        with get_session() as s:
+            inv = s.execute(select(Investigation).where(
+                Investigation.share_token == token)).scalar_one()
+            inv.commenters_available = 312
+        tc.cookies.clear()
+        claimer = _signup(tc, "claimer@t.com")
+        tc.post("/v1/investigations/claim", json={"share_token": token})
+
+        assert _rows(claimer)[0].commenters_available == 312
+
+
+def test_the_methodology_note_describes_the_signals_that_actually_exist():
+    """This renders on the public report, which is the page being promoted. It described `memory` and
+    `coordination` as two of the eight long after they were replaced, so a reader checking the
+    product's own description found it wrong about itself."""
+    from app.reasoning.prompts.comprehensive_investigation_template import (
+        COMPREHENSIVE_SIGNAL_NAMES,
+    )
+    from app.reports.templates import _methodology_note
+
+    note = _methodology_note().lower()
+    assert "memory" not in note
+    assert "coordination) " not in note
+    for human in ("posting rhythm", "content repetition", "machine-written prose",
+                  "profile coherence", "personal voice", "engagement farming",
+                  "account maturity", "history authenticity"):
+        assert human in note, human
+    assert len(COMPREHENSIVE_SIGNAL_NAMES) == 8
+    # The doctrine that matters most to a sceptical reader is stated, not implied.
+    assert "several independent indicators" in note
+    assert "probabilistic" in note
