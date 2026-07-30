@@ -130,7 +130,9 @@ def generate_analyst_assessment(
                     response.status_code = status.HTTP_202_ACCEPTED
                     return AnalystResponse(
                         slug=inv.slug, enabled=True, status="partial", cached=False,
-                        assessment=entry["assessment"], provider=entry.get("provider"),
+                        assessment=analyst.assessment_for_viewer(
+                            entry["assessment"], is_admin=current.is_admin),
+                        provider=entry.get("provider"),
                         generated_at=entry.get("generated_at"),
                     )
                 # Interrupted batched run (partial entry, nothing in flight) — treat as uncached so
@@ -140,7 +142,9 @@ def generate_analyst_assessment(
             if analyst.entry_is_model_backed(entry):
                 return AnalystResponse(
                     slug=inv.slug, enabled=True, status="ready", cached=True,
-                    assessment=entry["assessment"], provider=entry.get("provider"),
+                    assessment=analyst.assessment_for_viewer(
+                        entry["assessment"], is_admin=current.is_admin),
+                    provider=entry.get("provider"),
                     generated_at=entry.get("generated_at"),
                 )
             # The cached assessment is the deterministic Floor (the model wasn't reached, or its output
@@ -152,7 +156,9 @@ def generate_analyst_assessment(
             if not analyst.runtime_status(settings).get("ready_for_live_model"):
                 return AnalystResponse(
                     slug=inv.slug, enabled=True, status="ready", cached=True,
-                    assessment=entry["assessment"], provider=entry.get("provider"),
+                    assessment=analyst.assessment_for_viewer(
+                        entry["assessment"], is_admin=current.is_admin),
+                    provider=entry.get("provider"),
                     generated_at=entry.get("generated_at"),
                 )
             if analyst.is_generation_inflight(inv.slug):
@@ -163,7 +169,9 @@ def generate_analyst_assessment(
             else:
                 return AnalystResponse(
                     slug=inv.slug, enabled=True, status="ready", cached=True,
-                    assessment=entry["assessment"], provider=entry.get("provider"),
+                    assessment=analyst.assessment_for_viewer(
+                        entry["assessment"], is_admin=current.is_admin),
+                    provider=entry.get("provider"),
                     generated_at=entry.get("generated_at"),
                 )
 

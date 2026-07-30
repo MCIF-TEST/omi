@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1593 passed, 8 skipped, 2 failed** (5m55s), both failures pre-existing and listed below.
+**1659 passed, 8 skipped, 2 failed** (6m11s), both failures pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -252,6 +252,117 @@ The **live model will not emit any of this until the recompiled protocol is past
 OpenRouter preset** (`omi-master-v1`). Until then the schema accepts the old shape, every account
 renders without a breakdown, and nothing errors.
 
+### The breakdown is admin-only while it is unfinished
+
+Product decision (2026-07-29): a customer sees each account's OMI score, tier and written read. The
+eight-dimension scoring behind it is **admin-only** for now. `ADMIN_ONLY_ACCOUNT_FIELDS` in
+`analyst.py` is the whole gate (`signals` + `confidence`); empty that set to ship the feature.
+
+**Filtered on SERVE, never on persist**, and that is the load-bearing part. The signals stay in
+`payload_json`, so the day the breakdown ships every investigation already generated has one and no
+model output anyone paid for is discarded. Stripping at persist time would make the gate irreversible
+for all history. It also stops a 150-account investigation shipping ~150 KB of JSON the page renders
+nowhere.
+
+`assessment_for_viewer()` returns a **copy**, including new row dicts. It is handed the live
+`payload_json` object, so filtering in place would strip the signals from the row SQLAlchemy may flush
+back: one customer page view would permanently delete the data, for admins too.
+
+Applied at all four return sites in `routes/reasoning.py`, and hardcoded `is_admin=False` on the demo
+(`scan_async._demo_assessment`) because that route is unauthenticated and `True` must not be reachable
+there. `tests/test_signals_are_admin_only.py` includes a **source-level guard** that fails if any route
+reads `entry["assessment"]` without passing it through the filter, since a fifth return path added
+later would leak silently.
+
+No frontend gate is needed: `SignalBreakdown` already renders nothing when `signals` is absent, which
+is also how it handles investigations generated before per-signal scoring existed.
+
+### Score discipline: a high score has to be earned (constitution v9)
+
+The analyst was too willing to hand out elevated and high scores. The fix is deliberately **not** a cap
+on the numbers, which would just relocate the error. `_SCORE_DISCIPLINE` (`constitution.py`) makes a
+high score expensive to reach:
+
+- **Start from the base rate.** Most commenters are real. Every account starts low and moves up only as
+  named cells force it.
+- **The two errors are not equal.** Calling a real person bought is the expensive mistake, because the
+  customer cannot check it and one bad high score discredits every other number on the page. On
+  balanced evidence the lower score is *correct*, not merely cautious.
+- **Ambient traits vs discriminative evidence.** Few followers, a new account, no bio, unverified,
+  short or enthusiastic comments, emoji, agreement, fluent or formal prose, consistent posting hours, a
+  plain handle: all ordinary among real people, all named individually, and they cap the account in the
+  moderate band however many you stack. Fluent writing is called out explicitly, since treating it as a
+  tell systematically misjudges people who write well and second-language speakers (who often write
+  *more* formally, not less).
+- **Convergence by band.** 50-74 needs two *independent* discriminative indicators; 75-100 needs several
+  converging plus a statable reason the innocent explanation fails. Three restatements of one
+  observation count once.
+- **The alternative-explanation test** gates anything at 50 or above, and **thin evidence caps at 49**
+  (an account whose history was never collected cannot be strongly accused on profile metadata alone).
+- **No contagion**, and a **distribution self-check** as step (5) of the Dossier Loop: a mostly-high run
+  is more often a calibration failure than a captured section.
+
+Two things this also fixed: the worked example used to score A3 at 55 *explicitly because its wording
+echoed another promotional account*, teaching exactly the contagion the protocol forbids (now a capped
+moderate read that names what was not collected); and the constitution block count moved 15 → 16, which
+is pinned in `test_ai_readiness.py`.
+
+### Write so a stranger can verify you (constitution v10)
+
+**The results get posted publicly, into Twitter comment sections, about named real accounts.** That is
+the design constraint behind v10, and it should stay in mind for anything touching the analyst's prose:
+a per-account sentence is not a dashboard readout, it is a published claim about a person who can read
+it. A false positive is a harm to them and it discredits every other score in the same report.
+
+`_CHECKABLE_CLAIMS`:
+
+- **Compute, do not eyeball.** State the following-to-followers ratio as a figure, the age in days or
+  years, the post count as a number. LLMs are unreliable at ratio and date arithmetic and will
+  cheerfully describe an imbalance that is not there; forcing the computed number improves the
+  reasoning *and* makes the claim auditable.
+- **Quote, do not paraphrase.** Any claim about what an account wrote carries a short verbatim quote.
+  "If you cannot quote it, you cannot claim it."
+- **The hedge goes in the words, not only in the number.** A sentence gets screenshotted without the
+  confidence score beside it, so thin evidence has to be admitted *in the sentence*.
+- **Name what would overturn it** for anything at 50 or above. This is what makes it a finding rather
+  than an accusation.
+- **Never assert identity or intent**, and never imply knowledge of ownership, payment, networks, DMs,
+  or other platforms. None of that is in the bundle.
+
+`_CONFUSABLE_ACCOUNTS` names the legitimate shapes that resemble the tells, because a generic
+instruction to be careful does not stop a model reading a small fan account as a farm: a business or
+brand, a fan/hobby account, a news or aggregator feed, a real person who is new, a dormant account
+that came back, a private person with a tiny footprint, someone writing in a second language or a
+non-Latin script (**digits in a handle are auto-appended by platforms and are never a tell**), and an
+account whose opinion is unpopular or which simply agrees with the post. Recognising one is framed as
+a **correct finding**, not a failure to find something, so the model does not reach for a score.
+
+Dossier Loop gained step **(3c) coherence**: the `omi_score` must be explainable by the eight
+dimensions, and when the number is high and the dimensions are not, *the number is wrong*.
+
+**The worked example was contradicting the schema.** It showed all eight signals for A1 and **none**
+for A2 and A3, while the schema declares them required on every account. Models copy examples over
+schemas, so that was an open invitation to skip the block. All three accounts now carry eight, and the
+example teaches the semantics: A2 (82, high) has six elevated dimensions on different kinds of evidence
+plus one honest `null` (four posts is too few to read a rhythm), while A3 (38, moderate) has five
+`null`s and confidence 30, demonstrating that a null-heavy list must drag confidence down.
+
+`BANNED_PHRASES` extended with certainty ("proves that", "undoubtedly"), identity and intent ("was
+hired", "is operated by", "real identity"). **Note its reach:** the Governor's S9 lint sees only the
+investigation-level `headline`/`assessment`/evidence claims, *not* `commenter_assessments[].assessment`,
+and the comprehensive path runs `adjudication="schema_only"` so the Governor is not gating the model's
+prose at all on the live route. **The protocol is the only real control today.** Extending enforcement
+to per-account text is worth doing and is not done.
+
+Pinned by `tests/test_score_discipline.py` (53 tests). Protocol recompiled to
+**`map:461301d1a47061e711ce082c`, 80,583 chars**, zero em dashes, all drift guards green. Pins moved:
+constitution block count 16 → 18, `package_hash` → `pkg:118b279d16cd37662b7e101d`.
+
+**Cost note:** the protocol has grown 64,808 → 80,583 chars (roughly 20k input tokens) and is sent on
+every batch, so a 150-account investigation pays it six times. Worth watching if OpenRouter spend
+climbs, and worth resisting the urge to keep appending doctrine: past some length the model follows
+each individual instruction *less* reliably, so additions should replace rather than accumulate.
+
 ### Evidence completeness — what the model is allowed to see
 
 The analyst's verdict is only as good as the evidence assembled *before* the coverage budgeter
@@ -385,6 +496,22 @@ Two traps around this value:
 The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0) runs on **both** the
 Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
 limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
+
+### The paid plan is called "Omi Premium Member"
+
+`PLAN_NAME` in `apps/web/lib/plan.ts` is the single source, used by the pricing card, the landing
+page's closing pitch, the settings billing card, the subscription status row (an active subscriber is
+shown the membership name rather than the word "Active"), and the subscribe button ("Become an Omi
+Premium Member · $13.99/mo").
+
+Deliberately **not** an env var, unlike the credit and price figures. Those exist as env vars because
+they can disagree with what the server actually charges and grants; a plan name cannot, so a second
+copy in Render would be a liability rather than a safeguard.
+
+**It does need to match the product name in the Stripe dashboard**, which is a dashboard change and
+not a code one. The site names the plan, then Stripe Checkout shows whatever the product is called,
+and a customer seeing two different names at the moment they hand over a card reasonably wonders what
+they are buying. Nothing in the repo can detect that drift.
 
 ### Billing: Stripe ($13.99/mo, 20 credits), webhook + API backstop
 

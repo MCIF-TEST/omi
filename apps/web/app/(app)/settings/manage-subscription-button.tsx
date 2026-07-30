@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { apiClient, ApiError } from '@/lib/api';
+import { PLAN_NAME } from '@/lib/plan';
 
 export interface BillingStatus {
   configured: boolean;
@@ -194,7 +195,7 @@ export function ManageSubscriptionButton({
             ? 'Update payment method'
             : active
               ? 'Manage subscription'
-              : `Subscribe for ${status.price_display}/mo`}
+              : `Become an ${PLAN_NAME} · ${status.price_display}/mo`}
       </Button>
 
       {error && (

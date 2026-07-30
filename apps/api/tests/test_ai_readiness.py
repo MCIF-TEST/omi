@@ -273,7 +273,11 @@ def test_intelligence_inventory_is_grounded():
     assert inv["prompt_library"]["count"] == 13
     assert inv["prompt_library"]["all_content_addressed"] is True
     assert inv["prompt_library"]["live_activated"] == {"behavior_analyst": "v1", "omi_analyst": "v1"}
-    assert inv["constitution"]["count"] == 15  # v8 added score_integrity_rules (the Dossier Loop)
+    # v8 added score_integrity_rules (the Dossier Loop); v9 added score_discipline (what a high score
+    # has to earn: base rate, ambient vs discriminative, per-band convergence, the distribution check);
+    # v10 added confusable_accounts (legitimate shapes that resemble the tells) and checkable_claims
+    # (write so a stranger can verify you, because these findings get published).
+    assert inv["constitution"]["count"] == 18
     assert inv["playbook"]["count"] == 11
     assert inv["corpus_design"]["categories"] == 14
 

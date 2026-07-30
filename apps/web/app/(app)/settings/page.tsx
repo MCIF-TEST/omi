@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Target, ArrowRight, Clock, Gauge, MessageSquarePlus } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/auth';
+import { PLAN_NAME } from '@/lib/plan';
 import { apiServer } from '@/lib/api-server';
 import { ManageSubscriptionButton, type BillingStatus } from './manage-subscription-button';
 import { NotificationsBlock } from './notifications-block';
@@ -43,8 +44,11 @@ export default async function SettingsPage() {
           <Row
             label="Subscription"
             value={
+              // An active subscriber IS an Omi Premium Member, so name the membership rather than
+              // repeating the word "active". The other two states stay statuses, because neither one
+              // is a membership.
               user.subscription_status === 'active'
-                ? <span className="font-mono text-2xs tracking-wider uppercase text-accent-text">Active</span>
+                ? <span className="font-mono text-2xs tracking-wider uppercase text-accent-text">{PLAN_NAME}</span>
                 : user.subscription_status === 'canceled'
                   ? <span className="font-mono text-2xs tracking-wider uppercase text-warn">Canceled</span>
                   : <span className="font-mono text-2xs tracking-wider uppercase text-fg-dim">Free trial</span>
@@ -65,9 +69,10 @@ export default async function SettingsPage() {
         <CardLabel>Billing</CardLabel>
         {/* Figures come from the API, which reads them from the same settings that drive the actual
             charge and grant, so this card cannot drift from what a customer is really billed. */}
-        <CardTitle>
+        <CardTitle>{PLAN_NAME}</CardTitle>
+        <p className="font-mono text-2xs uppercase tracking-wider text-fg-mute mb-3">
           {billing.price_display} / month · {billing.credits_per_period} credits
-        </CardTitle>
+        </p>
         <p className="text-sm text-fg-dim mb-5">
           {billing.subscription_status === 'active' || billing.subscription_status === 'trialing'
             ? `${billing.credits_per_period} credits are added each month. Update your card or cancel any time from Stripe.`

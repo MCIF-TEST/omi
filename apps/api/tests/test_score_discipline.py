@@ -1,0 +1,379 @@
+"""The methodology that makes a high score expensive to reach.
+
+Product decision (2026-07-29): the analyst was too willing to hand out elevated and high scores. The
+fix is NOT a cap on the numbers, which would just move the error, but a stricter method: start from
+the base rate, separate evidence that actually discriminates from traits that are ordinary among real
+people, require converging independent indicators before a high band, test the innocent explanation,
+and re-check the distribution before emitting.
+
+These assertions pin the doctrine into the compiled protocol. It is easy to soften prose by accident
+while editing nearby text, and the only symptom in production would be scores drifting back up, which
+nobody would notice until a customer complained that real accounts were being called bots.
+"""
+from __future__ import annotations
+
+import pytest
+
+from app.reasoning.prompts.constitution import (
+    CONSTITUTION,
+    CONSTITUTION_VERSION,
+    BLOCKS_BY_ID,
+)
+from app.reasoning.prompts.master_protocol import compile_master_analyst_protocol
+
+
+@pytest.fixture(scope="module")
+def protocol() -> str:
+    return compile_master_analyst_protocol()["text"]
+
+
+# =========================================================================== #
+# The block exists, is in the constitution, and is versioned
+# =========================================================================== #
+def test_the_score_discipline_block_is_part_of_the_constitution():
+    assert "score_discipline" in BLOCKS_BY_ID
+    assert any(b.id == "score_discipline" for b in CONSTITUTION)
+
+
+def test_the_constitution_version_records_the_change():
+    """Adding doctrine is a material protocol change, so the version moves with it. A silent edit
+    would make two deployments disagree about what the analyst was told while reporting the same
+    version string in every trace."""
+    assert CONSTITUTION_VERSION == "v10"
+
+
+def test_the_block_reaches_the_compiled_protocol(protocol):
+    assert "SCORE DISCIPLINE" in protocol
+
+
+# =========================================================================== #
+# The five ideas that do the work
+# =========================================================================== #
+def test_the_base_rate_is_stated(protocol):
+    """Without a prior, every unusual-looking account reads as suspicious. The protocol has to say
+    out loud that most commenters are real."""
+    assert "BASE RATE" in protocol
+    assert "large majority of accounts are real people" in protocol
+
+
+def test_the_asymmetry_of_the_two_errors_is_stated(protocol):
+    """A false accusation is the expensive error, and the model has to know which way to lean when
+    the evidence is balanced."""
+    assert "THE TWO ERRORS ARE NOT EQUAL" in protocol
+    assert "the lower score is the correct answer" in protocol
+
+
+@pytest.mark.parametrize("ambient", [
+    "a low follower count", "a new account", "few posts", "no bio", "no verification",
+    "emoji", "agreeing with the post", "consistent times of day",
+])
+def test_the_ambient_traits_are_named_individually(protocol, ambient):
+    """Naming them one by one matters. A general instruction to "be careful" does not stop a model
+    reading a 3-follower account as a bot; an explicit list does. Second-language writing is the one
+    with the worst fairness consequences if it is treated as a tell."""
+    assert ambient in protocol
+
+
+def test_fluent_writing_is_explicitly_not_a_tell(protocol):
+    """The trap that would systematically misjudge people who write well, and people writing in a
+    second language, who often write more formally rather than less."""
+    assert "many people write well" in protocol
+    assert "second-language" in protocol
+    assert "MORE formally, not less" in protocol
+
+
+def test_ambient_traits_cannot_reach_the_high_bands(protocol):
+    """However many ordinary traits are stacked up, they do not add to an accusation."""
+    assert "may NEVER take an account above the moderate band" in protocol
+
+
+def test_the_discriminative_evidence_is_defined_separately(protocol):
+    """The counterpart to the ambient list: what genuinely is hard to explain innocently."""
+    assert "WHAT IS ACTUALLY DISCRIMINATIVE" in protocol
+    for tell in ("near-verbatim text reused across this account's OWN posts",
+                 "a scheduler is a better explanation than a person",
+                 "no topical continuity",
+                 "follow-for-follow, link in bio, DM to earn"):
+        assert tell in protocol
+
+
+def test_the_bands_require_converging_independent_evidence(protocol):
+    """The operational core. 50 or more needs two independent discriminative indicators; 75 or more
+    needs several plus a reason the innocent explanation fails."""
+    assert "CONVERGENCE, BY BAND" in protocol
+    assert "TWO INDEPENDENT" in protocol
+    # Independence has to be spelled out or one observation restated three times counts as three.
+    assert "three restatements of one observation are ONE indicator" in protocol
+
+
+def test_the_alternative_explanation_test_gates_the_elevated_band(protocol):
+    """The single most effective debiasing device here: before accusing, say what the innocent
+    reading is and point at the cell that rules it out."""
+    assert "ALTERNATIVE-EXPLANATION TEST BEFORE ANY SCORE OF 50 OR MORE" in protocol
+    assert "If no cell rules it out" in protocol
+
+
+def test_thin_evidence_caps_the_score(protocol):
+    """Absence of evidence is not evidence. An account we barely looked at cannot be strongly
+    accused, and the reason must say which evidence was never gathered."""
+    assert "THIN EVIDENCE CAPS THE SCORE" in protocol
+    assert "cannot exceed 49 on profile metadata alone" in protocol
+
+
+def test_a_single_dimension_cannot_carry_a_high_score(protocol):
+    """The per-account mirror of the engine's single-axis cap: one alarming axis is one observation."""
+    assert "ONE DIMENSION CANNOT CARRY A HIGH SCORE" in protocol
+
+
+def test_scores_do_not_spread_between_accounts(protocol):
+    """A suspicious neighbour is not evidence. The worked example used to nudge one account up for
+    resembling another, which is exactly the reasoning this forbids."""
+    assert "NO CONTAGION BETWEEN ACCOUNTS" in protocol
+    assert "A suspicious section never raises an individual's score" in protocol
+
+
+def test_the_distribution_self_check_runs_before_emitting(protocol):
+    """The backstop that catches a whole run drifting high, which is the failure mode a per-account
+    rule cannot see."""
+    assert "CHECK THE DISTRIBUTION BEFORE YOU EMIT" in protocol
+    assert "more often a calibration failure than a captured section" in protocol
+    # And it is wired into the method, not only asserted as doctrine.
+    assert "DISTRIBUTION CHECK" in protocol
+
+
+def test_ties_break_downward(protocol):
+    assert "NEVER ROUND UP" in protocol
+    assert "take the lower" in protocol
+
+
+# =========================================================================== #
+# The worked example has to model the doctrine, because it teaches harder than the rules
+# =========================================================================== #
+def test_the_worked_example_does_not_inflate_a_score_from_a_neighbour(protocol):
+    """A3 used to sit at 55 "elevated" explicitly because its wording echoed another promotional
+    account, which is the contagion the protocol forbids and a demonstration of the exact overclaim
+    this change is meant to stop. It is now a capped moderate read on its own thin evidence."""
+    assert "which nudges the score up" not in protocol
+    assert "loosely echoes another promotional account" not in protocol
+    assert '"ref": "A3", "omi_score": 38, "suspicion_tier": "moderate"' in protocol
+
+
+def test_the_worked_example_explains_its_own_cap(protocol):
+    """A3 models the required sentence for a thin account: name what was not collected, say the read
+    is weak because of it, and name the innocent shape it also fits."""
+    assert "Its posting history was not collected" in protocol
+    assert "this is a weak read on profile metadata alone" in protocol
+    assert "exactly what a real person who just joined looks like" in protocol
+
+
+def test_the_high_scoring_example_shows_three_independent_observations_in_its_prose(protocol):
+    """The discipline must not have flattened the example into uselessness. A2 at 82 remains a
+    demonstration of several independent tells landing together, and it says so, so the model learns
+    to justify the band rather than just assert it."""
+    assert '"ref": "A2", "omi_score": 82, "suspicion_tier": "high"' in protocol
+    a2 = protocol.split('"ref": "A2"', 1)[1][:2600]
+    assert "the identical sentence" in a2                  # semantic
+    assert "390 to 1" in a2                                # profile, computed
+    assert "created 9 days before this post" in a2         # maturity
+    assert "Three independent things point the same way" in a2
+    assert "which is why this sits high rather than moderate" in a2
+
+
+# =========================================================================== #
+# Checkable claims (v10). These exist because per-account prose gets published,
+# about named real accounts, where a wrong claim is both a harm and a liability.
+# =========================================================================== #
+def test_the_checkable_claims_block_is_part_of_the_constitution():
+    assert "checkable_claims" in BLOCKS_BY_ID
+    assert any(b.id == "checkable_claims" for b in CONSTITUTION)
+
+
+def test_figures_must_be_computed_and_stated_not_eyeballed(protocol):
+    """LLMs are unreliable at ratio and date arithmetic and will happily describe "a huge following
+    imbalance" that is not there. Forcing the computed number both improves the reasoning and makes
+    the claim auditable by whoever reads it."""
+    assert "COMPUTE, DO NOT EYEBALL" in protocol
+    assert "following-to-followers ratio" in protocol
+    assert "a comparison you have not actually computed is not evidence" in protocol
+
+
+def test_text_claims_require_a_verbatim_quote(protocol):
+    """A quote can be checked by anyone; a paraphrase is an opinion. This is the single strongest
+    thing a published claim can carry."""
+    assert "QUOTE, DO NOT PARAPHRASE" in protocol
+    assert "If you cannot quote it, you cannot claim it" in protocol
+
+
+def test_the_hedge_must_be_in_the_sentence_not_only_the_number(protocol):
+    """The failure this prevents: a confident-sounding sentence carrying a low confidence score gets
+    quoted without the score, and then it is simply an overclaim in someone's feed."""
+    assert "THE HEDGE GOES IN THE WORDS" in protocol
+    assert "will be quoted without the number" in protocol
+
+
+def test_every_serious_claim_names_what_would_overturn_it(protocol):
+    assert "SAY WHAT WOULD OVERTURN IT" in protocol
+    assert "separates an analytical finding" in protocol
+
+
+def test_identity_and_intent_are_never_assertable(protocol):
+    """The line between a finding and an accusation. The evidence can narrow whether behaviour is
+    automated; it can never establish who owns an account or that anyone was paid."""
+    assert "NEVER ASSERT IDENTITY OR INTENT" in protocol
+    # The rule names the forbidden forms verbatim so the model can pattern-match against them.
+    for forbidden in ("This account IS a bot", "this is a paid troll", "they were hired to"):
+        assert forbidden in protocol
+    # And gives the correct replacements, which is what makes the rule actionable.
+    assert "behaves in a way consistent with" in protocol
+    assert "difficult to explain as ordinary use" in protocol
+
+
+def test_the_limits_of_the_evidence_are_stated_explicitly(protocol):
+    """Guards the most tempting overreach: implying knowledge of ownership, payment, networks, DMs,
+    or other platforms, none of which are in the bundle."""
+    assert "NO CLAIM ABOUT WHAT YOU CANNOT SEE" in protocol
+    assert "whether money changed hands" in protocol
+
+
+# =========================================================================== #
+# Confusable accounts (v10): the biggest single source of false positives
+# =========================================================================== #
+def test_the_confusable_accounts_block_is_part_of_the_constitution():
+    assert "confusable_accounts" in BLOCKS_BY_ID
+    assert any(b.id == "confusable_accounts" for b in CONSTITUTION)
+
+
+@pytest.mark.parametrize("archetype", [
+    "A BUSINESS OR BRAND ACCOUNT",
+    "A FAN, HOBBY, OR SUPPORTER ACCOUNT",
+    "A NEWS, SPORTS, OR AGGREGATOR ACCOUNT",
+    "A REAL PERSON WHO IS NEW",
+    "A DORMANT ACCOUNT THAT CAME BACK",
+    "A PRIVATE PERSON WITH A TINY FOOTPRINT",
+    "SOMEONE WRITING IN A SECOND LANGUAGE",
+])
+def test_each_legitimate_shape_that_resembles_a_bot_is_named(protocol, archetype):
+    """Generic instructions to be careful do not stop a model reading a small fan account as a farm.
+    An explicit list of the shapes that get misread does."""
+    assert archetype in protocol
+
+
+def test_recognising_a_legitimate_shape_is_framed_as_a_finding(protocol):
+    """Otherwise the model treats "nothing found" as a failure and reaches for a score."""
+    assert "not a failure to find something" in protocol
+
+
+def test_handle_digits_and_non_latin_names_are_not_tells(protocol):
+    """Platforms append digits automatically when a name is taken, and script or naming convention
+    says nothing about authenticity. Treating either as evidence would make the product
+    systematically wrong about whole populations."""
+    assert "digits in a handle" in protocol
+    assert "non-Latin script" in protocol
+    assert "fairness failure" in protocol
+
+
+def test_stance_and_topic_are_never_evidence(protocol):
+    """Especially important given results get posted into political comment sections."""
+    assert "AN ACCOUNT WHOSE OPINION IS UNPOPULAR" in protocol
+    assert "Stance, politics" in protocol
+
+
+def test_the_loop_checks_score_against_its_own_signals(protocol):
+    """A model will write 85 above eight mild dimensions. The number and the breakdown have to agree,
+    and when they do not it is the number that is wrong."""
+    assert "CHECK YOUR OWN COHERENCE" in protocol
+    assert "the number is wrong, not the dimensions" in protocol
+
+
+# =========================================================================== #
+# The worked example must now demonstrate all of it
+# =========================================================================== #
+def test_every_account_in_the_example_carries_all_eight_signals():
+    """The example used to show eight dimensions for one account and none for the other two, while
+    the schema declared them required on every account. Models copy examples over schemas, so that
+    contradiction was an invitation to skip the block."""
+    import json
+
+    from app.reasoning.prompts import comprehensive_investigation_template as T
+
+    raw = T._OUTPUT_EXAMPLE
+    obj = json.loads(raw[raw.find("{"):])
+    rows = obj["commenter_assessments"]
+    assert len(rows) == 3
+    for row in rows:
+        assert len(row["signals"]) == 8, f"{row['ref']} does not show all eight"
+        assert isinstance(row["confidence"], int)
+
+
+def test_the_example_high_score_is_coherent_with_its_own_dimensions():
+    """A2 at 82 has to be explainable by its breakdown, which is what the loop's coherence step now
+    demands of the model."""
+    import json
+
+    from app.reasoning.prompts import comprehensive_investigation_template as T
+
+    raw = T._OUTPUT_EXAMPLE
+    a2 = next(r for r in json.loads(raw[raw.find("{"):])["commenter_assessments"]
+              if r["ref"] == "A2")
+    elevated = [s["name"] for s in a2["signals"]
+                if isinstance(s["score"], int) and s["score"] >= 50]
+    assert a2["omi_score"] >= 75
+    assert len(elevated) >= 3, "a high score with fewer than three elevated dimensions teaches the "\
+                               "exact incoherence the loop is supposed to catch"
+    # And it still shows an honest null, so a high score does not imply everything was measurable.
+    assert any(s["score"] is None for s in a2["signals"])
+
+
+def test_the_example_thin_account_is_null_heavy_with_low_confidence():
+    """A3 is the teaching case for the null semantics: history never collected means most dimensions
+    are unscorable, and confidence has to fall accordingly rather than staying high."""
+    import json
+
+    from app.reasoning.prompts import comprehensive_investigation_template as T
+
+    raw = T._OUTPUT_EXAMPLE
+    a3 = next(r for r in json.loads(raw[raw.find("{"):])["commenter_assessments"]
+              if r["ref"] == "A3")
+    nulls = [s["name"] for s in a3["signals"] if s["score"] is None]
+    assert len(nulls) >= 4, "the thin-evidence example must show nulls, not invented numbers"
+    assert a3["confidence"] <= 40, "null-heavy signals must come with low confidence"
+    assert a3["omi_score"] < 50
+
+
+def test_the_example_leads_with_computed_figures_and_a_quote():
+    """The example has to model the two things that make a claim checkable, or the rules asking for
+    them are competing with a demonstration that ignores them."""
+    import json
+
+    from app.reasoning.prompts import comprehensive_investigation_template as T
+
+    raw = T._OUTPUT_EXAMPLE
+    rows = {r["ref"]: r for r in json.loads(raw[raw.find("{"):])["commenter_assessments"]}
+    a2, a3 = rows["A2"]["assessment"], rows["A3"]["assessment"]
+    assert '"Huge potential here, link in bio"' in a2      # verbatim quote
+    assert "390 to 1" in a2                                # computed ratio
+    assert "4 to 1" in a3                                  # computed ratio
+    assert "would overturn it" in a2                        # falsifiability
+    assert "weak read" in a3                                # hedge in the words
+
+
+# =========================================================================== #
+# House rules still hold over the new text
+# =========================================================================== #
+@pytest.mark.parametrize("block_id", ["score_discipline", "confusable_accounts", "checkable_claims"])
+def test_the_new_doctrine_introduced_no_dashes(protocol, block_id):
+    """The punctuation rule covers the compiled protocol, because the model's prose renders directly
+    on the site and would otherwise reintroduce em dashes on every scan."""
+    body = BLOCKS_BY_ID[block_id].body
+    assert "—" not in body and "–" not in body
+    assert "—" not in protocol and "–" not in protocol
+
+
+def test_the_banned_phrases_cover_certainty_identity_and_intent():
+    """These three are the ways a finding turns into an accusation. The list is also documented as
+    NOT reaching per-account prose on the live path, which is why the protocol has to hold the line."""
+    from app.governor.governor import BANNED_PHRASES
+
+    for phrase in ("is a bot", "confirmed bot", "proves that", "was hired", "is operated by",
+                   "real identity", "undoubtedly"):
+        assert phrase in BANNED_PHRASES

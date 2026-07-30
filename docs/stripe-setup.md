@@ -53,13 +53,20 @@ Stripe Dashboard → **Product catalogue → Add product**
 
 | Field | Value |
 |---|---|
-| Name | `OmiSphere Monthly` |
+| Name | `Omi Premium Member` |
 | Description | `20 analysis credits per month` |
 | Price | `13.99` **USD** |
 | Billing period | **Monthly** (recurring) |
 
 Save, then open the price and copy its id — it looks like `price_1QxxxxxxxxxxxxxxxxxxXXXX`.
 That is `OMI_STRIPE_PRICE_ID`.
+
+> **The product Name must match `PLAN_NAME` in `apps/web/lib/plan.ts`** (currently
+> `Omi Premium Member`). The site names the plan, then Stripe Checkout shows whatever this field says,
+> and a customer who sees two different plan names at the moment they hand over a card reasonably
+> wonders what they are buying. Nothing in the repo can detect that drift, so if you rename the plan
+> in one place, rename it in the other. Renaming an existing product is safe: it does not change the
+> price id, so no env var needs updating and no subscription is affected.
 
 > One credit covers up to 50 analysed accounts, so 20 credits ≈ 1,000 accounts a month. If you ever
 > want to change what a subscription is worth, change `OMI_MONTHLY_CREDIT_GRANT` — the amount charged

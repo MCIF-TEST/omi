@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Check, Sparkles, Zap } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TRIAL_CREDITS, SUBSCRIPTION_PRICE } from '@/lib/plan';
+import { TRIAL_CREDITS, SUBSCRIPTION_PRICE, PLAN_NAME } from '@/lib/plan';
 
 export const metadata = { title: 'Pricing. OMISPHERE' };
 
@@ -45,7 +45,7 @@ export default function PricingPage() {
           Pricing
         </div>
         <h1 className="display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
-          One plan. <span className="text-brand">Cancel anytime.</span>
+          One membership. <span className="text-brand">Cancel anytime.</span>
         </h1>
         <p className="mt-4 text-fg-dim leading-relaxed">
           Comment-section intelligence. Bots, bought engagement, and AI-written
@@ -60,6 +60,9 @@ export default function PricingPage() {
           {/* corner glow */}
 
           <div className="relative">
+            <p className="display text-lg font-semibold text-fg tracking-tight mb-1">
+              {PLAN_NAME}
+            </p>
             <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
               <span className="stat-value text-5xl font-bold tracking-tight">
                 <span className="text-brand">{SUBSCRIPTION_PRICE}</span>
