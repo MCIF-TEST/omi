@@ -33,7 +33,9 @@ def build_report_view(
     the full ComprehensiveScanResult that was stored at scan time.
     """
     flagged = _flagged_commenters(payload)
-    everyone = _all_commenters(payload)
+    everyone = _merge_account_reads(
+        _all_commenters(payload), investigation.get("account_reads") or [],
+    )
     commentary = None
     if investigation.get("commentary_text"):
         commentary = {
@@ -173,14 +175,16 @@ def render_markdown(
     if v["all_commenters"]:
         add(f"## Accounts scanned · {v['total_scanned']} total, {v['total_flagged']} flagged")
         add("")
-        add("| Handle | Tier | Probability | Intent |")
+        add("| Handle | Tier | OMI | What the analyst found |")
         add("|---|---|---|---|")
         for c in v["all_commenters"]:
-            add(
-                f"| {c['handle']} | {c['tier']} | "
-                f"{int(round(c['overall_probability']*100))}% | "
-                f"{c.get('intent_label') or '-'} |"
+            score = (
+                c["omi_score"] if isinstance(c.get("omi_score"), int)
+                else int(round(c["overall_probability"] * 100))
             )
+            # Pipes inside the prose would break the markdown table.
+            note = str(c.get("assessment") or c.get("intent_label") or "-").replace("|", "/")
+            add(f"| {c['handle']} | {c.get('analyst_tier') or c['tier']} | {score} | {note} |")
         add("")
 
     if template == "evidence" and v["cross_links"]:
@@ -243,6 +247,37 @@ def _top_cross_links(payload: dict, *, n: int = 3) -> list[dict]:
 #: Hard ceiling on the full account list in one report. Above the operator scan cap (150) so it is
 #: never reached in practice; it exists so a pathological payload cannot produce an unbounded response.
 _ALL_COMMENTERS_CAP = 250
+
+
+def _merge_account_reads(rows: list[dict[str, Any]], reads: list[dict]) -> list[dict[str, Any]]:
+    """Attach the analyst's per-account score and written read to each scanned account.
+
+    Joined on external_id, which is the platform's stable identifier, never the handle (handles are
+    mutable and two accounts can present the same display name). An account the analyst did not reach
+    keeps its engine tier and carries no prose rather than an empty string, so the page can tell
+    "not assessed" apart from "assessed and said nothing".
+
+    The rows arrive already filtered for a non-admin viewer; this does not decide what is public.
+    """
+    by_id = {
+        str(r.get("external_id")): r for r in reads
+        if isinstance(r, dict) and r.get("external_id")
+    }
+    if not by_id:
+        return rows
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        read = by_id.get(str(row.get("external_id")))
+        merged = dict(row)
+        if read:
+            if isinstance(read.get("omi_score"), int):
+                merged["omi_score"] = read["omi_score"]
+            if read.get("suspicion_tier"):
+                merged["analyst_tier"] = read["suspicion_tier"]
+            if isinstance(read.get("assessment"), str) and read["assessment"].strip():
+                merged["assessment"] = read["assessment"].strip()
+        out.append(merged)
+    return out
 
 
 def _all_commenters(payload: dict) -> list[dict[str, Any]]:

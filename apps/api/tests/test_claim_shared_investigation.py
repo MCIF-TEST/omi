@@ -521,3 +521,138 @@ def test_a_report_with_no_commenters_renders_without_the_table():
         view = tc.get(f"/r/{token}").json()["view"]
         assert view["all_commenters"] == []
         assert view["total_scanned"] == 0
+
+
+# =========================================================================== #
+# The shared link is the FULL investigation, including what the analyst wrote
+# =========================================================================== #
+def _seed_with_analyst(owner_id: int, token: str) -> None:
+    """A shared report whose analyst entry carries per-account reads AND admin-only signals."""
+    from app.reasoning.analyst import CACHE_KEY
+
+    payload = dict(_PAYLOAD)
+    payload[CACHE_KEY] = {
+        "provider": "openrouter-omi-analyst-v1",
+        "generated_at": "2026-07-29T00:00:00Z",
+        "assessment": {
+            "investigation_trace": {"model_backed": True},
+            "commenter_assessments": [
+                {"ref": "A1", "external_id": "a", "handle": "@a", "resolved": True,
+                 "omi_score": 88, "suspicion_tier": "high", "confidence": 90,
+                 "signals": [{"name": "temporal", "score": 90, "reason": "machine-regular"}],
+                 "assessment": "Posted the identical sentence on four separate days."},
+                {"ref": "A2", "external_id": "b", "handle": "@b", "resolved": True,
+                 "omi_score": 9, "suspicion_tier": "low", "confidence": 85,
+                 "signals": [{"name": "temporal", "score": 5, "reason": "ordinary hours"}],
+                 "assessment": "Years of varied posts that read as one person's life."},
+                {"ref": "A99", "resolved": False, "omi_score": 70,
+                 "suspicion_tier": "elevated", "assessment": "Unresolved alias."},
+            ],
+        },
+    }
+    with get_session() as s:
+        from app.storage.repository import AccountRepository
+        inv = AccountRepository(s).create_investigation(
+            user_id=owner_id, slug="inv_full001", label="Full", input_url="https://x.com/p/9",
+            target_id="9", kind="comprehensive", overall_probability=0.61,
+            overall_tier="elevated", summary="Mixed.", quota_used=2, payload_json=payload,
+        )
+        inv.share_token, inv.is_public = token, 1
+
+
+def test_the_shared_report_carries_what_the_analyst_wrote_about_each_account():
+    """A summary of an investigation is not the investigation. The per-account prose and OMI score are
+    the substance, and without them a promoted link is just a percentage."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_with_analyst(owner, token)
+
+        rows = {c["handle"]: c for c in tc.get(f"/r/{token}").json()["view"]["all_commenters"]}
+        assert rows["@a"]["omi_score"] == 88
+        assert rows["@a"]["analyst_tier"] == "high"
+        assert "identical sentence" in rows["@a"]["assessment"]
+        # The clean account carries its read too, which is what makes the report analysis not a list.
+        assert rows["@b"]["omi_score"] == 9
+        assert "one person's life" in rows["@b"]["assessment"]
+
+
+def test_the_public_report_never_leaks_the_admin_only_signal_breakdown():
+    """This route is anonymous, so `is_admin=True` must be unreachable on it. The eight-signal
+    breakdown is an unfinished feature and must not appear in a public response even though the
+    analyst entry stored underneath it has one."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_with_analyst(owner, token)
+
+        raw = tc.get(f"/r/{token}").text
+        assert "machine-regular" not in raw, "a signal reason leaked into the public report"
+        assert '"signals"' not in raw
+        for row in tc.get(f"/r/{token}").json()["view"]["all_commenters"]:
+            assert "signals" not in row
+            assert "confidence" not in row
+
+
+def test_an_unresolved_alias_is_not_published():
+    """An unresolved alias has no identity to attach a public claim to. Publishing one would be a
+    statement about nobody."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_with_analyst(owner, token)
+
+        raw = tc.get(f"/r/{token}").text
+        assert "Unresolved alias" not in raw
+
+
+def test_accounts_the_analyst_never_reached_keep_their_engine_row():
+    """Half an investigation is still an investigation. An account with no model read must still be
+    listed rather than silently dropped from the count."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_shared_report(owner, token=token)   # no analyst entry at all
+
+        rows = tc.get(f"/r/{token}").json()["view"]["all_commenters"]
+        assert [c["handle"] for c in rows] == ["@a", "@b"]
+        assert all("assessment" not in c for c in rows), (
+            "not assessed must be absent, not an empty string"
+        )
+
+
+def test_the_export_carries_the_analyst_prose_too():
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_with_analyst(owner, token)
+
+        md = tc.get(f"/r/{token}/markdown").text
+        assert "What the analyst found" in md
+        assert "identical sentence" in md
+        assert "machine-regular" not in md, "the export must respect the same admin gate"
+
+
+def test_the_public_json_export_does_not_hand_over_the_analyst_cache():
+    """The leak this closes: /r/<token>/json dumped payload_json raw on an unauthenticated route, and
+    that blob carries the analyst entry with its admin-only signal breakdown and internal provenance
+    (trace ids, prompt hashes, token counts). The page and the markdown export both filter; this one
+    handed over everything, so the admin gate was one URL away from meaning nothing.
+
+    The filtered per-account reads stay, so a programmatic consumer still gets the conclusions.
+    """
+    from app.reasoning.analyst import CACHE_KEY
+
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        token = "tok_public_abcdefgh"
+        _seed_with_analyst(owner, token)
+
+        body = tc.get(f"/r/{token}/json").json()
+        assert CACHE_KEY not in body["payload"], "the analyst cache is still in the public export"
+        raw = tc.get(f"/r/{token}/json").text
+        assert "machine-regular" not in raw, "a signal reason leaked through the JSON export"
+        assert '"signals"' not in raw
+        # The scan result itself is still exported, and so are the filtered reads.
+        assert body["payload"]["video"]["commenters"]
+        assert any(r["handle"] == "@a" for r in body["investigation"]["account_reads"])

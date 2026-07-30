@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Download, FileText, Printer, ExternalLink, ShieldCheck } from 'lucide-react';
 import { ApiError, type PublicReportResponse } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
+import { env } from '@/lib/env';
 import { Logo } from '@/components/shared/logo';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
@@ -43,6 +44,16 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
   const pct = Math.round(v.verdict.overall_probability * 100);
   // What this report leaves out, as facts rather than adjectives. Absent values stay absent: the CTAs
   // fall back to a qualitative line rather than inventing a total.
+  // The visible domain, derived from the configured public base rather than written out. It was
+  // hardcoded to a host this deployment does not use, printed on the page under "Verified by
+  // OMISPHERE", which is the worst possible place for the product to be wrong about itself.
+  const siteName = (() => {
+    try {
+      return new URL(env.PUBLIC_BASE_URL).host.replace(/^www\./, '');
+    } catch {
+      return 'omisphere.online';
+    }
+  })();
   const coverage: Coverage = {
     scanned: v.meta.commenters_scanned ?? 0,
     available: v.meta.commenters_available ?? null,
@@ -227,19 +238,27 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
                     <tr className="text-left font-mono text-2xs tracking-[0.16em] uppercase text-fg-mute report-muted">
                       <th className="px-4 py-2.5 font-normal">Handle</th>
                       <th className="px-4 py-2.5 font-normal">Tier</th>
-                      <th className="px-4 py-2.5 font-normal text-right">Prob.</th>
-                      <th className="px-4 py-2.5 font-normal">Intent</th>
+                      <th className="px-4 py-2.5 font-normal text-right">OMI</th>
+                      <th className="px-4 py-2.5 font-normal">What the analyst found</th>
                     </tr>
                   </thead>
                   <tbody>
                     {v.all_commenters!.map((c) => (
-                      <tr key={c.external_id} className="border-t border-border-1">
-                        <td className="px-4 py-3 font-medium text-fg align-top break-all">{c.handle}</td>
-                        <td className="px-4 py-3 align-top"><TierBadge tier={c.tier} size="sm" /></td>
-                        <td className="px-4 py-3 mono text-right text-fg align-top tabular-nums">
-                          {Math.round((c.overall_probability || 0) * 100)}%
+                      <tr key={c.external_id} className="border-t border-border-1 align-top">
+                        <td className="px-4 py-3 font-medium text-fg break-all">{c.handle}</td>
+                        <td className="px-4 py-3">
+                          <TierBadge tier={c.analyst_tier ?? c.tier} size="sm" />
                         </td>
-                        <td className="px-4 py-3 text-fg-dim align-top">{c.intent_label || '-'}</td>
+                        <td className="px-4 py-3 mono text-right text-fg tabular-nums">
+                          {typeof c.omi_score === 'number'
+                            ? c.omi_score
+                            : Math.round((c.overall_probability || 0) * 100)}
+                        </td>
+                        {/* The analyst's written read is the substance of the investigation. When it
+                            reached this account the prose replaces the terse intent label. */}
+                        <td className="px-4 py-3 text-fg-dim leading-relaxed min-w-[18rem]">
+                          {c.assessment || c.intent_label || '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -356,7 +375,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
                 Report ID <span className="mono text-fg">{v.meta.slug}</span> · generated{' '}
                 {v.meta.created_at?.slice(0, 10) || ', '}.
                 Re-validate by re-scanning the source URL on{' '}
-                <a href="/" className="text-accent hover:underline">omisphere.ai</a>.
+                <a href="/" className="text-accent hover:underline">{siteName}</a>.
               </p>
             </div>
           </div>

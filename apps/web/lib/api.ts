@@ -1093,6 +1093,12 @@ export interface ReportCommenterRow {
   tier: Tier;
   overall_probability: number;
   intent_label: string | null;
+  /** The analyst's own read, merged on when it reached this account. Absent means not assessed, which
+   *  is different from assessed and silent. The eight-signal breakdown is NOT here: it is admin-only
+   *  and this response is public. */
+  omi_score?: number;
+  analyst_tier?: Tier;
+  assessment?: string;
 }
 
 export interface ReportCommenter {

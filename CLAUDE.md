@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1685 passed, 8 skipped, 1 failed** (5m46s), the failure pre-existing and listed below.
+**1691 passed, 8 skipped, 1 failed** (5m11s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -566,6 +566,25 @@ so it is unreachable in practice and exists only so a pathological payload canno
 response. The page falls back to the flagged-only table for reports generated before the full list was
 carried, and the **markdown export lists everyone too**: a page and an export that disagree about who
 was scanned is worse than either alone.
+
+**The shared report carries the analyst's per-account reads**, not just engine percentages: each row
+shows the model's OMI score, its tier, and what it actually wrote. A summary of an investigation is not
+the investigation, and without the prose a promoted link is just a percentage.
+
+Those reads go through **`assessment_for_viewer(..., is_admin=False)`, hardcoded**, because `/r/` is
+unauthenticated and the admin-only signal breakdown must not be reachable there. Hand-filtering the
+fields would drift from the gate the rest of the app uses. Unresolved aliases are dropped: there is no
+identity to attach a public claim to.
+
+**`/r/<token>/json` used to dump `payload_json` raw**, and that blob carries the analyst cache with its
+admin-only signals and internal provenance (trace ids, prompt hashes, token counts). So the gate was
+one URL away from meaning nothing. `_public_payload()` strips the cache key; the filtered reads still
+ride along on `investigation.account_reads`. Note this leak was NOT caught by the source-level guard in
+`test_signals_are_admin_only.py`, which looks for `entry["assessment"]` and cannot see a route that
+dumps the whole payload.
+
+`account_reads` is built inside **`_investigation_to_dict`**, not per route. Adding it at one call site
+is exactly what made the markdown export disagree with the page it exports, which a test caught.
 
 **Nothing on this page may be estimated.** It is a report about fabricated engagement: one invented
 number beside the real ones discredits all of them, and it only takes one screenshot. That rules out

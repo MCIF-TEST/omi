@@ -147,6 +147,60 @@ def _read_count(token: str) -> int | None:
         return None
 
 
+def _public_payload(payload: dict | None) -> dict:
+    """The scan payload with the internal analyst cache removed, for the public JSON export.
+
+    ``payload_json`` carries the analyst entry under its cache key, and that entry holds the
+    admin-only eight-signal breakdown plus internal provenance (trace ids, prompt hashes, token
+    counts). Dumping it raw on an UNAUTHENTICATED route bypassed the viewer gate entirely: the page
+    and the markdown export both filter, and this one handed over everything.
+
+    The filtered per-account reads are already on ``investigation.account_reads``, so a programmatic
+    consumer still gets the analyst's conclusions, just not the unfinished feature or the internals.
+    """
+    from app.reasoning.analyst import CACHE_KEY
+
+    if not isinstance(payload, dict):
+        return {}
+    return {k: v for k, v in payload.items() if k != CACHE_KEY}
+
+
+def _account_reads(inv: Investigation) -> list[dict]:
+    """The model's written read per account, for the public report.
+
+    Filtered through the SAME viewer gate the signed-in routes use, with ``is_admin=False`` hardcoded
+    because this route is anonymous. That keeps the eight-signal breakdown (an unfinished, admin-only
+    feature) out of a public response without this function needing to know which fields those are.
+
+    Only resolved accounts are carried: an unresolved alias has no identity to attach a public claim
+    to, and publishing one would be a statement about nobody.
+    """
+    from app.reasoning import analyst
+
+    try:
+        entry = analyst.cached_assessment(inv)
+        if not entry or not analyst.entry_is_model_backed(entry):
+            return []
+        served = analyst.assessment_for_viewer(entry.get("assessment"), is_admin=False) or {}
+        rows = served.get("commenter_assessments") or []
+        out: list[dict] = []
+        for r in rows:
+            if not isinstance(r, dict) or not r.get("resolved"):
+                continue
+            out.append({
+                "external_id": r.get("external_id"),
+                "handle": r.get("handle"),
+                "omi_score": r.get("omi_score"),
+                "suspicion_tier": r.get("suspicion_tier"),
+                "assessment": r.get("assessment"),
+            })
+        return out
+    except Exception:
+        # A shared report must render even if the analyst entry is malformed. Losing the prose is a
+        # degraded page; a 500 is a dead link somebody already posted publicly.
+        return []
+
+
 def _investigation_to_dict(inv: Investigation) -> dict:
     return {
         "slug": inv.slug,
@@ -163,6 +217,9 @@ def _investigation_to_dict(inv: Investigation) -> dict:
         "commentary_generated_at": inv.commentary_generated_at,
         # Funnel: how much of the post this report actually covers (see Investigation.commenters_available).
         "commenters_available": getattr(inv, "commenters_available", None),
+        # The analyst's per-account reads, built HERE rather than per route. Adding it at one call
+        # site is exactly what made the markdown export disagree with the page it exports.
+        "account_reads": _account_reads(inv),
     }
 
 
@@ -222,7 +279,7 @@ def public_report_json(token: str = Path(min_length=8)) -> Response:
     body = json.dumps(
         {
             "investigation": _investigation_to_dict(inv),
-            "payload": inv.payload_json or {},
+            "payload": _public_payload(inv.payload_json),
         },
         default=str,
         indent=2,
