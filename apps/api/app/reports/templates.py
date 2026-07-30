@@ -33,6 +33,9 @@ def build_report_view(
     the full ComprehensiveScanResult that was stored at scan time.
     """
     flagged = _flagged_commenters(payload)
+    everyone = _merge_account_reads(
+        _all_commenters(payload), investigation.get("account_reads") or [],
+    )
     commentary = None
     if investigation.get("commentary_text"):
         commentary = {
@@ -51,6 +54,14 @@ def build_report_view(
             "published_at": _iso(investigation.get("published_at")),
             "batch_count": investigation.get("batch_count", 1),
             "quota_used": investigation.get("quota_used", 0),
+            # Funnel facts. Both are real or absent, never estimated: `commenters_available` is the
+            # compiled total for the post (NULL on rows written before it was recorded) and
+            # `read_count` is the deduped public-view count for this token. The page shows each only
+            # when it has one, because a made-up number on a report about fake engagement is the one
+            # lie that would discredit everything else on the page.
+            "commenters_scanned": _scanned_count(payload),
+            "commenters_available": investigation.get("commenters_available"),
+            "read_count": investigation.get("read_count"),
         },
         "commentary": commentary,
         "verdict": {
@@ -68,9 +79,16 @@ def build_report_view(
         "focus_account": _summarize_focus_account(payload.get("focus_account")),
         "top_flagged": flagged[: 10 if template == "evidence" else 5],
         "total_flagged": len(flagged),
+        # Every account scored, worst first. The report leads with this now: a list of only the
+        # flagged ones reads as an accusation, while the full list reads as analysis and makes the
+        # clean majority visible.
+        "all_commenters": everyone,
+        "total_scanned": _scanned_count(payload),
         "video": _summarize_video(payload.get("video"), template),
         "methodology": _methodology_note(),
-        "stats": _stats_block(payload),
+        "stats": _stats_block(
+            payload, commenters_available=investigation.get("commenters_available"),
+        ),
     }
 
 
@@ -152,17 +170,21 @@ def render_markdown(
                 add(f"- {r}")
         add("")
 
-    if v["top_flagged"]:
-        add(f"## Top flagged commenters · {v['total_flagged']} total")
+    # Every account scored, worst first. The export has to match what the page shows, or someone who
+    # downloads the report as evidence has a different document from the one they read.
+    if v["all_commenters"]:
+        add(f"## Accounts scanned · {v['total_scanned']} total, {v['total_flagged']} flagged")
         add("")
-        add("| Handle | Tier | Probability | Intent |")
+        add("| Handle | Tier | OMI | What the analyst found |")
         add("|---|---|---|---|")
-        for c in v["top_flagged"]:
-            add(
-                f"| {c['handle']} | {c['tier']} | "
-                f"{int(round(c['overall_probability']*100))}% | "
-                f"{c.get('intent_label') or '—'} |"
+        for c in v["all_commenters"]:
+            score = (
+                c["omi_score"] if isinstance(c.get("omi_score"), int)
+                else int(round(c["overall_probability"] * 100))
             )
+            # Pipes inside the prose would break the markdown table.
+            note = str(c.get("assessment") or c.get("intent_label") or "-").replace("|", "/")
+            add(f"| {c['handle']} | {c.get('analyst_tier') or c['tier']} | {score} | {note} |")
         add("")
 
     if template == "evidence" and v["cross_links"]:
@@ -220,6 +242,76 @@ def _top_cross_links(payload: dict, *, n: int = 3) -> list[dict]:
     return sorted(
         links, key=lambda l: _SEVERITY_RANK.get(l.get("severity"), 0), reverse=True,
     )[:n]
+
+
+#: Hard ceiling on the full account list in one report. Above the operator scan cap (150) so it is
+#: never reached in practice; it exists so a pathological payload cannot produce an unbounded response.
+_ALL_COMMENTERS_CAP = 250
+
+
+def _merge_account_reads(rows: list[dict[str, Any]], reads: list[dict]) -> list[dict[str, Any]]:
+    """Attach the analyst's per-account score and written read to each scanned account.
+
+    Joined on external_id, which is the platform's stable identifier, never the handle (handles are
+    mutable and two accounts can present the same display name). An account the analyst did not reach
+    keeps its engine tier and carries no prose rather than an empty string, so the page can tell
+    "not assessed" apart from "assessed and said nothing".
+
+    The rows arrive already filtered for a non-admin viewer; this does not decide what is public.
+    """
+    by_id = {
+        str(r.get("external_id")): r for r in reads
+        if isinstance(r, dict) and r.get("external_id")
+    }
+    if not by_id:
+        return rows
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        read = by_id.get(str(row.get("external_id")))
+        merged = dict(row)
+        if read:
+            if isinstance(read.get("omi_score"), int):
+                merged["omi_score"] = read["omi_score"]
+            if read.get("suspicion_tier"):
+                merged["analyst_tier"] = read["suspicion_tier"]
+            if isinstance(read.get("assessment"), str) and read["assessment"].strip():
+                merged["assessment"] = read["assessment"].strip()
+        out.append(merged)
+    return out
+
+
+def _all_commenters(payload: dict) -> list[dict[str, Any]]:
+    """EVERY account this report scored, worst first, not just the flagged ones.
+
+    Showing only flagged accounts made the report read as a hit list and hid the most reassuring
+    thing in it: that most of the section came back clean. A reader who can see 240 low-tier rows
+    understands the 12 elevated ones as a finding rather than as the product flagging everything.
+
+    Deliberately LIGHTER than ``_flagged_commenters``: no ``reasons`` and no ``recent_activity``. Those
+    are per-account evidence blobs, and carrying them for every account would multiply the public
+    response by the size of the whole comment section for data the table never renders.
+    """
+    video = payload.get("video") or {}
+    rows = [c for c in (video.get("commenters") or []) if isinstance(c, dict)]
+    rows.sort(
+        key=lambda c: (
+            _TIER_RANK.get(c.get("tier"), 0),
+            c.get("coordination_adjusted_probability") or c.get("overall_probability") or 0,
+        ),
+        reverse=True,
+    )
+    return [
+        {
+            "handle": c.get("handle"),
+            "external_id": c.get("external_id"),
+            "tier": c.get("tier") or "low",
+            "overall_probability": (
+                c.get("coordination_adjusted_probability") or c.get("overall_probability") or 0
+            ),
+            "intent_label": c.get("intent_label"),
+        }
+        for c in rows[:_ALL_COMMENTERS_CAP]
+    ]
 
 
 def _flagged_commenters(payload: dict) -> list[dict[str, Any]]:
@@ -284,26 +376,47 @@ def _summarize_video(video: dict | None, template: Template) -> dict | None:
     }
 
 
-def _stats_block(payload: dict) -> dict[str, Any]:
+def _scanned_count(payload: dict) -> int:
+    """How many commenters this report actually scored.
+
+    Prefers the recorded `commenter_count` and falls back to the length of the commenters list,
+    because a payload carrying commenters but no count would otherwise render "0 of 312", which reads
+    as a broken product rather than a partial report.
+    """
     video = payload.get("video") or {}
-    return {
-        "Commenters scanned": video.get("commenter_count", 0),
+    count = video.get("commenter_count")
+    if isinstance(count, int) and count > 0:
+        return count
+    return len(video.get("commenters") or [])
+
+
+def _stats_block(payload: dict, *, commenters_available: int | None = None) -> dict[str, Any]:
+    video = payload.get("video") or {}
+    scanned = _scanned_count(payload)
+    out: dict[str, Any] = {
+        "Commenters scanned": (
+            f"{scanned} of {commenters_available}"
+            if commenters_available and commenters_available > scanned
+            else scanned
+        ),
         "Fresh / cached": f"{video.get('fresh_count', 0)} / {video.get('cached_count', 0)}",
         "Cross-links detected": len(payload.get("cross_links") or []),
         "YouTube quota used": payload.get("quota_used", 0),
         "Coordination clusters": len(video.get("clusters") or []),
     }
+    return out
 
 
 def _methodology_note() -> str:
     return (
-        "OMISPHERE combines eight per-account detectors "
-        "(temporal, semantic, AI-writing, profile, voice, engagement, "
-        "memory, coordination) via a calibrated log-odds aggregator with "
-        "convergence bonuses and a single-signal cap. Five cross-account "
-        "detectors then look for coordination clusters across all "
-        "commenters. Every score is a probability with an explicit "
-        "evidence chain — never a definitive judgement."
+        "OMISPHERE scores every account on eight behavioural dimensions: posting rhythm, "
+        "content repetition, machine-written prose, profile coherence, personal voice, "
+        "engagement farming, account maturity, and history authenticity. Each account is judged "
+        "on its own evidence, and a high score requires several independent indicators that "
+        "converge, not one unusual-looking trait. Ordinary traits that are common among real "
+        "people (a new account, few followers, a short comment) cannot on their own produce a "
+        "high score. Every score is probabilistic and carries the evidence behind it, never a "
+        "definitive judgement about the account or the person using it."
     )
 
 

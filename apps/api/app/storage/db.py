@@ -163,6 +163,8 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     # Funnel: which shared report a claimed copy came from (see Investigation.claimed_from_token).
     # Existing rows stay NULL, which correctly means "not claimed from anyone".
     ("investigations", "claimed_from_token", "VARCHAR(48)"),
+    # How many commenters were compiled for the post, for the shared-report funnel's "checked N of M".
+    ("investigations", "commenters_available", "INTEGER"),
     # Public campaign sharing (opt-in, revocable) — distribution phase
     ("campaigns", "share_token", "VARCHAR(64)"),
     ("campaigns", "is_public", "INTEGER DEFAULT 0"),

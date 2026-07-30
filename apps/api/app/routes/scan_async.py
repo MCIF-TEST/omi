@@ -53,7 +53,9 @@ from app.integrations.twitter_errors import TwitterClientError
 from app.integrations.youtube_errors import YouTubeClientError
 from app.schemas import ComprehensiveScanRequest, ComprehensiveScanResult, Tier
 from app.storage.db import get_session
-from app.storage.models import CandidateList, CommenterCandidate, DemoScanLog, ScanJob
+from app.storage.models import (
+    CandidateList, CommenterCandidate, DemoScanLog, Investigation, ScanJob,
+)
 
 log = logging.getLogger("omi.scan")
 
@@ -1120,6 +1122,21 @@ def _run_link_scan_job(
                 cl = session.get(CandidateList, candidate_list_id)
                 if cl is not None:
                     cl.investigation_slug = slug
+                # How many commenters were COMPILED for this post, against however many got scored.
+                # The gap is what the shared-report funnel says out loud ("checked 25 of 312"), and
+                # counting here is free: the list is already in hand and the read path needs no join.
+                _available = session.execute(
+                    select(func.count()).select_from(CommenterCandidate).where(
+                        CommenterCandidate.list_id == candidate_list_id,
+                    )
+                ).scalar_one()
+                _inv = session.execute(
+                    select(Investigation).where(Investigation.slug == slug)
+                ).scalar_one_or_none()
+                if _inv is not None and _available:
+                    _inv.commenters_available = max(
+                        int(_available), int(_inv.commenters_available or 0),
+                    )
                 if selected_ids:
                     for cand in session.execute(
                         select(CommenterCandidate).where(

@@ -522,6 +522,14 @@ class Investigation(Base):
     # Deliberately NOT unique: the same report can be claimed by many different visitors, which is
     # the entire point of the funnel.
     claimed_from_token: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
+    # How many commenters were COMPILED for this post, against however many were actually scored
+    # (payload video.commenter_count). The gap is the honest, specific fact the shared-report funnel
+    # runs on: "this report checked 25 of the 312 accounts that replied". Set at scan time from the
+    # candidate-list row count, which is free there and needs no join on the read path.
+    #
+    # Nullable because rows written before this existed cannot know it, and the read path must render
+    # the report without the number rather than inventing one.
+    commenters_available: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

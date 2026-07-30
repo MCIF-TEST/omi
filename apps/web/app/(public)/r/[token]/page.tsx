@@ -3,11 +3,12 @@ import Link from 'next/link';
 import { Download, FileText, Printer, ExternalLink, ShieldCheck } from 'lucide-react';
 import { ApiError, type PublicReportResponse } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
+import { env } from '@/lib/env';
 import { Logo } from '@/components/shared/logo';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { PrintButton, CopyLinkButton } from './print-button';
-import { ScanMoreStrip, ScanMoreRail, ScanMoreFooter } from './scan-more-cta';
+import { ScanMoreStrip, ScanMoreRail, ScanMoreFooter, type Coverage } from './scan-more-cta';
 
 interface PageProps {
   params: { token: string };
@@ -41,6 +42,23 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
   }
   const v = body.view;
   const pct = Math.round(v.verdict.overall_probability * 100);
+  // What this report leaves out, as facts rather than adjectives. Absent values stay absent: the CTAs
+  // fall back to a qualitative line rather than inventing a total.
+  // The visible domain, derived from the configured public base rather than written out. It was
+  // hardcoded to a host this deployment does not use, printed on the page under "Verified by
+  // OMISPHERE", which is the worst possible place for the product to be wrong about itself.
+  const siteName = (() => {
+    try {
+      return new URL(env.PUBLIC_BASE_URL).host.replace(/^www\./, '');
+    } catch {
+      return 'omisphere.online';
+    }
+  })();
+  const coverage: Coverage = {
+    scanned: v.meta.commenters_scanned ?? 0,
+    available: v.meta.commenters_available ?? null,
+    readCount: v.meta.read_count ?? null,
+  };
 
   return (
     <div className="min-h-screen bg-bg-deep report-page">
@@ -76,7 +94,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
       </div>
 
       {/* Funnel, placement 1 of 3: seen before any scrolling. */}
-      <ScanMoreStrip token={params.token} />
+      <ScanMoreStrip token={params.token} coverage={coverage} />
 
       {/* At xl there is room for a sticky rail beside the report; below that the grid collapses and
           the article keeps its own centering exactly as before. */}
@@ -200,8 +218,58 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
           </section>
         )}
 
-        {/* Top flagged commenters */}
-        {v.top_flagged.length > 0 && (
+        {/* Every account scanned, worst first. A list of only the flagged ones reads as a hit list
+            and hides the most reassuring thing in the report: that most of the section came back
+            clean. Falls back to the flagged-only list for reports generated before the full list
+            was carried. */}
+        {(v.all_commenters?.length ?? 0) > 0 ? (
+          <section>
+            <div className="font-mono text-2xs tracking-[0.18em] uppercase text-accent report-accent mb-3">
+              Accounts scanned · {v.total_scanned ?? v.all_commenters!.length}
+              {v.total_flagged > 0 && (
+                <span className="text-fg-mute report-muted"> · {v.total_flagged} flagged</span>
+              )}
+            </div>
+            {/* Wide content scrolls inside its own container; the page body never pans sideways. */}
+            <div className="report-card bg-bg-elev border border-border-1 rounded-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-bg">
+                    <tr className="text-left font-mono text-2xs tracking-[0.16em] uppercase text-fg-mute report-muted">
+                      <th className="px-4 py-2.5 font-normal">Handle</th>
+                      <th className="px-4 py-2.5 font-normal">Tier</th>
+                      <th className="px-4 py-2.5 font-normal text-right">OMI</th>
+                      <th className="px-4 py-2.5 font-normal">What the analyst found</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {v.all_commenters!.map((c) => (
+                      <tr key={c.external_id} className="border-t border-border-1 align-top">
+                        <td className="px-4 py-3 font-medium text-fg break-all">{c.handle}</td>
+                        <td className="px-4 py-3">
+                          <TierBadge tier={c.analyst_tier ?? c.tier} size="sm" />
+                        </td>
+                        <td className="px-4 py-3 mono text-right text-fg tabular-nums">
+                          {typeof c.omi_score === 'number'
+                            ? c.omi_score
+                            : Math.round((c.overall_probability || 0) * 100)}
+                        </td>
+                        {/* The analyst's written read is the substance of the investigation. When it
+                            reached this account the prose replaces the terse intent label. */}
+                        <td className="px-4 py-3 text-fg-dim leading-relaxed min-w-[18rem]">
+                          {c.assessment || c.intent_label || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p className="mt-2 font-mono text-2xs tracking-wider uppercase text-fg-mute report-muted leading-relaxed">
+              Every account listed here was scored on its own evidence. A low tier is a finding too.
+            </p>
+          </section>
+        ) : v.top_flagged.length > 0 && (
           <section>
             <div className="font-mono text-2xs tracking-[0.18em] uppercase text-accent report-accent mb-3">
               Flagged commenters · {v.total_flagged}
@@ -293,7 +361,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
         </section>
 
         {/* Funnel, placement 3 of 3: the reader has finished and is deciding. */}
-        <ScanMoreFooter token={params.token} />
+        <ScanMoreFooter token={params.token} coverage={coverage} />
 
         {/* Verification + footer */}
         <footer className="pt-8 border-t border-border-1 space-y-4">
@@ -307,7 +375,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
                 Report ID <span className="mono text-fg">{v.meta.slug}</span> · generated{' '}
                 {v.meta.created_at?.slice(0, 10) || ', '}.
                 Re-validate by re-scanning the source URL on{' '}
-                <a href="/" className="text-accent hover:underline">omisphere.ai</a>.
+                <a href="/" className="text-accent hover:underline">{siteName}</a>.
               </p>
             </div>
           </div>
@@ -319,7 +387,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
       </article>
 
         {/* Funnel, placement 2 of 3: follows the reader down the page on wide screens. */}
-        <ScanMoreRail token={params.token} />
+        <ScanMoreRail token={params.token} coverage={coverage} />
       </div>
     </div>
   );

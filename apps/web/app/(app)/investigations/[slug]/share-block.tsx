@@ -18,7 +18,19 @@ export function ShareBlock({ slug, initialToken, publicBaseUrl }: Props) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const publicUrl = token ? `${publicBaseUrl}/r/${token}` : '';
+  // The link a customer copies and pastes into a comment section, so the host matters: an
+  // onrender.com URL makes a promoted link look like staging. `publicBaseUrl` is OMI_PUBLIC_BASE_URL
+  // and is the canonical answer when it is set to the real domain. It is `sync: false` in
+  // render.yaml (dashboard-only), so it CAN be unset or stale, and this used to silently produce a
+  // localhost or wrong-host link with nothing to indicate it. Falling back to the origin the page is
+  // actually being served from is always a working link, which a broken one is not.
+  const base = (() => {
+    const configured = (publicBaseUrl || '').replace(/\/$/, '');
+    if (configured && !/localhost|127\.0\.0\.1/.test(configured)) return configured;
+    if (typeof window !== 'undefined') return window.location.origin;
+    return configured;
+  })();
+  const publicUrl = token ? `${base}/r/${token}` : '';
 
   const mint = async () => {
     setError(null);
