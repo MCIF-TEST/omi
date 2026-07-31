@@ -341,3 +341,51 @@ def test_the_dispute_endpoint_the_report_points_at_actually_works():
         assert "Request a review" in tc.get(f"/r/{_TOKEN}/markdown").text
         r = tc.post(f"/r/{_TOKEN}/dispute", json={"reason": _REASON})
         assert r.status_code == 201
+
+
+# =========================================================================== #
+# The admin queue has an interface
+#
+# The routes above shipped before any UI existed, which meant the only way to read the queue was
+# curl. That is not a takedown process: the operational value of the whole feature is being able to
+# say "reviewed and acted within a day", and a queue nobody looks at cannot deliver that.
+#
+# These are source-level assertions against apps/web, in the same spirit as the signal gate's guard:
+# a page whose only protection is a hidden nav link is not protected, and TypeScript will not tell
+# anyone if the server check is dropped.
+# =========================================================================== #
+from pathlib import Path  # noqa: E402 — kept beside the tests that use it
+
+_WEB = Path(__file__).resolve().parents[3] / "apps" / "web"
+_QUEUE_DIR = _WEB / "app" / "(app)" / "disputes"
+
+
+def test_the_queue_page_exists():
+    assert (_QUEUE_DIR / "page.tsx").exists(), "the dispute queue API has no interface"
+
+
+def test_the_queue_page_is_gated_on_the_server():
+    """Hiding the nav item is presentation. The route would still answer to anyone who typed the URL,
+    and this page reads complainants' contact details and can unpublish any report in the system."""
+    src = (_QUEUE_DIR / "page.tsx").read_text()
+    assert "is_admin" in src
+    assert "notFound()" in src
+    assert "force-dynamic" in src, "a cached render would serve one user's gate result to another"
+
+
+def test_the_queue_link_is_admin_only_in_both_navs():
+    for nav in ("sidebar.tsx", "mobile-nav.tsx"):
+        src = (_WEB / "components" / "layout" / nav).read_text()
+        line = next((ln for ln in src.splitlines() if "'/disputes'" in ln), None)
+        assert line is not None, f"{nav} has no link to the dispute queue"
+        assert "adminOnly: true" in line, f"{nav} shows the dispute queue to customers"
+
+
+def test_the_takedown_is_not_a_one_click_action():
+    """Revoking clears the share token, so every link already posted publicly 404s and re-sharing
+    mints a different one. That is the right outcome when we got someone wrong, and the wrong one to
+    reach by a stray click."""
+    src = (_QUEUE_DIR / "dispute-queue.tsx").read_text()
+    assert "confirmingTakedown" in src
+    assert "unpublish: true" not in src, "unpublish must be passed deliberately, not hardcoded on"
+    assert "act('upheld', true)" in src

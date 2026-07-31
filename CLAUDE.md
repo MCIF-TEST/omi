@@ -5,9 +5,9 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
+**Last updated:** 2026-07-31 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1707 passed, 8 skipped, 1 failed** (5m16s), the failure pre-existing and listed below.
+**1729 passed, 8 skipped, 1 failed** (6m58s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -933,6 +933,70 @@ reduced-motion guarded.
 
 Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-max`,
 `emil-design-eng`, `human-crafted-design-auditor`.
+
+---
+
+## Operator blindness: the two things nobody could see
+
+### Error tracking is one env var away, and the SDK is already installed
+
+`app/core/observability.py` was written to be opt-in and inert, and `app/main.py` already called
+`init_error_tracking()` from the lifespan. What was missing was the part that made any of it reachable:
+**`sentry-sdk` was not a dependency**, so setting `SENTRY_DSN` in the Render dashboard would have
+logged one warning and done nothing. It is now a **core** dependency, not an extra, for the inverse of
+the httpx reasoning: the module costs nothing when unconfigured, whereas shipping without the package
+means turning error tracking on needs an env var *plus* a build-command edit *plus* a redeploy, at the
+exact moment someone is trying to see a production fire.
+
+`SENTRY_DSN` is declared `sync: false` on the API service in `render.yaml`. Paste a DSN, redeploy, done.
+Any Sentry-compatible ingest works, self-hosted included, so this commits to no vendor.
+
+Guarantees pinned by `tests/test_error_tracking.py` (18 tests), each because monitoring that can break
+the thing it monitors is a downgrade: no DSN is a total no-op; a blank/whitespace DSN counts as unset
+(that is Render's shape for "not filled in yet"); a bad DSN, a missing package, or an SDK that raises
+all degrade to a log line; `send_default_pii` is off and `max_request_body_size="never"`, because this
+service handles other people's social media data and a scan payload attached to a crash report would
+be a data-protection incident of our own making; and **tracing is off unless `SENTRY_TRACES_SAMPLE_RATE`
+is set**, so enabling error tracking cannot silently enable a spend.
+
+**The background pool is the reason this matters more than it looks.** `background._wrap` absorbs every
+exception by design, so a failed analyst run or scan job has *no user-visible signature at all* — the
+work simply never finishes. That is exactly how the `NameError` in the analyst's persist closure
+survived long enough to mean no investigation over 25 accounts ever produced an assessment. `_wrap` and
+`_submit_to` now call `capture_exception` alongside the existing `logger.exception`, and the test
+asserts the **exception object** reaches the sink, not that a log line was written: the log line already
+existed and is precisely what was not enough. `capture_exception` is imported at **module scope** in
+`background.py` for the reason in "A bug class worth knowing" — this module runs other people's
+closures, and a function-level import would not be visible inside one.
+
+The request path needs no wiring: there are no global exception handlers, so Starlette re-raises and
+sentry-sdk's FastAPI integration captures. The web app is **not** wired (that needs `@sentry/nextjs`,
+`instrumentation.ts` and a source-map upload step); a Next 500 is still log-only.
+
+### The dispute queue now has a UI
+
+`POST /r/<token>/dispute` and the admin routes shipped without an interface, so the only way to read
+the queue was curl. That is not a takedown process. The operational value of the whole feature is being
+able to say "reviewed and acted within a day" instead of "there was no way to reach us", and a queue
+nobody looks at cannot deliver that.
+
+`/disputes` (`app/(app)/disputes/`) lists the queue, filters by status, and resolves with a note.
+Three things about it:
+
+- **Admin-gated on the SERVER** (`if (!user?.is_admin) notFound()`), plus `force-dynamic` so a cached
+  render cannot serve one user's gate result to another. The page reads complainants' contact details
+  and its resolve action can unpublish **any** report in the system, so the hidden nav link is
+  presentation, exactly as with `/narratives`.
+- **The takedown takes two clicks.** Revoking clears the share token, so `/r/<token>` 404s for every
+  link already posted publicly and re-sharing mints a different one. That is the right outcome when we
+  got someone wrong and the wrong one to reach by a stray click. "Uphold, leave published" is a separate
+  button, because agreeing with a complainant and withdrawing a public claim are different decisions.
+- Resolving removes the row from a filtered view it no longer belongs in, so "Open" reads as work
+  remaining rather than a log.
+
+Pinned by four source-level tests at the end of `tests/test_report_disputes.py` (the server gate, the
+`adminOnly` flag in **both** navs, and the confirm step), in the same spirit as the signal gate's guard:
+TypeScript will not tell anyone if the server check is dropped.
 
 ---
 
