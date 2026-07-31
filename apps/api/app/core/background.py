@@ -15,6 +15,11 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable
 
+# Module-level on purpose (see CLAUDE.md, "A bug class worth knowing"): a function-level import here
+# would not be visible to anything nested, and this module is all about running other people's
+# closures. `observability` imports nothing but `logging` and `os` until a DSN is configured.
+from app.core.observability import capture_exception
+
 logger = logging.getLogger("omi.background")
 
 _executor: ThreadPoolExecutor | None = None
@@ -81,8 +86,9 @@ def _submit_to(ex: ThreadPoolExecutor, fn: Callable[..., Any], args: tuple, kwar
             _pending.add(fut)
         fut.add_done_callback(_discard)
         return fut
-    except Exception:  # noqa: BLE001 — executor down → drop silently
+    except Exception as exc:  # noqa: BLE001 — executor down → drop the work, never the request
         logger.exception("background.submit failed")
+        capture_exception(exc)
         return None
 
 
@@ -92,10 +98,19 @@ def _discard(fut: Future) -> None:
 
 
 def _wrap(fn: Callable[..., Any], args: tuple, kwargs: dict) -> None:
+    """Run the task, absorbing any failure.
+
+    This is the single most important place in the codebase to report an exception from. Nothing here
+    ever raises into a request, so a background failure has no user-visible signature at all: the scan
+    or the analyst run simply never finishes, and the only trace is one line in an ephemeral log
+    stream. That is exactly how the `NameError` in the analyst's persist closure hid long enough to
+    mean no investigation over 25 accounts ever produced an assessment.
+    """
     try:
         fn(*args, **kwargs)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         logger.exception("background task failed: %s", getattr(fn, "__name__", fn))
+        capture_exception(exc)
 
 
 def shutdown(wait_seconds: float = 5.0) -> None:

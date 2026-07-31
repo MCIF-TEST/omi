@@ -85,6 +85,17 @@ services:
         value: 'true'
       - key: OMI_LOG_LEVEL
         value: INFO
+      # Error tracking (OPTIONAL, and inert until you set it). Without a DSN the only record of a
+      # production failure is Render's log stream: ephemeral, unsearchable at volume, no grouping and
+      # no alerting. Worse, the background pool absorbs its exceptions by design (a failed analyst run
+      # or scan job never surfaces to a user at all), so those failures have no signature anywhere
+      # else. Paste a Sentry DSN here to turn it on; the SDK ships in the API dependencies, so no
+      # build change is needed. Any Sentry-compatible ingest works, self-hosted included.
+      # The boot log states which mode it is in ("Error tracking: on" / "OFF"). Never sent: request
+      # bodies, and PII (send_default_pii stays off in app/core/observability.py). Performance
+      # tracing is off unless SENTRY_TRACES_SAMPLE_RATE is set, so this cannot become a cost surprise.
+      - key: SENTRY_DSN
+        sync: false
       - key: OMI_DATABASE_URL
         fromDatabase:
           name: omisphere-postgres
@@ -102,13 +113,14 @@ services:
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
         value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
-      # Signup trial: 3 credits, then they pay. Scans bill at ceil(accounts / 50)
-      # credits (min 1, see compute_scan_credits) and OMI_SCAN_MAX_COMMENTERS is
-      # 150 below, so 3 credits buys EITHER one full 150-account investigation OR
-      # three small ones of up to 50 accounts each.
+      # Signup trial: 1 credit, then they pay. Scans bill at ceil(accounts / 50)
+      # credits (min 1, see compute_scan_credits), so one credit buys exactly one
+      # scan of up to 50 accounts. That is deliberate: most new accounts arrive
+      # from a shared report link, and one credit is enough to scan more of the
+      # post they came from and see the product work, not enough to finish it.
       #
       # This is not the only free path, and the two are metered independently:
-      # the pre-login front page gives every visitor 2 real scans of up to 25
+      # the pre-login front page gives every visitor 1 real scan of up to 25
       # accounts (DEMO_FREE_SCANS_PER_IP in app/routes/scan_async.py and
       # DEMO_MAX_COMMENTERS in app/routes/scan.py, both hardcoded and test-pinned,
       # NOT driven by this variable). That is "try it before signing up"; these 3
