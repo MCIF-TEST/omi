@@ -9,6 +9,7 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { PrintButton, CopyLinkButton } from './print-button';
 import { ScanMoreStrip, ScanMoreRail, ScanMoreFooter, type Coverage } from './scan-more-cta';
+import { DisputeBlock } from './dispute-block';
 
 interface PageProps {
   params: { token: string };
@@ -379,6 +380,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
               </p>
             </div>
           </div>
+          <DisputeBlock token={params.token} />
           <p className="font-mono text-2xs tracking-wider uppercase text-fg-mute report-muted leading-relaxed">
             All output is probabilistic and evidence-bearing, never a definitive judgement about
             the account or person behind it.
