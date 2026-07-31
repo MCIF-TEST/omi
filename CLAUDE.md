@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1704 passed, 8 skipped, 1 failed** (5m45s), the failure pre-existing and listed below.
+**1707 passed, 8 skipped, 1 failed** (5m16s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -496,6 +496,32 @@ Two traps around this value:
 The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0) runs on **both** the
 Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
 limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
+
+### The scope statement, and where it has to appear
+
+The product scores named accounts and the reports get posted publicly, so **what the number is NOT**
+has to travel with it. Three surfaces, and the placement of each was a decision:
+
+- **`ScopeNotice`** sits ABOVE the verdict on `/r/<token>`, so nobody reads a number before reading
+  what it means. It is deliberately **not `no-print`**, unlike every other interactive block on that
+  page: the exported PDF is the version that circulates as evidence, and a document making scored
+  claims about people with no scope statement attached is the exact artifact this exists to prevent.
+- **The markdown export** carries the same statement at the TOP, above the verdict. It used to have a
+  one-line caveat at the very bottom, which is the part nobody reads and the first thing cropped from
+  a screenshot. Break the lines on clause boundaries: a phrase split mid-sentence ("whether money /
+  changed hands") is invisible to a reader scanning and to any test asserting on it.
+- **`/accuracy`** is the full policy, linked from the report, the landing footer, the auth footer and
+  the marketing nav. Written for the person who has just found themselves scored and is upset, which
+  is the audience that matters most on that page.
+
+The claim it makes, which must not be softened: these are probabilistic readings of public behaviour,
+not findings of fact; not an allegation that anyone broke a law or a platform rule; no claim about who
+operates an account, whether money changed hands, or anyone's intent. It names the confusable shapes
+(businesses, fan accounts, news feeds, new users, second-language writers) as things that legitimately
+resemble the patterns, and says a low score is not a certification either.
+
+`tests/test_report_disputes.py` asserts the export leads with it and that the "Request a review"
+promise on the page points at an endpoint that actually accepts a submission.
 
 ### Disputes: the recourse an accused account has
 

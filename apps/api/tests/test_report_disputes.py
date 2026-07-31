@@ -292,3 +292,52 @@ def test_an_unknown_status_is_refused():
 
         assert tc.post(f"/v1/admin/disputes/{did}",
                        json={"status": "vanished"}).status_code == 422
+
+
+# =========================================================================== #
+# The scope statement: what the report is claiming, said out loud
+# =========================================================================== #
+def test_the_markdown_export_leads_with_the_scope_statement():
+    """The export is the version that circulates as a document, often screenshotted from the first
+    page. A caveat at the very bottom is the part nobody reads and the first thing cropped out, so the
+    statement goes at the top, above the verdict."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        _seed_report(owner)
+        tc.cookies.clear()
+
+        md = tc.get(f"/r/{_TOKEN}/markdown").text
+        head = md[: md.index("## Verdict")]
+
+        assert "not findings of fact" in head
+        assert "not an allegation" in head
+        assert "Request a review" in head, "the recourse must travel with the document"
+        for shape in ("businesses", "fan accounts", "news feeds", "second"):
+            assert shape in head, f"the confusable shape '{shape}' is not disclosed"
+
+
+def test_the_export_disclaims_identity_and_intent():
+    """The two claims the evidence can never support, and the two most likely to cause real harm if a
+    reader assumes them."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        _seed_report(owner)
+        tc.cookies.clear()
+
+        md = tc.get(f"/r/{_TOKEN}/markdown").text
+        assert "who operates an account" in md
+        assert "money changed hands" in md
+        assert "intent" in md
+
+
+def test_the_dispute_endpoint_the_report_points_at_actually_works():
+    """The report tells a reader to use "Request a review". This asserts the thing it points at exists
+    and accepts a submission, so the promise on the page is not a dead end."""
+    with TestClient(app) as tc:
+        owner = _signup(tc, "owner@t.com")
+        _seed_report(owner)
+        tc.cookies.clear()
+
+        assert "Request a review" in tc.get(f"/r/{_TOKEN}/markdown").text
+        r = tc.post(f"/r/{_TOKEN}/dispute", json={"reason": _REASON})
+        assert r.status_code == 201

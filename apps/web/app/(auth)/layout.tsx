@@ -20,6 +20,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       <footer className="relative z-10 px-6 py-5 text-center font-mono text-2xs tracking-wider text-fg-faint uppercase">
         <Link href="/terms"   className="hover:text-fg-mute transition-colors">Terms</Link>
+        <Link href="/accuracy" className="hover:text-fg-mute transition-colors">Accuracy</Link>
         <span className="mx-2 text-border-hot">·</span>
         <Link href="/privacy" className="hover:text-fg-mute transition-colors">Privacy</Link>
         <span className="mx-2 text-border-hot">·</span>
