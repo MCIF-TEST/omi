@@ -1098,6 +1098,47 @@ class PriorContextCacheRow(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class ReportDispute(Base):
+    """Someone named in a public report objecting to it.
+
+    This is the recourse an accused account has, and it is a legal artifact as much as a product one:
+    OmiSphere publishes scored claims about named real people who never agreed to be analysed, and
+    "we reviewed it and acted within a day" is a materially different position from "they had no way
+    to reach us". It is also the operational answer to a GDPR objection or erasure request about a
+    person whose data was collected indirectly.
+
+    Append-only in spirit: a dispute is never deleted, only resolved, so the trail of what was
+    reported and what was done about it survives. `ip_hash` exists ONLY to rate-limit abuse and is a
+    hash, never a stored address.
+
+    Deliberately NOT auto-unpublishing on submission. That would let anyone silence any report by
+    claiming to be named in it, which is its own abuse vector; the mitigation is that an admin can
+    unpublish in one call and the queue is small enough to action quickly.
+    """
+
+    __tablename__ = "report_disputes"
+    __table_args__ = (
+        Index("ix_dispute_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # The shared report objected to. Kept as the raw token because the investigation may later be
+    # unshared or deleted, and the record of the complaint has to outlive the thing complained about.
+    share_token: Mapped[str] = mapped_column(String(48), index=True)
+    investigation_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # Which account in the report this is about, as the complainant identified it.
+    subject_handle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # How to reach them with an outcome. Optional: someone may object without wanting contact.
+    contact: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    # open -> reviewing -> upheld (report removed) | rejected (report stands)
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Feedback(Base):
     """User-submitted product feedback. Any signed-in user can create one; only admins can list/search
     them (the admin feedback queue). The submitter is recorded for context; the message is the point."""

@@ -330,6 +330,8 @@ def create_app() -> FastAPI:
     app.include_router(memory.admin_router)
     app.include_router(reports.share_router)
     app.include_router(reports.public_router)
+    # Dispute queue + admin takedown. Admin-gated inside the handlers, like the other admin routers.
+    app.include_router(reports.admin_router)
     app.include_router(monitoring.router)
     app.include_router(watchlists.router)
     app.include_router(learning.router)

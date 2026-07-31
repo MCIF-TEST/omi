@@ -340,7 +340,7 @@ export function LandingPage() {
             Online media intelligence
           </p>
           <div className="flex items-center gap-px font-mono text-2xs text-fg-mute tracking-wider uppercase">
-            {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Pricing', '/pricing'], ['About', '/about']].map(
+            {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Accuracy', '/accuracy'], ['Pricing', '/pricing'], ['About', '/about']].map(
               ([label, href]) => (
                 <Link
                   key={href}

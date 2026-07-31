@@ -14,6 +14,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         <nav className="flex items-center gap-5 font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase">
           <Link href="/pricing" className="hover:text-fg-dim transition-colors">Pricing</Link>
           <Link href="/about"   className="hover:text-fg-dim transition-colors">About</Link>
+          <Link href="/accuracy" className="hover:text-fg-dim transition-colors">Accuracy</Link>
           <Link href="/login"   className="hover:text-fg-dim transition-colors">Log in</Link>
           <Link
             href="/signup"

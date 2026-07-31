@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1691 passed, 8 skipped, 1 failed** (5m11s), the failure pre-existing and listed below.
+**1707 passed, 8 skipped, 1 failed** (5m16s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -496,6 +496,63 @@ Two traps around this value:
 The per-IP abuse guard (a signup from an IP that already claimed a trial gets 0) runs on **both** the
 Clerk path (`app/core/auth.py`) and the legacy path (`app/routes/auth.py`). The 5/hour/IP signup rate
 limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
+
+### The scope statement, and where it has to appear
+
+The product scores named accounts and the reports get posted publicly, so **what the number is NOT**
+has to travel with it. Three surfaces, and the placement of each was a decision:
+
+- **`ScopeNotice`** sits ABOVE the verdict on `/r/<token>`, so nobody reads a number before reading
+  what it means. It is deliberately **not `no-print`**, unlike every other interactive block on that
+  page: the exported PDF is the version that circulates as evidence, and a document making scored
+  claims about people with no scope statement attached is the exact artifact this exists to prevent.
+- **The markdown export** carries the same statement at the TOP, above the verdict. It used to have a
+  one-line caveat at the very bottom, which is the part nobody reads and the first thing cropped from
+  a screenshot. Break the lines on clause boundaries: a phrase split mid-sentence ("whether money /
+  changed hands") is invisible to a reader scanning and to any test asserting on it.
+- **`/accuracy`** is the full policy, linked from the report, the landing footer, the auth footer and
+  the marketing nav. Written for the person who has just found themselves scored and is upset, which
+  is the audience that matters most on that page.
+
+The claim it makes, which must not be softened: these are probabilistic readings of public behaviour,
+not findings of fact; not an allegation that anyone broke a law or a platform rule; no claim about who
+operates an account, whether money changed hands, or anyone's intent. It names the confusable shapes
+(businesses, fan accounts, news feeds, new users, second-language writers) as things that legitimately
+resemble the patterns, and says a low score is not a certification either.
+
+`tests/test_report_disputes.py` asserts the export leads with it and that the "Request a review"
+promise on the page points at an endpoint that actually accepts a submission.
+
+### Disputes: the recourse an accused account has
+
+OmiSphere publishes scored claims about **named real people who never agreed to be analysed**, and the
+results get posted into comment sections. A person who thinks a report is wrong about them needs a way
+to say so, and the operator needs to withdraw a public claim fast. That is what `ReportDispute` and
+`POST /r/<token>/dispute` are for. It is a legal artifact as much as a product one: "reviewed and acted
+within a day" is a materially different position from "there was no way to reach us", and it is the
+operational answer to a data-protection objection from someone whose data was collected indirectly.
+
+Two rules pull against each other and both must hold:
+
+- **Filing is anonymous and easy.** The person disputing is not a customer; making them sign up to the
+  product accusing them would make the recourse theatre. The route is unauthenticated, sits under the
+  public rate limiter, and asks for as little as possible.
+- **Filing does NOT unpublish anything.** Otherwise anyone silences any report by claiming to be named
+  in it. The takedown is a decision, not a side effect of a form submission.
+
+They reconcile on the admin side: `POST /v1/admin/disputes/{id}` resolves and optionally revokes the
+token in one call, and **it works on ANY report, not only the admin's own**. The owner-scoped
+`DELETE /v1/investigations/{slug}/share` cannot serve here by construction: the person harmed is never
+the owner, and waiting for the owner to act is not a takedown process. Revoking clears the token so
+`/r/<token>` 404s immediately, including for links already posted publicly.
+
+**The investigation itself is never deleted**, only the public claim. The customer keeps their work;
+what is withdrawn is the thing that caused the harm.
+
+Other decisions worth keeping: a dispute about an **already-unshared** report is still recorded (a 404
+there reads as stonewalling at the worst moment); one open dispute per (token, subject) so a double
+submit does not produce two queue entries; `ip_hash` is a hash and exists only for abuse triage.
+Pinned by `tests/test_report_disputes.py` (13 tests).
 
 ### The shared-report funnel
 

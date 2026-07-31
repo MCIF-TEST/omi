@@ -9,6 +9,8 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { PrintButton, CopyLinkButton } from './print-button';
 import { ScanMoreStrip, ScanMoreRail, ScanMoreFooter, type Coverage } from './scan-more-cta';
+import { DisputeBlock } from './dispute-block';
+import { ScopeNotice } from './scope-notice';
 
 interface PageProps {
   params: { token: string };
@@ -117,6 +119,9 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
             {v.meta.input_url}
           </p>
         </header>
+
+        {/* What this report is claiming, said before the number. Survives print on purpose. */}
+        <ScopeNotice />
 
         {/* Verdict */}
         <section className="report-card bg-bg-elev border border-border-1 rounded-md p-8">
@@ -268,6 +273,10 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
             <p className="mt-2 font-mono text-2xs tracking-wider uppercase text-fg-mute report-muted leading-relaxed">
               Every account listed here was scored on its own evidence. A low tier is a finding too.
             </p>
+            {/* Where someone finds their own handle is where they want this, not the footer. */}
+            <div className="mt-3">
+              <DisputeBlock token={params.token} />
+            </div>
           </section>
         ) : v.top_flagged.length > 0 && (
           <section>
@@ -379,6 +388,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
               </p>
             </div>
           </div>
+          <DisputeBlock token={params.token} />
           <p className="font-mono text-2xs tracking-wider uppercase text-fg-mute report-muted leading-relaxed">
             All output is probabilistic and evidence-bearing, never a definitive judgement about
             the account or person behind it.
