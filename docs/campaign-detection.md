@@ -261,27 +261,35 @@ Proposed persistence (not yet built): a `campaign_signature_bands` table of `(ba
 campaign_id)`, indexed on `(band_index, band_key)`. On each detection, look up candidates by band
 collision, verify by sketch similarity ≥ 0.4, then merge or create.
 
-### Tenancy: the precondition
+### Tenancy: gated, not scoped (done)
 
-`Campaign` has no `user_id`, so campaigns are already deployment-global. That is the right technical
-answer for cross-customer linkage and it has a policy consequence that must be handled **before** this
-ships:
+`Campaign` has no `user_id`, so campaigns are deployment-global. That is the right technical answer
+for cross-customer linkage, and it means these routes **cannot be scoped to your own data** because
+there is no such thing here. The library is therefore admin-gated instead, matching `/narratives` and
+`/disputes`.
 
-> `GET /v1/campaigns` and `GET /v1/campaigns/{key}` are gated on `require_user` with no admin check
-> and no owner filter, and `CampaignDetail.observations[].context_id` carries the post id of the scan
-> that produced each observation. Any signed-in customer can therefore enumerate every campaign in the
-> deployment and read **which posts other customers scanned**. This is live today; only the deleted
-> UI hides it.
+This replaced a live cross-tenant exposure. Before it, `require_user` with no admin check meant any
+signed-in customer could enumerate every campaign in the deployment along with each one's
+`share_token` (a capability URL), read `observations[].context_id` (the id of the post **another
+customer scanned**), mint a permanent public `/rc/<token>` report for any campaign including one
+assembled from other customers' scans, and revoke anyone else's. The existing campaign tests could
+not catch any of it: they run in local mode, where `require_user` returns `is_admin=True`.
 
-Required before wiring this up:
+What is now enforced, pinned by `tests/test_campaign_tenancy.py` (11 tests, 8 of which fail against
+the pre-fix route file):
 
-1. Strip `context_id` from any non-admin response, or drop it from the model. It is the only field
-   that identifies someone else's investigation.
-2. Decide whether the campaign library is admin-only or customer-visible. If customer-visible, it
-   must expose aggregates and member handles only, never provenance.
-3. Say so in the privacy policy. Cross-customer aggregation is defensible and arguably a product
-   strength, but "we do not share your scan history" needs to remain true as written, and today the
-   policy does not describe this.
+- list, detail, share, unshare and export are admin-only;
+- the seeded `feat_` examples stay readable by any signed-in user, because they are curated from
+  public disclosure archives and belong to no customer;
+- `include_provenance` on `_campaign_detail` **defaults to False**, so a route added later that
+  forgets to pass it leaks nothing, and `context_id` is stripped on the public `/rc/` report, on the
+  featured path, and on the export pack even for an admin (the pack is a file that leaves the app to
+  be forwarded, which is exactly when provenance must not ride along);
+- admins do still see provenance on the detail route, because the post an observation came from is
+  the first thing an investigator needs.
+
+The privacy policy now describes the cross-investigation record explicitly, including that it is not
+tied to a customer and does not identify which investigation it came from.
 
 ---
 
@@ -396,10 +404,9 @@ it does.
 
 ## 11. Integration checklist
 
-Not done. In order:
-
-1. Close the `context_id` / campaign-enumeration leak (§7).
-2. Decide the tenancy policy and update the privacy policy to match.
+1. ~~Close the `context_id` / campaign-enumeration leak.~~ **Done** (§7).
+2. ~~Decide the tenancy policy and update the privacy policy to match.~~ **Done**: admin-gated,
+   policy updated.
 3. Add `campaign_signature_bands` and the LSH lookup to `CampaignService`.
 4. Call `analyze()` after an investigation's analyst assessment completes, on
    `background.submit_slow`, and feed `to_coordination_clusters()` into

@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-31 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1752 passed, 8 skipped, 1 failed** (5m40s), the failure pre-existing and listed below.
+**1787 passed, 8 skipped, 1 failed** (5m46s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -954,6 +954,43 @@ One live reference remains on purpose: `campaign_reasoning` ("Campaign analysis"
 `analyst-panel.tsx` and `lib/api.ts`. That is a section of the **analyst's own response schema**, not
 the campaigns feature. Removing it means a protocol change, a recompile, and a re-paste of the
 OpenRouter preset.
+
+### Campaigns are GATED, not scoped, because they have no owner
+
+`Campaign` has no `user_id` and that is deliberate: one operation seen by two customers on two
+different posts is **one** campaign, and that cross-customer accumulation is the whole point. The
+cost is that these routes cannot be "scoped to your own data" — there is no such thing here — so the
+library is **admin-gated** instead, matching `/narratives` and `/disputes`.
+
+This replaced a live cross-tenant exposure. `require_user` with no admin check meant any signed-in
+customer could enumerate every campaign in the deployment **with each one's `share_token`** (a
+capability URL), read `observations[].context_id` (the id of the post **another customer scanned**),
+mint a permanent public `/rc/<token>` report for any campaign including one assembled from other
+customers' scans, and revoke anyone else's. **The existing campaign tests could not catch any of it:
+they run in local mode, where `require_user` returns `is_admin=True`.** Any test that needs to prove
+an authorisation rule must set `OMI_REQUIRE_AUTH=true` and sign up a real user.
+
+- **`include_provenance` on `_campaign_detail` defaults to False.** A route added later that forgets
+  to pass it leaks nothing; one that forgot to *strip* would. `context_id` is gone from the public
+  `/rc/` report, the featured path, and the export pack **even for an admin** — the pack is a file
+  that leaves the app to be forwarded, which is exactly when provenance must not ride along. Admins
+  do still see it on the detail route, because the post an observation came from is the first thing
+  an investigator needs.
+- **The `feat_` examples stay open** to any signed-in user. Curated from public disclosure archives,
+  owned by nobody, and the product's front door.
+- **Share/unshare are the gates that mattered most.** Publishing a claim about named real people is
+  the operator's decision, never a customer's on the operator's behalf.
+
+Pinned by `tests/test_campaign_tenancy.py` (11 tests; 8 fail against the pre-fix route file, checked
+by stashing it). The privacy policy now describes the cross-investigation record explicitly.
+
+The detection algorithm that will feed this is designed and implemented in
+`app/campaigns/verdict_coordination.py`, documented in `docs/campaign-detection.md`, and **not yet
+wired to any route**. It clusters accounts from omi scores + analyst verdicts alone. Two things in
+it that a future session will otherwise re-break: a score-band-stratified permutation test
+degenerates when a cluster fills its own band (every draw is the cluster, p lands near 0.5, and a
+correct detection is thrown away), so `p_value=None` means "could not test" and must never be read
+as "not significant"; and a DBSCAN blob larger than 40% of the batch is the batch, not a cohort.
 
 ### No em dashes, and no decorative badges
 
