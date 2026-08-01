@@ -140,6 +140,30 @@ services:
         value: 'andrewexiga@gmail.com,landonnorris116@gmail.com,exigahayden1@gmail.com,couldbewiser@yahoo.com'
       - key: OMI_SCAN_MAX_COMMENTERS
         value: '150'
+      # ===============================================================
+      # Daily ceilings on PAID UPSTREAM API CALLS (twitterapi.io, YouTube)
+      # ===============================================================
+      # The compile step (/v1/scan/link/commenters) requires auth but charges NO
+      # credits and calls the real X API, which bills per read. Credits cannot
+      # guard it: there is nothing to spend. Its per-minute limiter bounds a
+      # burst, is per instance, and resets on deploy; these are the ceilings that
+      # survive a deploy, are correct across instances, and are recorded.
+      #
+      # Read today's spend against both at GET /v1/admin/usage (admin only).
+      #
+      # Per user per day. At ~$0.005 per X call, a 150-account investigation is
+      # ~300 calls plus ~30 to compile. 1500 leaves room for several full
+      # investigations back to back and caps a runaway at about $7.50 instead of
+      # $216. Raise if real customers report hitting it; 0 disables.
+      - key: OMI_UPSTREAM_DAILY_CALLS_PER_USER
+        value: '1500'
+      # Deployment-wide circuit breaker, NOT a business limit. When it trips it
+      # refuses paying customers (with a 503 that says the fault is ours), so it
+      # sits well above any plausible real day and exists only to stop a bug or
+      # an attack emptying the API budget overnight. Raise it rather than
+      # removing it. 0 disables.
+      - key: OMI_UPSTREAM_DAILY_CALLS_GLOBAL
+        value: '50000'
       - key: OMI_SCAN_MAX_HISTORY_PER_COMMENTER
         value: '50'
       - key: OMI_SCAN_CACHE_TTL_DAYS

@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-31 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1729 passed, 8 skipped, 1 failed** (6m58s), the failure pre-existing and listed below.
+**1752 passed, 8 skipped, 1 failed** (5m40s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -461,8 +461,55 @@ Pinned by `test_admins_and_local_mode_are_exempt`.
 **Scope limit, stated plainly:** every limiter is in-process, so each budget is **per instance** and
 resets on deploy. One instance (what `render.yaml` provisions) behaves as configured; N instances give
 N× the ceiling. Making them global needs Redis behind the same `hit()` interface. These are an abuse
-guard, **not** a billing control — cost is guarded by credits and the demo's DB-backed per-IP
-reservations, both of which are correct across instances.
+guard, **not** a billing control — cost is guarded by credits, the demo's DB-backed per-IP
+reservations, and the daily upstream budget below, all of which are correct across instances.
+
+### The daily upstream budget: the only cost control on the free compile path
+
+Compile requires auth, charges **no credits**, and calls an API that bills per read. The per-minute
+limiter above is an abuse guard and was being asked to do a cost control's job, which it cannot: it
+bounds a burst and not a day (30/min sustained is **~43,000 provider calls per user per day**), it is
+per instance, it resets on deploy, and it **recorded nothing**, so no query anywhere could answer
+"how much did today cost". The first signal would have been the invoice.
+
+`app/core/upstream_budget.py` adds a DB-backed daily ceiling and, just as importantly, a ledger.
+`upstream_usage` is one counter row per (scope, day, platform), read at `GET /v1/admin/usage` and
+rendered at `/settings/spend`.
+
+- **It counts provider calls, not requests.** One compile pages the provider several times;
+  `Source.quota_used` is what bills. Counting requests would understate spend by roughly the page
+  count, which is the whole quantity of interest.
+- **Checked before the fetch, recorded after** — a refusal must cost nothing, the same property
+  `test_compile_is_capped_per_user_and_stops_upstream_calls` pins for the limiter.
+- **A failed fetch is still charged, and this is the subtle part.** The accounting callback fires
+  from a `finally`, but the route used to raise straight out of the `with get_session()` block, which
+  rolls the transaction back and takes the ledger row with it: money spent, nothing recorded. Both
+  compile routes now **hold** the `HTTPException` in `fetch_error`, let the session commit, and raise
+  after the block exits. Do not "simplify" that back into a direct raise. (Recording in a second,
+  nested session instead would deadlock on SQLite.)
+- **The paid scan path records but is NOT gated.** Credits are a real billing control there, and
+  refusing a scan mid-flight would take the credit and return nothing. Recorded inside `_finish`'s
+  terminal-transition guard, so the single caller that owns the outcome and the refund also owns the
+  accounting: a worker finishing after the watchdog reaped it must not double-count. Recorded on
+  **both** outcomes, because refunding a credit does not refund the upstream bill.
+- **The demo records but is not gated either.** Every anonymous visitor shares one bucket, so a
+  per-user budget there would shut the front page rather than stop an abuser; the demo has its own
+  per-IP and global guards. It still reaches the deployment total, since a total that omits the
+  highest-traffic surface is not a total.
+- **Two scopes.** The per-user row enforces fairness; the `global` row answers "is the API budget on
+  fire right now" and has no user to hang off. The global ceiling answers **503, not 429**, and says
+  the fault is ours: it refuses paying customers who did nothing wrong. It is a circuit breaker to
+  raise, not a business limit.
+- **Recording never raises**, and a failure is reported to the error tracker. A ledger that can fail
+  a scan is worse than a ledger with a gap, but a silent gap defeats the point.
+
+Defaults: 1500 calls/user/day, 50,000/deployment/day, both env-tunable
+(`OMI_UPSTREAM_DAILY_CALLS_PER_USER` / `_GLOBAL`, `0` disables) so a spike is absorbed without a
+deploy. Sizing at ~$0.005/call: a 150-account investigation is ~300 calls plus ~30 to compile, and a
+subscriber's 20 monthly credits buy ~1000 accounts, so a whole month of heavy legitimate use is
+~2000-3000 calls. 1500 in one day caps a runaway at about $7.50 rather than $216.
+
+Pinned by `tests/test_upstream_budget.py` (23 tests).
 
 ### Billing
 

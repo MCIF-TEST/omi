@@ -276,6 +276,25 @@ export function resolveDispute(
 }
 
 // ---------------------------------------------------------------------------
+// Upstream API spend. Admin only.
+//
+// `api_calls` is the number that BILLS (twitterapi.io charges per call), not the number of requests
+// this product served: one compile can page the provider several times. Reading the two apart is the
+// point, which is why `requests` is carried separately.
+// ---------------------------------------------------------------------------
+export interface UpstreamUsageSnapshot {
+  date: string;
+  today_api_calls: number;
+  per_user_budget: number;
+  global_budget: number;
+  /** Null when the deployment-wide ceiling is disabled (budget 0). */
+  global_remaining: number | null;
+  by_day: { date: string; api_calls: number; requests: number }[];
+  by_platform: { platform: string; api_calls: number }[];
+  heaviest_users_today: { user_id: string; api_calls: number; requests: number }[];
+}
+
+// ---------------------------------------------------------------------------
 // Shared response types (mirror app/schemas.py. Kept thin until Phase 1.5
 // generates types from OpenAPI directly).
 // ---------------------------------------------------------------------------

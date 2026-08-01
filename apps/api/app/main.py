@@ -32,7 +32,7 @@ from app.monitoring import lifespan_monitoring
 from app.routes import (
     accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, feedback,
     graph, health, improvement, intelligence, investigations, labels, learning, memory, metrics,
-    monitoring, narratives, reasoning, reports, scan, scan_async, shadow, watchlists,
+    monitoring, narratives, reasoning, reports, scan, scan_async, shadow, usage, watchlists,
 )
 from app.storage.db import init_db
 
@@ -332,6 +332,8 @@ def create_app() -> FastAPI:
     app.include_router(reports.public_router)
     # Dispute queue + admin takedown. Admin-gated inside the handlers, like the other admin routers.
     app.include_router(reports.admin_router)
+    # Upstream spend readout. Same admin gating.
+    app.include_router(usage.router)
     app.include_router(monitoring.router)
     app.include_router(watchlists.router)
     app.include_router(learning.router)

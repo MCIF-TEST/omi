@@ -420,6 +420,26 @@ class Settings(BaseSettings):
     rate_limit_scan_max: int = 20
     rate_limit_scan_window_seconds: float = 60.0
 
+    # Daily ceilings on PAID UPSTREAM API CALLS, database-backed (app/core/upstream_budget.py).
+    #
+    # The limiters above bound a burst; these bound a day, and they are the only spend controls that
+    # survive a deploy and are correct across instances. 30 compile requests a minute sustained is
+    # ~43,000 provider calls a day from one account, and until this existed nothing recorded that it
+    # had happened: the first signal would have been the invoice.
+    #
+    # Sizing, at roughly $0.005 per X call. A 150-account investigation costs ~300 calls (profile +
+    # history per account) plus ~30 to compile the list. A subscriber's 20 monthly credits buy about
+    # 1000 accounts, so a whole month of legitimate heavy use is ~2000-3000 calls. 1500 in a single
+    # day therefore leaves room for several full investigations back to back while capping a runaway
+    # at about $7.50 rather than $216.
+    # Env: OMI_UPSTREAM_DAILY_CALLS_PER_USER. 0 disables.
+    upstream_daily_calls_per_user: int = 1500
+    # Deployment-wide circuit breaker, NOT a business limit. It refuses paying customers when it
+    # trips (with a 503 that says the fault is ours), so it is set well above any plausible real day
+    # and exists only to stop a bug or an attack emptying the API budget overnight. Raise it rather
+    # than removing it. Env: OMI_UPSTREAM_DAILY_CALLS_GLOBAL. 0 disables.
+    upstream_daily_calls_global: int = 50_000
+
     # Largest accepted request body (BodySizeLimitMiddleware). Neither Starlette nor uvicorn caps this
     # by default, and ten routes take an unvalidated `payload: dict`, so an oversized JSON body was
     # parsed fully into memory — a cheap way to exhaust a small instance's RAM without an account.
