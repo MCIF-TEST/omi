@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-31 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1787 passed, 8 skipped, 1 failed** (5m46s), the failure pre-existing and listed below.
+**1819 passed, 8 skipped, 1 failed** (5m21s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -355,13 +355,53 @@ prose at all on the live route. **The protocol is the only real control today.**
 to per-account text is worth doing and is not done.
 
 Pinned by `tests/test_score_discipline.py` (53 tests). Protocol recompiled to
-**`map:461301d1a47061e711ce082c`, 80,583 chars**, zero em dashes, all drift guards green. Pins moved:
-constitution block count 16 → 18, `package_hash` → `pkg:118b279d16cd37662b7e101d`.
+**`map:7b1c50bffb5b61190181bbb9`, 82,060 chars**, zero em dashes, all drift guards green. Pins moved:
+constitution block count 16 → 18, `package_hash` → `pkg:2351f616b71da13ccad74105`.
 
-**Cost note:** the protocol has grown 64,808 → 80,583 chars (roughly 20k input tokens) and is sent on
+**Cost note:** the protocol has grown 64,808 → 82,060 chars (roughly 20.5k input tokens) and is sent on
 every batch, so a 150-account investigation pays it six times. Worth watching if OpenRouter spend
 climbs, and worth resisting the urge to keep appending doctrine: past some length the model follows
 each individual instruction *less* reliably, so additions should replace rather than accumulate.
+
+### The analyst's prose is verified against the evidence, deterministically
+
+`BANNED_PHRASES` never reached `commenter_assessments[].assessment`, and the comprehensive path runs
+`adjudication="schema_only"`, so nothing at all inspected the sentences that actually get
+screenshotted. The protocol was the only control, and asking a model nicely is not a control.
+
+`app/reasoning/grounding.py` runs at the join in `_join_commenter_assessments`, which is the one place
+holding BOTH the model's prose and the account's ground truth (`recent_activity`, `bio`,
+`follower_count`, `following_count`, `account_created_at`, `history_size`). Every check is a
+comparison between those two: no model call, no network, no guessing at what "sounds" wrong.
+
+- **Quotes** are matched against what the account actually posted. This is the check worth having if
+  you only have one: an invented quotation asserts a named person wrote words they never wrote, and
+  the reader cannot tell. Truncated quotes match on the head, so honest shortening is not punished.
+- **Figures** (followers, following, posts, age, ratio) are compared against the real metadata.
+  `_CHECKABLE_CLAIMS` forced the number into the sentence to make the error auditable; this catches it.
+- **Banned phrasing**, **boilerplate** (5-shingle Jaccard across the batch), **readability** (sentence
+  length, a short jargon list) and **score coherence** (Dossier Loop 3c, previously unenforced).
+
+**HARD violations withhold the paragraph**: it moves to `assessment_unverified`, `assessment` becomes
+an honest notice, and confidence is capped at 40. SOFT violations never suppress anything.
+
+Three things not to undo:
+
+- **The replacement happens at JOIN, not at serve.** That is the opposite of the signal gate, and
+  deliberately: that gate hides a finished feature and must stay reversible, while this removes a
+  claim the evidence does not support, and there is no viewer who should be shown that. Nothing is
+  deleted, so an operator can always see what the model said and why it was refused.
+- **`NEVER_PUBLIC_ACCOUNT_FIELDS` is a separate set from `ADMIN_ONLY_ACCOUNT_FIELDS`.** A test caught
+  this: folding `grounding` / `assessment_unverified` into the signal gate would mean emptying that
+  set to ship the breakdown ALSO releases the refused paragraphs.
+- **Quote detection keys on the speech verb, not just length.** Length alone cannot separate an
+  excerpt from scare-quoting: "engagement farming" is 18 characters and quotes nobody, while
+  `wrote "buy my course"` is a 3-word attributed claim that must be checked.
+
+The protocol now tells the model the check exists, which is the strongest prompt lever available
+(models comply far better when told output is machine-checked against a source), and adds a concrete
+plain-English rule. Recompiled to **`map:7b1c50bffb5b61190181bbb9`, 82,060 chars**. Pinned by
+`tests/test_grounding.py` (33 tests).
 
 ### Evidence completeness — what the model is allowed to see
 
