@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-07-31 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1819 passed, 8 skipped, 1 failed** (5m21s), the failure pre-existing and listed below.
+**1825 passed, 8 skipped, 1 failed** (6m10s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -362,6 +362,31 @@ constitution block count 16 → 18, `package_hash` → `pkg:2351f616b71da13ccad7
 every batch, so a 150-account investigation pays it six times. Worth watching if OpenRouter spend
 climbs, and worth resisting the urge to keep appending doctrine: past some length the model follows
 each individual instruction *less* reliably, so additions should replace rather than accumulate.
+
+### What actually goes on the OpenRouter wire
+
+Worth knowing before anyone tries to "also send the prompt": **the local system prompt is never sent
+to OpenRouter.** `OpenRouterReasoningProvider._request_body` builds `messages = [{"role": "user",
+...}]` and nothing else. The dashboard preset `omi-master-v1` holds the compiled protocol, the
+request carries only the evidence, and OpenRouter joins them.
+
+That is correct and must stay: `compile_master_analyst_protocol().text` is byte-identical to
+`pp.system` (test-pinned), so the preset content IS the local protocol. Sending both would put the
+same ~20k tokens on every request twice, for nothing. The HF path still receives system+user.
+
+The cost of that design is that **preset drift is undetectable**: paste an old protocol, or edit it
+in the dashboard, and every scan silently runs on the wrong instructions. Omi records the hash it
+EXPECTS (`master_prompt_hash` on the trace) but cannot read the remote preset to compare.
+
+Because the preset owns the instructions, the operative task sits ~20k tokens behind the evidence by
+the time the model reads it. So `_closing_directive` (`prompt/stage_builder.py`) appends a short tail
+to the USER message, after the alias legend, restating only the constraints that fail in practice.
+The load-bearing line names the exact aliases and the exact count: a model handed 25 accounts
+sometimes returns 21, and without the expected set stated it cannot notice, whereas we could detect
+the shortfall but not fix it. Keep the tail under ~900 chars (pinned): it rides on every request, so
+unlike the preset it is a per-scan cost.
+
+`docs/openrouter-wire-example.md` is a generated, readable dump of both halves plus the HTTP body.
 
 ### The analyst's prose is verified against the evidence, deterministically
 

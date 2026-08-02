@@ -460,3 +460,74 @@ def test_persisted_shape_stays_frontend_compatible():
         assert field in out, f"frontend-facing field {field} missing"
     assert set(out["comprehensive_sections"]) == set(COMPREHENSIVE_SECTION_KEYS)
     assert "verdict" in out["governance"] and "provider" in out["governance"]
+
+
+# =========================================================================== #
+# The closing directive on the USER message
+#
+# OpenRouter never receives the local system prompt: the dashboard preset owns it, and the request
+# carries only the evidence. That leaves the operative task ~20k tokens behind the evidence by the
+# time the model reads it, and instructions at the end of a long context are followed markedly
+# better than the same instructions only at the front.
+# =========================================================================== #
+def test_the_user_message_ends_by_naming_the_accounts_it_expects_back():
+    """The highest-value line in the tail. A model handed 25 accounts sometimes returns 21, and
+    without the expected set stated it has no way to notice; we could detect the shortfall but the
+    model could not self-correct."""
+    pp = build_comprehensive_investigation_prompt_package(
+        _package(), assets=load_comprehensive_investigation_assets())
+    tail = pp.user[pp.user.index("## Before you answer"):]
+    assert "Return EXACTLY 2 items" in tail
+    assert "A1, A2" in tail
+    assert "none omitted and none invented" in tail
+
+
+def test_the_closing_directive_comes_last():
+    """After the alias legend, so it is genuinely the final thing read before generation."""
+    pp = build_comprehensive_investigation_prompt_package(
+        _package(), assets=load_comprehensive_investigation_assets())
+    assert pp.user.index("Alias legend") < pp.user.index("## Before you answer")
+    assert pp.user.rstrip().endswith("keep every number and quote.")
+
+
+def test_the_closing_directive_warns_that_output_is_verified():
+    """Repeated here because it changes behaviour at generation time and is read last."""
+    pp = build_comprehensive_investigation_prompt_package(
+        _package(), assets=load_comprehensive_investigation_assets())
+    tail = pp.user[pp.user.index("## Before you answer"):]
+    assert "checked automatically" in tail
+    assert "discards that account's whole assessment" in tail
+
+
+def test_the_closing_directive_stays_small():
+    """It rides on EVERY request, so it is a per-scan cost unlike the preset. Keep it cheap."""
+    pp = build_comprehensive_investigation_prompt_package(
+        _package(), assets=load_comprehensive_investigation_assets())
+    tail = pp.user[pp.user.index("## Before you answer"):]
+    assert len(tail) < 900, f"the tail has grown to {len(tail)} chars"
+
+
+def test_a_stage_with_no_accounts_gets_no_directive():
+    """Nothing to enumerate means nothing to say, and an empty instruction is worse than none."""
+    from app.reasoning.prompt.stage_builder import _closing_directive
+
+    assert _closing_directive({}) == ""
+    assert _closing_directive({"legend": {"accounts": {}}}) == ""
+
+
+def test_the_local_system_is_never_on_the_openrouter_wire():
+    """The preset owns the protocol. Sending it again would put ~20k identical tokens on every
+    request for no gain, and give the model two copies of the same instructions."""
+    import json as _json
+
+    from app.reasoning.model_providers import ReasoningRequest
+    from app.reasoning.model_providers.openrouter import OpenRouterReasoningProvider
+
+    prov = OpenRouterReasoningProvider(preset="omi-master-v1")
+    body = _json.loads(prov._request_body(ReasoningRequest(
+        system="THE ENTIRE COMPILED PROTOCOL", user="THE EVIDENCE",
+        response_format="text", temperature=0.2, max_tokens=100)))
+    assert [m["role"] for m in body["messages"]] == ["user"]
+    assert body["messages"][0]["content"] == "THE EVIDENCE"
+    assert "THE ENTIRE COMPILED PROTOCOL" not in _json.dumps(body)
+    assert body["model"] == "@preset/omi-master-v1"
