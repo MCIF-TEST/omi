@@ -29,15 +29,16 @@ import {
  *   · Section padding cut by a third and copy cut again. The page is shorter than the previous
  *     pass while carrying more.
  *
- * Palette, edges and display face are scoped under `.omi-landing` in globals.css. Nothing in the
- * signed-in app changes.
+ * The palette, edges and display face that started here now live in `:root` and the Tailwind
+ * radius scale, so the whole product reads as one instrument. What is still page-local is the
+ * chapter grammar (`.chapter`, `.band`, `.rule-chapter`), which the marketing pages reuse.
  *
  * No `overflow-hidden` on the root: it creates a scroll container that breaks the sticky header.
  * Horizontal containment is handled by `overflow-x: clip` on html/body in globals.css.
  */
 export function LandingPage() {
   return (
-    <div className="omi-landing omi-landing-grid min-h-screen bg-bg-deep flex flex-col">
+    <div className="omi-landing rule-grid min-h-screen bg-bg-deep flex flex-col">
       <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 bg-bg-deep px-4 md:px-8 flex items-center gap-3 min-w-0">
         <Link
           href="/"

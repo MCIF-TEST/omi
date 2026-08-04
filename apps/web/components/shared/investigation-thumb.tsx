@@ -90,7 +90,7 @@ export function InvestigationThumb({
               )}
               aria-hidden
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 border border-white/15 backdrop-blur-sm shadow-card">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/80 border border-white/20 shadow-card">
                 <PlayIcon className="text-white ml-0.5" />
               </span>
             </span>
@@ -118,19 +118,9 @@ function Placeholder({
 }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center" aria-hidden>
-      {/* brand aurora */}
-      <span
-        className={cn(
-          'pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full blur-3xl opacity-50',
-          isX ? 'bg-violet/35' : isYt ? 'bg-red-500/25' : 'bg-accent/20',
-        )}
-      />
-      <span
-        className={cn(
-          'pointer-events-none absolute -left-6 bottom-0 h-20 w-20 rounded-full blur-2xl opacity-40',
-          isX ? 'bg-fg/15' : 'bg-violet/20',
-        )}
-      />
+      {/* No blurred colour blobs here any more: they were decoration that encoded
+          nothing, and on the near-black ground they read as smudges. The grid
+          texture below plus the platform glyph carry the surface on their own. */}
       {/* subtle grid texture */}
       <span
         className="pointer-events-none absolute inset-0 opacity-[0.07]"
@@ -144,7 +134,7 @@ function Placeholder({
       <div className="relative flex flex-col items-center gap-2">
         <span
           className={cn(
-            'flex items-center justify-center rounded-2xl border border-white/10 bg-bg/40 backdrop-blur-sm shadow-card',
+            'flex items-center justify-center rounded-2xl border border-white/10 bg-bg shadow-card',
             size === 'sm' ? 'h-8 w-8' : 'h-12 w-12',
           )}
         >
@@ -184,7 +174,7 @@ function PlatformChip({
     <span
       className={cn(
         'inline-flex items-center gap-1 font-mono tracking-wider uppercase',
-        'rounded-full border backdrop-blur-md shadow-sm',
+        'rounded-full border shadow-sm',
         compact ? 'text-[0.5rem] px-1 py-px' : 'text-[0.55rem] px-1.5 py-0.5',
         isYt && 'border-red-500/30 bg-black/55 text-red-200',
         isX && 'border-white/15 bg-black/55 text-fg',

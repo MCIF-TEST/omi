@@ -15,17 +15,24 @@ import { ClerkProvider } from '@clerk/nextjs';
 //
 // The publishable key is a NEXT_PUBLIC_ var (inlined into the client bundle at build). When it's
 // absent, render children ungated so the app still works.
+// Clerk renders the sign-in and sign-up forms from its own bundle, so it cannot see our CSS
+// variables and every colour has to be handed to it literally. That makes this file the one place
+// a palette change silently does not reach: after the ramp moved to near-black, these values still
+// painted the form in the old navy (#131E31 panels, #0F1828 inputs) on top of a #010203 page, on
+// the two screens the whole funnel ends at.
+//
+// Kept in sync BY HAND with :root in globals.css. If you change the ramp there, change it here.
 const clerkAppearance = {
   variables: {
-    colorPrimary: '#3B82F6',
-    colorBackground: '#131E31',
-    colorInputBackground: '#0F1828',
-    colorText: '#F8FAFC',
-    colorTextSecondary: '#94A3B8',
-    colorInputText: '#F8FAFC',
+    colorPrimary: '#3B82F6',        // --accent
+    colorBackground: '#0A0D12',     // --bg-elev
+    colorInputBackground: '#030406', // --bg-inset
+    colorText: '#FFFFFF',           // --text
+    colorTextSecondary: '#AAB2BC',  // --text-mute
+    colorInputText: '#FFFFFF',
     colorDanger: '#EF4444',
     colorSuccess: '#22C55E',
-    borderRadius: '0.625rem',
+    borderRadius: '3px',            // matches the tightened Tailwind radius scale
     fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
   },
   elements: {
@@ -36,17 +43,17 @@ const clerkAppearance = {
     formButtonPrimary:
       'bg-[#3B82F6] hover:bg-[#2d6edf] text-white font-semibold normal-case shadow-none',
     socialButtonsBlockButton:
-      'border border-[#31425e] bg-[#0f1828] hover:bg-[#18263d] hover:border-[#3c4f70] text-[#f8fafc] normal-case',
-    socialButtonsBlockButtonText: 'text-[#f8fafc] font-medium',
-    dividerLine: 'bg-[#24344f]',
-    dividerText: 'text-[#64748b] font-mono text-xs tracking-wider uppercase',
-    formFieldLabel: 'text-[#cbd5e1]',
-    formFieldInput: 'bg-[#0f1828] border border-[#24344f] focus:border-[#3B82F6] text-[#f8fafc]',
+      'border border-[#343c4b] bg-[#06080b] hover:bg-[#10141b] hover:border-[#4b5566] text-white normal-case',
+    socialButtonsBlockButtonText: 'text-white font-medium',
+    dividerLine: 'bg-[#232935]',
+    dividerText: 'text-[#7b8593] font-mono text-xs tracking-wider uppercase',
+    formFieldLabel: 'text-[#e3e8ef]',
+    formFieldInput: 'bg-[#030406] border border-[#232935] focus:border-[#3B82F6] text-white',
     footer: 'hidden',
     footerAction: 'hidden',
     identityPreviewEditButton: 'text-[#5b9dff]',
     formResendCodeLink: 'text-[#5b9dff]',
-    otpCodeFieldInput: 'bg-[#0f1828] border border-[#24344f] text-[#f8fafc]',
+    otpCodeFieldInput: 'bg-[#030406] border border-[#232935] text-white',
   },
 };
 

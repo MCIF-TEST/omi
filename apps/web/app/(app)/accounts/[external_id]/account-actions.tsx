@@ -87,7 +87,7 @@ export function AccountActions({ externalId, platform, handle, csvRows }: Props)
   }
 
   return (
-    <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-bg/95 backdrop-blur border-b border-border-1">
+    <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-bg border-b border-border-1">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 font-mono text-2xs tracking-wider uppercase text-fg-mute min-w-0">
           <span className="px-1.5 py-0.5 rounded-sm border border-border-2 text-fg-dim">

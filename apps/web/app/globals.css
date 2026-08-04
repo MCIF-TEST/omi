@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 /* =====================================================================
-   OMISPHERE. DESIGN LANGUAGE v2  ·  "INTELLIGENCE"
-   Software for intelligence analysts. Deep blue is the identity; royal
-   purple is the intelligence layer. OpenAI × Linear × Stripe × Palantir.
+   OMISPHERE. DESIGN LANGUAGE v3  ·  "INSTRUMENT"
+   A forensic tool, not a product page. Near-black ground, high contrast,
+   square edges, structure carried by hairlines and tone.
 
    Rules (binding)
      · Blue is the identity (~85%). Purple is the AI/intelligence layer
@@ -16,33 +16,46 @@
      · No blue→purple gradients, ever.
      · Elevation by tone + hairline, not shadow or glow.
      · Every colour communicates purpose. Decoration is not a purpose.
+     · Corners are 2 to 4px. `rounded-full` stays full, for dots, avatars
+       and status pills only.
 
-   Voices  ·  Inter, the entire interface, including display
+   Voices  ·  Archivo, display only (h1/h2, `.display`, `.display-hard`)
+              Inter, body and interface
               JetBrains Mono. Evidence: ids, numbers, handles, raw data
    ===================================================================== */
 
 :root {
-  /* Surfaces. Deep navy graphite ramp */
-  --bg-deep:    #09111f;   /* app background            */
-  --bg:         #0e1728;   /* secondary background      */
-  --bg-elev:    #131e31;   /* panel surface (cards)     */
-  --bg-elev-2:  #18263d;   /* elevated surface          */
-  --bg-elev-3:  #1a2942;   /* hover surface             */
-  --bg-inset:   #0f1828;   /* input fields / sunk wells */
-  --bg-sidebar: #08101c;   /* sidebar / deepest chrome  */
+  /* Surfaces. Near-black instrument ramp.
+     This was a deep navy ramp. Navy reads soft at any size and softer the
+     larger it gets, which is most of what made this product look like a
+     template rather than a tool. The ground is now pushed almost to zero so
+     type carries the interface: white on #010203 runs about 20:1. */
+  --bg-deep:    #010203;   /* app background            */
+  --bg:         #06080b;   /* secondary background      */
+  --bg-elev:    #0a0d12;   /* panel surface (cards)     */
+  --bg-elev-2:  #10141b;   /* elevated surface          */
+  --bg-elev-3:  #171c25;   /* hover surface             */
+  --bg-inset:   #030406;   /* input fields / sunk wells */
+  /* Chrome now sits ABOVE the content ground rather than below it. With the
+     page at #010203 there is no room left to go darker, so the sidebar
+     separates by being raised instead of sunk. */
+  --bg-sidebar: #06080b;
 
-  /* Borders */
-  --border:     #24344f;   /* primary border   */
-  --border-2:   #31425e;   /* secondary border */
-  --border-hot: #3c4f70;   /* hover emphasis   */
-  --divider:    #1c2a3f;   /* quiet rule line  */
+  /* Borders. Pulled UP as the ground went down: on a near-black field a dim
+     hairline disappears and takes the structure with it. */
+  --border:     #232935;   /* primary border   */
+  --border-2:   #343c4b;   /* secondary border */
+  --border-hot: #4b5566;   /* hover emphasis   */
+  --divider:    #1a1f29;   /* quiet rule line  */
 
-  /* Text. Slate ramp on navy. AA on the surfaces:
-     dim ~11:1, mute ~6.5:1, faint ~3.5:1 (faint = non-essential only). */
-  --text:       #f8fafc;
-  --text-dim:   #cbd5e1;
-  --text-mute:  #94a3b8;
-  --text-faint: #64748b;
+  /* Text. Brighter and less blue than the old slate ramp, whose middle steps
+     sat in the mid-grey band the eye reads as "secondary, skip it".
+     Measured on the rendered page: dim ~16.9:1, mute ~9.7:1, faint ~5.6:1.
+     --text-faint is for labels, never for sentences. */
+  --text:       #ffffff;
+  --text-dim:   #e3e8ef;
+  --text-mute:  #aab2bc;
+  --text-faint: #7b8593;
 
   /* Accent. BLUE. The identity: focus, active, links, primary action. */
   --accent:      #3b82f6;   /* primary blue. 4.5:1, AA text on surfaces  */
@@ -76,8 +89,12 @@
   --grad-brand: linear-gradient(90deg, var(--tier-low) 0%, var(--tier-moderate) 40%, var(--tier-elevated) 68%, var(--tier-high) 100%);
   --grad-brand-soft: linear-gradient(90deg, rgba(34,197,94,0.12) 0%, rgba(245,158,11,0.10) 40%, rgba(249,115,22,0.10) 68%, rgba(239,68,68,0.12) 100%);
 
-  /* Type. Next/font sets --font-inter / --font-mono / --font-display-alt on <html> */
-  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Type. Next/font sets --font-inter / --font-mono / --font-archivo on <html>.
+     Display is Archivo, a signage grotesque: narrower than Inter, closed
+     apertures, a much heavier top weight. It carries h1/h2 and `.display`
+     across the whole product. Body copy stays Inter, which is what Inter is
+     good at, so the split is display-only. */
+  --font-display: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   /* Confidence / data-sufficiency ramp. Separate from action + tier. */
   --confidence-strong: #22c55e;
@@ -456,7 +473,7 @@
 }
 
 /* =====================================================================
-   PRE-LOGIN FRONT PAGE  ·  scoped to .omi-landing
+   PUBLIC SURFACE GRAMMAR  ·  chapters, rules, bone actions
    =====================================================================
    Everything here is namespaced under .omi-landing on purpose. The front
    page wants a colder, harder register than the workspace, and the
@@ -471,47 +488,25 @@
    a hairline, exactly as in the app.
    ===================================================================== */
 
+/* The palette that used to live here is now in :root, so the whole product
+   reads as one instrument rather than a hard front page bolted to a soft app.
+   What remains scoped is the front page's own chapter grammar. */
 .omi-landing {
-  /* Near-black, not navy. The ground is pushed almost to zero so the type
-     carries the whole page: at #04 the white headline is running at about
-     19:1, which is what makes it feel unavoidable rather than merely
-     legible. Borders are pulled UP as the ground goes down, because on a
-     near-black field a dim hairline disappears and the structure with it. */
-  --bg-deep:    #010203;
-  --bg:         #06080b;
-  --bg-elev:    #0a0d12;
-  --bg-elev-2:  #10141b;
-  --bg-elev-3:  #171c25;
-  --bg-inset:   #030406;
-  --border:     #232935;
-  --border-2:   #343c4b;
-  --border-hot: #4b5566;
-  --divider:    #1a1f29;
+  background-color: var(--bg-deep);
+}
 
-  /* Text ramp pulled up and desaturated. The app's slate ramp carries a blue
-     cast that reads soft, and its middle steps sit in the mid-grey band the
-     eye reads as "secondary, skip it". Here the primary is pure white on
-     near-black (about 20:1) and every step below is brighter and cooler than
-     the app's, so body copy stops receding. --text-faint is the only step
-     that stays quiet, and it is used for labels, never for sentences. */
-  --text:       #ffffff;
-  --text-dim:   #e3e8ef;
-  /* Cool but not periwinkle. The app ramp's blue tilt is strong enough at
-     this lightness that body copy starts reading as link text. */
-  --text-mute:  #aab2bc;
-  /* Measured at 5.4:1 on the near-black ground. The old value landed at
-     4.6:1, which clears AA on paper but is uncomfortable at the 10px these
-     mono labels are set in. */
-  --text-faint: #7b8593;
+:root {
+  /* Warm bone. The one warm value in the product, reserved for the primary
+     action on public surfaces. A warm mass on cold ink is a harder, more
+     decisive stop than any blue fill, and it keeps blue meaning "this is a
+     link or a mark" rather than "this is a button".
 
-  /* Warm bone, the one warm value on the page, reserved for the primary
-     action. A warm mass on cold ink is a harder, more decisive stop than
-     any blue fill, and it keeps blue meaning "this is a link or a mark"
-     rather than "this is a button". */
+     The signed-in app deliberately keeps its blue primary (.btn-lamp): blue
+     as the action colour is learned behaviour there, carried by nav rails,
+     focus rings and links, and swapping it would be a semantic change rather
+     than a visual one. Public surfaces argue; the workspace is used. */
   --bone:     #ece7dd;
   --bone-dim: #d6d0c4;
-
-  background-color: var(--bg-deep);
 }
 
 /* The page ground is set on a wrapper div, but <body> still carries the app's
@@ -520,13 +515,14 @@
    against near-black. Matching body to the landing ground closes that seam.
    Scoped by :has() so no other route is affected; browsers without :has()
    simply keep the old behaviour, which is a colour seam rather than a break. */
-body:has(.omi-landing) { background: #06080b; }
+/* The body:has(.omi-landing) override is gone: :root now carries the ground
+   for every route, so there is no seam left to patch. */
 
 /* Structural texture. A 1px rule grid at ~1.5% and a single hairline
    scanline pass: enough that the surface is not a flat void under the
    type, far too faint to read as decoration. Fixed attachment would fight
    the sticky header, so it scrolls with the page. */
-.omi-landing-grid {
+.rule-grid {
   background-image:
     linear-gradient(rgba(148, 163, 184, 0.016) 1px, transparent 1px),
     linear-gradient(90deg, rgba(148, 163, 184, 0.016) 1px, transparent 1px);
@@ -537,13 +533,13 @@ body:has(.omi-landing) { background: #06080b; }
    counters closing up. Weight and tracking do the work here, not size
    alone, which is why the headline can stay left ragged instead of
    needing a centred slab to feel important. */
-.omi-landing .display-hard {
+.display-hard {
   font-family: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 0.94;
 }
-.omi-landing .display-hard-sm {
+.display-hard-sm {
   font-family: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -553,7 +549,7 @@ body:has(.omi-landing) { background: #06080b; }
 /* Index numeral. The dossier tell: every section and every signal is
    numbered, so the page reads as a document with an order rather than a
    pile of equally weighted cards. */
-.omi-landing .idx {
+.idx {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.625rem;
@@ -565,7 +561,7 @@ body:has(.omi-landing) { background: #06080b; }
    than a text colour so it reads as structure the page is built on and
    not as a value anybody is meant to read. This is most of what makes the
    sections land as chapters instead of a continuous scroll. */
-.omi-landing .chapter {
+.chapter {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
@@ -580,7 +576,7 @@ body:has(.omi-landing) { background: #06080b; }
 
 /* Section rule. Heavier on the left where the index sits, fading right,
    so the horizontal rules have a direction and a start. */
-.omi-landing .rule-hard {
+.rule-hard {
   height: 1px;
   border: 0;
   background: linear-gradient(90deg, var(--border-hot) 0%, var(--border) 22%, transparent 100%);
@@ -590,7 +586,7 @@ body:has(.omi-landing) { background: #06080b; }
    and stops, rather than fading edge to edge. The old single hairline was
    too polite to separate anything: the page read as one continuous column
    of content with rules drawn on it. */
-.omi-landing .rule-chapter {
+.rule-chapter {
   height: 2px;
   border: 0;
   background: linear-gradient(90deg, var(--text-faint) 0%, var(--border-hot) 8%, var(--border) 40%, transparent 100%);
@@ -600,7 +596,7 @@ body:has(.omi-landing) { background: #06080b; }
    full-bleed band, so section boundaries are felt before they are read.
    Tone, never a border, and the step is deliberately small (4 points of
    luminance) so it separates without looking like a different page. */
-.omi-landing .band {
+.band {
   background: var(--bg);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -610,7 +606,7 @@ body:has(.omi-landing) { background: #06080b; }
    corners and a warm fill are the two things that most separate this from
    a soft blue SaaS pill. One real pixel of travel on press, as everywhere
    else in the product. */
-.omi-landing .btn-bone {
+.btn-bone {
   background: var(--bone);
   color: #06080b;
   border: 1px solid var(--bone);
@@ -620,30 +616,30 @@ body:has(.omi-landing) { background: #06080b; }
   box-shadow: none;
   transition: background var(--dur-hover) ease, transform 0.06s ease;
 }
-.omi-landing .btn-bone:hover:not(:disabled) { background: var(--bone-dim); border-color: var(--bone-dim); }
-.omi-landing .btn-bone:active:not(:disabled) { transform: translateY(1px); }
+.btn-bone:hover:not(:disabled) { background: var(--bone-dim); border-color: var(--bone-dim); }
+.btn-bone:active:not(:disabled) { transform: translateY(1px); }
 
 /* Secondary action. Hairline only, square, no fill until hover. */
-.omi-landing .btn-hard {
+.btn-hard {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border-2);
   border-radius: 2px;
   transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease, transform 0.06s ease;
 }
-.omi-landing .btn-hard:hover:not(:disabled) { border-color: var(--border-hot); background: var(--bg-elev-2); }
-.omi-landing .btn-hard:active:not(:disabled) { transform: translateY(1px); }
+.btn-hard:hover:not(:disabled) { border-color: var(--border-hot); background: var(--bg-elev-2); }
+.btn-hard:active:not(:disabled) { transform: translateY(1px); }
 
 /* Square off the shared primitives inside the landing scope. The app's
    8 to 16px radii are what read as "modern SaaS card" at this scale; 2 to
    3px reads as an instrument. Scoped, so the workspace keeps its softer
    corners where the surfaces are small and adjacent. */
-.omi-landing .hard-edge,
-.omi-landing .hard-edge > * { border-radius: 2px; }
+.hard-edge,
+.hard-edge > * { border-radius: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .omi-landing .btn-bone:active,
-  .omi-landing .btn-hard:active { transform: none !important; }
+  .btn-bone:active,
+  .btn-hard:active { transform: none !important; }
 }
 
 /* ---------------------------------------------------------------------------

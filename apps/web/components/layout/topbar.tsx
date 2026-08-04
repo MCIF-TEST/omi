@@ -40,7 +40,7 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
     // min-w-0 + gap-2 on phones: this row holds six things, and without a floor on how far it can
     // shrink the last of them (the account button) is simply pushed off the right edge of a 390px
     // screen. Reachable only by panning the page sideways.
-    <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 glass px-3 md:px-5 flex items-center gap-2 md:gap-3 min-w-0">
+    <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border-1 bg-bg-sidebar px-3 md:px-5 flex items-center gap-2 md:gap-3 min-w-0">
 
       {/* Persistent feedback. Top-left, on every page, even deep inside an investigation. */}
       <FeedbackButton />
@@ -54,12 +54,12 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
       <div className="hidden lg:flex items-center gap-2.5 font-mono text-2xs text-fg-mute tracking-wider shrink-0">
         {engineStatus && (
           <>
-            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev/60">
+            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev">
               <span className="w-1.5 h-1.5 rounded-full bg-tier-low" />
               <span>FP</span>
               <span className="text-fg-dim tabular">{engineStatus.fingerprints_stored.toLocaleString()}</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev/60">
+            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev">
               <span>SCANS</span>
               <span className="text-fg-dim tabular">{engineStatus.total_scans.toLocaleString()}</span>
             </span>
@@ -101,7 +101,7 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
         {/* Alerts. Phones reach alerts from the tab bar, so this duplicate is tablet-up. */}
         <Link
           href="/monitoring"
-          className="relative hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border-2 bg-bg-elev/60 hover:border-border-hot hover:text-fg-dim text-fg-mute transition-colors"
+          className="relative hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border-2 bg-bg-elev hover:border-border-hot hover:text-fg-dim text-fg-mute transition-colors"
           aria-label={`Alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
         >
           <Bell size={15} />

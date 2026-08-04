@@ -1,13 +1,14 @@
+import { PageMasthead } from '@/components/shared/page-masthead';
+
 export const metadata = { title: 'Privacy. OMISPHERE' };
 
 export default function PrivacyPage() {
   return (
     <article className="space-y-6">
-      <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">Legal</p>
-        <h1 className="text-3xl font-semibold text-fg tracking-tight">Privacy Policy</h1>
-        <p className="mt-1 font-mono text-2xs text-fg-mute">Last updated: May 2026</p>
-      </header>
+      <PageMasthead index="001" eyebrow="Legal" title="Privacy Policy" />
+      <p className="font-mono text-[0.625rem] tracking-[0.14em] uppercase text-fg-faint -mt-6">
+        Last updated May 2026
+      </p>
 
       <p className="text-fg-dim leading-relaxed">
         This policy explains what OMISPHERE collects, why, and the choices you
