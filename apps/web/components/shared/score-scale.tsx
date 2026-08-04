@@ -1,18 +1,20 @@
 /**
- * The 0-to-100 scale, rendered as the instrument face it actually is.
+ * The 0-to-100 scale, rendered as the instrument face it is.
  *
- * The score is the product's single output and it was previously mentioned only in passing, inside
- * sentences. Given a section of its own, at size, it does two things at once: it tells a visitor
- * exactly what the number means, and it makes clear that the number is a judgement with thresholds
- * behind it rather than a friendly percentage.
+ * The ranges sit INSIDE the bands, in near-black on the band colour, rather than as tick labels
+ * underneath. That is the difference between a chart annotated with numbers and a gauge whose
+ * numbers are part of it, and it is most of why this reads as an instrument.
  *
- * The bands and the evidence each one demands are the real ones, taken from the engine's tier
- * bounds and the analyst constitution's score discipline (50 and above needs two independent
- * discriminative indicators; 75 and above needs several converging plus a statable reason the
- * innocent explanation fails). Stating the burden of proof publicly is the strongest possible
- * claim to seriousness, and it is only available to a product that actually imposes one.
+ * Bands and burdens are the real ones, from the engine's tier bounds and the analyst
+ * constitution's score discipline: 50 and above needs two independent discriminative indicators,
+ * 75 and above needs several converging plus a statable reason the innocent explanation fails.
+ * Stating the burden publicly is the strongest claim to seriousness available, and it is only
+ * available to a product that actually imposes one.
  *
- * Server-rendered, no JS.
+ * The asymmetry note is not a disclaimer. A tool that assigns a number to a named person and does
+ * not say which way it errs is hiding the only thing that makes the number trustworthy.
+ *
+ * Server-rendered, no JS. Near-black on every band clears 5.5:1 at the worst case (red).
  */
 
 const BANDS = [
@@ -20,76 +22,72 @@ const BANDS = [
     tier: 'low',
     range: '0-24',
     label: 'Low',
-    burden: 'Reads like a person.',
+    burden: 'Behaves like a person.',
   },
   {
     tier: 'moderate',
     range: '25-49',
     label: 'Moderate',
-    burden: 'Something is off. Not enough to name it.',
+    burden: 'Irregular. Not enough to name it.',
   },
   {
     tier: 'elevated',
     range: '50-74',
     label: 'Elevated',
-    burden: 'Two independent indicators, converging.',
+    burden: 'Two independent indicators converge.',
   },
   {
     tier: 'high',
     range: '75-100',
     label: 'High',
-    burden: 'Several converge, and the innocent explanation fails.',
+    burden: 'Converging evidence. No innocent reading survives it.',
   },
 ] as const;
 
 export function ScoreScale() {
   return (
     <div>
-      {/* The bar. Four equal quarters, hard edges, no rounding: this is a scale, not a meter. */}
-      <div className="flex h-11 w-full border border-border-1" role="img" aria-label="The OMI scale runs 0 to 100 in four bands: low 0 to 24, moderate 25 to 49, elevated 50 to 74, high 75 to 100.">
+      <div
+        className="flex h-16 w-full border border-border-2"
+        role="img"
+        aria-label="The OMI scale runs 0 to 100 in four bands: low 0 to 24, moderate 25 to 49, elevated 50 to 74, high 75 to 100."
+      >
         {BANDS.map((b) => (
           <div
             key={b.tier}
-            className="flex-1 border-r border-bg-deep last:border-r-0"
+            className="flex-1 flex items-center justify-center border-r-2 border-bg-deep last:border-r-0"
             style={{ background: `var(--tier-${b.tier})` }}
-          />
-        ))}
-      </div>
-
-      {/* Ticks. Sit directly under the band boundaries they mark, so the numbers belong to the
-          scale rather than floating beneath it. */}
-      <div className="flex mt-2" aria-hidden>
-        {['0', '25', '50', '75'].map((n) => (
-          <div key={n} className="flex-1 border-l border-border-2 pl-2">
-            <span className="stat-value text-xs text-fg-mute tabular">{n}</span>
+          >
+            <span
+              className="stat-value text-base sm:text-lg font-semibold tabular"
+              style={{ color: '#010203' }}
+            >
+              {b.range}
+            </span>
           </div>
         ))}
-        <div className="border-l border-border-2 pl-2">
-          <span className="stat-value text-xs text-fg-mute tabular">100</span>
-        </div>
       </div>
 
-      {/* The burden of proof for each band. */}
-      <dl className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border-1 border border-border-1 mt-8">
+      <dl className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border-1 border-x border-b border-border-1">
         {BANDS.map((b) => (
-          <div key={b.tier} className="bg-bg-deep p-4 md:p-5">
-            <dt className="flex items-baseline gap-2 mb-2.5">
-              <span
-                className="h-2.5 w-2.5 shrink-0 translate-y-px"
-                style={{ background: `var(--tier-${b.tier})` }}
-                aria-hidden
-              />
-              <span className="font-mono text-[0.625rem] tracking-[0.16em] uppercase text-fg">
-                {b.label}
-              </span>
-              <span className="stat-value text-[0.625rem] text-fg-faint tabular ml-auto">
-                {b.range}
-              </span>
+          <div key={b.tier} className="bg-bg-deep px-3.5 py-4">
+            <dt
+              className="font-mono text-[0.625rem] tracking-[0.18em] uppercase mb-2"
+              style={{ color: `var(--tier-${b.tier})` }}
+            >
+              {b.label}
             </dt>
-            <dd className="text-sm text-fg-mute leading-relaxed">{b.burden}</dd>
+            <dd className="text-sm text-fg-dim leading-snug">{b.burden}</dd>
           </div>
         ))}
       </dl>
+
+      {/* Which way the instrument errs, stated up front. */}
+      <p className="mt-6 text-sm text-fg-mute leading-relaxed max-w-[62ch]">
+        <span className="text-fg">The errors are not symmetric.</span> Calling a real person bought
+        is the expensive mistake, because the reader cannot check it and one bad score discredits
+        every other number beside it. On balanced evidence the engine returns the lower score.
+      </p>
     </div>
   );
 }

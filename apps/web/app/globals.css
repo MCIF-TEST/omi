@@ -477,16 +477,32 @@
      19:1, which is what makes it feel unavoidable rather than merely
      legible. Borders are pulled UP as the ground goes down, because on a
      near-black field a dim hairline disappears and the structure with it. */
-  --bg-deep:    #040507;
-  --bg:         #080a0e;
-  --bg-elev:    #0c0f15;
-  --bg-elev-2:  #12161e;
-  --bg-elev-3:  #191e28;
-  --bg-inset:   #06080b;
-  --border:     #1f242e;
-  --border-2:   #2e3542;
-  --border-hot: #434c5c;
-  --divider:    #171b23;
+  --bg-deep:    #010203;
+  --bg:         #06080b;
+  --bg-elev:    #0a0d12;
+  --bg-elev-2:  #10141b;
+  --bg-elev-3:  #171c25;
+  --bg-inset:   #030406;
+  --border:     #232935;
+  --border-2:   #343c4b;
+  --border-hot: #4b5566;
+  --divider:    #1a1f29;
+
+  /* Text ramp pulled up and desaturated. The app's slate ramp carries a blue
+     cast that reads soft, and its middle steps sit in the mid-grey band the
+     eye reads as "secondary, skip it". Here the primary is pure white on
+     near-black (about 20:1) and every step below is brighter and cooler than
+     the app's, so body copy stops receding. --text-faint is the only step
+     that stays quiet, and it is used for labels, never for sentences. */
+  --text:       #ffffff;
+  --text-dim:   #e3e8ef;
+  /* Cool but not periwinkle. The app ramp's blue tilt is strong enough at
+     this lightness that body copy starts reading as link text. */
+  --text-mute:  #aab2bc;
+  /* Measured at 5.4:1 on the near-black ground. The old value landed at
+     4.6:1, which clears AA on paper but is uncomfortable at the 10px these
+     mono labels are set in. */
+  --text-faint: #7b8593;
 
   /* Warm bone, the one warm value on the page, reserved for the primary
      action. A warm mass on cold ink is a harder, more decisive stop than
@@ -554,7 +570,11 @@ body:has(.omi-landing) { background: #06080b; }
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   letter-spacing: -0.02em;
-  color: var(--border-2);
+  /* Quiet enough to read as structure rather than as a value, but not
+     invisible: at --border-2 this measured 1.8:1, and 28px counts as large
+     text, which has a 3:1 floor. This measures 3.4:1, still the quietest
+     thing on the page. */
+  color: #576174;
   line-height: 1;
 }
 
