@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Archivo } from 'next/font/google';
 import { ClerkClientProvider } from '@/components/shared/clerk-provider';
 import './globals.css';
 
@@ -20,6 +20,22 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
   variable: '--font-mono',
   weight: ['400', '500', '600'],
+});
+
+/**
+ * Front-page display voice. Archivo is a grotesque cut for signage and headlines: narrower than
+ * Inter, closed apertures, a much heavier top weight. Set tight and large it reads institutional
+ * and a little severe, which is the register this product wants, and it is nobody's default, which
+ * is most of the point.
+ *
+ * Loaded as a variable font (one file covers 400 to 800) and scoped to the pre-login page via
+ * `.font-hero`. The signed-in app keeps Inter throughout: the two sides of the login boundary
+ * should still read as one product, so the split is display-only and never reaches body copy.
+ */
+const archivo = Archivo({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-archivo',
 });
 
 // Space Grotesk (the old `--font-display-alt` marketing voice) is no longer loaded: the pre-login
@@ -57,7 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${archivo.variable}`}
     >
       {/* No external <link rel="stylesheet">. Fonts are self-hosted via next/font. */}
       <body className={`font-sans ${inter.className}`} data-csp-nonce={nonce || undefined}>
