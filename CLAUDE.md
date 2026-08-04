@@ -5,9 +5,9 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-07-29 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
+**Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1707 passed, 8 skipped, 1 failed** (5m16s), the failure pre-existing and listed below.
+**1843 passed, 8 skipped, 1 failed** (7m34s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -150,6 +150,40 @@ secrets from the Edge runtime, so any server-side Clerk usage breaks the Render 
 
 `pyjwt[crypto]` is a **required** dependency in `apps/api/pyproject.toml`. Without it
 `verify_session_token` silently returns `None` and every login bounces back to the landing page.
+
+#### Both services must name the same Clerk instance, and nothing at runtime checks that
+
+This was live on omisphere.online. The browser gets `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` from the
+**web** service and signs the user in; the API gets `CLERK_PUBLISHABLE_KEY` from the **API** service,
+base64-decodes it (a key is `pk_(test|live)_<base64(frontend_api_host + '$')>`) and verifies every
+session JWT against that issuer's JWKS. Two services, two copies, no reconciliation.
+
+Switch one to the production keys and not the other and the result reads as a network fault and is
+not one: sign-in succeeds, a valid JWT is minted by `clerk.omisphere.online`, and the API rejects it
+because it still expects `sweet-finch-45.clerk.accounts.dev`. `verify_session_token` swallows the
+mismatch and returns `None` (an unverifiable token is normally just an anonymous request), so there
+is **no log line, no 5xx, no failed health check**. The only symptom is the user being told they are
+signed in with no workspace.
+
+Three things now hold it together:
+
+- **`render.yaml` commits the key as a `value:` on both services, and they must be byte-identical.**
+  A blueprint sync re-applies what is committed, so a dashboard edit that disagrees is temporary:
+  fixing this in the Render dashboard alone gets silently undone on the next sync. The web service
+  genuinely needs it at build time (the static prerender throws "Missing publishableKey"), which is
+  why neither side is `sync: false`.
+- **`_clerk_instance_problem` (`app/main.py`) refuses the boot** of a production deploy holding a
+  `pk_test_` key, alongside the other fail-closed checks. `CLERK_ISSUER` overrides the key-derived
+  issuer, so when it is set it is what gets checked. An **absent** key is deliberately not fatal:
+  Clerk is optional here (the legacy cookie path still authenticates) and `render.yaml` always
+  commits one, so failing on absence would add a way to brick a deploy without catching a bug.
+- **`tests/test_clerk_instance_pairing.py`** (13 tests) asserts the two committed values match, that
+  the API's is `pk_live_`, and that it decodes to the host `clerk_auth._issuer` will actually use.
+  The decode assertion matters on its own: a typo in the base64 passes a `startswith` check and just
+  points the API at a host that does not exist, failing every login with the same silent `None`.
+
+**Changing the key needs a redeploy of both services, not a restart of one.** `_ISSUER` and
+`_JWKS_CLIENT` are module globals cached for the life of the process.
 
 ### The analyst is batched, sequential, and progressive
 
@@ -355,13 +389,102 @@ prose at all on the live route. **The protocol is the only real control today.**
 to per-account text is worth doing and is not done.
 
 Pinned by `tests/test_score_discipline.py` (53 tests). Protocol recompiled to
-**`map:461301d1a47061e711ce082c`, 80,583 chars**, zero em dashes, all drift guards green. Pins moved:
-constitution block count 16 → 18, `package_hash` → `pkg:118b279d16cd37662b7e101d`.
+**`map:ac15ee80f4237b3276877ed6`, 84,116 chars**, zero em dashes, all drift guards green. Pins moved:
+constitution block count 16 → 18, `package_hash` → `pkg:eacb6bf1831418d1eb49d95d`.
 
-**Cost note:** the protocol has grown 64,808 → 80,583 chars (roughly 20k input tokens) and is sent on
+**Cost note:** the protocol has grown 64,808 → 84,116 chars (roughly 21k input tokens) and is sent on
 every batch, so a 150-account investigation pays it six times. Worth watching if OpenRouter spend
 climbs, and worth resisting the urge to keep appending doctrine: past some length the model follows
 each individual instruction *less* reliably, so additions should replace rather than accumulate.
+
+### What actually goes on the OpenRouter wire
+
+Worth knowing before anyone tries to "also send the prompt": **the local system prompt is never sent
+to OpenRouter.** `OpenRouterReasoningProvider._request_body` builds `messages = [{"role": "user",
+...}]` and nothing else. The dashboard preset `omi-master-v1` holds the compiled protocol, the
+request carries only the evidence, and OpenRouter joins them.
+
+That is correct and must stay: `compile_master_analyst_protocol().text` is byte-identical to
+`pp.system` (test-pinned), so the preset content IS the local protocol. Sending both would put the
+same ~20k tokens on every request twice, for nothing. The HF path still receives system+user.
+
+The cost of that design is that **preset drift is undetectable**: paste an old protocol, or edit it
+in the dashboard, and every scan silently runs on the wrong instructions. Omi records the hash it
+EXPECTS (`master_prompt_hash` on the trace) but cannot read the remote preset to compare.
+
+Because the preset owns the instructions, the operative task sits ~20k tokens behind the evidence by
+the time the model reads it. So `_closing_directive` (`prompt/stage_builder.py`) appends a short tail
+to the USER message, after the alias legend, restating only the constraints that fail in practice.
+The load-bearing line names the exact aliases and the exact count: a model handed 25 accounts
+sometimes returns 21, and without the expected set stated it cannot notice, whereas we could detect
+the shortfall but not fix it. Keep the tail under ~900 chars (pinned): it rides on every request, so
+unlike the preset it is a per-scan cost.
+
+`docs/openrouter-wire-example.md` is a generated, readable dump of both halves plus the HTTP body.
+
+### The analyst's prose is verified against the evidence, deterministically
+
+`BANNED_PHRASES` never reached `commenter_assessments[].assessment`, and the comprehensive path runs
+`adjudication="schema_only"`, so nothing at all inspected the sentences that actually get
+screenshotted. The protocol was the only control, and asking a model nicely is not a control.
+
+`app/reasoning/grounding.py` runs at the join in `_join_commenter_assessments`, which is the one place
+holding BOTH the model's prose and the account's ground truth (`recent_activity`, `bio`,
+`follower_count`, `following_count`, `account_created_at`, `history_size`). Every check is a
+comparison between those two: no model call, no network, no guessing at what "sounds" wrong.
+
+- **Quotes** are matched against what the account actually posted. This is the check worth having if
+  you only have one: an invented quotation asserts a named person wrote words they never wrote, and
+  the reader cannot tell. Truncated quotes match on the head, so honest shortening is not punished.
+- **Figures** (followers, following, posts, age, ratio) are compared against the real metadata.
+  `_CHECKABLE_CLAIMS` forced the number into the sentence to make the error auditable; this catches it.
+- **Banned phrasing**, **boilerplate** (5-shingle Jaccard across the batch), **readability** (sentence
+  length, a short jargon list) and **score coherence** (Dossier Loop 3c, previously unenforced).
+
+**HARD violations withhold the paragraph**: it moves to `assessment_unverified`, `assessment` becomes
+an honest notice, and confidence is capped at 40. SOFT violations never suppress anything.
+
+Three things not to undo:
+
+- **The replacement happens at JOIN, not at serve.** That is the opposite of the signal gate, and
+  deliberately: that gate hides a finished feature and must stay reversible, while this removes a
+  claim the evidence does not support, and there is no viewer who should be shown that. Nothing is
+  deleted, so an operator can always see what the model said and why it was refused.
+- **`NEVER_PUBLIC_ACCOUNT_FIELDS` is a separate set from `ADMIN_ONLY_ACCOUNT_FIELDS`.** A test caught
+  this: folding `grounding` / `assessment_unverified` into the signal gate would mean emptying that
+  set to ship the breakdown ALSO releases the refused paragraphs.
+- **Quote detection keys on the speech verb, not just length.** Length alone cannot separate an
+  excerpt from scare-quoting: "engagement farming" is 18 characters and quotes nobody, while
+  `wrote "buy my course"` is a 3-word attributed claim that must be checked.
+
+The protocol now tells the model the check exists, which is the strongest prompt lever available
+(models comply far better when told output is machine-checked against a source), and adds a concrete
+plain-English rule. Recompiled to **`map:ac15ee80f4237b3276877ed6`, 84,116 chars**. Pinned by
+`tests/test_grounding.py` (33 tests).
+
+### The protocol used to contradict itself about verdict length
+
+Found while auditing for quality, and the most likely single cause of thin per-account reads. The
+base prompt's Dossier Loop STEP 4 and the constitution's step (4) both said the per-account reason
+was a **"1-3 sentence"** plain-English line. The output contract said **"4-7 sentences"** and the
+schema sets `minLength: 200`. Told the short version twice and the long version once, a model writes
+short, and three sentences cannot physically carry what the same protocol demands of them: a computed
+figure, a verbatim quote, the innocent explanation, where the score landed, and what would overturn
+it. All three sites now say 4 to 7.
+
+The base prompt also called the loop a **"four-step worksheet"** after the constitution had grown it
+with the (3c) coherence check and the (5) distribution check. A model told there are four steps stops
+at four. It now states that the constitution governs where the two differ.
+
+Both are pinned by `tests/test_score_discipline.py`, including an assertion that the stated length
+can actually satisfy the schema floor it is paired with. **When editing one document, grep the
+compiled protocol for the instruction rather than the file** — the same rule is stated in up to three
+places and they drift silently.
+
+A **FINAL PASS** checklist now closes the output contract, which is the last thing read before
+generation: count the accounts against the legend, re-check every quote and figure against the rows,
+spread, length, plain English. It deliberately points at the constitution's distribution check rather
+than issuing a competing one.
 
 ### Evidence completeness — what the model is allowed to see
 
@@ -461,8 +584,55 @@ Pinned by `test_admins_and_local_mode_are_exempt`.
 **Scope limit, stated plainly:** every limiter is in-process, so each budget is **per instance** and
 resets on deploy. One instance (what `render.yaml` provisions) behaves as configured; N instances give
 N× the ceiling. Making them global needs Redis behind the same `hit()` interface. These are an abuse
-guard, **not** a billing control — cost is guarded by credits and the demo's DB-backed per-IP
-reservations, both of which are correct across instances.
+guard, **not** a billing control — cost is guarded by credits, the demo's DB-backed per-IP
+reservations, and the daily upstream budget below, all of which are correct across instances.
+
+### The daily upstream budget: the only cost control on the free compile path
+
+Compile requires auth, charges **no credits**, and calls an API that bills per read. The per-minute
+limiter above is an abuse guard and was being asked to do a cost control's job, which it cannot: it
+bounds a burst and not a day (30/min sustained is **~43,000 provider calls per user per day**), it is
+per instance, it resets on deploy, and it **recorded nothing**, so no query anywhere could answer
+"how much did today cost". The first signal would have been the invoice.
+
+`app/core/upstream_budget.py` adds a DB-backed daily ceiling and, just as importantly, a ledger.
+`upstream_usage` is one counter row per (scope, day, platform), read at `GET /v1/admin/usage` and
+rendered at `/settings/spend`.
+
+- **It counts provider calls, not requests.** One compile pages the provider several times;
+  `Source.quota_used` is what bills. Counting requests would understate spend by roughly the page
+  count, which is the whole quantity of interest.
+- **Checked before the fetch, recorded after** — a refusal must cost nothing, the same property
+  `test_compile_is_capped_per_user_and_stops_upstream_calls` pins for the limiter.
+- **A failed fetch is still charged, and this is the subtle part.** The accounting callback fires
+  from a `finally`, but the route used to raise straight out of the `with get_session()` block, which
+  rolls the transaction back and takes the ledger row with it: money spent, nothing recorded. Both
+  compile routes now **hold** the `HTTPException` in `fetch_error`, let the session commit, and raise
+  after the block exits. Do not "simplify" that back into a direct raise. (Recording in a second,
+  nested session instead would deadlock on SQLite.)
+- **The paid scan path records but is NOT gated.** Credits are a real billing control there, and
+  refusing a scan mid-flight would take the credit and return nothing. Recorded inside `_finish`'s
+  terminal-transition guard, so the single caller that owns the outcome and the refund also owns the
+  accounting: a worker finishing after the watchdog reaped it must not double-count. Recorded on
+  **both** outcomes, because refunding a credit does not refund the upstream bill.
+- **The demo records but is not gated either.** Every anonymous visitor shares one bucket, so a
+  per-user budget there would shut the front page rather than stop an abuser; the demo has its own
+  per-IP and global guards. It still reaches the deployment total, since a total that omits the
+  highest-traffic surface is not a total.
+- **Two scopes.** The per-user row enforces fairness; the `global` row answers "is the API budget on
+  fire right now" and has no user to hang off. The global ceiling answers **503, not 429**, and says
+  the fault is ours: it refuses paying customers who did nothing wrong. It is a circuit breaker to
+  raise, not a business limit.
+- **Recording never raises**, and a failure is reported to the error tracker. A ledger that can fail
+  a scan is worse than a ledger with a gap, but a silent gap defeats the point.
+
+Defaults: 1500 calls/user/day, 50,000/deployment/day, both env-tunable
+(`OMI_UPSTREAM_DAILY_CALLS_PER_USER` / `_GLOBAL`, `0` disables) so a spike is absorbed without a
+deploy. Sizing at ~$0.005/call: a 150-account investigation is ~300 calls plus ~30 to compile, and a
+subscriber's 20 monthly credits buy ~1000 accounts, so a whole month of heavy legitimate use is
+~2000-3000 calls. 1500 in one day caps a runaway at about $7.50 rather than $216.
+
+Pinned by `tests/test_upstream_budget.py` (23 tests).
 
 ### Billing
 
@@ -908,6 +1078,43 @@ One live reference remains on purpose: `campaign_reasoning` ("Campaign analysis"
 the campaigns feature. Removing it means a protocol change, a recompile, and a re-paste of the
 OpenRouter preset.
 
+### Campaigns are GATED, not scoped, because they have no owner
+
+`Campaign` has no `user_id` and that is deliberate: one operation seen by two customers on two
+different posts is **one** campaign, and that cross-customer accumulation is the whole point. The
+cost is that these routes cannot be "scoped to your own data" — there is no such thing here — so the
+library is **admin-gated** instead, matching `/narratives` and `/disputes`.
+
+This replaced a live cross-tenant exposure. `require_user` with no admin check meant any signed-in
+customer could enumerate every campaign in the deployment **with each one's `share_token`** (a
+capability URL), read `observations[].context_id` (the id of the post **another customer scanned**),
+mint a permanent public `/rc/<token>` report for any campaign including one assembled from other
+customers' scans, and revoke anyone else's. **The existing campaign tests could not catch any of it:
+they run in local mode, where `require_user` returns `is_admin=True`.** Any test that needs to prove
+an authorisation rule must set `OMI_REQUIRE_AUTH=true` and sign up a real user.
+
+- **`include_provenance` on `_campaign_detail` defaults to False.** A route added later that forgets
+  to pass it leaks nothing; one that forgot to *strip* would. `context_id` is gone from the public
+  `/rc/` report, the featured path, and the export pack **even for an admin** — the pack is a file
+  that leaves the app to be forwarded, which is exactly when provenance must not ride along. Admins
+  do still see it on the detail route, because the post an observation came from is the first thing
+  an investigator needs.
+- **The `feat_` examples stay open** to any signed-in user. Curated from public disclosure archives,
+  owned by nobody, and the product's front door.
+- **Share/unshare are the gates that mattered most.** Publishing a claim about named real people is
+  the operator's decision, never a customer's on the operator's behalf.
+
+Pinned by `tests/test_campaign_tenancy.py` (11 tests; 8 fail against the pre-fix route file, checked
+by stashing it). The privacy policy now describes the cross-investigation record explicitly.
+
+The detection algorithm that will feed this is designed and implemented in
+`app/campaigns/verdict_coordination.py`, documented in `docs/campaign-detection.md`, and **not yet
+wired to any route**. It clusters accounts from omi scores + analyst verdicts alone. Two things in
+it that a future session will otherwise re-break: a score-band-stratified permutation test
+degenerates when a cluster fills its own band (every draw is the cluster, p lands near 0.5, and a
+correct detection is thrown away), so `p_value=None` means "could not test" and must never be read
+as "not significant"; and a DBSCAN blob larger than 40% of the batch is the batch, not a cohort.
+
 ### No em dashes, and no decorative badges
 
 Two house rules, both enforced by the product owner's explicit decision (2026-07-28):
@@ -936,6 +1143,70 @@ Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-m
 
 ---
 
+## Operator blindness: the two things nobody could see
+
+### Error tracking is one env var away, and the SDK is already installed
+
+`app/core/observability.py` was written to be opt-in and inert, and `app/main.py` already called
+`init_error_tracking()` from the lifespan. What was missing was the part that made any of it reachable:
+**`sentry-sdk` was not a dependency**, so setting `SENTRY_DSN` in the Render dashboard would have
+logged one warning and done nothing. It is now a **core** dependency, not an extra, for the inverse of
+the httpx reasoning: the module costs nothing when unconfigured, whereas shipping without the package
+means turning error tracking on needs an env var *plus* a build-command edit *plus* a redeploy, at the
+exact moment someone is trying to see a production fire.
+
+`SENTRY_DSN` is declared `sync: false` on the API service in `render.yaml`. Paste a DSN, redeploy, done.
+Any Sentry-compatible ingest works, self-hosted included, so this commits to no vendor.
+
+Guarantees pinned by `tests/test_error_tracking.py` (18 tests), each because monitoring that can break
+the thing it monitors is a downgrade: no DSN is a total no-op; a blank/whitespace DSN counts as unset
+(that is Render's shape for "not filled in yet"); a bad DSN, a missing package, or an SDK that raises
+all degrade to a log line; `send_default_pii` is off and `max_request_body_size="never"`, because this
+service handles other people's social media data and a scan payload attached to a crash report would
+be a data-protection incident of our own making; and **tracing is off unless `SENTRY_TRACES_SAMPLE_RATE`
+is set**, so enabling error tracking cannot silently enable a spend.
+
+**The background pool is the reason this matters more than it looks.** `background._wrap` absorbs every
+exception by design, so a failed analyst run or scan job has *no user-visible signature at all* — the
+work simply never finishes. That is exactly how the `NameError` in the analyst's persist closure
+survived long enough to mean no investigation over 25 accounts ever produced an assessment. `_wrap` and
+`_submit_to` now call `capture_exception` alongside the existing `logger.exception`, and the test
+asserts the **exception object** reaches the sink, not that a log line was written: the log line already
+existed and is precisely what was not enough. `capture_exception` is imported at **module scope** in
+`background.py` for the reason in "A bug class worth knowing" — this module runs other people's
+closures, and a function-level import would not be visible inside one.
+
+The request path needs no wiring: there are no global exception handlers, so Starlette re-raises and
+sentry-sdk's FastAPI integration captures. The web app is **not** wired (that needs `@sentry/nextjs`,
+`instrumentation.ts` and a source-map upload step); a Next 500 is still log-only.
+
+### The dispute queue now has a UI
+
+`POST /r/<token>/dispute` and the admin routes shipped without an interface, so the only way to read
+the queue was curl. That is not a takedown process. The operational value of the whole feature is being
+able to say "reviewed and acted within a day" instead of "there was no way to reach us", and a queue
+nobody looks at cannot deliver that.
+
+`/disputes` (`app/(app)/disputes/`) lists the queue, filters by status, and resolves with a note.
+Three things about it:
+
+- **Admin-gated on the SERVER** (`if (!user?.is_admin) notFound()`), plus `force-dynamic` so a cached
+  render cannot serve one user's gate result to another. The page reads complainants' contact details
+  and its resolve action can unpublish **any** report in the system, so the hidden nav link is
+  presentation, exactly as with `/narratives`.
+- **The takedown takes two clicks.** Revoking clears the share token, so `/r/<token>` 404s for every
+  link already posted publicly and re-sharing mints a different one. That is the right outcome when we
+  got someone wrong and the wrong one to reach by a stray click. "Uphold, leave published" is a separate
+  button, because agreeing with a complainant and withdrawing a public claim are different decisions.
+- Resolving removes the row from a filtered view it no longer belongs in, so "Open" reads as work
+  remaining rather than a log.
+
+Pinned by four source-level tests at the end of `tests/test_report_disputes.py` (the server gate, the
+`adminOnly` flag in **both** navs, and the confirm step), in the same spirit as the signal gate's guard:
+TypeScript will not tell anyone if the server check is dropped.
+
+---
+
 ## Outstanding — needs the user, not code
 
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
@@ -944,6 +1215,10 @@ Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-m
    on the API host. Until then billing works, just not instantly: reconciliation carries it.
 2. **Clerk dashboard:** Configure → User & authentication → Email, phone, username → **Username OFF,
    Phone Optional.** Otherwise sign-up dead-ends on `/sign-up/continue`. This is config, not code.
+   Also set the **`sk_live_` `CLERK_SECRET_KEY` on BOTH Render services** (it is `sync: false`, so it
+   is dashboard-owned and was never committed) and confirm the committed `pk_live_` in `render.yaml`
+   equals the production publishable key in the Clerk dashboard. See the Clerk instance-pairing note
+   above for why a mismatch is invisible.
 3. **Rotate the secrets** pasted into chat in an earlier session (`CLERK_SECRET_KEY`,
    `OMI_DATABASE_URL`, `OMI_TWITTER_API_KEY`, `OMI_YOUTUBE_API_KEY`, `OPENROUTER_API_KEY`,
    `OMI_SESSION_SECRET`). Never commit them.

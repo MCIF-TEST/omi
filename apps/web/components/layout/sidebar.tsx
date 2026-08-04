@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Search, Network, MessageSquareText,
-  Activity, Settings, History, type LucideIcon,
+  Activity, Settings, History, Scale, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Logo } from '@/components/shared/logo';
@@ -40,6 +40,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: 'Operations',
     items: [
       { href: '/monitoring',     label: 'Monitoring',    icon: Activity },
+      { href: '/disputes',       label: 'Disputes',      icon: Scale, adminOnly: true },
       { href: '/settings',       label: 'Settings',      icon: Settings },
     ],
   },

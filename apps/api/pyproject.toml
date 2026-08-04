@@ -35,6 +35,12 @@ dependencies = [
     # out). Same lesson as httpx above: a core platform dependency must never sit
     # in an extra.
     "pyjwt[crypto]>=2.8",
+    # Error tracking. CORE rather than an extra for the same reason as httpx above, inverted: the
+    # module that uses it (app/core/observability.py) is inert without a DSN, so shipping the package
+    # costs nothing, while shipping WITHOUT it means setting SENTRY_DSN in the dashboard silently
+    # does nothing but log a warning nobody is watching for. Turning on error tracking should be one
+    # env var, not an env var plus a build-command edit plus a redeploy.
+    "sentry-sdk>=2",
 ]
 
 [project.optional-dependencies]

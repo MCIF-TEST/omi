@@ -4,6 +4,39 @@ Exposes the durable coordination-cluster records captured during scans. These
 are observations, not verdicts: every field is measured evidence the operator
 can inspect (members, methods, coordination score, recurrence, hashtags,
 mentions, raw observation history).
+
+---------------------------------------------------------------------------
+TENANCY. Read this before adding a route here.
+---------------------------------------------------------------------------
+``Campaign`` has NO ``user_id``. Rows are deployment-global by design: one
+operation seen by two customers on two different posts is ONE campaign, and
+that cross-customer accumulation is the whole point of the feature (see
+docs/campaign-detection.md).
+
+The cost of that design is that these routes cannot be "scoped to your own
+data", because there is no such thing here. So the library is **admin-gated**
+instead, matching /narratives and /disputes, and every non-admin path is
+stripped of provenance.
+
+This replaced a live cross-tenant exposure. Before it, ``require_user`` with no
+admin check meant any signed-in customer could:
+
+* enumerate every campaign in the deployment, with each one's ``share_token``
+  (a capability URL, handed out to anyone who asked);
+* read ``observations[].context_id``, which is the id of the POST ANOTHER
+  CUSTOMER SCANNED;
+* mint a public ``/rc/<token>`` report for any campaign, including one built
+  from other customers' scans, and revoke anyone else's.
+
+``context_id`` is the field that identifies someone else's investigation, and it
+is now admin-only everywhere, including on the unauthenticated public report.
+That is the same class of bug as the ``/r/<token>/json`` leak in CLAUDE.md: the
+gate on the detail route meant nothing while a second route served the same data
+unfiltered.
+
+FEATURED campaigns are the deliberate exception. They are curated, seeded from
+public state-actor disclosure archives, and belong to nobody, so any signed-in
+user may read them. They still go through the provenance filter.
 """
 
 from __future__ import annotations
@@ -94,7 +127,13 @@ def list_campaigns(
     limit: int = Query(50, ge=1, le=200),
     current: CurrentUser = Depends(require_user),
 ) -> CampaignsResponse:
-    """The Campaign Library — durable coordinated-account groups, newest first."""
+    """The Campaign Library — durable coordinated-account groups, newest first.
+
+    Admin only. Campaign rows are deployment-global, so this endpoint enumerates every operation the
+    whole deployment has ever seen, and each summary carries that campaign's ``share_token``, which
+    is a capability URL. There is no owner to scope it to. See the tenancy note at the top.
+    """
+    _require_admin(current)
     with get_session() as session:
         q = select(Campaign).where(Campaign.max_coordination_score >= min_score)
         if platform:
@@ -155,9 +194,26 @@ def list_featured_campaigns(
 _MAX_MEMBERS_IN_DETAIL = 500
 
 
-def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
+def _require_admin(current: CurrentUser) -> None:
+    """The library is admin-only. See the tenancy note at the top of this module.
+
+    Local mode (``OMI_REQUIRE_AUTH=false``) resolves to ``is_admin=True``, which is why the existing
+    campaign tests are unaffected; production refuses that configuration at boot.
+    """
+    if not current.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admins only.")
+
+
+def _campaign_detail(session, campaign_key: str, *,
+                     include_provenance: bool = False) -> CampaignDetail | None:
     """Assemble the full CampaignDetail for a key, or None if absent. Shared by
-    the detail endpoint and the evidence-pack export so both read identically."""
+    the detail endpoint and the evidence-pack export so both read identically.
+
+    ``include_provenance`` controls ``observations[].context_id``, which is the id of the post a scan
+    ran on. On a global campaign row that field says which post SOMEONE ELSE scanned, so it is
+    admin-only and must stay defaulted OFF: a route added later that forgets to pass it leaks
+    nothing, while one that forgets to strip it would.
+    """
     c = session.execute(
         select(Campaign).where(Campaign.campaign_key == campaign_key)
     ).scalar_one_or_none()
@@ -183,7 +239,8 @@ def _campaign_detail(session, campaign_key: str) -> CampaignDetail | None:
             times_observed=m.times_observed, methods=m.methods_json or [],
         ) for m in members],
         observations=[CampaignObservationOut(
-            observed_at=o.observed_at, context_id=o.context_id,
+            observed_at=o.observed_at,
+            context_id=(o.context_id if include_provenance else None),
             coordination_score=o.coordination_score, member_count=o.member_count,
             methods=o.methods_json or [], evidence=o.evidence_json or [],
         ) for o in obs],
@@ -196,11 +253,23 @@ def get_campaign(
     ref: str | None = Query(None, description="Navigation source marker (e.g. 'featured')."),
     current: CurrentUser = Depends(require_user),
 ) -> CampaignDetail:
-    """A single campaign with members, evidence, and its full observation history."""
+    """A single campaign with members, evidence, and its full observation history.
+
+    Admin only, EXCEPT the seeded ``feat_`` examples, which are curated from public disclosure
+    archives, belong to no customer, and are the first thing a new user is meant to explore. Those
+    still come back without provenance: even a featured campaign's ``context_id`` would say which
+    post produced an observation, and there is no reason a reader needs it.
+    """
     from app.analytics.event_log import record
+    from app.content.featured import featured_keys
+
+    is_featured = campaign_key in featured_keys()
+    if not is_featured:
+        _require_admin(current)
 
     with get_session() as session:
-        detail = _campaign_detail(session, campaign_key)
+        detail = _campaign_detail(session, campaign_key,
+                                  include_provenance=bool(current.is_admin))
         if detail is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
         # Q1 diagnostic (founder learning): did the new user reach the featured
@@ -227,9 +296,15 @@ def export_campaign(
     Reuses the same detail assembly the campaign page renders.
     """
     from app.analytics.event_log import record
+    from app.content.featured import featured_keys
     from app.reports.campaign_pack import render_campaign_json, render_campaign_markdown
 
+    if campaign_key not in featured_keys():
+        _require_admin(current)
+
     with get_session() as session:
+        # The pack is a file that leaves the app and gets forwarded. Provenance is stripped even for
+        # an admin export, because the export's whole purpose is to be handed to someone else.
         detail = _campaign_detail(session, campaign_key)
         if detail is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
@@ -277,9 +352,17 @@ def share_campaign(
 ) -> CampaignShareResponse:
     """Mint (or reuse) a public share token for this campaign. Idempotent —
     calling twice returns the existing token rather than rotating. The campaign
-    becomes readable at /rc/{token} with no login."""
+    becomes readable at /rc/{token} with no login.
+
+    ADMIN ONLY, and this is the gate that mattered most of the three. Campaign rows are global, so
+    without it any signed-in customer could take a campaign assembled partly from other customers'
+    scans and publish a permanent, unauthenticated URL naming its member accounts. Publishing a
+    claim about named real people is a decision this product makes deliberately (see the dispute
+    and takedown path), never one a customer makes on the operator's behalf.
+    """
     from app.analytics.event_log import record
 
+    _require_admin(current)
     with get_session() as session:
         c = session.execute(
             select(Campaign).where(Campaign.campaign_key == campaign_key)
@@ -308,7 +391,12 @@ def unshare_campaign(
     campaign_key: str,
     current: CurrentUser = Depends(require_user),
 ) -> dict:
-    """Revoke the share token. The public URL 404s immediately afterward."""
+    """Revoke the share token. The public URL 404s immediately afterward.
+
+    Admin only, for the mirror-image reason: without it any customer could unpublish any campaign,
+    including the seeded featured examples the product's own front door depends on.
+    """
+    _require_admin(current)
     with get_session() as session:
         c = session.execute(
             select(Campaign).where(Campaign.campaign_key == campaign_key)

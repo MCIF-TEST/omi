@@ -85,6 +85,17 @@ services:
         value: 'true'
       - key: OMI_LOG_LEVEL
         value: INFO
+      # Error tracking (OPTIONAL, and inert until you set it). Without a DSN the only record of a
+      # production failure is Render's log stream: ephemeral, unsearchable at volume, no grouping and
+      # no alerting. Worse, the background pool absorbs its exceptions by design (a failed analyst run
+      # or scan job never surfaces to a user at all), so those failures have no signature anywhere
+      # else. Paste a Sentry DSN here to turn it on; the SDK ships in the API dependencies, so no
+      # build change is needed. Any Sentry-compatible ingest works, self-hosted included.
+      # The boot log states which mode it is in ("Error tracking: on" / "OFF"). Never sent: request
+      # bodies, and PII (send_default_pii stays off in app/core/observability.py). Performance
+      # tracing is off unless SENTRY_TRACES_SAMPLE_RATE is set, so this cannot become a cost surprise.
+      - key: SENTRY_DSN
+        sync: false
       - key: OMI_DATABASE_URL
         fromDatabase:
           name: omisphere-postgres
@@ -93,22 +104,36 @@ services:
         value: '3.11.9'
       - key: OMI_MONTHLY_CREDIT_GRANT
         value: '20'
-      # Clerk auth — the API verifies Clerk session JWTs (see app/core/clerk_auth.py).
+      # Clerk auth. The API verifies Clerk session JWTs (see app/core/clerk_auth.py).
       # The SECRET key is server-only and set in the Render dashboard, NEVER committed.
       # The publishable key is PUBLIC (it ships in the browser bundle by design) and is
-      # used here only to derive the JWKS/issuer, so it's safe to commit as a value —
+      # used here only to derive the JWKS/issuer, so it's safe to commit as a value:
       # this guarantees the API can verify tokens even before the dashboard is filled in.
+      #
+      # THIS KEY AND THE WEB SERVICE'S NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY MUST NAME THE SAME
+      # CLERK INSTANCE. The API derives its JWKS URL by base64-decoding this key, so if the
+      # browser signs in against the production instance while the API still holds the
+      # development one, every session JWT fails verification and the user is "signed in"
+      # with no workspace. That outage is silent: verify_session_token just returns None.
+      # This pair went out of step once already, when the dashboard was switched to the
+      # pk_live key while these committed values still pinned pk_test, and a blueprint sync
+      # would have re-pinned the dashboard back to test anyway. _validate_production_config
+      # now refuses to boot a production deploy holding a pk_test key.
+      #
+      # Decodes to clerk.omisphere.online$, i.e. issuer https://clerk.omisphere.online,
+      # which is the CNAME target Clerk asked for on the custom domain.
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
-        value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
-      # Signup trial: 3 credits, then they pay. Scans bill at ceil(accounts / 50)
-      # credits (min 1, see compute_scan_credits) and OMI_SCAN_MAX_COMMENTERS is
-      # 150 below, so 3 credits buys EITHER one full 150-account investigation OR
-      # three small ones of up to 50 accounts each.
+        value: pk_live_Y2xlcmsub21pc3BoZXJlLm9ubGluZSQ
+      # Signup trial: 1 credit, then they pay. Scans bill at ceil(accounts / 50)
+      # credits (min 1, see compute_scan_credits), so one credit buys exactly one
+      # scan of up to 50 accounts. That is deliberate: most new accounts arrive
+      # from a shared report link, and one credit is enough to scan more of the
+      # post they came from and see the product work, not enough to finish it.
       #
       # This is not the only free path, and the two are metered independently:
-      # the pre-login front page gives every visitor 2 real scans of up to 25
+      # the pre-login front page gives every visitor 1 real scan of up to 25
       # accounts (DEMO_FREE_SCANS_PER_IP in app/routes/scan_async.py and
       # DEMO_MAX_COMMENTERS in app/routes/scan.py, both hardcoded and test-pinned,
       # NOT driven by this variable). That is "try it before signing up"; these 3
@@ -128,6 +153,30 @@ services:
         value: 'andrewexiga@gmail.com,landonnorris116@gmail.com,exigahayden1@gmail.com,couldbewiser@yahoo.com'
       - key: OMI_SCAN_MAX_COMMENTERS
         value: '150'
+      # ===============================================================
+      # Daily ceilings on PAID UPSTREAM API CALLS (twitterapi.io, YouTube)
+      # ===============================================================
+      # The compile step (/v1/scan/link/commenters) requires auth but charges NO
+      # credits and calls the real X API, which bills per read. Credits cannot
+      # guard it: there is nothing to spend. Its per-minute limiter bounds a
+      # burst, is per instance, and resets on deploy; these are the ceilings that
+      # survive a deploy, are correct across instances, and are recorded.
+      #
+      # Read today's spend against both at GET /v1/admin/usage (admin only).
+      #
+      # Per user per day. At ~$0.005 per X call, a 150-account investigation is
+      # ~300 calls plus ~30 to compile. 1500 leaves room for several full
+      # investigations back to back and caps a runaway at about $7.50 instead of
+      # $216. Raise if real customers report hitting it; 0 disables.
+      - key: OMI_UPSTREAM_DAILY_CALLS_PER_USER
+        value: '1500'
+      # Deployment-wide circuit breaker, NOT a business limit. When it trips it
+      # refuses paying customers (with a 503 that says the fault is ours), so it
+      # sits well above any plausible real day and exists only to stop a bug or
+      # an attack emptying the API budget overnight. Raise it rather than
+      # removing it. 0 disables.
+      - key: OMI_UPSTREAM_DAILY_CALLS_GLOBAL
+        value: '50000'
       - key: OMI_SCAN_MAX_HISTORY_PER_COMMENTER
         value: '50'
       - key: OMI_SCAN_CACHE_TTL_DAYS
@@ -318,11 +367,16 @@ services:
         sync: false
       # Clerk auth (frontend). The publishable key is PUBLIC (ships in the browser
       # bundle by design) and MUST exist at build time or the static prerender throws
-      # "Missing publishableKey" — so we commit it as a value here rather than leaving
+      # "Missing publishableKey", so we commit it as a value here rather than leaving
       # it as a dashboard-only sync:false (which is empty during Render's build step).
       # The secret key is server-only and stays in the dashboard, NEVER committed.
+      #
+      # MUST be byte-identical to CLERK_PUBLISHABLE_KEY on the API service above. The two
+      # sides name the Clerk instance independently and nothing at runtime reconciles them:
+      # a mismatch signs the user in and then rejects every one of their API calls. See the
+      # longer note on the API service.
       - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-        value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
+        value: pk_live_Y2xlcmsub21pc3BoZXJlLm9ubGluZSQ
       - key: CLERK_SECRET_KEY
         sync: false
       - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL

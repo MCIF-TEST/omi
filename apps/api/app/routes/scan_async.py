@@ -200,18 +200,40 @@ def _source_for_platform(platform: str, settings: Settings) -> Source:
 
 
 def _fetch_and_cache_commenters(
-    session, cl: CandidateList, existing: list, *, fetch_n: int, settings: Settings, source_factory
+    session, cl: CandidateList, existing: list, *, fetch_n: int, settings: Settings, source_factory,
+    on_upstream_calls=None,
 ) -> int:
     """Pull up to ``fetch_n`` NEW commenters for ``cl`` from the platform source and persist them as
     ``CommenterCandidate`` rows (exemplar comment + cached meta/comments for the later score step).
     Returns how many new commenters were added. The source is built lazily via ``source_factory`` — only
     when there is actually work to do — so a fetch-nothing call never touches (or 503s on) the platform.
 
+    ``on_upstream_calls`` is handed the number of PROVIDER calls this fetch made (``Source.quota_used``,
+    which is what twitterapi.io bills on). It fires in a ``finally``, because a fetch that raised
+    part-way through still made and still pays for the calls it managed; only counting successes would
+    make the ledger optimistic in exactly the situation worth watching. It never fires when no source
+    was built, since nothing was spent.
+
     Shared verbatim by the signed-in compile step and the free demo compile so both produce
     byte-identical candidate rows and a single fetch/caching code path."""
     if fetch_n <= 0 or cl.exhausted:
         return 0
     source = source_factory()
+    try:
+        return _fetch_and_cache_inner(
+            session, cl, existing, fetch_n=fetch_n, settings=settings, source=source,
+        )
+    finally:
+        if on_upstream_calls is not None:
+            try:
+                on_upstream_calls(int(getattr(source, "quota_used", 0) or 0))
+            except Exception:  # noqa: BLE001 — accounting must never break the fetch
+                log.warning("upstream call accounting failed for %s", cl.platform, exc_info=True)
+
+
+def _fetch_and_cache_inner(
+    session, cl: CandidateList, existing: list, *, fetch_n: int, settings: Settings, source
+) -> int:
     # Best-effort: capture the post's real title once, so a saved investigation reads "Xandr's launch
     # video" not "Scan of https://…". Never blocks the list.
     if not cl.content_title:
@@ -410,7 +432,23 @@ def list_commenters(
     page_max = settings.candidate_page_max
     first_page = settings.candidate_first_page
 
+    from app.core.upstream_budget import enforce_daily_budget, record_calls
+
+    # A provider error must not discard the ledger row for the calls it already made. Raising it
+    # straight out of the session block would roll back the whole transaction, including the
+    # accounting: money spent, nothing recorded. So the fetch failure is held here, the session
+    # commits the ledger, and the error is raised once the block has exited.
+    fetch_error: HTTPException | None = None
+
     with get_session() as session:
+        # The DAILY spend ceiling, and the only one of the two that survives a deploy or is correct
+        # across instances. The limiter above bounds a burst; 30 a minute sustained is ~43,000
+        # provider calls a day from one account. Checked here, before any upstream fetch, so a
+        # refusal costs nothing.
+        enforce_daily_budget(
+            session, user_id=uid, is_admin=current.is_admin, what="commenter-list",
+        )
+
         # Duplicate-tolerant on purpose; see _candidate_list_for.
         cl = _candidate_list_for(session, platform, content_id, uid)
         if cl is None:
@@ -447,44 +485,57 @@ def list_commenters(
         fetch_n = min(fetch_n, page_max, room)
 
         # _source_for_platform raises HTTPException(503) when a platform key is missing — let that
-        # through unchanged so the UI shows the real "key not configured" message.
-        fetched_now = _fetch_and_cache_commenters(
-            session, cl, existing, fetch_n=fetch_n, settings=settings,
-            source_factory=lambda: _source_for_platform(platform, settings),
-        )
-
-        # Always record this post in the content DB — even if the user never scans it. Every X post /
-        # YouTube video that the system loads is persisted, not just the selected ones. Idempotent +
-        # best-effort: a failure here never affects the free commenter list.
+        # through unchanged so the UI shows the real "key not configured" message. Note the
+        # accounting callback fires from a `finally` inside the helper, so it has already run by the
+        # time we get here on either outcome.
+        fetched_now = 0
         try:
-            from app.content.service import ContentIntelligenceService
-            ContentIntelligenceService(session).get_or_create_entity(
-                platform=platform, content_id=content_id,
-                kind=("video" if platform == "youtube" else "post"),
-                title=cl.content_title, canonical_url=cl.content_url or url,
+            fetched_now = _fetch_and_cache_commenters(
+                session, cl, existing, fetch_n=fetch_n, settings=settings,
+                source_factory=lambda: _source_for_platform(platform, settings),
+                on_upstream_calls=lambda n: record_calls(
+                    session, user_id=uid, platform=platform, api_calls=n,
+                ),
             )
-        except Exception:  # noqa: BLE001 — content bookkeeping must never break the list
-            pass
+        except HTTPException as exc:
+            fetch_error = exc
 
-        rows = list(session.execute(
-            select(CommenterCandidate)
-            .where(CommenterCandidate.list_id == cl.id)
-            .order_by(CommenterCandidate.seq)
-        ).scalars().all())
-        commenters = [
-            CommenterCandidateOut(
-                external_id=r.external_id, handle=r.handle, comment=r.comment_text,
-                comment_count=r.comment_count, avatar_url=r.avatar_url, scanned=r.scanned,
+        if fetch_error is None:
+            # Always record this post in the content DB — even if the user never scans it. Every X post /
+            # YouTube video that the system loads is persisted, not just the selected ones. Idempotent +
+            # best-effort: a failure here never affects the free commenter list.
+            try:
+                from app.content.service import ContentIntelligenceService
+                ContentIntelligenceService(session).get_or_create_entity(
+                    platform=platform, content_id=content_id,
+                    kind=("video" if platform == "youtube" else "post"),
+                    title=cl.content_title, canonical_url=cl.content_url or url,
+                )
+            except Exception:  # noqa: BLE001 — content bookkeeping must never break the list
+                pass
+
+            rows = list(session.execute(
+                select(CommenterCandidate)
+                .where(CommenterCandidate.list_id == cl.id)
+                .order_by(CommenterCandidate.seq)
+            ).scalars().all())
+            commenters = [
+                CommenterCandidateOut(
+                    external_id=r.external_id, handle=r.handle, comment=r.comment_text,
+                    comment_count=r.comment_count, avatar_url=r.avatar_url, scanned=r.scanned,
+                )
+                for r in rows
+            ]
+            # More to pull only if the source has more AND we're under the whole-post pool cap.
+            has_more = (not cl.exhausted) and len(commenters) < pool_max
+            return CommenterListOut(
+                platform=platform, content_id=content_id, url=cl.content_url or url,
+                commenters=commenters, total=len(commenters),
+                has_more=has_more, fetched_now=fetched_now,
             )
-            for r in rows
-        ]
-        # More to pull only if the source has more AND we're under the whole-post pool cap.
-        has_more = (not cl.exhausted) and len(commenters) < pool_max
-        return CommenterListOut(
-            platform=platform, content_id=content_id, url=cl.content_url or url,
-            commenters=commenters, total=len(commenters),
-            has_more=has_more, fetched_now=fetched_now,
-        )
+
+    # Outside the session block, so the ledger row above is committed before the request fails.
+    raise fetch_error
 
 
 @router.post("/estimate", response_model=ScanEstimateOut)
@@ -1032,6 +1083,22 @@ def _run_link_scan_job(
                 telemetry=telemetry,
             )]
             session.flush()
+
+            # Ledger this scan's provider calls. Inside the terminal-transition guard, so the single
+            # caller that owns the outcome (and the refund) also owns the accounting: a worker that
+            # finishes after the watchdog reaped it must not count its calls twice.
+            #
+            # Recorded on BOTH outcomes, because a scan that failed half way still paid for
+            # everything it fetched, and refunding the credit does not refund the upstream bill.
+            # The paid path is deliberately not GATED on the daily budget: credits are the real
+            # control there, and refusing a scan mid-flight would take the credit and give nothing
+            # back. But a deployment-wide total that omits paid scans is not a total.
+            from app.core.upstream_budget import record_calls as _record_calls
+
+            _record_calls(
+                session, user_id=user_id, platform=platform,
+                api_calls=int(telemetry.get("api_calls") or 0),
+            )
             transitioned = True
         if transitioned and refund:
             try:
@@ -1323,6 +1390,7 @@ def scan_demo_commenters(
     url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
     content_id = _demo_classify_x_post(url)
     ip_hash = _demo_ip_hash(request)
+    fetch_error: HTTPException | None = None
 
     with get_session() as session:
         if _demo_scans_used(session, ip_hash) >= DEMO_FREE_SCANS_PER_IP:
@@ -1348,30 +1416,48 @@ def scan_demo_commenters(
         # A single bounded page: fetch the first (up to) 25 repliers when the list is empty; re-compiling
         # the same post returns the cached rows with no new X call.
         fetch_n = 0 if existing else scan_mod.DEMO_MAX_COMMENTERS
-        _fetch_and_cache_commenters(
-            session, cl, existing, fetch_n=fetch_n, settings=settings,
-            source_factory=lambda: _source_for_platform("x", settings),
-        )
+        # Recorded, deliberately NOT gated on the per-user daily budget. Every anonymous visitor
+        # would share one bucket, so that budget would shut the front page rather than stop an
+        # abuser; the demo already has its own two guards above. The deployment-wide total still
+        # has to include these calls, because a total that omits the free front page is not a total.
+        from app.core.upstream_budget import record_calls as _record_calls
 
-        rows = list(session.execute(
-            select(CommenterCandidate).where(CommenterCandidate.list_id == cl.id)
-            .order_by(CommenterCandidate.seq)
-        ).scalars().all())[: scan_mod.DEMO_MAX_COMMENTERS]
-        commenters = [
-            CommenterCandidateOut(
-                external_id=r.external_id, handle=r.handle, comment=r.comment_text,
-                comment_count=r.comment_count, avatar_url=r.avatar_url,
-                # The demo never marks candidates scanned (the shared anonymous bucket must not leak one
-                # visitor's picks to the next), so every replier stays selectable.
-                scanned=False,
+        # Same held-error shape as the signed-in compile: a provider failure must not roll back the
+        # ledger row for the calls it already made.
+        try:
+            _fetch_and_cache_commenters(
+                session, cl, existing, fetch_n=fetch_n, settings=settings,
+                source_factory=lambda: _source_for_platform("x", settings),
+                on_upstream_calls=lambda n: _record_calls(
+                    session, user_id=None, platform="x", api_calls=n,
+                ),
             )
-            for r in rows
-        ]
-        return CommenterListOut(
-            platform="x", content_id=content_id, url=cl.content_url or url,
-            commenters=commenters, total=len(commenters),
-            has_more=False, fetched_now=len(commenters),
-        )
+        except HTTPException as exc:
+            fetch_error = exc
+
+        if fetch_error is None:
+            rows = list(session.execute(
+                select(CommenterCandidate).where(CommenterCandidate.list_id == cl.id)
+                .order_by(CommenterCandidate.seq)
+            ).scalars().all())[: scan_mod.DEMO_MAX_COMMENTERS]
+            commenters = [
+                CommenterCandidateOut(
+                    external_id=r.external_id, handle=r.handle, comment=r.comment_text,
+                    comment_count=r.comment_count, avatar_url=r.avatar_url,
+                    # The demo never marks candidates scanned (the shared anonymous bucket must not leak one
+                    # visitor's picks to the next), so every replier stays selectable.
+                    scanned=False,
+                )
+                for r in rows
+            ]
+            return CommenterListOut(
+                platform="x", content_id=content_id, url=cl.content_url or url,
+                commenters=commenters, total=len(commenters),
+                has_more=False, fetched_now=len(commenters),
+            )
+
+    # Outside the session block, so the ledger row above is committed before the request fails.
+    raise fetch_error
 
 
 def _demo_assessment(result, settings: Settings) -> dict | None:

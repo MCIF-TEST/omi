@@ -91,6 +91,42 @@ def registered_stages() -> tuple[str, ...]:
     return tuple(sorted(_STAGE_REGISTRY))
 
 
+def _closing_directive(sections: dict) -> str:
+    """The short reminder that rides at the END of the evidence, after the alias legend.
+
+    Only the constraints that actually fail in production, and only for stages that carry accounts.
+    Every line here earns its per-request cost:
+
+    * **Naming the aliases** is the one that buys the most. A model handed 25 accounts sometimes
+      returns 21, and until it is told the expected set it has no way to notice; we could detect the
+      shortfall but the model could not self-correct. Listing them turns "more verdicts" from a hope
+      into a checkable instruction.
+    * **The verification warning** is repeated here because it changes behaviour at generation time,
+      and it is the last thing read before the model writes.
+    * **Plain English** and **score from this account's own row** are the two quality failures that
+      survive the protocol most often.
+    """
+    legend = sections.get("legend") or sections.get("alias_legend") or {}
+    aliases = sorted((legend.get("accounts") or {}).keys(), key=lambda a: (len(a), a))
+    if not aliases:
+        return ""
+    shown = ", ".join(aliases[:60]) + (", ..." if len(aliases) > 60 else "")
+    return (
+        "## Before you answer\n"
+        f"The evidence above contains {len(aliases)} accounts: {shown}. Return EXACTLY "
+        f"{len(aliases)} items in commenter_assessments, one per alias, none omitted and none "
+        "invented, each with all eight signals.\n"
+        "Score each account only from its own row. Co-occurrence in this comment section is "
+        "expected and is not evidence.\n"
+        "Quotes and figures are checked automatically against the rows above before anyone sees "
+        "them: a quote that is not verbatim in that account's own posts, or a number that "
+        "disagrees with its metadata, discards that account's whole assessment. Quote exactly or "
+        "describe instead, and copy figures rather than recalling them.\n"
+        "Write for the creator whose comment section this is: short plain sentences, no jargon, "
+        "and keep every number and quote."
+    )
+
+
 def build_prompt(
     stage: str,
     bundle: Any,
@@ -115,12 +151,22 @@ def build_prompt(
     # --- system message: assembled for HF + provenance; OpenRouter never ships it on the wire ----
     system = assemble_stage_system(lp, tmpl)
 
-    # --- user message: PURE evidence package only (headers + JSON; no instructional restate) ----
-    # OpenRouter never puts the local system on the wire. Dashboard Preset owns instructions.
+    # --- user message: the evidence package, then ONE short closing directive -------------------
+    # OpenRouter never puts the local system on the wire; the dashboard Preset owns the instructions.
+    # That leaves the operative task roughly 20k tokens behind the evidence by the time the model
+    # reads it, and instructions at the very end of a long context are followed markedly more
+    # reliably than the same instructions only at the front. So a SHORT tail restates the few
+    # constraints that actually fail in practice, and names the exact accounts expected, which is the
+    # only way to make a skipped account detectable by the model itself rather than only by us.
+    #
+    # Deliberately short. This rides on EVERY request, so it is a per-scan cost, unlike the preset.
     sections = spec.render_sections(bundle, ctx)
     ev = [tmpl["evidence_preamble"]]
     for s in tmpl["evidence_sections"]:
         ev.append(s["header"] + "\n" + json.dumps(sections.get(s["section"], {}), ensure_ascii=False, sort_keys=True))
+    closing = _closing_directive(sections)
+    if closing:
+        ev.append(closing)
     user = "\n\n".join(ev).strip()
 
     manifest = {

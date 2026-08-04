@@ -79,11 +79,22 @@ export default function PrivacyPage() {
       <Section title="Sharing and subprocessors">
         We do not sell your data and we do not share your scan history with
         third parties for their own purposes. We rely on a small set of
-        subprocessors to operate the service: Stripe (payments), our hosting
-        and managed-database providers (application + storage), an optional SMTP
-        provider (alert and account emails), and. Only when you explicitly
-        generate analyst commentary on an investigation. Anthropic&apos;s API
-        for that single request.
+        subprocessors to operate the service: Stripe (payments), Clerk
+        (sign-in), our hosting and managed-database providers (application and
+        storage), an optional SMTP provider (alert and account emails), and
+        OpenRouter, which routes the single model request that produces the
+        written analysis on an investigation. The social platforms&apos; own
+        APIs are what we read public profile and post data from.
+      </Section>
+
+      <Section title="Coordination patterns across accounts">
+        When several separate investigations turn up the same pattern, we keep a
+        record of that pattern itself: the accounts involved, what linked them,
+        and how often it has been seen. That record is not tied to you and does
+        not identify which investigation it came from, and it is what lets us
+        recognise a network that reappears under different accounts on a
+        different post. It is visible only to our own staff. Your investigations
+        stay private to your account, and nobody else can see what you scanned.
       </Section>
 
       <Section title="Your rights">

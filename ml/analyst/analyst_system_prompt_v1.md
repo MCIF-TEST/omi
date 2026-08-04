@@ -123,7 +123,9 @@ the raw facts you cite and reason from, and the ONLY facts that exist for this c
 
 THE DOSSIER LOOP (the mandatory method, one account at a time, every time)
 Process the accounts strictly ONE AT A TIME, in alias order (A1, then A2, … through the last row).
-For the CURRENT account, and it alone, run this four-step worksheet before touching the next row:
+For the CURRENT account, and it alone, run this worksheet in full before touching the next
+row. The constitution's SCORE DISCIPLINE block expands steps 3 and 4 and adds the coherence
+and distribution checks; where the two differ, the constitution governs.
 STEP 1. EXTRACT: restate to yourself this account's own cells: its age (account_created_at against
   the post dates), follower_count, following_count, post_count, and what its sampled posts and its
   comment(s) on this post actually say. If a cell is null, note "not collected".
@@ -136,9 +138,14 @@ STEP 3. WEIGH & SCORE: weigh "ordinary person" against "bought/inauthentic accou
   overall read. Fine gradations are expected: an account with one moderate tell and a thin history
   is not the same number as one with two strong tells, and neither is a multiple of 5 by habit.
   Two accounts may land on the same score ONLY when their extracted facts are genuinely equivalent.
-STEP 4. WRITE: write this account's 1-3 sentence plain-English reason, quoting at least two of ITS
-  OWN concrete facts (its age, its counts, or a quoted snippet of its own posts). The reason must be
-  specific enough that it could not be pasted under any other account in this case.
+STEP 4. WRITE: write this account's plain-English reason as 4 to 7 full sentences, not a one-line
+  verdict. This is the product the user reads, so it must SHOW THE REASONING, in this order: the
+  account's own figures and what each one means; what it actually wrote, quoted verbatim from its own
+  posts; the innocent explanation and specifically why the evidence does or does not fit it; where you
+  landed and why not ten points higher or lower; and the one piece of missing evidence that would most
+  change your mind. Quote at least two of ITS OWN concrete facts. The reason must be specific enough
+  that it could not be pasted under any other account in this case. A short reason is a failed reason:
+  three sentences cannot carry a number, a quote, both explanations, and a limit.
 Only after every account has completed the loop do you write the cross-account sections and the
 executive synthesis. Never run the loop on a summary of the accounts; run it on the rows.
 

@@ -233,6 +233,68 @@ export function listFeedback(params: { q?: string; user?: string; limit?: number
 }
 
 // ---------------------------------------------------------------------------
+// Report disputes: the recourse an accused account has.
+//
+// Anyone can file one from a public report without an account (that is the point: the person a
+// report is about is never a customer). Reading and resolving the queue is admin only, because it
+// holds complainants' contact details.
+//
+// The important asymmetry, mirrored from app/routes/reports.py: filing does NOT unpublish anything,
+// or anyone could silence any report by claiming to be named in it. Unpublishing is a decision an
+// admin makes here, and it works on ANY report, not only one the admin owns.
+// ---------------------------------------------------------------------------
+export const DISPUTE_STATUSES = ['open', 'reviewing', 'upheld', 'rejected'] as const;
+export type DisputeStatus = (typeof DISPUTE_STATUSES)[number];
+
+export interface ReportDispute {
+  id: number;
+  share_token: string;
+  /** The account the complainant says the report is wrong about. Optional: they need not tell us. */
+  subject_handle: string | null;
+  contact: string | null;
+  reason: string;
+  status: DisputeStatus;
+  resolution_note: string | null;
+  created_at: string | null;
+  resolved_at: string | null;
+  /** Whether /r/<token> still resolves. False once the token has been revoked. */
+  report_still_public: boolean;
+}
+
+export function listDisputes(status: DisputeStatus | 'all' = 'open'): Promise<ReportDispute[]> {
+  return apiClient<ReportDispute[]>(`/v1/admin/disputes?status=${encodeURIComponent(status)}`);
+}
+
+export function resolveDispute(
+  id: number,
+  body: { status: DisputeStatus; note?: string; unpublish?: boolean },
+): Promise<ReportDispute> {
+  return apiClient<ReportDispute>(`/v1/admin/disputes/${id}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Upstream API spend. Admin only.
+//
+// `api_calls` is the number that BILLS (twitterapi.io charges per call), not the number of requests
+// this product served: one compile can page the provider several times. Reading the two apart is the
+// point, which is why `requests` is carried separately.
+// ---------------------------------------------------------------------------
+export interface UpstreamUsageSnapshot {
+  date: string;
+  today_api_calls: number;
+  per_user_budget: number;
+  global_budget: number;
+  /** Null when the deployment-wide ceiling is disabled (budget 0). */
+  global_remaining: number | null;
+  by_day: { date: string; api_calls: number; requests: number }[];
+  by_platform: { platform: string; api_calls: number }[];
+  heaviest_users_today: { user_id: string; api_calls: number; requests: number }[];
+}
+
+// ---------------------------------------------------------------------------
 // Shared response types (mirror app/schemas.py. Kept thin until Phase 1.5
 // generates types from OpenAPI directly).
 // ---------------------------------------------------------------------------

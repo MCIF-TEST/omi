@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { Target, ArrowRight, Clock, Gauge, MessageSquarePlus } from 'lucide-react';
+import { Target, ArrowRight, Clock, Gauge, MessageSquarePlus, Wallet } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/auth';
 import { PLAN_NAME } from '@/lib/plan';
@@ -139,6 +139,21 @@ export default async function SettingsPage() {
                   <div className="text-xs text-fg-dim mt-0.5">
                     Benchmark scoreboard. Accuracy, coordination rescue, and the
                     memory learning curve.
+                  </div>
+                </div>
+              </div>
+              <ArrowRight size={14} className="text-fg-mute" />
+            </Link>
+            <Link
+              href="/settings/spend"
+              className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border-1 card-interactive"
+            >
+              <div className="flex items-center gap-3">
+                <Wallet size={16} className="text-accent" />
+                <div>
+                  <div className="text-fg font-medium">Upstream spend</div>
+                  <div className="text-xs text-fg-dim mt-0.5">
+                    What today&apos;s scanning cost against the daily ceilings, and who spent it.
                   </div>
                 </div>
               </div>

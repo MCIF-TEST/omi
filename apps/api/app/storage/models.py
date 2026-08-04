@@ -1152,3 +1152,48 @@ class Feedback(Base):
     message: Mapped[str] = mapped_column(Text, default="")
     page: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class UpstreamUsage(Base):
+    """A daily counter of calls made to the paid upstream APIs (twitterapi.io, YouTube).
+
+    This exists because ONE route spends real money with no billing control behind it. The compile
+    step (``POST /v1/scan/link/commenters``) requires auth but charges no credits and calls the X API,
+    which bills per read, so credits cannot guard it: there is nothing to spend. Its only ceiling was
+    an in-process 30/minute limiter, which bounds a burst and not a day, is per instance, and resets
+    on every deploy. Thirty a minute sustained is roughly 43,000 calls per user per day, and nothing
+    anywhere recorded that they had happened. The first signal would have been the invoice.
+
+    An aggregate row rather than an event log, on purpose. The budget check runs before every upstream
+    fetch and has to be one indexed lookup, and a per-call log of a launch's traffic grows without
+    bound for a question ("how much did today cost") that only ever needs the sum. Per-scan detail
+    already exists in ``ScanLog`` and on the investigation itself.
+
+    ``scope`` / ``scope_id`` rather than a user FK because the most important row has no user: the
+    deployment-wide total, which is the one that answers "is the API budget on fire right now". Rows
+    are keyed on a UTC date string, never a timestamp, so a rollover is a different row rather than a
+    window that has to be computed.
+    """
+
+    __tablename__ = "upstream_usage"
+    __table_args__ = (
+        # The budget lookup. Every column it filters on is NOT NULL, so unlike `candidate_lists` this
+        # constraint is genuinely enforced (SQL treats NULLs as distinct, which is what makes that
+        # table's constraint inert for anonymous rows).
+        UniqueConstraint("scope", "scope_id", "usage_date", "platform", name="uq_upstream_usage_key"),
+        Index("ix_upstream_usage_date", "usage_date", "scope"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # "user" (scope_id is the user id) or "global" (scope_id is ""). Never NULL.
+    scope: Mapped[str] = mapped_column(String(16), default="user")
+    scope_id: Mapped[str] = mapped_column(String(64), default="")
+    # UTC "YYYY-MM-DD". A string so the daily boundary is unambiguous across drivers and timezones.
+    usage_date: Mapped[str] = mapped_column(String(10))
+    platform: Mapped[str] = mapped_column(String(16), default="x")
+    # What actually bills: upstream provider calls. twitterapi.io charges per call.
+    api_calls: Mapped[int] = mapped_column(Integer, default=0)
+    # How many of our own requests produced them, for reading the ratio back.
+    requests: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

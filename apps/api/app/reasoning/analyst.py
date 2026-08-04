@@ -29,6 +29,10 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import Settings, get_settings
+# Module scope for the same reason as get_session below: this module runs work inside the
+# background pool, which absorbs exceptions, so a sink that is not visible to a nested scope is
+# a sink that silently does nothing.
+from app.core.observability import capture_exception
 # Module scope on purpose. The batched generation's progressive persist (_generate_batched ->
 # _persist_progress) calls get_session(); when this import lived only inside generate_and_persist it
 # was a LOCAL binding there, so the nested closure resolved the name against module globals, found
@@ -436,6 +440,32 @@ def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> 
             if _eng is not None:
                 row["engine_probability"] = _eng
         joined.append(row)
+
+    # Deterministic grounding pass. This is the ONLY thing inspecting the sentences that get
+    # screenshotted: the Governor's S9 lint does not see `commenter_assessments[].assessment`, and
+    # the comprehensive path runs adjudication="schema_only". Here is the one place holding both the
+    # model's prose and the account's real posts, so here is where a quote it never wrote, or a
+    # follower count that contradicts the evidence, gets caught rather than published.
+    try:
+        from app.reasoning.grounding import verify_batch
+
+        accounts_by_ref = {}
+        for r in joined:
+            author_ref = accounts.get(r.get("ref")) or (
+                legend.resolve(r["ref"]) if r.get("ref") else None
+            )
+            if author_ref and by_ref.get(author_ref):
+                accounts_by_ref[r.get("ref")] = by_ref[author_ref]
+        summary = verify_batch(joined, accounts_by_ref)
+        if summary.get("withheld"):
+            logger.warning(
+                "grounding: withheld %s of %s per-account assessments (codes=%s)",
+                summary["withheld"], summary["accounts"], ",".join(summary.get("codes") or []),
+            )
+    except Exception as exc:  # noqa: BLE001 — verification must never lose a whole assessment
+        logger.exception("grounding pass failed; assessments served unverified")
+        capture_exception(exc)
+
     return joined
 
 
@@ -1152,7 +1182,18 @@ def cached_assessment(inv) -> dict | None:
 #: (product decision 2026-07-29): a customer sees each account's OMI score, tier and written read,
 #: and not the per-dimension scoring behind it. `confidence` is part of the same block and goes with
 #: it. Flip the feature on by emptying this set; nothing else needs touching.
+#:
 ADMIN_ONLY_ACCOUNT_FIELDS = frozenset({"signals", "confidence"})
+
+#: Fields that are admin-only FOREVER, not pending a product decision. Kept in a separate set from
+#: the one above precisely so "empty the set to ship the breakdown" stays a one-line change that
+#: cannot also release these by accident.
+#:
+#: These are the verification pass's working notes (app/reasoning/grounding.py): which checks a
+#: paragraph failed, and the refused paragraph itself. An operator needs both to see whether the
+#: model is drifting. A customer shown the refused text beside the notice explaining that it was
+#: refused would simply read the refused text, which defeats the entire point of refusing it.
+NEVER_PUBLIC_ACCOUNT_FIELDS = frozenset({"grounding", "assessment_unverified"})
 
 
 def assessment_for_viewer(assessment: dict | None, *, is_admin: bool) -> dict | None:
@@ -1174,9 +1215,10 @@ def assessment_for_viewer(assessment: dict | None, *, is_admin: bool) -> dict | 
     rows = assessment.get("commenter_assessments")
     if not isinstance(rows, list) or not rows:
         return assessment
+    hidden = ADMIN_ONLY_ACCOUNT_FIELDS | NEVER_PUBLIC_ACCOUNT_FIELDS
     out = dict(assessment)
     out["commenter_assessments"] = [
-        {k: v for k, v in r.items() if k not in ADMIN_ONLY_ACCOUNT_FIELDS}
+        {k: v for k, v in r.items() if k not in hidden}
         if isinstance(r, dict) else r
         for r in rows
     ]
