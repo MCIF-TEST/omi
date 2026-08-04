@@ -455,6 +455,142 @@
   .stagger > *:nth-child(6) { animation-delay: 0.23s; }
 }
 
+/* =====================================================================
+   PRE-LOGIN FRONT PAGE  ·  scoped to .omi-landing
+   =====================================================================
+   Everything here is namespaced under .omi-landing on purpose. The front
+   page wants a colder, harder register than the workspace, and the
+   workspace must not inherit it: the app is a tool people sit inside for
+   an hour, the front page is a thirty second argument.
+
+   The split is surfaces, edges and display type ONLY. Blue stays the
+   identity, the tier ramp is untouched, and body copy stays Inter, so a
+   visitor who signs up lands somewhere recognisable.
+
+   No blur, no glow, no translucency, no gradient fills. Depth is tone and
+   a hairline, exactly as in the app.
+   ===================================================================== */
+
+.omi-landing {
+  /* Colder and deeper than the app's navy ramp. The navy reads soft at
+     hero scale, which is most of what made the old page feel like a
+     template; near-black with a faint cool cast reads deliberate. */
+  --bg-deep:    #06080b;
+  --bg:         #090c11;
+  --bg-elev:    #0d1118;
+  --bg-elev-2:  #131822;
+  --bg-elev-3:  #19202b;
+  --bg-inset:   #080b0f;
+  --border:     #1c222c;
+  --border-2:   #29313d;
+  --border-hot: #3a4553;
+  --divider:    #161c24;
+
+  /* Warm bone, the one warm value on the page, reserved for the primary
+     action. A warm mass on cold ink is a harder, more decisive stop than
+     any blue fill, and it keeps blue meaning "this is a link or a mark"
+     rather than "this is a button". */
+  --bone:     #ece7dd;
+  --bone-dim: #d6d0c4;
+
+  background-color: var(--bg-deep);
+}
+
+/* The page ground is set on a wrapper div, but <body> still carries the app's
+   navy from the base layer, so any surface the wrapper does not cover (an
+   overscroll bounce, the area behind a rubber-banding header) flashes navy
+   against near-black. Matching body to the landing ground closes that seam.
+   Scoped by :has() so no other route is affected; browsers without :has()
+   simply keep the old behaviour, which is a colour seam rather than a break. */
+body:has(.omi-landing) { background: #06080b; }
+
+/* Structural texture. A 1px rule grid at ~1.5% and a single hairline
+   scanline pass: enough that the surface is not a flat void under the
+   type, far too faint to read as decoration. Fixed attachment would fight
+   the sticky header, so it scrolls with the page. */
+.omi-landing-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.016) 1px, transparent 1px);
+  background-size: 72px 72px, 72px 72px;
+}
+
+/* Display voice. Archivo, set as tight as it will take without the
+   counters closing up. Weight and tracking do the work here, not size
+   alone, which is why the headline can stay left ragged instead of
+   needing a centred slab to feel important. */
+.omi-landing .display-hard {
+  font-family: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+}
+.omi-landing .display-hard-sm {
+  font-family: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+}
+
+/* Index numeral. The dossier tell: every section and every signal is
+   numbered, so the page reads as a document with an order rather than a
+   pile of equally weighted cards. */
+.omi-landing .idx {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  color: var(--text-faint);
+}
+
+/* Section rule. Heavier on the left where the index sits, fading right,
+   so the horizontal rules have a direction and a start. */
+.omi-landing .rule-hard {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, var(--border-hot) 0%, var(--border) 22%, transparent 100%);
+}
+
+/* Primary action. Bone slab, near-black label, 2px corners. Square-ish
+   corners and a warm fill are the two things that most separate this from
+   a soft blue SaaS pill. One real pixel of travel on press, as everywhere
+   else in the product. */
+.omi-landing .btn-bone {
+  background: var(--bone);
+  color: #06080b;
+  border: 1px solid var(--bone);
+  border-radius: 2px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  box-shadow: none;
+  transition: background var(--dur-hover) ease, transform 0.06s ease;
+}
+.omi-landing .btn-bone:hover:not(:disabled) { background: var(--bone-dim); border-color: var(--bone-dim); }
+.omi-landing .btn-bone:active:not(:disabled) { transform: translateY(1px); }
+
+/* Secondary action. Hairline only, square, no fill until hover. */
+.omi-landing .btn-hard {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  border-radius: 2px;
+  transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease, transform 0.06s ease;
+}
+.omi-landing .btn-hard:hover:not(:disabled) { border-color: var(--border-hot); background: var(--bg-elev-2); }
+.omi-landing .btn-hard:active:not(:disabled) { transform: translateY(1px); }
+
+/* Square off the shared primitives inside the landing scope. The app's
+   8 to 16px radii are what read as "modern SaaS card" at this scale; 2 to
+   3px reads as an instrument. Scoped, so the workspace keeps its softer
+   corners where the surfaces are small and adjacent. */
+.omi-landing .hard-edge,
+.omi-landing .hard-edge > * { border-radius: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .omi-landing .btn-bone:active,
+  .omi-landing .btn-hard:active { transform: none !important; }
+}
+
 /* ---------------------------------------------------------------------------
    Print / PDF styling.
 --------------------------------------------------------------------------- */

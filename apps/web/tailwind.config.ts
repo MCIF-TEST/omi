@@ -64,6 +64,9 @@ const config: Config = {
         sans:    ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         display: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono:    ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        // Pre-login display voice only. Falls back to Inter so stray usage degrades rather than
+        // breaking; see the note in app/layout.tsx for why the app itself does not use it.
+        hero:    ['var(--font-archivo)', 'var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         'display-alt': ['var(--font-display-alt)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       fontSize: {
