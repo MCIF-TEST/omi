@@ -12,7 +12,7 @@
   "production_prompt": {
     "active_version": "v1",
     "analyst": "omi_analyst",
-    "prompt_hash": "ph:aa711111dc4c6bfe0b5dbab026c53f64",
+    "prompt_hash": "ph:421b001b942aa1f78e1ed9d48f0ffffd",
     "published_asset": "prompts/analyst_system_prompt_v1.md"
   },
   "prompts": [
@@ -208,7 +208,7 @@
         "mistral-family",
         "qwen-family"
       ],
-      "prompt_hash": "ph:aa711111dc4c6bfe0b5dbab026c53f64",
+      "prompt_hash": "ph:421b001b942aa1f78e1ed9d48f0ffffd",
       "version": "v1"
     },
     {

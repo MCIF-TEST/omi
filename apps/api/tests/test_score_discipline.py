@@ -377,3 +377,65 @@ def test_the_banned_phrases_cover_certainty_identity_and_intent():
     for phrase in ("is a bot", "confirmed bot", "proves that", "was hired", "is operated by",
                    "real identity", "undoubtedly"):
         assert phrase in BANNED_PHRASES
+
+
+# =========================================================================== #
+# The protocol must not contradict itself
+#
+# Two documents disagreeing about the same instruction is worse than either one alone: the model
+# picks, and it tends to pick the cheaper option. These are regression tests for contradictions that
+# were live in the compiled protocol and were the most likely cause of thin per-account verdicts.
+# =========================================================================== #
+def _protocol() -> str:
+    from app.reasoning.prompts.master_protocol import compile_master_analyst_protocol
+
+    return compile_master_analyst_protocol()["text"]
+
+
+def test_the_protocol_asks_for_one_assessment_length_everywhere():
+    """The base prompt and the Dossier Loop both said "1-3 sentence" while the output contract said
+    "4-7 sentences" and the schema sets minLength 200. Told "1-3" twice and "4-7" once, a model
+    writes short, and three sentences cannot carry a figure, a quote, both explanations and a limit.
+    """
+    text = _protocol()
+    assert "1-3 sentence" not in text, "the short-reason instruction is back and contradicts the schema"
+    assert "4 to 7 full sentences" in text
+    assert "4-7 sentences" in text
+
+
+def test_the_stated_length_can_actually_satisfy_the_schema_floor():
+    """A floor of 200 characters is roughly four sentences. An instruction that cannot satisfy the
+    schema it is paired with is a bug in the pairing, not a style preference."""
+    from app.reasoning.prompts.comprehensive_investigation_template import (
+        _COMMENTER_ASSESSMENT_ITEM_SCHEMA,
+    )
+
+    assert _COMMENTER_ASSESSMENT_ITEM_SCHEMA["properties"]["assessment"]["minLength"] >= 200
+
+
+def test_the_dossier_loop_does_not_advertise_a_stale_step_count():
+    """The base prompt called it a "four-step worksheet" after the constitution had grown the loop
+    with a coherence check and a distribution check. A model told there are four steps stops at four.
+    """
+    text = _protocol()
+    assert "four-step worksheet" not in text
+    assert "the constitution governs" in text, "the precedence between the two must be stated"
+
+
+def test_there_is_a_final_pass_over_the_finished_json():
+    """The last thing read before generation. Counts the accounts, re-checks quotes and figures
+    against the rows, and asks for plain English, which are the failures that actually occur."""
+    text = _protocol()
+    i = text.index("FINAL PASS OVER THE JSON")
+    block = text[i:i + 1400]
+    for item in ("COUNT", "QUOTES", "FIGURES", "SPREAD", "LENGTH", "PLAIN"):
+        assert item in block, f"the final pass lost its {item} item"
+    assert "machine-checked" in block
+
+
+def test_the_final_pass_does_not_restate_the_distribution_check():
+    """Two blocks giving calibration instructions would compete. The final pass points at the
+    constitution's version rather than issuing a second one."""
+    text = _protocol()
+    i = text.index("FINAL PASS OVER THE JSON")
+    assert "The distribution check above governs" in text[i:i + 1400]

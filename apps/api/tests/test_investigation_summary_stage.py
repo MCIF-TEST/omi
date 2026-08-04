@@ -118,7 +118,7 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     # + v10's confusable_accounts and checkable_claims (the legitimate shapes that resemble the tells;
     # compute figures, quote verbatim, hedge in the words, name what would overturn it).
     # Bump this pin deliberately whenever the protocol text changes on purpose.
-    assert pp.manifest["package_hash"] == "pkg:2351f616b71da13ccad74105"
+    assert pp.manifest["package_hash"] == "pkg:eacb6bf1831418d1eb49d95d"
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 

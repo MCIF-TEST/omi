@@ -34,7 +34,7 @@
     "expected_output_contract": "analyst_assessment",
     "json_schema": "schema/analyst_response_schema.json",
     "key": "omi_analyst",
-    "prompt_hash": "ph:aa711111dc4c6bfe0b5dbab026c53f64",
+    "prompt_hash": "ph:421b001b942aa1f78e1ed9d48f0ffffd",
     "published_asset": "prompts/analyst_system_prompt_v1.md",
     "reasoning_objectives": [
       "interpret detection evidence into a cited, probabilistic recommendation",

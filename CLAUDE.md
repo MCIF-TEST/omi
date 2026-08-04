@@ -355,10 +355,10 @@ prose at all on the live route. **The protocol is the only real control today.**
 to per-account text is worth doing and is not done.
 
 Pinned by `tests/test_score_discipline.py` (53 tests). Protocol recompiled to
-**`map:7b1c50bffb5b61190181bbb9`, 82,060 chars**, zero em dashes, all drift guards green. Pins moved:
-constitution block count 16 → 18, `package_hash` → `pkg:2351f616b71da13ccad74105`.
+**`map:ac15ee80f4237b3276877ed6`, 84,116 chars**, zero em dashes, all drift guards green. Pins moved:
+constitution block count 16 → 18, `package_hash` → `pkg:eacb6bf1831418d1eb49d95d`.
 
-**Cost note:** the protocol has grown 64,808 → 82,060 chars (roughly 20.5k input tokens) and is sent on
+**Cost note:** the protocol has grown 64,808 → 84,116 chars (roughly 21k input tokens) and is sent on
 every batch, so a 150-account investigation pays it six times. Worth watching if OpenRouter spend
 climbs, and worth resisting the urge to keep appending doctrine: past some length the model follows
 each individual instruction *less* reliably, so additions should replace rather than accumulate.
@@ -425,8 +425,32 @@ Three things not to undo:
 
 The protocol now tells the model the check exists, which is the strongest prompt lever available
 (models comply far better when told output is machine-checked against a source), and adds a concrete
-plain-English rule. Recompiled to **`map:7b1c50bffb5b61190181bbb9`, 82,060 chars**. Pinned by
+plain-English rule. Recompiled to **`map:ac15ee80f4237b3276877ed6`, 84,116 chars**. Pinned by
 `tests/test_grounding.py` (33 tests).
+
+### The protocol used to contradict itself about verdict length
+
+Found while auditing for quality, and the most likely single cause of thin per-account reads. The
+base prompt's Dossier Loop STEP 4 and the constitution's step (4) both said the per-account reason
+was a **"1-3 sentence"** plain-English line. The output contract said **"4-7 sentences"** and the
+schema sets `minLength: 200`. Told the short version twice and the long version once, a model writes
+short, and three sentences cannot physically carry what the same protocol demands of them: a computed
+figure, a verbatim quote, the innocent explanation, where the score landed, and what would overturn
+it. All three sites now say 4 to 7.
+
+The base prompt also called the loop a **"four-step worksheet"** after the constitution had grown it
+with the (3c) coherence check and the (5) distribution check. A model told there are four steps stops
+at four. It now states that the constitution governs where the two differ.
+
+Both are pinned by `tests/test_score_discipline.py`, including an assertion that the stated length
+can actually satisfy the schema floor it is paired with. **When editing one document, grep the
+compiled protocol for the instruction rather than the file** — the same rule is stated in up to three
+places and they drift silently.
+
+A **FINAL PASS** checklist now closes the output contract, which is the last thing read before
+generation: count the accounts against the legend, re-check every quote and figure against the rows,
+spread, length, plain English. It deliberately points at the constitution's distribution check rather
+than issuing a competing one.
 
 ### Evidence completeness — what the model is allowed to see
 
