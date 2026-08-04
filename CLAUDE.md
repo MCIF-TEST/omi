@@ -311,6 +311,35 @@ later would leak silently.
 No frontend gate is needed: `SignalBreakdown` already renders nothing when `signals` is absent, which
 is also how it handles investigations generated before per-signal scoring existed.
 
+### Getting the results out: CSV and clipboard
+
+`ExportResults` (`components/shared/export-results.tsx`) sits in the analyst card's header on
+`/investigations/<slug>` and offers two buttons over the same table: **Copy table** (TSV to the
+clipboard) and **CSV** (a downloaded file). `lib/investigation-export.ts` holds the pure half, pinned
+by `lib/investigation-export.test.ts` (23 tests).
+
+Five decisions in there:
+
+- **The engine's account list is the spine, not the analyst's.** A batched run can finish having
+  skipped accounts the model never returned, and the customer paid a credit for those. They export
+  with their engine tier and a blank `omi_score`, which reads as "scanned, not assessed". An export
+  built from `commenter_assessments` alone would be quietly smaller than the investigation.
+- **The columns follow the data, never a second copy of the gate.** `confidence` and the eight
+  `signal_*` columns appear only when the served rows carry them, which is the same thing as "only
+  for an admin, until the breakdown ships". A hardcoded column list is the field-shredding trap
+  `coerce_comprehensive_model_output` already paid for once.
+- **The rows are projected on the SERVER** (`scannedAccountsFrom`, called in `page.tsx`).
+  `inv.payload` is the whole stored scan and the page renders none of it; passing it to a client
+  component would serialise megabytes into the HTML for a button most visits never press.
+- **The CSV opens with a BOM.** Excel on Windows reads a BOM-less UTF-8 file as the local codepage
+  and mangles every non-Latin handle, and this data has plenty.
+- **CSV quotes, TSV flattens.** A pasted verdict containing a newline or a tab would explode into
+  extra cells and rows in a spreadsheet, so the clipboard path collapses whitespace; the CSV keeps
+  the text intact because RFC 4180 quoting can carry it.
+
+The join is on `external_id`, never the handle. Sorted worst first, which deliberately differs from
+the on-screen order (that follows the batches so results can appear as they land).
+
 ### Score discipline: a high score has to be earned (constitution v9)
 
 The analyst was too willing to hand out elevated and high scores. The fix is deliberately **not** a cap
@@ -670,7 +699,7 @@ limit only guards legacy `POST /v1/auth/signup`; Clerk signups never touch it.
 ### The scope statement, and where it has to appear
 
 The product scores named accounts and the reports get posted publicly, so **what the number is NOT**
-has to travel with it. Three surfaces, and the placement of each was a decision:
+has to travel with it. Four surfaces, and the placement of each was a decision:
 
 - **`ScopeNotice`** sits ABOVE the verdict on `/r/<token>`, so nobody reads a number before reading
   what it means. It is deliberately **not `no-print`**, unlike every other interactive block on that
@@ -680,6 +709,11 @@ has to travel with it. Three surfaces, and the placement of each was a decision:
   one-line caveat at the very bottom, which is the part nobody reads and the first thing cropped from
   a screenshot. Break the lines on clause boundaries: a phrase split mid-sentence ("whether money /
   changed hands") is invisible to a reader scanning and to any test asserting on it.
+- **The CSV export** carries it as `#`-prefixed lines at the BOTTOM, after a blank line, which is the
+  one place in this product the statement does not lead. A preamble would push the header off row 1,
+  and a CSV whose first row is not its header breaks sorting, filtering, and every tool that reads
+  one. The clipboard copy carries no footer at all: its target is a spreadsheet cell range, not a
+  document, and prose rows pasted into a sheet are noise rather than a notice.
 - **`/accuracy`** is the full policy, linked from the report, the landing footer, the auth footer and
   the marketing nav. Written for the person who has just found themselves scored and is upset, which
   is the audience that matters most on that page.

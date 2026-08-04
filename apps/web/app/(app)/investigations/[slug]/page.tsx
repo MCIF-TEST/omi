@@ -7,6 +7,7 @@ import { Card, CardLabel } from '@/components/ui/card';
 import { ShareBlock } from './share-block';
 import { AnalystPanel } from './analyst-panel';
 import { VerdictWidget } from './verdict-widget';
+import { scannedAccountsFrom } from '@/lib/investigation-export';
 import { env } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,12 @@ export default async function InvestigationPage({ params }: { params: { slug: st
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
+
+  // Projected HERE, on the server. `inv.payload` is the whole stored scan (every account's evidence,
+  // posts and analyst sections, megabytes on a large investigation) and the page renders none of it.
+  // Handing it to a client component to build a table would serialise all of it into the HTML for a
+  // button most visits never press; this is a few hundred bytes per account.
+  const scanned = scannedAccountsFrom(inv.payload);
 
   return (
     <div className="space-y-6">
@@ -95,7 +102,7 @@ export default async function InvestigationPage({ params }: { params: { slug: st
       {/* Single governed AI surface: the Omi Analyst assessment is generated from the one
           model-backed inference per investigation. The former free-text commentary block
           (separate Anthropic/template path) is retired to keep one report from one inference. */}
-      <AnalystPanel slug={inv.slug} />
+      <AnalystPanel slug={inv.slug} scanned={scanned} createdAt={inv.created_at} />
 
       <ShareBlock
         slug={inv.slug}
