@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1843 passed, 8 skipped, 1 failed** (7m34s), the failure pre-existing and listed below.
+**1846 passed, 8 skipped, 1 failed** (5m27s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -215,6 +215,33 @@ browser console.
 Pinned by `apps/web/middleware.test.ts` (8 tests), which asserts the derived origin lands in every
 directive that needs it. Note the key is inlined into the Edge bundle at BUILD time, so changing it
 needs a rebuild of the web service, not a restart.
+
+#### Switching instances gives every user a new Clerk id, and the local row must re-point
+
+A Clerk development instance and a production instance are **separate user pools**; nothing migrates
+between them. So on the switch every existing user signs in with a Clerk id the database has never
+seen, `_resolve_clerk_user`'s `clerk_user_id` lookup misses, and the account is found **by email**
+instead, which is what carries their credits, investigations and subscription across.
+
+That email link used to be written only `if not existing.clerk_user_id`, so a row still holding its
+*development* id was never updated. It still resolved to the right account, but only through the
+email path, meaning **every request** re-resolved the user through the Clerk Backend API, and the one
+time that call failed (rotated secret, Clerk outage) `email` came back `None` and the create branch
+below minted an **empty duplicate account** for someone with a subscription. It now re-points, which
+is safe by construction: the lookup above already proved no row holds the new id, so the unique index
+cannot collide.
+
+Two more things on that path:
+
+- **`is_admin` is granted from `OMI_SUPER_ADMIN_EMAILS` at CREATION only**, and this path skips
+  creation. Without the re-grant the owner comes back from the switch as an ordinary customer: no
+  `/disputes`, no `/narratives`, no signal breakdown on their own investigations.
+- **The `sk_live_` `CLERK_SECRET_KEY` must be on the API service BEFORE anyone signs in.** Clerk
+  session tokens carry no email, so the email that performs the link comes from the Backend API. With
+  the wrong or missing secret the very first production sign-in creates a placeholder account instead
+  of finding the real one.
+
+Pinned by the last four tests in `tests/test_clerk_provisioning.py`.
 
 ### The analyst is batched, sequential, and progressive
 

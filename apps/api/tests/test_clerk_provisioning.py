@@ -162,3 +162,73 @@ def test_existing_email_account_is_linked_not_duplicated(env, monkeypatch):
         rows = s.query(User).filter(User.email == "carry@x.com").all()
         assert len(rows) == 1 and rows[0].clerk_user_id == "user_link"
         assert rows[0].credits_remaining == 7, "existing credits must be preserved on link"
+
+
+# ---------------------------------------------------------------------------
+# Moving from the development Clerk instance to the production one
+#
+# Every user gets a BRAND NEW Clerk id when the deployment switches from pk_test to pk_live: the two
+# instances are separate user pools and nothing migrates between them. So the owner signs in on the
+# production instance, `clerk_user_id` misses, and the account is found by email instead. These pin
+# what has to happen next.
+# ---------------------------------------------------------------------------
+def test_a_new_instance_id_re_points_the_existing_account(env, monkeypatch):
+    """The link must be made DURABLE, not just used once.
+
+    Leaving the stale development id in place still returned the right account, but only through the
+    email path, which means every request re-resolves the user through the Clerk Backend API. The
+    moment that call fails (a rotated secret, a Clerk outage) `email` is None and the create branch
+    runs instead, minting an EMPTY DUPLICATE account for someone who has credits, investigations and
+    possibly a subscription.
+    """
+    with get_session() as s:
+        s.add(User(email="owner@x.com", password_hash="h", credits_remaining=11,
+                   clerk_user_id="user_from_the_dev_instance"))
+
+    _patch(monkeypatch, sub="user_from_the_live_instance", email="owner@x.com")
+    cu = _resolve_clerk_user(_Req(), get_settings())
+    assert cu is not None and cu.email == "owner@x.com"
+    assert cu.credits_remaining == 11, "credits and history must survive the instance switch"
+
+    with get_session() as s:
+        rows = s.query(User).filter(User.email == "owner@x.com").all()
+        assert len(rows) == 1, "must re-link, never duplicate"
+        assert rows[0].clerk_user_id == "user_from_the_live_instance"
+
+    # And now the fast path resolves it directly, with no Backend API call at all.
+    monkeypatch.setattr(clerk_auth, "email_from_claims", lambda c: None)
+    monkeypatch.setattr(clerk_auth, "fetch_user_email", _fail_if_called)
+    again = _resolve_clerk_user(_Req(), get_settings())
+    assert again is not None and again.email == "owner@x.com"
+
+
+def _fail_if_called(uid):  # pragma: no cover - the assertion is that it is NOT called
+    raise AssertionError(
+        "the Clerk Backend API was called again after the account was re-linked; the link did not "
+        "stick, and a failure of this call would create a duplicate empty account"
+    )
+
+
+def test_re_linking_restores_admin_for_a_super_admin_email(env, monkeypatch):
+    """is_admin is granted from OMI_SUPER_ADMIN_EMAILS at CREATION, and this path skips creation.
+
+    Without this the owner comes back from the instance switch as an ordinary customer: no
+    /disputes, no /narratives, no admin routes, and no signal breakdown on their own investigations.
+    """
+    with get_session() as s:
+        s.add(User(email="boss@omisphere.com", password_hash="h", clerk_user_id="old_dev_id"))
+    _patch(monkeypatch, sub="new_live_id", email="boss@omisphere.com")
+    cu = _resolve_clerk_user(_Req(), get_settings())
+    assert cu is not None and cu.is_admin
+
+
+def test_an_unrelated_account_is_not_touched(env, monkeypatch):
+    """Guard against over-reach: re-pointing happens only for the row matching the signed-in email."""
+    with get_session() as s:
+        s.add(User(email="someone@else.com", password_hash="h", clerk_user_id="their_id"))
+        s.add(User(email="owner@x.com", password_hash="h", clerk_user_id="old_dev_id"))
+    _patch(monkeypatch, sub="new_live_id", email="owner@x.com")
+    _resolve_clerk_user(_Req(), get_settings())
+    with get_session() as s:
+        other = s.query(User).filter(User.email == "someone@else.com").one()
+        assert other.clerk_user_id == "their_id"
