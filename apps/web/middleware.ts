@@ -29,22 +29,68 @@ export const SECURITY_HEADERS: Record<string, string> = {
  * on the request, Next applies that nonce to its inline scripts so we can avoid 'unsafe-inline'.
  * Clerk loads from its CDN without our nonce. Listed explicitly in script-src.
  */
+/**
+ * The Clerk origins THIS deployment actually talks to, derived from the publishable key.
+ *
+ * This is not a nicety. A **development** Clerk instance serves clerk-js and its Frontend API from
+ * `<slug>.clerk.accounts.dev`, which the static wildcards below cover. A **production** instance
+ * serves both from the customer's own subdomain, here `clerk.omisphere.online`, and a subdomain is a
+ * different origin, so `'self'` does not cover it and neither does `https://*.clerk.com`.
+ *
+ * Switching to the pk_live key with only the static hosts allowlisted therefore blocked the Clerk
+ * script outright, and the failure looked nothing like a CSP problem: `useAuth().isLoaded` simply
+ * never turned true, so `AuthFormGate` held its loading spinner and /sign-in span forever with no
+ * error on the page. Deriving the host from the key means the policy follows the instance instead of
+ * having to be remembered on the day the keys change.
+ *
+ * A publishable key is `pk_(test|live)_<base64(frontend_api_host + '$')>`, the same decode
+ * `app/core/clerk_auth._issuer` does on the API side.
+ */
+export function clerkOrigins(): string[] {
+  const pk = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '').trim();
+  const m = /^pk_(?:test|live)_(.+)$/.exec(pk);
+  if (!m) return [];
+  let host: string;
+  try {
+    // Clerk strips the base64 padding from the key, and `atob` (unlike Python's b64decode, which the
+    // API side uses) rejects a string whose length is not a multiple of four. Pad exactly, never with
+    // a fixed '==': the live key is 31 characters and needs one '=', so the naive version threw and
+    // this returned no origins at all.
+    const raw = m[1];
+    host = atob(raw + '='.repeat((4 - (raw.length % 4)) % 4)).replace(/\$$/, '').replace(/\/$/, '');
+  } catch {
+    return [];
+  }
+  // A malformed key must widen nothing: anything that is not a plain hostname is discarded rather
+  // than concatenated into a directive.
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(host)) return [];
+  const origins = [`https://${host}`];
+  // Clerk's Account Portal sits at `accounts.<domain>` when the Frontend API is `clerk.<domain>`.
+  // OAuth and email-link flows hand off to it, which is a form-action / navigation target.
+  if (host.startsWith('clerk.')) origins.push(`https://accounts.${host.slice('clerk.'.length)}`);
+  return origins;
+}
+
 export function buildContentSecurityPolicy(nonce: string): string {
-  // Clerk Frontend API host is account-specific (*.clerk.accounts.dev in test).
+  // The instance this deployment is actually configured for, first, then the static development
+  // hosts (kept so a pk_test preview deploy keeps working).
+  const instance = clerkOrigins().join(' ');
   const clerkScript = [
+    instance,
     'https://*.clerk.accounts.dev',
     'https://clerk.accounts.dev',
     'https://*.clerk.com',
     'https://clerk.com',
     'https://challenges.cloudflare.com',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
   const clerkConnect = [
+    instance,
     'https://*.clerk.accounts.dev',
     'https://api.clerk.com',
     'https://clerk-telemetry.com',
     'https://*.clerk.com',
     'https://challenges.cloudflare.com',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
   // Stripe Checkout is a top-level redirect (not embedded); connect kept for future Elements.
   const stripe = 'https://js.stripe.com https://api.stripe.com https://hooks.stripe.com';
 
@@ -54,16 +100,16 @@ export function buildContentSecurityPolicy(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}' ${clerkScript}`,
     // Clerk + Tailwind inject styles; 'unsafe-inline' for style is far less risky than for scripts.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com https://*.clerk.accounts.dev",
+    `img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com https://*.clerk.accounts.dev${instance ? ` ${instance}` : ''}`,
     "font-src 'self' data:",
     // The analyst runs server-side on the API, so the BROWSER never reaches the model
     // vendor. Allowing it here widened the policy for nothing.
     `connect-src 'self' ${clerkConnect} ${stripe}`,
-    `frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://js.stripe.com https://hooks.stripe.com`,
+    `frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://js.stripe.com https://hooks.stripe.com${instance ? ` ${instance}` : ''}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self' https://*.clerk.accounts.dev https://clerk.com",
+    `form-action 'self' https://*.clerk.accounts.dev https://clerk.com${instance ? ` ${instance}` : ''}`,
     "frame-ancestors 'none'",
     'upgrade-insecure-requests',
   ].join('; ');
