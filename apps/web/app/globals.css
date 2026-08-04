@@ -472,19 +472,21 @@
    ===================================================================== */
 
 .omi-landing {
-  /* Colder and deeper than the app's navy ramp. The navy reads soft at
-     hero scale, which is most of what made the old page feel like a
-     template; near-black with a faint cool cast reads deliberate. */
-  --bg-deep:    #06080b;
-  --bg:         #090c11;
-  --bg-elev:    #0d1118;
-  --bg-elev-2:  #131822;
-  --bg-elev-3:  #19202b;
-  --bg-inset:   #080b0f;
-  --border:     #1c222c;
-  --border-2:   #29313d;
-  --border-hot: #3a4553;
-  --divider:    #161c24;
+  /* Near-black, not navy. The ground is pushed almost to zero so the type
+     carries the whole page: at #04 the white headline is running at about
+     19:1, which is what makes it feel unavoidable rather than merely
+     legible. Borders are pulled UP as the ground goes down, because on a
+     near-black field a dim hairline disappears and the structure with it. */
+  --bg-deep:    #040507;
+  --bg:         #080a0e;
+  --bg-elev:    #0c0f15;
+  --bg-elev-2:  #12161e;
+  --bg-elev-3:  #191e28;
+  --bg-inset:   #06080b;
+  --border:     #1f242e;
+  --border-2:   #2e3542;
+  --border-hot: #434c5c;
+  --divider:    #171b23;
 
   /* Warm bone, the one warm value on the page, reserved for the primary
      action. A warm mass on cold ink is a harder, more decisive stop than
@@ -521,15 +523,15 @@ body:has(.omi-landing) { background: #06080b; }
    needing a centred slab to feel important. */
 .omi-landing .display-hard {
   font-family: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 0.98;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.94;
 }
 .omi-landing .display-hard-sm {
   font-family: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.06;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
 }
 
 /* Index numeral. The dossier tell: every section and every signal is
@@ -543,12 +545,45 @@ body:has(.omi-landing) { background: #06080b; }
   color: var(--text-faint);
 }
 
+/* Chapter numeral. Large, in the rail, set in the border colour rather
+   than a text colour so it reads as structure the page is built on and
+   not as a value anybody is meant to read. This is most of what makes the
+   sections land as chapters instead of a continuous scroll. */
+.omi-landing .chapter {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--border-2);
+  line-height: 1;
+}
+
 /* Section rule. Heavier on the left where the index sits, fading right,
    so the horizontal rules have a direction and a start. */
 .omi-landing .rule-hard {
   height: 1px;
   border: 0;
   background: linear-gradient(90deg, var(--border-hot) 0%, var(--border) 22%, transparent 100%);
+}
+
+/* Chapter break. A 2px full-bleed bar that starts hard at the left axis
+   and stops, rather than fading edge to edge. The old single hairline was
+   too polite to separate anything: the page read as one continuous column
+   of content with rules drawn on it. */
+.omi-landing .rule-chapter {
+  height: 2px;
+  border: 0;
+  background: linear-gradient(90deg, var(--text-faint) 0%, var(--border-hot) 8%, var(--border) 40%, transparent 100%);
+}
+
+/* Alternating ground. Every other chapter sits on a slightly raised
+   full-bleed band, so section boundaries are felt before they are read.
+   Tone, never a border, and the step is deliberately small (4 points of
+   luminance) so it separates without looking like a different page. */
+.omi-landing .band {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 /* Primary action. Bone slab, near-black label, 2px corners. Square-ish
