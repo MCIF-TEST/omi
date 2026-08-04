@@ -119,9 +119,13 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     # compute figures, quote verbatim, hedge in the words, name what would overturn it)
     # + the v10 recalibration: reposting/narrow topic/volume/tone named as AMBIENT, the mechanical
     # gate that nothing reaches 75 without a quotable tell, the graduated history ceiling, own-row
-    # sourcing, and the alias ban (which also removed the three places that used to PERMIT an alias).
+    # sourcing, and the alias ban (which also removed the three places that used to PERMIT an alias)
+    # + the v11 research pass: the signal_dimensions block (the eight were defined nowhere before),
+    # gate tells (f) continuity break and (g) quotable machine boilerplate, the temporal method on
+    # (b), the 9-15% base-rate anchor, WHAT THIS METHOD CANNOT SEE, and ai_writing narrowed and
+    # barred from the 50+/75+ quorum.
     # Bump this pin deliberately whenever the protocol text changes on purpose.
-    assert pp.manifest["package_hash"] == "pkg:6b56634700e134cdff2ea7ca"
+    assert pp.manifest["package_hash"] == "pkg:9419a4dd71d9916953afec07"
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 

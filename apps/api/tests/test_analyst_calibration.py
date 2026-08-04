@@ -169,13 +169,17 @@ def test_the_protocol_names_reposting_and_volume_as_ambient(protocol):
         assert trait in lowered, trait
 
 
-def test_the_protocol_states_the_mechanical_gate_with_all_five_tells(protocol):
+def test_the_protocol_states_the_mechanical_gate_with_all_seven_tells(protocol):
+    """Five at v10; v11 added continuity and machine boilerplate, both from the research and both
+    quotable, which is what keeps them usable rather than another vibe."""
     assert "NOTHING REACHES 75 WITHOUT ONE" in protocol
     for clause in ("same or near-identical text on two or more of this account's OWN posts",
-                   "a scheduler explains them better than a person",
+                   "a posting rhythm a person does not produce",
                    "commercial or engagement pitch in the account's own words",
                    "numbered or templated campaign sequence",
-                   "profile's own claims contradicting its own metadata"):
+                   "profile's own claims contradicting its own metadata",
+                   "a break in the account's own continuity",
+                   "machine boilerplate in the account's own text"):
         assert clause in protocol, clause
     # the load-bearing exclusion: the traits above may sit beside a tell, never substitute for one.
     assert "can never BE the mechanical tell" in protocol
@@ -224,3 +228,84 @@ def test_the_distribution_check_is_a_quarter_everywhere_it_is_stated(protocol):
     assert "a third" not in protocol.lower()
     assert protocol.count("50 or above") >= 2
     assert "QUARTER" in protocol
+
+
+# --------------------------------------------------------------------------- #
+# v11: the research pass
+#
+# Everything below traces to published work rather than to our own output, which is the point of the
+# pass. The v10 recalibration was driven entirely by reading our own exports; it could tighten what
+# we already believed but could not tell us what the field has actually measured.
+# --------------------------------------------------------------------------- #
+def test_every_one_of_the_eight_dimensions_is_defined_and_not_merely_exemplified(protocol):
+    """The hole this pass found. The eight names appeared in the compiled protocol ONLY inside the
+    worked example: there was no definition of any of them anywhere, while Dossier Loop 3c gated the
+    omi_score on how many were 'substantially elevated'. The model was scoring eight dimensions
+    whose meaning it had to infer from their names.
+
+    'Defined' means the name appears OUTSIDE the example JSON. The example is the last thing in the
+    protocol, so anything before it is prose.
+    """
+    from app.reasoning.prompts.comprehensive_investigation_template import (
+        COMPREHENSIVE_SIGNAL_NAMES,
+    )
+
+    assert "THE EIGHT DIMENSIONS: WHAT EACH ONE MEASURES" in protocol
+    prose = protocol[:protocol.index("EXAMPLE of a valid output object")]
+    for name in COMPREHENSIVE_SIGNAL_NAMES:
+        assert name.upper() in prose or name in prose, f"{name} is exemplified but never defined"
+
+
+def test_ai_writing_is_narrowed_to_quotable_machine_text_and_barred_from_the_quorum(protocol):
+    """Two facts sat in the shipped protocol at once: ai_writing was declared supplemental and
+    'never a reason to raise the OMI score', and it was one of eight required scored dimensions that
+    the coherence check counts toward a 50+. An unreliable dimension could be one of the two that
+    unlocked an elevated score.
+
+    Unreliable is measured, not asserted: AI-text detectors flag non-native English as machine
+    written about 61% of the time. The one AI signature with evidence behind it is the generator's
+    own boilerplate, which is quotable and therefore survives the grounding checks.
+    """
+    assert "as an AI language model" in protocol
+    assert "I cannot fulfill that request" in protocol
+    # The exclusion is stated in the dimension definition AND at the coherence check, because the
+    # coherence check is where the inflation actually happened.
+    assert "may NEVER be one of the dimensions that justifies a score of 50 or above" in protocol
+    assert "ai_writing does NOT count toward either of those" in protocol
+
+
+def test_the_protocol_states_the_base_rate_anchor_and_the_reason_not_to_relax_it(protocol):
+    """'Expect roughly one in ten' was an unexplained threshold. It matches the standing estimate,
+    so the estimate is now stated. The caveat matters more: charged threads measure far higher, but
+    with a tool whose false positive rate on those very measurements runs to 41-76%."""
+    assert "between 9 and 15 in every 100 active accounts are automated" in protocol
+    assert "41 to 76 percent" in protocol
+    assert "the LAST place to relax this check" in protocol
+
+
+def test_the_protocol_admits_what_per_account_analysis_cannot_do(protocol):
+    """The strongest anti-hallucination clause available, because it is true: a competent operation
+    is not reliably separable from a real person one account at a time, and the networks that were
+    exposed were caught by coordination, which this analysis does not have. That makes 'no tell
+    found' the expected outcome rather than a failure to look hard enough, which is exactly the
+    pressure that produces invented tells."""
+    assert "WHAT THIS METHOD CANNOT SEE" in protocol
+    assert "not reliably separable from a real person" in protocol
+    assert "ORDINARY, EXPECTED outcome" in protocol
+    assert "never a reason to promote an ambient trait into a tell to fill the gap" in protocol
+
+
+def test_age_is_evidence_in_neither_direction(protocol):
+    """v10 fixed the false positives by leaning on 'an old account with a balanced ratio is an
+    ordinary person'. Left alone that becomes its own blind spot, because aged accounts are bought
+    and resold precisely because age reads as trust. Continuity is the question, not age."""
+    assert "Age ALONE is not evidence in either direction" in protocol
+    assert "bought and resold precisely because age reads as trust" in protocol
+
+
+def test_the_engagement_farmer_is_named_as_a_person(protocol):
+    """The platform pays a revenue share on reply impressions, so high-volume replying and rage bait
+    are now rational HUMAN behaviour. Without this entry the most common 2026 comment-section shape
+    reads as engineered, which it is, by a person."""
+    assert "THE ENGAGEMENT FARMER WHO IS A PERSON" in protocol
+    assert "Mercenary is not automated" in protocol

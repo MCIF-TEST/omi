@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1874 passed, 8 skipped, 1 failed** (7m25s), the failure pre-existing and listed below.
+**1881 passed, 8 skipped, 1 failed** (5m58s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -664,6 +664,76 @@ the rest is the rules themselves. At mini-class pricing that is fractions of a c
 investigation, so the real reason to keep watching the number is that past some length a model
 follows each individual instruction *less* reliably. Additions must keep replacing rather than
 accumulating.
+
+### The research pass (v11): what the literature says, and the hole it exposed
+
+v10 was derived entirely from our own exports. It could tighten what we already believed and could
+not tell us what the field has measured. This pass read the bot-detection literature and found three
+things v10 could not have seen.
+
+**The eight dimensions were defined NOWHERE.** `temporal · semantic · ai_writing · profile · voice ·
+engagement · account_maturity · history_authenticity` appeared in the compiled protocol *only inside
+the worked example*. No definition of any of them existed, while Dossier Loop 3c gates the omi_score
+on how many are "substantially elevated". The model was scoring eight dimensions whose meaning it
+inferred from their names. `_SIGNAL_DIMENSIONS` now defines each one: what evidence it reads, what
+high means, when it must be null. Pinned by
+`test_analyst_calibration.py::test_every_one_of_the_eight_dimensions_is_defined_and_not_merely_exemplified`,
+which asserts each name appears *outside* the example JSON.
+
+**`ai_writing` was a live score-inflation pathway.** The protocol said both that it is supplemental
+and "never a reason to raise the OMI score", and that it is one of eight *required scored*
+dimensions (the example gave it 40). Since 3c licenses 50+ on two elevated dimensions, an unreliable
+one could be half the quorum. The engine already agreed it was worthless
+(`evaluation/corpus.py:161` marks it `"supplemental": True`; `orchestrator/ai_modules.py:112` drops
+`raises` findings citing a supplemental signal). Now: it scores above zero **only** for quotable
+machine boilerplate (`as an AI language model`, a refusal template, a leaked prompt fragment),
+everything else is `null`, and it **can never satisfy the 50+/75+ quorum**. That is stated in the
+dimension definition *and* at 3c, because 3c is where the inflation happened.
+
+**The bundle ships post timestamps and the protocol never said to read them.** `_account_evidence`
+sends `recent_posts` as `(text, created_at)` pairs, up to 50. Gate tell (b) now carries a method:
+compute the gaps, and state either a near-constant interval or the absence of a multi-hour daily
+quiet period. The direction matters and is easy to get backwards: a circadian rhythm is a **human**
+feature, so "posts at consistent times of day" stays ambient; the discriminative inverse is activity
+in all 24 hours with no rest gap.
+
+Also added, each traceable to published work:
+
+- **The base rate is now stated, not implied.** 9-15% of active accounts are automated. Charged
+  political threads measure 43-45%, but with a tool whose false positive rate on those very
+  measurements runs 41-76%, so a charged section is the last place to relax the distribution check,
+  not the first.
+- **`WHAT THIS METHOD CANNOT SEE`**, the strongest anti-hallucination clause available because it is
+  true: a competent operation is not reliably separable from a real person one account at a time, and
+  the large networks that were exposed were caught by coordination, which this analysis does not do.
+  So "no mechanical tell found" is the *expected* outcome, never a reason to promote an ambient trait
+  to fill the gap. That pressure is exactly what invents tells.
+- **Age is evidence in neither direction.** v10's "an old account with a balanced ratio is an
+  ordinary person" fixed the false positives and would have become its own blind spot: aged accounts
+  are bought and resold *because* age reads as trust. Continuity is the question, so new gate tell
+  (f) is a datable break in the account's own history.
+- **`THE ENGAGEMENT FARMER WHO IS A PERSON`.** The platform pays a revenue share on reply
+  impressions, so high-volume replying and rage bait are now rational *human* behaviour.
+- **`SOMEONE WRITING IN A SECOND LANGUAGE`** promoted from one clause in a list to its own confusable
+  shape, carrying the measured 61% false-positive rate. It is the largest documented false-positive
+  class in adjacent tooling and it was getting a single line.
+
+**Deliberately NOT added.** Purchased-engagement research converges on *audience-level* measurements:
+engagement that does not scale with follower count, sudden follower spikes, comment-to-follower
+ratio. The single-account bundle cannot support any of them. Asking the model for a claim the
+evidence cannot ground is how hallucinations get invited, so these stay out of the prompt. If they
+are ever wanted, they need new evidence collection first, not new prompt text.
+
+Protocol recompiled to **`map:5389ce7bc0376b7ef8f2668a`, 100,478 chars**, zero em dashes, all drift
+guards green. `package_hash` → `pkg:9419a4dd71d9916953afec07`. Constitution block count **18 → 19**
+(`signal_dimensions` is the only genuinely new block; everything else extended an existing one).
+
+**Cost note:** 93,440 → 100,478, about +1,750 input tokens per batch. Roughly 3.4k of the ~10.4k the
+new rules cost was paid back by deduplication: `_SCORE_INTEGRITY_RULES` was a fourth copy of the
+Dossier Loop and its two gates, the base prompt's ABSOLUTE RULES 1/2/3/7 duplicated the OMI
+CONSTITUTION block sitting directly beneath them, its signal library restated the
+ambient/discriminative split, and `_OUTPUT_FORMATTING`'s plain-English bullet restated
+`_CHECKABLE_CLAIMS`. Keep paying for additions this way.
 
 ### Evidence completeness — what the model is allowed to see
 

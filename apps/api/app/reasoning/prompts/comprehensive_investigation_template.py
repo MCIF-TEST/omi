@@ -390,8 +390,9 @@ _OUTPUT_EXAMPLE = (
     '"confidence": 82, "signals": [{"name": "temporal", "score": null, "reason": "Only four posts were '
     'collected, too few to read a posting rhythm from."}, {"name": "semantic", "score": 95, "reason": '
     '"The identical sentence about potential and a bio link appears on four separate days."}, '
-    '{"name": "ai_writing", "score": 40, "reason": "Short promotional phrasing that a person could just '
-    'as easily have typed."}, {"name": "profile", "score": 88, "reason": "Follows 4,300 while 11 follow '
+    '{"name": "ai_writing", "score": 90, "reason": "One post ends \\"As an AI language model, I cannot\\", '
+    'which is machine text the account did not clean up."}, '
+    '{"name": "profile", "score": 88, "reason": "Follows 4,300 while 11 follow '
     'back, about 390 to 1, on a nine-day-old account."}, {"name": "voice", "score": 78, "reason": "No '
     'reference to a job, a place, or anything about its own life."}, {"name": "engagement", "score": '
     '90, "reason": "Every collected post points at a bio link rather than saying anything."}, '
@@ -399,10 +400,12 @@ _OUTPUT_EXAMPLE = (
     'posts, so nothing has been built."}, {"name": "history_authenticity", "score": 80, "reason": "The '
     'whole collected history is one sentence repeated, not a life."}], '
     '"assessment": "Posted the identical sentence \\"Huge potential here, link in bio\\" on four '
-    "separate days, and follows 4,300 accounts while 11 follow back, a ratio of roughly 390 to 1, on an "
-    "account created 9 days before this post. Three independent things point the same way and none is "
-    "explained by a new user finding their feet, which is why this sits high rather than moderate. A "
-    'history of varied posts written fresh would overturn it.", "citations": '
+    "separate days, and one of those posts trails off into \\\"As an AI language model, I cannot\\\", which "
+    "is generator output nobody edited out. It follows 4,300 accounts while 11 follow back, a ratio of "
+    "roughly 390 to 1, on an account created 9 days before this post. The repeated sentence and the "
+    "leaked machine text are two different kinds of evidence and neither is explained by a new user "
+    "finding their feet, which is why this sits high rather than moderate. Finding those exact words "
+    'quoted from somewhere else would overturn it.", "citations": '
     '["A2"]}, {"ref": "A3", "omi_score": 14, "suspicion_tier": "low", "confidence": 12, '
     '"signals": [{"name": "temporal", "score": null, "reason": "No posting history was collected, so '
     'there is no rhythm to read."}, {"name": "semantic", "score": null, "reason": "No posts were '
@@ -421,10 +424,12 @@ _OUTPUT_EXAMPLE = (
     "not a mark against the account, so the score stays low and the confidence stays lower. Collecting "
     "even a dozen of its posts would settle this either way.\", "
     '"citations": ["A3"]}, {"ref": "A4", "omi_score": 22, "suspicion_tier": "low", "confidence": 74, '
-    '"signals": [{"name": "temporal", "score": 25, "reason": "Bursts on busy news days and quiet '
-    'stretches otherwise, which is how people read the news."}, {"name": "semantic", "score": 15, '
+    '"signals": [{"name": "temporal", "score": 15, "reason": "Gaps range from 3 minutes to 19 hours and '
+    'nothing lands between 01:00 and 08:00 on any day, so there is a nightly rest period."}, '
+    '{"name": "semantic", "score": 15, '
     '"reason": "The reposts are other people\'s words; nothing of its own is repeated."}, '
-    '{"name": "ai_writing", "score": 10, "reason": "The few original lines are short and untidy."}, '
+    '{"name": "ai_writing", "score": null, "reason": "No machine boilerplate in any collected post, and '
+    'writing style on its own is not evidence."}, '
     '{"name": "profile", "score": 12, "reason": "612 followers against 588 following, close to one to '
     'one, on a 14-year-old account."}, {"name": "voice", "score": 45, "reason": "Very little writing '
     'of its own, so there is not much voice to hear either way."}, {"name": "engagement", "score": 20, '
@@ -435,9 +440,11 @@ _OUTPUT_EXAMPLE = (
     "people's political content, and only four are written by the account itself. That is a heavy "
     "reposter, which is how a great many real people use the platform: they read, they agree, they hit "
     "repost, and they rarely compose anything. The account is about 14 years old with 612 followers "
-    "against 588 following, almost one to one, and none of its own four posts repeat each other. There "
-    "is no pitch, no repeated template, and no posting rhythm regular enough to suggest a scheduler, so "
-    "the narrow subject and the thin original writing are describing a habit rather than a machine.\", "
+    "against 588 following, almost one to one, and none of its own four posts repeat each other. Its "
+    "gaps between posts run from 3 minutes to 19 hours and nothing at all lands between 01:00 and "
+    "08:00 on any day, which is a person who sleeps rather than a scheduler that does not. With no "
+    "pitch and no repeated template either, the narrow subject and the thin original writing are "
+    "describing a habit rather than a machine.\", "
     '"citations": ["A4"]}]}'
 )
 
@@ -531,10 +538,13 @@ def _render_output_contract(schema: dict) -> str:
         f"REQUIRED reasoning domains (six first-class sections, each an object with a non-empty "
         f"'assessment' string and a 'citations' array of evidence ids/aliases): {', '.join(domains)}.\n"
         f"{commenter_clause}"
-        f"SUPPLEMENTAL SIGNALS: report any signal the evidence marks supplemental (e.g. ai_writing) ONLY "
-        f"in 'supplemental_context' (each item an object with 'signal' and a neutral 'note' making clear "
+        f"SUPPLEMENTAL SIGNALS: any signal the evidence marks supplemental goes in "
+        f"'supplemental_context' (each item an object with 'signal' and a neutral 'note' making clear "
         f"it carries no suspicion weight), never in evidence_for and never as a reason to raise the OMI "
-        f"score.\n"
+        f"score. The per-account 'signals' array is a separate thing and is always all eight; the one "
+        f"that overlaps is ai_writing, which stays in the eight because a reader is owed a row for it, "
+        f"and which the constitution keeps at null unless the account's own text contains quotable "
+        f"machine boilerplate. It never justifies a score of 50 or above.\n"
         f"THE OMI SCORES: you produce TWO levels, both INTEGERS 0-100 (0-24 low, 25-49 moderate, 50-74 "
         f"elevated, 75-100 high), each YOUR reasoned judgment (never an average of any provided number):\n"
         f"  • PER ACCOUNT: every commenter_assessments item carries its OWN 'omi_score' + 'suspicion_tier', "
@@ -553,6 +563,10 @@ def _render_output_contract(schema: dict) -> str:
         f"  2. QUOTES. Every quotation you wrote appears verbatim in THAT account's own posts in the "
         f"evidence. If you cannot find it there, delete the quotation marks and describe instead. "
         f"Quotes are machine-checked and an unverifiable one discards that account's whole assessment.\n"
+        f"  2b. RHYTHM. Any sentence about when or how often an account posts carries the number you "
+        f"worked out from its own timestamps (the interval, the post count in a window, or the daily "
+        f"quiet period). Delete any rhythm claim you cannot put a figure on: it is the easiest thing "
+        f"here to imagine and the hardest for a reader to check.\n"
         f"  3. FIGURES. Every follower count, following count, post count, age and ratio you stated "
         f"matches that account's row. Recompute any ratio rather than trusting your first pass.\n"
         f"  4. OWN ROW. Every figure and every quotation sits in the row of the account it is written "
@@ -594,7 +608,11 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "table. For the current account, and it alone: (1) EXTRACT its own cells. Derive its age by "
     "comparing account_created_at to the post times, read its follower_count and following_count, its "
     "post_count, and what its sampled posts and its comment(s) on this post actually say (a null cell "
-    "means 'not collected', never zero); (2) MATCH those facts against the tells, sorting what you "
+    "means 'not collected', never zero). Also READ THE TIMESTAMPS, which most readings of this "
+    "evidence skip: walk the created_at column of its own posts, note the gaps between consecutive "
+    "posts, and note the longest quiet period in a day. That is where a scheduler shows up and where "
+    "an ordinary human sleep gap shows up, and neither is visible from the post text; "
+    "(2) MATCH those facts against the tells, sorting what you "
     "found into DISCRIMINATIVE evidence and AMBIENT traits exactly as the constitution's SCORE "
     "DISCIPLINE block defines them. DISCRIMINATIVE is behaviour a person does not produce by accident: "
     "text reused across its OWN posts, scheduler-regular intervals, a history with no topical "
@@ -621,14 +639,18 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "Derived from the tells that actually fired, never from a default, a round-number habit, another "
     "account's score, or the overall read; and between two defensible numbers take the lower; "
     "(3b) SCORE THE EIGHT DIMENSIONS for this account in 'signals', every one present, each with its "
-    "own 0-100 and a one-sentence reason naming the fact behind it. Score the eight FIRST and let the "
+    "own 0-100 and a one-sentence reason naming the fact behind it, exactly as the constitution's "
+    "THE EIGHT DIMENSIONS block defines each of them. Score the eight FIRST and let the "
     "account's omi_score follow from them: a high omi_score must be explainable by which dimensions "
     "fired. A dimension whose evidence was never collected takes score null with a reason saying so, "
     "never a filler number. Then set 'confidence' (0-100) for how much evidence backed this account "
     "overall, low when the signal list is null-heavy; "
     "(3c) CHECK YOUR OWN COHERENCE before moving on. The omi_score must be explainable by the eight "
     "you just wrote: if the score is 50 or more, at least two dimensions must be substantially "
-    "elevated, and if it is 75 or more, several must be, each on a different kind of evidence. If the "
+    "elevated, and if it is 75 or more, several must be, each on a different kind of evidence. "
+    "ai_writing does NOT count toward either of those, ever: judging authorship from writing style is "
+    "measurably unreliable, so it may accompany a finding and can never be one of the dimensions that "
+    "licenses it. If the "
     "number is high and the dimensions are not, the number is wrong, not the dimensions. Also check it "
     "against the confusable shapes: a business, a fan account, a news feed, a new user, a returning "
     "user, a small private account, someone writing in a second language. If the account fits one, "

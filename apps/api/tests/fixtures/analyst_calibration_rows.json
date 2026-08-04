@@ -29,7 +29,7 @@
         "live_score": 93,
         "live_tier": "high",
         "mechanical_tell": "scheduler-regular intervals: automated product headlines at roughly hourly spacing",
-        "gate_clause": "(b) posting intervals regular enough that a scheduler explains them better than a person",
+        "gate_clause": "(b) a posting rhythm a person does not produce",
         "following_count": 24,
         "follower_count": null,
         "posts_collected": null,
