@@ -5,9 +5,9 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-07-31 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
+**Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1825 passed, 8 skipped, 1 failed** (6m10s), the failure pre-existing and listed below.
+**1843 passed, 8 skipped, 1 failed** (7m34s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -150,6 +150,40 @@ secrets from the Edge runtime, so any server-side Clerk usage breaks the Render 
 
 `pyjwt[crypto]` is a **required** dependency in `apps/api/pyproject.toml`. Without it
 `verify_session_token` silently returns `None` and every login bounces back to the landing page.
+
+#### Both services must name the same Clerk instance, and nothing at runtime checks that
+
+This was live on omisphere.online. The browser gets `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` from the
+**web** service and signs the user in; the API gets `CLERK_PUBLISHABLE_KEY` from the **API** service,
+base64-decodes it (a key is `pk_(test|live)_<base64(frontend_api_host + '$')>`) and verifies every
+session JWT against that issuer's JWKS. Two services, two copies, no reconciliation.
+
+Switch one to the production keys and not the other and the result reads as a network fault and is
+not one: sign-in succeeds, a valid JWT is minted by `clerk.omisphere.online`, and the API rejects it
+because it still expects `sweet-finch-45.clerk.accounts.dev`. `verify_session_token` swallows the
+mismatch and returns `None` (an unverifiable token is normally just an anonymous request), so there
+is **no log line, no 5xx, no failed health check**. The only symptom is the user being told they are
+signed in with no workspace.
+
+Three things now hold it together:
+
+- **`render.yaml` commits the key as a `value:` on both services, and they must be byte-identical.**
+  A blueprint sync re-applies what is committed, so a dashboard edit that disagrees is temporary:
+  fixing this in the Render dashboard alone gets silently undone on the next sync. The web service
+  genuinely needs it at build time (the static prerender throws "Missing publishableKey"), which is
+  why neither side is `sync: false`.
+- **`_clerk_instance_problem` (`app/main.py`) refuses the boot** of a production deploy holding a
+  `pk_test_` key, alongside the other fail-closed checks. `CLERK_ISSUER` overrides the key-derived
+  issuer, so when it is set it is what gets checked. An **absent** key is deliberately not fatal:
+  Clerk is optional here (the legacy cookie path still authenticates) and `render.yaml` always
+  commits one, so failing on absence would add a way to brick a deploy without catching a bug.
+- **`tests/test_clerk_instance_pairing.py`** (13 tests) asserts the two committed values match, that
+  the API's is `pk_live_`, and that it decodes to the host `clerk_auth._issuer` will actually use.
+  The decode assertion matters on its own: a typo in the base64 passes a `startswith` check and just
+  points the API at a host that does not exist, failing every login with the same silent `None`.
+
+**Changing the key needs a redeploy of both services, not a restart of one.** `_ISSUER` and
+`_JWKS_CLIENT` are module globals cached for the life of the process.
 
 ### The analyst is batched, sequential, and progressive
 
@@ -1181,6 +1215,10 @@ TypeScript will not tell anyone if the server check is dropped.
    on the API host. Until then billing works, just not instantly: reconciliation carries it.
 2. **Clerk dashboard:** Configure → User & authentication → Email, phone, username → **Username OFF,
    Phone Optional.** Otherwise sign-up dead-ends on `/sign-up/continue`. This is config, not code.
+   Also set the **`sk_live_` `CLERK_SECRET_KEY` on BOTH Render services** (it is `sync: false`, so it
+   is dashboard-owned and was never committed) and confirm the committed `pk_live_` in `render.yaml`
+   equals the production publishable key in the Clerk dashboard. See the Clerk instance-pairing note
+   above for why a mismatch is invisible.
 3. **Rotate the secrets** pasted into chat in an earlier session (`CLERK_SECRET_KEY`,
    `OMI_DATABASE_URL`, `OMI_TWITTER_API_KEY`, `OMI_YOUTUBE_API_KEY`, `OPENROUTER_API_KEY`,
    `OMI_SESSION_SECRET`). Never commit them.

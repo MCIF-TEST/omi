@@ -104,15 +104,28 @@ services:
         value: '3.11.9'
       - key: OMI_MONTHLY_CREDIT_GRANT
         value: '20'
-      # Clerk auth — the API verifies Clerk session JWTs (see app/core/clerk_auth.py).
+      # Clerk auth. The API verifies Clerk session JWTs (see app/core/clerk_auth.py).
       # The SECRET key is server-only and set in the Render dashboard, NEVER committed.
       # The publishable key is PUBLIC (it ships in the browser bundle by design) and is
-      # used here only to derive the JWKS/issuer, so it's safe to commit as a value —
+      # used here only to derive the JWKS/issuer, so it's safe to commit as a value:
       # this guarantees the API can verify tokens even before the dashboard is filled in.
+      #
+      # THIS KEY AND THE WEB SERVICE'S NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY MUST NAME THE SAME
+      # CLERK INSTANCE. The API derives its JWKS URL by base64-decoding this key, so if the
+      # browser signs in against the production instance while the API still holds the
+      # development one, every session JWT fails verification and the user is "signed in"
+      # with no workspace. That outage is silent: verify_session_token just returns None.
+      # This pair went out of step once already, when the dashboard was switched to the
+      # pk_live key while these committed values still pinned pk_test, and a blueprint sync
+      # would have re-pinned the dashboard back to test anyway. _validate_production_config
+      # now refuses to boot a production deploy holding a pk_test key.
+      #
+      # Decodes to clerk.omisphere.online$, i.e. issuer https://clerk.omisphere.online,
+      # which is the CNAME target Clerk asked for on the custom domain.
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
-        value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
+        value: pk_live_Y2xlcmsub21pc3BoZXJlLm9ubGluZSQ
       # Signup trial: 1 credit, then they pay. Scans bill at ceil(accounts / 50)
       # credits (min 1, see compute_scan_credits), so one credit buys exactly one
       # scan of up to 50 accounts. That is deliberate: most new accounts arrive
@@ -354,11 +367,16 @@ services:
         sync: false
       # Clerk auth (frontend). The publishable key is PUBLIC (ships in the browser
       # bundle by design) and MUST exist at build time or the static prerender throws
-      # "Missing publishableKey" — so we commit it as a value here rather than leaving
+      # "Missing publishableKey", so we commit it as a value here rather than leaving
       # it as a dashboard-only sync:false (which is empty during Render's build step).
       # The secret key is server-only and stays in the dashboard, NEVER committed.
+      #
+      # MUST be byte-identical to CLERK_PUBLISHABLE_KEY on the API service above. The two
+      # sides name the Clerk instance independently and nothing at runtime reconciles them:
+      # a mismatch signs the user in and then rejects every one of their API calls. See the
+      # longer note on the API service.
       - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-        value: pk_test_c3dlZXQtZmluY2gtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA
+        value: pk_live_Y2xlcmsub21pc3BoZXJlLm9ubGluZSQ
       - key: CLERK_SECRET_KEY
         sync: false
       - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL

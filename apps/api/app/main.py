@@ -132,6 +132,64 @@ _MIN_SESSION_SECRET_LENGTH = 32
 _KNOWN_ENVS = frozenset({"production", "development", "test"})
 
 
+# A Clerk DEVELOPMENT instance is always hosted on this suffix; a production instance lives on the
+# customer's own domain (here, clerk.omisphere.online).
+_CLERK_DEV_HOST_SUFFIX = ".clerk.accounts.dev"
+
+
+def _clerk_instance_problem() -> str | None:
+    """Refuse a production deploy that verifies sessions against a Clerk DEVELOPMENT instance.
+
+    This is the one production misconfiguration in this file that produced a *live* outage rather
+    than a hypothetical one, and it is worth understanding why nothing else caught it.
+
+    The API derives its JWKS URL and its expected issuer by base64-decoding the publishable key
+    (``clerk_auth._issuer``). The browser gets its own copy of that key, on the *other* Render
+    service, and nothing at runtime reconciles the two. So switching the web app to the production
+    Clerk keys while the API still held the development ones produced a state where sign-in
+    succeeded, a valid session JWT was issued by ``clerk.omisphere.online``, and the API rejected
+    every request bearing it because it was still expecting ``*.clerk.accounts.dev``.
+
+    The failure is silent by construction: :func:`verify_session_token` swallows every verification
+    error and returns ``None``, because "this token is not valid" is normally just an anonymous
+    request. There is no log line, no 500, no failed health check. The only symptom is a customer
+    who is signed in to Clerk and has no workspace.
+
+    Returns a problem string, or ``None`` if the pairing looks right.
+
+    An ABSENT key is deliberately not a problem here: Clerk is optional in this codebase (the legacy
+    cookie session path still authenticates), and ``render.yaml`` commits the publishable key as a
+    value, so absence is not a state a real deploy of this blueprint reaches.
+    """
+    import os
+
+    pk = (os.environ.get("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
+          or os.environ.get("CLERK_PUBLISHABLE_KEY") or "").strip()
+    if not pk:
+        return None
+
+    # CLERK_ISSUER overrides the key-derived issuer (clerk_auth._issuer), so when it is set it, not
+    # the key, is what the API actually verifies against.
+    issuer = (os.environ.get("CLERK_ISSUER") or "").strip().rstrip("/")
+    if issuer:
+        if not issuer.endswith(_CLERK_DEV_HOST_SUFFIX):
+            return None
+        named = f"CLERK_ISSUER is {issuer}"
+    else:
+        if not pk.startswith("pk_test_"):
+            return None
+        named = "the Clerk publishable key is a pk_test_ (development instance) key"
+
+    return (
+        f"{named}. In production that means this API verifies session JWTs against a Clerk "
+        "DEVELOPMENT instance. If the web app is on the production instance the two never agree: "
+        "every user signs in successfully and then has no workspace, because verify_session_token "
+        "silently returns None for a token from the other issuer. Set CLERK_PUBLISHABLE_KEY to the "
+        "pk_live_ key, byte-identical to NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY on the web service, and "
+        "redeploy BOTH (the issuer and JWKS client are cached per process)."
+    )
+
+
 class ProductionConfigError(RuntimeError):
     """Raised at boot when production environment is misconfigured.
 
@@ -231,6 +289,11 @@ def _validate_production_config(settings) -> None:
             "YouTube Data API v3 key at console.cloud.google.com and set it "
             "as a Render environment variable."
         )
+
+    # --- 4. Clerk instance pairing ------------------------------------------
+    clerk_problem = _clerk_instance_problem()
+    if clerk_problem:
+        problems.append(clerk_problem)
 
     if not problems:
         return
