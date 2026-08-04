@@ -105,6 +105,6 @@ Subject: account posting every 30 minutes for six weeks, with fast human replies
 Counterexample (what NOT to emit): 'mechanical cadence therefore bot'. Regularity is never guilt; the twin was never tested.
 
 ## 7. Prompt versions
-- live `v1` (active, unchanged) · library `lib-v1` (inert) · **`lib-v2`** (inert, this library's improvement) `ph:9d0a26681e563355e1da0953ec225906`
+- live `v1` (active, unchanged) · library `lib-v1` (inert) · **`lib-v2`** (inert, this library's improvement) `ph:b4764f43bf3c679fff871bf32757ad2b`
 - lib-v2 adds: explicit cadence classification + windows, archetype matching with counter-indicators, the benign-twin discipline, history-shape reading. Contract, constitution, and output schema unchanged.
 

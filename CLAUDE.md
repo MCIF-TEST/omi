@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1846 passed, 8 skipped, 1 failed** (5m27s), the failure pre-existing and listed below.
+**1874 passed, 8 skipped, 1 failed** (7m25s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -572,6 +572,98 @@ A **FINAL PASS** checklist now closes the output contract, which is the last thi
 generation: count the accounts against the legend, re-check every quote and figure against the rows,
 spread, length, plain English. It deliberately points at the constitution's distribution check rather
 than issuing a competing one.
+
+### The repost recalibration, and the four places that contradicted it
+
+Driven by ~250 real scored rows from four live investigation exports (2026-08-04). Of the ~90
+accounts the model put at 50 or above, **roughly 75 rested on "posts mostly reposts" and nothing
+else**: `4ucmikey` **86 high** (2011, 234/191), `Jillforhealth` **79 high** (2013, 155/283),
+`willowpete` 66, `Trucker238` 66 (607/616), `marymporte` 64 (3066/3305), `malawattorney` 64. A
+fifteen-year-old account with a balanced ratio that reposts politics all day is the most common real
+human on the platform, and these verdicts get posted publicly about named people.
+
+The model was not disobeying. `_SCORE_DISCIPLINE` already said ambient traits may never carry an
+account past the moderate band; its ambient list simply **never named reposting, topical narrowness,
+posting volume, or opinion strength**. The boundary was drawn in the wrong place. Four changes:
+
+- **AMBIENT TRAITS now names them**, plus a rule of its own (`A MOSTLY-REPOST TIMELINE IS NOT A
+  FINDING`) and a matching `THE HEAVY REPOSTER` entry in `_CONFUSABLE_ACCOUNTS`. It also names the
+  phrasings the model reached for (`reads more like an amplifier than a personal timeline`, `a
+  message relay`, `a broadcast feed`) as descriptions of ordinary use rather than evidence.
+- **The 75-100 band is a MECHANICAL GATE, not a count.** At least one of five tells, written into the
+  assessment as a quote or a figure: near-identical text on two of its own posts, scheduler-regular
+  intervals, its own commercial pitch, a numbered campaign, a profile contradicting its own metadata.
+  Repost share, narrowness, volume, tone, stance and follower ratio **can never BE the tell**. This
+  keeps the genuinely correct high scores in the same data (`aiseomastery` 93 on hourly automated
+  headlines, `horacio_names` 88 on five identical ad templates, `raidertbone` 88 on a numbered "Day
+  41 … Day 16" sequence, `stonk_simian` 90 on pump pitches).
+- **The thin-evidence cap became a graduated ceiling.** The old rule only covered a history that was
+  never collected, so `FTrimby` scored 62 on 5 posts and `PromptKing32` 78 on 8, while two accounts
+  in the identical state of nothing-collected came out **31 points apart** (`PedroJaniec` 3,
+  `Jamison598294` 34). Now: zero posts = 10-20 with confidence ≤20, one post caps 39, 2-14 caps 49
+  unless a tell is quotable from those very posts, 15+ normal bands.
+- **The distribution check moved from a third to a QUARTER**, and now says explicitly that anything
+  resting only on repost share, narrowness, volume or tone goes back below 50.
+
+**Two of the defects were INSTRUCTED by the prompt.** The output contract literally asked for "why
+you landed on THIS number rather than one 10 points higher or lower" (which became "I settled on 27
+rather than 42" in ~90% of rows, sometimes arguing upward while scoring downward), and it permitted
+"a short alias in parentheses" (which became "A17 is a 2009 account…" on essentially every verdict,
+plus cross-account references like "near-identical to A23's reposts", the contagion the same protocol
+forbids). Both instructions are gone.
+
+**The alias permission was in FOUR places and the ambient/convergence doctrine in THREE**, which is
+the drift this file has warned about twice. Do not fix one and stop: `constitution.py`
+(`_SCORE_DISCIPLINE` **and** `_OUTPUT_FORMATTING`), `comprehensive_investigation_template.py`
+(`COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK` **and** the output contract), and
+`_assets/omi_analyst_v1.txt`. The `system_task` copy was the worst: it still said "75-100 needs
+several that converge", "cannot exceed 49 on profile metadata alone" (against the new 10-20 ceiling)
+and "roughly a third", so half the recalibration was being contradicted a few thousand characters
+later. **Grep the compiled protocol, never the file.**
+
+Three checklists were also competing (base prompt "four audits", `system_task` "THE FOUR AUDITS",
+contract "FINAL PASS"). FINAL PASS is last-read and authoritative; the other two are now a pointer
+plus the two checks FINAL PASS does not make (the collapse audit, and use-the-cells-you-were-given).
+
+**Two code fixes the prompt could not reach:**
+
+- **The per-account tier is DERIVED from the score** in `_join_commenter_assessments`, not passed
+  through. One export served score 28 as "low" on two accounts and "moderate" on two others, and 29
+  as both, so the badge was not a function of the number beside it. `grounding.check_coherence`
+  already *detected* this as a SOFT `tier_mismatch` and nothing acted on it. A disagreement is now
+  logged (`analyst tier drift on %s`) and deliberately **not persisted**: a field here would go
+  through the viewer gate and the export for no reader's benefit.
+- **`check_alias_in_prose` is HARD** (`grounding.py`), so an internal label never reaches a reader,
+  and **`check_style` is SOFT** for the score counterfactual and the "more like an X than a Y"
+  construction. The severity split is deliberate and was a deviation from the plan, which proposed
+  putting these in `BANNED_PHRASES`: that list is HARD-enforced and withholds the whole paragraph,
+  and suppressing a factually correct assessment over a stylistic tic is a worse outcome than
+  printing it. `_ALIAS_RE` is `[AC]\d{1,3}` and deliberately excludes `N` so "N95" is not flagged.
+
+**Cross-account contamination was the most damaging class and is already caught deterministically.**
+`swanson18982373` (really 505/600) was published as following "1,281 people while only 505 follow
+back" and quoting "Climate scam" and "Fauci = evil fuck." All three belong to `X_is_Arbitrary` in the
+same batch; `JohnWSavio` (created 2014-02-07) was described as "created on 2024-08-03", which is
+`2vcGopld13`'s date. `check_figures`'s `_FOLLOWING_RE` **does** match that phrasing and returns HARD,
+contrary to a note in the plan that said it did not, so the paragraph is withheld rather than
+published. The protocol side adds an own-row sourcing rule to `_CHECKABLE_CLAIMS`.
+
+`tests/fixtures/analyst_calibration_rows.json` + `tests/test_analyst_calibration.py` (22 tests) keep
+the real accounts, grouped must-stay-high / must-come-down / must-be-capped, and pin the
+deterministic half. **The model-facing half can only be verified by a live re-scan**: paste the
+recompiled preset, re-scan one of these posts, and the elevated+ count should fall from ~90 to
+roughly 15-20 while `aiseomastery` and `raidertbone` stay high.
+
+Protocol recompiled to **`map:1b2d1dc15d37fc4ea0b9b20a`, 93,440 chars**, zero em dashes, all drift
+guards green. `package_hash` → `pkg:6b56634700e134cdff2ea7ca`. Constitution block count unchanged at
+18 (every change extended an existing block).
+
+**Cost note:** 84,116 → 93,440 chars, about +2,300 input tokens per batch, so a 150-account
+investigation pays it six times. The dedupe above gave back ~1.4k of the ~10.7k the new rules cost;
+the rest is the rules themselves. At mini-class pricing that is fractions of a cent per
+investigation, so the real reason to keep watching the number is that past some length a model
+follows each individual instruction *less* reliably. Additions must keep replacing rather than
+accumulating.
 
 ### Evidence completeness — what the model is allowed to see
 

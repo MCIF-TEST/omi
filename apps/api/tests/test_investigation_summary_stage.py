@@ -116,9 +116,12 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     # constitution's v9 score_discipline block (base rate, ambient vs discriminative evidence,
     # per-band convergence requirements, the alternative-explanation test, distribution self-check)
     # + v10's confusable_accounts and checkable_claims (the legitimate shapes that resemble the tells;
-    # compute figures, quote verbatim, hedge in the words, name what would overturn it).
+    # compute figures, quote verbatim, hedge in the words, name what would overturn it)
+    # + the v10 recalibration: reposting/narrow topic/volume/tone named as AMBIENT, the mechanical
+    # gate that nothing reaches 75 without a quotable tell, the graduated history ceiling, own-row
+    # sourcing, and the alias ban (which also removed the three places that used to PERMIT an alias).
     # Bump this pin deliberately whenever the protocol text changes on purpose.
-    assert pp.manifest["package_hash"] == "pkg:eacb6bf1831418d1eb49d95d"
+    assert pp.manifest["package_hash"] == "pkg:6b56634700e134cdff2ea7ca"
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 
