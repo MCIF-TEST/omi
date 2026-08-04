@@ -487,7 +487,7 @@ def test_the_closing_directive_comes_last():
     pp = build_comprehensive_investigation_prompt_package(
         _package(), assets=load_comprehensive_investigation_assets())
     assert pp.user.index("Alias legend") < pp.user.index("## Before you answer")
-    assert pp.user.rstrip().endswith("keep every number and quote.")
+    assert pp.user.rstrip().endswith("Short plain sentences.")
 
 
 def test_the_closing_directive_warns_that_output_is_verified():
@@ -495,8 +495,25 @@ def test_the_closing_directive_warns_that_output_is_verified():
     pp = build_comprehensive_investigation_prompt_package(
         _package(), assets=load_comprehensive_investigation_assets())
     tail = pp.user[pp.user.index("## Before you answer"):]
-    assert "checked automatically" in tail
+    assert "machine-checked" in tail
     assert "discards that account's whole assessment" in tail
+
+
+def test_the_closing_directive_carries_the_calibration_rules():
+    """The tail is the last thing read, so the two rules that failed hardest in production live here.
+
+    Live scoring put ~75 of ~90 elevated-or-above accounts on repost share alone, and wrote one
+    account's follower count and quotes into another account's paragraph. Both are restated here
+    because instructions at the very end of a long context are followed markedly better than the
+    same instructions only in the preset, 20k tokens earlier.
+    """
+    pp = build_comprehensive_investigation_prompt_package(
+        _package(), assets=load_comprehensive_investigation_assets())
+    tail = pp.user[pp.user.index("## Before you answer"):]
+    assert "OWN row" in tail, "the anti-contamination rule must be restated last"
+    assert "caps at 49" in tail, "the repost-share ceiling must be restated last"
+    assert "75" in tail and "quotable tell" in tail, "the mechanical gate must be restated last"
+    assert "No alias" in tail, "aliases must never reach the served prose"
 
 
 def test_the_closing_directive_stays_small():

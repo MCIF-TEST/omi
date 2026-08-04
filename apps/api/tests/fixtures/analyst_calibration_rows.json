@@ -1,0 +1,280 @@
+{
+  "_about": [
+    "Real accounts from four live investigation exports (2026-08-04), kept as the calibration",
+    "reference for the v10 recalibration of the Omi Analyst protocol.",
+    "",
+    "WHAT THIS IS AND IS NOT. The suite cannot call the model, so nothing here asserts that a",
+    "future scan produces a particular score. What it does is (a) pin the deterministic checks",
+    "against prose the live model actually wrote, and (b) record, in one place, the accounts the",
+    "recalibration is supposed to move and the ones it must not touch, so the live re-scan has a",
+    "checklist instead of an impression.",
+    "",
+    "'live_score' is what the model returned BEFORE the recalibration. For must_come_down and",
+    "must_be_capped that number is the defect, not the target.",
+    "",
+    "Metadata is copied from the export rows. A null means the export did not carry that column;",
+    "it is deliberately not guessed at, because inventing a figure is the exact failure this",
+    "protocol change exists to stop."
+  ],
+
+  "must_stay_high": {
+    "_rule": [
+      "Each of these clears the constitution's MECHANICAL GATE: a tell that can be quoted or stated",
+      "as a figure from the account's own cells. The recalibration must not drag them down, because",
+      "the gate was written to admit precisely this shape."
+    ],
+    "accounts": [
+      {
+        "handle": "aiseomastery",
+        "live_score": 93,
+        "live_tier": "high",
+        "mechanical_tell": "scheduler-regular intervals: automated product headlines at roughly hourly spacing",
+        "gate_clause": "(b) posting intervals regular enough that a scheduler explains them better than a person",
+        "following_count": 24,
+        "follower_count": null,
+        "posts_collected": null,
+        "account_created": null
+      },
+      {
+        "handle": "horacio_names",
+        "live_score": 88,
+        "live_tier": "high",
+        "mechanical_tell": "five near-identical advertisement templates across its own posts",
+        "gate_clause": "(a) the same or near-identical text on two or more of this account's OWN posts",
+        "following_count": null,
+        "follower_count": null,
+        "posts_collected": null,
+        "account_created": null
+      },
+      {
+        "handle": "raidertbone",
+        "live_score": 88,
+        "live_tier": "high",
+        "mechanical_tell": "numbered campaign sequence, 'Day 41' through 'Day 16'",
+        "gate_clause": "(d) a numbered or templated campaign sequence",
+        "following_count": null,
+        "follower_count": null,
+        "posts_collected": null,
+        "account_created": null
+      },
+      {
+        "handle": "stonk_simian",
+        "live_score": 90,
+        "live_tier": "high",
+        "mechanical_tell": "explicit pump pitches in the account's own words",
+        "gate_clause": "(c) an explicit commercial or engagement pitch in the account's own words",
+        "following_count": null,
+        "follower_count": null,
+        "posts_collected": null,
+        "account_created": null
+      },
+      {
+        "handle": "TomChataFitness",
+        "live_score": null,
+        "live_tier": "high",
+        "mechanical_tell": "promotional pitch in its own posts",
+        "gate_clause": "(c) an explicit commercial or engagement pitch in the account's own words",
+        "following_count": null,
+        "follower_count": null,
+        "posts_collected": null,
+        "account_created": null
+      }
+    ]
+  },
+
+  "must_come_down": {
+    "_rule": [
+      "Every one of these was scored on repost share, topical narrowness, volume or tone, and",
+      "nothing else. All are long-lived accounts with an ordinary follower balance: the HEAVY",
+      "REPOSTER shape. Under the recalibration they cap at 49 unless a mechanical tell turns up in",
+      "their own cells, and none of the live assessments named one.",
+      "",
+      "These are the rows that made the change necessary. 4ucmikey and Jillforhealth were published",
+      "as HIGH: an accusation, about a named person, on a fifteen-year-old account that retweets",
+      "politics."
+    ],
+    "expected_ceiling": 49,
+    "accounts": [
+      {
+        "handle": "4ucmikey",
+        "live_score": 86,
+        "live_tier": "high",
+        "account_created_year": 2011,
+        "follower_count": 234,
+        "following_count": 191,
+        "stated_driver": "posts are mostly reposts, narrow political topic",
+        "mechanical_tell": null
+      },
+      {
+        "handle": "Jillforhealth",
+        "live_score": 79,
+        "live_tier": "high",
+        "account_created_year": 2013,
+        "follower_count": 155,
+        "following_count": 283,
+        "stated_driver": "posts are mostly reposts, narrow topic",
+        "mechanical_tell": null
+      },
+      {
+        "handle": "willowpete",
+        "live_score": 66,
+        "live_tier": "elevated",
+        "account_created_year": 2010,
+        "follower_count": 435,
+        "following_count": 213,
+        "stated_driver": "repost-heavy timeline",
+        "mechanical_tell": null
+      },
+      {
+        "handle": "Trucker238",
+        "live_score": 66,
+        "live_tier": "elevated",
+        "account_created_year": 2010,
+        "follower_count": 607,
+        "following_count": 616,
+        "stated_driver": "repost-heavy timeline, balanced ratio ignored",
+        "mechanical_tell": null
+      },
+      {
+        "handle": "marymporte",
+        "live_score": 64,
+        "live_tier": "elevated",
+        "account_created_year": 2010,
+        "follower_count": 3066,
+        "following_count": 3305,
+        "stated_driver": "repost-heavy timeline",
+        "mechanical_tell": null
+      },
+      {
+        "handle": "malawattorney",
+        "live_score": 64,
+        "live_tier": "elevated",
+        "account_created_year": 2012,
+        "follower_count": 107,
+        "following_count": 116,
+        "stated_driver": "repost-heavy timeline",
+        "mechanical_tell": null
+      }
+    ]
+  },
+
+  "must_be_capped_by_thin_evidence": {
+    "_rule": [
+      "The history ceiling. The old rule only covered a history that was never collected at all, so",
+      "a five-post sample was scored as though it were a pattern, and two accounts in identical",
+      "states (nothing collected) came out 31 points apart.",
+      "",
+      "PedroJaniec at 3 and Jamison598294 at 34 are the same evidence: none. That spread is the",
+      "clearest possible demonstration that the number was not coming from the cells."
+    ],
+    "accounts": [
+      {
+        "handle": "FTrimby",
+        "live_score": 62,
+        "live_tier": "elevated",
+        "posts_collected": 5,
+        "expected_ceiling": 49,
+        "ceiling_clause": "2 TO 14 POSTS: ceiling 49, unless a mechanical tell is quotable from those very posts",
+        "mechanical_tell": null
+      },
+      {
+        "handle": "PromptKing32",
+        "live_score": 78,
+        "live_tier": "high",
+        "posts_collected": 8,
+        "expected_ceiling": 49,
+        "ceiling_clause": "2 TO 14 POSTS: ceiling 49, unless a mechanical tell is quotable from those very posts",
+        "mechanical_tell": null
+      },
+      {
+        "handle": "Jamison598294",
+        "live_score": 34,
+        "live_tier": "moderate",
+        "posts_collected": 0,
+        "expected_score_range": [10, 20],
+        "expected_max_confidence": 20,
+        "ceiling_clause": "ZERO POSTS COLLECTED: score 10 to 20 and confidence 20 or less",
+        "note": "The live assessment argued 'the lack of collected history is uncertainty, not proof' and then scored 34."
+      },
+      {
+        "handle": "PedroJaniec",
+        "live_score": 3,
+        "live_tier": "low",
+        "posts_collected": 0,
+        "expected_score_range": [10, 20],
+        "expected_max_confidence": 20,
+        "ceiling_clause": "ZERO POSTS COLLECTED: score 10 to 20 and confidence 20 or less"
+      }
+    ]
+  },
+
+  "cross_account_contamination": {
+    "_rule": [
+      "The most damaging class: a figure or a quotation carried from a neighbouring row into a",
+      "paragraph published about a different named person. The prose below is verbatim from the",
+      "live export, paired with the account's REAL metadata from its own row.",
+      "",
+      "Both are caught deterministically today by grounding.check_figures, which is why they are",
+      "here as executable tests rather than as a note."
+    ],
+    "cases": [
+      {
+        "handle": "swanson18982373",
+        "real_follower_count": 505,
+        "real_following_count": 600,
+        "borrowed_from": "X_is_Arbitrary",
+        "live_prose": "This account follows 1,281 people while only 505 follow back, and it has posted \"Climate scam\" and \"Fauci = evil fuck.\"",
+        "defect": "the following count, and both quotations, belong to another account in the same batch"
+      },
+      {
+        "handle": "JohnWSavio",
+        "real_account_created_at": "2014-02-07T00:00:00Z",
+        "borrowed_from": "2vcGopld13",
+        "live_prose": "This is a young account, created on 2024-08-03, roughly 366 days old at the time of the post.",
+        "defect": "the creation date belongs to another account in the same batch; the real account is about ten years older"
+      }
+    ]
+  },
+
+  "tier_passthrough": {
+    "_rule": [
+      "Not a prompt defect. The per-account tier was taken from the model unvalidated, so one export",
+      "rendered the same score under two different badges. Fixed in the join by deriving the tier",
+      "from the score."
+    ],
+    "cases": [
+      {"handle": "Sethsilver2", "live_score": 28, "model_tier": "low", "correct_tier": "moderate"},
+      {"handle": "A_Eye_Bubble", "live_score": 28, "model_tier": "low", "correct_tier": "moderate"},
+      {"handle": "VISOR_05", "live_score": 28, "model_tier": "moderate", "correct_tier": "moderate"},
+      {"handle": "JureUrsic", "live_score": 28, "model_tier": "moderate", "correct_tier": "moderate"},
+      {"handle": "DuckZone5O3", "live_score": 29, "model_tier": "low", "correct_tier": "moderate"},
+      {"handle": "Ladams2070157", "live_score": 29, "model_tier": "moderate", "correct_tier": "moderate"}
+    ]
+  },
+
+  "prose_defects": {
+    "_rule": [
+      "Two of these were instructed by the prompt itself: the output contract asked for the score",
+      "counterfactual and permitted an alias in the prose. Both instructions are gone."
+    ],
+    "cases": [
+      {
+        "defect": "alias_in_prose",
+        "severity": "hard",
+        "live_prose": "A17 is a 2009 account whose timeline is almost entirely reposts, near-identical to A23's reposts."
+      },
+      {
+        "defect": "style_formula",
+        "severity": "soft",
+        "live_prose": "I settled on 27 rather than 42 because the follower imbalance and repost-heavy pattern are notable.",
+        "note": "BillFredericco. The sentence argues upward and scores downward, which is what a formula rather than a reading produces."
+      },
+      {
+        "defect": "style_formula",
+        "severity": "soft",
+        "live_prose": "The timeline reads more like an amplifier than a personal account with its own voice.",
+        "note": "The 'more like an X than a Y' construction appeared over forty times in one export."
+      }
+    ]
+  }
+}

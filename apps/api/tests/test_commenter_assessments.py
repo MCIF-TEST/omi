@@ -163,16 +163,20 @@ def test_output_contract_instructs_the_array():
 # =========================================================================== #
 def test_commenter_assessments_survive_and_are_echo_joined():
     out = _run(_model_output([
+        # No alias appears in either paragraph, and neither refers to the other account. That is now
+        # a HARD grounding rule (check_alias_in_prose), so a fixture written the old way would be
+        # withheld rather than served, which is exactly what the live export was doing.
         {"ref": "A1", "omi_score": 82, "suspicion_tier": "high",
-         "assessment": "A1 posts on a mechanically regular cadence, with comment timestamps landing "
-                       "suspiciously close to a fixed interval across multiple threads, a pattern far more "
-                       "consistent with scheduled or automated posting than an organic browsing habit from "
-                       "a real person replying whenever they happen to be online.", "citations": ["A1"]},
+         "assessment": "This account posts on a mechanically regular cadence, with comment timestamps "
+                       "landing suspiciously close to a fixed interval across multiple threads, a pattern "
+                       "far more consistent with scheduled or automated posting than an organic browsing "
+                       "habit from a real person replying whenever they happen to be online.",
+         "citations": ["A1"]},
         {"ref": "A2", "omi_score": 40, "suspicion_tier": "moderate",
-         "assessment": "A2 has a noticeably lighter footprint than A1: its posting cadence shows some "
-                       "irregularity, follower and following counts sit in an unremarkable range, and there "
-                       "is not yet enough independently corroborating evidence to push this account higher "
-                       "or lower than a moderate read at this time.", "citations": ["A2"]},
+         "assessment": "The footprint here is lighter: posting cadence shows some irregularity, follower "
+                       "and following counts sit in an unremarkable range, and there is not yet enough "
+                       "independently corroborating evidence to push this account higher or lower than a "
+                       "moderate read at this time.", "citations": ["A2"]},
     ]))
     assert out["investigation_trace"]["model_backed"] is True
     rows = out["commenter_assessments"]

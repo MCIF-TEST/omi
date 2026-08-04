@@ -17,6 +17,7 @@ no-op.
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import re
@@ -30,6 +31,8 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from app.core.config import Settings, get_settings
 from app.storage.db import get_session
 from app.storage.models import User
+
+log = logging.getLogger("omi.auth")
 
 
 # ---------------------------------------------------------------------------
@@ -274,8 +277,23 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
         if email:
             existing = session.query(User).filter(User.email == email).first()
             if existing is not None:
-                if not existing.clerk_user_id:
+                # RE-POINT, not just fill in. The row may already carry a Clerk id from a DIFFERENT
+                # instance: moving from the development keys to production gives every user a brand
+                # new Clerk id, and their old one is now meaningless. Leaving it in place still
+                # returned the right account, but only via this email path, which means every single
+                # request re-resolved the user through the Clerk Backend API, and the one time that
+                # call failed `email` would be None and the branch below would mint an EMPTY DUPLICATE
+                # account for someone who has credits and investigations. Re-pointing makes the link
+                # durable after the first sign-in. Safe by construction: the lookup above found no row
+                # holding `clerk_uid`, so this cannot collide with the unique index.
+                if existing.clerk_user_id != clerk_uid:
+                    log.info("linking clerk user %s to existing account %s (previous clerk id: %s)",
+                             clerk_uid, existing.id, existing.clerk_user_id or "none")
                     existing.clerk_user_id = clerk_uid
+                # A re-linked owner must not lose admin: is_admin is granted from
+                # OMI_SUPER_ADMIN_EMAILS at creation, and this path skips creation entirely.
+                if is_super and not existing.is_admin:
+                    existing.is_admin = 1
                 existing.last_login_at = datetime.utcnow()
                 _ensure_referral_code(session, existing)
                 session.flush()

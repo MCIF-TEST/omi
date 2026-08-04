@@ -406,16 +406,32 @@ def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> 
         alias = it.get("ref")
         author_ref = accounts.get(alias) or (legend.resolve(alias) if alias else None)
         commenter = by_ref.get(author_ref) if author_ref else None
-        # The account's OMI score + tier are MODEL-produced (clamped/normalized for safety).
+        # The account's OMI score is MODEL-produced (clamped for safety). The TIER is DERIVED from it
+        # here rather than taken from the model, because the two disagreed in production: one live
+        # export rendered score 28 as "low" on two accounts and "moderate" on two others, and 29 as
+        # both, so the tier badge a customer reads was not a function of the number printed beside
+        # it. The band edges are one definition (`_tier_for_score`), the investigation-level tier has
+        # always been derived that way (see `_merge_batch_parts`), and this makes the per-account
+        # tier agree. Score is the single source of truth; the badge renders it.
+        #
+        # A disagreement is still worth knowing about, because it means the model's own banding drifted
+        # from the protocol it was given, so it is logged rather than silently dropped. It is NOT
+        # persisted on the row: adding a field here would put it through the viewer gate and the
+        # export for no reader's benefit.
         omi_score = it.get("omi_score")
         try:
             omi_score = max(0, min(100, int(round(float(omi_score))))) if omi_score is not None else None
         except (TypeError, ValueError):
             omi_score = None
+        model_tier = it.get("suspicion_tier")
+        derived_tier = _tier_for_score(omi_score) if omi_score is not None else model_tier
+        if omi_score is not None and model_tier and model_tier != derived_tier:
+            logger.info("analyst tier drift on %s: model said %s for score %s, serving %s",
+                        alias, model_tier, omi_score, derived_tier)
         row: dict = {
             "ref": alias,
             "omi_score": omi_score,
-            "suspicion_tier": it.get("suspicion_tier"),
+            "suspicion_tier": derived_tier,
             "confidence": _clamp_int(it.get("confidence")),
             "signals": _normalise_signals(it.get("signals")),
             "assessment": it.get("assessment"),

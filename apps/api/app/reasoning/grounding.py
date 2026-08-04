@@ -349,6 +349,54 @@ def check_readability(assessment: str) -> list[Violation]:
     return out
 
 
+# Account (A1..) and cluster (C1..) aliases. Narrative aliases (N1..) are deliberately NOT matched:
+# they are vanishingly rare in per-account prose, while "N95" is not rare at all in the kind of
+# comment section this product reads, and a false withhold costs a customer a paragraph they paid for.
+# "A1" and "C4" can still collide with ordinary words; that trade is worth it, because aliases opened
+# essentially every verdict in the live export and a withheld paragraph still shows its score, its
+# breakdown, and an honest notice.
+_ALIAS_RE = re.compile(r"\b[AC]\d{1,3}\b")
+# Phrases that narrate the scoring instead of describing the account, or swap one label for another.
+# SOFT on purpose: a paragraph can be perfectly true and still be written this way, and withholding a
+# correct assessment over a stylistic tic would be a worse outcome than printing it. HARD is reserved
+# for claims the evidence contradicts.
+_STYLE_TICS = ("i settled on", "rather than one", "more like a ", "more like an ",
+               "reads more like", "i landed on")
+
+
+def check_alias_in_prose(assessment: str) -> list[Violation]:
+    """An internal alias must never reach the reader.
+
+    Aliases (A1, A7, C2, N3) are batch-local labels for the model's own bookkeeping: they resolve
+    through the legend, they mean DIFFERENT accounts in different batches of the same investigation,
+    and the customer has never seen one. Live output opened essentially every verdict with "A17 is a
+    2009 account...", and several referred across to other accounts ("near-identical to A23's
+    reposts"), which is both meaningless after the merge and the contagion the protocol forbids.
+
+    HARD, unlike the style check below, because this is not a matter of taste: the sentence is about
+    an entity the reader cannot resolve, so as published prose it is unverifiable by construction.
+    """
+    found = sorted(set(_ALIAS_RE.findall(assessment or "")))
+    if not found:
+        return []
+    return [Violation(
+        "alias_in_prose", HARD,
+        f"names internal alias(es) {', '.join(found[:4])} that the reader cannot resolve",
+    )]
+
+
+def check_style(assessment: str) -> list[Violation]:
+    """The formulaic tics, flagged for the operator and never suppressed.
+
+    "I settled on 72 rather than 57" appeared in roughly 90% of one live export and is worthless to a
+    reader: it names a number the account did NOT get, which reads as though it nearly was accused.
+    It came from the output contract, which used to ask for it explicitly.
+    """
+    low = (assessment or "").lower()
+    hits = [t for t in _STYLE_TICS if t in low]
+    return [Violation("style_formula", SOFT, f"formulaic phrasing: {', '.join(hits)}")] if hits else []
+
+
 def check_coherence(row: dict) -> list[Violation]:
     """The score has to be explainable by the dimensions underneath it.
 
@@ -400,6 +448,8 @@ def verify_row(row: dict, account: dict | None) -> GroundingReport:
     violations += check_quotes(assessment, account)
     violations += check_figures(assessment, account)
     violations += check_phrasing(assessment)
+    violations += check_alias_in_prose(assessment)
+    violations += check_style(assessment)
     violations += check_readability(assessment)
     violations += check_coherence(row)
     quotes = [m for m in _QUOTE_RE.finditer(assessment)
@@ -474,5 +524,6 @@ def verify_batch(rows: list[dict], accounts_by_ref: dict) -> dict:
 __all__ = [
     "GroundingReport", "Violation", "HARD", "SOFT", "WITHHELD_NOTICE",
     "check_quotes", "check_figures", "check_phrasing", "check_boilerplate",
-    "check_readability", "check_coherence", "verify_row", "verify_batch",
+    "check_readability", "check_coherence", "check_alias_in_prose", "check_style",
+    "verify_row", "verify_batch",
 ]

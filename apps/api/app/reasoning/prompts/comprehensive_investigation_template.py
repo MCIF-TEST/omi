@@ -333,7 +333,7 @@ _OUTPUT_EXAMPLE = (
     "EXAMPLE of a valid output object (illustrative values. Reason from the real evidence). Notice that "
     "each account is explained by ITS OWN evidence in plain words, and links to other accounts are kept "
     "brief and secondary:\n"
-    '{"omi_score": 61, "suspicion_tier": "elevated", "verdict": "mixed", "confidence_band": "moderate", '
+    '{"omi_score": 33, "suspicion_tier": "moderate", "verdict": "mixed", "confidence_band": "moderate", '
     '"confidence_rationale": "One account (A2) shows a strong amplifier profile on its own metadata. '
     "brand-new, following thousands while almost no one follows it back, with no real posting history. "
     'and that carries the read. The other accounts are weaker and are judged on their own evidence.", '
@@ -342,10 +342,10 @@ _OUTPUT_EXAMPLE = (
     "before it posted, following several thousand accounts while almost no one follows it back, and with "
     "no posting history beyond two near-identical promotional replies, a profile far more consistent "
     "with an amplifier than an ordinary user. A1 looks like a genuine person: a years-old account with a "
-    "normal balance of followers and a varied posting history. A3 is a weaker middle case. Fairly new "
-    "with a thin history and one promotional-sounding reply. Judged on its own limited evidence; its "
-    "wording loosely resembles A2's, which nudges the read up slightly but does not carry it. Findings "
-    'are probabilistic; the human analyst sets the verdict.", '
+    "normal balance of followers and a varied posting history. A3 had no posts collected at all, so it "
+    "is scored low with low confidence and nothing is read into the gap. A4 reposts almost everything "
+    "it shares and writes little of its own, which is an ordinary way to use the platform rather than a "
+    'finding. Findings are probabilistic; the human analyst sets the verdict.", '
     '"evidence_for": [{"signal": "amplifier_profile", "claim": "A2 is brand-new, follows thousands while '
     'almost no one follows it back, and has no real posting history.", "evidence_refs": ["A2"], '
     '"direction": "raises", "impact": 0.6}], '
@@ -403,23 +403,42 @@ _OUTPUT_EXAMPLE = (
     "account created 9 days before this post. Three independent things point the same way and none is "
     "explained by a new user finding their feet, which is why this sits high rather than moderate. A "
     'history of varied posts written fresh would overturn it.", "citations": '
-    '["A2"]}, {"ref": "A3", "omi_score": 38, "suspicion_tier": "moderate", "confidence": 30, '
+    '["A2"]}, {"ref": "A3", "omi_score": 14, "suspicion_tier": "low", "confidence": 12, '
     '"signals": [{"name": "temporal", "score": null, "reason": "No posting history was collected, so '
     'there is no rhythm to read."}, {"name": "semantic", "score": null, "reason": "No posts were '
     'collected, so repetition cannot be checked."}, {"name": "ai_writing", "score": null, "reason": '
-    '"One short reply is not enough text to judge how it was written."}, {"name": "profile", "score": '
-    '35, "reason": "47 followers against 210 following, about 4 to 1, which is unremarkable."}, '
+    '"No text was collected, so there is nothing to judge how it was written."}, {"name": "profile", '
+    '"score": 20, "reason": "47 followers against 210 following, about 4 to 1, which is unremarkable."}, '
     '{"name": "voice", "score": null, "reason": "No posting history was collected, so there is nothing '
-    'to hear a voice in."}, {"name": "engagement", "score": 30, "reason": "One promotional-sounding '
-    'reply, a single data point rather than a pattern."}, {"name": "account_maturity", "score": 55, '
+    'to hear a voice in."}, {"name": "engagement", "score": null, "reason": "No posts were collected, '
+    'so there is no engagement behaviour to read."}, {"name": "account_maturity", "score": 30, '
     '"reason": "24 days old with a small audience, young but not implausibly so."}, '
     '{"name": "history_authenticity", "score": null, "reason": "The posting history that would answer '
-    'this was never gathered."}], "assessment": "Created 24 '
-    "days before this post, with 47 followers against 210 following, a ratio of about 4 to 1 that is "
-    "unremarkable. Its posting history was not collected, so this is a weak read on profile metadata "
-    "alone, and a new account with a thin profile is also exactly what a real person who just joined "
-    "looks like. Seeing whether its posts repeat the same text would move this either way.\", "
-    '"citations": ["A3"]}]}'
+    'this was never gathered."}], "assessment": "None of this account\'s posts were collected, so there '
+    "is nothing here about how it actually behaves. What the profile shows is a 24-day-old account with "
+    "47 followers against 210 following, a ratio of about 4 to 1, which is unremarkable and is also what "
+    "a real person who joined last month looks like. A missing history is a gap in what was gathered, "
+    "not a mark against the account, so the score stays low and the confidence stays lower. Collecting "
+    "even a dozen of its posts would settle this either way.\", "
+    '"citations": ["A3"]}, {"ref": "A4", "omi_score": 22, "suspicion_tier": "low", "confidence": 74, '
+    '"signals": [{"name": "temporal", "score": 25, "reason": "Bursts on busy news days and quiet '
+    'stretches otherwise, which is how people read the news."}, {"name": "semantic", "score": 15, '
+    '"reason": "The reposts are other people\'s words; nothing of its own is repeated."}, '
+    '{"name": "ai_writing", "score": 10, "reason": "The few original lines are short and untidy."}, '
+    '{"name": "profile", "score": 12, "reason": "612 followers against 588 following, close to one to '
+    'one, on a 14-year-old account."}, {"name": "voice", "score": 45, "reason": "Very little writing '
+    'of its own, so there is not much voice to hear either way."}, {"name": "engagement", "score": 20, '
+    '"reason": "No pitches, no link-in-bio, no follow-for-follow."}, {"name": "account_maturity", '
+    '"score": 8, "reason": "Fourteen years old with a steadily built audience."}, '
+    '{"name": "history_authenticity", "score": 25, "reason": "One subject for years, but continuous and '
+    'tied to real events."}], "assessment": "Forty-six of the fifty collected posts are reposts of other '
+    "people's political content, and only four are written by the account itself. That is a heavy "
+    "reposter, which is how a great many real people use the platform: they read, they agree, they hit "
+    "repost, and they rarely compose anything. The account is about 14 years old with 612 followers "
+    "against 588 following, almost one to one, and none of its own four posts repeat each other. There "
+    "is no pitch, no repeated template, and no posting rhythm regular enough to suggest a scheduler, so "
+    "the narrow subject and the thin original writing are describing a habit rather than a machine.\", "
+    '"citations": ["A4"]}]}'
 )
 
 
@@ -475,16 +494,26 @@ def _render_output_contract(schema: dict) -> str:
             f"(age, follower/following balance, post count, bio present or empty, verified or not) and "
             f"say what each one means; quote or closely describe something IT ACTUALLY WROTE and say what "
             f"that writing tells you; state the innocent explanation and why the evidence does or does not "
-            f"fit it; then say why you landed on THIS number rather than one 10 points higher or lower, "
-            f"and what missing evidence would most change your mind. Use at least THREE of this account's "
+            f"fit it; and, for any account at 50 or above, name the one observation that would most change "
+            f"your read. NEVER narrate the scoring itself: do not write 'I settled on 72 rather than 57' or "
+            f"any variant naming a score you did not give, and do not use the 'more like an X than a Y' "
+            f"construction. Vary how you open: two accounts in one response must not begin the same way. "
+            f"Use at least THREE of this account's "
             f"own concrete facts, specific enough that the paragraph could not be pasted under any other "
             f"account. Every fact must pass the POINT-TO-THE-CELL test: it appears in the account's rows; "
             f"never state a detail (location, off-platform behavior, follower quality) the evidence does "
-            f"not carry. Mention another account only "
-            f"briefly, and only when the link is strong; the score must rest on the account's own evidence, "
-            f"not on its relationship to other accounts. Explain the concept, not the jargon ('writes in a "
-            f"strikingly similar style to another account', not 'style_match axis'; a short alias in "
-            f"parentheses is fine as a reference). Grounded in THAT account's specific evidence, never "
+            f"not carry, and never carry a figure or a quotation across from a neighbouring account's row. "
+            f"Do NOT mention any other account in a per-account assessment and do NOT write an alias such "
+            f"as A7 in the assessment text: the reader has never seen those labels, they mean different "
+            f"accounts in different batches, and resemblance between accounts belongs in "
+            f"coordination_reasoning, not in either account's score. Aliases go in 'ref' and 'citations' "
+            f"only. Explain the concept, not the jargon ('writes in a "
+            f"strikingly similar style to another account', not 'style_match axis'). "
+            f"Before writing any score at or above 75, confirm you can quote a mechanical tell from this "
+            f"account's own cells; before writing any score at all, apply the history ceiling (no posts "
+            f"collected means 10-20 and confidence 20 or less; exactly one post caps at 39; 2 to 14 posts "
+            f"cap at 49 unless a mechanical tell is quotable from those very posts). "
+            f"Grounded in THAT account's specific evidence, never "
             f"boilerplate; and a 'citations' array. Accounts disclosed as omitted by the coverage manifest "
             f"carry no rows and need no item. Omit the array entirely ONLY when there are no account rows "
             f"at all.\n"
@@ -526,12 +555,23 @@ def _render_output_contract(schema: dict) -> str:
         f"Quotes are machine-checked and an unverifiable one discards that account's whole assessment.\n"
         f"  3. FIGURES. Every follower count, following count, post count, age and ratio you stated "
         f"matches that account's row. Recompute any ratio rather than trusting your first pass.\n"
-        f"  4. SPREAD. Identical scores on non-identical evidence mean you batched instead of reading "
-        f"one account at a time. The distribution check above governs the calibration itself.\n"
-        f"  5. LENGTH. Each per-account assessment is 4 to 7 sentences and names a figure, a quote, "
-        f"the innocent explanation, and what would change your mind.\n"
-        f"  6. PLAIN. No jargon a creator would not know. Read one assessment back as if you were the "
-        f"account holder.\n"
+        f"  4. OWN ROW. Every figure and every quotation sits in the row of the account it is written "
+        f"under. Carrying one account's follower count or one account's words into another account's "
+        f"paragraph publishes a false claim about a named person; check each one against its own row.\n"
+        f"  5. ALIAS. No alias (A1, A7, A21) appears anywhere in any assessment text, and no assessment "
+        f"refers to another account. Rewrite any sentence that does.\n"
+        f"  6. CEILING. For every account, the score obeys the history ceiling: no posts collected means "
+        f"10-20; one post caps at 39; 2 to 14 posts cap at 49 unless a mechanical tell is quoted from "
+        f"those posts. Anything at 75 or above quotes a mechanical tell. Drop any score that cannot "
+        f"meet its gate.\n"
+        f"  7. SPREAD. Identical scores on non-identical evidence mean you batched instead of reading "
+        f"one account at a time. Then count how many accounts you placed at 50 or above and re-read "
+        f"each one. The distribution check above governs the calibration itself; apply it here rather "
+        f"than trusting the pass you already made.\n"
+        f"  8. LENGTH. Each per-account assessment is 4 to 7 sentences and names a figure, a quote, and "
+        f"the innocent explanation.\n"
+        f"  9. PLAIN. No jargon a creator would not know, no narration of your own scoring, no two "
+        f"assessments opening the same way. Read one back as if you were the account holder.\n"
         f"Do NOT produce Omi-owned system/provenance fields. OmiSphere injects these after you respond and "
         f"you must not fabricate them: {', '.join(omi_injected)}. The engine's factual 'corroboration' state "
         f"is likewise supplied by OmiSphere. Output ONLY the JSON object, no prose before or after.\n"
@@ -554,25 +594,30 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "table. For the current account, and it alone: (1) EXTRACT its own cells. Derive its age by "
     "comparing account_created_at to the post times, read its follower_count and following_count, its "
     "post_count, and what its sampled posts and its comment(s) on this post actually say (a null cell "
-    "means 'not collected', never zero); (2) MATCH those facts against the bought-account tells. "
-    "following a very large number while almost none follow back (following ≫ followers) is a classic "
-    "amplifier shape, strongest on a young account with little content; an empty or engagement-only "
-    "history (nothing but one-line praise/emoji/reactions), templated or verbatim-repeated content, and "
-    "spam/scam/promo intent ('link in bio', 'DM to earn', 'follow for follow', giveaway/crypto pitches) "
-    "are STRONG tells; a varied, original, lived-in history leans genuine. Sort what you found into "
-    "DISCRIMINATIVE tells (hard to produce by accident: text reused across its own posts, scheduler-"
-    "regular intervals, a history with no topical continuity, explicit farming or scam templates, a "
-    "profile contradicting its own metadata) and AMBIENT traits that are ordinary among real people "
-    "(few followers, a new account, few posts, no bio, unverified, short or enthusiastic comments, "
-    "emoji, agreement with the post, fluent or formal prose, consistent times of day, a plain handle). "
-    "Ambient traits alone cap the account in the moderate band, however many of them you count; "
+    "means 'not collected', never zero); (2) MATCH those facts against the tells, sorting what you "
+    "found into DISCRIMINATIVE evidence and AMBIENT traits exactly as the constitution's SCORE "
+    "DISCIPLINE block defines them. DISCRIMINATIVE is behaviour a person does not produce by accident: "
+    "text reused across its OWN posts, scheduler-regular intervals, a history with no topical "
+    "continuity, an explicit farming or scam pitch ('link in bio', 'DM to earn', 'follow for follow', "
+    "giveaway and crypto pitches), a profile contradicting its own metadata. AMBIENT is everything "
+    "ordinary among real people, and it now explicitly includes a timeline that is mostly reposts, a "
+    "feed about one topic, high posting volume, and strong or one-sided opinions, alongside few "
+    "followers, a new account, few posts, no bio, unverified, short or enthusiastic comments, emoji, "
+    "agreement with the post, fluent or formal prose, consistent times of day, and a plain handle. "
+    "Following far more accounts than follow back is worth noting and is not on its own "
+    "discriminative. Ambient traits cap the account below 50 however many of them you count, and a "
+    "mostly-repost feed is how a great many real people use the platform, never a finding in itself. "
+    "A varied, original, lived-in history leans genuine; "
     "(3) WEIGH genuine-vs-bought and pick the INTEGER 0-100 this account's own evidence earns. Start "
     "from the base rate, which is that most commenters are real, and move up only as far as named cells "
     "force you. Before writing 50 or more, name the most plausible innocent explanation and find the "
     "cell that rules it out; if none does, stay at 49 or below and say which question the evidence "
     "could not answer. 50-74 needs two INDEPENDENT discriminative tells (restatements of one "
-    "observation count once); 75-100 needs several that converge AND a reason the innocent explanation "
-    "fails. An account whose history was never collected cannot exceed 49 on profile metadata alone. "
+    "observation count once). Then apply the constitution's two hard ceilings before you commit the "
+    "number: the MECHANICAL GATE (nothing reaches 75 without a tell you can quote or state as a figure "
+    "from this account's own cells) and the HISTORY CEILING (zero posts collected means 10 to 20 with "
+    "confidence 20 or less; exactly one post caps at 39; 2 to 14 posts cap at 49 unless a mechanical "
+    "tell is quotable from those very posts). "
     "Derived from the tells that actually fired, never from a default, a round-number habit, another "
     "account's score, or the overall read; and between two defensible numbers take the lower; "
     "(3b) SCORE THE EIGHT DIMENSIONS for this account in 'signals', every one present, each with its "
@@ -600,14 +645,12 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "facts, specific enough that it could not be pasted under any other account. Only after every "
     "account has completed the loop do you write the cross-account sections and the executive "
     "synthesis.\n"
-    "  (5) THE DISTRIBUTION CHECK, once, after the last account and before you write anything else. Look "
-    "at the scores you just produced as a set. A real comment section comes out mostly low with a few "
-    "genuine outliers. If more than roughly a third of the accounts landed at 50 or above, go back "
-    "through those accounts and, for each, name the specific discriminative cell that earned it; lower "
-    "the ones where you can only point at ambient traits. Do the same for any account you put at 75 or "
-    "above without being able to say why the innocent explanation fails. A mostly-high set of scores is "
-    "far more often a calibration failure than a captured section, and correcting it here is part of the "
-    "method, not an admission of error.\n"
+    "  (5) THE DISTRIBUTION CHECK, once, after the last account and before you write anything else, "
+    "run exactly as the constitution's SCORE DISCIPLINE block specifies it. Look at the scores you "
+    "just produced as a set, count how many landed at 50 or above, and if that is more than a quarter "
+    "of them, go back through each one and name the specific discriminative cell that earned it. Any "
+    "that rest only on repost share, topical narrowness, volume or tone come back below 50. Correcting "
+    "the set here is part of the method, not an admission of error.\n"
     "  ★ account_reasoning + commenter_assessments, THE MISSION. Every account gets its own omi_score "
     "(0-100) + suspicion_tier in commenter_assessments, derived in its own Dossier Loop pass, two "
     "accounts that commented on the same post can and usually do score differently, because real "
@@ -645,33 +688,25 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "evidence COVERAGE disclosed by structure, never by suspicion; omitted entities remain citable. "
     "Describe behavior, not people; use probabilistic language; a genuine-looking account scores low. "
     "The human analyst sets the final verdict.\n"
-    "THE FOUR AUDITS (run all of them against your draft BEFORE emitting the JSON: each is a hard "
-    "gate):\n"
-    "1. COUNT AUDIT: count the Accounts-table rows and your commenter_assessments items: the numbers "
-    "MUST be equal, every alias exactly once, no omissions, no duplicates.\n"
-    "2. COLLAPSE AUDIT: read your per-account scores and assessments side by side and apply these "
-    "tests literally. (a) NO TWO ASSESSMENTS MAY SHARE A SENTENCE. If you could swap two accounts' "
-    "paragraphs and both would still read as true, BOTH are wrong. They describe your template, not "
-    "those accounts. Rewrite them from their own rows with their own numbers and their own quoted "
-    "text. (b) EVERY assessment must contain at least one figure or quoted fragment that appears in NO "
+    "TWO AUDITS AGAINST YOUR DRAFT. The output contract closes with a FINAL PASS checklist that "
+    "covers counts, quotes, figures, own-row sourcing, aliases, the ceilings, length and plain "
+    "English; run that as written and do not duplicate it here. These two are the ones it does not "
+    "cover:\n"
+    "1. COLLAPSE AUDIT. Read your per-account scores and assessments side by side. (a) NO TWO "
+    "ASSESSMENTS MAY SHARE A SENTENCE: if you could swap two accounts' paragraphs and both would "
+    "still read as true, BOTH are wrong, because they describe your template rather than those "
+    "accounts. (b) Every assessment carries at least one figure or quoted fragment that appears in no "
     "other assessment. (c) Three or more accounts on one number means the batch was shortcut; two may "
-    "share a number ONLY when their extracted facts are genuinely equivalent. (d) YOUR SCORES ARE NOT "
-    "A LADDER: if every score you wrote is a multiple of 5, you were picking from a mental menu "
-    "instead of reading evidence. Re-derive them, and let them land on 63, 71, 38 when that is where "
-    "the evidence lands. (e) If nearly every account came out in one tier, stop and ask whether the "
-    "evidence really says that or whether one shared property of the batch (often absent history) is "
-    "driving every score; a page of near-identical 'high' verdicts is the signature of a failed "
-    "investigation, and a mixed page with reasons that differ is the signature of a real one.\n"
-    "3. FABRICATION AUDIT: every number, age, quote, and behavior in your draft must pass the POINT-"
-    "TO-THE-CELL test: you can name the exact row and column it came from. You know NOTHING about "
-    "these accounts beyond the rows supplied, no location, no off-platform behavior, no follower "
-    "quality, no prior reputation. Delete any claim without a cell; verify every citation is an alias "
-    "that exists in the legend. Conversely, USE every cell you ARE given: the Accounts table carries "
-    "follower_count, following_count, account_created_at, verified, bio and the account's own recent "
-    "posts, and an assessment that ignores the populated cells is as weak as one that invents them.\n"
-    "4. CONTRACT AUDIT: every required field present and valid; each suspicion_tier agrees with its "
-    "omi_score's band; genuine-looking accounts scored low; the wrapper score is consistent with the "
-    "per-account scores."
+    "share a number only when their facts are genuinely equivalent. (d) YOUR SCORES ARE NOT A LADDER: "
+    "if every score is a multiple of 5 you were picking from a mental menu, so re-derive them and let "
+    "them land on 63, 71, 38. (e) If nearly every account came out in one tier, ask whether the "
+    "evidence says that or whether one shared property of the batch (often absent history) drove every "
+    "score. A page of near-identical verdicts is the signature of a failed investigation.\n"
+    "2. USE THE CELLS YOU WERE GIVEN. You know NOTHING about these accounts beyond the rows supplied: "
+    "no location, no off-platform behaviour, no follower quality, no prior reputation, so delete any "
+    "claim without a cell. The converse matters as much: the Accounts table carries follower_count, "
+    "following_count, account_created_at, verified, bio and the account's own recent posts, and an "
+    "assessment that ignores the populated cells is as weak as one that invents them."
 )
 
 # The model-facing OUTPUT CONTRACT: rendered deterministically from the ONE canonical schema (no

@@ -114,10 +114,60 @@ def test_the_alternative_explanation_test_gates_the_elevated_band(protocol):
 
 
 def test_thin_evidence_caps_the_score(protocol):
-    """Absence of evidence is not evidence. An account we barely looked at cannot be strongly
-    accused, and the reason must say which evidence was never gathered."""
-    assert "THIN EVIDENCE CAPS THE SCORE" in protocol
-    assert "cannot exceed 49 on profile metadata alone" in protocol
+    """Absence of evidence is not evidence, and how much was collected is a fact about the SCAN.
+
+    The old rule only covered a history "never collected", which left a hole the live export fell
+    through in both directions: five sparse posts produced a 62 and eight produced a 78, while
+    accounts with zero posts scattered from 3 to 34 because nothing said where they should land.
+    The ceiling is now graduated and the zero-post case is pinned to a narrow band.
+    """
+    assert "HOW MUCH HISTORY YOU HAVE SETS A HARD CEILING" in protocol
+    assert "ZERO POSTS COLLECTED" in protocol
+    assert "score 10 to 20 and confidence 20 or less" in protocol
+    assert "EXACTLY ONE POST" in protocol and "ceiling 39" in protocol
+    assert "2 TO 14 POSTS" in protocol and "ceiling 49" in protocol
+    assert "15 OR MORE POSTS" in protocol
+    # Two accounts we learned nothing about must not come out 30 points apart.
+    assert "must not come out 30 points apart" in protocol
+
+
+def test_reposting_is_ambient_not_a_tell(protocol):
+    """The single biggest calibration defect in the live data.
+
+    Of ~90 accounts scored at 50 or above, roughly 75 rested on "the sampled posts are almost
+    entirely reposts". The constitution already capped ambient traits at the moderate band but never
+    named reposting as one, so the model was not disobeying: it had never been told.
+    """
+    assert "REPOSTING OR QUOTE-POSTING AS MOST OF WHAT THE ACCOUNT DOES" in protocol
+    assert "A MOSTLY-REPOST TIMELINE IS NOT A FINDING" in protocol
+    assert "Reposting is what the button is for" in protocol
+    # The exact phrasings the live verdicts used to justify elevated scores, named and disowned.
+    for phrase in ("amplifier than a personal timeline", "a message relay", "a broadcast feed"):
+        assert phrase in protocol, f"the protocol must name and reject {phrase!r}"
+    assert "may not on their own carry an account past 49" in protocol
+
+
+def test_the_heavy_reposter_is_a_named_confusable_shape(protocol):
+    """A generic instruction to be careful does not stop a model reading a retweeter as a farm.
+
+    willowpete (2010, 435 followers / 213 following) and Trucker238 (2010, 607 / 616) were both
+    scored 66 on repost share alone. Both are the ordinary shape this entry describes.
+    """
+    assert "THE HEAVY REPOSTER" in protocol
+    assert "is a person with an opinion and a phone" in protocol
+
+
+def test_nothing_reaches_the_top_band_without_a_mechanical_tell(protocol):
+    """4ucmikey scored 86 naming zero mechanical tells: a 2011 account, 234 followers against 191
+    following, elevated purely for reposting politics. The top band is now a gate, not a count."""
+    assert "THE MECHANICAL GATE" in protocol
+    assert "NOTHING REACHES 75 WITHOUT ONE" in protocol
+    for tell in ("the same or near-identical text on two or more of this account's OWN posts",
+                 "posting intervals regular enough that a scheduler",
+                 "an explicit commercial or engagement pitch",
+                 "a numbered or templated campaign sequence"):
+        assert tell in protocol, f"the gate must list {tell!r}"
+    assert "can never BE the mechanical tell" in protocol
 
 
 def test_a_single_dimension_cannot_carry_a_high_score(protocol):
@@ -155,15 +205,28 @@ def test_the_worked_example_does_not_inflate_a_score_from_a_neighbour(protocol):
     this change is meant to stop. It is now a capped moderate read on its own thin evidence."""
     assert "which nudges the score up" not in protocol
     assert "loosely echoes another promotional account" not in protocol
-    assert '"ref": "A3", "omi_score": 38, "suspicion_tier": "moderate"' in protocol
+    assert "nudges the read up slightly" not in protocol
+    # A3 now demonstrates the zero-post floor rather than a mid-band read on no evidence.
+    assert '"ref": "A3", "omi_score": 14, "suspicion_tier": "low", "confidence": 12' in protocol
 
 
 def test_the_worked_example_explains_its_own_cap(protocol):
-    """A3 models the required sentence for a thin account: name what was not collected, say the read
-    is weak because of it, and name the innocent shape it also fits."""
-    assert "Its posting history was not collected" in protocol
-    assert "this is a weak read on profile metadata alone" in protocol
-    assert "exactly what a real person who just joined looks like" in protocol
+    """A3 models the required sentence for an account with NO collected history: say plainly that
+    nothing was observed, refuse to read anything into the gap, and name what would settle it."""
+    assert "None of this account's posts were collected" in protocol
+    assert "A missing history is a gap in what was gathered, not a mark against the account" in protocol
+
+
+def test_the_worked_example_demonstrates_the_heavy_reposter(protocol):
+    """Models copy examples over rules, so the shape that was being misjudged has to appear as a
+    worked case scored low, not only as a prohibition in the constitution."""
+    assert '"ref": "A4", "omi_score": 22, "suspicion_tier": "low"' in protocol
+    assert "Forty-six of the fifty collected posts are reposts" in protocol
+    assert "That is a heavy reposter, which is how a great many real people use the platform" in protocol
+    # And it must show the reasoning that keeps it low, not merely assert the number.
+    assert "no posting rhythm regular enough to suggest a scheduler" in protocol
+    # The no-history case (A3) keeps its own hedge, in the zero-post wording.
+    assert "a real person who joined last month looks like" in protocol
 
 
 def test_the_high_scoring_example_shows_three_independent_observations_in_its_prose(protocol):
@@ -299,7 +362,9 @@ def test_every_account_in_the_example_carries_all_eight_signals():
     raw = T._OUTPUT_EXAMPLE
     obj = json.loads(raw[raw.find("{"):])
     rows = obj["commenter_assessments"]
-    assert len(rows) == 3
+    # Four now: a genuine account, a promotional shell, an account with no collected history, and a
+    # heavy reposter. The last two exist because both were being scored wrongly in production.
+    assert len(rows) == 4
     for row in rows:
         assert len(row["signals"]) == 8, f"{row['ref']} does not show all eight"
         assert isinstance(row["confidence"], int)
@@ -349,12 +414,34 @@ def test_the_example_leads_with_computed_figures_and_a_quote():
 
     raw = T._OUTPUT_EXAMPLE
     rows = {r["ref"]: r for r in json.loads(raw[raw.find("{"):])["commenter_assessments"]}
-    a2, a3 = rows["A2"]["assessment"], rows["A3"]["assessment"]
+    a2, a3, a4 = (rows["A2"]["assessment"], rows["A3"]["assessment"], rows["A4"]["assessment"])
     assert '"Huge potential here, link in bio"' in a2      # verbatim quote
     assert "390 to 1" in a2                                # computed ratio
     assert "4 to 1" in a3                                  # computed ratio
     assert "would overturn it" in a2                        # falsifiability
-    assert "weak read" in a3                                # hedge in the words
+    # A3 hedges in the words: it says outright that nothing was observed rather than implying a read.
+    assert "there is nothing here about how it actually behaves" in a3
+    # A4 leads with a count and states the age as a figure, not as the adjective "old".
+    assert "Forty-six of the fifty collected posts" in a4
+    assert "about 14 years old" in a4 and "612 followers against 588 following" in a4
+
+
+def test_no_worked_example_narrates_its_own_scoring_or_names_an_alias():
+    """The contract used to ASK for the counterfactual ("why not ten points higher or lower"), which
+    is why "I settled on 72 rather than 57" appeared in roughly 90% of live verdicts. It also used to
+    permit "a short alias in parentheses", which is why every verdict opened with one. Both are gone,
+    and the example must not reintroduce either by demonstration."""
+    import json
+    import re
+
+    from app.reasoning.prompts import comprehensive_investigation_template as T
+
+    raw = T._OUTPUT_EXAMPLE
+    for row in json.loads(raw[raw.find("{"):])["commenter_assessments"]:
+        text = row["assessment"]
+        assert not re.search(r"\b[AC]\d{1,3}\b", text), f"{row['ref']} names an alias in its prose"
+        for tic in ("I settled on", "rather than one", "more like a ", "more like an "):
+            assert tic not in text, f"{row['ref']} demonstrates the banned formula {tic!r}"
 
 
 # =========================================================================== #
@@ -427,7 +514,9 @@ def test_there_is_a_final_pass_over_the_finished_json():
     against the rows, and asks for plain English, which are the failures that actually occur."""
     text = _protocol()
     i = text.index("FINAL PASS OVER THE JSON")
-    block = text[i:i + 1400]
+    # The checklist grew when the history ceiling and the alias/own-row items were added, so the
+    # window is sized to the block rather than to a number that happened to fit the old one.
+    block = text[i:text.index('Do NOT produce Omi-owned', i)]
     for item in ("COUNT", "QUOTES", "FIGURES", "SPREAD", "LENGTH", "PLAIN"):
         assert item in block, f"the final pass lost its {item} item"
     assert "machine-checked" in block
@@ -438,4 +527,5 @@ def test_the_final_pass_does_not_restate_the_distribution_check():
     constitution's version rather than issuing a second one."""
     text = _protocol()
     i = text.index("FINAL PASS OVER THE JSON")
-    assert "The distribution check above governs" in text[i:i + 1400]
+    block = text[i:text.index("Do NOT produce Omi-owned", i)]
+    assert "The distribution check above governs" in block

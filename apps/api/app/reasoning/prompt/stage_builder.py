@@ -116,14 +116,14 @@ def _closing_directive(sections: dict) -> str:
         f"The evidence above contains {len(aliases)} accounts: {shown}. Return EXACTLY "
         f"{len(aliases)} items in commenter_assessments, one per alias, none omitted and none "
         "invented, each with all eight signals.\n"
-        "Score each account only from its own row. Co-occurrence in this comment section is "
-        "expected and is not evidence.\n"
-        "Quotes and figures are checked automatically against the rows above before anyone sees "
-        "them: a quote that is not verbatim in that account's own posts, or a number that "
-        "disagrees with its metadata, discards that account's whole assessment. Quote exactly or "
-        "describe instead, and copy figures rather than recalling them.\n"
-        "Write for the creator whose comment section this is: short plain sentences, no jargon, "
-        "and keep every number and quote."
+        "Take every figure and quote from that account's OWN row. Carrying a neighbour's number or "
+        "wording across is the worst error here.\n"
+        "Quotes and figures are machine-checked against the rows: one that does not match discards "
+        "that account's whole assessment. Quote exactly or describe instead.\n"
+        "A mostly-repost, one-subject feed is ordinary use and caps at 49. Nothing reaches 75 "
+        "without a quotable tell: text this account repeated, a scheduler-regular rhythm, or its "
+        "own pitch.\n"
+        "No alias and no mention of another account in the assessment text. Short plain sentences."
     )
 
 
