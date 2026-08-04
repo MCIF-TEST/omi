@@ -185,6 +185,37 @@ Three things now hold it together:
 **Changing the key needs a redeploy of both services, not a restart of one.** `_ISSUER` and
 `_JWKS_CLIENT` are module globals cached for the life of the process.
 
+#### The CSP has to name the production Clerk instance, and it is derived, not hardcoded
+
+Second half of the same outage, and it hit immediately after the keys were fixed. A **development**
+Clerk instance serves clerk-js and its Frontend API from `<slug>.clerk.accounts.dev`, which the
+static wildcards in `middleware.ts` covered. A **production** instance serves both from the
+customer's own subdomain, `clerk.omisphere.online`. A subdomain is a separate origin, so `'self'`
+does not cover it and neither does `https://*.clerk.com`.
+
+So the pk_live deploy had its Clerk script blocked outright, and the symptom named nothing: `useAuth()
+.isLoaded` never turned true, so `AuthFormGate` held its spinner and `/sign-in` span forever with no
+error on the page and nothing server-side at all. The only evidence was a CSP violation in the
+browser console.
+
+- **`clerkOrigins()` derives the origins from `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`** and feeds
+  `script-src` / `connect-src` / `img-src` / `frame-src` / `form-action`, so the policy follows the
+  instance instead of having to be remembered on the day the keys change. It also adds
+  `accounts.<domain>` (the Account Portal, which OAuth and email links hand off to) when the
+  Frontend API is `clerk.<domain>`. A malformed key widens nothing: the decode is validated against a
+  hostname pattern and discarded otherwise.
+- **`atob` needs exact padding.** The live key's payload is 31 characters and needs ONE `=`; the
+  obvious `atob(raw + '==')` throws and silently produced no origins at all. Python's `b64decode` on
+  the API side is lenient about the extra padding, which is why the same line is correct there and
+  wrong here.
+- **The static dev hosts stay**, so a pk_test preview deploy keeps working.
+- **`AuthFormGate` now gives up after 12s** and says the form could not load. A spinner with no
+  terminal state is not a loading state, it is a silent failure, and this one cost a live hour.
+
+Pinned by `apps/web/middleware.test.ts` (8 tests), which asserts the derived origin lands in every
+directive that needs it. Note the key is inlined into the Edge bundle at BUILD time, so changing it
+needs a rebuild of the web service, not a restart.
+
 ### The analyst is batched, sequential, and progressive
 
 For a selection larger than `analyst_batch_accounts` (25), `_generate_batched` in
