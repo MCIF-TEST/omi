@@ -1,123 +1,131 @@
-import { Shield, Database, Cpu, GitBranch, Scale } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { PageMasthead, PageSection } from '@/components/shared/page-masthead';
 
 export const metadata = { title: 'About. OMISPHERE' };
 
+/**
+ * Rebuilt to the front page's grammar, and corrected.
+ *
+ * Two claims on this page had gone stale and were contradicting the rest of the site:
+ *
+ *   · "Today OMISPHERE scans YouTube only" with "X / Twitter ingestion is the next platform on the
+ *     roadmap", directly under a roadmap block on the same page marking X as live.
+ *   · "no LLM calls in the per-scan path. Pure Python heuristics" was true when the engine scored
+ *     every dimension itself. The eight per-signal readings and the written verdict now come from
+ *     the analyst model, with the deterministic engine still producing the OMI score underneath.
+ *
+ * The honest version is also the stronger one, so it is stated plainly below: a deterministic
+ * engine computes the number, a model explains it, and the model's prose is checked back against
+ * the evidence rather than trusted.
+ */
+
 const SECTIONS = [
   {
-    icon: Shield,
-    title: 'What OMISPHERE is not',
+    title: 'What this is not',
     body: (
       <>
-        OMISPHERE is <strong className="text-fg">not a binary &ldquo;bot / not-bot&rdquo; classifier</strong>. Every
-        result is a probability with an explicit evidence chain. We never accuse, we
-        never claim certainty, and we never tell you a person is a bot. We tell you
-        that certain observable patterns are consistent with synthetic or coordinated
-        behavior, and we show you exactly what those patterns are.
+        Not a binary bot classifier. Every result is a probability with an evidence chain attached.
+        The product never asserts that an account is a bot, that anyone was paid, or that a rule was
+        broken. It reports which observable patterns an account&apos;s public behaviour resembles,
+        and shows the patterns.
       </>
     ),
   },
   {
-    icon: Database,
-    title: 'Self-improving',
+    title: 'How a score is made',
     body: (
       <>
-        Every scan adds a behavioral fingerprint to OMISPHERE&apos;s database. Future scans
-        pull priors from that growing set. The platform sharpens with every use, and
-        the intelligence belongs to its users collectively.
+        A deterministic engine computes the 0-to-100 OMI score from public behaviour: posting
+        intervals, text reuse, follower and following ratios, history depth. The analyst model then
+        reads the same evidence, scores the eight detection methods, and writes the verdict. The two
+        are separate on purpose, so the number does not depend on a model&apos;s mood.
       </>
     ),
   },
   {
-    icon: Cpu,
-    title: 'The omi detection engine',
+    title: 'The prose is checked, not trusted',
     body: (
       <>
-        Under the hood, the detection engine is called{' '}
-        <span className="mono text-accent">omi</span>. It runs locally with
-        no LLM calls in the per-scan path. Pure Python heuristics, embeddings, and
-        graph algorithms. LLMs are reserved for optional report generation, never the
-        core scoring.
+        Every quotation the analyst attributes to an account is matched against what that account
+        actually posted, and every figure it states is recomputed from the account&apos;s real
+        metadata. A verdict that fails those checks is withheld rather than published. Asking a
+        model to be careful is not a control.
       </>
     ),
   },
   {
-    icon: GitBranch,
-    title: 'Scope, plainly',
+    title: 'Fingerprints accumulate',
     body: (
       <>
-        Today OMISPHERE scans <span className="text-fg">YouTube</span> only. Videos
-        and channels. Every &ldquo;scan&rdquo; covers a video&apos;s comment thread or a
-        single channel&apos;s recent activity, and consumes one credit. X / Twitter
-        ingestion is the next platform on the roadmap; pricing for X scans will
-        reflect that platform&apos;s higher API cost when it ships.
+        Every scan stores a behavioral fingerprint, so an account checked in March still matches
+        when it appears under a different post in July. The set sharpens with use.
       </>
     ),
   },
   {
-    icon: Scale,
-    title: 'Ethical use',
+    title: 'Who it is for',
     body: (
       <>
-        OMISPHERE is for researchers, journalists, brand-safety teams, and
-        platform-integrity professionals. It is not a tool to harass individuals.
-        Probabilistic patterns are not proof.
+        Researchers, journalists, brand-safety teams, and platform-integrity professionals. It is
+        not a tool for harassing individuals. Probabilistic patterns are not proof, and the product
+        says so on every report it produces.
       </>
     ),
   },
 ];
 
+const ROADMAP = [
+  { platform: 'X', state: 'live', detail: 'Per-account scoring, fingerprinting, posting-history analysis' },
+  { platform: 'YouTube', state: 'live', detail: 'Full comment analysis, per-account scoring, channel intelligence' },
+  { platform: 'Reddit', state: 'Nov 1', detail: 'Post and comment analysis' },
+  { platform: 'TikTok', state: 'Nov 1', detail: 'Comment-section analysis, creator audience intelligence' },
+];
+
 export default function AboutPage() {
   return (
-    <article className="space-y-10">
-      <header>
-        <span className="section-label mb-3">About</span>
-        <h1 className="display text-3xl md:text-4xl font-semibold tracking-tight leading-tight mt-3">
-          Purpose-built bot detection.{' '}
-          <span className="text-brand">Not a wrapper around a chatbot.</span>
-        </h1>
-        <p className="mt-4 text-fg-dim leading-relaxed">
-          OMISPHERE scores the accounts in a comment section: how likely each
-          one is bought, farmed, or automated rather than a real person, on
-          YouTube and X (Twitter). Every finding is a probability with its
-          confidence, the evidence for it, the evidence against it, and a plain
-          English explanation of why the account scored the way it did. Built
-          for OSINT researchers, investigative journalists, and
-          trust-&amp;-safety teams.
-        </p>
-      </header>
+    <article>
+      <PageMasthead
+        index="001"
+        eyebrow="About"
+        title="Purpose-built detection. Not a wrapper around a chatbot."
+        lede="OmiSphere scores the accounts in a comment section on how closely each one resembles bought, farmed or automated behaviour. Every finding carries its confidence, the evidence for it, the evidence against it, and a plain English reason."
+      />
 
-      <div className="space-y-4 stagger">
-        {SECTIONS.map(({ icon: Icon, title, body }) => (
-          <Card key={title} interactive>
-            <div className="flex gap-4">
-              <div className="shrink-0 w-10 h-10 rounded-md bg-accent/[0.08] border border-accent/20 flex items-center justify-center text-accent">
-                <Icon size={18} />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-fg mb-1.5">{title}</h2>
-                <div className="text-sm text-fg-dim leading-relaxed">{body}</div>
-              </div>
+      <div className="border border-border-1 divide-y divide-divider">
+        {SECTIONS.map(({ title, body }, i) => (
+          <div
+            key={title}
+            className="grid grid-cols-[1.75rem_1fr] sm:grid-cols-[1.75rem_13rem_1fr] gap-x-4 sm:gap-x-8 gap-y-1.5 px-4 py-4"
+          >
+            <span className="idx pt-0.5">{String(i + 1).padStart(2, '0')}</span>
+            <h2 className="text-sm font-semibold text-fg">{title}</h2>
+            <div className="col-start-2 sm:col-start-3 text-sm text-fg-mute leading-relaxed min-w-0">
+              {body}
             </div>
-          </Card>
+          </div>
         ))}
       </div>
 
-      {/* Platform roadmap. Relocated from the dashboard: "what's coming" is
-          marketing context, not workspace content. */}
-      <Card>
-        <h2 className="text-base font-semibold text-fg mb-1.5">Platform roadmap</h2>
-        <p className="text-sm text-fg-dim mb-4">
-          Depth over breadth. Deep coordination intelligence on the platforms
-          that matter most.
-        </p>
-        <ul className="space-y-2 text-sm">
-          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">YouTube</span> <span className="text-fg-dim">, live: full comment analysis, per-account scoring, channel intelligence</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-accent shrink-0">✓</span><span><span className="text-fg font-medium">X / Twitter</span> <span className="text-fg-dim">, live: per-account scoring, account fingerprinting, posting-history analysis</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">Reddit</span> <span className="text-fg-dim">, coming soon November 1st: post + comment analysis</span></span></li>
-          <li className="flex gap-3"><span className="font-mono text-fg-faint shrink-0">○</span><span><span className="text-fg font-medium">TikTok</span> <span className="text-fg-dim">, coming soon November 1st: comment-section analysis, creator audience intelligence</span></span></li>
-        </ul>
-      </Card>
+      <PageSection label="Platform roadmap">
+        <dl className="border border-border-1 divide-y divide-divider">
+          {ROADMAP.map(({ platform, state, detail }) => (
+            <div
+              key={platform}
+              className="grid grid-cols-[1fr_auto] sm:grid-cols-[7rem_1fr_auto] gap-x-4 gap-y-1 px-4 py-3.5 items-baseline"
+            >
+              <dt className="text-sm font-semibold text-fg">{platform}</dt>
+              <dd className="col-span-2 sm:col-span-1 sm:col-start-2 text-sm text-fg-mute leading-relaxed min-w-0 order-last sm:order-none">
+                {detail}
+              </dd>
+              <span
+                className="font-mono text-[0.625rem] tracking-[0.14em] uppercase tabular"
+                style={{ color: state === 'live' ? 'var(--tier-low)' : 'var(--text-faint)' }}
+              >
+                {state}
+              </span>
+            </div>
+          ))}
+        </dl>
+      </PageSection>
     </article>
   );
 }

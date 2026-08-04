@@ -1,3 +1,5 @@
+import { PageMasthead } from '@/components/shared/page-masthead';
+
 export const metadata = {
   title: 'Accuracy and scope. OMISPHERE',
   description:
@@ -18,13 +20,10 @@ export const metadata = {
 export default function AccuracyPage() {
   return (
     <article className="space-y-6">
-      <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">
-          Scope and limits
-        </p>
-        <h1 className="text-3xl font-semibold text-fg tracking-tight">Accuracy and scope</h1>
-        <p className="mt-1 font-mono text-2xs text-fg-mute">Last updated: July 2026</p>
-      </header>
+      <PageMasthead index="001" eyebrow="Scope and limits" title="Accuracy and scope" />
+      <p className="font-mono text-[0.625rem] tracking-[0.14em] uppercase text-fg-faint -mt-6">
+        Last updated July 2026
+      </p>
 
       <p className="text-fg-dim leading-relaxed">
         OMISPHERE produces a score, from 0 to 100, describing how closely an account&apos;s public
@@ -122,7 +121,7 @@ export default function AccuracyPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="text-lg font-semibold text-fg mb-2">{title}</h2>
+      <h2 className="display-hard-sm text-xl text-fg mb-2.5">{title}</h2>
       <div className="text-fg-dim leading-relaxed">{children}</div>
     </section>
   );
@@ -130,7 +129,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Callout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-accent/30 bg-accent/[0.06] p-4">
+    <div className="border-l-2 border-accent bg-bg-elev px-4 py-3.5">
       <p className="text-sm text-fg leading-relaxed">{children}</p>
     </div>
   );

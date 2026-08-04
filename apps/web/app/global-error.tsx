@@ -25,8 +25,8 @@ export default function GlobalError({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#09111f',
-          color: '#f8fafc',
+          background: '#010203',
+          color: '#ffffff',
           fontFamily: 'Inter, system-ui, sans-serif',
           padding: '1.5rem',
         }}
@@ -35,7 +35,7 @@ export default function GlobalError({
           <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.75rem' }}>
             Something went wrong
           </h1>
-          <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '1.25rem' }}>
+          <p style={{ fontSize: '0.875rem', color: '#aab2bc', marginBottom: '1.25rem' }}>
             The app hit an unexpected error. Please try again.
           </p>
           <button
@@ -53,7 +53,7 @@ export default function GlobalError({
             Try again
           </button>
           {error.digest && (
-            <p style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#64748b', marginTop: '1rem' }}>
+            <p style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#7b8593', marginTop: '1rem' }}>
               Reference: {error.digest}
             </p>
           )}

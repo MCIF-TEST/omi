@@ -95,7 +95,7 @@ export function MobileNav({
     <>
       {/* Bottom tab bar */}
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border-1 bg-bg/85 backdrop-blur-xl supports-[backdrop-filter]:bg-bg/70 safe-bottom"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border-1 bg-bg safe-bottom"
         aria-label="Primary"
       >
         <div className="flex items-stretch px-1">
@@ -138,7 +138,7 @@ export function MobileNav({
       {sheetOpen && (
         <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="More">
           <div
-            className="sheet-scrim absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="sheet-scrim absolute inset-0 bg-black/75"
             onClick={() => setSheetOpen(false)}
           />
           <div className="sheet-panel absolute inset-x-0 bottom-0 bg-bg-elev border-t border-border-1 rounded-t-2xl shadow-overlay safe-bottom">

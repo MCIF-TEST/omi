@@ -55,16 +55,8 @@ export default async function InvestigationsPage({
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
+      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
         <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <span
-          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-violet/15 blur-3xl"
-          aria-hidden
-        />
-        <span
-          className="pointer-events-none absolute -left-8 bottom-0 h-28 w-28 rounded-full bg-accent/10 blur-2xl"
-          aria-hidden
-        />
         <div className="relative flex items-end justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <span className="section-label inline-flex items-center gap-1.5">

@@ -1,13 +1,14 @@
+import { PageMasthead } from '@/components/shared/page-masthead';
+
 export const metadata = { title: 'Terms. OMISPHERE' };
 
 export default function TermsPage() {
   return (
     <article className="space-y-6">
-      <header>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-2">Legal</p>
-        <h1 className="text-3xl font-semibold text-fg tracking-tight">Terms of Service</h1>
-        <p className="mt-1 font-mono text-2xs text-fg-mute">Last updated: May 2026</p>
-      </header>
+      <PageMasthead index="001" eyebrow="Legal" title="Terms of Service" />
+      <p className="font-mono text-[0.625rem] tracking-[0.14em] uppercase text-fg-faint -mt-6">
+        Last updated May 2026
+      </p>
 
       <p className="text-fg-dim leading-relaxed">
         These terms govern your use of OMISPHERE. By creating an account or using

@@ -65,7 +65,7 @@ export default async function PublicReportPage({ params, searchParams }: PagePro
   return (
     <div className="min-h-screen bg-bg-deep report-page">
       {/* Top banner. Hidden on print */}
-      <div className="no-print border-b border-border-1 bg-bg-elev/60 backdrop-blur sticky top-0 z-10">
+      <div className="no-print border-b border-border-1 bg-bg-elev sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/" aria-label="OMISPHERE home">
             <Logo />

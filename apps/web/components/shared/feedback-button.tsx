@@ -61,7 +61,7 @@ export function FeedbackButton() {
 
       {open && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="Send feedback">
-          <div className="fb-scrim absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={close} />
+          <div className="fb-scrim absolute inset-0 bg-black/75" onClick={close} />
           <div className="fb-panel relative w-full sm:max-w-md bg-bg-elev border border-border-1 rounded-t-2xl sm:rounded-2xl shadow-overlay safe-bottom">
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-divider">
               <h2 className="text-sm font-semibold text-fg inline-flex items-center gap-2">

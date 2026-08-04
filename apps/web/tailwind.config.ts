@@ -62,24 +62,35 @@ const config: Config = {
       fontFamily: {
         // CSS variables injected by next/font on <html> (self-hosted, no CDN CSS).
         sans:    ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Display is Archivo product-wide now, not just on the front page.
+        display: ['var(--font-archivo)', 'var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono:    ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
-        // Pre-login display voice only. Falls back to Inter so stray usage degrades rather than
-        // breaking; see the note in app/layout.tsx for why the app itself does not use it.
         hero:    ['var(--font-archivo)', 'var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         'display-alt': ['var(--font-display-alt)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
+      /**
+       * Instrument corners. The scale is redefined rather than the ~600 call
+       * sites being edited: `rounded-lg` and `rounded-xl` are spread across
+       * every page, so tightening the tokens squares the entire product at
+       * once and, more importantly, keeps it square. A sweep through the call
+       * sites would drift back the first time somebody typed `rounded-xl`
+       * out of habit.
+       *
+       * `full` is untouched: dots, avatars and status pills are round because
+       * round means something there, and TierBadge is the product's primary
+       * output.
+       */
       borderRadius: {
-        DEFAULT: '4px',
-        sm:  '3px',
-        md:  '6px',
-        lg:  '8px',
-        xl:  '12px',
-        '2xl': '16px',
-        '3xl': '20px',
+        DEFAULT: '2px',
+        sm:  '2px',
+        md:  '3px',
+        lg:  '3px',
+        xl:  '4px',
+        '2xl': '4px',
+        '3xl': '6px',
         full: '9999px',
       },
       boxShadow: {

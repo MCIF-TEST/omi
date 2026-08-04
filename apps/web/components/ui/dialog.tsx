@@ -45,7 +45,7 @@ export function Dialog({ open, onClose, children, className, label }: DialogProp
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[16vh] px-4 bg-bg-deep/85 backdrop-blur-md animate-fade-up"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[16vh] px-4 bg-bg-deep/92 animate-fade-up"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
