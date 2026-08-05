@@ -603,6 +603,19 @@ function AssessmentView(
   { a, slug, onRetry, busy }:
   { a: AnalystAssessment; slug: string; onRetry: () => void; busy: boolean },
 ) {
+  // A batched run that is still going is NOT a failed run. `batching.complete === false` means more
+  // batches are queued, and a later one can still land a model-backed result that makes the merged
+  // assessment model-backed. Showing the terminal "could not be produced" notice here contradicts the
+  // progress strip rendered directly above it ("1 of 4 done, 3 more batches to go") and tells the user
+  // the scan failed while it is visibly still working. Wait for the run to finish before judging it.
+  const stillBatching = a.batching ? a.batching.complete === false : false;
+  if (!isModelBacked(a) && stillBatching) {
+    return (
+      <p className="text-sm text-fg-dim">
+        Waiting for the first completed batch. Account scores appear above as each one lands.
+      </p>
+    );
+  }
   // Product-cutover rule: only AI-authored assessments render as AI reasoning. If the model
   // was not reached, the deterministic Floor stood in. We must NOT present its synthesized verdict /
   // headline / assessment / evidence as though the AI wrote it.
