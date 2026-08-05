@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1888 passed, 8 skipped, 1 failed** (7m39s), the failure pre-existing and listed below.
+**1910 passed, 8 skipped, 1 failed** (5m56s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
