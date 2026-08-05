@@ -253,13 +253,24 @@ services:
         value: 'true'
       - key: OMI_ANALYST_PROVIDER
         value: 'openrouter'
+      # MUST match the preset's identifier in the OpenRouter dashboard EXACTLY.
+      # A rename there and not here sends @preset/<old-name>, OpenRouter 404s, and
+      # EVERY scan silently serves the deterministic Floor with no written analysis.
+      # That is exactly what happened when the preset was renamed v1 -> v2.
+      # GET /v1/investigations/analyst/preflight reports this as
+      # preset_or_model_not_found.
       - key: OMI_OPENROUTER_PRESET
-        value: 'omi-master-v1'
+        value: 'omi-master-v2'
       # Secret — set the value in the Render dashboard, never in this file.
       - key: OPENROUTER_API_KEY
         sync: false
-      # OMI_OPENROUTER_MODEL is intentionally UNSET: the omi-master-v1 preset
-      # determines the model. Set it only to intentionally override the preset.
+      # The preset in the dashboard currently has NO model configured ("can be used
+      # with any model"), so the preset alone does not resolve to one and the request
+      # has nothing to route to. Naming the model here layers it onto the preset as
+      # <slug>@preset/<name>, which is the supported form. If a model is later pinned
+      # ON the preset, unset this again so the dashboard stays the single source.
+      - key: OMI_OPENROUTER_MODEL
+        value: 'openai/gpt-5-mini'
       #
       # The model we EXPECT the preset to serve. NOT sent on the wire (so a bad
       # value can never brick the AI path) — after each scan the code compares

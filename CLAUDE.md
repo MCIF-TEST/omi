@@ -1505,6 +1505,28 @@ model's real output ceiling, since a `max_tokens` above what the model allows is
 `governor_reject` means the S1-S9 lint refused valid output. Admins can get the raw capture from
 `POST /v1/investigations/<slug>/analyst/audit`.
 
+### The preset name is a two-sided contract and nothing at runtime reconciles it
+
+The OpenRouter preset was renamed `omi-master-v1` -> `omi-master-v2` in the dashboard.
+`OMI_OPENROUTER_PRESET` in `render.yaml` still said `omi-master-v1`, so every request asked for
+`@preset/omi-master-v1`, OpenRouter answered 404, and **every scan served the deterministic Floor**
+with no written analysis. Same shape as the Clerk instance pairing: two systems, two copies of one
+name, no reconciliation, and a failure that reads as "the AI is broken" rather than "a string is
+stale".
+
+`GET /v1/investigations/analyst/preflight` reports this as `preset_or_model_not_found` and names the
+model reference it tried, which is the whole diagnosis in one line.
+
+A second, separate problem was visible in the same dashboard view: the preset had **no model
+configured** ("can be used with any model"), while `render.yaml` deliberately left
+`OMI_OPENROUTER_MODEL` unset *because the preset was supposed to choose the model*. A preset with no
+model and no override does not resolve to anything. `OMI_OPENROUTER_MODEL` is now pinned to
+`openai/gpt-5-mini`, which layers onto the preset as `openai/gpt-5-mini@preset/omi-master-v2`. If a
+model is ever pinned ON the preset, unset the env var again so the dashboard stays the single source.
+
+**Renaming a preset is a deploy, not a dashboard edit.** The name lives in `render.yaml` as a
+committed `value:`, so a blueprint sync re-applies it and a dashboard-only fix is temporary.
+
 ### The analyst floored on EVERY scan because a validator lived outside the deployed package
 
 This is the one that actually broke the product, and it is a packaging bug wearing a validation bug's

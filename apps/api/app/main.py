@@ -88,7 +88,29 @@ def _log_optional_feature_state() -> None:
         "Error tracking: on" if error_tracking_enabled()
         else "Error tracking: OFF — production failures will only appear in the log stream (set SENTRY_DSN)"
     )
+    # The analyst's canonical validator, reported at BOOT. When it cannot run, every model response is
+    # discarded and every investigation serves the deterministic Floor, with no exception raised
+    # anywhere to say so — the product looks like it is running an analyst and silently produces no
+    # written analysis. That state used to be invisible until somebody read a page. One line here turns
+    # it into the first thing the deploy log says.
+    parts.append(f"Analyst canonical validator: {_validator_state()}")
     logger.info("Optional features: %s", " | ".join(parts))
+
+
+def _validator_state() -> str:
+    """Whether canonical validation can actually run, proven by validating a known-good object rather
+    than by importing something and assuming. Never raises: a boot report must not break the boot."""
+    try:
+        from app.governor.canonical_validate import validate_analyst_response
+
+        errs = validate_analyst_response(
+            {"headline": "x"}, schema={"type": "object", "properties": {"headline": {"type": "string"}}})
+        if any("unavailable" in str(e) for e in errs):
+            return "BROKEN — reports itself unavailable; EVERY scan will fall back to the Floor"
+        return "ok"
+    except Exception as exc:  # noqa: BLE001
+        return (f"BROKEN ({type(exc).__name__}) — EVERY scan will fall back to the Floor and produce "
+                "no written analysis")
 
 
 def _configure_logging() -> None:
