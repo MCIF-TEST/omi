@@ -56,3 +56,44 @@ describe('failureReason', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// A batched run that is still going is not a failed run.
+//
+// Live symptom: the panel showed "SCORING IN BATCHES: 1 OF 4 DONE ... 3 more batches to go" AND
+// "The written analysis could not be produced for this scan" at the same time. The first batch had
+// floored, so isModelBacked() was false over the merged-so-far assessment, and the terminal notice
+// rendered while the run was visibly still working. A later batch can still land a model-backed
+// result. The rule the panel now applies is encoded here so it cannot drift back.
+// ---------------------------------------------------------------------------
+type Batching = { total: number; done: number; batch_size: number; complete: boolean } | undefined;
+
+/** Mirror of the guard in AssessmentView: only judge a run once it has finished. */
+function showsTerminalFailure(modelBacked: boolean, batching: Batching): boolean {
+  const stillBatching = batching ? batching.complete === false : false;
+  if (!modelBacked && stillBatching) return false;
+  return !modelBacked;
+}
+
+describe('when the failed-analysis notice may appear', () => {
+  it('stays hidden while more batches are still queued', () => {
+    // The exact live case: batch 1 of 4 floored, three still to run.
+    expect(showsTerminalFailure(false, { total: 4, done: 1, batch_size: 25, complete: false }))
+      .toBe(false);
+  });
+
+  it('appears once the batched run is over and nothing was model-backed', () => {
+    expect(showsTerminalFailure(false, { total: 4, done: 4, batch_size: 25, complete: true }))
+      .toBe(true);
+  });
+
+  it('appears for a single-shot run that failed, where there is no batching block at all', () => {
+    expect(showsTerminalFailure(false, undefined)).toBe(true);
+  });
+
+  it('never appears for a model-backed result, mid-run or finished', () => {
+    expect(showsTerminalFailure(true, { total: 4, done: 1, batch_size: 25, complete: false }))
+      .toBe(false);
+    expect(showsTerminalFailure(true, undefined)).toBe(false);
+  });
+});
