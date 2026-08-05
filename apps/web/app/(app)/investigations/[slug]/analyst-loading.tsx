@@ -48,7 +48,9 @@ export function AnalystLoading({
               Omi is reading this investigation and scoring every account on its own evidence.
             </p>
             <p className="text-xs text-fg-mute leading-relaxed mt-0.5">
-              It writes each verdict in plain English. A full read can take up to a couple of minutes.
+              It writes each verdict in plain English. Large scans are analysed in batches of 25, one
+              pass each, so a full read can take up to 10 minutes. Accounts appear as each batch
+              lands, and you do not need to stay on this page.
             </p>
           </div>
         </div>
