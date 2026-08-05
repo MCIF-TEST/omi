@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertTriangle, Check, CheckSquare, ClipboardPaste, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { AnalysisProgress } from '@/components/shared/analysis-progress';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
 import { TRIAL_CREDITS_LABEL } from '@/lib/plan';
@@ -650,35 +651,15 @@ function CompilingState() {
   );
 }
 
-// The scan-in-progress state, the intelligence step is running on the selection.
+// The scan-in-progress state. This is the SAME component the investigation page shows while the
+// analyst runs, on purpose: the scan and the analysis are one wait as far as the user is concerned,
+// and giving them two different-looking screens made a single job read as a restart.
 function ScanningState({ count }: { count: number }) {
-  return (
-    <div className="rounded-xl border border-violet-solid/40 bg-violet-solid/[0.06] p-8">
-      <div className="flex items-center gap-4">
-        <span className="relative grid place-items-center w-12 h-12 shrink-0">
-          <span className="ring" aria-hidden />
-          <Radar size={22} className="text-violet-2 radar-spin" />
-        </span>
-        <div>
-          <p className="text-sm text-fg font-medium">
-            Analyzing {count} account{count === 1 ? '' : 's'}…
-          </p>
-          <p className="text-xs text-fg-mute mt-0.5">
-            Pulling each account&apos;s history, detecting coordination, then Omi writes the verdict. This can take a
-            couple of minutes. You&apos;ll be taken to the investigation when it&apos;s ready.
-          </p>
-        </div>
-      </div>
-      <style jsx>{`
-        .radar-spin { animation: spin 1.6s linear infinite; }
-        .ring {
-          position: absolute; inset: 0; border-radius: 999px;
-          border: 1.5px solid color-mix(in oklab, var(--violet-solid) 45%, transparent);
-          border-top-color: var(--violet-2); animation: spin 1s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @media (prefers-reduced-motion: reduce) { .radar-spin, .ring { animation: none; } }
-      `}</style>
-    </div>
-  );
+  const [elapsedSec, setElapsedSec] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const t = setInterval(() => setElapsedSec(Math.round((Date.now() - started) / 1000)), 500);
+    return () => clearInterval(t);
+  }, []);
+  return <AnalysisProgress elapsedSec={elapsedSec} accounts={count} phase="scanning" />;
 }
