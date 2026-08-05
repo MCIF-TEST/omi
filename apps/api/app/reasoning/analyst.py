@@ -1432,7 +1432,17 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     cost = 0.0
     have_usage = False
     batch_traces: list[dict] = []
-    all_model_backed = len(completed) == total_batches
+    # model_backed asks "is the prose in this entry the model's?", and for a run still in progress the
+    # answer is about the batches that HAVE landed, not the ones still queued.
+    #
+    # This used to be seeded `len(completed) == total_batches`, so every partial merge came out
+    # model_backed=False even when every completed batch was genuinely model-authored. A 100-account
+    # scan whose first batch returned 25 real assessments was therefore served as though the Floor had
+    # written it, and the UI refused to render the accounts it already had until the whole run ended.
+    #
+    # Only once the run is OVER does a missing batch make the entry non-model-backed, which is what the
+    # self-heal path keys on to regenerate it.
+    all_model_backed = bool(completed)
     for i, p in completed:
         pt = p.get("investigation_trace") or {}
         if not pt.get("model_backed"):
@@ -1458,6 +1468,11 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
             "endpoint_cost_usd": pt.get("endpoint_cost_usd"),
             "endpoint_latency_ms": pt.get("endpoint_latency_ms"),
         })
+    # Only once the run is OVER does a missing batch make the whole entry non-model-backed. That is
+    # what the self-heal path keys on to regenerate it, and applying it mid-run is what made every
+    # partial merge look like the Floor.
+    if run_finished and len(completed) != total_batches:
+        all_model_backed = False
     if have_usage:
         tr["input_tokens"], tr["output_tokens"], tr["total_tokens"] = in_tok, out_tok, tot_tok
         tr["endpoint_cost_usd"] = round(cost, 6)
