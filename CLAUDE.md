@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1881 passed, 8 skipped, 1 failed** (5m58s), the failure pre-existing and listed below.
+**1888 passed, 8 skipped, 1 failed** (7m39s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -1460,6 +1460,50 @@ Pinned by four source-level tests at the end of `tests/test_report_disputes.py` 
 TypeScript will not tell anyone if the server check is dropped.
 
 ---
+
+### A floored assessment is invisible by construction, and the copy lied about it
+
+Reported 2026-08-05: *every* investigation showed "The AI analysis for this investigation isn't ready
+yet. It runs automatically. Please check back in a moment or scan again shortly."
+
+**That message is not a loading state.** It renders when the run has FINISHED and FAILED. The model
+was unreachable or its output was rejected, the deterministic Floor was persisted as the assessment,
+and `isModelBacked()` is false. The route already holds the loading screen through one automatic
+regeneration (`claim_floor_autorefresh`, exactly once per slug) and only then serves the Floor as
+`status: "ready"`. So "just keep it loading" was already the behaviour, and extending it forever
+would poll every 2.5s against a run that can never succeed while deleting the only signal that the
+analyst is down. Same lesson as the sign-in spinner: **a spinner with no terminal state is not a
+loading state, it is a silent failure.**
+
+Two fixes, and a third thing that still needs the operator.
+
+**The alert.** `persist_assessment` now calls `_report_floor` when `entry_is_model_backed` is false:
+an ERROR log carrying the trace's classified `fallback_reason`, plus `capture_exception` with a typed
+`AnalystFellBackToFloor`. This is the load-bearing point and it is worth stating plainly: **a Floor
+result is a *successful* code path.** Nothing raises, so `background._wrap`'s reporting never fires,
+so the tracker never hears about it, so the only symptom in the entire system is a sentence on a page
+a human has to happen to read. That is exactly how this ran on every scan unnoticed. The alert fires
+BEFORE the write, so a persist failure cannot also swallow it, and it is wrapped so a broken tracker
+can never fail a scan. Pinned by `tests/test_analyst_floor_alerting.py` (7 tests), including the
+inverse: a model-backed assessment must report nothing, because an alert that fires on success is an
+alert people turn off.
+
+**The copy.** `AiUnavailable` promised a result that was never coming and offered no recovery except
+re-running the whole scan, which costs a credit. It now says the written analysis could not be
+produced, names the cause in customer-safe words, states that **every account score below is real and
+unaffected** (only the analyst prose is missing, which the old wording hid), and carries a Retry
+button on the existing `run(true)` / `?refresh=true` path. `lib/analyst-failure.ts` holds the pure
+mapping from `fallback_reason` to a sentence, pinned by `lib/analyst-failure.test.ts`; it returns
+`null` rather than guessing, because a confident wrong explanation about someone's own scan is worse
+than admitting only that it failed.
+
+**The four causes are already classified** by `_fallback_reason` (`reasoning/trace.py:451`) and any
+investigation prints its own with `?verify=1`. `no_model_call` means the credential or provider is
+wrong; `model_output_not_schema_valid_json` means the preset is truncated or the response was cut
+off (worth checking `OMI_ANALYST_COMPLETION_CEILING_TOKENS`, currently 150000, against the served
+model's real output ceiling, since a `max_tokens` above what the model allows is rejected outright);
+`governor_reject` means the S1-S9 lint refused valid output. Admins can get the raw capture from
+`POST /v1/investigations/<slug>/analyst/audit`.
 
 ## Outstanding — needs the user, not code
 

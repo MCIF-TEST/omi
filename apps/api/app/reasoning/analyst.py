@@ -1277,6 +1277,38 @@ def is_generation_inflight(slug: str) -> bool:
         return slug in _autogen_inflight
 
 
+class AnalystFellBackToFloor(Exception):
+    """Raised NOWHERE. It exists only to give the error tracker a typed, greppable event for a
+    floored assessment, which is otherwise a completely silent failure (see ``_report_floor``)."""
+
+
+def _report_floor(inv, assessment: dict, provider: str) -> None:
+    """Make a Floor result LOUD. It is otherwise invisible by construction.
+
+    A floored assessment is a *successful* code path: the model was unreachable or its output was
+    rejected, the deterministic Floor stood in, and nothing raised. ``background._wrap`` only reports
+    exceptions, so the tracker never hears about it, and the only symptom is a customer reading "the
+    AI analysis isn't ready yet" on every investigation. That is exactly how this went unnoticed
+    across every scan until someone looked at the screen.
+
+    The trace already classifies WHY (``fallback_reason``), so log that rather than a bare "it
+    floored", and hand the tracker a typed exception so the alert is greppable and groupable.
+    Best-effort throughout: monitoring must never be able to fail the thing it monitors.
+    """
+    try:
+        trace = (assessment or {}).get("investigation_trace") or {}
+        reason = trace.get("fallback_reason") or "unclassified"
+        slug = getattr(inv, "slug", "?")
+        logger.error(
+            "analyst FLOORED inv=%s provider=%s reason=%s status=%s model=%s "
+            "(the customer sees the 'analysis not ready' notice for this investigation)",
+            slug, provider, reason, trace.get("response_status"), trace.get("served_model"),
+        )
+        capture_exception(AnalystFellBackToFloor(f"{slug}: {reason}"))
+    except Exception:  # noqa: BLE001 — a broken alert must never break the scan
+        logger.exception("failed to report a floored analyst assessment")
+
+
 def persist_assessment(session, inv, assessment: dict, provider: str) -> dict:
     """Cache the assessment inside payload_json. SAVEPOINT-isolated so a write hiccup
     can never corrupt the surrounding transaction (Platform Guardian §4)."""
@@ -1285,6 +1317,10 @@ def persist_assessment(session, inv, assessment: dict, provider: str) -> dict:
         "provider": provider,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+    # Alert BEFORE the write, so a persist failure cannot also swallow the alert. Reuses the same
+    # predicate the route and the UI use, so all three agree on what "the model wrote this" means.
+    if not entry_is_model_backed(entry):
+        _report_floor(inv, assessment, provider)
     try:
         with session.begin_nested():
             # Reassign so SQLAlchemy detects the JSON mutation.

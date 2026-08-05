@@ -9,6 +9,7 @@ import { AnalystLoading } from './analyst-loading';
 import { SignalBreakdown } from '@/components/shared/signal-breakdown';
 import { ExportResults } from '@/components/shared/export-results';
 import type { ScannedAccount } from '@/lib/investigation-export';
+import { failureReason } from '@/lib/analyst-failure';
 import {
   apiClient,
   ApiError,
@@ -225,7 +226,12 @@ export function AnalystPanel({
               scored={assessment.commenter_assessments?.length ?? 0}
             />
           )}
-          <AssessmentView a={assessment} slug={slug} />
+          <AssessmentView
+            a={assessment}
+            slug={slug}
+            onRetry={() => { lastBatchDoneRef.current = 0; void run(true); }}
+            busy={pending}
+          />
           {/* The same live state repeated where the results END: the user reading down the list
               reaches the last scored account here, and needs to know more are still coming rather
               than assuming the scan stopped short. */}
@@ -593,11 +599,14 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
   );
 }
 
-function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
+function AssessmentView(
+  { a, slug, onRetry, busy }:
+  { a: AnalystAssessment; slug: string; onRetry: () => void; busy: boolean },
+) {
   // Product-cutover rule: only AI-authored assessments render as AI reasoning. If the model
   // was not reached, the deterministic Floor stood in. We must NOT present its synthesized verdict /
   // headline / assessment / evidence as though the AI wrote it.
-  if (!isModelBacked(a)) return <AiUnavailable a={a} />;
+  if (!isModelBacked(a)) return <AiUnavailable a={a} onRetry={onRetry} busy={busy} />;
 
   return (
     <div className="space-y-5">
@@ -666,20 +675,44 @@ function AssessmentView({ a, slug }: { a: AnalystAssessment; slug: string }) {
   );
 }
 
-// The AI analysis couldn't be produced for this investigation (rare, the pipeline auto-retries a fresh
-// model call once). Users see a clean, friendly notice; the technical forensic diagnostic is shown ONLY
-// in dev/verification mode. We never present the deterministic Floor's synthesis as if the AI wrote it.
-function AiUnavailable({ a }: { a: AnalystAssessment }) {
+// The written analysis could not be produced for this scan. This is a FINISHED state, not a pending
+// one: the run completed, the model was unreachable or its answer was rejected, and the deterministic
+// Floor stood in. The old copy here said "isn't ready yet, check back in a moment", which described a
+// pending state that no longer existed and left the user with nothing to do but re-run the whole scan
+// and spend another credit. It also read as though nothing worked, when in fact every account score
+// below is real. Say what happened, keep the scores, and offer the free retry.
+// The technical forensic diagnostic stays behind verification mode.
+function AiUnavailable(
+  { a, onRetry, busy }: { a: AnalystAssessment; onRetry: () => void; busy: boolean },
+) {
   const t = a.investigation_trace ?? {};
   const verbose = verificationEnabled();
+  const reason = failureReason(t);
   return (
-    <div className="text-sm text-fg-dim flex items-start gap-2">
-      <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
-      <span>
-        The AI analysis for this investigation isn’t ready yet. It runs automatically. Please check back
-        in a moment or scan again shortly.
-        {verbose && <AiUnavailableDiagnostics t={t} governanceProvider={a.governance?.provider} />}
-      </span>
+    <div className="rounded-lg border border-warn/35 bg-warn/[0.07] px-3.5 py-3 space-y-2.5">
+      <div className="flex items-start gap-2.5">
+        <TriangleAlert size={14} className="mt-0.5 shrink-0 text-warn" />
+        <div className="text-sm text-fg-dim leading-relaxed flex-1 min-w-[12rem]">
+          <p>
+            The written analysis could not be produced for this scan.
+            {reason ? ` ${reason}` : ''}
+          </p>
+          <p className="mt-1.5 text-xs text-fg-mute">
+            Every account score below is complete and unaffected. Only the Omi Analyst&rsquo;s written
+            read is missing. Retrying runs a fresh analysis and does not cost a credit.
+          </p>
+          {verbose && <AiUnavailableDiagnostics t={t} governanceProvider={a.governance?.provider} />}
+        </div>
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={busy}
+          className="btn-slab h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 text-fg-dim disabled:opacity-40 shrink-0"
+        >
+          {busy ? <Loader2 size={12} className="animate-spin" /> : null}
+          Retry analysis
+        </button>
+      </div>
     </div>
   );
 }
