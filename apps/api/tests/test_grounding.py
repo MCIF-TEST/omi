@@ -14,7 +14,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from app.reasoning.grounding import (
+    HARD,
     WITHHELD_NOTICE,
+    check_alias_in_prose,
     check_boilerplate,
     check_coherence,
     check_figures,
@@ -138,6 +140,63 @@ def test_a_figure_with_no_ground_truth_is_left_alone():
     """Silence in the evidence is not a licence to accuse, and not a licence to flag either."""
     assert check_figures("It has 12,000 followers.",
                          _account(follower_count=None)) == []
+
+
+# --------------------------------------------------------------------------------------------- #
+# False positives: every one of these was withholding a TRUE paragraph in production
+#
+# A HARD violation deletes a paragraph a customer paid for and replaces it with a notice, so a
+# checker bug here is not a missing feature, it is the product silently refusing its own correct
+# work. Each case below is a sentence the protocol actively ASKS the model to write.
+# --------------------------------------------------------------------------------------------- #
+def test_a_subset_of_the_history_is_not_a_wrong_post_count():
+    """The 75+ gate demands subset counts, so flagging them punished the required behaviour.
+
+    "six posts inside one hour" is consistent with a 42-post history. Only a number ABOVE the
+    history describes posts that do not exist, which is why the post comparison is one-directional.
+    """
+    acct = _account(history_size=42)
+    assert check_figures("In one hour it published 6 posts with near-identical wording.", acct) == []
+    assert check_figures("Three of its 42 posts repeat the same line.", acct) == []
+    assert check_figures("It posted 12 replies in a single day.", acct) == []
+    # ...but a count the history cannot support is still a fabrication.
+    assert [v.code for v in check_figures("It has posted 900 times.", acct)] == ["figure_mismatch"]
+
+
+def test_a_ratio_stated_the_other_way_up_is_still_a_true_figure():
+    """Following-to-followers is what the protocol asks for; the inverse is the same fact inverted.
+
+    Withholding a paragraph because the model named a true ratio in the other orientation is a
+    checker bug, not a fabrication.
+    """
+    acct = _account(follower_count=1200, following_count=300)  # following/followers = 0.25
+    assert check_figures("A following-to-followers ratio of 0.25 is unremarkable.", acct) == []
+    assert check_figures("A followers-to-following ratio of 4.0 is unremarkable.", acct) == []
+    assert check_figures("The ratio of 300:1200 is healthy.", acct) == []
+    assert [v.code for v in check_figures("A ratio of 39 to 1.", acct)] == ["figure_mismatch"]
+
+
+def test_counting_accounts_is_not_a_claim_about_who_it_follows():
+    """A bare "N accounts" was compared against the following count and withheld true paragraphs."""
+    acct = _account(following_count=300)
+    assert check_figures("It is one of 4 accounts in this batch using that phrasing.", acct) == []
+    assert check_figures("Two accounts posted the same sentence.", acct) == []
+    # The contamination this check exists for names the verb, and is still caught.
+    assert [v.code for v in check_figures(
+        "It follows 1,281 accounts while only 505 follow back.", acct)] == ["figure_mismatch"]
+
+
+def test_an_alias_inside_a_quotation_is_the_accounts_words_not_a_leaked_label():
+    """`[AC]\\d{1,3}` matches plenty of things real people write, and they arrive inside quotes.
+
+    An internal label only leaks in NARRATION, so narration is what is scanned. Three of five
+    realistic paragraphs were being withheld over "C4" (the broadcaster), "C19" and "the A1".
+    """
+    assert check_alias_in_prose('It posted "Channel 4 and C4 news are the same thing" twice.') == []
+    assert check_alias_in_prose('Wrote "I got my C19 booster today" in January.') == []
+    assert check_alias_in_prose('It quoted "the A1 is closed again" about the motorway.') == []
+    # A label in the model's own words is still HARD: the reader has never seen the legend.
+    assert [v.severity for v in check_alias_in_prose("A17 is a 2009 account.")] == [HARD]
 
 
 # --------------------------------------------------------------------------------------------- #

@@ -199,12 +199,22 @@ _NUM = r"([0-9][0-9,]*(?:\.[0-9]+)?)"
 # inside "followers", so "1,200 followers" was read as a FOLLOWING count and compared against the
 # wrong ground truth. Every clean paragraph in the test fixture failed on it.
 _FOLLOWERS_RE = re.compile(_NUM + r"\s+followers\b", re.I)
+#: Only a phrase that actually says "follows N" counts as a following claim. A bare "N accounts" was
+#: here once and was a false-positive machine: "one of 4 accounts in this batch", "3 accounts posted
+#: the same line" are ordinary sentences that got compared against the following count and withheld a
+#: true paragraph. The live contamination this check exists to catch ("following 1,281 people while
+#: only 505 follow back") is caught by the verb form, so nothing is lost by dropping the bare one.
+_HEDGE = r"(?:about\s+|around\s+|roughly\s+|~\s*|just\s+|only\s+|over\s+|under\s+)?"
 _FOLLOWING_RE = re.compile(
-    r"follow(?:s|ing)\s+" + _NUM + r"\b(?!\s*followers)|" + _NUM + r"\s+accounts?\b", re.I)
-_POSTS_RE = re.compile(_NUM + r"\s+(?:posts?|tweets?|replies)\b", re.I)
+    r"follow(?:s|ing)\s+" + _HEDGE + _NUM + r"\b(?!\s*followers)", re.I)
+_POSTS_RE = re.compile(
+    _NUM + r"\s+(?:posts?|tweets?|replies)\b|posted\s+" + _HEDGE + _NUM + r"\s+times?\b", re.I)
 _DAYS_RE = re.compile(_NUM + r"\s*days?\s*old", re.I)
 _YEARS_RE = re.compile(_NUM + r"\s*years?\s*old", re.I)
-_RATIO_RE = re.compile(r"ratio\s+(?:of\s+)?" + _NUM, re.I)
+#: A ratio may be written as a decimal ("a ratio of 1.19") or as a pair ("a ratio of 600:505"). Both
+#: are true statements about the same account, so both are accepted and the pair is divided out.
+_RATIO_RE = re.compile(
+    r"ratio\s+(?:of\s+)?" + _NUM + r"(?:\s*[:/]\s*" + _NUM + r")?", re.I)
 
 
 def _f(raw: str) -> float | None:
@@ -242,19 +252,28 @@ def check_figures(assessment: str, account: dict | None) -> list[Violation]:
     Only figures with a known ground truth are checked. A number this account has no value for is
     left alone rather than guessed at: silence in the evidence is not a licence to accuse, and it is
     not a licence to flag either.
+
+    Post counts are compared in ONE DIRECTION, and that is the important subtlety. The protocol
+    *requires* the model to name subsets of the history ("near-identical text on two of its own
+    posts", "six posts inside one hour"), and every one of those is legitimately smaller than the
+    total. Flagging them cost real paragraphs. A number BELOW the history is consistent with the
+    evidence; only a number above it describes posts that do not exist.
     """
     if not isinstance(account, dict):
         return []
     text = assessment or ""
     out: list[Violation] = []
 
-    def compare(pattern: re.Pattern, actual, label: str, tol: float) -> None:
+    def compare(pattern: re.Pattern, actual, label: str, tol: float,
+                over_only: bool = False) -> None:
         if actual is None:
             return
         for m in pattern.finditer(text):
             raw = next((g for g in m.groups() if g), None)
             stated = _f(raw) if raw else None
             if stated is None:
+                continue
+            if over_only and stated <= float(actual) * (1.0 + tol):
                 continue
             if _off_by(stated, float(actual), tol):
                 out.append(Violation(
@@ -268,7 +287,7 @@ def check_figures(assessment: str, account: dict | None) -> list[Violation]:
 
     compare(_FOLLOWERS_RE, followers, "followers", COUNT_TOLERANCE)
     compare(_FOLLOWING_RE, following, "following", COUNT_TOLERANCE)
-    compare(_POSTS_RE, posts, "posts", COUNT_TOLERANCE)
+    compare(_POSTS_RE, posts, "posts", COUNT_TOLERANCE, over_only=True)
 
     age = _age_days(account)
     compare(_DAYS_RE, age, "age in days", AGE_TOLERANCE)
@@ -276,7 +295,36 @@ def check_figures(assessment: str, account: dict | None) -> list[Violation]:
         compare(_YEARS_RE, age / 365.25, "age in years", AGE_TOLERANCE)
 
     if followers not in (None, 0) and following is not None:
-        compare(_RATIO_RE, float(following) / float(followers), "the ratio", RATIO_TOLERANCE)
+        out.extend(_check_ratio(text, float(following) / float(followers)))
+    return out
+
+
+def _check_ratio(text: str, actual: float) -> list[Violation]:
+    """A ratio is accepted in either direction, and as a pair.
+
+    ``_CHECKABLE_CLAIMS`` asks for following-to-followers, but a model that writes the inverse and
+    labels it correctly has stated a TRUE figure about the account. Withholding that paragraph
+    punishes the model for naming the same fact the other way up, which is a checker bug rather than
+    a fabrication. So both orientations pass, and a pair ("a ratio of 600:505") is divided out first.
+    """
+    out: list[Violation] = []
+    if actual <= 0:
+        return out
+    inverse = 1.0 / actual
+    for m in _RATIO_RE.finditer(text):
+        left, right = _f(m.group(1)), _f(m.group(2)) if m.group(2) else None
+        if left is None:
+            continue
+        stated = left if right is None else (left / right if right else None)
+        if stated is None:
+            continue
+        if (not _off_by(stated, actual, RATIO_TOLERANCE)
+                or not _off_by(stated, inverse, RATIO_TOLERANCE)):
+            continue
+        out.append(Violation(
+            "figure_mismatch", HARD,
+            f"said the ratio {stated:g}, evidence says {actual:g} (or {inverse:g} inverted)",
+        ))
     return out
 
 
@@ -375,8 +423,17 @@ def check_alias_in_prose(assessment: str) -> list[Violation]:
 
     HARD, unlike the style check below, because this is not a matter of taste: the sentence is about
     an entity the reader cannot resolve, so as published prose it is unverifiable by construction.
+
+    QUOTED TEXT IS EXCLUDED, and that exclusion is the difference between this rule working and this
+    rule destroying good assessments. `[AC]\\d{1,3}` matches plenty of things real people write:
+    "C4" (the broadcaster), "C19", "the A1" (the road), model and part numbers. Those arrive inside a
+    verbatim quote of the account's OWN post, where they are the account's words, not our label
+    leaking. Scanning them withheld correct paragraphs for quoting accurately, which is the opposite
+    of what this is for. An alias leaks in NARRATION ("A17 is a 2009 account"), so narration is what
+    is scanned.
     """
-    found = sorted(set(_ALIAS_RE.findall(assessment or "")))
+    narration = _QUOTE_RE.sub(" ", assessment or "")
+    found = sorted(set(_ALIAS_RE.findall(narration)))
     if not found:
         return []
     return [Violation(

@@ -549,6 +549,47 @@ The protocol now tells the model the check exists, which is the strongest prompt
 plain-English rule. Recompiled to **`map:ac15ee80f4237b3276877ed6`, 84,116 chars**. Pinned by
 `tests/test_grounding.py` (33 tests).
 
+#### A HARD check that over-fires deletes work the customer paid for
+
+Reported 2026-08-05: assessments were being withheld on the live site. **Four checker bugs, and each
+one was firing on a sentence the protocol actively ASKS the model to write.** A probe of realistic
+prose flagged 3 of 5 paragraphs on the alias rule and 5 of 12 on figures. The direction of the error
+matters: a false HARD is not a missing feature, it is the product refusing its own correct work and
+showing a notice instead, and the customer already paid a credit for it.
+
+- **Aliases inside QUOTATIONS.** `_ALIAS_RE` is `[AC]\d{1,3}`, which matches plenty of things real
+  people write: "C4" (the broadcaster), "C19", "the A1" (the road), model and part numbers. Those
+  arrive inside verbatim quotes of the account's own posts. An internal label only leaks in
+  **narration**, so `check_alias_in_prose` now strips quoted spans before scanning. A label in the
+  model's own words is still HARD.
+- **Post counts are compared in ONE DIRECTION only.** The 75-100 mechanical gate *requires* subset
+  counts ("near-identical text on two of its own posts", "six posts inside one hour"), and every one
+  of those is legitimately smaller than the history. They were being compared against the total and
+  withheld. A number below the history is consistent with the evidence; only a number **above** it
+  describes posts that do not exist. This also closed a false negative, since `posted N times` was
+  not matched at all.
+- **A ratio stated the other way up is the same true fact.** `_CHECKABLE_CLAIMS` asks for
+  following-to-followers, but a model writing "a followers-to-following ratio of 4.0" and labelling
+  it correctly has stated a true figure. `_check_ratio` accepts either orientation and divides out a
+  pair form ("a ratio of 300:1200"), which was previously read as the bare number 300.
+- **A bare `N accounts` was read as a following count.** "one of 4 accounts in this batch" got
+  compared against `following_count`. The alternative is deleted; the live contamination this check
+  exists for ("following 1,281 people while only 505 follow back") names the verb and is still
+  caught.
+
+The prompt half ships with it, because a checker that only *tolerates* good output leaves the model
+guessing at the forms that survive. `_CHECKABLE_CLAIMS` gained the mechanical rules: copy a quote
+character for character out of ONE row (no merging two posts, no tidying spelling, no translating),
+shorten with `...` and only the head is matched, state the two counts beside any ratio, say which
+whole a subset count belongs to, and drop a figure you are unsure of rather than lose the paragraph
+to it.
+
+Pinned by the false-positive section of `tests/test_grounding.py`. **Every case there is a sentence
+the protocol demands**, which is the standard for adding to it: if a HARD rule fires on prose the
+constitution asks for, the rule is wrong, not the model. Recompiled to
+**`map:feec389425014663a2b23cc3`, 101,754 chars**, zero em dashes, all drift guards green.
+`package_hash` → `pkg:3e7f63fdd9456ddc1554ede4`. Constitution block count unchanged at 19.
+
 ### The protocol used to contradict itself about verdict length
 
 Found while auditing for quality, and the most likely single cause of thin per-account reads. The
