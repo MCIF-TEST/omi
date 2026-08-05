@@ -209,6 +209,116 @@ def analyst_runtime_status(current: CurrentUser = Depends(require_user)) -> dict
     return status
 
 
+# One remedy per probe failure, phrased as the action the operator takes. Keyed on the reasons
+# OpenRouterReasoningProvider.probe() returns, so a new reason there fails loudly here (no remedy) rather
+# than being silently described as a generic error.
+_PROBE_REMEDIES: dict[str, str] = {
+    "no_api_key": "Set OPENROUTER_API_KEY on the API service (it is sync:false in render.yaml, so it "
+                  "lives in the dashboard and is never committed).",
+    "bad_api_key": "OPENROUTER_API_KEY is set but the gateway rejected it. Issue a new key and paste it "
+                   "on the API service. A key rotated at the provider and never updated here is the "
+                   "usual cause.",
+    "no_credit": "The OpenRouter account has no remaining credit. Top it up.",
+    "preset_or_model_not_found": "The gateway does not recognise the model reference {model_ref!r}. "
+                                 "Confirm the preset exists and its slug matches OMI_OPENROUTER_PRESET.",
+    "rate_limited": "The gateway is rate limiting this key right now. Retry shortly.",
+    "timeout": "The gateway did not respond in time.",
+    "unreachable": "Could not reach the gateway from this service (network or DNS).",
+    "no_preset_or_model": "Set OMI_OPENROUTER_PRESET (or OMI_OPENROUTER_MODEL) on the API service.",
+    "provider_build_failed": "The provider could not be constructed from the current configuration.",
+    "http_error": "The gateway returned an unexpected status. The detail above is its own message.",
+}
+
+
+@router.get("/analyst/preflight")
+def analyst_preflight(current: CurrentUser = Depends(require_user)) -> dict:
+    """Can this deployment produce an AI analysis RIGHT NOW? Answered against the live gateway.
+
+    ``/analyst/status`` above is config-only: it reports ``ready_for_live_model`` when the API key is
+    merely PRESENT and a preset name is set. A revoked key, a renamed or truncated preset, and an
+    exhausted balance all pass that check and then fail on EVERY scan, each one silently persisting the
+    deterministic Floor. Point anyone debugging "the AI analysis isn't working" here first, exactly as
+    ``/v1/billing/preflight`` is the first stop for "billing doesn't work".
+
+    Makes one minimal, near-free model call. Never returns the API key.
+    """
+    settings = get_settings()
+    status = analyst.runtime_status(settings)
+    checks: list[dict] = []
+    steps: list[str] = []
+
+    enabled = bool(getattr(settings, "analyst_enabled", False))
+    checks.append({"name": "analyst_enabled", "ok": enabled,
+                   "detail": "OMI_ANALYST_ENABLED is true." if enabled
+                             else "OMI_ANALYST_ENABLED is not true, so no model is ever called."})
+    if not enabled:
+        steps.append("Set OMI_ANALYST_ENABLED=true on the API service.")
+
+    provider_sel = str(getattr(settings, "analyst_provider", "") or "").lower()
+    checks.append({"name": "provider", "ok": provider_sel in ("openrouter", "huggingface"),
+                   "detail": f"OMI_ANALYST_PROVIDER={provider_sel or '(unset)'}"})
+
+    # The live half. Only OpenRouter is probed: it is the production path, and probing the deprecated
+    # HF path would mean standing up a second transport for a route nobody deploys.
+    #
+    # NOTE: build_remote_provider() constructs the HUGGING FACE provider and returns None without an HF
+    # endpoint — it is not the OpenRouter builder. Construct the same provider the analyst does, from
+    # the same settings, or this route proves nothing about the path that actually runs.
+    probe: dict | None = None
+    if provider_sel == "openrouter":
+        from app.reasoning.model_providers.openrouter import (
+            OPENROUTER_URL,
+            OpenRouterReasoningProvider,
+        )
+
+        try:
+            provider = OpenRouterReasoningProvider(
+                base_url=str(getattr(settings, "openrouter_base_url", OPENROUTER_URL) or OPENROUTER_URL),
+                model=getattr(settings, "openrouter_model", None),
+                preset=getattr(settings, "openrouter_preset", None),
+                referer=getattr(settings, "openrouter_referer", None),
+                title=getattr(settings, "openrouter_title", None),
+            )
+            probe = provider.probe()
+        except Exception as exc:  # noqa: BLE001 — a diagnostic must never 500
+            probe = {"ok": False, "reason": "provider_build_failed",
+                     "detail": f"{type(exc).__name__}: {str(exc)[:200]}"}
+        # Always recorded, even on success: a preflight whose live check silently did not run would
+        # report ready for the same reason /analyst/status already does, which is the whole bug.
+        checks.append({"name": "gateway_reachable", "ok": bool(probe.get("ok")),
+                       "detail": str(probe.get("detail") or "")[:400]})
+        remedy = _PROBE_REMEDIES.get(str(probe.get("reason") or ""))
+        if remedy:
+            steps.append(remedy.format(model_ref=probe.get("model_ref")))
+    else:
+        checks.append({
+            "name": "gateway_reachable", "ok": False,
+            "detail": f"No live check exists for provider {provider_sel or '(unset)'!r}, so this "
+                      "deployment's ability to reach a model is unverified.",
+        })
+        steps.append("Set OMI_ANALYST_PROVIDER=openrouter to use the production path.")
+
+    # The model actually served vs the one we expect. Today this is only checked AFTER a scan has been
+    # paid for (served_model_verified on the trace); here it costs nothing.
+    expected = (getattr(settings, "openrouter_expected_model", "") or "").strip()
+    served = (probe or {}).get("served_model")
+    if expected and served:
+        match = str(served).startswith(expected) or str(expected).startswith(str(served))
+        checks.append({"name": "served_model", "ok": match,
+                       "detail": f"expected {expected!r}, gateway served {served!r}"})
+
+    ready = all(c["ok"] for c in checks)
+    return {
+        "ready": ready,
+        "checks": checks,
+        "next_steps": steps,
+        "config_only_status": {k: status.get(k) for k in
+                               ("active_provider", "ready_for_live_model", "blockers")},
+        "note": ("config_only_status is what /analyst/status reports. It can say ready while this "
+                 "endpoint says not ready: that gap is the bug this route exists to expose."),
+    }
+
+
 @router.get("/analyst/integrity")
 def analyst_integrity(current: CurrentUser = Depends(require_user)) -> dict:
     """Live AI integration diagnostics (Sprint 018): prompt integrity (the Prompt Registry is the
