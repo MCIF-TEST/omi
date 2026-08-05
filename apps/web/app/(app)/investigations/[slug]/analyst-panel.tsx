@@ -36,6 +36,20 @@ const POLL_INTERVAL_MS = 2500;
 // "10 minutes without visible progress". A scan that keeps delivering batches is never cut off here.
 const MAX_POLLS = 240;
 
+// A transport failure is not an answer, so it must not end the wait.
+//
+// A batched run polls every 2.5s for up to 10 minutes, which is ~240 fetches. Treating ONE failed
+// fetch as terminal meant a single dropped connection anywhere in that sequence threw away a
+// generation that was still running on the server, and the customer had already paid a credit for
+// it. It fires most reliably during an API restart, which is exactly when a deploy is going out.
+//
+// So a dropped connection is retried with backoff and only reported once the API has been
+// unreachable for about a minute. These retries deliberately do NOT consume the poll budget: that
+// budget measures "how long since the analyst last made progress", and a failed request is not
+// evidence either way.
+const MAX_TRANSPORT_FAILS = 6;
+const TRANSPORT_BACKOFF_CAP_MS = 15000;
+
 // Dev-only Production Verification Mode (Phase 5C). OFF for normal users; enabled on demand with the
 // URL query `?verify=1` (or `?debug=1`), or always-on where the deploy sets NEXT_PUBLIC_OMI_VERIFY_MODE=1.
 // Purely a read-only diagnostic surface over the existing forensic trace, it changes no data.
@@ -99,10 +113,13 @@ export function AnalystPanel({
     startRef.current = Date.now();
     setPending(true);
     let polls = 0;
+    let transportFails = 0;
 
     const step = async (doRefresh: boolean): Promise<void> => {
       try {
         const r = await post(doRefresh);
+        // The API answered, so whatever the answer is, the connection is healthy again.
+        transportFails = 0;
         // A SAVED assessment (model-backed, or the deterministic floor) is the previous result. Show
         // it as-is. We never force a re-run on open; the backend alone decides when an inconclusive
         // (floored) result is worth regenerating, and does so exactly once, returning 202 while it runs.
@@ -135,6 +152,18 @@ export function AnalystPanel({
         }
         pollRef.current = setTimeout(() => { void step(false); }, POLL_INTERVAL_MS);
       } catch (e) {
+        // A dropped connection, or a gateway that has no server to talk to, says nothing about the
+        // generation. Both happen while the API restarts. Ride them out rather than discarding a run
+        // that is still going. 503 is deliberately NOT here: our own API returns it to mean the
+        // analyst is switched off, which is a real answer and not a transport fault.
+        const transport = e instanceof TypeError
+          || (e instanceof ApiError && (e.status === 502 || e.status === 504));
+        if (transport && ++transportFails <= MAX_TRANSPORT_FAILS) {
+          const wait = Math.min(POLL_INTERVAL_MS * 2 ** (transportFails - 1),
+                                TRANSPORT_BACKOFF_CAP_MS);
+          pollRef.current = setTimeout(() => { void step(false); }, wait);
+          return;
+        }
         if (e instanceof ApiError && e.status === 503) {
           setDisabled(true);
         } else if (e instanceof ApiError) {
@@ -147,9 +176,9 @@ export function AnalystPanel({
           // and it used to be reported with the same generic sentence, which hid the distinction that
           // matters most when diagnosing: was the API even reached?
           setError(
-            'Lost the connection to the analysis service before it answered. The generation often ' +
-            'keeps running on the server. Reload in a minute to pick it up. If it keeps happening, ' +
-            'the API may be restarting.',
+            'Could not reach the analysis service for about a minute, after several retries. Your ' +
+            'analysis is most likely still running on the server, and no credit is spent by ' +
+            'waiting. Reload the page in a minute to pick it up.',
           );
         } else {
           setError(e instanceof Error && e.message ? e.message : 'Failed to generate the assessment.');
