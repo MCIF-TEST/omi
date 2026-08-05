@@ -125,7 +125,7 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     # (b), the 9-15% base-rate anchor, WHAT THIS METHOD CANNOT SEE, and ai_writing narrowed and
     # barred from the 50+/75+ quorum.
     # Bump this pin deliberately whenever the protocol text changes on purpose.
-    assert pp.manifest["package_hash"] == "pkg:9419a4dd71d9916953afec07"
+    assert pp.manifest["package_hash"] == "pkg:3e7f63fdd9456ddc1554ede4"
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 
