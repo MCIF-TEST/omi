@@ -4,7 +4,7 @@ Generated from the live code. Two pieces, and only ONE of them travels on the wi
 
 ## 1. The system prompt: your preset (NOT sent per request)
 
-Compiled Master Analyst Protocol, **93,440 chars**, hash `map:1b2d1dc15d37fc4ea0b9b20a`.
+Compiled Master Analyst Protocol, **100,478 chars**, hash `map:5389ce7bc0376b7ef8f2668a`.
 Version `map/prompt:v1+constitution:v10+framework:v1+template:citmpl-v9`.
 
 This lives in your OpenRouter dashboard preset `omi-master-v1`. The repository is the source of

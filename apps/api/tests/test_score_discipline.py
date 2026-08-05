@@ -163,11 +163,26 @@ def test_nothing_reaches_the_top_band_without_a_mechanical_tell(protocol):
     assert "THE MECHANICAL GATE" in protocol
     assert "NOTHING REACHES 75 WITHOUT ONE" in protocol
     for tell in ("the same or near-identical text on two or more of this account's OWN posts",
-                 "posting intervals regular enough that a scheduler",
+                 "a posting rhythm a person does not produce",
                  "an explicit commercial or engagement pitch",
-                 "a numbered or templated campaign sequence"):
+                 "a numbered or templated campaign sequence",
+                 # v11 added two, both quotable and both from the research: a resold aged account
+                 # shows as a break in its own continuity, and the one reliable AI tell is the
+                 # generator's own boilerplate left in the text.
+                 "a break in the account's own continuity",
+                 "machine boilerplate in the account's own text"):
         assert tell in protocol, f"the gate must list {tell!r}"
     assert "can never BE the mechanical tell" in protocol
+
+
+def test_the_rhythm_tell_carries_a_method_and_not_just_a_name(protocol):
+    """The bundle has always shipped a created_at per post and the protocol never said to read it,
+    so 'scheduler-regular' was a vibe the model could assert without arithmetic. The tell now names
+    what to compute and what a human pattern looks like, so it can be checked by a reader."""
+    assert "WORK IT OUT from the" in protocol and "created_at" in protocol
+    assert "no multi-hour quiet period" in protocol
+    # The human inverse has to travel with it or the method just manufactures a new false positive.
+    assert "posting at similar times each day is a routine" in protocol
 
 
 def test_a_single_dimension_cannot_carry_a_high_score(protocol):
@@ -223,8 +238,11 @@ def test_the_worked_example_demonstrates_the_heavy_reposter(protocol):
     assert '"ref": "A4", "omi_score": 22, "suspicion_tier": "low"' in protocol
     assert "Forty-six of the fifty collected posts are reposts" in protocol
     assert "That is a heavy reposter, which is how a great many real people use the platform" in protocol
-    # And it must show the reasoning that keeps it low, not merely assert the number.
-    assert "no posting rhythm regular enough to suggest a scheduler" in protocol
+    # And it must show the reasoning that keeps it low, not merely assert the number. v11 makes that
+    # reasoning arithmetic rather than an impression: the example states the gap range and the
+    # nightly quiet period, which is what the model is being asked to do on every account.
+    assert "nothing at all lands between 01:00 and 08:00 on any day" in protocol
+    assert "which is a person who sleeps rather than a scheduler that does not" in protocol
     # The no-history case (A3) keeps its own hedge, in the zero-post wording.
     assert "a real person who joined last month looks like" in protocol
 
@@ -238,7 +256,10 @@ def test_the_high_scoring_example_shows_three_independent_observations_in_its_pr
     assert "the identical sentence" in a2                  # semantic
     assert "390 to 1" in a2                                # profile, computed
     assert "created 9 days before this post" in a2         # maturity
-    assert "Three independent things point the same way" in a2
+    # v11: A2 now also demonstrates the one AI tell that is real, quoted rather than inferred from
+    # style, because the example is what the model copies.
+    assert "As an AI language model, I cannot" in a2
+    assert "two different kinds of evidence" in a2
     assert "which is why this sits high rather than moderate" in a2
 
 
@@ -332,7 +353,11 @@ def test_handle_digits_and_non_latin_names_are_not_tells(protocol):
     systematically wrong about whole populations."""
     assert "digits in a handle" in protocol
     assert "non-Latin script" in protocol
-    assert "fairness failure" in protocol
+    assert "accuracy failure before it is a fairness one" in protocol
+    # v11 promoted this from a clause in a list to its own confusable shape, carrying the measured
+    # rate, because it is the largest documented false-positive class in adjacent tooling.
+    assert "SOMEONE WRITING IN A SECOND LANGUAGE" in protocol
+    assert "about 61% of the time" in protocol
 
 
 def test_stance_and_topic_are_never_evidence(protocol):

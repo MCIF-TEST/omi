@@ -276,8 +276,10 @@ def test_intelligence_inventory_is_grounded():
     # v8 added score_integrity_rules (the Dossier Loop); v9 added score_discipline (what a high score
     # has to earn: base rate, ambient vs discriminative, per-band convergence, the distribution check);
     # v10 added confusable_accounts (legitimate shapes that resemble the tells) and checkable_claims
-    # (write so a stranger can verify you, because these findings get published).
-    assert inv["constitution"]["count"] == 18
+    # (write so a stranger can verify you, because these findings get published); the v11 research
+    # pass added signal_dimensions, because the eight scored dimensions were named only inside the
+    # worked example and defined nowhere, while the coherence check gated the omi_score on them.
+    assert inv["constitution"]["count"] == 19
     assert inv["playbook"]["count"] == 11
     assert inv["corpus_design"]["categories"] == 14
 
