@@ -1504,7 +1504,8 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                 "sequential" if workers == 1 else f"concurrency={workers}")
 
     parts: list[dict | None] = [None] * total
-    flushed = 0  # batches merged+persisted so far (strict first-to-last prefix)
+    flushed = 0    # longest contiguous run of completed batches (0..total)
+    attempted = 0  # batches whose model call has returned, succeeded or not — what the UI counts
 
     def _persist_progress(done: int, *, run_finished: bool = False) -> dict | None:
         merged = _merge_batch_parts(parts, batch_size=batch_size, done=done,
@@ -1523,20 +1524,31 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     entry: dict | None = None
 
     def _landed(i: int) -> None:
-        """Record batch ``i``'s outcome, then persist the longest completed PREFIX — results appear
-        first-to-last, in order, even when a later batch finishes before an earlier one."""
-        nonlocal flushed, entry
+        """Record batch ``i``'s outcome and persist what has landed so far.
+
+        Persisting on EVERY landing, not only when the completed prefix grows. The prefix used to gate
+        this, which stalled the run visibly and materially the moment any single batch failed: with
+        batch 2 floored, the UI froze on "1 of 4 done" and batches 3 and 4 kept their accounts
+        unpersisted until the whole run ended, minutes later. That reads as a hung scan and hides work
+        that is already finished.
+
+        The prefix is not needed to keep results ordered. ``_merge_batch_parts`` walks ``parts`` by
+        index and merges every completed one, so accounts always appear in batch order regardless of
+        the order the batches finish in; a gap left by a failed or slow batch simply fills in when it
+        lands. ``flushed`` is still tracked, because the final merge below uses it to tell a run that
+        finished short of every batch from one that completed.
+        """
+        nonlocal flushed, entry, attempted
+        attempted += 1
         if parts[i] is None:
             logger.warning("analyst.batched: batch %d/%d returned no assessment (slug=%s)",
                            i + 1, total, inv_slug)
-        new_flushed = flushed
-        while new_flushed < total and parts[new_flushed] is not None:
-            new_flushed += 1
-        if new_flushed > flushed:
-            flushed = new_flushed
-            entry = _persist_progress(flushed) or entry
-            logger.info("analyst.batched: slug=%s progress %d/%d batches persisted",
-                        inv_slug, flushed, total)
+        while flushed < total and parts[flushed] is not None:
+            flushed += 1
+        # `done` drives only the progress readout; the merge itself always uses every completed part.
+        entry = _persist_progress(attempted) or entry
+        logger.info("analyst.batched: slug=%s progress %d/%d batches attempted, %d landed",
+                    inv_slug, attempted, total, sum(1 for p in parts if p is not None))
 
     def _run(i: int) -> dict | None:
         try:
@@ -1569,7 +1581,11 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     # (billable) regeneration on every subsequent request.
     if flushed < total:
         landed = sum(1 for p in parts if p is not None)
-        entry = _persist_progress(landed, run_finished=True) or entry
+        # `done` counts ATTEMPTS, not successes, and every batch has now been attempted. Reporting the
+        # success count here instead made the readout run 1, 2, 3, 4 and then drop back to 3 on the
+        # final write, which reads as the scan losing work it had already shown. How many batches
+        # actually produced accounts is visible in the accounts themselves.
+        entry = _persist_progress(attempted, run_finished=True) or entry
         logger.warning("analyst.batched: slug=%s finished with %d/%d batches (failed batches keep "
                        "their accounts unassessed; a refresh re-runs the generation)",
                        inv_slug, landed, total)
