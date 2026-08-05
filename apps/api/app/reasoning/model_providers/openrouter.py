@@ -292,6 +292,75 @@ class OpenRouterReasoningProvider:
                     continue
         raise ProviderError(f"openrouter unreachable: {last}") from last
 
+    def probe(self, *, timeout: float = 12.0) -> dict:
+        """Can this deployment actually reach the model RIGHT NOW? One minimal, near-free call.
+
+        Config checks alone cannot answer this. ``provider_status`` reports ready when the API key is
+        merely PRESENT and a preset name is set, so a revoked key, a renamed or truncated preset, and an
+        exhausted balance all report ready and then fail on every scan, floored into the deterministic
+        Floor with no exception raised anywhere. That is precisely the state this method exists to catch,
+        and it is the same lesson the Stripe preflight already encodes: the key being set is not the same
+        as the key working.
+
+        Deliberately NOT routed through ``_fetch``: no retry (a health check that waits out three
+        backoffs is not a health check) and a short timeout. It still exercises the real credential, the
+        real model reference and the real gateway, which is what has to be proven.
+
+        Never raises and never returns the key — the caller renders this straight to an operator.
+        """
+        out: dict = {"ok": False, "reason": None, "detail": None,
+                     "status": None, "served_model": None, "model_ref": None}
+        token = self._token()
+        if not token:
+            out["reason"] = "no_api_key"
+            out["detail"] = "OPENROUTER_API_KEY is not set on this service."
+            return out
+        if not (self.preset or self.model):
+            out["reason"] = "no_preset_or_model"
+            out["detail"] = "Neither OMI_OPENROUTER_PRESET nor OMI_OPENROUTER_MODEL is set."
+            return out
+
+        model_ref = self._model_ref()
+        out["model_ref"] = model_ref
+        body = json.dumps({
+            "model": model_ref,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+            "stream": False,
+        }).encode("utf-8")
+        try:
+            req = urllib.request.Request(self.base_url, data=body, headers=self._headers(token))
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read()
+                out["status"] = getattr(resp, "status", None) or resp.getcode()
+                try:
+                    obj = json.loads(raw.decode("utf-8", "replace"))
+                    out["served_model"] = obj.get("model") if isinstance(obj, dict) else None
+                except Exception:  # noqa: BLE001 — a 2xx is a reachable gateway even if the body surprises us
+                    pass
+                out["ok"] = True
+                out["detail"] = f"Reached the gateway and it served {out['served_model'] or 'a model'}."
+                return out
+        except urllib.error.HTTPError as he:
+            out["status"] = he.code
+            # The gateway's own message names the problem far better than we can guess at it, so pass a
+            # bounded slice of it through rather than paraphrasing.
+            try:
+                out["detail"] = he.read().decode("utf-8", "replace")[:400]
+            except Exception:  # noqa: BLE001
+                out["detail"] = f"HTTP {he.code}"
+            out["reason"] = {
+                401: "bad_api_key", 403: "bad_api_key",
+                402: "no_credit",
+                404: "preset_or_model_not_found",
+                429: "rate_limited",
+            }.get(he.code, "http_error")
+            return out
+        except Exception as exc:  # noqa: BLE001 — connection error / timeout; report, never raise
+            out["reason"] = "timeout" if _is_timeout(exc) else "unreachable"
+            out["detail"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+            return out
+
     def complete(self, request: ReasoningRequest) -> ReasoningResponse:
         token = self._token()
         if not token:

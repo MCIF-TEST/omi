@@ -1505,6 +1505,39 @@ model's real output ceiling, since a `max_tokens` above what the model allows is
 `governor_reject` means the S1-S9 lint refused valid output. Admins can get the raw capture from
 `POST /v1/investigations/<slug>/analyst/audit`.
 
+### `/analyst/status` is config-only, and that is how every scan floored unnoticed
+
+`analyst.runtime_status` checks that `OPENROUTER_API_KEY` is **present** and a preset name is set,
+then reports `ready_for_live_model: true`. It never calls anything. So a revoked key, a renamed or
+truncated preset, and an exhausted balance all read as ready and then fail on **every** scan, each one
+silently persisting the deterministic Floor. `render.yaml` used to point the go-live check at exactly
+that endpoint.
+
+`GET /v1/investigations/analyst/preflight` closes it, the same way `/v1/billing/preflight` closed the
+identical hole for Stripe: **the key being set is not the same as the key working.** It makes one
+`max_tokens: 1` call through the real credential and the real model reference, classifies the refusal
+(`bad_api_key` / `no_credit` / `preset_or_model_not_found` / `rate_limited` / `unreachable`), and
+returns the operator action for it. It also prints `config_only_status` beside its own answer, because
+the gap between the two IS the diagnosis.
+
+Three things not to undo:
+
+- **`OpenRouterReasoningProvider.probe()` never raises and never returns the key.** It is rendered
+  straight to an operator and gets pasted into chats and issues. Pinned by
+  `test_the_probe_never_returns_the_api_key`.
+- **The `gateway_reachable` check is appended on every OpenRouter path, success or failure.** An
+  earlier draft only appended it when the probe ran, so a preflight that could not perform its live
+  check reported `ready: true` for precisely the reason `/analyst/status` already did. A test caught
+  it. A preflight that passes because it failed to look is worse than no preflight.
+- **Do not use `build_remote_provider()` here.** Despite the name it builds the **Hugging Face**
+  provider and returns `None` without an HF endpoint, so the probe silently never ran. The preflight
+  constructs the same `OpenRouterReasoningProvider` the analyst does, from the same settings, or it
+  proves nothing about the path that actually runs.
+
+`_PROBE_REMEDIES` is keyed on the probe's reasons and `test_every_probe_reason_has_an_operator_remedy`
+fails when a new reason arrives without one, so a failure can never render as a bare error with no
+next step.
+
 ## Outstanding — needs the user, not code
 
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then

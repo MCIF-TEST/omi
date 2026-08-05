@@ -243,8 +243,11 @@ services:
       # for the preset content; the preset is created once in the OpenRouter
       # dashboard. To go live, supply OPENROUTER_API_KEY (secret; set the
       # value in the dashboard, never committed). Then verify with
-      # GET /v1/investigations/analyst/status -> active_provider: openrouter,
-      # ready_for_live_model: true, blockers: [].
+      # GET /v1/investigations/analyst/preflight -> ready: true.
+      # Use the PREFLIGHT, not /analyst/status: status is config-only and
+      # reports ready when the key is merely PRESENT, so a revoked key, a
+      # renamed preset or an empty balance all pass it and then floor every
+      # single scan. The preflight makes one real call and proves it.
       # ---------------------------------------------------------------
       - key: OMI_ANALYST_ENABLED
         value: 'true'
