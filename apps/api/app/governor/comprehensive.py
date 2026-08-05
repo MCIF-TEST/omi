@@ -370,7 +370,12 @@ def validate_comprehensive_model_output(
         return ["response is not a JSON object"]
     errors: list[str] = []
     try:
-        from omi_analyst.schema_validate import validate_analyst_response
+        # API-OWNED. This used to import ``omi_analyst.schema_validate`` from ml/, which
+        # apps/api/pyproject.toml does not package, so on a real deploy the import raised
+        # ModuleNotFoundError, this function returned "canonical validator unavailable", and every
+        # model response was discarded for the Floor. Failing closed is right; importing across a
+        # packaging boundary to do it was not.
+        from app.governor.canonical_validate import validate_analyst_response
 
         errors.extend(validate_analyst_response(obj, schema=schema))
     except Exception as exc:  # noqa: BLE001 — validator unreachable is itself a hard validation failure

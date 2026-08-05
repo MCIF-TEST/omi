@@ -336,9 +336,19 @@ class AIInvestigationRuntime:
 
     @staticmethod
     def _schema_errors(obj: dict, impl) -> list:
+        """Legacy single-account prefilter. Only reached when there is NO canonical output schema AND
+        ``schema_prefilter=True`` (it defaults to False), so the comprehensive investigation path never
+        uses it — that path goes through ``_canonical_candidate``.
+
+        Imports the API-OWNED validator. It previously imported ``omi_analyst.schema_validate`` from
+        ml/, which apps/api does not package; see ``app/governor/canonical_validate`` for what that cost
+        on the comprehensive path.
+        """
         try:
-            from omi_analyst.schema_validate import validate_analyst_response
-            return validate_analyst_response(obj)
+            from app.governor.canonical_validate import validate_analyst_response
+
+            schema = getattr(impl, "response_schema", None)
+            return validate_analyst_response(obj, schema=schema)
         except Exception:  # noqa: BLE001 — if the validator is unreachable, treat as invalid -> Floor
             return ["schema validator unavailable"]
 

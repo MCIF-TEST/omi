@@ -1505,6 +1505,43 @@ model's real output ceiling, since a `max_tokens` above what the model allows is
 `governor_reject` means the S1-S9 lint refused valid output. Admins can get the raw capture from
 `POST /v1/investigations/<slug>/analyst/audit`.
 
+### The analyst floored on EVERY scan because a validator lived outside the deployed package
+
+This is the one that actually broke the product, and it is a packaging bug wearing a validation bug's
+clothes.
+
+`app/governor/comprehensive.py` did `from omi_analyst.schema_validate import validate_analyst_response`.
+That package lives in **`ml/analyst/`**, and `apps/api/pyproject.toml` packages only `app*`. So:
+
+1. the import raised `ModuleNotFoundError`;
+2. `validate_comprehensive_model_output` appended `"canonical validator unavailable: ..."`;
+3. a non-empty error list **is** a validation failure, so `runtime.py::_canonical_candidate` returned
+   `None` for **every** model response, whatever the model said;
+4. the deterministic Floor was persisted, on every investigation;
+5. nothing raised, so `background._wrap` reported nothing and the tracker never heard about it.
+
+**How it ever worked.** `analyst.py::_impl()` appends `ml/analyst` to `sys.path` as a side effect
+before importing the legacy HF implementation. When that ran first, the later validator import
+succeeded. So canonical validation of every investigation was riding on an unrelated legacy function
+having been called first, and on `ml/` being present on the deployed filesystem. Neither is guaranteed.
+
+**The fix is ownership, not leniency.** The validator is vendored to
+`app/governor/canonical_validate.py`. Failing closed when it is unreachable is correct and unchanged;
+what was wrong was reaching across a packaging boundary to find it. The `ml/` copy stays for the
+offline pipeline (it must not import from the API), and a test asserts the two agree so they cannot
+drift.
+
+The vendored copy drops ml/'s repo-relative `SCHEMA_PATH` default, which could not resolve in a
+packaged deploy anyway. Every API caller passes the canonical schema explicitly, and a missing schema
+now returns an error rather than silently validating against the wrong document.
+
+**Why the suite could not catch it.** Every one of these tests ran green with the validator
+unavailable, because nothing asserted that validation was actually happening.
+`tests/test_canonical_validator_is_owned_by_the_api.py` closes exactly that: it asserts a good object
+validates with **zero** errors (not merely "no crash"), that a bad one is still rejected, that the
+shipped worked example passes our own validator, and a source-level guard against re-adding the
+cross-boundary import. A test that passes whether or not the validator loads cannot protect it.
+
 ### `/analyst/status` is config-only, and that is how every scan floored unnoticed
 
 `analyst.runtime_status` checks that `OPENROUTER_API_KEY` is **present** and a preset name is set,
