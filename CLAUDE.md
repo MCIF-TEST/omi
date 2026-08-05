@@ -7,7 +7,7 @@ re-introduce a bug this one already paid for.
 
 **Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
 `main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1910 passed, 8 skipped, 1 failed** (5m56s), the failure pre-existing and listed below.
+**1911 passed, 8 skipped, 1 failed** (6m24s), the failure pre-existing and listed below.
 The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -1504,6 +1504,32 @@ off (worth checking `OMI_ANALYST_COMPLETION_CEILING_TOKENS`, currently 150000, a
 model's real output ceiling, since a `max_tokens` above what the model allows is rejected outright);
 `governor_reject` means the S1-S9 lint refused valid output. Admins can get the raw capture from
 `POST /v1/investigations/<slug>/analyst/audit`.
+
+### One failed batch used to freeze the whole run
+
+Live symptom on a 100-account scan: batch 1 landed, batch 2 floored, and the UI sat on
+`1 OF 4 DONE` while batches 3 and 4 were still generating. It read as a hung scan.
+
+`_landed` persisted progress only when the longest *completed prefix* grew. A failed batch leaves
+`parts[i] = None` forever, so the prefix could never advance past it: the counter froze, **and**
+batches 3 and 4 kept their finished accounts unpersisted until the entire run ended minutes later.
+Work that was already done was being withheld.
+
+The prefix was never needed for ordering. `_merge_batch_parts` walks `parts` by index and merges every
+completed one, so accounts always come out in batch order however the batches finish; a gap left by a
+failed or slow batch simply fills in when it lands. Progress is now persisted after **every** batch.
+
+**`batching.done` counts batches ATTEMPTED, not batches that succeeded.** It drives the progress
+readout and the client's poll-budget reset (`analyst-panel.tsx` resets `polls` when `done` grows), and
+counting successes meant a run containing any failure could never show itself finishing and a failed
+batch looked like no progress at all, which is what spent the poll budget. How many batches actually
+produced accounts is visible in the accounts themselves. Two tests pinned the old meaning and were
+updated deliberately.
+
+A test caught a regression in the first version of this fix: the final merge still re-persisted with
+the *success* count, so the readout ran 1, 2, 3, 4 and then dropped back to 3, which reads as the scan
+losing work it had already shown. Pinned by
+`test_a_failed_middle_batch_does_not_freeze_progress_or_withhold_later_batches`.
 
 ### The preset name is a two-sided contract and nothing at runtime reconciles it
 

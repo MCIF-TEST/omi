@@ -215,7 +215,11 @@ def test_a_run_whose_batch_fails_still_ends_complete(batched):
     _starts, persisted = batched([True, False, True])
     final = persisted[-1]
     assert final["complete"] is True, "a finished run must be terminal even when a batch failed"
-    assert final["done"] == 2 and final["total"] == 3
+    # `done` counts batches ATTEMPTED, not batches that succeeded. It drives the progress readout and
+    # the client's poll-budget reset, and counting only successes meant a run containing any failure
+    # could never show itself finishing, and a failed batch looked like no progress at all. How many
+    # batches produced accounts is visible in the accounts.
+    assert final["done"] == 3 and final["total"] == 3
 
 
 def test_a_first_batch_failure_still_ends_complete(batched):
@@ -224,7 +228,7 @@ def test_a_first_batch_failure_still_ends_complete(batched):
     assert persisted, "the landed batch must still be persisted"
     final = persisted[-1]
     assert final["complete"] is True
-    assert final["done"] == 1 and final["total"] == 2
+    assert final["done"] == 2 and final["total"] == 2  # both attempted; see the note above
 
 
 def test_a_fully_successful_run_is_not_persisted_twice(batched):
@@ -232,3 +236,68 @@ def test_a_fully_successful_run_is_not_persisted_twice(batched):
     round trip on the hot path of every large scan."""
     _starts, persisted = batched([True, True])
     assert len(persisted) == 2
+
+
+# --------------------------------------------------------------------------- #
+# A failed batch must not freeze the run
+#
+# Live symptom on a 100-account scan: batch 1 landed, batch 2 floored, and the UI sat on
+# "1 OF 4 DONE" while batches 3 and 4 were still being generated. The progress readout was the
+# longest COMPLETED PREFIX, so one failure pinned it, and because progress was only persisted when
+# that prefix grew, batches 3 and 4 kept their finished accounts unpersisted until the entire run
+# ended minutes later. It read as a hung scan and it withheld work that was already done.
+#
+# The prefix was never needed for ordering: _merge_batch_parts walks parts by index, so accounts
+# always come out in batch order however the batches finish.
+# --------------------------------------------------------------------------- #
+def test_a_failed_middle_batch_does_not_freeze_progress_or_withhold_later_batches(monkeypatch):
+    from app.reasoning import analyst as A
+
+    persisted: list[dict] = []
+
+    def _fake_assess(chunk, *, ref, platform, settings):
+        # Batch 2 (ref ...b2) floors; every other batch returns one account.
+        if ref.endswith(".b2"):
+            return None
+        n = ref.rsplit(".b", 1)[1]
+        return {
+            "omi_score": 20,
+            "governance": {"provider": "openrouter-omi-analyst-v1"},
+            "commenter_assessments": [{"ref": f"A{n}", "omi_score": 20,
+                                       "suspicion_tier": "low", "assessment": "x"}],
+        }
+
+    def _fake_persist(session, inv, merged, provider):
+        entry = {"assessment": merged, "provider": provider}
+        persisted.append(entry)
+        return entry
+
+    class _Repo:
+        def __init__(self, _s): pass
+        def get_investigation(self, **_k): return object()
+
+    import contextlib
+
+    @contextlib.contextmanager
+    def _fake_session():
+        yield object()
+
+    monkeypatch.setattr(A, "assess_payload", _fake_assess)
+    monkeypatch.setattr(A, "persist_assessment", _fake_persist)
+    monkeypatch.setattr(A, "get_session", _fake_session)
+    monkeypatch.setattr("app.storage.repository.AccountRepository", _Repo)
+
+    chunks = [{"video": {"commenters": [{"handle": f"h{i}"}]}} for i in range(4)]
+    A._generate_batched("inv_x", 1, {"video": {"commenters": []}}, chunks,
+                        platform="twitter", settings=A.get_settings())
+
+    # Progress was persisted after EVERY batch, including the one that failed and the two after it.
+    assert len(persisted) >= 4, f"only {len(persisted)} persists; a failed batch stalled the run"
+
+    dones = [e["assessment"]["batching"]["done"] for e in persisted]
+    assert dones == sorted(dones), f"progress went backwards: {dones}"
+    assert dones[-1] == 4, f"final progress should count all four attempts, got {dones}"
+
+    # Batches 3 and 4 reached the reader rather than waiting for the run to end.
+    final_refs = [a["ref"] for a in persisted[-1]["assessment"]["commenter_assessments"]]
+    assert final_refs == ["A1", "A3", "A4"], final_refs
