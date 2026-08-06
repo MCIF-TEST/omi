@@ -316,13 +316,21 @@ services:
       # concurrency below. The timeout above is what stops a large batch being cut off.
       - key: OMI_ANALYST_BATCH_ACCOUNTS
         value: '25'
-      # How many batches run at once. 1 was chosen so the first accounts land as early as possible,
-      # and with flat per-batch latency that choice costs the entire run: every batch queues behind
-      # the one before it for no gain, since batch 1 lands at the same moment either way. 4 runs a
-      # 100-account scan as a single wave (~8 min instead of ~30). `_merge_batch_parts` walks batches
-      # by INDEX, so accounts still appear in selection order however the batches finish.
+      # How many batches run at once. ONE, and that is a product decision, not a performance one.
+      #
+      # The intended experience is a rollout: send the first quarter of the evidence bundle, show the
+      # user those accounts the moment OpenRouter returns them, say that more are still coming, then
+      # fill the rest in underneath. Raising this collapses that into a single wait where everything
+      # appears at the end, which is faster in total and worse to sit through: the reader has nothing
+      # for the first several minutes and then gets all 100 at once.
+      #
+      # The cost is real and worth knowing before changing it. Per-batch latency is FLAT in the
+      # account count (see above), so a 100-account scan is 4 sequential calls of ~430s, roughly 28
+      # minutes end to end, with the first 25 accounts readable after ~7. Set this to 2 for two waves
+      # (first quarter still at ~7 min, everything done in ~14) if the total wait matters more than
+      # the rollout.
       - key: OMI_ANALYST_BATCH_CONCURRENCY
-        value: '4'
+        value: '1'
       #
       # --- Legacy Hugging Face path (DEPRECATED — no longer the default) ---
       # Still supported as a fallback provider: to use it instead of
