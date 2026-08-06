@@ -290,7 +290,8 @@ export function AnalystPanel({
               read as the whole answer, and offer the retry that would fill it in. */}
           {assessment.batching
             && assessment.batching.complete
-            && assessment.batching.done < assessment.batching.total && (
+            && (assessment.batching.landed ?? assessment.batching.total)
+               < assessment.batching.total && (
             <IncompleteCoverageNotice
               batching={assessment.batching}
               onRetry={() => void run(true)}
@@ -401,7 +402,7 @@ function IncompleteCoverageNotice({
   onRetry: () => void;
   busy: boolean;
 }) {
-  const missing = batching.total - batching.done;
+  const missing = batching.total - (batching.landed ?? batching.total);
   return (
     <div className="mt-4 rounded-lg border border-warn/35 bg-warn/[0.07] px-3.5 py-3 flex items-start gap-2.5 flex-wrap">
       <TriangleAlert size={13} className="mt-0.5 shrink-0 text-warn" />

@@ -952,7 +952,11 @@ export interface AnalystAssessment {
   /** Batched generation progress (selections > the per-request account cap run as parallel ≤cap
    *  batches, merged first-to-last). Present only on batched runs; `complete` false means more
    *  batches are still landing and the client should keep polling. */
-  batching?: { total: number; done: number; batch_size: number; complete: boolean };
+  /*  `done` counts batches ATTEMPTED (so the readout moves when one fails rather than freezing),
+   *  which makes it equal to `total` on any finished run. `landed` counts the batches that actually
+   *  produced accounts, and is therefore the COVERAGE figure. Optional: entries written before it
+   *  existed have no value, and the UI falls back rather than claiming coverage it cannot know. */
+  batching?: { total: number; done: number; landed?: number; batch_size: number; complete: boolean };
   // The engine's corroboration state, echoed onto the assessment (overlaid from the deterministic
   // Floor, never model-fabricated. Apps/api runtime.py). It bounds the coordination read: a maximal
   // 'coordinated' verdict requires >=1 discriminative method AND single_axis_capped === false.
