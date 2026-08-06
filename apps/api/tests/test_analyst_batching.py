@@ -87,7 +87,7 @@ def test_merge_concatenates_accounts_first_to_last():
     assert merged is not None
     scores = [a["omi_score"] for a in merged["commenter_assessments"]]
     assert scores == [10, 20, 80, 90]
-    assert _batching_core(merged) == {"total": 2, "done": 2, "batch_size": 2, "complete": True}
+    assert _batching_core(merged) == {"total": 2, "done": 2, "landed": 2, "batch_size": 2, "complete": True}
 
 
 def test_merge_overall_is_account_weighted_mean_of_batch_overalls():
@@ -103,7 +103,7 @@ def test_partial_merge_reports_progress_and_incomplete():
     merged = _merge_batch_parts(parts, batch_size=1, done=1)
     assert merged is not None
     assert len(merged["commenter_assessments"]) == 1
-    assert _batching_core(merged) == {"total": 3, "done": 1, "batch_size": 1, "complete": False}
+    assert _batching_core(merged) == {"total": 3, "done": 1, "landed": 1, "batch_size": 1, "complete": False}
     assert merged["completion"]["complete"] is False
 
 
@@ -137,7 +137,7 @@ def test_a_finished_run_is_marked_complete_even_with_a_failed_batch():
     client waited for a batch that is never coming."""
     parts = [_part(scores=[10], overall=10), None, _part(scores=[20], overall=20)]
     merged = _merge_batch_parts(parts, batch_size=1, done=2, run_finished=True)
-    assert _batching_core(merged) == {"total": 3, "done": 2, "batch_size": 1, "complete": True}
+    assert _batching_core(merged) == {"total": 3, "done": 2, "landed": 2, "batch_size": 1, "complete": True}
     # Still honest about coverage: only the two landed batches' accounts are present.
     assert len(merged["commenter_assessments"]) == 2
 
@@ -428,3 +428,45 @@ def test_a_forced_refresh_does_not_start_a_second_run_against_a_live_one(monkeyp
 
     assert out is live, "a forced refresh must serve the live run's partial, not start a duplicate"
     assert called == [], "a forced refresh started a duplicate model run against a live one"
+
+
+def test_a_finished_run_that_missed_a_batch_is_still_model_backed():
+    """MISSING COVERAGE IS NOT FLOORED, and conflating them restarted finished scans.
+
+    Live symptom: the results appeared, then the panel started batching again from the top. A run
+    that landed 3 of 4 batches was marked non-model-backed on the strength of the fourth, which is
+    exactly the signal the route's floor self-heal keys on, so the moment the scan finished the route
+    regenerated the WHOLE thing and billed a second full run.
+
+    `model_backed` answers "is the prose in this entry the model's?" and for three real batches it is
+    yes. Coverage is a separate fact, carried by `landed`.
+    """
+    parts = [_part(scores=[10], overall=10), None, _part(scores=[20], overall=20)]
+    merged = _merge_batch_parts(parts, batch_size=1, done=3, run_finished=True)
+    assert merged["investigation_trace"]["model_backed"] is True, \
+        "a finished run with real model prose must not look like the Floor"
+    # ...and the shortfall is still visible, so the UI can offer a retry the user chooses to spend.
+    assert merged["batching"]["landed"] == 2
+    assert merged["batching"]["total"] == 3
+    assert merged["batching"]["complete"] is True
+
+
+def test_a_run_where_every_batch_floored_is_still_not_model_backed():
+    """The inverse, so the self-heal that matters keeps working.
+
+    A floored batch returns an assessment carrying model_backed=False, so a wholly floored run is
+    caught by the per-part check rather than by the coverage count.
+    """
+    parts = [_part(scores=[10], overall=10, model_backed=False),
+             _part(scores=[20], overall=20, model_backed=False)]
+    merged = _merge_batch_parts(parts, batch_size=1, done=2, run_finished=True)
+    assert merged["investigation_trace"]["model_backed"] is False
+
+
+def test_landed_is_the_coverage_figure_and_done_is_not():
+    """`done` counts ATTEMPTS so the readout moves when a batch fails, which makes it equal to
+    `total` on every finished run. Keying coverage off it would silence the notice entirely."""
+    parts = [_part(scores=[10], overall=10), None, None]
+    merged = _merge_batch_parts(parts, batch_size=1, done=3, run_finished=True)
+    assert merged["batching"]["done"] == 3      # every batch was attempted
+    assert merged["batching"]["landed"] == 1    # only one produced accounts

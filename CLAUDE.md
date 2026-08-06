@@ -1620,7 +1620,33 @@ last one. That is defence in depth, not the fix: the cost is asymmetric, since s
 reads as the product losing paid-for work while ignoring one stale poll costs nothing (the next poll
 corrects it 2.5s later). Both refs reset at the top of `run()`, so Retry and a slug change start clean.
 
-Pinned by eight tests at the end of `tests/test_analyst_batching.py`. Note that the exact-equality
+Pinned by eleven tests at the end of `tests/test_analyst_batching.py`.
+
+#### Missing coverage is not the same thing as floored, and conflating them restarted finished scans
+
+Reported 2026-08-06: the results appeared, then the panel started batching again from the top. Not a
+duplicate run this time, a **self-inflicted full regeneration**.
+
+`_merge_batch_parts` used to set `all_model_backed = False` whenever a finished run had landed fewer
+batches than it attempted. That is precisely the signal `routes/reasoning.py`'s floor self-heal keys
+on, so a run that landed 3 of 4 batches was read as the deterministic Floor the instant it finished:
+`claim_floor_autorefresh` fired, `refresh=True` was submitted, and the whole scan ran again from
+batch 1. It billed a second full run, and `_floor_autorefreshed` is a per-process set, so N workers
+give N regenerations and a restart resets the one-shot.
+
+**`model_backed` answers "is the prose in this entry the model's?"** For three real batches that is
+yes. Coverage is a different fact and now has its own field:
+
+- **`batching.landed`** is how many batches actually produced accounts. `done` cannot serve: it
+  counts batches ATTEMPTED so the readout moves when one fails rather than freezing, which makes
+  `done == total` on every finished run. `IncompleteCoverageNotice` was gated on `done < total` and
+  had therefore been silently unreachable since `done` changed meaning; it now reads `landed`.
+- **A wholly floored run still self-heals**, because a floored batch returns an assessment carrying
+  `model_backed: False` and the per-part check catches it. Pinned by
+  `test_a_run_where_every_batch_floored_is_still_not_model_backed`.
+
+`landed` is optional in `lib/api.ts`: entries written before it existed have no value and the UI
+falls back rather than claiming coverage it cannot know. Note that the exact-equality
 assertions on `merged["batching"]` had to go through `_batching_core()`, since a heartbeat is a
 wall-clock timestamp and asserting on the whole dict is asserting on the current time.
 

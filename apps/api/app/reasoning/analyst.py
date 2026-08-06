@@ -1469,11 +1469,15 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
             "endpoint_cost_usd": pt.get("endpoint_cost_usd"),
             "endpoint_latency_ms": pt.get("endpoint_latency_ms"),
         })
-    # Only once the run is OVER does a missing batch make the whole entry non-model-backed. That is
-    # what the self-heal path keys on to regenerate it, and applying it mid-run is what made every
-    # partial merge look like the Floor.
-    if run_finished and len(completed) != total_batches:
-        all_model_backed = False
+    # MISSING COVERAGE IS NOT THE SAME THING AS FLOORED, and conflating them restarted finished
+    # scans. A run that landed 3 of 4 batches used to be marked non-model-backed on the strength of
+    # the fourth, which is the exact signal the route's floor self-heal keys on. So the moment the
+    # scan finished, the route regenerated the WHOLE thing: the customer watched a completed result
+    # start batching again from "1 of 4", and it billed a second full run every time.
+    #
+    # `model_backed` answers "is the prose in this entry the model's?", and for three real batches it
+    # is yes. How much of the selection was covered is a separate fact, carried by `landed` below and
+    # rendered by IncompleteCoverageNotice, which offers a retry the user chooses to spend.
     if have_usage:
         tr["input_tokens"], tr["output_tokens"], tr["total_tokens"] = in_tok, out_tok, tot_tok
         tr["endpoint_cost_usd"] = round(cost, 6)
@@ -1491,14 +1495,18 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     # incomplete marker makes the route treat the entry as an interrupted run and resubmit a FULL
     # regeneration on every poll, so a batch that fails deterministically would bill OpenRouter for a
     # fresh run every few seconds, forever, and the client would poll for a batch that is never coming.
-    # ``done`` < ``total`` with ``complete`` true is the honest "finished, but N batches yielded
-    # nothing" state; the UI says so and offers a refresh.
+    # ``landed`` is how many batches actually PRODUCED accounts, which is the coverage figure.
+    # ``done`` cannot serve that purpose: it counts batches ATTEMPTED (so the progress readout moves
+    # when a batch fails rather than freezing), which means ``done == total`` on any finished run,
+    # successful or not. ``landed`` < ``total`` with ``complete`` true is the honest "finished, but N
+    # batches yielded nothing" state; the UI says so and offers a retry the user chooses to spend.
     #
     # ``run_id`` + ``heartbeat`` make a live run visible ACROSS PROCESSES, which the in-flight set
     # cannot do (see ``batched_run_looks_alive``). Without them a second worker saw an incomplete
     # entry, concluded the run had been interrupted, and started a duplicate whose first write
     # replaced "3 of 4" with "1 of 4" and no accounts.
-    base["batching"] = {"total": total_batches, "done": done, "batch_size": batch_size,
+    base["batching"] = {"total": total_batches, "done": done, "landed": len(completed),
+                        "batch_size": batch_size,
                         "complete": bool(run_finished) or done >= total_batches,
                         "run_id": run_id,
                         "heartbeat": datetime.now(timezone.utc).isoformat()}
