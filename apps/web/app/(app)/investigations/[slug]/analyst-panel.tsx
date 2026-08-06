@@ -236,7 +236,10 @@ export function AnalystPanel({
         // the model response is on its way, it fills in the moment the result lands. Once a
         // batched run's FIRST batch lands, the partial assessment renders below instead (with a
         // progress strip), so results appear first-to-last while later batches still generate.
-        <AnalystLoading elapsedSec={elapsedSec} />
+        // `scanned` is every account the engine scored, so the batch count is derivable here
+        // without waiting for the server: the user sees "batch 1 of 4" immediately instead of a
+        // shapeless spinner that tells them nothing about how long this will take.
+        <AnalystLoading elapsedSec={elapsedSec} accounts={scanned.length} />
       ) : !assessment ? (
         <p className="text-sm text-fg-dim flex items-start gap-2">
           <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
