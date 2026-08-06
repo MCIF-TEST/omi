@@ -676,9 +676,17 @@ function AssessmentView(
   // the scan failed while it is visibly still working. Wait for the run to finish before judging it.
   const stillBatching = a.batching ? a.batching.complete === false : false;
   if (!isModelBacked(a) && stillBatching) {
+    // A mixed run: some batches landed real model-backed accounts and at least one floored, which
+    // makes the MERGED entry non-model-backed. Saying "waiting for the first completed batch" then
+    // contradicts the strip directly above it ("3 of 4 done, 25 accounts scored") and tells the user
+    // nothing has happened when a quarter of their scan is finished. Say what is actually true.
+    const scoredSoFar = a.commenter_assessments?.length ?? 0;
     return (
       <p className="text-sm text-fg-dim">
-        Waiting for the first completed batch. Account scores appear above as each one lands.
+        {scoredSoFar > 0
+          ? `${scoredSoFar} account${scoredSoFar === 1 ? '' : 's'} scored so far, listed above. `
+            + 'The remaining batches are still running and will appear as they land.'
+          : 'Waiting for the first completed batch. Account scores appear above as each one lands.'}
       </p>
     );
   }
