@@ -294,12 +294,23 @@ services:
       # 'low' roughly halves reasoning spend vs 'high' for this task.
       - key: OMI_OPENROUTER_REASONING_EFFORT
         sync: false
-      # One model generation timeout (background worker, not a user request). 500s lets a slow GPT-5
-      # generation FINISH and be cached as a real result instead of being cut off and floored (the
-      # "isn't ready yet" fallback, which also made re-opens re-run). The UI holds a loading screen and
-      # polls for ~9 min. Still fails a genuinely stalled call, not a hang.
+      # One model generation timeout (background worker, not a user request). It must clear the
+      # SLOWEST realistic single batch, or the batch is cut off and returns nothing: a live 100
+      # account scan averaged ~418s per 25-account batch and lost two of four to the old 500s
+      # ceiling, so the customer paid for 100 accounts and got 25.
+      #
+      # Latency is driven by the compiled protocol (~25k input tokens, sent on EVERY batch) plus the
+      # per-account evidence, so it grew when the protocol grew. 900s leaves real headroom. It must
+      # stay BELOW the client's poll budget (MAX_POLLS in analyst-panel.tsx, 400 x 2.5s = 1000s
+      # without visible progress), or the browser gives up on a batch the server would still deliver.
       - key: OMI_ANALYST_TIMEOUT_SECONDS
-        value: '500'
+        value: '900'
+      # Accounts per model call. 12 rather than 25 because per-batch latency scales with the account
+      # count while the ~25k-token protocol overhead is FIXED, so smaller batches land comfortably
+      # inside the timeout instead of racing it, and the first accounts reach the reader sooner. The
+      # cost is paying the protocol more times, which at mini-class pricing is fractions of a cent.
+      - key: OMI_ANALYST_BATCH_ACCOUNTS
+        value: '12'
       #
       # --- Legacy Hugging Face path (DEPRECATED — no longer the default) ---
       # Still supported as a fallback provider: to use it instead of
