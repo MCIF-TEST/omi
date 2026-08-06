@@ -1623,10 +1623,16 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                 existing = cached_assessment(inv)
             except Exception:  # noqa: BLE001
                 existing = None
-            if not run_finished and _entry_is_ahead(existing, merged, run_id):
+            # The FINAL write is guarded too, and that is the important half. It used to be exempt,
+            # which made this the worst version of the bug rather than a cosmetic one: a duplicate
+            # run finishing with one batch published 25 accounts over the leader's 75 AND set
+            # `complete: true`, so the entry stopped being regenerable and the customer was left
+            # permanently with a quarter of what they paid for. Our run just ends quietly instead;
+            # the leader is still going and will mark the row complete itself.
+            if _entry_is_ahead(existing, merged, run_id):
                 logger.info(
                     "analyst.batched: slug=%s another run is further ahead; not publishing this "
-                    "run's progress over it", inv_slug)
+                    "run's %s over it", inv_slug, "final result" if run_finished else "progress")
                 return existing
             return persist_assessment(session, inv, merged, provider)
 
@@ -1733,7 +1739,19 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
                 logger.info("analyst.generate: investigation slug=%s not found (user_id=%s); skipping",
                             slug, user_id)
                 return None
-            cached = None if refresh else cached_assessment(inv)
+            current = cached_assessment(inv)
+            # Checked BEFORE the refresh branch, deliberately. `refresh` used to skip reading the
+            # entry at all, so every forced regeneration (the route's one-shot floor auto-heal, the
+            # UI's Retry button) started a second run even when one was healthily mid-flight. A
+            # refresh exists to heal a dead or floored result, not to race a live one: the duplicate
+            # publishes its first batch over the leader's third, and whichever finishes first marks
+            # the row complete with a fraction of the accounts. Whoever is mid-run will finish.
+            if batched_run_looks_alive(current):
+                logger.info("analyst.generate: slug=%s a batched run is already live elsewhere "
+                            "(fresh heartbeat); serving its partial instead of starting a duplicate",
+                            slug)
+                return current
+            cached = None if refresh else current
             if cached is not None:
                 batching = (cached.get("assessment") or {}).get("batching") or {}
                 if not batching or batching.get("complete"):
@@ -1742,17 +1760,9 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
                                 "(cache hit_rate=%.2f)", slug,
                                 runtime_metrics()["assessment_cache"]["hit_rate"])
                     return cached
-                # A PARTIAL batched entry is not a finished result, so it normally falls through and
-                # regenerates. But "partial" and "being written to right now" look identical in the
-                # row, and `_autogen_inflight` is per-process, so a second worker used to reach here
-                # while a run was healthily mid-flight and start a duplicate. The duplicate then
-                # republished "1 of 4" over the "3 of 4" the user was reading. A fresh heartbeat is
-                # the cross-process evidence that someone is still working, so leave them to it and
-                # serve what has landed.
-                if batched_run_looks_alive(cached):
-                    logger.info("analyst.generate: slug=%s already being generated elsewhere "
-                                "(fresh batch heartbeat); serving partial", slug)
-                    return cached
+                # Otherwise this is a PARTIAL batched entry whose run is not alive (the liveness
+                # check above already returned for the ones that are), so it is a genuinely
+                # interrupted run: fall through and regenerate it.
             payload = inv.payload_json or {}
             platform = _platform_of(inv)
             inv_slug = inv.slug

@@ -1603,7 +1603,24 @@ The `cached_assessment(inv)` read inside `_persist_progress` is wrapped in `try/
 It is advisory, and a guard that cannot read the current entry must fall through to the write:
 losing the guard costs a cosmetic regression, losing the write costs results a customer paid for.
 
-Pinned by six tests at the end of `tests/test_analyst_batching.py`. Note that the exact-equality
+**Two holes remained after the first attempt, and the user hit them the same day:**
+
+- **The FINAL write was exempt from the guard** (`if not run_finished and ...`), which made this
+  permanent rather than cosmetic. A duplicate run finishing with one batch published 25 accounts over
+  the leader's 75 **and set `complete: true`**, so the entry stopped being regenerable and the
+  customer was left with a quarter of what they paid for, forever. The guard now covers both writes;
+  a deferring run simply ends, and the leader marks the row complete itself.
+- **`refresh=True` never read the entry at all** (`cached = None if refresh else ...`), so every
+  forced regeneration started a duplicate: both the route's one-shot floor auto-heal and the UI's
+  Retry button pass it. The liveness check now runs BEFORE the refresh branch. A refresh exists to
+  heal a dead or floored result, not to race a live one.
+
+`analyst-panel.tsx` also keeps a `maxScoredRef` and ignores a poll carrying fewer accounts than the
+last one. That is defence in depth, not the fix: the cost is asymmetric, since showing fewer accounts
+reads as the product losing paid-for work while ignoring one stale poll costs nothing (the next poll
+corrects it 2.5s later). Both refs reset at the top of `run()`, so Retry and a slug change start clean.
+
+Pinned by eight tests at the end of `tests/test_analyst_batching.py`. Note that the exact-equality
 assertions on `merged["batching"]` had to go through `_batching_core()`, since a heartbeat is a
 wall-clock timestamp and asserting on the whole dict is asserting on the current time.
 
