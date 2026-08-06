@@ -28,13 +28,17 @@ const POLL_INTERVAL_MS = 2500;
 // Opening an investigation loads its SAVED assessment: a model-backed result shows immediately (no
 // re-run), and while a generation is still in flight, the one scheduled at scan time, or the
 // backend's one-shot auto-heal of an inconclusive/floored result. We hold the loading screen and
-// poll until it lands. We never force a re-run from here. ~520s of polling matches the server's
-// 500s generation timeout, so the wait ends when the real result does.
-// ~10 min of polling. A batched run issues its model calls ONE AT A TIME (so the first accounts
-// land as early as possible), which means the wall-clock total grows with the batch count, but this
-// budget RESETS every time a new batch's results land (see the 'partial' branch), so it is really
-// "10 minutes without visible progress". A scan that keeps delivering batches is never cut off here.
-const MAX_POLLS = 240;
+// poll until it lands. We never force a re-run from here.
+//
+// A batched run issues its model calls ONE AT A TIME (so the first accounts land as early as
+// possible), which means the wall-clock total grows with the batch count. This budget RESETS every
+// time a new batch's results land (see the 'partial' branch), so it means "this long without
+// visible progress", not "this long in total". A scan that keeps delivering batches is never cut
+// off here.
+// 400 x 2.5s = ~1000s without visible progress. It must OUTLAST the server's per-call timeout
+// (OMI_ANALYST_TIMEOUT_SECONDS, 900s), or the browser declares failure while the server is still
+// working and would have delivered the batch.
+const MAX_POLLS = 400;
 
 // A transport failure is not an answer, so it must not end the wait.
 //
