@@ -393,3 +393,44 @@ def test_the_working_notes_are_admin_only():
     row = served["commenter_assessments"][0]
     assert "assessment_unverified" not in row and "grounding" not in row
     assert row["assessment"] == WITHHELD_NOTICE
+
+
+# --------------------------------------------------------------------------------------------- #
+# Aliases in the investigation-level prose
+#
+# Live on omisphere.online: "style-match clusters (C4, C6, C1, C5, C3, C7)" and "few or no collected
+# posts (A24, A20, A19)". `check_alias_in_prose` is HARD but only guards the per-account paragraphs;
+# this text goes through the Governor's S9 lint, which has no alias rule.
+# --------------------------------------------------------------------------------------------- #
+def test_account_aliases_become_real_handles():
+    """Resolving beats refusing: a handle is strictly more useful than the label the model wrote."""
+    from app.reasoning.grounding import resolve_aliases_in_prose
+    out = resolve_aliases_in_prose(
+        "Several accounts had few or no collected posts (A24, A20, A19) so those are weak reads.",
+        {"A24": "realguy", "A20": "@second", "A19": "third"})
+    assert out == ("Several accounts had few or no collected posts (@realguy, @second, @third) "
+                   "so those are weak reads.")
+
+
+def test_cluster_labels_are_removed_because_they_have_no_public_name():
+    """And the parenthetical goes with them: "()" left behind reads as a defect."""
+    from app.reasoning.grounding import resolve_aliases_in_prose
+    out = resolve_aliases_in_prose(
+        "A small number belong to style-match clusters (C4, C6, C1, C5, C3, C7) suggesting "
+        "single-author fingerprints.", {})
+    assert "C4" not in out and "(" not in out
+    assert out == ("A small number belong to style-match clusters suggesting single-author "
+                   "fingerprints.")
+
+
+def test_prose_without_aliases_is_untouched():
+    from app.reasoning.grounding import resolve_aliases_in_prose
+    text = "Most accounts look like ordinary partisan amplifiers or heavy reposters."
+    assert resolve_aliases_in_prose(text, {"A1": "someone"}) == text
+
+
+def test_an_unresolvable_account_alias_is_removed_rather_than_printed():
+    """An unresolved label tells the reader nothing and looks like a bug."""
+    from app.reasoning.grounding import resolve_aliases_in_prose
+    out = resolve_aliases_in_prose("The pattern centres on A77 and A78.", {})
+    assert "A77" not in out and "A78" not in out

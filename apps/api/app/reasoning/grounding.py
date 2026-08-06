@@ -584,3 +584,56 @@ __all__ = [
     "check_readability", "check_coherence", "check_alias_in_prose", "check_style",
     "verify_row", "verify_batch",
 ]
+
+
+# --------------------------------------------------------------------------------------------- #
+# Aliases in the INVESTIGATION-LEVEL prose
+#
+# `check_alias_in_prose` is HARD and guards `commenter_assessments[].assessment`. It never saw the
+# investigation-level `headline` / `assessment` / evidence claims, which go through the Governor's
+# S9 lint instead, and that lint has no alias rule. So this shipped to a live page:
+#
+#   "A small number of accounts belong to style-match clusters (C4, C6, C1, C5, C3, C7)"
+#   "Several accounts had few or no collected posts (A24, A20, A19)"
+#
+# Meaningless to a reader who has never seen the legend, and this is the paragraph that gets
+# screenshotted. Withholding the whole investigation summary over it would be far too blunt, so the
+# fix is to RESOLVE rather than refuse: an account alias becomes the real handle, which is strictly
+# more useful than what the model wrote. Cluster aliases have no public name at all, so they are
+# removed, and a parenthetical left empty by that removal goes with them.
+# --------------------------------------------------------------------------------------------- #
+_ACCOUNT_ALIAS_RE = re.compile(r"\bA\d{1,3}\b")
+_ANY_ALIAS_RE = re.compile(r"\b[AC]\d{1,3}\b")
+#: A parenthetical holding nothing but aliases and separators, e.g. "(C4, C6, C1)".
+_ALIAS_ONLY_PAREN_RE = re.compile(r"\s*\(\s*(?:[AC]\d{1,3})(?:\s*(?:,|and|&)\s*[AC]\d{1,3})*\s*\)")
+
+
+def resolve_aliases_in_prose(text: str, handles: dict) -> str:
+    """Rewrite internal aliases out of reader-facing prose.
+
+    ``handles`` maps alias -> display handle (already @-prefixed or bare; both are accepted).
+    Anything that cannot be resolved is removed rather than printed, because an unresolved label is
+    strictly worse than no label: it looks like a defect and tells the reader nothing.
+    """
+    if not text or not isinstance(text, str):
+        return text
+
+    def _sub_known(m: re.Match) -> str:
+        h = handles.get(m.group(0))
+        if not h:
+            return m.group(0)
+        h = str(h)
+        return h if h.startswith("@") else f"@{h}"
+
+    out = _ACCOUNT_ALIAS_RE.sub(_sub_known, text)
+    # Drop parentheticals that are now nothing but unresolved labels.
+    out = _ALIAS_ONLY_PAREN_RE.sub("", out)
+    # Any stragglers in running text, plus the separator that would be left dangling.
+    out = re.sub(r"\s*,\s*(?=[AC]\d{1,3}\b)", ", ", out)
+    out = _ANY_ALIAS_RE.sub("", out)
+    # Tidy the punctuation the removals leave behind.
+    out = re.sub(r"\(\s*[,;\s]*\)", "", out)
+    out = re.sub(r"\s+([,.;:])", r"\1", out)
+    out = re.sub(r"([,;])\s*\1+", r"\1", out)
+    out = re.sub(r"\s{2,}", " ", out)
+    return out.strip()
