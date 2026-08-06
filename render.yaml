@@ -305,12 +305,24 @@ services:
       # without visible progress), or the browser gives up on a batch the server would still deliver.
       - key: OMI_ANALYST_TIMEOUT_SECONDS
         value: '900'
-      # Accounts per model call. 12 rather than 25 because per-batch latency scales with the account
-      # count while the ~25k-token protocol overhead is FIXED, so smaller batches land comfortably
-      # inside the timeout instead of racing it, and the first accounts reach the reader sooner. The
-      # cost is paying the protocol more times, which at mini-class pricing is fractions of a cent.
+      # Accounts per model call. MEASURED, not reasoned: a 12-account batch took 426s and a
+      # 25-account batch took ~418s, so per-batch latency is essentially FLAT in the account count.
+      # It is dominated by the fixed cost of the request (the ~25k-token protocol plus the model's
+      # reasoning budget), not by the per-account evidence.
+      #
+      # That inverts the obvious tuning. Shrinking batches does not make them faster, it just makes
+      # more of them: 100 accounts at 12 per batch is 9 sequential passes, about 64 minutes, against
+      # 4 passes for the same work at 25. Keep batches LARGE and buy the wall clock back with
+      # concurrency below. The timeout above is what stops a large batch being cut off.
       - key: OMI_ANALYST_BATCH_ACCOUNTS
-        value: '12'
+        value: '25'
+      # How many batches run at once. 1 was chosen so the first accounts land as early as possible,
+      # and with flat per-batch latency that choice costs the entire run: every batch queues behind
+      # the one before it for no gain, since batch 1 lands at the same moment either way. 4 runs a
+      # 100-account scan as a single wave (~8 min instead of ~30). `_merge_batch_parts` walks batches
+      # by INDEX, so accounts still appear in selection order however the batches finish.
+      - key: OMI_ANALYST_BATCH_CONCURRENCY
+        value: '4'
       #
       # --- Legacy Hugging Face path (DEPRECATED — no longer the default) ---
       # Still supported as a fallback provider: to use it instead of
