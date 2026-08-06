@@ -182,7 +182,13 @@ def generate_analyst_assessment(
         # keep the client polling WITHOUT re-submitting a background job on every poll. The in-flight
         # guard would skip a duplicate anyway; short-circuiting here avoids the per-poll churn seen in the
         # logs while a slow model call is in flight.
-        if analyst.is_generation_inflight(inv.slug) and not refresh:
+        # `is_generation_inflight` is per-process. The durable lease is not, and it is claimed
+        # before the first model call rather than after the first batch persists, so it covers the
+        # window where a run scheduled at scan time is invisible to the worker serving this poll.
+        # Without it the page's first POST started a second full run, seconds after the scan started
+        # the first: two OpenRouter runs, two bills, one investigation.
+        if (analyst.is_generation_inflight(inv.slug)
+                or analyst.generation_lease_is_live(inv)) and not refresh:
             response.status_code = status.HTTP_202_ACCEPTED
             return AnalystResponse(slug=inv.slug, enabled=True, status="generating", cached=False)
 

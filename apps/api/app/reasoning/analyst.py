@@ -388,6 +388,35 @@ def _normalise_signals(raw) -> list[dict]:
     ]
 
 
+def _dealias_investigation_prose(governed: dict, legend, payload: dict) -> None:
+    """Rewrite aliases out of the investigation-level prose, in place.
+
+    Account aliases become the account's real handle; a cluster alias has no public name at all, so
+    it is removed along with any parenthetical it leaves empty. Best effort by construction: prose
+    the reader can follow matters, but never at the cost of failing the investigation over it.
+    """
+    try:
+        from app.reasoning.grounding import resolve_aliases_in_prose
+        accounts = (legend.to_manifest() or {}).get("accounts") or {}
+        by_ref = _commenters_by_author_ref(payload)
+        handles = {}
+        for alias, author_ref in accounts.items():
+            c = by_ref.get(author_ref) or {}
+            h = c.get("handle") or c.get("external_id")
+            if h:
+                handles[alias] = str(h)
+        for key in ("headline", "assessment", "bottom_line"):
+            if isinstance(governed.get(key), str):
+                governed[key] = resolve_aliases_in_prose(governed[key], handles)
+        for bucket in ("evidence_for", "evidence_against", "uncertainty",
+                       "what_would_change_this"):
+            for item in (governed.get(bucket) or []):
+                if isinstance(item, dict) and isinstance(item.get("claim"), str):
+                    item["claim"] = resolve_aliases_in_prose(item["claim"], handles)
+    except Exception:  # noqa: BLE001 — presentation polish must never sink an investigation
+        logger.exception("analyst: could not de-alias the investigation prose")
+
+
 def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
     """Join each model-authored per-account assessment (keyed by alias) with the account's real identity.
     AI-first: the per-account OMI score + tier are the MODEL'S (it reasons them from that account's raw
@@ -853,6 +882,14 @@ def _assess_core(
         governed["commenter_assessments"] = (
             _join_commenter_assessments(inference.raw_obj, investigation_legend, payload)
             if model_backed else [])
+        # Internal aliases must not reach a reader in the INVESTIGATION-LEVEL prose either. This
+        # shipped live: "style-match clusters (C4, C6, C1, C5, C3, C7)" and "few or no collected
+        # posts (A24, A20, A19)" rendered on the page a customer screenshots. `check_alias_in_prose`
+        # is HARD but only guards the per-account paragraphs; this text goes through the Governor's
+        # S9 lint, which has no alias rule. Resolving beats refusing here: withholding the whole
+        # summary would be far too blunt, and a real handle is strictly more useful than the label
+        # the model wrote.
+        _dealias_investigation_prose(governed, investigation_legend, payload)
         # Phase 5H — completion verification. Decide explicitly whether the AI reasoned over the COMPLETE
         # investigation: did generation stop normally (vs hit the token ceiling), did every commenter shown
         # to the model receive an assessment, was any commenter omitted upstream. Nothing is silently
@@ -1336,6 +1373,78 @@ _autogen_inflight: set[str] = set()
 _autogen_lock = threading.Lock()
 
 
+#: Durable "somebody is generating this right now" marker, kept OUTSIDE the assessment cache so it
+#: cannot be mistaken for a result: ``cached_assessment`` only returns an entry carrying an
+#: ``assessment``, and this key never has one.
+LEASE_KEY = "analyst_run_lease_v1"
+
+
+def generation_lease_is_live(inv) -> bool:
+    """Whether some process claimed this investigation's generation recently.
+
+    THIS CLOSES THE STARTUP WINDOW, which the batch heartbeat cannot. ``batched_run_looks_alive``
+    reads ``batching.heartbeat``, and that only exists once the FIRST batch has been persisted,
+    which is minutes into a run. Until then a batched generation is completely invisible to any
+    other process: ``maybe_autogenerate`` schedules the run when the scan finishes, the user opens
+    the investigation seconds later, that POST lands on a different worker whose ``_autogen_inflight``
+    set is empty, and it submits a SECOND full run. That is the "it scans twice" report, and it bills
+    twice.
+    """
+    lease = (getattr(inv, "payload_json", None) or {}).get(LEASE_KEY)
+    if not isinstance(lease, dict):
+        return False
+    beat = lease.get("heartbeat")
+    if not isinstance(beat, str) or not beat:
+        return False
+    try:
+        seen = datetime.fromisoformat(beat.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - seen).total_seconds() < BATCH_HEARTBEAT_STALE_SEC
+
+
+def claim_generation_lease(session, inv, run_id: str) -> bool:
+    """Take the lease unless a live one is already held by someone else. Returns whether we own it.
+
+    Read-modify-write rather than a locked row, deliberately. It narrows the duplicate-run window
+    from the length of a first batch (minutes) to the length of this function (milliseconds), and
+    two claims landing inside that remaining window are already handled downstream by
+    ``_entry_is_ahead``, which stops the loser publishing over the leader. A row lock here would buy
+    the last few milliseconds at the cost of holding a write lock on the investigation across a
+    multi-minute generation if anything ever moved the release.
+    """
+    if generation_lease_is_live(inv) and (inv.payload_json or {}).get(LEASE_KEY, {}).get(
+            "run_id") != run_id:
+        return False
+    _write_lease(session, inv, {"run_id": run_id,
+                                "heartbeat": datetime.now(timezone.utc).isoformat()})
+    return True
+
+
+def release_generation_lease(session, inv, run_id: str) -> None:
+    """Drop our lease so a later refresh is not made to wait out the staleness window."""
+    if (inv.payload_json or {}).get(LEASE_KEY, {}).get("run_id") != run_id:
+        return  # someone else's lease, or already replaced; leave it alone
+    _write_lease(session, inv, None)
+
+
+def _write_lease(session, inv, lease: dict | None) -> None:
+    """Best effort, and SAVEPOINT-isolated: a lease write must never break the surrounding work."""
+    try:
+        with session.begin_nested():
+            payload = {**(inv.payload_json or {})}
+            if lease is None:
+                payload.pop(LEASE_KEY, None)
+            else:
+                payload[LEASE_KEY] = lease
+            inv.payload_json = payload  # reassign so SQLAlchemy sees the JSON mutation
+            session.add(inv)
+    except Exception:  # noqa: BLE001
+        logger.exception("analyst.lease: write failed for inv=%s", getattr(inv, "slug", "?"))
+
+
 # --------------------------------------------------------------------------- #
 # Batched inference — a single OpenRouter request carries at most N accounts.
 # --------------------------------------------------------------------------- #
@@ -1732,6 +1841,7 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
             logger.info("analyst.generate: already in flight for slug=%s; skipping duplicate model call", slug)
             return None
         _autogen_inflight.add(slug)
+    run_lease_id = uuid.uuid4().hex[:12]
     try:
         # get_session is imported at module scope (see the note there — a local import here is what
         # broke the batched path's nested closure).
@@ -1771,6 +1881,16 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
                 # Otherwise this is a PARTIAL batched entry whose run is not alive (the liveness
                 # check above already returned for the ones that are), so it is a genuinely
                 # interrupted run: fall through and regenerate it.
+
+            # Durable claim, taken BEFORE any model call. The heartbeat above only exists once the
+            # first batch has landed, which is minutes in; until then a run is invisible to every
+            # other process, so the page's first POST (arriving seconds after the scan scheduled
+            # this one) landed on another worker and started a whole second run. That is the
+            # "it scans twice" report, and it billed twice.
+            if not claim_generation_lease(session, inv, run_lease_id):
+                logger.info("analyst.generate: slug=%s another process holds the generation lease; "
+                            "not starting a duplicate run", slug)
+                return current
             payload = inv.payload_json or {}
             platform = _platform_of(inv)
             inv_slug = inv.slug
@@ -1804,6 +1924,16 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
     finally:
         with _autogen_lock:
             _autogen_inflight.discard(slug)
+        # Drop the durable claim so a later refresh is not made to wait out the staleness window.
+        # Never allowed to raise: the generation is already done and its result is already written.
+        try:
+            with get_session() as _s:
+                from app.storage.repository import AccountRepository as _Repo
+                _inv = _Repo(_s).get_investigation(slug=slug, user_id=user_id)
+                if _inv is not None:
+                    release_generation_lease(_s, _inv, run_lease_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("analyst.generate: could not release the lease for slug=%s", slug)
 
 
 def maybe_autogenerate(slug: str, user_id: int | None) -> bool:

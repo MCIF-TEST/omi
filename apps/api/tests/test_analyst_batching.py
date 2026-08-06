@@ -470,3 +470,80 @@ def test_landed_is_the_coverage_figure_and_done_is_not():
     merged = _merge_batch_parts(parts, batch_size=1, done=3, run_finished=True)
     assert merged["batching"]["done"] == 3      # every batch was attempted
     assert merged["batching"]["landed"] == 1    # only one produced accounts
+
+
+# --------------------------------------------------------------------------- #
+# The startup window: "it scans twice"
+#
+# `batching.heartbeat` only exists once the FIRST batch has persisted, minutes into a run. Until
+# then a batched generation is invisible to every other process, so the page's first POST (arriving
+# seconds after the scan scheduled the run) landed on another worker and started a second full run.
+# Two OpenRouter runs, two bills, one investigation.
+# --------------------------------------------------------------------------- #
+class _LeaseInv:
+    def __init__(self, payload=None):
+        self.slug = "inv_lease"
+        self.payload_json = payload or {}
+
+
+class _LeaseSession:
+    """Just enough session for the SAVEPOINT-wrapped lease write."""
+    def begin_nested(self):
+        return contextlib.nullcontext()
+
+    def add(self, _obj):
+        pass
+
+
+def test_the_lease_is_claimed_before_any_batch_has_landed():
+    """The whole point: a claim that exists from the first moment of the run."""
+    inv, session = _LeaseInv(), _LeaseSession()
+    assert A.generation_lease_is_live(inv) is False
+    assert A.claim_generation_lease(session, inv, "runA") is True
+    assert A.generation_lease_is_live(inv) is True
+
+
+def test_a_second_process_cannot_claim_a_live_lease():
+    inv, session = _LeaseInv(), _LeaseSession()
+    assert A.claim_generation_lease(session, inv, "runA") is True
+    assert A.claim_generation_lease(session, inv, "runB") is False, \
+        "a second worker started a duplicate run while the first was still going"
+
+
+def test_a_run_can_reclaim_its_own_lease():
+    inv, session = _LeaseInv(), _LeaseSession()
+    assert A.claim_generation_lease(session, inv, "runA") is True
+    assert A.claim_generation_lease(session, inv, "runA") is True
+
+
+def test_a_stale_lease_does_not_block_a_new_run_forever():
+    """A crashed run must not lock the investigation out of ever being generated again."""
+    from datetime import datetime, timedelta, timezone
+    old = (datetime.now(timezone.utc)
+           - timedelta(seconds=A.BATCH_HEARTBEAT_STALE_SEC + 60)).isoformat()
+    inv = _LeaseInv({A.LEASE_KEY: {"run_id": "dead", "heartbeat": old}})
+    assert A.generation_lease_is_live(inv) is False
+    assert A.claim_generation_lease(_LeaseSession(), inv, "runB") is True
+
+
+def test_releasing_frees_the_investigation_immediately():
+    """Otherwise a Retry right after a run would sit out the whole staleness window."""
+    inv, session = _LeaseInv(), _LeaseSession()
+    A.claim_generation_lease(session, inv, "runA")
+    A.release_generation_lease(session, inv, "runA")
+    assert A.generation_lease_is_live(inv) is False
+
+
+def test_releasing_someone_elses_lease_is_a_no_op():
+    inv, session = _LeaseInv(), _LeaseSession()
+    A.claim_generation_lease(session, inv, "runA")
+    A.release_generation_lease(session, inv, "runB")
+    assert A.generation_lease_is_live(inv) is True, "runB released a lease it did not own"
+
+
+def test_the_lease_is_never_mistaken_for_a_result():
+    """It lives outside the assessment cache, so `cached_assessment` cannot return it."""
+    inv, session = _LeaseInv(), _LeaseSession()
+    A.claim_generation_lease(session, inv, "runA")
+    assert A.LEASE_KEY != A.CACHE_KEY
+    assert A.cached_assessment(inv) is None
