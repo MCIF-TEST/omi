@@ -16,6 +16,17 @@ from app.reasoning import analyst as A
 from app.reasoning.analyst import _merge_batch_parts, _split_batches
 
 
+def _batching_core(merged: dict) -> dict:
+    """The batching marker without its liveness fields.
+
+    ``run_id`` and ``heartbeat`` identify the run that wrote the entry and when, so another process
+    can tell a live batched run from an interrupted one. A heartbeat is a wall-clock timestamp, so
+    asserting on the whole dict would be asserting on the current time.
+    """
+    return {k: v for k, v in (merged["batching"] or {}).items()
+            if k not in ("run_id", "heartbeat")}
+
+
 def _payload(n_accounts: int) -> dict:
     return {
         "video": {
@@ -76,7 +87,7 @@ def test_merge_concatenates_accounts_first_to_last():
     assert merged is not None
     scores = [a["omi_score"] for a in merged["commenter_assessments"]]
     assert scores == [10, 20, 80, 90]
-    assert merged["batching"] == {"total": 2, "done": 2, "batch_size": 2, "complete": True}
+    assert _batching_core(merged) == {"total": 2, "done": 2, "batch_size": 2, "complete": True}
 
 
 def test_merge_overall_is_account_weighted_mean_of_batch_overalls():
@@ -92,7 +103,7 @@ def test_partial_merge_reports_progress_and_incomplete():
     merged = _merge_batch_parts(parts, batch_size=1, done=1)
     assert merged is not None
     assert len(merged["commenter_assessments"]) == 1
-    assert merged["batching"] == {"total": 3, "done": 1, "batch_size": 1, "complete": False}
+    assert _batching_core(merged) == {"total": 3, "done": 1, "batch_size": 1, "complete": False}
     assert merged["completion"]["complete"] is False
 
 
@@ -126,7 +137,7 @@ def test_a_finished_run_is_marked_complete_even_with_a_failed_batch():
     client waited for a batch that is never coming."""
     parts = [_part(scores=[10], overall=10), None, _part(scores=[20], overall=20)]
     merged = _merge_batch_parts(parts, batch_size=1, done=2, run_finished=True)
-    assert merged["batching"] == {"total": 3, "done": 2, "batch_size": 1, "complete": True}
+    assert _batching_core(merged) == {"total": 3, "done": 2, "batch_size": 1, "complete": True}
     # Still honest about coverage: only the two landed batches' accounts are present.
     assert len(merged["commenter_assessments"]) == 2
 
@@ -301,3 +312,71 @@ def test_a_failed_middle_batch_does_not_freeze_progress_or_withhold_later_batche
     # Batches 3 and 4 reached the reader rather than waiting for the run to end.
     final_refs = [a["ref"] for a in persisted[-1]["assessment"]["commenter_assessments"]]
     assert final_refs == ["A1", "A3", "A4"], final_refs
+
+
+# --------------------------------------------------------------------------- #
+# Progress must never go backwards on screen
+#
+# Live symptom (2026-08-05): the panel reached "3 of 4" and then dropped back to "1 of 4" with no
+# accounts scored. Two runs were writing to one row. `_autogen_inflight` is a PER-PROCESS set, so a
+# second worker (or a poll after a restart) looked at the incomplete entry, concluded the run had
+# been interrupted, and started a duplicate whose first write replaced the user's 75 accounts with
+# 25.
+# --------------------------------------------------------------------------- #
+def _entry(*, done: int, total: int, accounts: int, run_id: str,
+           heartbeat_age_sec: float = 0.0, complete: bool = False) -> dict:
+    from datetime import datetime, timedelta, timezone
+    beat = datetime.now(timezone.utc) - timedelta(seconds=heartbeat_age_sec)
+    return {"assessment": {
+        "commenter_assessments": [{"ref": f"A{i+1}"} for i in range(accounts)],
+        "batching": {"total": total, "done": done, "batch_size": 25, "complete": complete,
+                     "run_id": run_id, "heartbeat": beat.isoformat()},
+    }}
+
+
+def test_a_fresh_heartbeat_means_some_process_is_still_working():
+    assert A.batched_run_looks_alive(_entry(done=3, total=4, accounts=75, run_id="r1")) is True
+    # Stale: whoever was writing has stopped, so this entry is fair game to regenerate.
+    assert A.batched_run_looks_alive(
+        _entry(done=3, total=4, accounts=75, run_id="r1",
+               heartbeat_age_sec=A.BATCH_HEARTBEAT_STALE_SEC + 5)) is False
+    # A finished run is not "alive", however recently it was written.
+    assert A.batched_run_looks_alive(
+        _entry(done=4, total=4, accounts=100, run_id="r1", complete=True)) is False
+    # Entries written before the field existed must still self-heal rather than block forever.
+    assert A.batched_run_looks_alive(
+        {"assessment": {"batching": {"total": 4, "done": 3, "complete": False}}}) is False
+    assert A.batched_run_looks_alive(None) is False
+
+
+def test_a_duplicate_run_does_not_publish_its_first_batch_over_a_live_runs_third():
+    """The exact regression: run B's "1 of 4" must not replace run A's "3 of 4"."""
+    live = _entry(done=3, total=4, accounts=75, run_id="runA")
+    mine = {"commenter_assessments": [{"ref": "A1"}] * 25,
+            "batching": {"total": 4, "done": 1, "run_id": "runB", "complete": False}}
+    assert A._entry_is_ahead(live, mine, "runB") is True
+
+
+def test_a_run_always_advances_over_its_own_earlier_writes():
+    """Deferring to our own previous write would freeze the run at batch 1 forever."""
+    ours = _entry(done=3, total=4, accounts=75, run_id="runA")
+    mine = {"commenter_assessments": [{"ref": "A1"}] * 100,
+            "batching": {"total": 4, "done": 4, "run_id": "runA", "complete": False}}
+    assert A._entry_is_ahead(ours, mine, "runA") is False
+
+
+def test_a_dead_run_is_replaceable_even_though_it_has_more_accounts():
+    """Otherwise a crashed run's partial result would be permanent and nothing could heal it."""
+    dead = _entry(done=3, total=4, accounts=75, run_id="runA",
+                  heartbeat_age_sec=A.BATCH_HEARTBEAT_STALE_SEC + 60)
+    mine = {"commenter_assessments": [{"ref": "A1"}] * 25,
+            "batching": {"total": 4, "done": 1, "run_id": "runB", "complete": False}}
+    assert A._entry_is_ahead(dead, mine, "runB") is False
+
+
+def test_catching_up_publishes_again():
+    """The guard defers, it does not disable the run. Once we draw level we write."""
+    live = _entry(done=2, total=4, accounts=50, run_id="runA")
+    mine = {"commenter_assessments": [{"ref": "A1"}] * 75,
+            "batching": {"total": 4, "done": 3, "run_id": "runB", "complete": False}}
+    assert A._entry_is_ahead(live, mine, "runB") is False

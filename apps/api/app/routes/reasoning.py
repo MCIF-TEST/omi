@@ -126,7 +126,10 @@ def generate_analyst_assessment(
         if entry and not refresh:
             _batching = (entry.get("assessment") or {}).get("batching") or {}
             if _batching and not _batching.get("complete"):
-                if analyst.is_generation_inflight(inv.slug):
+                # `is_generation_inflight` only sees THIS process's runs. The heartbeat on the entry
+                # sees any process's, which is what stops a second worker deciding a healthy run is
+                # interrupted and starting a duplicate that republishes "1 of 4" over "3 of 4".
+                if analyst.is_generation_inflight(inv.slug) or analyst.batched_run_looks_alive(entry):
                     response.status_code = status.HTTP_202_ACCEPTED
                     return AnalystResponse(
                         slug=inv.slug, enabled=True, status="partial", cached=False,

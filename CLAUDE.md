@@ -1572,6 +1572,41 @@ the *success* count, so the readout ran 1, 2, 3, 4 and then dropped back to 3, w
 losing work it had already shown. Pinned by
 `test_a_failed_middle_batch_does_not_freeze_progress_or_withhold_later_batches`.
 
+### Two runs used to fight over one investigation, and progress ran backwards
+
+Reported 2026-08-05: the panel reached **"3 of 4"** and then dropped to **"1 of 4" with 0 accounts
+scored**. Two batched runs were writing to the same row.
+
+**`_autogen_inflight` is a per-process set.** `is_generation_inflight()` therefore answers only for
+the worker that happens to serve the request. With more than one worker, or after a restart, a
+healthy run in flight is *invisible*, and a partial entry (`batching.complete == False`) looks
+exactly like the interrupted run the route is supposed to heal. So the second worker cleared `entry`,
+submitted a duplicate generation, and that duplicate's first `_persist_progress(1)` republished 25
+accounts over the 75 the customer was reading.
+
+Two independent fixes, because either alone leaves a hole:
+
+- **A durable heartbeat.** `batching` now carries `run_id` and `heartbeat`, written on every progress
+  persist, and `batched_run_looks_alive()` reads them. That is cross-process evidence that somebody
+  is still working, which the in-flight set cannot provide. Used in `generate_and_persist` (serve the
+  partial instead of regenerating) and in the route's partial branch. `BATCH_HEARTBEAT_STALE_SEC` is
+  **420s**, which has to clear the slowest realistic single batch: too low and duplicate runs come
+  back, too high and a genuinely crashed run leaves the user waiting. An **absent** heartbeat counts
+  as not-alive, so entries written before the field existed still self-heal.
+- **Progress never goes backwards.** `_entry_is_ahead()` makes `_persist_progress` defer to a stored
+  entry that belongs to a *different*, *still-live* run with *more* accounts. Deliberately narrow:
+  our own `run_id`, a stale entry, a finished entry and an equal-or-behind entry all fall through to
+  the normal write, so a single run is completely unaffected and a crashed run stays replaceable. The
+  guard **defers, it does not disable** the run: once the second run draws level it publishes again.
+
+The `cached_assessment(inv)` read inside `_persist_progress` is wrapped in `try/except` on purpose.
+It is advisory, and a guard that cannot read the current entry must fall through to the write:
+losing the guard costs a cosmetic regression, losing the write costs results a customer paid for.
+
+Pinned by six tests at the end of `tests/test_analyst_batching.py`. Note that the exact-equality
+assertions on `merged["batching"]` had to go through `_batching_core()`, since a heartbeat is a
+wall-clock timestamp and asserting on the whole dict is asserting on the current time.
+
 ### The preset name is a two-sided contract and nothing at runtime reconciles it
 
 The OpenRouter preset was renamed `omi-master-v1` -> `omi-master-v2` in the dashboard.

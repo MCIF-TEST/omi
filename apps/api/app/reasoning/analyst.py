@@ -24,6 +24,7 @@ import os
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -1368,7 +1369,7 @@ def _tier_for_score(score: int) -> str:
 
 
 def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
-                       run_finished: bool = False) -> dict | None:
+                       run_finished: bool = False, run_id: str | None = None) -> dict | None:
     """Merge per-batch assessments into ONE progressive assessment, strictly first-to-last.
 
     ``parts`` is indexed by batch; entries still pending (or failed) are None. The first completed
@@ -1492,9 +1493,77 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     # fresh run every few seconds, forever, and the client would poll for a batch that is never coming.
     # ``done`` < ``total`` with ``complete`` true is the honest "finished, but N batches yielded
     # nothing" state; the UI says so and offers a refresh.
+    #
+    # ``run_id`` + ``heartbeat`` make a live run visible ACROSS PROCESSES, which the in-flight set
+    # cannot do (see ``batched_run_looks_alive``). Without them a second worker saw an incomplete
+    # entry, concluded the run had been interrupted, and started a duplicate whose first write
+    # replaced "3 of 4" with "1 of 4" and no accounts.
     base["batching"] = {"total": total_batches, "done": done, "batch_size": batch_size,
-                        "complete": bool(run_finished) or done >= total_batches}
+                        "complete": bool(run_finished) or done >= total_batches,
+                        "run_id": run_id,
+                        "heartbeat": datetime.now(timezone.utc).isoformat()}
     return base
+
+
+#: How long a batched run's entry may go without a progress write before another worker is allowed
+#: to conclude it died and regenerate. A batch is one model call, so this has to clear the slowest
+#: realistic one with room to spare: too low and we are back to duplicate runs fighting over the
+#: same row, too high and a genuinely crashed run leaves the user waiting.
+BATCH_HEARTBEAT_STALE_SEC = 420
+
+
+def batched_run_looks_alive(entry: dict | None) -> bool:
+    """Whether an incomplete batched entry is being actively worked on by SOME process.
+
+    ``is_generation_inflight`` answers this for the current process only, and that is not enough:
+    the in-flight set is per-process, so with more than one worker (or after a restart) a live run
+    is invisible to whichever worker handles the next poll. That worker treated the partial entry as
+    an interrupted run and launched a duplicate, and the duplicate's first progress write published
+    ``done=1`` with one batch of accounts over the ``done=3`` the user was already looking at.
+
+    A fresh heartbeat is durable evidence that someone is still writing, whoever and wherever they
+    are. Absent heartbeat means the entry predates this field, and is treated as NOT alive so an
+    genuinely interrupted old run still self-heals.
+    """
+    batching = ((entry or {}).get("assessment") or {}).get("batching") or {}
+    if not batching or batching.get("complete"):
+        return False
+    beat = batching.get("heartbeat")
+    if not isinstance(beat, str) or not beat:
+        return False
+    try:
+        seen = datetime.fromisoformat(beat.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - seen).total_seconds()
+    return age < BATCH_HEARTBEAT_STALE_SEC
+
+
+def _scored_accounts(assessment: dict | None) -> int:
+    return len(((assessment or {}).get("commenter_assessments")) or [])
+
+
+def _entry_is_ahead(existing: dict | None, mine: dict, run_id: str | None) -> bool:
+    """Whether a stored entry belongs to a different, still-live run that has more results than we do.
+
+    Every clause is a reason not to defer, so the normal single-run path is untouched:
+
+    * no stored entry, or no batching on it: nothing to lose, write.
+    * same ``run_id``: our own earlier write, and ours must always advance.
+    * not alive: a crashed or interrupted run, which is exactly what we are here to replace.
+    * fewer or equal accounts: we are not losing any work by publishing, so publish.
+    """
+    stored = ((existing or {}).get("assessment") or {})
+    batching = stored.get("batching") or {}
+    if not batching:
+        return False
+    if run_id and batching.get("run_id") == run_id:
+        return False
+    if not batched_run_looks_alive(existing):
+        return False
+    return _scored_accounts(stored) > _scored_accounts(mine)
 
 
 def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks: list[dict],
@@ -1521,10 +1590,12 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     parts: list[dict | None] = [None] * total
     flushed = 0    # longest contiguous run of completed batches (0..total)
     attempted = 0  # batches whose model call has returned, succeeded or not — what the UI counts
+    # Identifies THIS run's writes, so a concurrent one can tell our progress from its own.
+    run_id = uuid.uuid4().hex[:12]
 
     def _persist_progress(done: int, *, run_finished: bool = False) -> dict | None:
         merged = _merge_batch_parts(parts, batch_size=batch_size, done=done,
-                                    run_finished=run_finished)
+                                    run_finished=run_finished, run_id=run_id)
         if merged is None:
             return None
         gov = merged.get("governance") or {}
@@ -1534,6 +1605,29 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
             inv = repo.get_investigation(slug=inv_slug, user_id=user_id)
             if inv is None:
                 return None
+            # PROGRESS NEVER GOES BACKWARDS ON SCREEN.
+            #
+            # The heartbeat above stops most duplicate runs from starting. This stops the damage if
+            # one starts anyway (two workers racing, a redeploy mid-run, a manual refresh landing on
+            # a live run): a younger run's first write would otherwise replace the "3 of 4" and 75
+            # accounts the user is reading with "1 of 4" and 25.
+            #
+            # Deliberately narrow. It only defers to an entry from a DIFFERENT run that is still
+            # being written to and is genuinely ahead of us. Our own writes, a stale entry, and a
+            # finished entry all fall through to the normal write, so a single run behaves exactly
+            # as before and a crashed run is still replaceable.
+            # Advisory only, so it must never be the reason a batch fails to persist. If the stored
+            # entry cannot be read we write, which is exactly the behaviour that existed before this
+            # guard: losing the guard costs a cosmetic regression, losing the write costs results.
+            try:
+                existing = cached_assessment(inv)
+            except Exception:  # noqa: BLE001
+                existing = None
+            if not run_finished and _entry_is_ahead(existing, merged, run_id):
+                logger.info(
+                    "analyst.batched: slug=%s another run is further ahead; not publishing this "
+                    "run's progress over it", inv_slug)
+                return existing
             return persist_assessment(session, inv, merged, provider)
 
     entry: dict | None = None
@@ -1648,8 +1742,17 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
                                 "(cache hit_rate=%.2f)", slug,
                                 runtime_metrics()["assessment_cache"]["hit_rate"])
                     return cached
-                # A PARTIAL batched entry (an interrupted run left batching.complete=False with no
-                # generation in flight) is not a finished result — fall through and regenerate.
+                # A PARTIAL batched entry is not a finished result, so it normally falls through and
+                # regenerates. But "partial" and "being written to right now" look identical in the
+                # row, and `_autogen_inflight` is per-process, so a second worker used to reach here
+                # while a run was healthily mid-flight and start a duplicate. The duplicate then
+                # republished "1 of 4" over the "3 of 4" the user was reading. A fresh heartbeat is
+                # the cross-process evidence that someone is still working, so leave them to it and
+                # serve what has landed.
+                if batched_run_looks_alive(cached):
+                    logger.info("analyst.generate: slug=%s already being generated elsewhere "
+                                "(fresh batch heartbeat); serving partial", slug)
+                    return cached
             payload = inv.payload_json or {}
             platform = _platform_of(inv)
             inv_slug = inv.slug
