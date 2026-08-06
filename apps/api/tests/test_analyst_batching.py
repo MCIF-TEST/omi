@@ -380,3 +380,51 @@ def test_catching_up_publishes_again():
     mine = {"commenter_assessments": [{"ref": "A1"}] * 75,
             "batching": {"total": 4, "done": 3, "run_id": "runB", "complete": False}}
     assert A._entry_is_ahead(live, mine, "runB") is False
+
+
+def test_a_duplicate_runs_FINAL_write_cannot_bury_a_live_runs_progress():
+    """The worst version of the bug, and the one that survived the first fix.
+
+    The final write used to be exempt from the guard. So a duplicate run finishing with one batch
+    published 25 accounts over the leader's 75 AND set ``complete: true``, which stops the entry
+    being regenerable: the customer was left permanently with a quarter of what they paid for.
+    """
+    live = _entry(done=3, total=4, accounts=75, run_id="runA")
+    final = {"commenter_assessments": [{"ref": "A1"}] * 25,
+             "batching": {"total": 4, "done": 4, "run_id": "runB", "complete": True}}
+    assert A._entry_is_ahead(live, final, "runB") is True
+
+
+def test_a_forced_refresh_does_not_start_a_second_run_against_a_live_one(monkeypatch):
+    """`refresh` used to skip reading the entry entirely, so every forced regeneration raced.
+
+    Both the route's one-shot floor auto-heal and the UI's Retry button pass refresh=True. A refresh
+    exists to heal a dead or floored result, not to race a live one.
+    """
+    live = _entry(done=3, total=4, accounts=75, run_id="runA")
+
+    class _Inv:
+        slug = "inv_live"
+        payload_json = {"video": {"commenters": []}}
+
+    class _Repo:
+        def __init__(self, _s): pass
+        def get_investigation(self, **_k): return _Inv()
+
+    @contextlib.contextmanager
+    def _fake_session():
+        yield object()
+
+    called: list[str] = []
+
+    monkeypatch.setattr(A, "get_session", _fake_session)
+    monkeypatch.setattr(A, "cached_assessment", lambda _inv: live)
+    monkeypatch.setattr(A, "analyst_enabled", lambda _s: True)
+    monkeypatch.setattr(A, "assess_payload",
+                        lambda *a, **k: called.append("model") or None)
+    monkeypatch.setattr("app.storage.repository.AccountRepository", _Repo)
+
+    out = A.generate_and_persist("inv_live", 1, refresh=True)
+
+    assert out is live, "a forced refresh must serve the live run's partial, not start a duplicate"
+    assert called == [], "a forced refresh started a duplicate model run against a live one"

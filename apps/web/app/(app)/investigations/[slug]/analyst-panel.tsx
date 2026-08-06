@@ -87,6 +87,8 @@ export function AnalystPanel({
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startRef = useRef<number>(0);
   const lastBatchDoneRef = useRef<number>(0);
+  // Most accounts published so far in THIS run, so a stale or duplicate poll cannot walk it back.
+  const maxScoredRef = useRef<number>(0);
 
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
 
@@ -112,6 +114,9 @@ export function AnalystPanel({
     setElapsedSec(0);
     startRef.current = Date.now();
     setPending(true);
+    // Reset per-run, here rather than at the call sites, so a slug change starts clean too.
+    lastBatchDoneRef.current = 0;
+    maxScoredRef.current = 0;
     let polls = 0;
     let transportFails = 0;
 
@@ -139,9 +144,20 @@ export function AnalystPanel({
             lastBatchDoneRef.current = done;
             polls = 0;
           }
-          setAssessment(r.assessment);
-          setProvider(r.provider ?? null);
-          setGeneratedAt(r.generated_at ?? null);
+          // Defence in depth against a reset the user should never see. The server now refuses to
+          // publish one run's progress over a further-along live run, so this should not trigger;
+          // it is here because the cost of being wrong is asymmetric. Showing fewer accounts than
+          // a moment ago reads as the product losing paid-for work, while ignoring one stale poll
+          // costs nothing: the next poll 2.5s later corrects it.
+          //
+          // Both counters reset in `run(true)`, so an explicit Retry still shows its fresh run.
+          const scored = r.assessment.commenter_assessments?.length ?? 0;
+          if (scored >= maxScoredRef.current) {
+            maxScoredRef.current = scored;
+            setAssessment(r.assessment);
+            setProvider(r.provider ?? null);
+            setGeneratedAt(r.generated_at ?? null);
+          }
         }
         // 202 generating, a scan-time generation or the backend's one-shot auto-heal is in flight.
         // Hold the loading screen and poll until it lands.
@@ -258,7 +274,7 @@ export function AnalystPanel({
           <AssessmentView
             a={assessment}
             slug={slug}
-            onRetry={() => { lastBatchDoneRef.current = 0; void run(true); }}
+            onRetry={() => void run(true)}
             busy={pending}
           />
           {/* The same live state repeated where the results END: the user reading down the list
@@ -277,7 +293,7 @@ export function AnalystPanel({
             && assessment.batching.done < assessment.batching.total && (
             <IncompleteCoverageNotice
               batching={assessment.batching}
-              onRetry={() => { lastBatchDoneRef.current = 0; void run(true); }}
+              onRetry={() => void run(true)}
               busy={pending}
             />
           )}
