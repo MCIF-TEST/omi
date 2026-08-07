@@ -5,10 +5,33 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
-`main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1911 passed, 8 skipped, 1 failed** (6m24s), the failure pre-existing and listed below.
-The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
+**Last updated:** 2026-08-06 · branch `claude/master-analyst-protocol-v1-1u8tyk`, open as draft PR
+[#178](https://github.com/MCIF-TEST/omi/pull/178) · suite measured at **1938 passed, 8 skipped,
+1 failed** (6m04s), the failure pre-existing and listed below. The 8 skips are the corpus-backed
+tests — see "The dataset corpus is not in git".
+
+### Deploy state, read this first
+
+The branch carries ~20 commits and **the code was not confirmed deployed** at the end of the
+2026-08-06 session, while the OpenRouter preset WAS updated (live prose showed the recalibrated
+"heavy reposters / ambient trait" language). That split is the single most confusing thing about the
+current state: **the model is running the new protocol, the server may still be running old code.**
+Confirm which before diagnosing anything, because most of the day's reported symptoms have a fix
+sitting unshipped on this branch.
+
+Three env vars carry tuning that the code defaults get wrong. `OMI_ANALYST_TIMEOUT_SECONDS` and
+`OMI_ANALYST_BATCH_ACCOUNTS` are committed in `render.yaml`, so a dashboard edit is temporary;
+`OMI_ANALYST_BATCH_CONCURRENCY` is committed too. See "Analyst latency is FLAT in the batch size".
+
+| | |
+|---|---|
+| `OMI_ANALYST_TIMEOUT_SECONDS` | **900** (was 500, which was cutting batches off) |
+| `OMI_ANALYST_BATCH_ACCOUNTS` | **25** (12 was tried and is worse, see the section) |
+| `OMI_ANALYST_BATCH_CONCURRENCY` | **1**, a product decision about the rollout, not a perf default |
+
+**How to tell a failing run from a slow one at a glance:** compare the batch counter against the
+account count. `done` counts batches ATTEMPTED, so `3 OF 4 DONE` beside `25 accounts scored` means
+two batches produced nothing. `landed` is the real coverage figure.
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -1758,8 +1781,149 @@ Three things not to undo:
 fails when a new reason arrives without one, so a failure can never render as a bare error with no
 next step.
 
+### Analyst latency is FLAT in the batch size, which inverts the obvious tuning
+
+Measured on the live site 2026-08-06, and it contradicted two changes made the same day before the
+numbers arrived. **A 12-account batch took 426s. A 25-account batch took ~418s.** Per-batch latency
+is dominated by the FIXED cost of the request (the ~100k-char protocol, roughly 25k input tokens,
+re-sent on every batch, plus the model's reasoning budget), not by the per-account evidence.
+
+Three consequences, all of which cost real money or real time before they were understood:
+
+- **Batches were being cut off and returning nothing.** `OMI_ANALYST_TIMEOUT_SECONDS` was 500s
+  against ~418s batches, so two of four batches on a 100-account scan crossed it and produced
+  nothing. The customer paid for 100 accounts and got 25. The UI read `SCORING IN BATCHES: 3 OF 4
+  DONE` beside `25 accounts scored`, which is the signature: `done` counts batches ATTEMPTED, so a
+  gap between `done` and the account count means batches are failing. Now **900s**.
+- **Shrinking batches does not make them faster, it just makes more of them.** 100 accounts at 12
+  per batch is 9 sequential passes, about 64 minutes, against 4 passes for the same work at 25.
+  `OMI_ANALYST_BATCH_ACCOUNTS` is pinned at **25** for that reason; the timeout, not a smaller
+  batch, is what keeps a large batch from being cut off.
+- **The client's poll budget must OUTLAST the server's per-call timeout.** `MAX_POLLS` (400 × 2.5s
+  ≈ 1000s without visible progress) now exceeds the 900s call timeout. At the old 240 the browser
+  declared failure while the server was still working and would have delivered the batch, which is
+  what produced a red "taking longer than usual" notice at 1254s on a healthy run.
+
+**`OMI_ANALYST_BATCH_CONCURRENCY` stays at 1, and that is a PRODUCT decision, not a performance
+one.** The intended experience is a rollout: send the first quarter of the evidence bundle, show
+those accounts the moment OpenRouter returns them, say more are coming, fill the rest in underneath.
+Raising it collapses that into a single wait where everything appears at the end, which is faster in
+total and worse to sit through. The cost is stated plainly so nobody "optimises" it away by
+accident: a 100-account scan is 4 sequential calls of ~430s, roughly **28 minutes end to end, first
+25 accounts readable after about 7**. Concurrency 2 is the middle option (first quarter still at
+~7 min, everything done in ~14) if total wait ever matters more than the rollout.
+
+**Cost note gains a second axis.** The protocol has grown 64,808 → 101,754 chars, and that file has
+tracked the token cost since. It never tracked the LATENCY cost, and latency is what broke the
+product: the same growth is why a batch takes ~7 minutes. If the protocol grows again, measure a
+batch, not just the token count.
+
+### The durable generation lease, and why the in-process set was never enough
+
+`_autogen_inflight` is a **per-process set**, so `is_generation_inflight()` answers only for the
+worker serving the request. Three separate live bugs came out of that, and each needed its own fix:
+
+- **`batching.run_id` + `batching.heartbeat`**, written on every progress persist and read by
+  `batched_run_looks_alive()`. Cross-process evidence that somebody is still working. Without it a
+  second worker saw an incomplete entry, concluded the run was interrupted, and started a duplicate
+  whose first write republished "1 of 4" over the "3 of 4" the customer was reading.
+  `BATCH_HEARTBEAT_STALE_SEC` is 420s: it must clear the slowest realistic single batch.
+- **`LEASE_KEY` (`analyst_run_lease_v1`)**, claimed by `claim_generation_lease()` BEFORE any model
+  call and released in `generate_and_persist`'s `finally`. The heartbeat only exists once the FIRST
+  batch has persisted, which is ~7 minutes in; until then a run scheduled at scan time is invisible
+  to every other process, so the page's first POST (arriving seconds later) started a whole second
+  run. That is the "it scans twice" report, and it billed twice. The lease lives **outside** the
+  assessment cache, so `cached_assessment` can never mistake it for a result. Read-modify-write
+  rather than a locked row on purpose: it narrows the window from minutes to milliseconds, and
+  anything landing inside that remainder is caught by `_entry_is_ahead` below.
+- **`_entry_is_ahead()`** makes a progress write defer to a stored entry from a *different*,
+  *still-live* run with *more* accounts. It covers the FINAL write too, which is the load-bearing
+  part: exempting it made the bug permanent rather than cosmetic, because a duplicate finishing with
+  one batch published 25 accounts over the leader's 75 **and set `complete: true`**, so the entry
+  stopped being regenerable. It defers, it does not disable: once the second run draws level it
+  publishes again.
+
+`refresh=True` used to skip reading the entry entirely, so every forced regeneration (the route's
+one-shot floor auto-heal, the UI's Retry) started a duplicate. The liveness check now runs BEFORE
+the refresh branch. A refresh exists to heal a dead or floored result, not to race a live one.
+
+The `cached_assessment(inv)` read inside `_persist_progress` is wrapped in `try/except` on purpose:
+it is advisory, and a guard that cannot read the current entry must fall through to the write.
+Losing the guard costs a cosmetic regression; losing the write costs results a customer paid for.
+
+### One progress screen, and a fabricated batch pointer that is honest about itself
+
+`components/shared/analysis-progress.tsx` is the ONE loading screen for a running investigation.
+There used to be three (a violet card on the select page, grey route skeletons, then a differently
+built analyst card), and a user who had just spent a credit watched the screen change shape twice
+for a single job, which reads as a restart rather than progress. Compile and select are unchanged.
+
+The pure half is `lib/analysis-progress.ts` (same split as `investigation-export.ts` and
+`analyst-failure.ts`). It shows a batch position immediately, derived client-side without the
+server: the investigation page already receives every account the engine scored, the select page
+knows the selection size, so batches are `ceil(accounts / 25)` on both.
+
+**`displayedBatch()` advances the pointer every 120s if nothing has landed.** That is a front-end
+estimate and two things keep it honest, both load-bearing:
+
+- It names the batch being **worked on**, never a count of batches finished. "Analysing batch 2 of
+  4" is a position in a queue; "2 of 4 done" would claim results exist. Tests pin that distinction.
+- It only runs while there is **no real progress data**. The moment the first batch lands the whole
+  component is replaced by the results plus `BatchProgressStrip`, which reports the server's real
+  `batching.done`. The estimate and a real number are never on screen together.
+
+The route skeleton renders the same card with no batch count, since that render knows nothing about
+the investigation and inventing a denominator is what the file is careful not to do.
+
+### A dropped connection is not an answer
+
+A batched run polls every 2.5s for up to ~17 minutes, so a single failed fetch used to end the whole
+loop and show a terminal error while the generation kept running on the server. It fires most
+reliably during an API restart, which is exactly when a deploy is going out.
+
+`TypeError` (the connection never completed) and 502/504 are now retried with backoff
+(`MAX_TRANSPORT_FAILS` 6, capped at 15s) and only reported once the API has been unreachable for
+about a minute. **503 is deliberately excluded**: our own API returns it to mean the analyst is
+switched off, which is a real answer rather than a transport fault. The retries do not consume the
+poll budget, since that budget measures time since the analyst last made progress.
+
+`analyst-panel.tsx` also keeps a `maxScoredRef` and ignores a poll carrying fewer accounts than the
+last one. Defence in depth, not the fix: showing fewer accounts reads as the product losing paid-for
+work, while ignoring one stale poll costs nothing. Both refs reset at the top of `run()`.
+
+### Aliases must not reach a reader in the INVESTIGATION-LEVEL prose either
+
+`check_alias_in_prose` is HARD but only guards `commenter_assessments[].assessment`. The
+investigation-level `headline` / `assessment` / evidence claims go through the Governor's S9 lint,
+which has no alias rule, so this rendered live on omisphere.online:
+
+> "style-match clusters (C4, C6, C1, C5, C3, C7)" · "few or no collected posts (A24, A20, A19)"
+
+`_dealias_investigation_prose` (`analyst.py`, called at the join where the legend and payload are
+both in hand) fixes it by **resolving rather than refusing**: withholding a whole investigation
+summary over a label would be far too blunt, and an account's real handle is strictly more useful
+than what the model wrote. Cluster aliases have no public name at all, so they are removed along
+with any parenthetical left empty; an unresolvable account alias is removed rather than printed,
+since an unresolved label tells the reader nothing and looks like a defect. The pure half is
+`resolve_aliases_in_prose` in `grounding.py`. Best effort by construction: presentation polish must
+never sink an investigation.
+
+---
+
 ## Outstanding — needs the user, not code
 
+0. **Deploy this branch, and confirm it deployed.** Nothing below matters more. Around 20 commits
+   are unshipped, several of which fix things that break scans on every run (the canonical validator
+   packaging bug that floors every analysis, the withheld assessments, the duplicate-run race, the
+   batch timeout). The preset is already updated, so the deploy is the only remaining half.
+   Verify with `GET /v1/investigations/analyst/preflight` **on the API host directly**, and by
+   checking whether an investigation summary still prints raw aliases like `(C4, C6)` — if it does,
+   `_dealias_investigation_prose` is not running and the code is stale.
+0b. **Set `SENTRY_DSN` on the API service.** Still unset, and the boot log says so in plain words:
+   "production failures will only appear in the log stream". The whole 2026-08-06 session was spent
+   chasing failures that were silent by construction (`background._wrap` swallows exceptions, and a
+   Floor result is a *successful* code path). One env var, already `sync: false` in `render.yaml`,
+   SDK already a core dependency. This is the highest-value item on the list after the deploy.
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
    redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
    are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly
@@ -1773,6 +1937,27 @@ next step.
 3. **Rotate the secrets** pasted into chat in an earlier session (`CLERK_SECRET_KEY`,
    `OMI_DATABASE_URL`, `OMI_TWITTER_API_KEY`, `OMI_YOUTUBE_API_KEY`, `OPENROUTER_API_KEY`,
    `OMI_SESSION_SECRET`). Never commit them.
+
+### What the 2026-08-06 end-to-end audit did and did not cover
+
+Ran for real, not read: full backend suite (**1938 passed**), `pyflakes` (0 undefined names), web
+`tsc` / `next lint` / `vitest` (70), a production `next build` with `CLERK_SECRET_KEY` unset, and a
+live API boot probed over ~30 routes in three roles (anonymous with auth off, anonymous with auth
+on, signed-in non-admin). That last role is what found the narrative leak, and it is the only way
+that class of bug shows itself: **local mode resolves `require_user` to `is_admin=True` and hides
+every authorisation defect in the codebase.** Any future auth work must probe a real signed-in
+non-admin against a running server.
+
+Deliberately NOT covered, so nobody assumes it was:
+
+- **No browser driving.** No Playwright run against the built frontend, so rendered UI behaviour is
+  unverified. The mobile-layout rules were verified at 360/375/390/430px in an earlier session, not
+  this one.
+- **No live model call.** Everything analyst-side was exercised against fakes or the deterministic
+  Floor; the recalibrated protocol's effect on real scores can only be confirmed by a live re-scan.
+- **The pre-existing failure is still undiagnosed.**
+  `test_investigation_prompt_builder::test_user_presents_the_investigation_context_evidence` predates
+  all of this and reproduces on an unchanged tree.
 
 ### Launch-readiness findings still open
 
