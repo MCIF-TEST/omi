@@ -1402,6 +1402,22 @@ an authorisation rule must set `OMI_REQUIRE_AUTH=true` and sign up a real user.
 Pinned by `tests/test_campaign_tenancy.py` (11 tests; 8 fail against the pre-fix route file, checked
 by stashing it). The privacy policy now describes the cross-investigation record explicitly.
 
+**Narratives had the identical hole and were missed by that pass** (found 2026-08-06 by probing a
+signed-in non-admin against a running server, which is the only way this class of bug shows itself:
+local mode resolves `require_user` to `is_admin=True` and hides it entirely). `Narrative` has no
+`user_id` either, being a cross-customer semantic cluster assembled from every scan the deployment
+has run. `/v1/narratives` was on `require_user` alone, so any signed-in customer could enumerate the
+deployment's narratives and read `samples` and `members`: comment texts and accounts drawn from
+OTHER customers' investigations. All three routes now go through `_require_admin`, matching
+campaigns. Nothing legitimate broke, since the `/narratives` page was already admin-only and
+server-gated.
+
+`tests/test_narrative_members.py` changed with it, and how it failed is the lesson. It sets
+`OMI_REQUIRE_AUTH=true` and signs up a real user, so unlike the campaign tests it was NOT immune to
+the new gate: it was **asserting the leak was correct**, signing in a plain customer to read
+narrative members and expecting 200. Its fixture now promotes that user to admin. A test that
+exercises an operator surface as a customer is pinning an authorisation bug, not covering a feature.
+
 The detection algorithm that will feed this is designed and implemented in
 `app/campaigns/verdict_coordination.py`, documented in `docs/campaign-detection.md`, and **not yet
 wired to any route**. It clusters accounts from omi scores + analyst verdicts alone. Two things in
