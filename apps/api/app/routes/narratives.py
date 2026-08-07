@@ -35,6 +35,27 @@ from app.storage.models import Account, Narrative, NarrativeMembership
 router = APIRouter(prefix="/v1/narratives", tags=["narratives"])
 
 
+def _require_admin(current: CurrentUser) -> None:
+    """Narratives are GATED, not scoped, for exactly the reason campaigns are.
+
+    ``Narrative`` has no ``user_id``. It is a cross-customer semantic cluster assembled from every
+    scan the deployment has run, and that accumulation is the point: one narrative seen by two
+    customers on two different posts is ONE narrative. The cost is that these routes cannot be
+    "scoped to your own data", because there is no such thing here.
+
+    Left on ``require_user`` alone, any signed-in customer could enumerate every narrative in the
+    deployment and read ``samples`` and ``members``, which are comment texts and accounts drawn from
+    OTHER customers' investigations. That is the same cross-tenant exposure ``app/routes/campaigns.py``
+    was fixed for, and narratives were missed by that pass.
+
+    Nothing legitimate breaks: the ``/narratives`` page is already admin-only and server-gated, so no
+    customer flow reaches these routes. Local mode resolves to ``is_admin=True``, which production
+    refuses at boot.
+    """
+    if not current.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admins only.")
+
+
 @router.get("", response_model=NarrativesResponse)
 def list_narratives(
     window_days: int = Query(7, ge=1, le=90),
@@ -50,6 +71,7 @@ def list_narratives(
     current: CurrentUser = Depends(require_user),
 ) -> NarrativesResponse:
     """Trending narratives, ranked by coordination intelligence (not raw volume)."""
+    _require_admin(current)
     embedder = get_embedder()
     embedder_name = type(embedder).__name__
 
@@ -112,6 +134,7 @@ def get_narrative(
     Returns the multi-signal panel, propagation timeline, identified
     bursts, origin lag, and a MODERATE-and-above subgraph.
     """
+    _require_admin(current)
     try:
         with get_session() as session:
             service = NarrativeService(session)
@@ -260,6 +283,7 @@ def get_narrative_members(
     """The comments + commenters that constitute a narrative, paginated, newest
     first. Each row links the comment to its author and the author's own scan
     verdict so the narrative is investigable down to the individual evidence."""
+    _require_admin(current)
     with get_session() as session:
         narrative = session.get(Narrative, narrative_id)
         if narrative is None:

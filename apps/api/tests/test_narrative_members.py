@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from app.core.config import get_settings
 from app.main import app
 from app.storage.db import get_session, reset_db_for_tests
-from app.storage.models import Account, Narrative, NarrativeMembership
+from app.storage.models import Account, Narrative, NarrativeMembership, User
 
 
 @pytest.fixture
@@ -29,7 +29,14 @@ def client(monkeypatch):
     SIGNUP_LIMITER._windows.clear()
     LOGIN_LIMITER._windows.clear()
     with TestClient(app) as tc:
-        tc.post("/v1/auth/signup", json={"email": "u@x.com", "password": "12345678"})
+        r = tc.post("/v1/auth/signup", json={"email": "u@x.com", "password": "12345678"})
+        # ADMIN, because the narrative library is an operator surface. `Narrative` has no user_id,
+        # so these routes serve comment texts and accounts drawn from every customer's scans and
+        # cannot be scoped; they are admin-gated exactly as campaigns are. These tests previously
+        # signed up a PLAIN customer and asserted 200, which pinned that cross-tenant read as
+        # correct behaviour. They exercise the same functionality now, through the right role.
+        with get_session() as s_:
+            s_.get(User, r.json()["id"]).is_admin = 1
         yield tc
     reset_db_for_tests("sqlite:///:memory:")
     get_settings.cache_clear()

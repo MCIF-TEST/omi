@@ -195,3 +195,29 @@ def test_share_tokens_are_not_handed_out_by_the_listing():
         r = tc.get("/v1/campaigns")
         assert r.status_code == 403
         assert "cmp_" not in r.text
+
+
+# --------------------------------------------------------------------------- #
+# Narratives have no owner either, and were missed by the campaign tenancy pass
+# --------------------------------------------------------------------------- #
+def test_narratives_are_admin_only_because_they_have_no_owner():
+    """`Narrative` has no user_id: it is a cross-customer cluster built from every scan the
+    deployment has run. `samples` and `members` are comment texts and accounts drawn from OTHER
+    customers' investigations, so `require_user` alone let any signed-in customer enumerate them.
+
+    Same exposure `app/routes/campaigns.py` was fixed for, and narratives were missed by that pass.
+    Nothing legitimate breaks: the /narratives page is already admin-only and server-gated, so no
+    customer flow reaches these routes.
+    """
+    with TestClient(app) as tc:
+        _signup(tc, "narrative-probe@t.com")
+        for path in ("/v1/narratives", "/v1/narratives/1", "/v1/narratives/1/members"):
+            assert tc.get(path).status_code == 403, f"{path} is reachable by a plain customer"
+
+
+def test_an_admin_still_reaches_the_narrative_library():
+    """The gate must not lock the operator out of their own investigative surface."""
+    with TestClient(app) as tc:
+        uid = _signup(tc, "narrative-admin@t.com")
+        _make_admin(uid)
+        assert tc.get("/v1/narratives").status_code == 200
