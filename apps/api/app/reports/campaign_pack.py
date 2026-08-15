@@ -21,10 +21,11 @@ import json
 from datetime import datetime
 from typing import Any
 
+from app.campaigns.detector import COHORT_DISCRIMINATIVE, COHORT_METHODS
 from app.detection.coordination.aggregate import DISCRIMINATIVE_DETECTORS
 
-# All coordination detectors, for "what did NOT fire" (evidence-weakening).
-KNOWN_METHODS: tuple[str, ...] = (
+# The per-scan engine's detectors, for "what did NOT fire" (evidence-weakening).
+ENGINE_METHODS: tuple[str, ...] = (
     "fingerprint_cluster",
     "co_engagement",
     "co_tag",
@@ -33,6 +34,13 @@ KNOWN_METHODS: tuple[str, ...] = (
     "age_cohort",
 )
 
+# The cohort coordination detector's methods. Kept as a SEPARATE list rather than appended to the
+# engine's, because ``_silent_methods`` reports everything a campaign did not fire: merging the two
+# would make every campaign recorded by either detector render the other's entire set as failures
+# it never had the chance to attempt. A campaign is reported against the family it actually ran
+# under.
+KNOWN_METHODS: tuple[str, ...] = ENGINE_METHODS + COHORT_METHODS
+
 METHOD_LABEL: dict[str, str] = {
     "fingerprint_cluster": "Fingerprint cluster",
     "co_engagement": "Co-engagement",
@@ -40,6 +48,13 @@ METHOD_LABEL: dict[str, str] = {
     "style_match": "Style match",
     "temporal_semantic_clique": "Temporal-semantic",
     "age_cohort": "Account-age cohort",
+    "verbatim_echo": "Verbatim text reuse",
+    "bio_echo": "Shared profile bio",
+    "burst_lockstep": "Synchronised arrival",
+    "co_target": "Shared engagement targets",
+    "client_signature": "Shared posting client",
+    "provisioning_window": "Provisioned together",
+    "handle_template": "Shared handle template",
 }
 
 METHOD_RATIONALE_WHEN_SILENT: dict[str, str] = {
@@ -49,6 +64,13 @@ METHOD_RATIONALE_WHEN_SILENT: dict[str, str] = {
     "style_match": "stylometric features did not cluster",
     "temporal_semantic_clique": "no synchronized comment-burst observed",
     "age_cohort": "account creation dates not clustered",
+    "verbatim_echo": "no repeated text long enough to be evidence",
+    "bio_echo": "profile bios did not match",
+    "burst_lockstep": "arrivals were unremarkable against the thread's own rate",
+    "co_target": "no shared engagement targets outside the popular ones",
+    "client_signature": "no shared non-standard posting client",
+    "provisioning_window": "account creation times not clustered beyond chance",
+    "handle_template": "handles did not share a template",
 }
 
 _DISCLAIMER = (
@@ -59,12 +81,19 @@ _DISCLAIMER = (
 )
 
 
+#: Both detectors' discriminative sets. ``aggregate.DISCRIMINATIVE_DETECTORS`` itself is left
+#: alone: it feeds ``elevate.py`` on the live per-scan path, so adding names there would change
+#: per-member score elevation inside every running scan, which is not what registering a report
+#: label should do.
+ALL_DISCRIMINATIVE: frozenset[str] = DISCRIMINATIVE_DETECTORS | COHORT_DISCRIMINATIVE
+
+
 def is_corroborated(methods: list[str]) -> bool:
     """Mirror of the scoring gate: a maximal verdict needs a discriminative
     detector or ≥2 distinct detectors. Kept in lockstep with
     ``aggregate.DISCRIMINATIVE_DETECTORS`` so the pack can't contradict the UI."""
     distinct = set(methods or [])
-    if distinct & DISCRIMINATIVE_DETECTORS:
+    if distinct & ALL_DISCRIMINATIVE:
         return True
     return len(distinct) >= 2
 
@@ -93,15 +122,22 @@ def _fmt(v: Any) -> str:
 
 
 def _silent_methods(methods: list[str]) -> list[str]:
+    """What this campaign's own detector looked for and did not find.
+
+    Scoped to the family the campaign actually ran under. Reporting the other detector's methods as
+    silent would be a false statement about the evidence: they were never attempted, which is a
+    different thing from having been attempted and found nothing.
+    """
     fired = set(methods or [])
-    return [m for m in KNOWN_METHODS if m not in fired]
+    family = COHORT_METHODS if (fired & set(COHORT_METHODS)) else ENGINE_METHODS
+    return [m for m in family if m not in fired]
 
 
 def render_campaign_markdown(d: dict) -> str:
     """Render a Campaign detail dict as a Markdown evidence pack."""
     methods = d.get("methods") or []
     corroborated = is_corroborated(methods)
-    discriminative = [m for m in methods if m in DISCRIMINATIVE_DETECTORS]
+    discriminative = [m for m in methods if m in ALL_DISCRIMINATIVE]
     silent = _silent_methods(methods)
     max_pct = int(round((d.get("max_coordination_score") or 0.0) * 100))
     now_pct = int(round((d.get("coordination_score") or 0.0) * 100))
@@ -151,7 +187,7 @@ def render_campaign_markdown(d: dict) -> str:
         add("_No detectors fired._")
     else:
         for m in methods:
-            tag = " *(discriminative)*" if m in DISCRIMINATIVE_DETECTORS else ""
+            tag = " *(discriminative)*" if m in ALL_DISCRIMINATIVE else ""
             add(f"- **{METHOD_LABEL.get(m, m)}**{tag}")
     if d.get("evidence"):
         add("")
@@ -237,8 +273,8 @@ def campaign_pack_dict(d: dict) -> dict:
         "campaign": d,
         "trust": {
             "corroborated": is_corroborated(methods),
-            "discriminative_methods": [m for m in methods if m in DISCRIMINATIVE_DETECTORS],
-            "supporting_methods": [m for m in methods if m not in DISCRIMINATIVE_DETECTORS],
+            "discriminative_methods": [m for m in methods if m in ALL_DISCRIMINATIVE],
+            "supporting_methods": [m for m in methods if m not in ALL_DISCRIMINATIVE],
             "silent_methods": _silent_methods(methods),
             "gate": (
                 "A maximal verdict requires a discriminative detector "
@@ -274,7 +310,7 @@ def evidence_for_list(d: dict) -> list[str]:
     methods = d.get("methods") or []
     out: list[str] = []
     for m in methods:
-        tag = " (discriminative)" if m in DISCRIMINATIVE_DETECTORS else ""
+        tag = " (discriminative)" if m in ALL_DISCRIMINATIVE else ""
         out.append(f"{METHOD_LABEL.get(m, m)}{tag} fired across this group")
     out.extend((d.get("evidence") or [])[:6])
     return out
@@ -324,7 +360,7 @@ def build_campaign_report_view(d: dict, *, published_at: Any = None) -> dict:
             "member_count": d.get("member_count") or 0,
             "observation_count": d.get("observation_count") or 0,
             "corroborated": is_corroborated(methods),
-            "discriminative_methods": [m for m in methods if m in DISCRIMINATIVE_DETECTORS],
+            "discriminative_methods": [m for m in methods if m in ALL_DISCRIMINATIVE],
             "methods": methods,
         },
         "evidence_for": evidence_for_list(d),

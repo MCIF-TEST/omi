@@ -5,10 +5,12 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
-`main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1911 passed, 8 skipped, 1 failed** (6m24s), the failure pre-existing and listed below.
-The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
+**Last updated:** 2026-08-07 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
+after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
+coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
+"The cohort coordination detector" below, and read its two rules before touching any threshold.
+Suite measured at **2006 passed, 8 skipped, 1 failed** (6m18s), the failure pre-existing and listed
+below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -56,23 +58,25 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **1572 passed, 8 skipped, 2 failed** (4m28s, 2026-07-28). Both failures reproduce on an
-unchanged tree AND in isolation, so neither is pollution:
+Current measured state: **2006 passed, 8 skipped, 1 failed** (6m18s, 2026-08-07):
 
-1. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
-   0.032 gate.
-2. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
+1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
    builder now renders a user message that ends after the evidence sections. Looks like the test
    trails a prompt-assembly change rather than a real regression; not yet diagnosed.
 
-**A third failure is yours.** If you see mass failures instead, see the next section first.
+2. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
+   0.032 gate. **Did NOT fire in the 2026-08-07 runs** (three consecutive), having failed
+   consistently before. Nothing in this session touched scoring, so treat it as order-dependent
+   rather than fixed, and do not read its absence as a licence to tighten the gate.
+
+**A second failure is yours.** If you see mass failures instead, see the next section first.
 
 **Count depends on collection order.** A run during the launch-readiness work reported *13* failures;
 11 of those were order-dependent analyst tests that adding new test files shifted into a different
-order, not regressions. A clean run in the default order gives the 2 above. If you see extra
-failures, re-run the specific files in isolation before believing you caused them — and note that
-this order sensitivity is itself a latent problem nobody has fixed yet.
+order, not regressions. Item 2 above is the same effect. If you see extra failures, re-run the
+specific files in isolation before believing you caused them — and note that this order sensitivity
+is itself a latent problem nobody has fixed yet.
 
 ### If the suite is suddenly red everywhere, it is probably not you
 
@@ -1348,6 +1352,9 @@ Two traps that bit here, both verified with Playwright at 360/375/390/430px:
   `overflow-x: clip` on `html, body` in `globals.css` (see the mobile section above).
 
 ### The coordinated-events surface is removed from the product, not from the code
+<!-- Superseded in part: /narratives is now the live admin coordination queue. See "The cohort
+     coordination detector" below. The campaigns UI and /rc/ web route are still deleted. -->
+
 
 Product decision (2026-07-28): the campaigns UI shipped clusters the engine had not earned the right
 to call coordinated, so it is gone from the site pending a real detection algorithm.
@@ -1363,15 +1370,169 @@ and are still green. That is the foundation the future algorithm builds on, so d
 because nothing in the UI imports it. `/rc/<token>` is still a live **API** route, which is why
 `tests/test_featured_campaigns.py` passes unchanged.
 
-`/narratives` is a placeholder that says "Coming soon: narrative / campaign detector". It is
-**admin-only and gated on the server** (`if (!user?.is_admin) notFound()`), because hiding the nav
-link alone would leave the route answering to anyone who typed the URL. `adminOnly` on a nav item in
-`sidebar.tsx` / `mobile-nav.tsx` is presentation only; the page is the access control.
+`/narratives` is no longer a placeholder: it is the **coordination queue** for the cohort detector
+(see below), labelled "Coordination" in both navs. It remains **admin-only and gated on the server**
+(`if (!user?.is_admin) notFound()`, plus `force-dynamic`), because hiding the nav link alone would
+leave the route answering to anyone who typed the URL. `adminOnly` on a nav item in `sidebar.tsx` /
+`mobile-nav.tsx` is presentation only; the page is the access control.
 
 One live reference remains on purpose: `campaign_reasoning` ("Campaign analysis") in
 `analyst-panel.tsx` and `lib/api.ts`. That is a section of the **analyst's own response schema**, not
 the campaigns feature. Removing it means a protocol change, a recompile, and a re-paste of the
 OpenRouter preset.
+
+### The cohort coordination detector: what it is and the two rules holding it up
+
+`app/campaigns/detector/` answers the question a per-account score cannot: **are these accounts
+running together?** It takes the accounts an investigation scored at **70 or above**, clusters them
+on evidence those accounts produced themselves, and writes corroborated groups into the existing
+`Campaign` tables. Deterministic: no model call, no network, no provider quota, pinned by
+`tests/test_campaign_detector_uses_no_model.py` at the **import graph**, because a "no model" rule
+that is only true by inspection stops being true the first time someone adds a convenient import.
+
+It is **admin-only**, at `/narratives`, served by `/v1/admin/coordination`. The thresholds are
+reasoned, not fitted against a labelled corpus, so a finding is an operator's lead. Nothing reaches
+the customer app, the public report, or the exports.
+
+**This is a new algorithm, not the six detectors in `app/detection/coordination/`.** Those still run
+on every scan and are untouched. `app/campaigns/verdict_coordination.py` also still exists and is
+still unwired; it was not adopted because its every measurement is *relative to the batch*, and the
+70+ filter is precisely what removes the batch.
+
+#### Rule 1: filtering to 70+ destroys the background, so the evidence must be ABSOLUTE
+
+Measuring agreement relative to peers is what stops a detector reporting "the 80-scorers use
+similar words, therefore a campaign". A cohort filtered to 70+ has no such background: every member
+already looks bad, which is the *definition* of the cohort. So each signal is improbable in itself,
+not relative to a peer group.
+
+Where a null is genuinely needed it comes from the **full batch and the full thread**, which the
+filter never touched, while only cohort members are ever named. Two signals need one:
+
+- **`burst_lockstep`** tests co-arrival against the post's own arrival rate. Without that null it is
+  the single worst false-positive generator available: on a viral post 200 comments land per minute
+  and any four accounts share a minute. `tests/test_campaign_detector_signals.py` runs the same four
+  accounts in the same window against a viral thread (refuses) and a quiet one (p < 1e-4). Those two
+  tests *are* the thesis; if you break one, the detector is wrong.
+- **`provisioning_window`** tests creation clustering against the batch's empirical distribution,
+  because platform growth is not uniform and a theoretical prior fires on every signup wave.
+
+**A cluster must never be counted in its own background.** It inflates the distribution it is being
+tested against and hides itself. This bit twice during development, in two different coordinates:
+`stats.local_rate` takes an `exclude` range (the same burst went from p=1.4e-4, missed, to p=2.3e-7,
+caught) and `stats.window_mass` does the same for creation dates. `window_mass` also floors at the
+uniform rate because an empirical count has **no resolution** below the spacing of the data: with
+300 creation dates over ten years, a 200-second window is empty for every window that does not
+contain the cluster, and zero mass reads as untestable rather than significant.
+
+#### Rule 2: corroboration is AND, and it counts FAMILIES
+
+The seven signals sit in five families of independent evidence:
+
+```
+text (verbatim_echo, bio_echo) · timing (burst_lockstep) · network (co_target)
+infrastructure (client_signature) · identity (provisioning_window, handle_template)
+```
+
+Fusion takes the **strongest edge within a family** and combines **across** families. Two methods
+reading the same material are one kind of evidence seen twice: `verbatim_echo` + `bio_echo` both say
+"these accounts emitted the same string", and counting method names would let one copy-paste
+observation clear a gate meant to need independent confirmation.
+
+**The gate is `discriminative AND ≥2 families`**, where `aggregate.py`'s is `discriminative OR ≥2`.
+That is deliberate and stricter: the engine's gate was calibrated on a mixed batch, where a lone
+discriminative hit stands out against ordinary accounts. Here everything is pre-selected for
+suspicion, so one lens is never enough. Failing the gate caps the score at `SUPPORTING_CEILING`
+(0.49, same value and meaning as the engine's) and the finding is a `lead`, which is recorded in the
+payload and **never written as a `Campaign` row**.
+
+Three more guards, each replacing a specific way this goes wrong:
+
+- **Edges, not clusters.** `CampaignService.merge_clusters` unions any two clusters sharing one
+  account, so per-detector clusters let one account fuse two unrelated groups into a fake
+  mega-campaign. Communities come out member-disjoint and `record_clusters` is called **once per
+  finding**.
+- **Density ≥ 0.60.** A path a-b-c-d is what you get when one account shares one property with each
+  of two others, and a partition hands a star back as a community. A group where most members have
+  never met is not an operation.
+- **Every edge carries an `artifact`** and `fuse_pairs` drops any that does not. The deterministic
+  form of "if you cannot quote it, you cannot claim it".
+
+Clustering is seeded Louvain over sorted input, and `test_the_same_input_always_gives_the_same_answer`
+pins it: these are published claims about named accounts, and a verdict that changes between runs is
+not a verdict.
+
+#### Two passes, one core, one stored result
+
+Pass 1 fires when the scan is saved, on the **deterministic engine probability**, so a coordination
+read exists even when the analyst floors (a documented recurring failure). Pass 2 fires from
+`generate_and_persist`'s `finally` and re-cuts on the **customer-visible OMI score**.
+
+Both are literally the same function (`run.detect_for_investigation`, differing only in `prefer`),
+and pass 2 **replaces** pass 1's `campaign_detection_v1` block rather than sitting beside it. That is
+the whole anti-divergence design: there is one scoring core and one stored answer, so the two passes
+cannot present competing verdicts about the same accounts. Scheduled on `background.submit`, **not**
+`submit_slow` — the slow pool exists because an analyst run holds a worker for minutes, and this is
+seconds of pure CPU.
+
+`campaign_detections` is a denormalised index row so the admin queue can list and filter **without
+loading `payload_json`**. Same trap the archive list already paid for, and worse here because these
+are the heaviest payloads in the product. Uniqueness is an `Index(..., unique=True)` and not a
+`UniqueConstraint`, because the boot-time upgrade pass backfills `table.indexes` and cannot see
+`table.constraints`.
+
+#### Evidence that used to be thrown away
+
+Four things were collected on every scan, used in-process, and dropped before persistence. All are
+now carried, and none costs an extra fetch:
+
+- **`CommenterScanResult.thread_comments`** — the account's comments *on the scanned post*, with
+  real timestamps. `recent_activity` is the account's own timeline, which is a different thing:
+  co-timing is only evidence when both accounts were commenting on the same thing.
+- **`FullVideoScanResult.thread_arrivals`** — epoch seconds for every comment under the post from
+  **every** author, scanned or not. Numbers only, no text, no author. This is `burst_lockstep`'s
+  null, and it must stay complete: measured over scanned accounts alone the rate is under-stated,
+  which over-states significance. `BatchBackground.arrivals_complete` is False for payloads written
+  before this existed, and **`burst_lockstep` abstains entirely** rather than measuring a subset.
+- **`source_client` / `reply_to_id` / `repost_of_id`** on each activity sample, and `source_client` +
+  `reply_to_id` on X reply items. `_map_tweet` had already parsed all of them and
+  `fetch_tweet_engagers` was building a four-key dict that discarded two.
+
+**`_merge_payloads` was deleting the analyst assessment, and had been all along.** It started from
+`merged = dict(new)`, so any top-level key present only in the stored payload was dropped, and a
+fresh scan result never carries `analyst_assessment_v1`. So a continuation batch silently destroyed
+the written analysis a customer had already paid for. Pre-existing, unrelated to this feature, found
+because the detection block lives in the same place and would have died the same way. Pinned by
+`test_a_continuation_batch_does_not_delete_the_analyst_assessment`.
+
+#### `campaign_pack` method lists must stay SPLIT
+
+`_silent_methods` reports every method a campaign did not fire, so `KNOWN_METHODS` is now
+`ENGINE_METHODS + COHORT_METHODS` and the function picks the family the campaign actually ran under.
+Merging them would make every existing engine campaign render seven extra "did not fire" lines for
+detectors that did not exist when it was recorded, which is a false statement about the evidence:
+never attempted is not the same as attempted and found nothing.
+
+`aggregate.DISCRIMINATIVE_DETECTORS` itself is **not** modified. It feeds `elevate.py` on the live
+per-scan path, so adding names would change per-member score elevation inside every running scan.
+`campaign_pack.ALL_DISCRIMINATIVE` is the union, used for reporting only.
+
+#### What it cannot see, stated on the page
+
+It catches operations that reuse copy, arrive in lockstep, share a non-standard publishing tool,
+converge on unpopular targets, or were provisioned together. It will **not** catch a well-run
+operation using aged accounts with individually written posts on ordinary clients: five of the seven
+signals go quiet. So an empty result means no mechanical tell was found, **not** that the accounts
+are unrelated, and the `/narratives` page says so rather than leaving it in a docstring.
+
+`tests/test_campaign_detector_precision.py` is the load-bearing suite and its controls come first:
+professionals covering one beat (the shape that once scored unrelated journalists at 1.0), a fan
+community, second-language writers, a viral thread, and accounts sharing only a handle shape. Every
+one is built to score 70+ across the board, because that is the state the filter guarantees.
+
+**The dismissals are the only ground truth this will ever accumulate.** Every constant is reasoned;
+`POST /v1/admin/coordination/{slug}/dismiss` records a labelled negative so a future calibration has
+something to fit against.
 
 ### Campaigns are GATED, not scoped, because they have no owner
 
@@ -1387,6 +1548,15 @@ mint a permanent public `/rc/<token>` report for any campaign including one asse
 customers' scans, and revoke anyone else's. **The existing campaign tests could not catch any of it:
 they run in local mode, where `require_user` returns `is_admin=True`.** Any test that needs to prove
 an authorisation rule must set `OMI_REQUIRE_AUTH=true` and sign up a real user.
+
+**`/v1/narratives/*` had the same hole and it is now closed.** A `Narrative` also has no owner: it
+is assembled from content ingested across every customer's scans. The routes were `require_user`
+only, so any signed-in customer could read narrative clusters, their top accounts and their sample
+texts, all built from other customers' investigations, by calling the endpoints directly. The
+`/narratives` *page* had always gated on `is_admin` server-side, which is exactly what made it look
+fine. Gated by `narratives._require_admin` and pinned by `tests/test_coordination_admin_gate.py`,
+which signs up a real non-admin and also proves an admin still gets through (a suite of 403s with no
+positive case cannot tell a gate from a broken router).
 
 - **`include_provenance` on `_campaign_detail` defaults to False.** A route added later that forgets
   to pass it leaks nothing; one that forgot to *strip* would. `context_id` is gone from the public
@@ -1744,6 +1914,14 @@ next step.
 
 ## Outstanding — needs the user, not code
 
+0. **Measure the coordination detector on real scans.** Every threshold in
+   `app/campaigns/detector/` is reasoned, not fitted: no labelled corpus of verdict-only campaigns
+   exists. The controls in `test_campaign_detector_precision.py` are synthetic, so they prove the
+   *shape* of the guard and not its calibration. Run a dozen real investigations, open
+   `/narratives`, and dismiss the false positives; those dismissals are the only ground truth that
+   will ever accumulate, and a later pass can fit against them. Watch specifically for
+   `verbatim_echo` firing on platform-templated text (auto-generated "I just earned a badge" posts)
+   and for `co_target` on small niches where everyone genuinely engages the same handful of posts.
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
    redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
    are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly

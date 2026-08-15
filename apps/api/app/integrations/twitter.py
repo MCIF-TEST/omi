@@ -514,6 +514,12 @@ def fetch_tweet_engagers(
                 "author_external_id": author,
                 "text": post.text,
                 "created_at": post.created_at,
+                # _map_tweet already parsed both of these and this dict used to drop them. The
+                # reply's own parent id is the thread structure, and the source client is the
+                # publishing tool. Free to carry, and they ride through the compile cache without
+                # further change because _reconstruct_injected rebuilds with {**c, ...}.
+                "reply_to_id": post.reply_to_id,
+                "source_client": post.source_client,
             })
             if author not in commenters and len(commenters) < max_commenters:
                 a = tw.get("author") if isinstance(tw.get("author"), dict) else {}

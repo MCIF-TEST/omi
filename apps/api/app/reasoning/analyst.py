@@ -1934,6 +1934,18 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
                     release_generation_lease(_s, _inv, run_lease_id)
         except Exception:  # noqa: BLE001
             logger.exception("analyst.generate: could not release the lease for slug=%s", slug)
+        # Pass 2 of the coordination detector: re-cut the 70+ cohort on the OMI scores this run
+        # just produced. Hooked here rather than at the two return sites because `finally` covers
+        # both the batched path and the single-shot one, and it is reached even when the run ends
+        # early (the job itself no-ops when there is nothing to refine). Deterministic, no model
+        # call, and scheduled on the normal pool so it never occupies a slow-pool worker.
+        try:
+            from app.campaigns.detector import run as campaign_detector
+
+            campaign_detector.schedule(slug, user_id, "analyst")
+        except Exception:  # noqa: BLE001
+            logger.exception("analyst.generate: could not schedule coordination refinement "
+                             "for slug=%s", slug)
 
 
 def maybe_autogenerate(slug: str, user_id: int | None) -> bool:

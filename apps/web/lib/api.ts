@@ -276,6 +276,135 @@ export function resolveDispute(
 }
 
 // ---------------------------------------------------------------------------
+// Coordinated-campaign detection. Admin only, on every route.
+//
+// The detector is deterministic: no model call, no network, no provider quota. It clusters the
+// accounts an investigation scored at 70 or above, using evidence those accounts themselves
+// produced. Its thresholds are reasoned rather than fitted against a labelled corpus, so a finding
+// is a lead for an operator to review and nothing here is reachable from the customer app, the
+// public report, or the exports.
+// ---------------------------------------------------------------------------
+export const COORDINATION_FILTERS = ['open', 'dismissed', 'all'] as const;
+export type CoordinationFilter = (typeof COORDINATION_FILTERS)[number];
+
+/** Families of independent evidence. Fusion takes the strongest edge WITHIN a family and combines
+ *  ACROSS families, so two methods reading the same material cannot corroborate each other. */
+export const COORDINATION_FAMILY_LABEL: Record<string, string> = {
+  text: 'Repeated text',
+  timing: 'Synchronised arrival',
+  network: 'Shared targets',
+  infrastructure: 'Shared tooling',
+  identity: 'Account provisioning',
+};
+
+export interface CoordinationMember {
+  external_id: string;
+  handle: string;
+  /** The score the cohort was cut on, 0-100. Null when the account is no longer in the payload. */
+  score: number | null;
+}
+
+export interface CoordinationArtifact {
+  method: string;
+  family: string;
+  /** The two handles this specific claim is about. */
+  pair: string[];
+  sentence: string;
+  /** The raw material the accounts produced. Empty artifacts are dropped before this point. */
+  artifact: string;
+  statistic: [string, number] | null;
+}
+
+export interface CoordinationFinding {
+  finding_id: string;
+  /** 'corroborated' is a campaign. 'lead' failed a gate and is never written as one. */
+  label: 'corroborated' | 'lead';
+  score: number;
+  /** True when the score was held at 0.49 for want of a second, independent family. */
+  capped: boolean;
+  /** Share of all possible member pairs that carry an edge. Below 0.6 is a chain, not a group. */
+  density: number;
+  members: CoordinationMember[];
+  families_fired: string[];
+  families_silent: string[];
+  methods: string[];
+  evidence: string[];
+  notes: string[];
+  artifacts: CoordinationArtifact[];
+}
+
+export interface CoordinationDetection {
+  investigation_slug: string;
+  investigation_label: string;
+  platform: string;
+  computed_at: string | null;
+  passes: number;
+  /** 'analyst' means the cohort was cut on the customer-visible OMI score, 'engine' on the
+   *  deterministic probability (which is what runs when the analyst is unreachable). */
+  score_source: 'analyst' | 'engine';
+  scanned_total: number;
+  cohort_size: number;
+  finding_count: number;
+  campaign_count: number;
+  best_score: number;
+  best_label: string;
+  status: string;
+  thresholds_version: string;
+}
+
+export interface CoordinationDetectionDetail extends CoordinationDetection {
+  findings: CoordinationFinding[];
+  lone_high_scorers: string[];
+  notes: string[];
+  resolution_note: string | null;
+}
+
+export interface CoordinationDetectionsResponse {
+  detections: CoordinationDetection[];
+  total: number;
+  open_count: number;
+  campaign_count: number;
+}
+
+export function listCoordinationDetections(
+  opts: { status?: CoordinationFilter; onlyCampaigns?: boolean } = {},
+): Promise<CoordinationDetectionsResponse> {
+  const q = new URLSearchParams({ status: opts.status ?? 'open' });
+  if (opts.onlyCampaigns) q.set('only_campaigns', 'true');
+  return apiClient<CoordinationDetectionsResponse>(`/v1/admin/coordination?${q.toString()}`);
+}
+
+export function getCoordinationDetection(slug: string): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}`,
+  );
+}
+
+export function rerunCoordinationDetection(slug: string): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}/rerun`,
+    { method: 'POST' },
+  );
+}
+
+export function dismissCoordinationDetection(
+  slug: string,
+  note: string,
+): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}/dismiss`,
+    { method: 'POST', body: JSON.stringify({ note }) },
+  );
+}
+
+export function reopenCoordinationDetection(slug: string): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}/reopen`,
+    { method: 'POST' },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Upstream API spend. Admin only.
 //
 // `api_calls` is the number that BILLS (twitterapi.io charges per call), not the number of requests

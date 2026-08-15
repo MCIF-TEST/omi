@@ -1216,6 +1216,18 @@ def _run_link_scan_job(
         except Exception:
             log.exception("could not mark candidates scanned for list %s", candidate_list_id)
 
+    # Pass 1 of the coordination detector, off the hot path. Deterministic and cheap (no model
+    # call, no network, no provider quota), and it runs on the ENGINE probability so an
+    # investigation still gets a coordination read when the analyst is unreachable, which is a
+    # documented recurring failure. Pass 2 re-cuts the same cohort on the OMI score once the
+    # assessment lands, replacing this result rather than competing with it.
+    try:
+        from app.campaigns.detector import run as campaign_detector
+
+        campaign_detector.schedule(slug, user_id, "engine")
+    except Exception:  # noqa: BLE001 - an advisory detection must never affect the scan's outcome
+        log.exception("could not schedule coordination detection for %s", slug)
+
     tier = result.overall_tier.value if hasattr(result.overall_tier, "value") else str(result.overall_tier)
     commenters = result.video.commenter_count if getattr(result, "video", None) else (
         1 if getattr(result, "focus_account", None) else 0

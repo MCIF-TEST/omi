@@ -235,6 +235,13 @@ class CommenterScanResult(BaseModel):
     # is genuine, which is half of the judgment it is asked to make.
     recent_activity: list[dict] = Field(default_factory=list)
     activity_total: int = 0
+    # This account's comments UNDER THE SCANNED POST, with their real timestamps. Distinct from
+    # recent_activity, which is the account's own timeline. Both platforms have always returned
+    # these and the scan has always used them in-process, but they were dropped before persistence,
+    # so nothing after the scan could ask when an account commented. Cross-account co-timing is
+    # only evidence when both accounts were commenting on the same thing, which makes this the one
+    # field that carries it. Empty on investigations persisted before it existed.
+    thread_comments: list[dict] = Field(default_factory=list)
     weak_signals: list[str] = Field(default_factory=list)
     # Plain-language record of how the aggregator adjusted the raw signal sum:
     # correlated detectors discounted, single-axis HIGH cap, convergence bonus.
@@ -295,6 +302,17 @@ class FullVideoScanResult(BaseModel):
     coordination_score: float = Field(ge=0.0, le=1.0)
     coordination_tier: Tier
     clusters: list[CoordinationClusterOut]
+
+    # Arrival times (epoch seconds, sorted) of EVERY comment under the post, from every author,
+    # scanned or not. Just numbers: no text, no author, nothing about who said what.
+    #
+    # This is the null the coordination detector's timing signal is tested against, and it has to
+    # be persisted because the full stream only ever exists inside the scan. Measured over scored
+    # accounts alone the arrival rate is under-stated, which over-states the significance of any
+    # co-timing, in the one direction that turns a busy comment section into a fake conspiracy.
+    # Capped, with the true total and span kept beside it so the rate stays exact when it is.
+    thread_arrivals: list[int] = Field(default_factory=list)
+    thread_arrival_total: int = 0
 
     # Optional focus account deep-dive (when the request specified one)
     focus_account: CommenterScanResult | None = None

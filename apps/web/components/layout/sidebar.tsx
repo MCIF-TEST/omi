@@ -33,7 +33,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: 'Coordination',
     items: [
       { href: '/graph',          label: 'Graph',         icon: Network },
-      { href: '/narratives',     label: 'Narratives',    icon: MessageSquareText, adminOnly: true },
+      { href: '/narratives',     label: 'Coordination',  icon: MessageSquareText, adminOnly: true },
     ],
   },
   {

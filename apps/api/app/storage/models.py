@@ -413,6 +413,52 @@ class CampaignObservation(Base):
     member_ids_json: Mapped[list[str]] = mapped_column(JSON, default=list)
 
 
+class CampaignDetection(Base):
+    """One run of the cohort coordination detector over one investigation.
+
+    A denormalised index row, deliberately: the findings and every evidence artifact live in
+    ``Investigation.payload_json`` under ``campaign_detection_v1``, and the admin queue must be
+    able to list and filter without touching that blob. This is the same lesson the archive list
+    already paid for (see ``list_user_investigations`` and its ``load_only``), and it bites harder
+    here because these are the heaviest payloads in the product.
+
+    Uniqueness is declared as an ``Index(..., unique=True)`` rather than a ``UniqueConstraint`` on
+    purpose. The boot-time upgrade pass in ``storage/db.py`` backfills ``table.indexes`` onto
+    databases that predate a change but cannot see ``table.constraints``, so the Index form
+    survives a table that already exists and the constraint form silently does not.
+    """
+
+    __tablename__ = "campaign_detections"
+    __table_args__ = (
+        Index("ix_campaign_detection_slug", "investigation_slug", unique=True),
+        Index("ix_campaign_detection_rank", "status", "best_score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    investigation_slug: Mapped[str] = mapped_column(String(64))
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    platform: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True,
+    )
+    passes: Mapped[int] = mapped_column(Integer, default=1)
+    #: "analyst" or "engine". Which score defined the 70+ cohort, so a reader can tell whether the
+    #: finding rests on the customer-visible number or on the deterministic one.
+    score_source: Mapped[str] = mapped_column(String(16), default="engine")
+    scanned_total: Mapped[int] = mapped_column(Integer, default=0)
+    cohort_size: Mapped[int] = mapped_column(Integer, default=0)
+    finding_count: Mapped[int] = mapped_column(Integer, default=0)
+    campaign_count: Mapped[int] = mapped_column(Integer, default=0)
+    best_score: Mapped[float] = mapped_column(Float, default=0.0)
+    best_label: Mapped[str] = mapped_column(String(32), default="no_campaign_detected")
+    #: "open" until an admin acts; "dismissed" records a labelled negative, which is the only
+    #: source of ground truth this detector will ever accumulate.
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    resolution_note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    thresholds_version: Mapped[str] = mapped_column(String(32), default="cohort-v1")
+
+
 # ---------------------------------------------------------------------------
 # User-curated named graphs — operators manually collect profiles into
 # named graphs; Omi draws coordination edges between members automatically.
