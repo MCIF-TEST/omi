@@ -115,7 +115,10 @@ def batched(monkeypatch):
 
         monkeypatch.setattr(analyst, "assess_payload", fake_assess)
         payload = _payload(accounts)
-        chunks = analyst._split_batches(payload, batch_size)
+        # Explicit count so the scripted outcome indices line up. How a selection is divided is a
+        # separate rule with its own tests; these are about what happens when a batch fails.
+        chunks = analyst._split_batches(payload, batch_size,
+                                        batches=max(1, accounts // batch_size))
         settings = SimpleNamespace(analyst_batch_accounts=batch_size, analyst_batch_concurrency=1)
         entry = analyst._generate_batched("slug1", 1, payload, chunks,
                                           platform="x", settings=settings)

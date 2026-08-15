@@ -305,12 +305,18 @@ services:
       # without visible progress), or the browser gives up on a batch the server would still deliver.
       - key: OMI_ANALYST_TIMEOUT_SECONDS
         value: '900'
-      # Accounts per model call. 12 rather than 25 because per-batch latency scales with the account
-      # count while the ~25k-token protocol overhead is FIXED, so smaller batches land comfortably
-      # inside the timeout instead of racing it, and the first accounts reach the reader sooner. The
-      # cost is paying the protocol more times, which at mini-class pricing is fractions of a cent.
+      # The THRESHOLD, not the size: a selection at or below this runs as one model call. Anything
+      # above it is divided into OMI_ANALYST_BATCH_COUNT near-equal batches, so a 100-account scan is
+      # four batches of 25 and a 126-account scan is 32/32/31/31. The batch count a customer sees is
+      # therefore a constant rather than a function of how many accounts they selected.
       - key: OMI_ANALYST_BATCH_ACCOUNTS
         value: '12'
+      # Per-batch latency scales with the account count while the ~25k-token protocol overhead is
+      # FIXED, so this is the lever to raise (6, 8) if batches start racing OMI_ANALYST_TIMEOUT_
+      # SECONDS above. The cost of raising it is paying the protocol more times, which at mini-class
+      # pricing is fractions of a cent. Lowering it below 4 makes the progress strip coarser.
+      - key: OMI_ANALYST_BATCH_COUNT
+        value: '4'
       #
       # --- Legacy Hugging Face path (DEPRECATED — no longer the default) ---
       # Still supported as a fallback provider: to use it instead of

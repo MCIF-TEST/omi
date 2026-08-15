@@ -53,6 +53,11 @@ logger = logging.getLogger("omi.reasoning.analyst")
 
 # Where the cached structured assessment lives inside Investigation.payload_json.
 CACHE_KEY = "analyst_assessment_v1"
+# How many batches a selection large enough to need batching is split into. A COUNT, not a size:
+# see `_split_batches` for why. Overridable per deployment via OMI_ANALYST_BATCH_COUNT, which is the
+# lever to reach for if per-batch latency ever starts racing OMI_ANALYST_TIMEOUT_SECONDS — more
+# batches means fewer accounts in each one.
+DEFAULT_ANALYST_BATCHES = 4
 # Repo root: apps/api/app/reasoning/analyst.py -> parents[4] == repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _ML_ANALYST_PATH = str(_REPO_ROOT / "ml" / "analyst")
@@ -1552,20 +1557,51 @@ def _write_lease(session, inv, lease: dict | None) -> None:
 # while later batches are still generating.
 
 
-def _split_batches(payload: dict, batch_size: int) -> list[dict] | None:
-    """Split an investigation payload into ≤batch_size-account chunk payloads (selection order
-    preserved), or None when it already fits in one request. Each chunk shares the investigation's
-    non-account context; only video.commenters is sliced — the evidence composer renders the Accounts
-    table (and the per-account evidence budget) from that list."""
+def _batch_sizes(total_accounts: int, batches: int) -> list[int]:
+    """Split ``total_accounts`` into ``batches`` parts as evenly as the count allows.
+
+    The remainder is spread one account at a time across the leading batches rather than piled onto
+    the last one. Slicing at a fixed ``ceil(n/k)`` looks equivalent and is not: at 126 over 4 it
+    gives 32/32/32/30, and at 5 over 4 it gives 2/2/1 — three batches, not four. Spreading gives
+    32/32/31/31 and 2/1/1/1, so the count is always exactly what was asked for and no single request
+    carries a disproportionate share of the work.
+    """
+    if total_accounts <= 0 or batches <= 0:
+        return []
+    batches = min(batches, total_accounts)          # never plan an empty request
+    base, extra = divmod(total_accounts, batches)
+    return [base + (1 if i < extra else 0) for i in range(batches)]
+
+
+def _split_batches(payload: dict, batch_size: int, *, batches: int = 0) -> list[dict] | None:
+    """Split an investigation payload into per-request chunk payloads, or None when it fits in one.
+
+    ``batch_size`` is the threshold: a selection at or below it is one request, and nothing here
+    changes for a small scan. Above it, the selection is divided into a FIXED NUMBER of near-equal
+    batches (``batches``, from ``analyst_batch_count``) rather than sliced at a fixed size.
+
+    That is the product decision behind this function. A fixed slice size makes the batch count a
+    function of how many accounts someone happened to select, so the same customer sees 4 batches on
+    one post and 9 on the next with nothing to explain the difference, and a deployment tuning the
+    size for latency silently changes the shape of every scan. A fixed count reads the same every
+    time: 100 accounts is four batches of 25, 126 is four batches of 32/32/31/31.
+
+    Selection order is preserved. Each chunk shares the investigation's non-account context; only
+    ``video.commenters`` is sliced, since the evidence composer renders the Accounts table (and the
+    per-account evidence budget) from that list.
+    """
     video = payload.get("video") or {}
     commenters = video.get("commenters") or []
     if len(commenters) <= batch_size:
         return None
+    sizes = _batch_sizes(len(commenters), batches or DEFAULT_ANALYST_BATCHES)
     chunks: list[dict] = []
-    for i in range(0, len(commenters), batch_size):
+    start = 0
+    for size in sizes:
         chunk_payload = {k: v for k, v in payload.items() if k != CACHE_KEY}
-        chunk_payload["video"] = {**video, "commenters": commenters[i:i + batch_size]}
+        chunk_payload["video"] = {**video, "commenters": commenters[start:start + size]}
         chunks.append(chunk_payload)
+        start += size
     return chunks
 
 
@@ -1801,7 +1837,11 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     ref = _ref(inv_slug)
     total = len(chunks)
     workers = max(1, min(total, int(getattr(settings, "analyst_batch_concurrency", 1) or 1)))
-    batch_size = int(getattr(settings, "analyst_batch_accounts", 50) or 50)
+    # The size the chunks ACTUALLY have, not the configured threshold. Since the split is by count,
+    # the two disagree (a 100-account scan is four batches of 25 against a threshold of 12), and the
+    # `batching` marker below is what the progress strip renders to the customer.
+    batch_size = max((len((c.get("video") or {}).get("commenters") or []) for c in chunks),
+                     default=int(getattr(settings, "analyst_batch_accounts", 50) or 50))
     logger.info("analyst.batched: slug=%s accounts=%d -> %d batches of <=%d (%s)",
                 inv_slug, len((payload.get("video") or {}).get("commenters") or []),
                 total, batch_size,
@@ -2055,7 +2095,9 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
         # runs as ≤N-account requests issued ONE AT A TIME, each persisted the moment it lands, so the
         # first accounts are readable while the rest are still being generated.
         batch_size = max(1, int(getattr(settings, "analyst_batch_accounts", 50) or 50))
-        chunks = _split_batches(payload, batch_size)
+        batch_count = max(1, int(getattr(settings, "analyst_batch_count", DEFAULT_ANALYST_BATCHES)
+                                 or DEFAULT_ANALYST_BATCHES))
+        chunks = _split_batches(payload, batch_size, batches=batch_count)
         if chunks:
             entry = _generate_batched(inv_slug, user_id, payload, chunks,
                                       platform=platform, settings=settings)

@@ -65,17 +65,63 @@ def test_small_selection_is_not_split():
     assert _split_batches(_payload(1), 50) is None
 
 
-def test_large_selection_splits_in_order_at_the_cap():
-    chunks = _split_batches(_payload(120), 50)
-    assert chunks is not None and len(chunks) == 3
-    sizes = [len(c["video"]["commenters"]) for c in chunks]
-    assert sizes == [50, 50, 20]
-    # Selection order preserved across the boundary: chunk 2 starts where chunk 1 ended.
+def test_a_large_selection_splits_into_a_FIXED_NUMBER_of_batches():
+    """The batch count is a constant, not a function of the selection size.
+
+    Slicing at a fixed size made the count depend on how many accounts someone happened to pick: the
+    same customer saw 4 batches on one post and 9 on the next, with nothing on the page to explain
+    the difference, and a deployment tuning the slice size for latency silently reshaped every scan.
+    100 accounts is four batches of 25, whatever the threshold is set to.
+    """
+    chunks = _split_batches(_payload(100), 12, batches=4)
+    assert chunks is not None
+    assert [len(c["video"]["commenters"]) for c in chunks] == [25, 25, 25, 25]
+    # Selection order preserved across every boundary.
     assert chunks[0]["video"]["commenters"][0]["handle"] == "user0"
-    assert chunks[1]["video"]["commenters"][0]["handle"] == "user50"
-    assert chunks[2]["video"]["commenters"][-1]["handle"] == "user119"
+    assert chunks[1]["video"]["commenters"][0]["handle"] == "user25"
+    assert chunks[3]["video"]["commenters"][-1]["handle"] == "user99"
     # Non-account context rides along; the cached-assessment key never leaks into a chunk.
     assert all(c["overall_probability"] == 0.4 for c in chunks)
+
+
+def test_a_remainder_is_spread_across_the_batches_not_dumped_on_the_last():
+    """126 over four is 32/32/31/31, not 32/32/32/30.
+
+    Slicing at ceil(n/k) looks equivalent and is not: it concentrates the shortfall in one request
+    and, at small counts, produces FEWER batches than asked for (5 over 4 slices to 2/2/1, three
+    batches). Spreading the remainder keeps the count exact at every size.
+    """
+    assert A._batch_sizes(126, 4) == [32, 32, 31, 31]
+    assert sum(A._batch_sizes(126, 4)) == 126
+    for n in range(5, 200):
+        sizes = A._batch_sizes(n, 4)
+        assert len(sizes) == 4, n
+        assert sum(sizes) == n, n
+        assert max(sizes) - min(sizes) <= 1, n
+
+
+def test_the_count_never_plans_an_empty_request():
+    """Fewer accounts than batches. A request carrying no accounts costs a full protocol send and
+    can only come back empty."""
+    assert A._batch_sizes(3, 4) == [1, 1, 1]
+    assert A._batch_sizes(0, 4) == []
+
+
+def test_the_threshold_still_decides_whether_to_batch_at_all():
+    """`analyst_batch_accounts` did not change meaning for a small scan: at or below it, one request.
+    A 13-account selection above a 12 threshold becomes four batches, not thirteen."""
+    assert _split_batches(_payload(12), 12, batches=4) is None
+    sizes = [len(c["video"]["commenters"]) for c in _split_batches(_payload(13), 12, batches=4)]
+    assert sizes == [4, 3, 3, 3]
+
+
+def test_the_shipped_default_is_four_batches():
+    """The product decision, pinned. `render.yaml` can raise it if per-batch latency starts racing
+    the timeout, but four is what a customer sees unless someone chose otherwise."""
+    assert A.DEFAULT_ANALYST_BATCHES == 4
+    assert get_settings().analyst_batch_count == 4
+    # And the default is what an omitted argument uses, so no call site can quietly diverge.
+    assert len(_split_batches(_payload(100), 12)) == 4
 
 
 # --------------------------------------------------------------------------- #
@@ -183,7 +229,10 @@ def batched(monkeypatch):
 
         monkeypatch.setattr(A, "assess_payload", fake_assess)
         payload = _payload(25 * len(outcomes))
-        chunks = _split_batches(payload, 25)
+        # `batches` is pinned to the scripted length rather than left at the shipped default of 4:
+        # these tests are about the RUN LOOP (ordering, progressive persistence, terminal state with
+        # a failed batch), and how the selection is divided is a separate rule tested above.
+        chunks = _split_batches(payload, 25, batches=len(outcomes))
         A._generate_batched("inv_test", 1, payload, chunks,
                             platform="x", settings=get_settings())
         return persists_seen_at_start, persisted

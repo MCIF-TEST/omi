@@ -336,7 +336,13 @@ class Settings(BaseSettings):
     # single unshared request: its results appear in the UI at the earliest possible moment, and each
     # later batch reveals as it lands. Total wall-clock is similar; time-to-first-result is far better,
     # and it keeps us to one in-flight OpenRouter request per scan. Env-overridable.
+    # `analyst_batch_accounts` is the THRESHOLD: a selection at or below it runs as one request.
+    # Above it, the selection is divided into `analyst_batch_count` near-equal batches, so the batch
+    # count is a constant a customer can recognise (100 accounts is always four batches of 25, 126 is
+    # always 32/32/31/31) instead of a function of how many accounts they happened to select. Raise
+    # the COUNT, not the threshold, if per-batch latency ever starts racing OMI_ANALYST_TIMEOUT_SECONDS.
     analyst_batch_accounts: int = 25          # OMI_ANALYST_BATCH_ACCOUNTS
+    analyst_batch_count: int = 4              # OMI_ANALYST_BATCH_COUNT
     analyst_batch_concurrency: int = 1        # OMI_ANALYST_BATCH_CONCURRENCY
     # GPT-5-class reasoning effort. Reasoning tokens bill as output AND are the dominant latency driver —
     # with the preset left to decide (its default trends high), a single call reasoned long enough to
