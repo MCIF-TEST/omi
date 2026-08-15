@@ -388,7 +388,7 @@ def test_a_fresh_heartbeat_means_some_process_is_still_working():
     # Stale: whoever was writing has stopped, so this entry is fair game to regenerate.
     assert A.batched_run_looks_alive(
         _entry(done=3, total=4, accounts=75, run_id="r1",
-               heartbeat_age_sec=A.BATCH_HEARTBEAT_STALE_SEC + 5)) is False
+               heartbeat_age_sec=A.batch_heartbeat_stale_sec() + 5)) is False
     # A finished run is not "alive", however recently it was written.
     assert A.batched_run_looks_alive(
         _entry(done=4, total=4, accounts=100, run_id="r1", complete=True)) is False
@@ -417,7 +417,7 @@ def test_a_run_always_advances_over_its_own_earlier_writes():
 def test_a_dead_run_is_replaceable_even_though_it_has_more_accounts():
     """Otherwise a crashed run's partial result would be permanent and nothing could heal it."""
     dead = _entry(done=3, total=4, accounts=75, run_id="runA",
-                  heartbeat_age_sec=A.BATCH_HEARTBEAT_STALE_SEC + 60)
+                  heartbeat_age_sec=A.batch_heartbeat_stale_sec() + 60)
     mine = {"commenter_assessments": [{"ref": "A1"}] * 25,
             "batching": {"total": 4, "done": 1, "run_id": "runB", "complete": False}}
     assert A._entry_is_ahead(dead, mine, "runB") is False
@@ -569,7 +569,7 @@ def test_a_stale_lease_does_not_block_a_new_run_forever():
     """A crashed run must not lock the investigation out of ever being generated again."""
     from datetime import datetime, timedelta, timezone
     old = (datetime.now(timezone.utc)
-           - timedelta(seconds=A.BATCH_HEARTBEAT_STALE_SEC + 60)).isoformat()
+           - timedelta(seconds=A.batch_heartbeat_stale_sec() + 60)).isoformat()
     inv = _LeaseInv({A.LEASE_KEY: {"run_id": "dead", "heartbeat": old}})
     assert A.generation_lease_is_live(inv) is False
     assert A.claim_generation_lease(_LeaseSession(), inv, "runB") is True
@@ -596,3 +596,46 @@ def test_the_lease_is_never_mistaken_for_a_result():
     A.claim_generation_lease(session, inv, "runA")
     assert A.LEASE_KEY != A.CACHE_KEY
     assert A.cached_assessment(inv) is None
+
+
+# --------------------------------------------------------------------------- #
+# The liveness window has to clear one model call, or it manufactures duplicates
+# --------------------------------------------------------------------------- #
+def test_the_heartbeat_window_is_longer_than_a_single_batch_can_take(monkeypatch):
+    """A fixed 420s was a bet that no batch would ever take seven minutes, and it lost.
+
+    The heartbeat is written when a batch LANDS, so one whole model call sits between two writes. A
+    measured 25-account batch took 857s: for 437 of those seconds a perfectly healthy run looked
+    dead, another worker concluded it had crashed, and the duplicate republished "1 of 4" over the
+    "3 of 4" the customer was reading. Deriving the window from the per-call timeout is what stops
+    a future timeout increase silently re-opening that.
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("OMI_ANALYST_TIMEOUT_SECONDS", "1800")
+    get_settings.cache_clear()
+    try:
+        window = A.batch_heartbeat_stale_sec()
+        assert window > 1800, "a run must not be declared dead while a batch could still be running"
+        assert window == 1800 + A.BATCH_HEARTBEAT_MARGIN_SEC
+    finally:
+        get_settings.cache_clear()
+
+
+def test_the_window_never_drops_below_its_floor(monkeypatch):
+    """A deployment with no timeout configured must not get a window of zero, which would declare
+    every run dead the instant it started and regenerate forever."""
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("OMI_ANALYST_TIMEOUT_SECONDS", "0")
+    get_settings.cache_clear()
+    try:
+        assert A.batch_heartbeat_stale_sec() == A.BATCH_HEARTBEAT_STALE_SEC
+    finally:
+        get_settings.cache_clear()
+
+
+def test_liveness_never_raises_however_broken_the_settings_are(monkeypatch):
+    """This decides whether to start a second billable run. It must degrade, never explode."""
+    monkeypatch.setattr(A, "get_settings", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert A.batch_heartbeat_stale_sec() == A.BATCH_HEARTBEAT_STALE_SEC

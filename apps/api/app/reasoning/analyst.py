@@ -1503,7 +1503,7 @@ def generation_lease_is_live(inv) -> bool:
         return False
     if seen.tzinfo is None:
         seen = seen.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - seen).total_seconds() < BATCH_HEARTBEAT_STALE_SEC
+    return (datetime.now(timezone.utc) - seen).total_seconds() < batch_heartbeat_stale_sec()
 
 
 def claim_generation_lease(session, inv, run_id: str) -> bool:
@@ -1762,10 +1762,29 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
 
 
 #: How long a batched run's entry may go without a progress write before another worker is allowed
-#: to conclude it died and regenerate. A batch is one model call, so this has to clear the slowest
-#: realistic one with room to spare: too low and we are back to duplicate runs fighting over the
-#: same row, too high and a genuinely crashed run leaves the user waiting.
-BATCH_HEARTBEAT_STALE_SEC = 420
+#: to conclude it died and regenerate.
+#:
+#: THIS IS DERIVED FROM THE PER-CALL TIMEOUT, and it must be. The heartbeat is written when a batch
+#: LANDS, so between two writes sits one whole model call. A fixed 420 was therefore a bet that no
+#: batch would ever take seven minutes, and it lost: a measured 25-account batch took 857s, so for
+#: 437 of those seconds a perfectly healthy run looked dead. Another worker then concluded it had
+#: crashed and started a duplicate, which republished "1 of 4" over the "3 of 4" the customer was
+#: reading and billed a second run to do it.
+#:
+#: A run cannot be declared dead until longer than one model call could possibly take, so the floor
+#: is the configured timeout plus a margin for the persist that follows it. Raising
+#: OMI_ANALYST_TIMEOUT_SECONDS now moves this automatically instead of silently re-opening the bug.
+BATCH_HEARTBEAT_MARGIN_SEC = 300
+BATCH_HEARTBEAT_STALE_SEC = 420      # the floor, and what a caller with no settings falls back to
+
+
+def batch_heartbeat_stale_sec(settings: Settings | None = None) -> float:
+    """How long since the last progress write before a batched run counts as dead."""
+    try:
+        timeout = float(getattr(settings or get_settings(), "analyst_timeout_seconds", 0) or 0)
+    except Exception:  # noqa: BLE001 — liveness must never raise; fall back to the floor
+        timeout = 0.0
+    return max(BATCH_HEARTBEAT_STALE_SEC, timeout + BATCH_HEARTBEAT_MARGIN_SEC)
 
 
 def batched_run_looks_alive(entry: dict | None) -> bool:
@@ -1794,7 +1813,7 @@ def batched_run_looks_alive(entry: dict | None) -> bool:
     if seen.tzinfo is None:
         seen = seen.replace(tzinfo=timezone.utc)
     age = (datetime.now(timezone.utc) - seen).total_seconds()
-    return age < BATCH_HEARTBEAT_STALE_SEC
+    return age < batch_heartbeat_stale_sec()
 
 
 def _scored_accounts(assessment: dict | None) -> int:

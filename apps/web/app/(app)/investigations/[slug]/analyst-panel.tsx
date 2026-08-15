@@ -37,10 +37,11 @@ const POLL_INTERVAL_MS = 2500;
 // time a new batch's results land (see the 'partial' branch), so it means "this long without
 // visible progress", not "this long in total". A scan that keeps delivering batches is never cut
 // off here.
-// 400 x 2.5s = ~1000s without visible progress. It must OUTLAST the server's per-call timeout
-// (OMI_ANALYST_TIMEOUT_SECONDS, 900s), or the browser declares failure while the server is still
-// working and would have delivered the batch.
-const MAX_POLLS = 400;
+// 800 x 2.5s = ~2000s without visible progress. It must OUTLAST the server's per-call timeout
+// (OMI_ANALYST_TIMEOUT_SECONDS, 1800s), or the browser declares failure while the server is still
+// working and would have delivered the batch. A measured 25-account batch took 857s, so the old
+// 1000s budget was already inside one standard deviation of a single batch.
+const MAX_POLLS = 800;
 
 // A transport failure is not an answer, so it must not end the wait.
 //

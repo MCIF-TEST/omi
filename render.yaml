@@ -297,14 +297,26 @@ services:
       # One model generation timeout (background worker, not a user request). It must clear the
       # SLOWEST realistic single batch, or the batch is cut off and returns nothing: a live 100
       # account scan averaged ~418s per 25-account batch and lost two of four to the old 500s
-      # ceiling, so the customer paid for 100 accounts and got 25.
+      # ceiling, so the customer paid for 100 accounts and got 25. 900s then hit the SAME wall: a
+      # measured batch took 857s, a 5 percent margin, and batches started flooring again. A timed
+      # out generation is the worst possible outcome here because it is NOT retryable (it may
+      # already have billed on the provider's side), so the accounts in it are simply lost.
       #
-      # Latency is driven by the compiled protocol (~25k input tokens, sent on EVERY batch) plus the
-      # per-account evidence, so it grew when the protocol grew. 900s leaves real headroom. It must
-      # stay BELOW the client's poll budget (MAX_POLLS in analyst-panel.tsx, 400 x 2.5s = 1000s
-      # without visible progress), or the browser gives up on a batch the server would still deliver.
+      # 1800s is therefore deliberately far above anything observed. It is not a target, it is a
+      # ceiling that only a genuinely hung request should ever reach: it exists so a stuck call
+      # cannot hold a background worker for ever, not to bound a healthy scan. Latency is driven by
+      # the compiled protocol (~25k input tokens, sent on EVERY batch) plus the per-account
+      # evidence, so it grows whenever the protocol grows.
+      #
+      # TWO THINGS MOVE WITH IT, and one used to have to be remembered:
+      #   * The client's poll budget (MAX_POLLS in analyst-panel.tsx) must OUTLAST this, or the
+      #     browser gives up on a batch the server would still deliver.
+      #   * The batched-run liveness window must exceed it, or a healthy run looks dead mid-batch
+      #     and a second worker starts a duplicate. That one is now DERIVED from this value
+      #     (batch_heartbeat_stale_sec in analyst.py), so raising this can no longer silently
+      #     re-open the bug where "3 of 4" was republished as "1 of 4".
       - key: OMI_ANALYST_TIMEOUT_SECONDS
-        value: '900'
+        value: '1800'
       # The THRESHOLD, not the size: a selection at or below this runs as one model call. Anything
       # above it is divided into OMI_ANALYST_BATCH_COUNT near-equal batches, so a 100-account scan is
       # four batches of 25 and a 126-account scan is 32/32/31/31. The batch count a customer sees is
