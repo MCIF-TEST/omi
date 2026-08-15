@@ -1,7 +1,7 @@
 'use client';
 
 import { Brain, Radar } from 'lucide-react';
-import { batchesFor, displayedBatch } from '@/lib/analysis-progress';
+import { batchesFor, displayedBatch, formatElapsed } from '@/lib/analysis-progress';
 
 /**
  * The ONE progress screen for a running investigation.
@@ -50,7 +50,6 @@ export function AnalysisProgress({
   const total = totalBatches ?? batchesFor(accounts ?? 0);
   const current = displayedBatch(elapsedSec, total);
   const slow = elapsedSec >= 75;
-  const pct = Math.round((current / total) * 100);
 
   return (
     <div className="rounded-lg border border-border-1 bg-bg-elev-2/50 overflow-hidden">
@@ -62,7 +61,7 @@ export function AnalysisProgress({
             {retrying ? 'Omi analyst · retrying' : 'Omi analyst · running'}
           </span>
         </span>
-        <span className="font-mono text-2xs text-fg-mute tabular-nums shrink-0">{elapsedSec}s</span>
+        <span className="font-mono text-2xs text-fg-mute tabular-nums shrink-0">{formatElapsed(elapsedSec)}</span>
       </div>
 
       <div className="p-5 space-y-4">
@@ -83,23 +82,38 @@ export function AnalysisProgress({
             </p>
             <p className="text-xs text-fg-mute leading-relaxed mt-0.5">
               {total > 1
-                ? 'Batches of 25 run one pass each, so a full read can take up to 10 minutes. Accounts appear as each batch lands, and you do not need to stay on this page.'
+                ? `Your selection is split into ${total} passes of roughly equal size, so a full read can take up to 10 minutes. Accounts appear as each batch lands, and you do not need to stay on this page.`
                 : 'It writes each verdict in plain English. This usually takes a couple of minutes, and you do not need to stay on this page.'}
             </p>
           </div>
         </div>
 
-        {/* Batch position. Honest about what it is: which batch is being worked on, out of how many. */}
-        <div className="space-y-1.5">
-          <div className="h-1 rounded-full bg-bg-inset overflow-hidden"
-               role="progressbar"
-               aria-valuenow={current} aria-valuemin={1} aria-valuemax={total}
-               aria-label={`Analysing batch ${current} of ${total}`}>
-            <div className="h-full rounded-full bg-accent batch-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <div className="h-1 rounded-full bg-bg-inset overflow-hidden">
-            <div className="analyst-indeterminate h-full w-1/3 rounded-full bg-violet-solid/70" />
-          </div>
+        {/* Batch position, one segment per pass. Honest about what it is: which batch is being
+            worked on, out of how many, not a count of finished ones (nothing has finished yet, or
+            this screen would have been replaced by the results). The same track renders on the
+            results page once real progress arrives, so the two screens read as one continuous job
+            rather than two unrelated loaders. */}
+        <div
+          className="flex items-center gap-1"
+          role="progressbar"
+          aria-valuenow={current} aria-valuemin={1} aria-valuemax={total}
+          aria-label={`Analysing batch ${current} of ${total}`}
+        >
+          {Array.from({ length: total }, (_, i) => (
+            <div key={i} className="relative h-1.5 flex-1 rounded-full bg-bg-inset overflow-hidden">
+              <div
+                className={`absolute inset-0 rounded-full bg-violet-dim transition-opacity duration-300 ease-out ${
+                  i < current - 1 ? 'opacity-100' : i === current - 1 ? 'opacity-30' : 'opacity-0'
+                }`}
+              />
+              {i === current - 1 && (
+                <div
+                  className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
+                  aria-hidden
+                />
+              )}
+            </div>
+          ))}
         </div>
 
         <ol className="space-y-2 analyst-sweep">
@@ -120,12 +134,6 @@ export function AnalysisProgress({
       </div>
 
       <style jsx>{`
-        .batch-fill { transition: width 400ms cubic-bezier(0.23, 1, 0.32, 1); }
-        .analyst-indeterminate { animation: analyst-slide 1.4s ease-in-out infinite; }
-        @keyframes analyst-slide {
-          0% { transform: translateX(-120%); }
-          100% { transform: translateX(420%); }
-        }
         .analyst-sweep .stage-dot {
           animation: stage-pulse 3.2s ease-in-out infinite;
           animation-delay: calc(var(--i) * 0.5s);
@@ -135,8 +143,6 @@ export function AnalysisProgress({
           20% { background: var(--accent); transform: scale(1.5); }
         }
         @media (prefers-reduced-motion: reduce) {
-          .batch-fill { transition: none; }
-          .analyst-indeterminate { animation: none; width: 100%; opacity: 0.5; }
           .analyst-sweep .stage-dot { animation: none; }
         }
       `}</style>

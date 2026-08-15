@@ -3,8 +3,27 @@
  * tested directly (same split as `lib/investigation-export.ts` and `lib/analyst-failure.ts`).
  */
 
-/** Matches `analyst_batch_accounts` on the API. Batches are what the user actually waits on. */
+/**
+ * The THRESHOLD, mirroring `analyst_batch_accounts` on the API: at or below this, the analyst makes
+ * one request and there are no batches to wait on.
+ *
+ * A deployment can lower it (`OMI_ANALYST_BATCH_ACCOUNTS` is 12 in `render.yaml`), which makes a
+ * small selection batch sooner than this predicts. That is tolerable and deliberately not wired
+ * through as another public env var: this whole module is the estimate shown BEFORE the first batch
+ * lands, and real server progress replaces it the moment one does. The number that actually governs
+ * a long wait is the count below, and that one is exact.
+ */
 export const ACCOUNTS_PER_BATCH = 25;
+
+/**
+ * How many batches a selection above the threshold becomes. Mirrors `analyst_batch_count` on the
+ * API, which is a fixed COUNT rather than a slice size: 100 accounts is four passes of 25, and 126
+ * is four passes of 32/32/31/31.
+ *
+ * It used to be derived as `ceil(accounts / 25)` here, which stopped being true when the server
+ * moved to a fixed count: a 126-account scan would have promised six passes and run four.
+ */
+export const ANALYST_BATCH_COUNT = 4;
 
 /**
  * How long the displayed batch pointer waits before moving itself on.
@@ -26,9 +45,22 @@ export const ACCOUNTS_PER_BATCH = 25;
  */
 export const BATCH_ADVANCE_SEC = 120;
 
+/**
+ * 72 -> "1m 12s".
+ *
+ * Raw seconds stop being readable a couple of minutes in, which is most of the time a progress
+ * surface is on screen: "412s" makes a reader do arithmetic to find out whether the scan is going
+ * badly. Seconds are zero-padded so the number does not change width as it counts, which otherwise
+ * makes the whole line twitch once a second.
+ */
+export function formatElapsed(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
+
 /** Total batches for a selection of N accounts, which the client can derive without the server. */
 export function batchesFor(accounts: number): number {
-  return Math.max(1, Math.ceil(Math.max(0, accounts) / ACCOUNTS_PER_BATCH));
+  return Math.max(0, accounts) > ACCOUNTS_PER_BATCH ? ANALYST_BATCH_COUNT : 1;
 }
 
 /**

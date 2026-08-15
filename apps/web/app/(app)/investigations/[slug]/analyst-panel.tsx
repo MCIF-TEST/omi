@@ -11,6 +11,7 @@ import { ExportResults } from '@/components/shared/export-results';
 import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
 import { byOmiScoreDesc } from '@/lib/rank-accounts';
+import { formatElapsed } from '@/lib/analysis-progress';
 import {
   apiClient,
   ApiError,
@@ -336,30 +337,73 @@ function BatchProgressStrip({
    *  usually partial, which would overstate it). */
   scored: number;
 }) {
-  const pct = Math.max(4, Math.round((batching.done / Math.max(1, batching.total)) * 100));
   return (
-    <div className="mb-4 rounded-lg border border-violet/25 bg-violet/[0.06] px-3.5 py-2.5">
-      <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2 flex items-center gap-1.5">
-          <Loader2 size={11} className="animate-spin" />
-          Scoring in batches: {batching.done} of {batching.total} done
+    <div className="mb-4 rounded-lg border border-violet/25 bg-violet/[0.06] px-3.5 py-3">
+      <div className="flex items-baseline justify-between gap-2 mb-2.5 flex-wrap">
+        {/* The count stays in words as well as in the segments. The track carries it at a glance,
+            but a screen reader gets the segments only as a progressbar value, and a number is the
+            thing someone quotes back when a scan looks stuck. */}
+        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2">
+          Scoring in batches · {batching.done} of {batching.total}
         </span>
         <span className="font-mono text-2xs text-fg-mute tabular-nums">
-          {scored} account{scored === 1 ? '' : 's'} scored · {elapsedSec}s
+          {scored} account{scored === 1 ? '' : 's'} · {formatElapsed(elapsedSec)}
         </span>
       </div>
-      <div className="h-1 rounded-full bg-bg-inset overflow-hidden" role="progressbar"
-           aria-valuenow={batching.done} aria-valuemin={0} aria-valuemax={batching.total}
-           aria-label={`Analysis batches completed: ${batching.done} of ${batching.total}`}>
-        <div
-          className="h-full rounded-full bg-violet-dim transition-[width] duration-500 ease-out"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <p className="mt-1.5 text-2xs text-fg-mute leading-relaxed">
+      <BatchTrack done={batching.done} total={batching.total} />
+      <p className="mt-2.5 text-2xs text-fg-mute leading-relaxed">
         The scores below are final for the accounts already analyzed. The remaining accounts are being
-        analyzed right now and will appear underneath, in order.
+        analyzed right now and will appear underneath, ranked with the rest.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The progress bar IS the batch structure: one segment per batch, not a continuous fill.
+ *
+ * A single bar at 50% tells someone how far along they are and nothing about the shape of the work.
+ * Segments say "four passes, two finished, this one is running" at a glance, which is the thing the
+ * strip exists to communicate and the thing that makes a multi-minute wait legible. It also matches
+ * how a scan is actually run, so nothing here is a metaphor.
+ *
+ * Motion notes: the fill is opacity, not width or colour, so a landing batch composites rather than
+ * repaints. The running segment sweeps on `transform` alone, `motion-safe` only, and it keeps a
+ * static half-lit fill underneath so that with reduced motion it still reads as the active one
+ * rather than as pending.
+ */
+function BatchTrack({ done, total }: { done: number; total: number }) {
+  const count = Math.max(1, total);
+  return (
+    <div
+      className="flex items-center gap-1"
+      role="progressbar"
+      aria-valuenow={done}
+      aria-valuemin={0}
+      aria-valuemax={count}
+      aria-label={`Analysis batches completed: ${done} of ${count}`}
+    >
+      {Array.from({ length: count }, (_, i) => {
+        const state = i < done ? 'done' : i === done ? 'running' : 'pending';
+        return (
+          <div
+            key={i}
+            className="relative h-1.5 flex-1 rounded-full bg-bg-inset overflow-hidden"
+          >
+            <div
+              className={`absolute inset-0 rounded-full bg-violet-dim transition-opacity duration-300 ease-out ${
+                state === 'done' ? 'opacity-100' : state === 'running' ? 'opacity-30' : 'opacity-0'
+              }`}
+            />
+            {state === 'running' && (
+              <div
+                className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
+                aria-hidden
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -379,15 +423,24 @@ function BatchTrailingNotice({
   const remaining = Math.max(0, batching.total - batching.done);
   return (
     <div
-      className="mt-4 rounded-lg border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-3 flex items-center gap-2.5"
+      className="mt-4 rounded-lg border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-3 space-y-2"
       aria-live="polite"
     >
-      <Loader2 size={13} className="animate-spin text-violet-2 shrink-0" />
-      <p className="text-2xs text-fg-dim leading-relaxed">
-        <span className="text-fg-dim font-medium">{scored} account{scored === 1 ? '' : 's'} analyzed.</span>{' '}
-        Still analyzing the rest. {remaining} more batch{remaining === 1 ? '' : 'es'} to go. Each batch
-        is a separate pass, so a large scan can take up to 10 minutes to finish. New accounts appear
-        here as each batch lands; you don&apos;t need to wait on this page.
+      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2 flex items-center gap-1.5">
+          {/* A pulsing dot rather than a spinner. This sits below the results for the whole run, and
+              a spinner tracking a ten-minute wait reads as something stuck. */}
+          <span className="size-1.5 rounded-full bg-violet-2 motion-safe:animate-pulse-dot" aria-hidden />
+          {remaining} batch{remaining === 1 ? '' : 'es'} to go
+        </span>
+        <span className="font-mono text-2xs text-fg-mute tabular-nums">
+          {scored} analyzed
+        </span>
+      </div>
+      <BatchTrack done={batching.done} total={batching.total} />
+      <p className="text-2xs text-fg-mute leading-relaxed">
+        Each batch is a separate pass, so a large scan can take up to 10 minutes. New accounts appear
+        above as each one lands, and you don&apos;t need to wait on this page.
       </p>
     </div>
   );
