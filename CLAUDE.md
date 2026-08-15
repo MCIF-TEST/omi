@@ -12,7 +12,7 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2085
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2091
 passed, 8 skipped, 1 failed** (6m30s, 2026-08-15), the failure pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
@@ -62,7 +62,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2085 passed, 8 skipped, 1 failed** (6m30s, 2026-08-15):
+Current measured state: **2091 passed, 8 skipped, 1 failed** (6m30s, 2026-08-15):
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2043,9 +2043,21 @@ Two independent fixes, because either alone leaves a hole:
   `OMI_ANALYST_TIMEOUT_SECONDS` now moves the window automatically instead of silently re-opening
   that. An **absent** heartbeat counts as not-alive, so entries written before the field existed
   still self-heal.
+- **The lease is re-stamped as the run works.** Its heartbeat used to be written ONCE, at claim
+  time, so liveness was measured from when a run STARTED rather than from when it last did
+  anything: a four-batch scan at ~857s a batch runs close to an hour and outlived any fixed window,
+  so the lease expired mid-flight and another worker was free to claim it. Widening the window only
+  postpones that. `touch_generation_lease` is called on every progress persist, and it refuses to
+  re-stamp a lease it does not own (which would hide a genuinely dead run behind a heartbeat from a
+  process that is not doing the work).
+- **The floor self-heal claim is DURABLE**, stored as `FLOOR_HEAL_KEY` on the investigation. It was
+  a process-local set, so N web workers each granted their own automatic regeneration of the same
+  floored scan and a restart granted another. An automatic regeneration is a full billable run
+  nobody asked for, and the only place that would ever have shown up is the OpenRouter bill. The
+  in-process set stays in front of it to keep a 2.5s poll loop off the database.
 - **Progress never goes backwards.** `_entry_is_ahead()` makes `_persist_progress` defer to a stored
   entry that belongs to a *different*, *still-live* run with *more* accounts. Deliberately narrow:
-  our own `run_id`, a stale entry, a finished entry and an equal-or-behind entry all fall through to
+  our own `run_id`, a stale entry, a finished entry and a behind entry all fall through to
   the normal write, so a single run is completely unaffected and a crashed run stays replaceable. The
   guard **defers, it does not disable** the run: once the second run draws level it publishes again.
 

@@ -639,3 +639,83 @@ def test_liveness_never_raises_however_broken_the_settings_are(monkeypatch):
     """This decides whether to start a second billable run. It must degrade, never explode."""
     monkeypatch.setattr(A, "get_settings", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
     assert A.batch_heartbeat_stale_sec() == A.BATCH_HEARTBEAT_STALE_SEC
+
+
+# --------------------------------------------------------------------------- #
+# Three ways a duplicate run used to get started, and all three cost real money
+# --------------------------------------------------------------------------- #
+def test_a_long_run_keeps_its_lease_alive_while_it_works():
+    """The lease heartbeat was stamped ONCE, at claim time, so liveness was measured from when the
+    run STARTED rather than from when it last did anything. A four-batch scan at ~857s a batch runs
+    close to an hour and always outlived any fixed window, so the lease expired mid-flight and
+    another worker was free to start a duplicate billable run. Widening the window only postpones
+    that; the heartbeat has to be evidence of recent work."""
+    from datetime import datetime, timedelta, timezone
+
+    stale = (datetime.now(timezone.utc)
+             - timedelta(seconds=A.batch_heartbeat_stale_sec() + 60)).isoformat()
+    inv = _LeaseInv({A.LEASE_KEY: {"run_id": "runA", "heartbeat": stale}})
+    assert A.generation_lease_is_live(inv) is False, "precondition: this lease has gone stale"
+
+    A.touch_generation_lease(_LeaseSession(), inv, "runA")
+    assert A.generation_lease_is_live(inv) is True
+    # And a second worker can no longer take it out from under the run that is still working.
+    assert A.claim_generation_lease(_LeaseSession(), inv, "runB") is False
+
+
+def test_touching_a_lease_we_do_not_own_changes_nothing():
+    """Re-stamping somebody else's lease would be worse than not re-stamping our own: it would hide
+    a genuinely dead run behind a heartbeat written by a process that is not doing the work."""
+    from datetime import datetime, timedelta, timezone
+
+    stale = (datetime.now(timezone.utc)
+             - timedelta(seconds=A.batch_heartbeat_stale_sec() + 60)).isoformat()
+    inv = _LeaseInv({A.LEASE_KEY: {"run_id": "runA", "heartbeat": stale}})
+    A.touch_generation_lease(_LeaseSession(), inv, "someone-else")
+    assert A.generation_lease_is_live(inv) is False
+
+
+def test_an_equal_account_count_is_broken_by_how_far_through_the_run_each_one_is():
+    """The live regression: a leader holding 25 accounts at "3 of 4" was overwritten by a duplicate
+    holding 25 at "1 of 4", because comparing accounts alone saw two runs with the same number of
+    them and let the younger one publish. The counter ran backwards on screen."""
+    leader = _entry(done=3, total=4, accounts=25, run_id="runA")
+    mine = {"commenter_assessments": [{"ref": f"A{i}"} for i in range(25)],
+            "batching": {"total": 4, "done": 1, "run_id": "runB", "complete": False}}
+    assert A._entry_is_ahead(leader, mine, "runB") is True
+
+    # The inverse still publishes: we are the one further along, so nothing is lost by writing.
+    behind = _entry(done=1, total=4, accounts=25, run_id="runA")
+    ours = {"commenter_assessments": [{"ref": f"A{i}"} for i in range(25)],
+            "batching": {"total": 4, "done": 3, "run_id": "runB", "complete": False}}
+    assert A._entry_is_ahead(behind, ours, "runB") is False
+
+
+def test_our_own_writes_are_never_deferred_to():
+    """A single run must always be able to advance, including when a batch adds no accounts."""
+    same = _entry(done=3, total=4, accounts=25, run_id="runA")
+    mine = {"commenter_assessments": [{"ref": f"A{i}"} for i in range(25)],
+            "batching": {"total": 4, "done": 4, "run_id": "runA", "complete": False}}
+    assert A._entry_is_ahead(same, mine, "runA") is False
+
+
+def test_the_floor_self_heal_is_claimed_once_per_investigation_not_once_per_process():
+    """An automatic regeneration is a full billable run nobody asked for, so "once" has to mean
+    once. A process-local set granted one per web worker and another after every restart, and
+    nothing would have shown that except the OpenRouter bill."""
+    inv = _LeaseInv({})
+    inv.slug = "inv_heal"
+    assert A.claim_floor_autorefresh("inv_heal", session=_LeaseSession(), inv=inv) is True
+    assert (inv.payload_json or {}).get(A.FLOOR_HEAL_KEY), "the claim must be persisted"
+
+    # A different worker: its in-process set is empty, and the stored marker is what stops it.
+    A._floor_autorefreshed.discard("inv_heal")
+    assert A.claim_floor_autorefresh("inv_heal", session=_LeaseSession(), inv=inv) is False
+
+
+def test_the_floor_self_heal_still_bounds_itself_without_a_session():
+    """Callers that cannot pass a row must degrade to the old process-local behaviour rather than
+    granting a regeneration on every single poll."""
+    A._floor_autorefreshed.discard("inv_nosession")
+    assert A.claim_floor_autorefresh("inv_nosession") is True
+    assert A.claim_floor_autorefresh("inv_nosession") is False
