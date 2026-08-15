@@ -82,7 +82,7 @@ export function AnalysisProgress({
             </p>
             <p className="text-xs text-fg-mute leading-relaxed mt-0.5">
               {total > 1
-                ? `Your selection is split into ${total} passes of roughly equal size, so a full read can take up to 10 minutes. Accounts appear as each batch lands, and you do not need to stay on this page.`
+                ? `Your selection is split into ${total} passes of roughly equal size, and each pass reads every one of its accounts individually, so a large scan can take a while. Accounts appear as each batch lands, and you do not need to stay on this page.`
                 : 'It writes each verdict in plain English. This usually takes a couple of minutes, and you do not need to stay on this page.'}
             </p>
           </div>

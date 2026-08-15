@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACCOUNTS_PER_BATCH, ANALYST_BATCH_COUNT, batchesFor, displayedBatch } from './analysis-progress';
+import { ACCOUNTS_PER_BATCH, ANALYST_BATCH_COUNT, batchStates, batchesFor, displayedBatch } from './analysis-progress';
 
 describe('batchesFor', () => {
   it('matches the API threshold and batch count', () => {
@@ -56,5 +56,57 @@ describe('displayedBatch', () => {
     // batch 1, so the number shown is 1, not 0. If this returned `done` instead, the label
     // "Analysing batch N of M" would become a claim that N batches produced results.
     expect(displayedBatch(0, 4, 0)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A failed batch is not a finished one.
+//
+// Live symptom: the strip read "3 OF 4 DONE" directly beside "25 accounts scored". Both numbers
+// were correct. `batching.done` counts batches ATTEMPTED, on purpose, so a run containing a failure
+// still visibly advances instead of looking hung. But rendering attempts as completions told a
+// customer three quarters of their scan was finished when three quarters of it had been TRIED and
+// one quarter of it had worked.
+// ---------------------------------------------------------------------------
+describe('batchStates', () => {
+  it('does not count an attempted batch as a completed one', () => {
+    // The exact live case: 4 batches, 3 attempted, 1 produced accounts, 2 came back empty.
+    const states = batchStates({ total: 4, done: 3, landed: 1, complete: false });
+    expect(states).toEqual(['done', 'failed', 'failed', 'running']);
+    expect(states.filter((s) => s === 'done')).toHaveLength(1);
+  });
+
+  it('uses the per-batch record when it has one, rather than inferring from counts', () => {
+    // Counts cannot say WHICH batch failed. Traces can, and here the empty one is not the first.
+    const states = batchStates(
+      { total: 4, done: 3, landed: 2, complete: false },
+      [{ batch: 1, accounts: 25 }, { batch: 2, accounts: 0 }, { batch: 3, accounts: 25 }],
+    );
+    expect(states).toEqual(['done', 'failed', 'done', 'running']);
+  });
+
+  it('shows a healthy run as all done', () => {
+    expect(batchStates({ total: 4, done: 4, landed: 4, complete: true }))
+      .toEqual(['done', 'done', 'done', 'done']);
+  });
+
+  it('marks exactly one batch as running, and only while the run is unfinished', () => {
+    expect(batchStates({ total: 4, done: 1, landed: 1, complete: false }))
+      .toEqual(['done', 'running', 'pending', 'pending']);
+    // Once the run is over nothing is running: an unattempted batch stays pending.
+    expect(batchStates({ total: 4, done: 2, landed: 2, complete: true }))
+      .toEqual(['done', 'done', 'pending', 'pending']);
+  });
+
+  it('treats a missing landed count as "every attempt worked"', () => {
+    // Entries written before `landed` existed carry no value, and inventing failures for them would
+    // put a warning colour on a scan that was fine.
+    expect(batchStates({ total: 3, done: 2, complete: false }))
+      .toEqual(['done', 'done', 'running']);
+  });
+
+  it('never returns fewer segments than the run has batches', () => {
+    expect(batchStates({ total: 0, done: 0, complete: false })).toHaveLength(1);
+    expect(batchStates({ total: 4, done: 99, landed: 99, complete: true })).toHaveLength(4);
   });
 });

@@ -11,7 +11,7 @@ import { ExportResults } from '@/components/shared/export-results';
 import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
 import { byOmiScoreDesc } from '@/lib/rank-accounts';
-import { formatElapsed } from '@/lib/analysis-progress';
+import { batchStates, formatElapsed, type BatchState } from '@/lib/analysis-progress';
 import {
   apiClient,
   ApiError,
@@ -229,11 +229,17 @@ export function AnalystPanel({
           <CardLabel className="m-0 flex items-center gap-1.5">
             <Brain size={11} /> Omi Analyst assessment
           </CardLabel>
-          {customerProviderLabel(provider) && (
-            <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-              ▸ {customerProviderLabel(provider)}
-            </span>
-          )}
+          {(() => {
+            const label = customerProviderLabel(provider, {
+              running: pending || assessment?.batching?.complete === false,
+              hasReads: (assessment?.commenter_assessments?.length ?? 0) > 0,
+            });
+            return label ? (
+              <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
+                ▸ {label}
+              </span>
+            ) : null;
+          })()}
         </div>
         {/* Deliberately outside the assessment branches below. The engine scored every selected
             account even when the model reached none of them, so the export must not disappear with
@@ -273,6 +279,7 @@ export function AnalystPanel({
           {assessment.batching && !assessment.batching.complete && (
             <BatchProgressStrip
               batching={assessment.batching}
+              traces={assessment.investigation_trace?.batches?.traces}
               elapsedSec={elapsedSec}
               scored={assessment.commenter_assessments?.length ?? 0}
             />
@@ -289,6 +296,7 @@ export function AnalystPanel({
           {assessment.batching && !assessment.batching.complete && (
             <BatchTrailingNotice
               batching={assessment.batching}
+              traces={assessment.investigation_trace?.batches?.traces}
               scored={assessment.commenter_assessments?.length ?? 0}
             />
           )}
@@ -328,32 +336,44 @@ export function AnalystPanel({
  */
 function BatchProgressStrip({
   batching,
+  traces,
   elapsedSec,
   scored,
 }: {
   batching: NonNullable<AnalystAssessment['batching']>;
+  /** Per-batch outcomes, when the trace carries them. Exact beats inferred: without these the
+   *  failed/done split falls back to counts and cannot say WHICH batch came back empty. */
+  traces?: ReadonlyArray<{ batch: number; accounts: number }>;
   elapsedSec: number;
   /** Accounts actually returned so far, the real count, not done × batch_size (the final batch is
    *  usually partial, which would overstate it). */
   scored: number;
 }) {
+  const states = batchStates(batching, traces);
+  const failed = states.filter((s) => s === 'failed').length;
+  const complete = states.filter((s) => s === 'done').length;
   return (
     <div className="mb-4 rounded-lg border border-violet/25 bg-violet/[0.06] px-3.5 py-3">
       <div className="flex items-baseline justify-between gap-2 mb-2.5 flex-wrap">
-        {/* The count stays in words as well as in the segments. The track carries it at a glance,
-            but a screen reader gets the segments only as a progressbar value, and a number is the
-            thing someone quotes back when a scan looks stuck. */}
+        {/* The count in words as well as in the segments, and it counts batches that PRODUCED
+            something. It used to print `batching.done`, which counts attempts, so a run that had
+            tried three batches and got accounts out of one announced "3 of 4 done" directly beside
+            "25 accounts scored". Both numbers were right and the pair of them was a lie. */}
         <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2">
-          Scoring in batches · {batching.done} of {batching.total}
+          Scoring in batches · {complete} of {batching.total}
         </span>
         <span className="font-mono text-2xs text-fg-mute tabular-nums">
           {scored} account{scored === 1 ? '' : 's'} · {formatElapsed(elapsedSec)}
         </span>
       </div>
-      <BatchTrack done={batching.done} total={batching.total} />
+      <BatchTrack states={states} />
       <p className="mt-2.5 text-2xs text-fg-mute leading-relaxed">
         The scores below are final for the accounts already analyzed. The remaining accounts are being
         analyzed right now and will appear underneath, ranked with the rest.
+        {failed > 0 && (
+          <> {failed} batch{failed === 1 ? '' : 'es'} came back empty, so {failed === 1 ? 'its' : 'their'}{' '}
+          accounts have no written read. You can retry once the run finishes.</>
+        )}
       </p>
     </div>
   );
@@ -372,38 +392,40 @@ function BatchProgressStrip({
  * static half-lit fill underneath so that with reduced motion it still reads as the active one
  * rather than as pending.
  */
-function BatchTrack({ done, total }: { done: number; total: number }) {
-  const count = Math.max(1, total);
+function BatchTrack({ states }: { states: BatchState[] }) {
+  const done = states.filter((s) => s === 'done').length;
   return (
     <div
       className="flex items-center gap-1"
       role="progressbar"
       aria-valuenow={done}
       aria-valuemin={0}
-      aria-valuemax={count}
-      aria-label={`Analysis batches completed: ${done} of ${count}`}
+      aria-valuemax={states.length}
+      aria-label={`Analysis batches completed: ${done} of ${states.length}`}
     >
-      {Array.from({ length: count }, (_, i) => {
-        const state = i < done ? 'done' : i === done ? 'running' : 'pending';
-        return (
+      {states.map((state, i) => (
+        <div key={i} className="relative h-1.5 flex-1 rounded-full bg-bg-inset overflow-hidden">
+          {/* A failed batch is warn-coloured, not violet: it is not a quieter kind of progress, it
+              is work that did not happen, and colouring it like a dim success is how "3 of 4 done"
+              got told beside 25 accounts in the first place. */}
           <div
-            key={i}
-            className="relative h-1.5 flex-1 rounded-full bg-bg-inset overflow-hidden"
-          >
+            className={`absolute inset-0 rounded-full transition-opacity duration-300 ease-out ${
+              state === 'failed' ? 'bg-warn' : 'bg-violet-dim'
+            } ${
+              state === 'done' ? 'opacity-100'
+                : state === 'failed' ? 'opacity-50'
+                : state === 'running' ? 'opacity-30'
+                : 'opacity-0'
+            }`}
+          />
+          {state === 'running' && (
             <div
-              className={`absolute inset-0 rounded-full bg-violet-dim transition-opacity duration-300 ease-out ${
-                state === 'done' ? 'opacity-100' : state === 'running' ? 'opacity-30' : 'opacity-0'
-              }`}
+              className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
+              aria-hidden
             />
-            {state === 'running' && (
-              <div
-                className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
-                aria-hidden
-              />
-            )}
-          </div>
-        );
-      })}
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -415,12 +437,15 @@ function BatchTrack({ done, total }: { done: number; total: number }) {
  */
 function BatchTrailingNotice({
   batching,
+  traces,
   scored,
 }: {
   batching: NonNullable<AnalystAssessment['batching']>;
+  traces?: ReadonlyArray<{ batch: number; accounts: number }>;
   scored: number;
 }) {
-  const remaining = Math.max(0, batching.total - batching.done);
+  const states = batchStates(batching, traces);
+  const remaining = states.filter((s) => s === 'pending' || s === 'running').length;
   return (
     <div
       className="mt-4 rounded-lg border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-3 space-y-2"
@@ -437,10 +462,11 @@ function BatchTrailingNotice({
           {scored} analyzed
         </span>
       </div>
-      <BatchTrack done={batching.done} total={batching.total} />
+      <BatchTrack states={states} />
       <p className="text-2xs text-fg-mute leading-relaxed">
-        Each batch is a separate pass, so a large scan can take up to 10 minutes. New accounts appear
-        above as each one lands, and you don&apos;t need to wait on this page.
+        Each batch is a separate pass that reads every one of its accounts individually, so a large
+        scan can take a while. New accounts appear above as each one lands, and you don&apos;t need to
+        wait on this page.
       </p>
     </div>
   );
@@ -588,13 +614,21 @@ function LegitimateHypothesis({ text }: { text?: string | null }) {
 // The card header already says "Omi Analyst assessment", so the normal path needs no chip at all.
 // The one thing worth surfacing is the degraded case, named in product terms. The raw string stays
 // available to operators in the verification panel.
-function customerProviderLabel(provider: string | null): string | null {
+function customerProviderLabel(
+  provider: string | null,
+  { running = false, hasReads = false }: { running?: boolean; hasReads?: boolean } = {},
+): string | null {
   const p = (provider ?? '').toLowerCase();
   if (!p) return null;
-  if (p.includes('fallback') || p.includes('deterministic') || p.includes('floor')) {
-    return 'written analysis unavailable';
-  }
-  return null;
+  if (!(p.includes('fallback') || p.includes('deterministic') || p.includes('floor'))) return null;
+  // A RUN IN PROGRESS HAS NOT FAILED. The provider string turns to the Floor's the moment ONE batch
+  // floors, so this chip announced "written analysis unavailable" in the card header while the strip
+  // underneath was reporting live progress and more batches were still queued. Judge a run when it
+  // is over.
+  if (running) return null;
+  // The wrapper floored but the per-account reads survived, so "written analysis unavailable" would
+  // be false about the page it is labelling: the reads below it are the analyst's own.
+  return hasReads ? 'summary unavailable' : 'written analysis unavailable';
 }
 
 // Whether the AI model actually authored this assessment. Prefer the explicit trace flag; fall back to the
@@ -733,39 +767,45 @@ function AssessmentView(
   // progress strip rendered directly above it ("1 of 4 done, 3 more batches to go") and tells the user
   // the scan failed while it is visibly still working. Wait for the run to finish before judging it.
   const stillBatching = a.batching ? a.batching.complete === false : false;
-  if (!isModelBacked(a) && stillBatching) {
-    // A mixed run: some batches landed real model-backed accounts and at least one floored, which
-    // makes the MERGED entry non-model-backed. Saying "waiting for the first completed batch" then
-    // contradicts the strip directly above it ("3 of 4 done, 25 accounts scored") and tells the user
-    // nothing has happened when a quarter of their scan is finished. Say what is actually true.
-    const scoredSoFar = a.commenter_assessments?.length ?? 0;
-    return (
-      <p className="text-sm text-fg-dim">
-        {scoredSoFar > 0
-          ? `${scoredSoFar} account${scoredSoFar === 1 ? '' : 's'} scored so far, listed above. `
-            + 'The remaining batches are still running and will appear as they land.'
-          : 'Waiting for the first completed batch. Account scores appear above as each one lands.'}
-      </p>
-    );
-  }
-  // THE WRAPPER FLOORED BUT THE READS SURVIVED. Two ways an entry gets here, and both used to
-  // render as a total failure: one batch of four floored, which makes the merged entry
-  // non-model-backed while three batches of real per-account prose sit inside it; or a single
-  // response whose synthesis wrapper failed schema validation while its per-account rows were fine
-  // (the server keeps those, see `_salvaged_account_reads`).
-  //
-  // Showing them is not a softening of the rule below. The server populates
-  // `commenter_assessments` only from a model-backed part or an explicit salvage, so anything in
-  // this list IS the analyst's own prose; what is missing is the summary above it. Hiding a
-  // customer's paid-for per-account analysis behind "could not be produced" was the more misleading
-  // of the two options, not the safer one.
   const readCount = a.commenter_assessments?.length ?? 0;
+
+  // THE READS EXIST, SO SHOW THE READS. This branch comes FIRST, and the ordering is the fix.
+  //
+  // Live symptom: the page said "25 accounts scored so far, listed above" with nothing above it.
+  // The mid-run branch used to return that sentence INSTEAD of the account list, so the copy
+  // described a list the same branch had just declined to render, and a customer who had paid for
+  // 25 finished reads was shown a sentence about them.
+  //
+  // Three states reach here with reads in hand and they only differ in what to say around them: a
+  // run still going with a floored batch behind it, a finished run where one batch of four floored,
+  // and a single response whose synthesis wrapper failed validation while its per-account rows were
+  // fine (`_salvaged_account_reads` keeps those). In all three the rows ARE the model's own prose,
+  // because the server only ever fills `commenter_assessments` from a model-backed part or an
+  // explicit salvage. What is missing is the summary above them, never the reads themselves.
   if (!isModelBacked(a) && readCount > 0) {
     return (
       <div className="space-y-5">
-        <AiUnavailable a={a} onRetry={onRetry} busy={busy} summaryOnly />
+        {stillBatching ? (
+          <p className="text-sm text-fg-dim">
+            {readCount} account{readCount === 1 ? '' : 's'} scored so far, listed below. The
+            remaining batches are still running and will appear as they land.
+          </p>
+        ) : (
+          <AiUnavailable a={a} onRetry={onRetry} busy={busy} summaryOnly />
+        )}
         <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
       </div>
+    );
+  }
+  // Still going and nothing has landed yet. NOT a failed run: `batching.complete === false` means
+  // more batches are queued and a later one can still make the merged assessment model-backed.
+  // Showing the terminal "could not be produced" notice here would contradict the progress strip
+  // directly above it and tell the user the scan failed while it is visibly still working.
+  if (!isModelBacked(a) && stillBatching) {
+    return (
+      <p className="text-sm text-fg-dim">
+        Waiting for the first completed batch. Account scores appear here as each one lands.
+      </p>
     );
   }
   // Product-cutover rule: only AI-authored assessments render as AI reasoning. If the model

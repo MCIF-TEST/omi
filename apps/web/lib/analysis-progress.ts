@@ -46,6 +46,47 @@ export const ANALYST_BATCH_COUNT = 4;
 export const BATCH_ADVANCE_SEC = 120;
 
 /**
+ * What each batch in a run is actually doing.
+ *
+ * THE CONTRADICTION THIS FIXES, seen live: the strip read "3 of 4 done" beside "25 accounts
+ * scored". Both numbers were correct and together they were a lie. `batching.done` counts batches
+ * ATTEMPTED, not batches that produced anything, and it counts attempts on purpose: a run where one
+ * batch fails must still visibly advance, or a scan that is working looks hung. But rendering
+ * attempts as completions tells a customer that three quarters of their scan is finished when three
+ * quarters of it was tried and one quarter of it worked.
+ *
+ * A failed batch is therefore its own state. `traces` gives the exact answer when it is present (a
+ * batch that came back with zero accounts was attempted and produced nothing); without it the split
+ * falls back to counts, which is right in aggregate even though it cannot say WHICH batch failed.
+ */
+export type BatchState = 'done' | 'failed' | 'running' | 'pending';
+
+export function batchStates(
+  { total, done, landed, complete }: {
+    total: number; done: number; landed?: number; complete?: boolean;
+  },
+  traces?: ReadonlyArray<{ batch: number; accounts: number }>,
+): BatchState[] {
+  const n = Math.max(1, total);
+  const attempted = Math.min(Math.max(0, done), n);
+  const byBatch = new Map((traces ?? []).map((t) => [t.batch, t.accounts]));
+
+  return Array.from({ length: n }, (_, i) => {
+    if (byBatch.size > 0 && byBatch.has(i + 1)) {
+      return (byBatch.get(i + 1) ?? 0) > 0 ? 'done' : 'failed';
+    }
+    if (i < attempted) {
+      // Attempted, and either it produced nothing or we have no per-batch record. Fall back to the
+      // counts: the first `landed` attempts are shown as done and the remainder as failed.
+      const ok = Math.min(landed ?? attempted, attempted);
+      return i < ok ? 'done' : 'failed';
+    }
+    // Nothing is running once the run is over: a batch never attempted stays pending.
+    return i === attempted && !complete ? 'running' : 'pending';
+  });
+}
+
+/**
  * 72 -> "1m 12s".
  *
  * Raw seconds stop being readable a couple of minutes in, which is most of the time a progress
