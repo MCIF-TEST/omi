@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { clerkOriginsFor } from './lib/clerk-origin';
 
 /**
  * Security headers + CSP nonces + lightweight edge rate limiting + referral cookie.
@@ -47,28 +48,10 @@ export const SECURITY_HEADERS: Record<string, string> = {
  * `app/core/clerk_auth._issuer` does on the API side.
  */
 export function clerkOrigins(): string[] {
-  const pk = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '').trim();
-  const m = /^pk_(?:test|live)_(.+)$/.exec(pk);
-  if (!m) return [];
-  let host: string;
-  try {
-    // Clerk strips the base64 padding from the key, and `atob` (unlike Python's b64decode, which the
-    // API side uses) rejects a string whose length is not a multiple of four. Pad exactly, never with
-    // a fixed '==': the live key is 31 characters and needs one '=', so the naive version threw and
-    // this returned no origins at all.
-    const raw = m[1];
-    host = atob(raw + '='.repeat((4 - (raw.length % 4)) % 4)).replace(/\$$/, '').replace(/\/$/, '');
-  } catch {
-    return [];
-  }
-  // A malformed key must widen nothing: anything that is not a plain hostname is discarded rather
-  // than concatenated into a directive.
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(host)) return [];
-  const origins = [`https://${host}`];
-  // Clerk's Account Portal sits at `accounts.<domain>` when the Frontend API is `clerk.<domain>`.
-  // OAuth and email-link flows hand off to it, which is a form-action / navigation target.
-  if (host.startsWith('clerk.')) origins.push(`https://accounts.${host.slice('clerk.'.length)}`);
-  return origins;
+  // The decode lives in lib/clerk-origin.ts because AuthFormGate needs the same answer, to name the
+  // service that failed to answer. A malformed key widens nothing: it yields no origins rather than
+  // a string concatenated into a directive.
+  return clerkOriginsFor(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 }
 
 export function buildContentSecurityPolicy(nonce: string): string {

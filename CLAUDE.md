@@ -5,10 +5,16 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-08-04 · branch `claude/master-analyst-protocol-v1-1u8tyk`, restarted from
-`main` after PR [#130](https://github.com/MCIF-TEST/omi/pull/130) merged · suite measured at
-**1911 passed, 8 skipped, 1 failed** (6m24s), the failure pre-existing and listed below.
-The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
+**Last updated:** 2026-08-07 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
+after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
+coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
+"The cohort coordination detector" below, and read its two rules before touching any threshold.
+A second session then rebuilt scoring as a calibrated probability and added the planet-scale
+tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
+likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2082
+passed, 8 skipped, 1 failed** (5m52s, 2026-08-15), the failure pre-existing and listed below. The 8
+skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -56,23 +62,25 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **1572 passed, 8 skipped, 2 failed** (4m28s, 2026-07-28). Both failures reproduce on an
-unchanged tree AND in isolation, so neither is pollution:
+Current measured state: **2082 passed, 8 skipped, 1 failed** (5m52s, 2026-08-15):
 
-1. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
-   0.032 gate.
-2. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
+1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
    builder now renders a user message that ends after the evidence sections. Looks like the test
    trails a prompt-assembly change rather than a real regression; not yet diagnosed.
 
-**A third failure is yours.** If you see mass failures instead, see the next section first.
+2. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
+   0.032 gate. **Did NOT fire in the 2026-08-07 or 2026-08-15 runs**, having failed consistently
+   before. Nothing in either session touched scoring, so treat it as order-dependent rather than
+   fixed, and do not read its absence as a licence to tighten the gate.
+
+**A second failure is yours.** If you see mass failures instead, see the next section first.
 
 **Count depends on collection order.** A run during the launch-readiness work reported *13* failures;
 11 of those were order-dependent analyst tests that adding new test files shifted into a different
-order, not regressions. A clean run in the default order gives the 2 above. If you see extra
-failures, re-run the specific files in isolation before believing you caused them — and note that
-this order sensitivity is itself a latent problem nobody has fixed yet.
+order, not regressions. Item 2 above is the same effect. If you see extra failures, re-run the
+specific files in isolation before believing you caused them — and note that this order sensitivity
+is itself a latent problem nobody has fixed yet.
 
 ### If the suite is suddenly red everywhere, it is probably not you
 
@@ -209,12 +217,41 @@ browser console.
   the API side is lenient about the extra padding, which is why the same line is correct there and
   wrong here.
 - **The static dev hosts stay**, so a pk_test preview deploy keeps working.
-- **`AuthFormGate` now gives up after 12s** and says the form could not load. A spinner with no
-  terminal state is not a loading state, it is a silent failure, and this one cost a live hour.
+- **`AuthFormGate` gives up after 12s** and says the form could not load. A spinner with no terminal
+  state is not a loading state, it is a silent failure, and this one cost a live hour.
 
-Pinned by `apps/web/middleware.test.ts` (8 tests), which asserts the derived origin lands in every
-directive that needs it. Note the key is inlined into the Edge bundle at BUILD time, so changing it
-needs a rebuild of the web service, not a restart.
+Pinned by `apps/web/middleware.test.ts` and `lib/clerk-origin.test.ts`, which assert the derived
+origin lands in every directive that needs it. Note the key is inlined into the Edge bundle at BUILD
+time, so changing it needs a rebuild of the web service, not a restart.
+
+#### Three reasons the sign-in form does not load, and only one is the visitor's problem
+
+`AuthFormGate`'s timeout used to say one thing for all of them: *check your network or extensions
+blocking third-party scripts*. That advice is actively wrong for two of the three, and sends someone
+to debug a machine that is working. It now distinguishes:
+
+- **`blocked`** — a CSP violation naming the Clerk host. This is the cause with **no other evidence
+  anywhere**: no server log, no failed health check, nothing on the page, only a line in the browser
+  console. That is what made it cost an hour. `AuthFormGate` now listens for
+  `securitypolicyviolation` and says so. The listener is registered on mount and clerk-js is fetched
+  after hydration, so it is normally in place first; if a violation beats it, the generic message
+  stands rather than a wrong claim.
+- **`misconfigured`** — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` was empty at BUILD time, so the bundle
+  has no instance to talk to. Reloading cannot help, so that branch does not offer the button.
+- **`unreachable`** — everything is configured and the host did not answer.
+
+**The production instance's host is a CNAME, so sign-in has a hard dependency on the DNS for
+`omisphere.online`.** Observed 2026-08-15: a Namecheap resolver outage in the user's region made
+`clerk.omisphere.online` fail to resolve, and the entire symptom was this notice. **Nothing
+server-side can see it** — the API is healthy, the web service is healthy, and the failure is
+between one visitor's resolver and a hostname we do not serve. So before debugging the app, check
+that the host resolves (`dig clerk.omisphere.online`) and check the DNS provider's status page. The
+notice now prints the host for exactly that reason, and no longer blames the reader's extensions
+first.
+
+The decode itself lives in `apps/web/lib/clerk-origin.ts`, shared by the middleware (which needs the
+ORIGINS for the CSP) and the gate (which needs the HOST to name in the message). A malformed key
+yields nothing rather than a string concatenated into a security directive.
 
 #### Switching instances gives every user a new Clerk id, and the local row must re-point
 
@@ -245,10 +282,10 @@ Pinned by the last four tests in `tests/test_clerk_provisioning.py`.
 
 ### The analyst is batched, sequential, and progressive
 
-For a selection larger than `analyst_batch_accounts` (25), `_generate_batched` in
-`apps/api/app/reasoning/analyst.py`:
+For a selection larger than `analyst_batch_accounts` (25 in code, **12 on the deployment**),
+`_generate_batched` in `apps/api/app/reasoning/analyst.py`:
 
-1. splits the payload into ordered ≤25-account chunks,
+1. splits the payload into **exactly `analyst_batch_count` (4)** ordered, near-equal chunks,
 2. issues them **one at a time** (`analyst_batch_concurrency = 1`) — *not* in parallel,
 3. persists the merged result the moment each batch lands,
 
@@ -257,6 +294,22 @@ route serves the merged-so-far entry with `status: "partial"`; `analyst-panel.ts
 **resets its poll budget on every batch that arrives** (so `MAX_POLLS` means "10 minutes without
 progress", not "10 minutes total"). Two indicators show progress: a strip above the results and a
 trailing notice below them.
+
+**The split is by COUNT, not by size, and the two settings mean different things.**
+`analyst_batch_accounts` is only the *threshold* (at or below it, one request);
+`analyst_batch_count` decides how many batches everything above it becomes. Slicing at a fixed size
+made the batch count a function of how many accounts someone happened to select, so the same
+customer saw 4 batches on one post and 9 on the next with nothing on the page to explain the
+difference, and the deployment lowering the size to 12 for latency reshaped every scan silently. Now
+100 accounts is always 25/25/25/25 and 126 is always 32/32/31/31 — `_batch_sizes` spreads the
+remainder across the leading batches rather than piling it on the last, because slicing at
+`ceil(n/k)` produces *fewer* batches than asked for at small counts (5 over 4 gives 2/2/1).
+
+**If per-batch latency starts racing `OMI_ANALYST_TIMEOUT_SECONDS` (900), raise the COUNT, not the
+threshold.** That is the whole reason the deployment had dropped to 12-account slices: latency
+scales with the account count while the ~25k-token protocol overhead is fixed. Six or eight batches
+buys the same headroom without making the shape of a scan unpredictable, and it is one env var
+(`OMI_ANALYST_BATCH_COUNT`).
 
 Three landmines here, all previously live bugs:
 
@@ -395,8 +448,30 @@ Five decisions in there:
   extra cells and rows in a spreadsheet, so the clipboard path collapses whitespace; the CSV keeps
   the text intact because RFC 4180 quoting can carry it.
 
-The join is on `external_id`, never the handle. Sorted worst first, which deliberately differs from
-the on-screen order (that follows the batches so results can appear as they land).
+The join is on `external_id`, never the handle. Sorted worst first, which every surface now agrees
+on: see "Every list of accounts leads with the worst one" below.
+
+### Every list of accounts leads with the worst one
+
+The shared report, the markdown export, the CSV and the pre-login demo all sorted highest OMI score
+first. The signed-in investigation page did not: it rendered in BATCH order, which is a consequence
+of how a scan runs rather than a decision about what a reader wants. On a 100-account scan the
+highest-scoring account sat wherever it happened to be selected, so the finding the customer opened
+the page for was the one thing they had to scroll for.
+
+`lib/rank-accounts.ts` is the rule, pure and pinned by `lib/rank-accounts.test.ts`. Two things in it
+that a one-line inline sort gets wrong:
+
+- **An unscored account sorts LAST, never as a zero.** A missing `omi_score` means the analyst never
+  read that account (a floored batch, a row the model skipped), which is not the same claim as "this
+  account looks like a real person". `(b.omi_score ?? 0) - (a.omi_score ?? 0)` would file an
+  unassessed account among the most exonerated ones on the page. Same distinction as `score: null`
+  on the eight signals.
+- **Ties keep their existing order**, and it must stay a stable sort: the list re-renders every time
+  a batch lands, and accounts on the same score shuffling between polls reads as instability.
+
+It returns a copy. The panel holds that list in React state and `ExportResults` builds its own rows
+from the same array, so sorting in place would reorder it underneath both.
 
 ### Score discipline: a high score has to be earned (constitution v9)
 
@@ -1348,6 +1423,9 @@ Two traps that bit here, both verified with Playwright at 360/375/390/430px:
   `overflow-x: clip` on `html, body` in `globals.css` (see the mobile section above).
 
 ### The coordinated-events surface is removed from the product, not from the code
+<!-- Superseded in part: /narratives is now the live admin coordination queue. See "The cohort
+     coordination detector" below. The campaigns UI and /rc/ web route are still deleted. -->
+
 
 Product decision (2026-07-28): the campaigns UI shipped clusters the engine had not earned the right
 to call coordinated, so it is gone from the site pending a real detection algorithm.
@@ -1363,15 +1441,269 @@ and are still green. That is the foundation the future algorithm builds on, so d
 because nothing in the UI imports it. `/rc/<token>` is still a live **API** route, which is why
 `tests/test_featured_campaigns.py` passes unchanged.
 
-`/narratives` is a placeholder that says "Coming soon: narrative / campaign detector". It is
-**admin-only and gated on the server** (`if (!user?.is_admin) notFound()`), because hiding the nav
-link alone would leave the route answering to anyone who typed the URL. `adminOnly` on a nav item in
-`sidebar.tsx` / `mobile-nav.tsx` is presentation only; the page is the access control.
+`/narratives` is no longer a placeholder: it is the **coordination queue** for the cohort detector
+(see below), labelled "Coordination" in both navs. It remains **admin-only and gated on the server**
+(`if (!user?.is_admin) notFound()`, plus `force-dynamic`), because hiding the nav link alone would
+leave the route answering to anyone who typed the URL. `adminOnly` on a nav item in `sidebar.tsx` /
+`mobile-nav.tsx` is presentation only; the page is the access control.
 
 One live reference remains on purpose: `campaign_reasoning` ("Campaign analysis") in
 `analyst-panel.tsx` and `lib/api.ts`. That is a section of the **analyst's own response schema**, not
 the campaigns feature. Removing it means a protocol change, a recompile, and a re-paste of the
 OpenRouter preset.
+
+### The cohort coordination detector: what it is and the two rules holding it up
+
+`app/campaigns/detector/` answers the question a per-account score cannot: **are these accounts
+running together?** It takes the accounts an investigation scored at **70 or above**, clusters them
+on evidence those accounts produced themselves, and writes corroborated groups into the existing
+`Campaign` tables. Deterministic: no model call, no network, no provider quota, pinned by
+`tests/test_campaign_detector_uses_no_model.py` at the **import graph**, because a "no model" rule
+that is only true by inspection stops being true the first time someone adds a convenient import.
+
+It is **admin-only**, at `/narratives`, served by `/v1/admin/coordination`. The thresholds are
+reasoned, not fitted against a labelled corpus, so a finding is an operator's lead. Nothing reaches
+the customer app, the public report, or the exports.
+
+**This is a new algorithm, not the six detectors in `app/detection/coordination/`.** Those still run
+on every scan and are untouched. `app/campaigns/verdict_coordination.py` also still exists and is
+still unwired; it was not adopted because its every measurement is *relative to the batch*, and the
+70+ filter is precisely what removes the batch.
+
+#### Rule 1: filtering to 70+ destroys the background, so the evidence must be ABSOLUTE
+
+Measuring agreement relative to peers is what stops a detector reporting "the 80-scorers use
+similar words, therefore a campaign". A cohort filtered to 70+ has no such background: every member
+already looks bad, which is the *definition* of the cohort. So each signal is improbable in itself,
+not relative to a peer group.
+
+Where a null is genuinely needed it comes from the **full batch and the full thread**, which the
+filter never touched, while only cohort members are ever named. Two signals need one:
+
+- **`burst_lockstep`** tests co-arrival against the post's own arrival rate. Without that null it is
+  the single worst false-positive generator available: on a viral post 200 comments land per minute
+  and any four accounts share a minute. `tests/test_campaign_detector_signals.py` runs the same four
+  accounts in the same window against a viral thread (refuses) and a quiet one (p < 1e-4). Those two
+  tests *are* the thesis; if you break one, the detector is wrong.
+- **`provisioning_window`** tests creation clustering against the batch's empirical distribution,
+  because platform growth is not uniform and a theoretical prior fires on every signup wave.
+
+**A cluster must never be counted in its own background.** It inflates the distribution it is being
+tested against and hides itself. This bit twice during development, in two different coordinates:
+`stats.local_rate` takes an `exclude` range (the same burst went from p=1.4e-4, missed, to p=2.3e-7,
+caught) and `stats.window_mass` does the same for creation dates. `window_mass` also floors at the
+uniform rate because an empirical count has **no resolution** below the spacing of the data: with
+300 creation dates over ten years, a 200-second window is empty for every window that does not
+contain the cluster, and zero mass reads as untestable rather than significant.
+
+#### Rule 2: corroboration is AND, and it counts FAMILIES
+
+The seven signals sit in five families of independent evidence:
+
+```
+text (verbatim_echo, bio_echo) · timing (burst_lockstep) · network (co_target)
+infrastructure (client_signature) · identity (provisioning_window, handle_template)
+```
+
+Fusion takes the **strongest edge within a family** and combines **across** families. Two methods
+reading the same material are one kind of evidence seen twice: `verbatim_echo` + `bio_echo` both say
+"these accounts emitted the same string", and counting method names would let one copy-paste
+observation clear a gate meant to need independent confirmation.
+
+Fusion is now **arithmetic, not heuristic**: likelihood ratios multiply only when the evidence is
+conditionally independent given the hypothesis, and the family map *is* that independence
+assumption written down. See "The probability model" below.
+
+Three more guards, each replacing a specific way this goes wrong:
+
+- **Edges, not clusters.** `CampaignService.merge_clusters` unions any two clusters sharing one
+  account, so per-detector clusters let one account fuse two unrelated groups into a fake
+  mega-campaign. Findings come out member-disjoint and `record_clusters` is called **once per
+  finding**.
+- **Two independent links to join a group** (`MIN_LINKS_INTO_GROUP`). This replaced a density
+  ratio, which was a proxy for the same thing. If one account posts a script that four unrelated
+  people each copy, every spoke links to the hub at high probability while the spokes share
+  nothing; admitting all five would report "these five are running together" on evidence that only
+  ever said "each of these four echoed that one". **The rule triggers from the third member, not
+  the fourth** — requiring it only from the fourth let a three-account star through, which is the
+  smallest thing it exists to refuse.
+- **Every edge carries an `artifact`** and `pair_evidence` drops any that does not. The
+  deterministic form of "if you cannot quote it, you cannot claim it".
+
+`test_the_same_input_always_gives_the_same_answer` pins determinism: these are published claims
+about named accounts, and a verdict that changes between runs is not a verdict.
+
+#### The probability model: `detector/probability.py`
+
+The output is a **calibrated posterior**, not a score. `posterior_odds = prior_odds × Π LR_family`.
+
+**The prior is stated**: P(two accounts in one 70+ cohort are coordinated) ≈ 0.033, derived from the
+documented base rates (9-15% of active accounts automated; an operation of ~5 inside a ~15-account
+cohort, present in ~35% of investigations). From there, clearing 0.95 needs **LR ≥ 551**, and that
+number is the entire discipline.
+
+**Two signals get their denominator for free.** `LR = P(E|coordinated) / P(E|independent)`, and
+`burst_lockstep` and `provisioning_window` already compute a p-value that *is* the denominator. The
+null models built for a different reason turn out to be exactly what Bayes wants underneath, so
+those two ratios are data-derived per observation rather than estimated once.
+
+**The old hardcoded gate is gone because the numbers do its job.** With honest ratios, no single
+family at any strength can clear the bar, and any two independent families can. `SUPPORTING_CEILING`
+and `EVIDENCE_EPS` were deleted, not ported. Every one of those refusals is pinned in
+`tests/test_coordination_probability.py`; if a ratio drifts, whichever refusal it breaks says so.
+
+**Both measured-null signals are capped per method, and the reason is not tidiness.** A p-value
+answers "how surprising is this under MY null", and each of these nulls has a confound it cannot
+see. `burst_lockstep` (cap 2.30) correctly refuses a viral post but cannot see an **external
+referral spike**: a post linked from a Discord or a subreddit makes real strangers arrive together,
+and that burst is precisely the deviation the null flags. `provisioning_window` (cap 2.00) rests on
+an empirical CDF over a few hundred creation dates that already needs a uniform floor for lack of
+resolution. The caps are where the unmodelled confound is priced in.
+
+**Membership is gated per account.** An account joins only when *its own* posterior link to the
+group is ≥ 0.95, and a group's headline number is its **weakest** member's, not its mean: a group is
+only as defensible as the least defensible person named in it, and that person is the one harmed if
+it is wrong. Every member carries its own admitting probability into the UI so a reviewer can
+challenge one name without dismissing the finding.
+
+**Nothing claims certainty.** Total log10 LR is capped at 4.0, so the reportable ceiling is ~0.997.
+Five estimates multiplied do not make a fact.
+
+#### Two passes, one core, one stored result
+
+Pass 1 fires when the scan is saved, on the **deterministic engine probability**, so a coordination
+read exists even when the analyst floors (a documented recurring failure). Pass 2 fires from
+`generate_and_persist`'s `finally` and re-cuts on the **customer-visible OMI score**.
+
+Both are literally the same function (`run.detect_for_investigation`, differing only in `prefer`),
+and pass 2 **replaces** pass 1's `campaign_detection_v1` block rather than sitting beside it. That is
+the whole anti-divergence design: there is one scoring core and one stored answer, so the two passes
+cannot present competing verdicts about the same accounts. Scheduled on `background.submit`, **not**
+`submit_slow` — the slow pool exists because an analyst run holds a worker for minutes, and this is
+seconds of pure CPU.
+
+`campaign_detections` is a denormalised index row so the admin queue can list and filter **without
+loading `payload_json`**. Same trap the archive list already paid for, and worse here because these
+are the heaviest payloads in the product. Uniqueness is an `Index(..., unique=True)` and not a
+`UniqueConstraint`, because the boot-time upgrade pass backfills `table.indexes` and cannot see
+`table.constraints`.
+
+#### The planet-scale layer: `app/campaigns/tracking/`
+
+Three things a per-investigation detector cannot do, and the reason the layer exists.
+
+**It accumulates.** Every pair's evidence is folded into `CoordinationEdge` (extended with
+`log_lr_sum` / `families_json` / `contexts_json` / `platforms_json`), including pairs that did
+**not** clear the bar. That is the point: a pair at 0.86 today is below the threshold and still
+worth remembering, because the same pair on an unrelated post next month is what takes it over.
+Discarding sub-threshold evidence would mean the system could only ever learn from what it had
+already decided. Measured: one sighting 0.857 (refused, zero campaign rows), two sightings 0.988.
+
+Repeat sightings are **discounted by half** and capped at 5 contexts, because two observations of
+one pair are not independent (both accounts follow the same topics). And only a **distinct post**
+counts: `contexts_json` is a set, so re-scanning or a continuation batch cannot compound, which
+would otherwise let anyone strengthen a finding by pressing rescan. `last_shared_parent` could not
+serve here because it is overwritten, so one post scanned twice looked identical to two posts.
+
+**It survives account rotation.** A serious operation burns its accounts between runs, so
+`_match_or_create`'s member overlap finds nothing and forks a new campaign with a fresh random key
+— the system reports a first sighting of something it has seen three times. `tracking/signature.py`
+sketches the operation's **behaviour** (script shingles, handle skeletons, creation-month buckets,
+client strings, link domains) and **never account ids**, banded into `operation_signature_bands` for
+indexed lookup. Match order is now: member overlap, then signature collision verified at similarity
+≥ 0.40, then create. Measured: same operation with zero shared accounts, similarity 1.000 and 32/32
+bands colliding; a different operation, 0.031 and 0/32.
+
+**The hash family matters.** `verdict_coordination._minhash` derives permutations by XOR with a
+constant, which is not a universal family: the permutations are correlated, so the banding
+arithmetic does not hold. At one-investigation scale nobody noticed; at deployment scale, where band
+collisions decide what gets compared at all, it would produce a match rate nothing predicts. The
+tracking layer uses independently salted BLAKE2b (as `detector/textsim._hash64` already does).
+
+**Cross-platform is one rule.** A cross-platform edge may only be created by a **platform-neutral**
+family: text, network, timing. `client_signature` reads an X-only field, and handle conventions
+differ per platform so a shared skeleton across two would be evidence about the platforms rather
+than the accounts. Enforced once in `run._drop_illegal_cross_platform`, not inside seven signals
+that would each have to remember it.
+
+Two more fixes that landed here:
+
+- **`handle_template` fired on ordinary one-word handles.** Letter runs are capped at 9 in the
+  skeleton, so `marchingfern`, `quietwaterbird` and `brightpennylane` all reduce to `L9` and were
+  reported as sharing a template. A template needs more than one part; a bare single-word skeleton
+  is now refused alongside the auto-append shape.
+- **A large campaign swallowed every new cluster.** `jaccard >= 0.30 OR shared >= 3` is fine while
+  campaigns are small and absurd once one is large: three shared accounts linked a 5-account cluster
+  to a 500-account campaign at j = 0.006. Above `LARGE_CAMPAIGN_MEMBERS` the Jaccard floor is
+  required.
+
+#### What the calibration harness can and cannot tell you
+
+`python -m app.evaluation.coordination_probability` reports Brier, a reliability curve, and
+precision/recall per threshold over the committed scenarios. **Read the caveat it prints.** On the
+9 clean scenarios the detector is silent 9/9, which is the number that decides shippability and is
+genuinely meaningful. But those scenarios were built for the older per-scan detectors and carry no
+comment timestamps, no posting clients and no engagement targets, so four of seven signals cannot
+fire and **recall is not measurable from this corpus at all**. The harness says "no calls" rather
+than "precision 1.000" for exactly that reason: a metric that passes because it never looked is the
+same failure `/analyst/status` had before the preflight was written.
+
+The ratios are reasoned, not fitted, and stamped with `LR_VERSION`. ~200 labelled accounts can
+falsify a badly wrong ratio; they cannot fit seven. `AccountLabel` and the dismissals on
+`campaign_detections` are the reservoirs a real fit will eventually come from.
+
+#### Evidence that used to be thrown away
+
+Four things were collected on every scan, used in-process, and dropped before persistence. All are
+now carried, and none costs an extra fetch:
+
+- **`CommenterScanResult.thread_comments`** — the account's comments *on the scanned post*, with
+  real timestamps. `recent_activity` is the account's own timeline, which is a different thing:
+  co-timing is only evidence when both accounts were commenting on the same thing.
+- **`FullVideoScanResult.thread_arrivals`** — epoch seconds for every comment under the post from
+  **every** author, scanned or not. Numbers only, no text, no author. This is `burst_lockstep`'s
+  null, and it must stay complete: measured over scanned accounts alone the rate is under-stated,
+  which over-states significance. `BatchBackground.arrivals_complete` is False for payloads written
+  before this existed, and **`burst_lockstep` abstains entirely** rather than measuring a subset.
+- **`source_client` / `reply_to_id` / `repost_of_id`** on each activity sample, and `source_client` +
+  `reply_to_id` on X reply items. `_map_tweet` had already parsed all of them and
+  `fetch_tweet_engagers` was building a four-key dict that discarded two.
+
+**`_merge_payloads` was deleting the analyst assessment, and had been all along.** It started from
+`merged = dict(new)`, so any top-level key present only in the stored payload was dropped, and a
+fresh scan result never carries `analyst_assessment_v1`. So a continuation batch silently destroyed
+the written analysis a customer had already paid for. Pre-existing, unrelated to this feature, found
+because the detection block lives in the same place and would have died the same way. Pinned by
+`test_a_continuation_batch_does_not_delete_the_analyst_assessment`.
+
+#### `campaign_pack` method lists must stay SPLIT
+
+`_silent_methods` reports every method a campaign did not fire, so `KNOWN_METHODS` is now
+`ENGINE_METHODS + COHORT_METHODS` and the function picks the family the campaign actually ran under.
+Merging them would make every existing engine campaign render seven extra "did not fire" lines for
+detectors that did not exist when it was recorded, which is a false statement about the evidence:
+never attempted is not the same as attempted and found nothing.
+
+`aggregate.DISCRIMINATIVE_DETECTORS` itself is **not** modified. It feeds `elevate.py` on the live
+per-scan path, so adding names would change per-member score elevation inside every running scan.
+`campaign_pack.ALL_DISCRIMINATIVE` is the union, used for reporting only.
+
+#### What it cannot see, stated on the page
+
+It catches operations that reuse copy, arrive in lockstep, share a non-standard publishing tool,
+converge on unpopular targets, or were provisioned together. It will **not** catch a well-run
+operation using aged accounts with individually written posts on ordinary clients: five of the seven
+signals go quiet. So an empty result means no mechanical tell was found, **not** that the accounts
+are unrelated, and the `/narratives` page says so rather than leaving it in a docstring.
+
+`tests/test_campaign_detector_precision.py` is the load-bearing suite and its controls come first:
+professionals covering one beat (the shape that once scored unrelated journalists at 1.0), a fan
+community, second-language writers, a viral thread, and accounts sharing only a handle shape. Every
+one is built to score 70+ across the board, because that is the state the filter guarantees.
+
+**The dismissals are the only ground truth this will ever accumulate.** Every constant is reasoned;
+`POST /v1/admin/coordination/{slug}/dismiss` records a labelled negative so a future calibration has
+something to fit against.
 
 ### Campaigns are GATED, not scoped, because they have no owner
 
@@ -1387,6 +1719,15 @@ mint a permanent public `/rc/<token>` report for any campaign including one asse
 customers' scans, and revoke anyone else's. **The existing campaign tests could not catch any of it:
 they run in local mode, where `require_user` returns `is_admin=True`.** Any test that needs to prove
 an authorisation rule must set `OMI_REQUIRE_AUTH=true` and sign up a real user.
+
+**`/v1/narratives/*` had the same hole and it is now closed.** A `Narrative` also has no owner: it
+is assembled from content ingested across every customer's scans. The routes were `require_user`
+only, so any signed-in customer could read narrative clusters, their top accounts and their sample
+texts, all built from other customers' investigations, by calling the endpoints directly. The
+`/narratives` *page* had always gated on `is_admin` server-side, which is exactly what made it look
+fine. Gated by `narratives._require_admin` and pinned by `tests/test_coordination_admin_gate.py`,
+which signs up a real non-admin and also proves an admin still gets through (a suite of 403s with no
+positive case cannot tell a gate from a broken router).
 
 - **`include_provenance` on `_campaign_detail` defaults to False.** A route added later that forgets
   to pass it leaks nothing; one that forgot to *strip* would. `context_id` is gone from the public
@@ -1545,6 +1886,109 @@ off (worth checking `OMI_ANALYST_COMPLETION_CEILING_TOKENS`, currently 150000, a
 model's real output ceiling, since a `max_tokens` above what the model allows is rejected outright);
 `governor_reject` means the S1-S9 lint refused valid output. Admins can get the raw capture from
 `POST /v1/investigations/<slug>/analyst/audit`.
+
+### Why a floor happens: the field was always null, and three fixes behind it
+
+Reported 2026-08-15, same symptom as above and a different bug: the notice was appearing and naming
+no cause. The alert above was built and then fed by nothing.
+
+**`fallback_reason` was ALWAYS `None` on the live path.** `analyst.py` set it from
+`inference.fallback_from`, which `runtime.py` only ever populates on the `judge_then_floor` branch,
+and the comprehensive path runs `adjudication="schema_only"`. So three separate surfaces degraded at
+once, all silently: `_report_floor` logged `reason="unclassified"`, `capture_exception` carried that
+same empty reason to Sentry, and `lib/analyst-failure.ts` matched nothing and fell through to its
+generic sentence. One disconnected wire, three symptoms, and no test could see it because
+`test_analyst_floor_alerting.py` **hand-builds its trace dicts** — it proves the alert fires given a
+reason and says nothing about whether production ever supplies one.
+
+Everything needed to classify was already being captured and simply never read: `response_status`,
+`endpoint_error`, `finish_reason`, `canonical_validation_errors`.
+
+`app/reasoning/floor_reason.py` is the fix and is pure. **Its vocabulary is the probe's on purpose**
+(`bad_api_key` / `no_credit` / `preset_or_model_not_found` / `rate_limited` / `unreachable`), so
+`/v1/investigations/analyst/preflight` and a floored scan describe one fault identically instead of
+an operator having to learn two dialects. Order matters in two places: truncation is checked BEFORE
+the schema errors, because a cut-off reply also fails validation and reporting the schema errors
+sends someone hunting a prompt bug that is really a token budget; and a 5xx (`gateway_error`) is
+split from a 4xx (`http_error`) because only one of them is worth trying again.
+
+The load-bearing test is the **end-to-end** one in `tests/test_analyst_floor_classification.py`: it
+drives the real `assess_payload` path with a failing transport and asserts the persisted trace names
+its cause. A test that constructs the trace itself cannot catch this class of bug, which is exactly
+how it shipped.
+
+#### Retry once, and only where a retry can change the answer
+
+Almost nothing retried: a failed batch was `parts[i] = None` forever, so one bad draw cost the
+customer that batch permanently and the only recovery was them noticing and pressing Retry.
+`_generate_batched._run` now retries **once**, and the gate is `floor_reason.is_retryable`. The
+exclusions are the interesting half, and each is a decision about spending real money:
+
+- **A dead credential, an exhausted balance, a missing preset and a never-made call are never
+  retried.** The second call fails identically, so a retry is pure spend in front of a failure the
+  operator needs to see.
+- **A timeout is never retried**, even though it looks transient: the generation may already have
+  billed on their side. This matches `openrouter._fetch`'s own policy and softening it here would
+  quietly double the cost of a slow model.
+- **`governor_reject` is never retried.** Re-inferring to get a different draw past our own quality
+  gate is the wrong instinct.
+- **A run-level circuit breaker** stops retrying after two unfixable floors, so a 12-batch scan
+  against a broken config cannot double its generations before giving up.
+- **Truncation retries with 1.5x the budget.** Retrying it unchanged would truncate again at the
+  same cap, which is precisely why the in-transport retry declines it. The multiplier is passed only
+  when it is an escalation, so the ordinary call stays byte-identical and every existing test double
+  still works.
+
+#### A floored wrapper must not take the per-account reads with it
+
+`validate_comprehensive_model_output` is all-or-nothing, so a reply whose twenty per-account
+paragraphs were perfect and whose synthesis wrapper was missing one field was discarded whole. The
+serve gate emptied `commenter_assessments` on any non-model-backed result, and the same gate hid a
+**mixed batched run**: one floored batch out of four makes the merged entry non-model-backed, so a
+finished scan carrying 75 real per-account reads rendered as a total failure. That is the more
+misleading of the two options, not the safer one, and it is the likeliest thing the user actually
+saw.
+
+`_salvaged_account_reads` keeps the rows; the wrapper still floors. Nothing pretends the run
+succeeded: `model_backed` stays False, so the operator alert fires and the self-heal path still
+works. The new `investigation_trace.account_reads_salvaged` answers the different question the
+customer's page needs, and `AssessmentView` renders `AiUnavailable summaryOnly` plus the reads.
+
+Three rules:
+
+- **Salvaged rows are not taken on trust.** They go through the same `_join_commenter_assessments`,
+  so the tier is derived from the score and `grounding` still withholds an invented quote or a
+  contradicted figure.
+- **A Governor rejection is never salvaged.** That is our own policy layer refusing the output, not
+  a shape mismatch. It cannot fire on today's `schema_only` path; the guard is there so that changing
+  the adjudication mode cannot quietly turn salvage into a bypass.
+- **Rows resolving to no account are refused.** A read of nobody is not a read.
+
+#### A broken config now announces itself at boot
+
+None of the above helps against a revoked key or a renamed preset: the retry is correctly refused,
+the salvage finds nothing, and the deployment floors every scan in silence. `boot_preflight.py` fires
+the real probe once on `background.submit` and turns that into an ERROR log plus a typed
+`AnalystPreflightFailed` in the tracker, with the operator remedy attached.
+
+Five properties, because monitoring that can break the thing it monitors is a downgrade: it never
+blocks boot, never fails boot, never raises, no-ops without `OPENROUTER_API_KEY`, and no-ops when the
+analyst is switched off. Cost is one `max_tokens: 1` call per deploy. `_PROBE_REMEDIES` is imported
+lazily from the route package, because a route importing a reasoning module is the normal direction
+and doing it the other way at import time would couple boot to the whole router graph.
+
+#### The reason list is declared twice, in two languages
+
+`floor_reason.ALL_REASONS` (Python) against `FAILURE_SENTENCES` (`apps/web/lib/analyst-failure.ts`).
+Add a reason on one side without a sentence on the other and it renders as the generic line,
+silently, for exactly the fault nobody has seen before. Same drift class as the signal-name contract,
+so `test_every_reason_has_a_customer_sentence_in_the_web_app` reads the TypeScript source and fails
+on it. `null` is allowed only for `deterministic_floor`, which genuinely means "we cannot tell".
+
+Two rules the customer wording follows, both learned from copy that was live: **never say "credit"
+about anything but the customer's own credits** (this product sells credits, so "the analysis service
+is out of credit" reads as "you are out of credit" and sends someone to the billing page over a fault
+of ours), and **name whose fault it is**, so nobody re-runs a scan that will fail identically.
 
 ### One failed batch used to freeze the whole run
 
@@ -1744,6 +2188,14 @@ next step.
 
 ## Outstanding — needs the user, not code
 
+0. **Measure the coordination detector on real scans.** Every threshold in
+   `app/campaigns/detector/` is reasoned, not fitted: no labelled corpus of verdict-only campaigns
+   exists. The controls in `test_campaign_detector_precision.py` are synthetic, so they prove the
+   *shape* of the guard and not its calibration. Run a dozen real investigations, open
+   `/narratives`, and dismiss the false positives; those dismissals are the only ground truth that
+   will ever accumulate, and a later pass can fit against them. Watch specifically for
+   `verbatim_echo` firing on platform-templated text (auto-generated "I just earned a badge" posts)
+   and for `co_target` on small niches where everyone genuinely engages the same handful of posts.
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
    redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
    are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly

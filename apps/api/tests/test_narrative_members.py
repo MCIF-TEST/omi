@@ -23,6 +23,13 @@ def client(monkeypatch):
     monkeypatch.setenv("OMI_REQUIRE_AUTH", "true")
     monkeypatch.setenv("OMI_SESSION_SECRET", "x" * 64)
     monkeypatch.setenv("OMI_YOUTUBE_API_KEY", "test-key")
+    # The narrative routes are admin-gated: a Narrative has no owner, being assembled from content
+    # ingested across every customer's scans, so it cannot be scoped to "your own data" and is
+    # gated instead (see app/routes/narratives.py). This file exercises the members drill-in, not
+    # the authorisation rule, so the fixture's user is granted admin at creation.
+    # The gate itself is proved separately, against a real non-admin, in
+    # tests/test_coordination_admin_gate.py.
+    monkeypatch.setenv("OMI_SUPER_ADMIN_EMAILS", "u@x.com")
     get_settings.cache_clear()
     reset_db_for_tests("sqlite:///:memory:")
     from app.core.rate_limit import LOGIN_LIMITER, SIGNUP_LIMITER

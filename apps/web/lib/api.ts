@@ -276,6 +276,145 @@ export function resolveDispute(
 }
 
 // ---------------------------------------------------------------------------
+// Coordinated-campaign detection. Admin only, on every route.
+//
+// The detector is deterministic: no model call, no network, no provider quota. It clusters the
+// accounts an investigation scored at 70 or above, using evidence those accounts themselves
+// produced. Its thresholds are reasoned rather than fitted against a labelled corpus, so a finding
+// is a lead for an operator to review and nothing here is reachable from the customer app, the
+// public report, or the exports.
+// ---------------------------------------------------------------------------
+export const COORDINATION_FILTERS = ['open', 'dismissed', 'all'] as const;
+export type CoordinationFilter = (typeof COORDINATION_FILTERS)[number];
+
+/** Families of independent evidence. Fusion takes the strongest edge WITHIN a family and combines
+ *  ACROSS families, so two methods reading the same material cannot corroborate each other. */
+export const COORDINATION_FAMILY_LABEL: Record<string, string> = {
+  text: 'Repeated text',
+  timing: 'Synchronised arrival',
+  network: 'Shared targets',
+  infrastructure: 'Shared tooling',
+  identity: 'Account provisioning',
+};
+
+export interface CoordinationMember {
+  external_id: string;
+  handle: string;
+  /** The score the cohort was cut on, 0-100. Null when the account is no longer in the payload. */
+  score: number | null;
+}
+
+export interface CoordinationArtifact {
+  method: string;
+  family: string;
+  /** The two handles this specific claim is about. */
+  pair: string[];
+  sentence: string;
+  /** The raw material the accounts produced. Empty artifacts are dropped before this point. */
+  artifact: string;
+  statistic: [string, number] | null;
+}
+
+export interface CoordinationFinding {
+  finding_id: string;
+  /** 'corroborated' is a campaign. 'lead' did not clear the bar and is never written as one. */
+  label: 'corroborated' | 'lead';
+  /** Calibrated P(coordinated) for the group: the WEAKEST member's admitting probability, not the
+   *  strongest and not the mean. A group is only as defensible as the least defensible person in
+   *  it, and that person is the one harmed if it is wrong. */
+  score: number;
+  capped: boolean;
+  /** Share of all possible member pairs that carry evidence. */
+  density: number;
+  /** handle -> that account's own probability of being coordinated with this group. Every member
+   *  had to clear the bar on its own evidence, so no one is carried in by their neighbours. */
+  member_posteriors: Record<string, number>;
+  /** The prior, then each family's contribution, then the total. A probability with no visible
+   *  derivation is exactly as unaccountable as the score it replaced. */
+  derivation: string;
+  prior: number;
+  lr_version: string;
+  members: CoordinationMember[];
+  families_fired: string[];
+  families_silent: string[];
+  methods: string[];
+  evidence: string[];
+  notes: string[];
+  artifacts: CoordinationArtifact[];
+}
+
+export interface CoordinationDetection {
+  investigation_slug: string;
+  investigation_label: string;
+  platform: string;
+  computed_at: string | null;
+  passes: number;
+  /** 'analyst' means the cohort was cut on the customer-visible OMI score, 'engine' on the
+   *  deterministic probability (which is what runs when the analyst is unreachable). */
+  score_source: 'analyst' | 'engine';
+  scanned_total: number;
+  cohort_size: number;
+  finding_count: number;
+  campaign_count: number;
+  best_score: number;
+  best_label: string;
+  status: string;
+  thresholds_version: string;
+}
+
+export interface CoordinationDetectionDetail extends CoordinationDetection {
+  findings: CoordinationFinding[];
+  lone_high_scorers: string[];
+  notes: string[];
+  resolution_note: string | null;
+}
+
+export interface CoordinationDetectionsResponse {
+  detections: CoordinationDetection[];
+  total: number;
+  open_count: number;
+  campaign_count: number;
+}
+
+export function listCoordinationDetections(
+  opts: { status?: CoordinationFilter; onlyCampaigns?: boolean } = {},
+): Promise<CoordinationDetectionsResponse> {
+  const q = new URLSearchParams({ status: opts.status ?? 'open' });
+  if (opts.onlyCampaigns) q.set('only_campaigns', 'true');
+  return apiClient<CoordinationDetectionsResponse>(`/v1/admin/coordination?${q.toString()}`);
+}
+
+export function getCoordinationDetection(slug: string): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}`,
+  );
+}
+
+export function rerunCoordinationDetection(slug: string): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}/rerun`,
+    { method: 'POST' },
+  );
+}
+
+export function dismissCoordinationDetection(
+  slug: string,
+  note: string,
+): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}/dismiss`,
+    { method: 'POST', body: JSON.stringify({ note }) },
+  );
+}
+
+export function reopenCoordinationDetection(slug: string): Promise<CoordinationDetectionDetail> {
+  return apiClient<CoordinationDetectionDetail>(
+    `/v1/admin/coordination/${encodeURIComponent(slug)}/reopen`,
+    { method: 'POST' },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Upstream API spend. Admin only.
 //
 // `api_calls` is the number that BILLS (twitterapi.io charges per call), not the number of requests
@@ -1026,6 +1165,11 @@ export interface AnalystAssessment {
     request_completed?: boolean;
     json_received?: boolean;
     validation_passed?: boolean;
+    // The synthesis wrapper floored but real per-account reads survived (a mixed batched run, or a
+    // response whose wrapper failed validation while its rows were fine). Distinct from
+    // `model_backed` on purpose: that one still answers no, and it is what gates the operator alert
+    // and the self-heal regeneration. Absent on entries written before salvage existed.
+    account_reads_salvaged?: boolean;
     fallback_reason?: string | null;
     governor_verdict?: string | null;
     comprehensive_structurally_valid?: boolean;

@@ -1,16 +1,34 @@
 # Coordinated-campaign detection from scores and verdicts
 
+> **STATUS: NOT THE SHIPPED ALGORITHM.** `/narratives` now runs a different, purpose-built
+> detector, `apps/api/app/campaigns/detector/`, documented in CLAUDE.md under "The cohort
+> coordination detector". This document describes `verdict_coordination.py`, which remains
+> implemented, tested and **unwired**.
+>
+> **Why it was not adopted.** The product requirement is to cluster only the accounts scoring **70
+> or above**. Every measurement in this design is *relative to the batch, holding the score band
+> fixed* (see "The central trap" below), and filtering to 70+ is precisely what removes that batch.
+> With no background of ordinary accounts to contrast against, band-conditional centring and the
+> band-preserving permutation test have nothing to condition on. The shipped detector rests on
+> **absolute** evidence instead, and draws a null from the full thread and the full batch only for
+> the two signals that genuinely need one.
+>
+> This document is kept because §0's statement of the central trap, §6's insistence that
+> `coordinated_authentic` is a correct finding, and §9's failure modes all still apply, and because
+> the module is the natural starting point if verdict prose is ever wanted as evidence. Note that §12
+> below claims scipy is a core dependency: **it is not declared in `apps/api/pyproject.toml`** and is
+> present only transitively via scikit-learn. The shipped detector does not import it.
+
 **Status:** designed and implemented (`apps/api/app/campaigns/verdict_coordination.py`), pinned by
-`tests/test_verdict_coordination.py` (24 tests). Not yet wired to a route or a UI.
+`tests/test_verdict_coordination.py` (24 tests). Not wired to a route or a UI.
 
-This is the algorithm the `/narratives` placeholder has been waiting for. The campaigns backend was
-deliberately kept when the UI was removed (see CLAUDE.md, "The coordinated-events surface is removed
-from the product, not from the code") precisely so this could land on top of it: `Campaign`,
-`CampaignMember`, `CampaignObservation` and `CampaignService.record_clusters` already model recurring
-campaigns, and this module produces the `CoordinationCluster` objects they consume.
+The campaigns backend was deliberately kept when the UI was removed (see CLAUDE.md, "The
+coordinated-events surface is removed from the product, not from the code") precisely so a detector
+could land on top of it: `Campaign`, `CampaignMember`, `CampaignObservation` and
+`CampaignService.record_clusters` already model recurring campaigns, and this module produces the
+`CoordinationCluster` objects they consume. The shipped detector uses that same persistence layer.
 
-Zero external calls at runtime. numpy, scipy, scikit-learn and networkx only, all already core
-dependencies.
+Zero external calls at runtime. numpy, scipy, scikit-learn and networkx only.
 
 ---
 

@@ -1,19 +1,23 @@
 import { notFound } from 'next/navigation';
-import { MessageSquareText } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { apiServer } from '@/lib/api-server';
 import { type User } from '@/lib/api';
+import { CoordinationQueue } from './coordination-queue';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Narratives · OMISPHERE' };
+export const metadata = { title: 'Coordination · OMISPHERE' };
 
 /**
- * Placeholder for the narrative / campaign detector.
+ * The coordinated-campaign queue.
  *
- * ADMIN ONLY, and gated on the SERVER. The coordinated-account surface was removed from the product
- * until a real detection algorithm exists; this exists so the work has a home to land in without
- * showing customers a feature that does nothing. Hiding the nav item alone would not be enough,
- * because the route would still answer to anyone who typed the URL.
+ * ADMIN ONLY, and gated on the SERVER. Hiding the nav item would not be enough, because the route
+ * would still answer to anyone who typed the URL, and `adminOnly` in the nav files is presentation
+ * only. `force-dynamic` so a cached render cannot serve one user's gate result to another.
+ *
+ * Admin-only is a product decision, not a technicality. The detector's thresholds are reasoned
+ * rather than fitted against a labelled corpus, and it names groups of real people, so a finding is
+ * an operator's lead to review before anything is said publicly. Nothing here reaches the customer
+ * app, the shared report, or the exports.
  */
 export default async function NarrativesPage() {
   let user: User | null = null;
@@ -25,37 +29,43 @@ export default async function NarrativesPage() {
   if (!user?.is_admin) notFound();
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-4xl">
       <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
         <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
         <div className="relative">
-          <span className="section-label">Coordination · Admin preview</span>
-          <h1 className="display text-2xl font-semibold tracking-tight mt-3">Narratives</h1>
+          <span className="section-label">Coordination</span>
+          <h1 className="display text-2xl font-semibold tracking-tight mt-3">
+            Coordinated campaigns
+          </h1>
           <p className="text-sm text-fg-dim mt-1.5 max-w-2xl leading-relaxed">
-            Coming soon: narrative / campaign detector.
+            Accounts an investigation scored at 70 or above, grouped by evidence they produced
+            themselves. Runs on every scan, costs nothing, and calls no model.
           </p>
         </div>
       </header>
 
-      <Card>
-        <div className="flex gap-4">
-          <span className="shrink-0 grid place-items-center w-10 h-10 rounded-lg border border-border-2 bg-bg-elev-2 text-fg-mute">
-            <MessageSquareText size={18} />
-          </span>
-          <div className="min-w-0 space-y-2">
-            <p className="text-sm text-fg">
-              Not built yet. This page is visible to admins only.
-            </p>
-            <p className="text-sm text-fg-dim leading-relaxed">
-              The previous coordinated-account surface was removed rather than left running,
-              because it presented clusters the engine had not earned the right to call
-              coordinated. The detection work lands here when the algorithm exists.
-            </p>
-            <p className="font-mono text-2xs text-fg-mute uppercase tracking-wider pt-1">
-              Status: in design
-            </p>
-          </div>
-        </div>
+      <CoordinationQueue />
+
+      {/* Stated here rather than buried in a docstring. An operator reading a finding needs to know
+          what the method cannot see, or "no coordination found" gets read as "these accounts are
+          unrelated", which is a different and much stronger claim. */}
+      <Card className="space-y-2">
+        <span className="section-label">What this catches</span>
+        <p className="text-sm text-fg-dim leading-relaxed">
+          Operations that reuse copy, arrive in lockstep against the thread&apos;s own rate, share a
+          non-standard posting tool, keep turning up at the same unpopular posts, or were
+          provisioned in one batch. A group needs at least two independent kinds of evidence before
+          it is called a campaign; one kind alone is held at 49% however strong it looks.
+        </p>
+        <p className="text-sm text-fg-dim leading-relaxed">
+          It will not catch a well-run operation using aged accounts with individually written
+          posts on ordinary clients. Five of the seven signals go quiet against that, so an empty
+          result means no mechanical tell was found, not that the accounts are unrelated.
+        </p>
+        <p className="text-sm text-fg-mute leading-relaxed">
+          Every finding is an observation about behaviour that co-occurred. It is not a claim about
+          who operates an account, whether money changed hands, or anyone&apos;s intent.
+        </p>
       </Card>
     </div>
   );

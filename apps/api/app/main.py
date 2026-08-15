@@ -30,9 +30,10 @@ from app.core.middleware import (
 )
 from app.monitoring import lifespan_monitoring
 from app.routes import (
-    accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, feedback,
-    graph, health, improvement, intelligence, investigations, labels, learning, memory, metrics,
-    monitoring, narratives, reasoning, reports, scan, scan_async, shadow, usage, watchlists,
+    accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, coordination,
+    feedback, graph, health, improvement, intelligence, investigations, labels, learning, memory,
+    metrics, monitoring, narratives, reasoning, reports, scan, scan_async, shadow, usage,
+    watchlists,
 )
 from app.storage.db import init_db
 
@@ -51,6 +52,11 @@ async def lifespan(app: FastAPI):
     from app.content.seed import seed_example_content
     seed_example_content()
     _log_optional_feature_state()
+    # Ask the gateway one question, in the background, so a renamed preset or a revoked key is an
+    # ERROR in the deploy log instead of every scan silently serving the deterministic Floor until a
+    # customer complains. Never blocks boot, never fails it, no-ops without a credential.
+    from app.reasoning.boot_preflight import schedule_boot_preflight
+    schedule_boot_preflight()
     async with lifespan_monitoring(app):
         try:
             yield
@@ -404,6 +410,7 @@ def create_app() -> FastAPI:
     app.include_router(accounts.router)
     app.include_router(channels.router)
     app.include_router(narratives.router)
+    app.include_router(coordination.admin_router)
     app.include_router(campaigns.router)
     app.include_router(campaigns.campaign_public_router)
     app.include_router(content.router)

@@ -236,6 +236,10 @@ class CommenterRecord:
     from_cache: bool
     matched_neighbors: int
     error: str | None = None
+    # This account's own comments under the scanned post, bucketed out of the raw comment stream in
+    # Phase 3. Kept on the record so it can be persisted: the stream itself only ever exists inside
+    # scan_video_full, and without this nothing downstream can tell when an account commented.
+    thread_comments: list[dict] = field(default_factory=list)
     # Filled in after coordination detection
     coordination_adjusted_probability: float | None = None
     coordination_evidence: list[str] = field(default_factory=list)
@@ -252,6 +256,12 @@ class FullScanOutput:
     quota_used: int
     fresh_count: int
     cached_count: int
+    # Every comment under the post, from EVERY author, including those never selected for scoring.
+    # Carried out of the orchestrator because it is the only complete view of the thread that ever
+    # exists, and the coordination detector's arrival-rate null is meaningless without it: measured
+    # over scored accounts alone the rate is under-stated, which over-states significance in the one
+    # direction that produces false accusations.
+    all_thread_comments: list[dict] = field(default_factory=list)
 
 
 def _cached_commenter_record(
@@ -536,6 +546,18 @@ def scan_video_full(
     else:
         ts_finding = None
 
+    # Bucket the raw stream onto each commenter's record so the timestamps survive the scan. They
+    # were always collected and always discarded here; every downstream reader (the persisted
+    # payload, the analyst's evidence, the cohort coordination detector) has been blind to when an
+    # account actually commented. Cheap: this is a regroup of a list already in memory.
+    _by_author: dict[str, list[dict]] = {}
+    for i in all_comments_under_video:
+        aid = str(i.get("author_external_id") or "")
+        if aid:
+            _by_author.setdefault(aid, []).append(i)
+    for r in records:
+        r.thread_comments = _by_author.get(r.external_id, [])
+
     # Fingerprint clustering across all commenters who have a fingerprint.
     fp_entries = [
         FingerprintEntry(
@@ -693,6 +715,7 @@ def scan_video_full(
         coordination_clusters=clusters,
         coordination_score=coord_score,
         coordination_tier=coord_tier,
+        all_thread_comments=all_comments_under_video,
         quota_used=stats.quota_used,
         fresh_count=fresh,
         cached_count=cached,

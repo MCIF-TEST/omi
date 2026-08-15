@@ -1,4 +1,19 @@
-"""Narrative observatory endpoints."""
+"""Narrative observatory endpoints.
+
+ADMIN ONLY. A ``Narrative`` has no owner: it is assembled from content ingested across every
+customer's scans, and that cross-customer accumulation is the point of the feature. So these routes
+cannot be "scoped to your own data" because there is no such thing here, and the library is gated
+instead, matching ``/v1/campaigns`` and the dispute queue.
+
+This closes the same hole ``tests/test_campaign_tenancy.py`` was written for. The ``/narratives``
+page has always gated on ``is_admin`` server-side, but its API did not, so any signed-in customer
+could read narrative clusters, their top accounts and their sample texts, all built from other
+customers' investigations, by calling the endpoints directly.
+
+Note the trap that hid it: these routes' existing tests run in local mode, where ``require_user``
+returns ``is_admin=True``. A test that means to prove an authorisation rule has to set
+``OMI_REQUIRE_AUTH=true`` and sign up a real user.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +50,12 @@ from app.storage.models import Account, Narrative, NarrativeMembership
 router = APIRouter(prefix="/v1/narratives", tags=["narratives"])
 
 
+def _require_admin(current: CurrentUser) -> None:
+    """See the module docstring: narratives are deployment-global, so gated rather than scoped."""
+    if not current.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admins only.")
+
+
 @router.get("", response_model=NarrativesResponse)
 def list_narratives(
     window_days: int = Query(7, ge=1, le=90),
@@ -50,6 +71,7 @@ def list_narratives(
     current: CurrentUser = Depends(require_user),
 ) -> NarrativesResponse:
     """Trending narratives, ranked by coordination intelligence (not raw volume)."""
+    _require_admin(current)
     embedder = get_embedder()
     embedder_name = type(embedder).__name__
 
@@ -112,6 +134,7 @@ def get_narrative(
     Returns the multi-signal panel, propagation timeline, identified
     bursts, origin lag, and a MODERATE-and-above subgraph.
     """
+    _require_admin(current)
     try:
         with get_session() as session:
             service = NarrativeService(session)
@@ -260,6 +283,7 @@ def get_narrative_members(
     """The comments + commenters that constitute a narrative, paginated, newest
     first. Each row links the comment to its author and the author's own scan
     verdict so the narrative is investigable down to the individual evidence."""
+    _require_admin(current)
     with get_session() as session:
         narrative = session.get(Narrative, narrative_id)
         if narrative is None:

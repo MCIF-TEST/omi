@@ -38,7 +38,7 @@ const MORE_LINKS: {
   href: string; label: string; icon: LucideIcon; desc: string; adminOnly?: boolean;
 }[] = [
   { href: '/graph',      label: 'Graph',      icon: Network,           desc: 'Coordination network graphs' },
-  { href: '/narratives', label: 'Narratives', icon: MessageSquareText, desc: 'Coming soon: narrative / campaign detector', adminOnly: true },
+  { href: '/narratives', label: 'Coordination', icon: MessageSquareText, desc: 'Coordinated campaigns detected across scans', adminOnly: true },
   { href: '/search',     label: 'Search',     icon: Search,            desc: 'Find any account or channel' },
   { href: '/disputes',   label: 'Disputes',   icon: Scale,             desc: 'Review and take down published reports', adminOnly: true },
   { href: '/settings',   label: 'Settings',   icon: Settings,          desc: 'Account, billing & alerts' },

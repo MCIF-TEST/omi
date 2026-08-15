@@ -238,8 +238,82 @@ def _activity_payload(
             "created_at": ts.isoformat() if ts is not None else None,
             "parent_id": getattr(p, "parent_id", None),
             "like_count": getattr(p, "like_count", None),
+            # Three fields the provider already parsed and this line used to throw away. They cost
+            # roughly thirty bytes beside a 600-char text and no extra fetch, and each is
+            # cross-account evidence the per-account signals cannot use but the coordination
+            # detector can: `source_client` is the publishing tool (a shared third-party scheduler
+            # is infrastructure, not style), and the two ids are who the account was talking to.
+            "source_client": getattr(p, "source_client", None),
+            "reply_to_id": getattr(p, "reply_to_id", None),
+            "repost_of_id": getattr(p, "repost_of_id", None),
         })
     return samples, len(posts)
+
+
+# How many of an account's comments UNDER THE SCANNED POST ride along on its scan result. Distinct
+# from recent_activity, which is the account's own timeline: co-timing is only evidence when two
+# accounts were commenting on the same thing, and this is the only place that is recorded.
+THREAD_COMMENT_LIMIT = 20
+
+
+def _thread_comment_payload(comments: list[dict] | None) -> list[dict]:
+    """The account's own comments under the scanned post, with their real timestamps.
+
+    These were collected on every scan, used by one in-process detector, and then dropped before
+    persistence, so nothing after the scan could ever ask when an account commented. Kept small and
+    text-truncated to match ``_activity_payload``.
+    """
+    if not comments:
+        return []
+    out: list[dict] = []
+    for c in comments[:THREAD_COMMENT_LIMIT]:
+        if not isinstance(c, dict):
+            continue
+        text = (c.get("text") or "").strip()
+        if len(text) > 600:
+            text = text[:600] + "…"
+        ts = c.get("created_at")
+        out.append({
+            "text": text,
+            "created_at": ts.isoformat() if hasattr(ts, "isoformat") else (ts or None),
+            "comment_id": c.get("comment_id"),
+            "parent_comment_id": c.get("parent_comment_id"),
+        })
+    return out
+
+
+# Ceiling on the persisted arrival list. The true total and span ride alongside, so a truncated
+# list still yields the exact global rate; only the local (per-neighbourhood) estimate degrades,
+# and it degrades toward the global rate, which is the conservative direction.
+THREAD_ARRIVAL_CAP = 5000
+
+
+def _thread_arrivals(comments: list[dict] | None) -> tuple[list[int], int]:
+    """Sorted epoch seconds for every comment under the post, plus the true count.
+
+    Numbers only: no text, no author id, nothing about who said what. This exists so the
+    coordination detector's arrival-rate null survives the scan, and it must stay complete over
+    ALL authors rather than the scored subset. See ``FullVideoScanResult.thread_arrivals``.
+    """
+    if not comments:
+        return [], 0
+    stamps: list[int] = []
+    for c in comments:
+        if not isinstance(c, dict):
+            continue
+        ts = c.get("created_at")
+        if hasattr(ts, "timestamp"):
+            try:
+                stamps.append(int(ts.timestamp()))
+            except (OverflowError, ValueError, OSError):
+                continue
+    stamps.sort()
+    total = len(stamps)
+    if total > THREAD_ARRIVAL_CAP:
+        # Keep a uniform sample so the SPAN is preserved; the total beside it restores the rate.
+        step = total / THREAD_ARRIVAL_CAP
+        stamps = [stamps[min(total - 1, int(i * step))] for i in range(THREAD_ARRIVAL_CAP)]
+    return stamps, total
 
 
 def _profile_fields(profile) -> dict:
@@ -601,6 +675,7 @@ def scan_youtube_video_full(
                 recent_activity=activity_samples,
                 activity_total=activity_total,
                 history_size=activity_total,
+                thread_comments=_thread_comment_payload(r.thread_comments),
                 **_profile_fields(r.profile),
             ))
 
@@ -1255,6 +1330,14 @@ def _merge_payloads(existing: dict, new: dict) -> dict:
     arrays (cross_links, matrix) take the latest values.
     """
     merged = dict(new)  # start with new top-level
+    # Carry forward every top-level key the continuation batch does not have its own value for.
+    # Without this, `dict(new)` silently DELETES anything that was grafted onto the payload after
+    # the original scan: `analyst_assessment_v1` (the whole written assessment the customer paid
+    # for), the shadow-comparison block, and `campaign_detection_v1`. A fresh scan result never
+    # carries those keys, so a second batch was wiping the first batch's analysis every time.
+    for key, value in existing.items():
+        if key not in merged:
+            merged[key] = value
     existing_video = (existing.get("video") or {}) if isinstance(existing.get("video"), dict) else {}
     new_video = (new.get("video") or {}) if isinstance(new.get("video"), dict) else {}
     if existing_video and new_video:
@@ -1412,6 +1495,7 @@ def _run_comprehensive(
                 recent_activity=activity_samples,
                 activity_total=activity_total,
                 history_size=activity_total,
+                thread_comments=_thread_comment_payload(r.thread_comments),
                 **_profile_fields(r.profile),
             ))
         tier_counts = Counter(c.tier.value for c in commenter_results)
@@ -1443,6 +1527,7 @@ def _run_comprehensive(
                 out.next_page_token,
             )
 
+        arrivals, arrival_total = _thread_arrivals(out.video_output.all_thread_comments)
         video_result_out = FullVideoScanResult(
             video_id=out.video_output.video_id,
             platform=source.platform,
@@ -1465,6 +1550,8 @@ def _run_comprehensive(
             ],
             focus_account=None,
             summary="",  # the comprehensive summary covers it
+            thread_arrivals=arrivals,
+            thread_arrival_total=arrival_total,
             next_page_token=out.next_page_token,
         )
 
