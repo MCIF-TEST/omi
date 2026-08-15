@@ -694,6 +694,26 @@ function AssessmentView(
       </p>
     );
   }
+  // THE WRAPPER FLOORED BUT THE READS SURVIVED. Two ways an entry gets here, and both used to
+  // render as a total failure: one batch of four floored, which makes the merged entry
+  // non-model-backed while three batches of real per-account prose sit inside it; or a single
+  // response whose synthesis wrapper failed schema validation while its per-account rows were fine
+  // (the server keeps those, see `_salvaged_account_reads`).
+  //
+  // Showing them is not a softening of the rule below. The server populates
+  // `commenter_assessments` only from a model-backed part or an explicit salvage, so anything in
+  // this list IS the analyst's own prose; what is missing is the summary above it. Hiding a
+  // customer's paid-for per-account analysis behind "could not be produced" was the more misleading
+  // of the two options, not the safer one.
+  const readCount = a.commenter_assessments?.length ?? 0;
+  if (!isModelBacked(a) && readCount > 0) {
+    return (
+      <div className="space-y-5">
+        <AiUnavailable a={a} onRetry={onRetry} busy={busy} summaryOnly />
+        <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
+      </div>
+    );
+  }
   // Product-cutover rule: only AI-authored assessments render as AI reasoning. If the model
   // was not reached, the deterministic Floor stood in. We must NOT present its synthesized verdict /
   // headline / assessment / evidence as though the AI wrote it.
@@ -774,7 +794,8 @@ function AssessmentView(
 // below is real. Say what happened, keep the scores, and offer the free retry.
 // The technical forensic diagnostic stays behind verification mode.
 function AiUnavailable(
-  { a, onRetry, busy }: { a: AnalystAssessment; onRetry: () => void; busy: boolean },
+  { a, onRetry, busy, summaryOnly = false }:
+  { a: AnalystAssessment; onRetry: () => void; busy: boolean; summaryOnly?: boolean },
 ) {
   const t = a.investigation_trace ?? {};
   const verbose = verificationEnabled();
@@ -785,12 +806,18 @@ function AiUnavailable(
         <TriangleAlert size={14} className="mt-0.5 shrink-0 text-warn" />
         <div className="text-sm text-fg-dim leading-relaxed flex-1 min-w-[12rem]">
           <p>
-            The written analysis could not be produced for this scan.
+            {summaryOnly
+              ? 'The overall summary could not be produced for this scan.'
+              : 'The written analysis could not be produced for this scan.'}
             {reason ? ` ${reason}` : ''}
           </p>
           <p className="mt-1.5 text-xs text-fg-mute">
-            Every account score below is complete and unaffected. Only the Omi Analyst&rsquo;s written
-            read is missing. Retrying runs a fresh analysis and does not cost a credit.
+            {summaryOnly
+              ? 'The per-account reads below are the Omi Analyst’s own and are unaffected, as is '
+                + 'every account score. Only the summary above them is missing. Retrying regenerates '
+                + 'it and does not cost a credit.'
+              : 'Every account score below is complete and unaffected. Only the Omi Analyst’s '
+                + 'written read is missing. Retrying runs a fresh analysis and does not cost a credit.'}
           </p>
           {verbose && <AiUnavailableDiagnostics t={t} governanceProvider={a.governance?.provider} />}
         </div>

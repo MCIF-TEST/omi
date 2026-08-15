@@ -52,6 +52,11 @@ async def lifespan(app: FastAPI):
     from app.content.seed import seed_example_content
     seed_example_content()
     _log_optional_feature_state()
+    # Ask the gateway one question, in the background, so a renamed preset or a revoked key is an
+    # ERROR in the deploy log instead of every scan silently serving the deterministic Floor until a
+    # customer complains. Never blocks boot, never fails it, no-ops without a credential.
+    from app.reasoning.boot_preflight import schedule_boot_preflight
+    schedule_boot_preflight()
     async with lifespan_monitoring(app):
         try:
             yield

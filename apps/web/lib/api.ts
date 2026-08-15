@@ -1165,6 +1165,11 @@ export interface AnalystAssessment {
     request_completed?: boolean;
     json_received?: boolean;
     validation_passed?: boolean;
+    // The synthesis wrapper floored but real per-account reads survived (a mixed batched run, or a
+    // response whose wrapper failed validation while its rows were fine). Distinct from
+    // `model_backed` on purpose: that one still answers no, and it is what gates the operator alert
+    // and the self-heal regeneration. Absent on entries written before salvage existed.
+    account_reads_salvaged?: boolean;
     fallback_reason?: string | null;
     governor_verdict?: string | null;
     comprehensive_structurally_valid?: boolean;

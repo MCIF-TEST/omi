@@ -380,7 +380,7 @@ def run_stage_inference(
 
 def assess_investigation(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
-    capture: dict | None = None,
+    capture: dict | None = None, completion_budget_multiplier: float = 1.0,
 ) -> dict | None:
     """The AI Investigation Runtime's production orchestration entry (P2.1 cutover). This is the ONE
     path every investigation executes through: the ``assess_payload`` compatibility wrapper and the
@@ -391,7 +391,10 @@ def assess_investigation(
     Behavior, governance, metadata, and package/prompt hashes are byte-identical to the pre-cutover
     ``assess_payload``: the orchestration ENTRY is consolidated into the runtime; the reasoning,
     prompt, package, schema, and report are unchanged (P2.1 changed no behavior)."""
-    return _analyst._assess_core(payload, ref=ref, platform=platform, settings=settings, capture=capture)
+    return _analyst._assess_core(
+        payload, ref=ref, platform=platform, settings=settings, capture=capture,
+        completion_budget_multiplier=completion_budget_multiplier,
+    )
 
 
 __all__ = [

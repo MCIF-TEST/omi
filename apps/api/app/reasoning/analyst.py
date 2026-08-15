@@ -34,6 +34,13 @@ from app.core.config import Settings, get_settings
 # background pool, which absorbs exceptions, so a sink that is not visible to a nested scope is
 # a sink that silently does nothing.
 from app.core.observability import capture_exception
+# Module scope, not inside a function: this module runs closures on the background pool, and a
+# function-level import is invisible inside one (see CLAUDE.md, "A bug class worth knowing").
+from app.reasoning.floor_reason import (
+    base_reason as _floor_base_reason,
+    classify_floor as _classify_floor,
+    is_retryable as _floor_is_retryable,
+)
 # Module scope on purpose. The batched generation's progressive persist (_generate_batched ->
 # _persist_progress) calls get_session(); when this import lived only inside generate_and_persist it
 # was a LOCAL binding there, so the nested closure resolved the name against module globals, found
@@ -417,6 +424,41 @@ def _dealias_investigation_prose(governed: dict, legend, payload: dict) -> None:
         logger.exception("analyst: could not de-alias the investigation prose")
 
 
+def _salvaged_account_reads(raw_obj: dict | None, legend, payload: dict, *,
+                            governor_verdict: str | None) -> list[dict]:
+    """The per-account reads from a response whose EXECUTIVE WRAPPER failed canonical validation.
+
+    ``validate_comprehensive_model_output`` is all-or-nothing, so a reply whose twenty per-account
+    paragraphs are perfect and whose synthesis wrapper is missing one field was thrown away whole:
+    the customer paid a credit, the model did the expensive part of the work, and the product showed
+    them nothing. The substantive output of an investigation is the per-account reads; the wrapper is
+    a summary of them, and the deterministic Floor can stand in for a summary.
+
+    So the wrapper still floors (the Floor's verdict is served, ``model_backed`` stays False, and the
+    operator alert still fires: nothing here pretends the run succeeded) while the rows survive. They
+    are not taken on trust either. Each one goes through the same join as a valid run, which derives
+    the tier from the score and runs ``grounding`` over the prose, so an invented quote or a
+    contradicted figure is withheld exactly as it would be on a clean run.
+
+    Two refusals:
+
+    * **A Governor rejection is never salvaged.** That is our own policy layer refusing the output,
+      not a shape mismatch, and reaching around it to publish the rows it refused is the wrong
+      instinct. (Today's live path runs ``adjudication="schema_only"`` so this cannot fire; it is
+      here so that changing the adjudication mode cannot quietly turn salvage into a bypass.)
+    * **Nothing that resolves to no account.** A row whose alias resolves to nobody is not a read of
+      anything, and a wrapper-less entry carrying only unresolved rows is worse than an honest
+      failure notice.
+    """
+    if str(governor_verdict or "").lower() == "reject":
+        return []
+    items = (raw_obj or {}).get("commenter_assessments")
+    if not isinstance(items, list) or not items:
+        return []
+    rows = _join_commenter_assessments(raw_obj, legend, payload)
+    return rows if any(r.get("resolved") for r in rows) else []
+
+
 def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
     """Join each model-authored per-account assessment (keyed by alias) with the account's real identity.
     AI-first: the per-account OMI score + tier are the MODEL'S (it reasons them from that account's raw
@@ -652,7 +694,7 @@ def _assessment_metrics(governed: dict, gov: dict, settings: Settings, *, store_
 
 def _assess_core(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
-    capture: dict | None = None,
+    capture: dict | None = None, completion_budget_multiplier: float = 1.0,
 ) -> dict | None:
     """Produce a Governor-validated structured assessment for an investigation payload, or None if
     the feature is off / unavailable / errored. Never raises.
@@ -708,6 +750,16 @@ def _assess_core(
             floor=int(getattr(settings, "analyst_completion_floor_tokens", COMPLETION_FLOOR_TOKENS)),
             ceiling=int(getattr(settings, "analyst_completion_ceiling_tokens", COMPLETION_CEILING_TOKENS)),
         )
+        # A retry after a TRUNCATED reply asks for more room. Retrying a truncation at the same cap
+        # would truncate again in the same place, which is exactly why the in-transport retry
+        # declines to do it; raising the budget makes the second attempt a different question.
+        # Still clamped by the ceiling, so the cost guardrail keeps the last word.
+        if completion_budget_multiplier and completion_budget_multiplier != 1.0:
+            _ceiling = int(getattr(settings, "analyst_completion_ceiling_tokens",
+                                   COMPLETION_CEILING_TOKENS))
+            _completion_max_tokens = min(
+                _ceiling, int(_completion_max_tokens * float(completion_budget_multiplier)),
+            )
         config.decoding = {**(config.decoding or {}), "max_new_tokens": _completion_max_tokens}
         spec = default_registry().resolve("omi_analyst", getattr(settings, "analyst_prompt_version", None))
         prompt_meta = {"analyst": "omi_analyst", "version": spec.prompt_version,
@@ -879,9 +931,22 @@ def _assess_core(
         model_backed = ("fallback" not in prov) and ("deterministic" not in prov)
         # Only surface the model's per-account reasoning when the model output was ACCEPTED (not the Floor):
         # a rejected candidate's raw_obj must never leak its per-account assessments to the UI.
+        #
+        # When the model output was REFUSED, the per-account rows can still be salvageable: the
+        # wrapper is what failed validation, and the rows are the part the customer paid for. See
+        # `_salvaged_account_reads` for the two cases it refuses. `account_reads_salvaged` on the
+        # trace is what tells the UI it is looking at real reads under a Floor wrapper, so it can
+        # show them instead of a bare "could not be produced".
         governed["commenter_assessments"] = (
             _join_commenter_assessments(inference.raw_obj, investigation_legend, payload)
-            if model_backed else [])
+            if model_backed
+            else _salvaged_account_reads(inference.raw_obj, investigation_legend, payload,
+                                         governor_verdict=gov.get("verdict")))
+        salvaged = bool(not model_backed and governed["commenter_assessments"])
+        if salvaged:
+            logger.warning(
+                "analyst: ref=%s wrapper floored but %d per-account read(s) were salvaged from the "
+                "model response", ref, len(governed["commenter_assessments"]))
         # Internal aliases must not reach a reader in the INVESTIGATION-LEVEL prose either. This
         # shipped live: "style-match clusters (C4, C6, C1, C5, C3, C7)" and "few or no collected
         # posts (A24, A20, A19)" rendered on the page a customer screenshots. `check_alias_in_prose`
@@ -976,7 +1041,32 @@ def _assess_core(
             "json_received": inference.raw_obj is not None,
             "validation_passed": bool(model_backed),
             "model_backed": model_backed,
-            "fallback_reason": (inference.fallback_from or None),
+            # The wrapper floored but the model's per-account reads survived. Deliberately a field of
+            # its own rather than a softening of `model_backed`: that flag gates the operator alert,
+            # the self-heal regeneration and the "is this prose the model's" question about the
+            # SYNTHESIS, and all three answers are still no. This one answers a different question,
+            # for the one reader who needs it: the customer looking at reads that really are the
+            # analyst's, under a summary that is not.
+            "account_reads_salvaged": salvaged,
+            # Classified from what this run actually recorded, NOT from `inference.fallback_from`.
+            # That field is only ever set on the `judge_then_floor` branch, and the live
+            # comprehensive path runs `adjudication="schema_only"`, so it was always None here: the
+            # floor alert logged "unclassified", Sentry carried nothing, and the customer got the
+            # generic sentence. Everything needed to name the cause was already being captured a
+            # few lines below and simply never read. See app/reasoning/floor_reason.py.
+            "fallback_reason": (
+                inference.fallback_from
+                or (None if model_backed else _classify_floor({
+                    "governor_verdict": gov.get("verdict"),
+                    "rejected_codes": gov.get("rejected_codes"),
+                    "violation_codes": gov.get("violation_codes"),
+                    "response_status": inference.response_status,
+                    "endpoint_error": inference.endpoint_error,
+                    "endpoint_called": inference.endpoint_called,
+                    "finish_reason": capture.get("finish_reason"),
+                    "canonical_validation_errors": capture.get("canonical_validation_errors"),
+                }))
+            ),
             "snapshot_id": snapshot.snapshot_id,
             "investigation_package_id": package.package_id,
             "prompt_package_id": pp.prompt_package_id,
@@ -1065,7 +1155,7 @@ def _assess_core(
 
 def assess_payload(
     payload: dict, *, ref: str, platform: str = "youtube", settings: Settings | None = None,
-    capture: dict | None = None,
+    capture: dict | None = None, completion_budget_multiplier: float = 1.0,
 ) -> dict | None:
     """Compatibility wrapper (P2.1 AI-runtime cutover). The **AI Investigation Runtime** is now the
     ONE orchestration layer for AI execution; every investigation executes through it. This delegates
@@ -1074,7 +1164,10 @@ def assess_payload(
     entry point moved into the runtime. Never raises."""
     from app.reasoning.runtime import assess_investigation
 
-    return assess_investigation(payload, ref=ref, platform=platform, settings=settings, capture=capture)
+    return assess_investigation(
+        payload, ref=ref, platform=platform, settings=settings, capture=capture,
+        completion_budget_multiplier=completion_budget_multiplier,
+    )
 
 
 def runtime_status(settings: Settings | None = None) -> dict:
@@ -1335,7 +1428,10 @@ def _report_floor(inv, assessment: dict, provider: str) -> None:
     """
     try:
         trace = (assessment or {}).get("investigation_trace") or {}
-        reason = trace.get("fallback_reason") or "unclassified"
+        # Fall back to classifying here as well as at the trace-building site. An entry can reach
+        # this function from a path that did not build a full trace (a batched merge, a rehydrated
+        # cache entry), and "unclassified" in an alert is barely better than no alert at all.
+        reason = trace.get("fallback_reason") or _classify_floor(trace)
         slug = getattr(inv, "slug", "?")
         logger.error(
             "analyst FLOORED inv=%s provider=%s reason=%s status=%s model=%s "
@@ -1591,6 +1687,13 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
         tr["input_tokens"], tr["output_tokens"], tr["total_tokens"] = in_tok, out_tok, tot_tok
         tr["endpoint_cost_usd"] = round(cost, 6)
     tr["model_backed"] = bool(all_model_backed)
+    # Real per-account reads under a floored wrapper. Two ways a merged entry gets here and both are
+    # worth showing: one batch of four floored (so the merged entry is not model-backed while three
+    # batches of reads are perfectly good), or a single response's wrapper failed validation and
+    # `_salvaged_account_reads` kept its rows. `commenter_assessments` is only ever populated from a
+    # model-backed part or an explicit salvage, so anything in this list IS the model's prose and
+    # showing it is not presenting the Floor as AI reasoning.
+    tr["account_reads_salvaged"] = bool(not all_model_backed and merged_accounts)
     tr["inference_count"] = len(completed)
     tr["batches"] = {"total": total_batches, "done": done, "size": batch_size,
                      "traces": batch_traces}
@@ -1782,14 +1885,67 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
         logger.info("analyst.batched: slug=%s progress %d/%d batches attempted, %d landed",
                     inv_slug, attempted, total, sum(1 for p in parts if p is not None))
 
-    def _run(i: int) -> dict | None:
+    # Run-level circuit breaker. Counts batches that floored for a reason a retry cannot fix (a dead
+    # credential, a missing preset, an exhausted balance). Without it, a 12-batch scan against a
+    # broken config would double its generations before giving up, spending real money to fail
+    # twice as slowly. Two is enough to tell a config fault from a one-off bad draw.
+    _dead_config_floors = [0]
+    MAX_DEAD_CONFIG_FLOORS = 2
+
+    def _attempt(i: int, *, budget_multiplier: float = 1.0) -> dict | None:
+        # The multiplier is passed ONLY when it is actually an escalation, so the ordinary call is
+        # byte-identical to what it always was. That keeps the hot path unchanged and means a
+        # caller or test double that predates the parameter still works.
+        extra = ({"completion_budget_multiplier": budget_multiplier}
+                 if budget_multiplier and budget_multiplier != 1.0 else {})
         try:
             return assess_payload(
-                chunks[i], ref=f"{ref}.b{i + 1}", platform=platform, settings=settings,
+                chunks[i], ref=f"{ref}.b{i + 1}", platform=platform, settings=settings, **extra,
             )
         except Exception:  # noqa: BLE001 — one failed batch must not sink the others
             logger.exception("analyst.batched: batch %d/%d crashed for slug=%s", i + 1, total, inv_slug)
             return None
+
+    def _run(i: int) -> dict | None:
+        """One batch, retried at most once and only when a retry could plausibly change anything.
+
+        A failed batch used to be lost outright: ``parts[i] = None`` was never re-attempted, so a
+        single bad draw cost the customer that batch's accounts permanently and the only recovery
+        was them noticing and pressing Retry. One bounded retry fixes the stochastic failures
+        (a malformed response, a truncated one, a transient 429) without spending anything on the
+        deterministic ones.
+        """
+        result = _attempt(i)
+        if result is not None and entry_is_model_backed({"assessment": result}):
+            return result
+
+        reason = _classify_floor(((result or {}).get("investigation_trace")) or {})
+        if not _floor_is_retryable(reason):
+            _dead_config_floors[0] += 1
+            logger.error(
+                "analyst.batched: batch %d/%d floored for slug=%s reason=%s — NOT retrying, a "
+                "second call would fail identically", i + 1, total, inv_slug, reason,
+            )
+            return result
+        if _dead_config_floors[0] >= MAX_DEAD_CONFIG_FLOORS:
+            logger.error("analyst.batched: slug=%s circuit open after %d unfixable floors, "
+                         "not retrying batch %d/%d", inv_slug, _dead_config_floors[0], i + 1, total)
+            return result
+
+        # A truncated reply is the one case where retrying UNCHANGED is pointless: it would truncate
+        # again at the same cap, which is exactly why the in-transport retry declines it. Give the
+        # second attempt more room instead, so it is a different question rather than the same one.
+        multiplier = 1.5 if _floor_base_reason(reason) == "truncated_output" else 1.0
+        logger.warning("analyst.batched: batch %d/%d floored for slug=%s reason=%s — retrying once "
+                       "(budget x%.1f)", i + 1, total, inv_slug, reason, multiplier)
+        retried = _attempt(i, budget_multiplier=multiplier)
+        if retried is not None and entry_is_model_backed({"assessment": retried}):
+            logger.info("analyst.batched: batch %d/%d recovered on retry for slug=%s", i + 1, total,
+                        inv_slug)
+            return retried
+        # Keep whichever attempt produced something at all; a floored result still carries every
+        # deterministic score, and discarding it would lose the accounts entirely.
+        return retried if result is None else result
 
     if workers == 1:
         # Sequential: each batch is persisted the moment it lands, so the UI reveals accounts 1-25

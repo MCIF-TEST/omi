@@ -9,10 +9,12 @@ re-introduce a bug this one already paid for.
 after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
 coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
 "The cohort coordination detector" below, and read its two rules before touching any threshold.
-Suite measured at **2043 passed, 8 skipped, 1 failed** (7m37s), the failure pre-existing and listed
-below. A second session then rebuilt scoring as a calibrated probability and added the planet-scale
+A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
-likelihood ratio. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
+likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2078
+passed, 8 skipped, 1 failed** (6m21s, 2026-08-15), the failure pre-existing and listed below. The 8
+skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -60,7 +62,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2043 passed, 8 skipped, 1 failed** (7m37s, 2026-08-07):
+Current measured state: **2078 passed, 8 skipped, 1 failed** (6m21s, 2026-08-15):
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -68,9 +70,9 @@ Current measured state: **2043 passed, 8 skipped, 1 failed** (7m37s, 2026-08-07)
    trails a prompt-assembly change rather than a real regression; not yet diagnosed.
 
 2. `tests/test_evaluation_benchmark.py::test_accuracy_gate_no_regression` — Brier 0.0321 against a
-   0.032 gate. **Did NOT fire in the 2026-08-07 runs** (three consecutive), having failed
-   consistently before. Nothing in this session touched scoring, so treat it as order-dependent
-   rather than fixed, and do not read its absence as a licence to tighten the gate.
+   0.032 gate. **Did NOT fire in the 2026-08-07 or 2026-08-15 runs**, having failed consistently
+   before. Nothing in either session touched scoring, so treat it as order-dependent rather than
+   fixed, and do not read its absence as a licence to tighten the gate.
 
 **A second failure is yours.** If you see mass failures instead, see the next section first.
 
@@ -1817,6 +1819,109 @@ off (worth checking `OMI_ANALYST_COMPLETION_CEILING_TOKENS`, currently 150000, a
 model's real output ceiling, since a `max_tokens` above what the model allows is rejected outright);
 `governor_reject` means the S1-S9 lint refused valid output. Admins can get the raw capture from
 `POST /v1/investigations/<slug>/analyst/audit`.
+
+### Why a floor happens: the field was always null, and three fixes behind it
+
+Reported 2026-08-15, same symptom as above and a different bug: the notice was appearing and naming
+no cause. The alert above was built and then fed by nothing.
+
+**`fallback_reason` was ALWAYS `None` on the live path.** `analyst.py` set it from
+`inference.fallback_from`, which `runtime.py` only ever populates on the `judge_then_floor` branch,
+and the comprehensive path runs `adjudication="schema_only"`. So three separate surfaces degraded at
+once, all silently: `_report_floor` logged `reason="unclassified"`, `capture_exception` carried that
+same empty reason to Sentry, and `lib/analyst-failure.ts` matched nothing and fell through to its
+generic sentence. One disconnected wire, three symptoms, and no test could see it because
+`test_analyst_floor_alerting.py` **hand-builds its trace dicts** — it proves the alert fires given a
+reason and says nothing about whether production ever supplies one.
+
+Everything needed to classify was already being captured and simply never read: `response_status`,
+`endpoint_error`, `finish_reason`, `canonical_validation_errors`.
+
+`app/reasoning/floor_reason.py` is the fix and is pure. **Its vocabulary is the probe's on purpose**
+(`bad_api_key` / `no_credit` / `preset_or_model_not_found` / `rate_limited` / `unreachable`), so
+`/v1/investigations/analyst/preflight` and a floored scan describe one fault identically instead of
+an operator having to learn two dialects. Order matters in two places: truncation is checked BEFORE
+the schema errors, because a cut-off reply also fails validation and reporting the schema errors
+sends someone hunting a prompt bug that is really a token budget; and a 5xx (`gateway_error`) is
+split from a 4xx (`http_error`) because only one of them is worth trying again.
+
+The load-bearing test is the **end-to-end** one in `tests/test_analyst_floor_classification.py`: it
+drives the real `assess_payload` path with a failing transport and asserts the persisted trace names
+its cause. A test that constructs the trace itself cannot catch this class of bug, which is exactly
+how it shipped.
+
+#### Retry once, and only where a retry can change the answer
+
+Almost nothing retried: a failed batch was `parts[i] = None` forever, so one bad draw cost the
+customer that batch permanently and the only recovery was them noticing and pressing Retry.
+`_generate_batched._run` now retries **once**, and the gate is `floor_reason.is_retryable`. The
+exclusions are the interesting half, and each is a decision about spending real money:
+
+- **A dead credential, an exhausted balance, a missing preset and a never-made call are never
+  retried.** The second call fails identically, so a retry is pure spend in front of a failure the
+  operator needs to see.
+- **A timeout is never retried**, even though it looks transient: the generation may already have
+  billed on their side. This matches `openrouter._fetch`'s own policy and softening it here would
+  quietly double the cost of a slow model.
+- **`governor_reject` is never retried.** Re-inferring to get a different draw past our own quality
+  gate is the wrong instinct.
+- **A run-level circuit breaker** stops retrying after two unfixable floors, so a 12-batch scan
+  against a broken config cannot double its generations before giving up.
+- **Truncation retries with 1.5x the budget.** Retrying it unchanged would truncate again at the
+  same cap, which is precisely why the in-transport retry declines it. The multiplier is passed only
+  when it is an escalation, so the ordinary call stays byte-identical and every existing test double
+  still works.
+
+#### A floored wrapper must not take the per-account reads with it
+
+`validate_comprehensive_model_output` is all-or-nothing, so a reply whose twenty per-account
+paragraphs were perfect and whose synthesis wrapper was missing one field was discarded whole. The
+serve gate emptied `commenter_assessments` on any non-model-backed result, and the same gate hid a
+**mixed batched run**: one floored batch out of four makes the merged entry non-model-backed, so a
+finished scan carrying 75 real per-account reads rendered as a total failure. That is the more
+misleading of the two options, not the safer one, and it is the likeliest thing the user actually
+saw.
+
+`_salvaged_account_reads` keeps the rows; the wrapper still floors. Nothing pretends the run
+succeeded: `model_backed` stays False, so the operator alert fires and the self-heal path still
+works. The new `investigation_trace.account_reads_salvaged` answers the different question the
+customer's page needs, and `AssessmentView` renders `AiUnavailable summaryOnly` plus the reads.
+
+Three rules:
+
+- **Salvaged rows are not taken on trust.** They go through the same `_join_commenter_assessments`,
+  so the tier is derived from the score and `grounding` still withholds an invented quote or a
+  contradicted figure.
+- **A Governor rejection is never salvaged.** That is our own policy layer refusing the output, not
+  a shape mismatch. It cannot fire on today's `schema_only` path; the guard is there so that changing
+  the adjudication mode cannot quietly turn salvage into a bypass.
+- **Rows resolving to no account are refused.** A read of nobody is not a read.
+
+#### A broken config now announces itself at boot
+
+None of the above helps against a revoked key or a renamed preset: the retry is correctly refused,
+the salvage finds nothing, and the deployment floors every scan in silence. `boot_preflight.py` fires
+the real probe once on `background.submit` and turns that into an ERROR log plus a typed
+`AnalystPreflightFailed` in the tracker, with the operator remedy attached.
+
+Five properties, because monitoring that can break the thing it monitors is a downgrade: it never
+blocks boot, never fails boot, never raises, no-ops without `OPENROUTER_API_KEY`, and no-ops when the
+analyst is switched off. Cost is one `max_tokens: 1` call per deploy. `_PROBE_REMEDIES` is imported
+lazily from the route package, because a route importing a reasoning module is the normal direction
+and doing it the other way at import time would couple boot to the whole router graph.
+
+#### The reason list is declared twice, in two languages
+
+`floor_reason.ALL_REASONS` (Python) against `FAILURE_SENTENCES` (`apps/web/lib/analyst-failure.ts`).
+Add a reason on one side without a sentence on the other and it renders as the generic line,
+silently, for exactly the fault nobody has seen before. Same drift class as the signal-name contract,
+so `test_every_reason_has_a_customer_sentence_in_the_web_app` reads the TypeScript source and fails
+on it. `null` is allowed only for `deterministic_floor`, which genuinely means "we cannot tell".
+
+Two rules the customer wording follows, both learned from copy that was live: **never say "credit"
+about anything but the customer's own credits** (this product sells credits, so "the analysis service
+is out of credit" reads as "you are out of credit" and sends someone to the billing page over a fault
+of ours), and **name whose fault it is**, so nobody re-runs a scan that will fail identically.
 
 ### One failed batch used to freeze the whole run
 

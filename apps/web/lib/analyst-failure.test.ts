@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { failureReason } from './analyst-failure';
+import { FAILURE_SENTENCES, failureReason } from './analyst-failure';
 
 /**
  * These sentences are shown to someone who just spent a credit and got no written analysis. Getting
@@ -40,6 +40,61 @@ describe('failureReason', () => {
   it('does not mistake a successful call for a failure', () => {
     // endpoint_called true with no reason is not a classifiable failure.
     expect(failureReason({ endpoint_called: true, fallback_reason: null })).toBeNull();
+  });
+
+  it('explains a config fault as ours, without sending anyone to their billing page', () => {
+    // This product sells credits, so "the analysis service is out of credit" reads as "you are out
+    // of credit". Naming whose fault it is stops someone re-running a scan that will fail the same
+    // way, or worse, paying us again over a fault of ours.
+    const noCredit = failureReason({ fallback_reason: 'no_credit' }) ?? '';
+    expect(noCredit).toMatch(/our side/i);
+    expect(noCredit).not.toMatch(/your credit|out of credits/i);
+    expect(failureReason({ fallback_reason: 'bad_api_key' })).toMatch(/our side/i);
+    expect(failureReason({ fallback_reason: 'preset_or_model_not_found' })).toMatch(/our side/i);
+  });
+
+  it('invites another try only for the faults a retry can fix', () => {
+    for (const reason of ['rate_limited', 'gateway_error']) {
+      expect(failureReason({ fallback_reason: reason })).toMatch(/again/i);
+    }
+    // A dead credential will fail identically, so telling someone to try again wastes their time.
+    for (const reason of ['bad_api_key', 'no_credit', 'preset_or_model_not_found']) {
+      expect(failureReason({ fallback_reason: reason })).not.toMatch(/trying again/i);
+    }
+  });
+
+  it('reads the detail appended after a reason without tripping over it', () => {
+    // classify_floor appends detail so the LOG stays actionable ("http_error: 418",
+    // "governor_reject: ['S9_banned_phrase']"). The customer sentence must survive that.
+    expect(failureReason({ fallback_reason: 'gateway_error: 502' }))
+      .toBe(FAILURE_SENTENCES.gateway_error);
+    expect(failureReason({ fallback_reason: 'model_output_not_schema_valid_json: missing verdict' }))
+      .toBe(FAILURE_SENTENCES.model_output_not_schema_valid_json);
+  });
+
+  it('has a usable sentence for every reason except the one that means "we cannot tell"', () => {
+    // Totality. The Python side pins the other direction (every reason it can emit has a key here);
+    // this pins that a key is not an empty string or a placeholder.
+    for (const [reason, sentence] of Object.entries(FAILURE_SENTENCES)) {
+      if (reason === 'deterministic_floor') {
+        expect(sentence).toBeNull();
+        continue;
+      }
+      expect(sentence, reason).toBeTruthy();
+      expect(sentence!.trim().length, reason).toBeGreaterThan(20);
+      expect(sentence, reason).not.toContain('_');
+      expect(sentence!.endsWith('.'), reason).toBe(true);
+    }
+  });
+
+  it('has no reason that is a prefix of another', () => {
+    // The lookup is a prefix match, which is only unambiguous while that holds.
+    const keys = Object.keys(FAILURE_SENTENCES);
+    for (const a of keys) {
+      for (const b of keys) {
+        if (a !== b) expect(a.startsWith(b), `${a} starts with ${b}`).toBe(false);
+      }
+    }
   });
 
   it('never leaks the raw engineering string to the reader', () => {
