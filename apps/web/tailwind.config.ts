@@ -138,6 +138,10 @@ const config: Config = {
         'fade-up':    'fade-up 220ms cubic-bezier(0.16, 1, 0.3, 1)',
         'fade-up-lg': 'fade-up-lg 480ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'pulse-dot':  'pulse_dot 2s ease-in-out infinite',
+        // The batch currently being generated. Linear travel (it is constant motion, not an
+        // entrance) with the rest built into the keyframe, because this sits on screen for minutes
+        // at a time and a continuous sweep with no pause reads as frantic rather than as progress.
+        'batch-sweep': 'shimmer-sweep 2.2s linear infinite',
       },
     },
   },

@@ -1170,6 +1170,21 @@ export interface AnalystAssessment {
     // `model_backed` on purpose: that one still answers no, and it is what gates the operator alert
     // and the self-heal regeneration. Absent on entries written before salvage existed.
     account_reads_salvaged?: boolean;
+    // Per-batch outcome for a batched run. `accounts` is how many reads that batch actually
+    // produced, so 0 means it was attempted and came back empty. This is what lets the progress
+    // track show a failed batch as failed instead of counting it as done: `batching.done` counts
+    // ATTEMPTS (so the readout moves when one fails) and cannot tell the two apart on its own.
+    batches?: {
+      total: number;
+      done: number;
+      size: number;
+      traces?: Array<{
+        batch: number;
+        accounts: number;
+        model_backed?: boolean;
+        served_model?: string | null;
+      }>;
+    };
     fallback_reason?: string | null;
     governor_verdict?: string | null;
     comprehensive_structurally_valid?: boolean;

@@ -1390,20 +1390,53 @@ def entry_is_model_backed(entry: dict | None) -> bool:
     return bool(prov) and "fallback" not in prov and "deterministic" not in prov
 
 
-# Slugs whose FLOORED cache we've already auto-regenerated once this process. Bounds the auto-refresh to a
-# single fresh model call per investigation (per process) so a stale Floor self-heals WITHOUT a poll loop
-# hammering the gateway. Cleared on restart (one more attempt after a deploy is fine).
+# Slugs whose FLOORED cache we've already auto-regenerated once this process. Kept as a cheap local
+# short-circuit in front of the durable claim below, so a poll loop on one worker does not hit the
+# database to be told "no" every 2.5 seconds.
 _floor_autorefreshed: set[str] = set()
 _floor_autorefresh_lock = threading.Lock()
 
+#: Where the durable "we already auto-healed this one" marker lives inside ``Investigation.payload_json``.
+FLOOR_HEAL_KEY = "analyst_floor_autoheal_v1"
 
-def claim_floor_autorefresh(slug: str) -> bool:
-    """Return True exactly once per slug — the caller may trigger ONE automatic regeneration of a floored
-    cache. Subsequent calls return False (serve the floored result instead of re-calling forever)."""
+
+def claim_floor_autorefresh(slug: str, session=None, inv=None) -> bool:
+    """Return True exactly ONCE per investigation: the caller may trigger one automatic regeneration.
+
+    An automatic regeneration is a full billable run that the customer did not ask for, so "once"
+    has to mean once, and a process-local set cannot deliver that. It was one: N web workers each
+    held their own copy, so N of them each granted a regeneration for the same floored scan, and a
+    restart wiped the set and granted another. Nothing anywhere would have shown that except the
+    OpenRouter bill. Exactly the shape of bug the durable generation lease was introduced to fix,
+    still present one function away from it.
+
+    The marker is persisted on the investigation. The in-process set stays in front of it purely to
+    keep a 2.5s poll loop off the database; correctness comes from the stored value, so passing no
+    session degrades to the old process-local behaviour rather than failing open on every call.
+    """
     with _floor_autorefresh_lock:
         if slug in _floor_autorefreshed:
             return False
         _floor_autorefreshed.add(slug)
+
+    if session is None or inv is None:
+        return True
+    try:
+        if (inv.payload_json or {}).get(FLOOR_HEAL_KEY):
+            return False
+        # SAVEPOINT-isolated and reassigning the whole dict, the same shape as `_write_lease`: a
+        # marker write must never break the request it rides on, and SQLAlchemy only notices a JSON
+        # column that was reassigned.
+        with session.begin_nested():
+            payload = {**(inv.payload_json or {}),
+                       FLOOR_HEAL_KEY: {"at": datetime.now(timezone.utc).isoformat()}}
+            inv.payload_json = payload
+            session.add(inv)
+        return True
+    except Exception:  # noqa: BLE001
+        # A failed read or write must not strand a genuinely floored scan with no attempt at all.
+        # The in-process set above still bounds it to one per worker, which is the old behaviour.
+        logger.exception("analyst: could not record the floor auto-heal claim for %s", slug)
         return True
 
 
@@ -1503,7 +1536,7 @@ def generation_lease_is_live(inv) -> bool:
         return False
     if seen.tzinfo is None:
         seen = seen.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - seen).total_seconds() < BATCH_HEARTBEAT_STALE_SEC
+    return (datetime.now(timezone.utc) - seen).total_seconds() < batch_heartbeat_stale_sec()
 
 
 def claim_generation_lease(session, inv, run_id: str) -> bool:
@@ -1522,6 +1555,31 @@ def claim_generation_lease(session, inv, run_id: str) -> bool:
     _write_lease(session, inv, {"run_id": run_id,
                                 "heartbeat": datetime.now(timezone.utc).isoformat()})
     return True
+
+
+def touch_generation_lease(session, inv, run_id: str) -> None:
+    """Re-stamp our own lease so a long run does not look abandoned while it is working.
+
+    THE LEASE HEARTBEAT WAS WRITTEN ONCE, AT CLAIM TIME, AND NEVER AGAIN. Liveness is judged against
+    that single stamp, so the lease expired a fixed number of seconds after the run STARTED rather
+    than a fixed number of seconds after it last did anything. With batches measured at 857s and a
+    four-batch scan running close to an hour, the lease went stale while the run was healthy and
+    mid-flight, and another worker was then free to claim it and start a duplicate billable run.
+
+    Widening the staleness window cannot fix this, only postpone it: a long enough scan always
+    outlives a fixed window measured from its start. The heartbeat has to be evidence of RECENT
+    work, so it is re-stamped every time a batch lands.
+
+    Never raises, and never steals: if the stored lease belongs to somebody else we leave it alone,
+    exactly like ``release_generation_lease``.
+    """
+    try:
+        if (inv.payload_json or {}).get(LEASE_KEY, {}).get("run_id") != run_id:
+            return
+        _write_lease(session, inv, {"run_id": run_id,
+                                    "heartbeat": datetime.now(timezone.utc).isoformat()})
+    except Exception:  # noqa: BLE001 — advisory; a failed touch must never sink a persisted batch
+        logger.exception("analyst: could not refresh the generation lease")
 
 
 def release_generation_lease(session, inv, run_id: str) -> None:
@@ -1762,10 +1820,29 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
 
 
 #: How long a batched run's entry may go without a progress write before another worker is allowed
-#: to conclude it died and regenerate. A batch is one model call, so this has to clear the slowest
-#: realistic one with room to spare: too low and we are back to duplicate runs fighting over the
-#: same row, too high and a genuinely crashed run leaves the user waiting.
-BATCH_HEARTBEAT_STALE_SEC = 420
+#: to conclude it died and regenerate.
+#:
+#: THIS IS DERIVED FROM THE PER-CALL TIMEOUT, and it must be. The heartbeat is written when a batch
+#: LANDS, so between two writes sits one whole model call. A fixed 420 was therefore a bet that no
+#: batch would ever take seven minutes, and it lost: a measured 25-account batch took 857s, so for
+#: 437 of those seconds a perfectly healthy run looked dead. Another worker then concluded it had
+#: crashed and started a duplicate, which republished "1 of 4" over the "3 of 4" the customer was
+#: reading and billed a second run to do it.
+#:
+#: A run cannot be declared dead until longer than one model call could possibly take, so the floor
+#: is the configured timeout plus a margin for the persist that follows it. Raising
+#: OMI_ANALYST_TIMEOUT_SECONDS now moves this automatically instead of silently re-opening the bug.
+BATCH_HEARTBEAT_MARGIN_SEC = 300
+BATCH_HEARTBEAT_STALE_SEC = 420      # the floor, and what a caller with no settings falls back to
+
+
+def batch_heartbeat_stale_sec(settings: Settings | None = None) -> float:
+    """How long since the last progress write before a batched run counts as dead."""
+    try:
+        timeout = float(getattr(settings or get_settings(), "analyst_timeout_seconds", 0) or 0)
+    except Exception:  # noqa: BLE001 — liveness must never raise; fall back to the floor
+        timeout = 0.0
+    return max(BATCH_HEARTBEAT_STALE_SEC, timeout + BATCH_HEARTBEAT_MARGIN_SEC)
 
 
 def batched_run_looks_alive(entry: dict | None) -> bool:
@@ -1794,7 +1871,7 @@ def batched_run_looks_alive(entry: dict | None) -> bool:
     if seen.tzinfo is None:
         seen = seen.replace(tzinfo=timezone.utc)
     age = (datetime.now(timezone.utc) - seen).total_seconds()
-    return age < BATCH_HEARTBEAT_STALE_SEC
+    return age < batch_heartbeat_stale_sec()
 
 
 def _scored_accounts(assessment: dict | None) -> int:
@@ -1809,7 +1886,13 @@ def _entry_is_ahead(existing: dict | None, mine: dict, run_id: str | None) -> bo
     * no stored entry, or no batching on it: nothing to lose, write.
     * same ``run_id``: our own earlier write, and ours must always advance.
     * not alive: a crashed or interrupted run, which is exactly what we are here to replace.
-    * fewer or equal accounts: we are not losing any work by publishing, so publish.
+    * fewer accounts, and no further through the run: we lose nobody's work by publishing.
+
+    ON EQUAL ACCOUNT COUNTS, HOW FAR THROUGH THE RUN EACH ONE IS BREAKS THE TIE, and that clause is
+    not hypothetical. A leader that had attempted three batches and got accounts out of one held 25
+    accounts at "3 of 4"; a duplicate starting fresh held 25 at "1 of 4". Equal counts meant the
+    duplicate published, and the customer watched the counter run backwards. Comparing accounts
+    alone cannot see that, because the two runs genuinely had the same number of them.
     """
     stored = ((existing or {}).get("assessment") or {})
     batching = stored.get("batching") or {}
@@ -1819,11 +1902,15 @@ def _entry_is_ahead(existing: dict | None, mine: dict, run_id: str | None) -> bo
         return False
     if not batched_run_looks_alive(existing):
         return False
-    return _scored_accounts(stored) > _scored_accounts(mine)
+    stored_accounts, my_accounts = _scored_accounts(stored), _scored_accounts(mine)
+    if stored_accounts != my_accounts:
+        return stored_accounts > my_accounts
+    return int(batching.get("done") or 0) > int(((mine or {}).get("batching") or {}).get("done") or 0)
 
 
 def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks: list[dict],
-                      *, platform: str, settings: Settings) -> dict | None:
+                      *, platform: str, settings: Settings,
+                      lease_id: str | None = None) -> dict | None:
     """Run one analyst inference PER ≤N-account batch, merging + persisting the combined assessment
     after each batch lands (strictly first-to-last) so the UI can show batch 1's accounts while the
     rest are still generating. Returns the final persisted entry.
@@ -1889,6 +1976,11 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
             # `complete: true`, so the entry stopped being regenerable and the customer was left
             # permanently with a quarter of what they paid for. Our run just ends quietly instead;
             # the leader is still going and will mark the row complete itself.
+            # Evidence of recent work, written on the same beat as the progress itself. Without
+            # this the lease expires a fixed time after the run STARTED, which a long scan always
+            # outlives.
+            if lease_id:
+                touch_generation_lease(session, inv, lease_id)
             if _entry_is_ahead(existing, merged, run_id):
                 logger.info(
                     "analyst.batched: slug=%s another run is further ahead; not publishing this "
@@ -2100,7 +2192,8 @@ def generate_and_persist(slug: str, user_id: int | None, refresh: bool = False) 
         chunks = _split_batches(payload, batch_size, batches=batch_count)
         if chunks:
             entry = _generate_batched(inv_slug, user_id, payload, chunks,
-                                      platform=platform, settings=settings)
+                                      platform=platform, settings=settings,
+                                      lease_id=run_lease_id)
             if entry is not None:
                 _cache_stats["generated"] += 1
             return entry

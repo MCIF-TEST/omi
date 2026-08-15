@@ -167,7 +167,10 @@ def generate_analyst_assessment(
             if analyst.is_generation_inflight(inv.slug):
                 response.status_code = status.HTTP_202_ACCEPTED
                 return AnalystResponse(slug=inv.slug, enabled=True, status="generating", cached=False)
-            if analyst.claim_floor_autorefresh(inv.slug):
+            # Session + row passed so the claim is DURABLE. An automatic regeneration is a full
+            # billable run nobody asked for, and a process-local claim granted one per worker and
+            # another after every restart.
+            if analyst.claim_floor_autorefresh(inv.slug, session=session, inv=inv):
                 refresh = True
             else:
                 return AnalystResponse(

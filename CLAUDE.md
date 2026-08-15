@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2082
-passed, 8 skipped, 1 failed** (5m52s, 2026-08-15), the failure pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2091
+passed, 8 skipped, 1 failed** (6m30s, 2026-08-15), the failure pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -62,7 +62,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2082 passed, 8 skipped, 1 failed** (5m52s, 2026-08-15):
+Current measured state: **2091 passed, 8 skipped, 1 failed** (6m30s, 2026-08-15):
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2033,13 +2033,31 @@ Two independent fixes, because either alone leaves a hole:
 - **A durable heartbeat.** `batching` now carries `run_id` and `heartbeat`, written on every progress
   persist, and `batched_run_looks_alive()` reads them. That is cross-process evidence that somebody
   is still working, which the in-flight set cannot provide. Used in `generate_and_persist` (serve the
-  partial instead of regenerating) and in the route's partial branch. `BATCH_HEARTBEAT_STALE_SEC` is
-  **420s**, which has to clear the slowest realistic single batch: too low and duplicate runs come
-  back, too high and a genuinely crashed run leaves the user waiting. An **absent** heartbeat counts
-  as not-alive, so entries written before the field existed still self-heal.
+  partial instead of regenerating) and in the route's partial branch. The window is **derived from
+  `analyst_timeout_seconds`** (`batch_heartbeat_stale_sec()`, timeout + 300s, floored at 420s), and
+  that derivation is load-bearing: **the heartbeat is written when a batch LANDS, so one whole model
+  call sits between two writes.** A fixed 420 was a bet that no batch would ever take seven minutes,
+  and it lost. A measured 25-account batch took **857s**, so for 437 of those seconds a perfectly
+  healthy run looked dead, another worker concluded it had crashed, and the duplicate republished
+  "1 of 4" over the "3 of 4" the customer was reading, billing a second run to do it. Raising
+  `OMI_ANALYST_TIMEOUT_SECONDS` now moves the window automatically instead of silently re-opening
+  that. An **absent** heartbeat counts as not-alive, so entries written before the field existed
+  still self-heal.
+- **The lease is re-stamped as the run works.** Its heartbeat used to be written ONCE, at claim
+  time, so liveness was measured from when a run STARTED rather than from when it last did
+  anything: a four-batch scan at ~857s a batch runs close to an hour and outlived any fixed window,
+  so the lease expired mid-flight and another worker was free to claim it. Widening the window only
+  postpones that. `touch_generation_lease` is called on every progress persist, and it refuses to
+  re-stamp a lease it does not own (which would hide a genuinely dead run behind a heartbeat from a
+  process that is not doing the work).
+- **The floor self-heal claim is DURABLE**, stored as `FLOOR_HEAL_KEY` on the investigation. It was
+  a process-local set, so N web workers each granted their own automatic regeneration of the same
+  floored scan and a restart granted another. An automatic regeneration is a full billable run
+  nobody asked for, and the only place that would ever have shown up is the OpenRouter bill. The
+  in-process set stays in front of it to keep a 2.5s poll loop off the database.
 - **Progress never goes backwards.** `_entry_is_ahead()` makes `_persist_progress` defer to a stored
   entry that belongs to a *different*, *still-live* run with *more* accounts. Deliberately narrow:
-  our own `run_id`, a stale entry, a finished entry and an equal-or-behind entry all fall through to
+  our own `run_id`, a stale entry, a finished entry and a behind entry all fall through to
   the normal write, so a single run is completely unaffected and a crashed run stays replaceable. The
   guard **defers, it does not disable** the run: once the second run draws level it publishes again.
 
