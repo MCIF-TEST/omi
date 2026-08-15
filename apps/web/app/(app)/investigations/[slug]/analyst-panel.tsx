@@ -10,6 +10,7 @@ import { SignalBreakdown } from '@/components/shared/signal-breakdown';
 import { ExportResults } from '@/components/shared/export-results';
 import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
+import { byOmiScoreDesc } from '@/lib/rank-accounts';
 import {
   apiClient,
   ApiError,
@@ -1045,7 +1046,10 @@ function CommenterAssessments({
   items, completion,
 }: { items?: CommenterAssessment[]; completion?: CompletionStatus; slug: string }) {
   const rows = items ?? [];
-  const resolved = rows.filter((r) => r.resolved);
+  // Worst first, matching the shared report and both exports. Batch order was a consequence of how
+  // a scan runs, not a decision about what a reader wants: it buried the highest-scoring account in
+  // the middle of the list whenever that account happened to be selected late.
+  const resolved = byOmiScoreDesc(rows.filter((r) => r.resolved));
   const unresolvedCount = rows.length - resolved.length;
 
   return (

@@ -448,8 +448,30 @@ Five decisions in there:
   extra cells and rows in a spreadsheet, so the clipboard path collapses whitespace; the CSV keeps
   the text intact because RFC 4180 quoting can carry it.
 
-The join is on `external_id`, never the handle. Sorted worst first, which deliberately differs from
-the on-screen order (that follows the batches so results can appear as they land).
+The join is on `external_id`, never the handle. Sorted worst first, which every surface now agrees
+on: see "Every list of accounts leads with the worst one" below.
+
+### Every list of accounts leads with the worst one
+
+The shared report, the markdown export, the CSV and the pre-login demo all sorted highest OMI score
+first. The signed-in investigation page did not: it rendered in BATCH order, which is a consequence
+of how a scan runs rather than a decision about what a reader wants. On a 100-account scan the
+highest-scoring account sat wherever it happened to be selected, so the finding the customer opened
+the page for was the one thing they had to scroll for.
+
+`lib/rank-accounts.ts` is the rule, pure and pinned by `lib/rank-accounts.test.ts`. Two things in it
+that a one-line inline sort gets wrong:
+
+- **An unscored account sorts LAST, never as a zero.** A missing `omi_score` means the analyst never
+  read that account (a floored batch, a row the model skipped), which is not the same claim as "this
+  account looks like a real person". `(b.omi_score ?? 0) - (a.omi_score ?? 0)` would file an
+  unassessed account among the most exonerated ones on the page. Same distinction as `score: null`
+  on the eight signals.
+- **Ties keep their existing order**, and it must stay a stable sort: the list re-renders every time
+  a batch lands, and accounts on the same score shuffling between polls reads as instability.
+
+It returns a copy. The panel holds that list in React state and `ExportResults` builds its own rows
+from the same array, so sorting in place would reorder it underneath both.
 
 ### Score discipline: a high score has to be earned (constitution v9)
 
