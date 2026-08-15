@@ -217,12 +217,41 @@ browser console.
   the API side is lenient about the extra padding, which is why the same line is correct there and
   wrong here.
 - **The static dev hosts stay**, so a pk_test preview deploy keeps working.
-- **`AuthFormGate` now gives up after 12s** and says the form could not load. A spinner with no
-  terminal state is not a loading state, it is a silent failure, and this one cost a live hour.
+- **`AuthFormGate` gives up after 12s** and says the form could not load. A spinner with no terminal
+  state is not a loading state, it is a silent failure, and this one cost a live hour.
 
-Pinned by `apps/web/middleware.test.ts` (8 tests), which asserts the derived origin lands in every
-directive that needs it. Note the key is inlined into the Edge bundle at BUILD time, so changing it
-needs a rebuild of the web service, not a restart.
+Pinned by `apps/web/middleware.test.ts` and `lib/clerk-origin.test.ts`, which assert the derived
+origin lands in every directive that needs it. Note the key is inlined into the Edge bundle at BUILD
+time, so changing it needs a rebuild of the web service, not a restart.
+
+#### Three reasons the sign-in form does not load, and only one is the visitor's problem
+
+`AuthFormGate`'s timeout used to say one thing for all of them: *check your network or extensions
+blocking third-party scripts*. That advice is actively wrong for two of the three, and sends someone
+to debug a machine that is working. It now distinguishes:
+
+- **`blocked`** — a CSP violation naming the Clerk host. This is the cause with **no other evidence
+  anywhere**: no server log, no failed health check, nothing on the page, only a line in the browser
+  console. That is what made it cost an hour. `AuthFormGate` now listens for
+  `securitypolicyviolation` and says so. The listener is registered on mount and clerk-js is fetched
+  after hydration, so it is normally in place first; if a violation beats it, the generic message
+  stands rather than a wrong claim.
+- **`misconfigured`** — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` was empty at BUILD time, so the bundle
+  has no instance to talk to. Reloading cannot help, so that branch does not offer the button.
+- **`unreachable`** — everything is configured and the host did not answer.
+
+**The production instance's host is a CNAME, so sign-in has a hard dependency on the DNS for
+`omisphere.online`.** Observed 2026-08-15: a Namecheap resolver outage in the user's region made
+`clerk.omisphere.online` fail to resolve, and the entire symptom was this notice. **Nothing
+server-side can see it** — the API is healthy, the web service is healthy, and the failure is
+between one visitor's resolver and a hostname we do not serve. So before debugging the app, check
+that the host resolves (`dig clerk.omisphere.online`) and check the DNS provider's status page. The
+notice now prints the host for exactly that reason, and no longer blames the reader's extensions
+first.
+
+The decode itself lives in `apps/web/lib/clerk-origin.ts`, shared by the middleware (which needs the
+ORIGINS for the CSP) and the gate (which needs the HOST to name in the message). A malformed key
+yields nothing rather than a string concatenated into a security directive.
 
 #### Switching instances gives every user a new Clerk id, and the local row must re-point
 
