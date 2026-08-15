@@ -719,3 +719,32 @@ def test_the_floor_self_heal_still_bounds_itself_without_a_session():
     A._floor_autorefreshed.discard("inv_nosession")
     assert A.claim_floor_autorefresh("inv_nosession") is True
     assert A.claim_floor_autorefresh("inv_nosession") is False
+
+
+# --------------------------------------------------------------------------- #
+# `landed` is coverage, and a floored batch covers nothing
+# --------------------------------------------------------------------------- #
+def test_landed_counts_batches_that_produced_accounts_not_batches_that_returned():
+    """A floored batch is NOT None: it returns a complete deterministic Floor assessment carrying
+    zero accounts. Counting parts instead of accounts made `landed` restate exactly the lie `done`
+    already tells, and it disabled the one notice whose whole job is to say "finished, but N batches
+    yielded nothing" (IncompleteCoverageNotice is gated on `landed < total`)."""
+    floored = _part(scores=[], overall=10, model_backed=False)
+    parts = [_part(scores=[10] * 25, overall=10), floored, floored, _part(scores=[20] * 25, overall=20)]
+    merged = _merge_batch_parts(parts, batch_size=25, done=4, run_finished=True)
+
+    b = merged["batching"]
+    assert b["done"] == 4, "every batch was attempted"
+    assert b["landed"] == 2, "only two of them produced any accounts"
+    assert b["complete"] is True
+    assert len(merged["commenter_assessments"]) == 50
+    # The gate the incomplete-coverage notice reads must now actually open.
+    assert b["landed"] < b["total"]
+
+
+def test_a_fully_successful_run_still_reports_full_coverage():
+    """The inverse, so the stricter count cannot start crying wolf on healthy scans."""
+    parts = [_part(scores=[10] * 25, overall=10) for _ in range(4)]
+    merged = _merge_batch_parts(parts, batch_size=25, done=4, run_finished=True)
+    assert merged["batching"]["landed"] == 4
+    assert merged["batching"]["landed"] == merged["batching"]["total"]
