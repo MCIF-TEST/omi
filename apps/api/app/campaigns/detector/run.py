@@ -30,6 +30,7 @@ def detect(
     *,
     passes: int = 1,
     inherited_edges: list[Edge] | None = None,
+    accumulated: dict[tuple[str, str], float] | None = None,
 ) -> DetectionRun:
     """Every signal, then fusion, clustering and the gates.
 
@@ -68,8 +69,12 @@ def detect(
     else:
         notes.append("Fewer than two accounts scored at or above the threshold.")
 
+    # A platform-specific family may not link accounts on two different platforms. Applied once,
+    # here, rather than inside seven signals that would each have to remember it.
+    edges = _drop_illegal_cross_platform(edges, cohort)
+
     ids = [a.external_id for a in cohort.accounts]
-    findings = fuse.build_findings(ids, edges)
+    findings = fuse.build_findings(ids, edges, accumulated=accumulated)
     for f in findings:
         f.evidence = _evidence_lines(f)
 
@@ -84,6 +89,40 @@ def detect(
         lone_high_scorers=fuse.lone_high_scorers(ids, edges),
         notes=notes,
     )
+
+
+def _drop_illegal_cross_platform(edges: list[Edge], cohort: Cohort) -> list[Edge]:
+    """Enforce the cross-platform rule. See ``tracking/crossplatform.py`` for why it is this one."""
+    try:
+        from app.campaigns.tracking.crossplatform import may_link, split_key
+
+        platforms = {a.external_id: split_key(a.external_id)[0] for a in cohort.accounts}
+        default = cohort.platform or "unknown"
+
+        def platform_of(account_id: str) -> str:
+            found = platforms.get(account_id, "unknown")
+            return default if found == "unknown" else found
+
+        return [e for e in edges if may_link(platform_of(e.a), platform_of(e.b), e.family)]
+    except Exception:  # noqa: BLE001 - a filter that fails must not lose the evidence
+        logger.warning("campaign detector: cross-platform filter failed", exc_info=True)
+        return edges
+
+
+def _carried_evidence(session, platform: str, cohort: Cohort, context_id: str | None):
+    """Prior cross-scan evidence for this cohort's pairs, or nothing if the lookup fails."""
+    try:
+        from app.campaigns.tracking import graph
+
+        return graph.carried_evidence(
+            session,
+            platform=platform,
+            accounts=[a.external_id for a in cohort.accounts],
+            exclude_context=context_id,
+        )
+    except Exception:  # noqa: BLE001 - history is an enhancement, never a precondition
+        logger.warning("campaign detector: could not load carried evidence", exc_info=True)
+        return {}
 
 
 #: How many evidence sentences to render per finding. The raw edges are all persisted; this is the
@@ -153,17 +192,24 @@ def detect_for_investigation(
             previous = persist.stored_run(payload)
             inherited = persist.inherited_timing_edges(previous)
 
-            c = cohort_mod.from_payload(
-                payload,
-                platform=str(getattr(inv, "platform", "") or payload.get("platform") or "unknown"),
-                prefer=prefer,
+            platform = str(getattr(inv, "platform", "") or payload.get("platform") or "unknown")
+            c = cohort_mod.from_payload(payload, platform=platform, prefer=prefer)
+
+            # What the deployment already knows about these pairs from OTHER posts. This is what
+            # makes a pair that was merely suspicious here decisive when it has been seen before,
+            # and it is the only reason tracking globally improves accuracy rather than just
+            # storage. The current post is excluded so a re-run cannot read its own output back in.
+            carried = _carried_evidence(
+                session, platform, c, str(getattr(inv, "target_id", "") or "") or None,
             )
+
             run = detect(
                 c,
                 passes=2 if prefer == cohort_mod.SOURCE_ANALYST else 1,
                 inherited_edges=inherited,
+                accumulated=carried,
             )
-            persist.save(session, inv, run)
+            persist.save(session, inv, run, cohort=c)
             return run
     except Exception:  # noqa: BLE001
         logger.exception("campaign detector: run failed for slug=%s prefer=%s", slug, prefer)

@@ -176,6 +176,19 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "clerk_user_id", "VARCHAR(64)"),
     # Real post title (video title / tweet text) for human-readable investigation labels.
     ("candidate_lists", "content_title", "VARCHAR(500)"),
+    # Cross-scan coordination evidence. Existing edges start at zero / empty, which correctly means
+    # "seen, but before we were accumulating likelihood ratios" rather than "no evidence".
+    ("coordination_edges", "log_lr_sum", "DOUBLE PRECISION DEFAULT 0"),
+    ("coordination_edges", "families_json", "JSON"),
+    ("coordination_edges", "contexts_json", "JSON"),
+    ("coordination_edges", "platforms_json", "JSON"),
+    # Operation-level tracking on the campaign record.
+    ("campaigns", "posterior", "DOUBLE PRECISION DEFAULT 0"),
+    ("campaigns", "signature_json", "JSON"),
+    ("campaigns", "origin", "VARCHAR(24) DEFAULT 'detected'"),
+    ("campaigns", "dormant_since", "TIMESTAMP WITH TIME ZONE"),
+    ("campaigns", "resurfaced_count", "INTEGER DEFAULT 0"),
+    ("campaigns", "platforms_json", "JSON"),
 ]
 
 

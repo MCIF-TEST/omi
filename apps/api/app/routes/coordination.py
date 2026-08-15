@@ -60,9 +60,18 @@ class EvidenceOut(BaseModel):
 class FindingOut(BaseModel):
     finding_id: str
     label: str
+    #: The group's posterior probability of coordination: the WEAKEST member's admitting
+    #: probability, not the strongest or the mean.
     score: float
     capped: bool
     density: float
+    #: Each member's own probability of being coordinated with this group. Shown per account so a
+    #: reviewer can challenge one name without dismissing the finding.
+    member_posteriors: dict[str, float] = Field(default_factory=dict)
+    #: How the number was reached: the prior, then each family's contribution.
+    derivation: str = ""
+    prior: float = 0.0
+    lr_version: str = ""
     members: list[MemberOut]
     families_fired: list[str]
     families_silent: list[str]
@@ -379,6 +388,13 @@ def _finding(f: dict, handles: dict[str, str], scores: dict[str, float]) -> Find
         score=float(f.get("score") or 0.0),
         capped=bool(f.get("capped")),
         density=float(f.get("density") or 0.0),
+        member_posteriors={
+            handles.get(k, k): float(v)
+            for k, v in (f.get("member_posteriors") or {}).items()
+        },
+        derivation=str(f.get("derivation") or ""),
+        prior=float(f.get("prior") or 0.0),
+        lr_version=str(f.get("lr_version") or ""),
         members=members,
         families_fired=list(f.get("families_fired") or []),
         families_silent=list(f.get("families_silent") or []),

@@ -14,7 +14,11 @@ from __future__ import annotations
 import ast
 import pathlib
 
-PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "app" / "campaigns" / "detector"
+_APP = pathlib.Path(__file__).resolve().parents[1] / "app" / "campaigns"
+PACKAGE = _APP / "detector"
+#: The planet-scale tracking layer is under the same rule: it decides which named accounts belong
+#: to which operation, so it must stay deterministic and offline too.
+TRACKING = _APP / "tracking"
 
 #: Nothing in the detector may reach these. The first three are the model and provider stacks; the
 #: rest are the transport libraries that would let it make a call directly.
@@ -53,7 +57,7 @@ def _module_names(path: pathlib.Path) -> set[str]:
 
 
 def _detector_files() -> list[pathlib.Path]:
-    files = sorted(PACKAGE.glob("*.py"))
+    files = sorted(PACKAGE.glob("*.py")) + sorted(TRACKING.glob("*.py"))
     assert files, "the detector package should not be empty"
     return files
 

@@ -310,11 +310,16 @@ function FindingBlock({ finding }: { finding: CoordinationFinding }) {
               isCampaign ? 'text-tier-high' : 'text-tier-moderate',
             )}
           >
-            {isCampaign ? 'Corroborated campaign' : 'Lead, not a campaign'}
+            {isCampaign ? 'Coordinated operation' : 'Lead, below the bar'}
           </span>
           <p className="text-sm text-fg mt-1.5">
             {finding.members.length} accounts ·{' '}
-            <span className="stat-value">{pct(finding.score)}</span> coordination
+            <span className="stat-value">{pct(finding.score)}</span> probability
+          </p>
+          {/* The weakest-member framing is the honest one and has to be said, or a reader takes
+              the headline number as applying evenly to everyone named. */}
+          <p className="font-mono text-2xs text-fg-mute mt-1">
+            every member is linked at this probability or better
           </p>
         </div>
         <span className="font-mono text-2xs text-fg-mute shrink-0">
@@ -322,13 +327,26 @@ function FindingBlock({ finding }: { finding: CoordinationFinding }) {
         </span>
       </div>
 
+      {finding.derivation && (
+        <p className="font-mono text-2xs text-fg-mute leading-relaxed overflow-x-auto">
+          {finding.derivation}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {finding.members.map((m) => (
-          <span key={m.external_id} className="font-mono text-2xs text-fg-dim">
-            {m.handle ? `@${m.handle.replace(/^@/, '')}` : m.external_id}
-            {m.score !== null && <span className="text-fg-mute"> {Math.round(m.score)}</span>}
-          </span>
-        ))}
+        {finding.members.map((m) => {
+          const name = m.handle ? m.handle.replace(/^@/, '') : m.external_id;
+          const own = finding.member_posteriors?.[name] ?? finding.member_posteriors?.[m.external_id];
+          return (
+            <span key={m.external_id} className="font-mono text-2xs text-fg-dim">
+              @{name}
+              {m.score !== null && <span className="text-fg-mute"> {Math.round(m.score)}</span>}
+              {/* Each account's OWN probability, so a reviewer can challenge one name without
+                  dismissing the whole finding. */}
+              {own !== undefined && <span className="text-accent"> {pct(own)}</span>}
+            </span>
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -344,11 +362,7 @@ function FindingBlock({ finding }: { finding: CoordinationFinding }) {
         ))}
       </div>
 
-      {finding.capped && (
-        <p className="text-sm text-tier-moderate">
-          Held at 49%: only one independent family of evidence fired. A campaign needs two.
-        </p>
-      )}
+
       {finding.notes.map((n) => (
         <p key={n} className="text-sm text-fg-mute leading-relaxed">
           {n}

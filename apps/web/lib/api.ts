@@ -317,13 +317,23 @@ export interface CoordinationArtifact {
 
 export interface CoordinationFinding {
   finding_id: string;
-  /** 'corroborated' is a campaign. 'lead' failed a gate and is never written as one. */
+  /** 'corroborated' is a campaign. 'lead' did not clear the bar and is never written as one. */
   label: 'corroborated' | 'lead';
+  /** Calibrated P(coordinated) for the group: the WEAKEST member's admitting probability, not the
+   *  strongest and not the mean. A group is only as defensible as the least defensible person in
+   *  it, and that person is the one harmed if it is wrong. */
   score: number;
-  /** True when the score was held at 0.49 for want of a second, independent family. */
   capped: boolean;
-  /** Share of all possible member pairs that carry an edge. Below 0.6 is a chain, not a group. */
+  /** Share of all possible member pairs that carry evidence. */
   density: number;
+  /** handle -> that account's own probability of being coordinated with this group. Every member
+   *  had to clear the bar on its own evidence, so no one is carried in by their neighbours. */
+  member_posteriors: Record<string, number>;
+  /** The prior, then each family's contribution, then the total. A probability with no visible
+   *  derivation is exactly as unaccountable as the score it replaced. */
+  derivation: string;
+  prior: number;
+  lr_version: string;
   members: CoordinationMember[];
   families_fired: string[];
   families_silent: string[];

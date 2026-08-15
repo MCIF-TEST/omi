@@ -331,6 +331,23 @@ class CoordinationEdge(Base):
     first_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     last_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
 
+    # --- Cross-scan evidence accumulation (the planet-scale layer) ---------------------------
+    # Accumulated log10 likelihood ratio for this pair across every post it has been seen on,
+    # already discounted for context correlation. This is what makes a pair that was merely
+    # suspicious on one post decisive after being seen again on an unrelated one, and it is the
+    # entire reason tracking operations globally improves accuracy rather than just storage.
+    log_lr_sum: Mapped[float] = mapped_column(Float, default=0.0)
+    # Which evidence families have ever fired on this pair, JSON list. Distinct from methods_json,
+    # which is per-detector: families are the independence unit the probability model combines on.
+    families_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # The distinct posts this pair co-occurred under, capped. Replaces relying on
+    # last_shared_parent, which is overwritten on every observation and so destroys exactly the
+    # history this feature needs: without it there is no way to tell one post seen twice from two
+    # different posts, and only the second is independent evidence.
+    contexts_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Platforms this pair has been seen on. A cross-platform pair carries both.
+    platforms_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+
 
 # ---------------------------------------------------------------------------
 # Campaign intelligence — a detected coordination cluster materialized as a
@@ -375,6 +392,47 @@ class Campaign(Base):
     share_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_public: Mapped[int] = mapped_column(Integer, default=0)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- Operation-level tracking ---------------------------------------------------------------
+    # Calibrated P(coordinated) for this operation, distinct from `coordination_score` which is the
+    # legacy 0..1 detector output. Kept as a separate column rather than overwriting the old one so
+    # campaigns recorded by the per-scan engine and by the cohort detector stay distinguishable.
+    posterior: Mapped[float] = mapped_column(Float, default=0.0)
+    # MinHash sketch over the operation's BEHAVIOUR (script, handle factory, provisioning shape,
+    # tooling), never over its account ids. This is what lets an operation be recognised after it
+    # burns every account it was using: member overlap cannot, because there is no overlap.
+    signature_json: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    # "detected" for something this deployment observed, "disclosure" for a known operation seeded
+    # from a public archive. A disclosure row has a signature and no live members.
+    origin: Mapped[str] = mapped_column(String(24), default="detected")
+    # Set when an operation has not been observed for the dormancy window; cleared on resurfacing.
+    dormant_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resurfaced_count: Mapped[int] = mapped_column(Integer, default=0)
+    platforms_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+class OperationSignatureBand(Base):
+    """LSH band index over ``Campaign.signature_json``.
+
+    Exists so matching an operation is an indexed lookup instead of comparing a new sketch against
+    every campaign in the deployment. Follows the one index-assisted retrieval pattern already
+    proven in this codebase, ``memory/graph/postgres.py`` (token -> ids -> load).
+
+    NOT unique on ``(band_index, band_key)``: collisions are the entire mechanism. Many operations
+    may share a band key, and the sketch comparison afterwards is what decides. Rows are small and
+    there are 32 per operation, which is nothing against the database budget.
+    """
+
+    __tablename__ = "operation_signature_bands"
+    __table_args__ = (
+        Index("ix_opsig_band", "band_index", "band_key"),
+        Index("ix_opsig_campaign", "campaign_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"))
+    band_index: Mapped[int] = mapped_column(Integer)
+    band_key: Mapped[str] = mapped_column(String(32))
 
 
 class CampaignMember(Base):

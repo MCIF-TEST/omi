@@ -81,7 +81,8 @@ class CampaignService:
                         clusters, coordination_score: float,
                         confidence: float | None = None,
                         texts_by_account: dict[str, list[str]] | None = None,
-                        handles: dict[str, str] | None = None) -> list[Campaign]:
+                        handles: dict[str, str] | None = None,
+                        signature: list[int] | None = None) -> list[Campaign]:
         """Persist each coordinated group as a campaign (recurring or new).
 
         Caller should gate on a trustworthy verdict (e.g. corroboration-gated
@@ -95,7 +96,9 @@ class CampaignService:
                 continue
             tags = self._tags_for(comp.members, texts_by_account or {})
             conf = confidence if confidence is not None else min(1.0, 0.4 + 0.2 * len(comp.methods))
-            camp = self._match_or_create(platform, comp, coordination_score, conf, tags)
+            camp = self._match_or_create(
+                platform, comp, coordination_score, conf, tags, signature=signature,
+            )
             self._observe(camp, platform, context_id, comp, coordination_score)
             self._upsert_members(camp, platform, comp, handles)
             self._recompute(camp, comp, coordination_score, tags)
@@ -119,7 +122,17 @@ class CampaignService:
         label = top[0] if top else "+".join(sorted(comp.methods)[:2]) or "cluster"
         return f"{platform} coordination · {label} · {len(comp.members)} accounts"
 
-    def _match_or_create(self, platform, comp, score, conf, tags) -> Campaign:
+    def _match_or_create(self, platform, comp, score, conf, tags, signature=None) -> Campaign:
+        """Match an existing operation, or mint one.
+
+        Order matters. Member overlap first: the same accounts reappearing is the cheapest and most
+        certain link. Then behavioural signature: an operation that has burned every account it used
+        shares NO members with its own previous run, so overlap cannot see it and this is the only
+        thing that can. Then create.
+
+        Without the signature step the system reports a first sighting every time an operation
+        rotates, which is exactly backwards, because rotating is what the sophisticated ones do.
+        """
         rows = self.s.execute(
             select(CampaignMember.campaign_id, CampaignMember.account_external_id)
             .where(CampaignMember.platform == platform,
@@ -130,17 +143,36 @@ class CampaignService:
             by_camp.setdefault(cid, set()).add(acc)
 
         best, best_j = None, 0.0
-        for cid, accs in by_camp.items():
+        for cid, accs in sorted(by_camp.items()):
             camp = self.s.get(Campaign, cid)
             if camp is None:
                 continue
             shared = len(accs)
             union = max(1, camp.member_count + len(comp.members) - shared)
             j = shared / union
-            if (j >= _MATCH_JACCARD or shared >= _MATCH_MIN_SHARED) and j >= best_j:
+            # `jaccard >= 0.30 OR shared >= 3` is right while a campaign is small and wrong once it
+            # is large: three shared accounts would link a 5-account cluster to a 500-account
+            # campaign at j = 0.006, and every later cluster would fall into the same one.
+            from app.campaigns.tracking.operations import LARGE_CAMPAIGN_MEMBERS
+
+            if (camp.member_count or 0) >= LARGE_CAMPAIGN_MEMBERS:
+                accept = j >= _MATCH_JACCARD
+            else:
+                accept = j >= _MATCH_JACCARD or shared >= _MATCH_MIN_SHARED
+            if accept and j >= best_j:
                 best, best_j = camp, j
         if best is not None:
             return best
+
+        if signature:
+            try:
+                from app.campaigns.tracking.operations import find_by_signature
+
+                matched = find_by_signature(self.s, signature)
+                if matched is not None:
+                    return matched
+            except Exception:  # noqa: BLE001 - a failed lookup must not block recording
+                pass
 
         camp = Campaign(
             campaign_key=uuid.uuid4().hex[:16],

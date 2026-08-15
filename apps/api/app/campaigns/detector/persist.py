@@ -42,6 +42,12 @@ def _edge_dict(e: Edge) -> dict:
         "a": e.a, "b": e.b, "method": e.method, "family": e.family,
         "weight": round(e.weight, 4), "sentence": e.sentence, "artifact": e.artifact,
         "statistic": list(e.statistic) if e.statistic else None,
+        # Required, not decorative: for the two measured-null signals this p-value IS the
+        # denominator of the likelihood ratio, so an edge rehydrated without it silently drops to
+        # LR 1.0 and contributes nothing. That failure is invisible, which is why it is serialised
+        # explicitly rather than recovered from `statistic`.
+        "measured_p": e.measured_p,
+        "log10_lr": round(e.log10_lr, 4),
     }
 
 
@@ -101,11 +107,19 @@ def inherited_timing_edges(previous: dict | None) -> list[Edge]:
             if METHOD_FAMILY.get(str(method)) != FAMILY_TIMING:
                 continue
             stat = e.get("statistic")
+            # Fall back to `statistic` for blocks written before `measured_p` was serialised: for
+            # a timing edge that tuple is ("p_value", p), which is the same number. Without this an
+            # inherited edge would carry no p-value, its likelihood ratio would silently be 1.0, and
+            # the timing evidence pass 1 measured would vanish rather than transfer.
+            measured = e.get("measured_p")
+            if measured is None and isinstance(stat, list) and len(stat) == 2 and stat[0] == "p_value":
+                measured = stat[1]
             out.append(Edge(
                 a=str(e.get("a") or ""), b=str(e.get("b") or ""), method=str(method),
                 weight=float(e.get("weight") or 0.0),
                 sentence=str(e.get("sentence") or ""), artifact=str(e.get("artifact") or ""),
                 statistic=(str(stat[0]), float(stat[1])) if isinstance(stat, list) and len(stat) == 2 else None,
+                measured_p=float(measured) if measured is not None else None,
             ))
     return [e for e in out if e.a and e.b]
 
@@ -174,7 +188,7 @@ def upsert_index_row(session, investigation, run: DetectionRun) -> None:
         logger.exception("campaign detector: could not upsert detection index row")
 
 
-def record_campaigns(session, investigation, run: DetectionRun) -> int:
+def record_campaigns(session, investigation, run: DetectionRun, cohort=None) -> int:
     """Bridge corroborated findings into the durable, deployment-global campaign record.
 
     ONE ``record_clusters`` call per finding. ``record_clusters`` applies a single
@@ -208,13 +222,18 @@ def record_campaigns(session, investigation, run: DetectionRun) -> int:
             ]
             try:
                 with session.begin_nested():
-                    service.record_clusters(
+                    sketch = _signature_for(f, cohort)
+                    campaigns = service.record_clusters(
                         platform=run.platform or "unknown",
                         context_id=context_id,
                         clusters=clusters,
                         coordination_score=f.score,
                         confidence=min(1.0, 0.4 + 0.2 * len(f.families_fired)),
+                        # Passed so `_match_or_create` can recognise this operation even when it
+                        # shares no accounts with its own previous run.
+                        signature=sketch[0] if sketch else None,
                     )
+                    _attach_operation_identity(session, campaigns, f, run, sketch)
                 written += 1
             except Exception:  # noqa: BLE001 - one bad finding must not lose the others
                 logger.exception("campaign detector: could not record campaign for %s",
@@ -224,9 +243,89 @@ def record_campaigns(session, investigation, run: DetectionRun) -> int:
     return written
 
 
-def save(session, investigation, run: DetectionRun) -> dict:
-    """Everything, in the order that keeps the three stores consistent."""
+def _signature_for(finding, cohort):
+    """The finding's behavioural signature, or None when the group has shown too little of itself."""
+    if cohort is None:
+        return None
+    try:
+        from app.campaigns.tracking import signature as sig
+
+        accounts_by_id = {a.external_id: a for a in getattr(cohort, "accounts", [])}
+        if not accounts_by_id:
+            return None
+        return sig.signature_for_members(finding.members, accounts_by_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("campaign detector: could not build a signature", exc_info=True)
+        return None
+
+
+def _attach_operation_identity(session, campaigns, finding, run: DetectionRun, built) -> None:
+    """Give a recorded campaign its posterior, its behavioural signature and its lifecycle state.
+
+    The signature is what lets this operation be recognised after it replaces every account it is
+    currently using, so writing it is not bookkeeping: it is the only durable identity an operation
+    has. See ``tracking/signature.py``.
+    """
+    if not campaigns:
+        return
+    try:
+        from app.campaigns.tracking import operations
+
+        for campaign in campaigns:
+            campaign.posterior = max(float(campaign.posterior or 0.0), float(finding.score))
+            campaign.origin = campaign.origin or "detected"
+            platforms = set(campaign.platforms_json or []) | {run.platform or "unknown"}
+            campaign.platforms_json = sorted(platforms)
+            state = operations.mark_lifecycle(campaign)
+            if state == "resurfaced":
+                logger.info(
+                    "operations: campaign %s resurfaced after dormancy (now %s sightings)",
+                    campaign.campaign_key, campaign.observation_count,
+                )
+            if built is not None:
+                operations.store_signature(session, campaign, built[0], built[1])
+    except Exception:  # noqa: BLE001 - identity is an enhancement, never a reason to lose the row
+        logger.warning("campaign detector: could not attach operation identity", exc_info=True)
+
+
+def save(session, investigation, run: DetectionRun, cohort=None) -> dict:
+    """Everything, in the order that keeps the four stores consistent.
+
+    ``cohort`` is optional so a caller with only a stored run can still persist it, but without it
+    no behavioural signature can be built, and an operation recorded with no signature cannot be
+    recognised after it rotates its accounts.
+    """
     block = write_payload_block(session, investigation, run)
-    record_campaigns(session, investigation, run)
+    record_campaigns(session, investigation, run, cohort)
+    record_global_evidence(session, investigation, run, cohort)
     upsert_index_row(session, investigation, run)
     return block
+
+
+def record_global_evidence(session, investigation, run: DetectionRun, cohort) -> int:
+    """Fold this scan's pairwise evidence into the deployment-wide coordination graph.
+
+    Recorded for EVERY pair that produced evidence, not only the ones inside a corroborated
+    finding. That is the whole point of accumulating: a pair at 0.86 today is below the bar and
+    still worth remembering, because the same pair seen again on an unrelated post next month is
+    what takes it over. Discarding sub-threshold evidence would mean the system could only ever
+    learn from what it had already decided.
+    """
+    if cohort is None:
+        return 0
+    try:
+        from app.campaigns.detector.fuse import pair_evidence
+        from app.campaigns.tracking import graph
+
+        edges = [e for f in run.findings for e in f.edges]
+        if not edges:
+            return 0
+        return graph.record_pairs(
+            session,
+            platform=run.platform or "unknown",
+            context_id=str(getattr(investigation, "target_id", "") or "") or None,
+            pair_evidence=pair_evidence(edges),
+        )
+    except Exception:  # noqa: BLE001 - accumulation must never fail a scan
+        logger.warning("campaign detector: could not record global evidence", exc_info=True)
+        return 0

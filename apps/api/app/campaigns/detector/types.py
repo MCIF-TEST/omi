@@ -209,6 +209,15 @@ class Edge:
     ``artifact`` is the raw material (the repeated string, the two timestamps, the shared id).
     ``sentence`` is the same fact written for a human. Both are required; `fuse` discards an edge
     whose artifact is empty, because a claim nobody can check is not evidence.
+
+    ``weight`` is kept only as a human-readable strength for display and ordering. **It is not what
+    decides anything** any more: the verdict is a posterior computed from ``log10_lr``. Two numbers
+    on one object is a smell, so if `weight` ever stops being rendered, delete it.
+
+    ``measured_p`` is the signal's own p-value where the signal has a null model (`burst_lockstep`,
+    `provisioning_window`). It is exactly ``P(evidence | independent)``, which is the denominator of
+    the likelihood ratio, so those two signals get a data-derived ratio per observation instead of
+    an estimated constant.
     """
 
     a: str
@@ -218,6 +227,7 @@ class Edge:
     sentence: str
     artifact: str
     statistic: tuple[str, float] | None = None
+    measured_p: float | None = None
 
     @property
     def family(self) -> str:
@@ -227,10 +237,23 @@ class Edge:
     def pair(self) -> tuple[str, str]:
         return (self.a, self.b) if self.a <= self.b else (self.b, self.a)
 
+    @property
+    def log10_lr(self) -> float:
+        """How much this observation moves the odds. The only number that decides anything."""
+        from app.campaigns.detector.probability import log10_lr
+
+        return log10_lr(self.method, self.measured_p)
+
 
 @dataclass
 class Finding:
-    """One community of accounts and the case for it."""
+    """One group of accounts and the case for it.
+
+    ``score`` is the group's posterior probability of coordination, and it is the **weakest**
+    member's admitting posterior rather than the strongest or the mean. A group is only as
+    defensible as the least defensible person named in it, and that person is the one who gets hurt
+    if this is wrong.
+    """
 
     finding_id: str
     members: list[str]                       # external ids, sorted
@@ -244,6 +267,15 @@ class Finding:
     edges: list[Edge]
     evidence: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    #: Each member's own posterior link to the group. This is what admitted them, and showing it
+    #: per account is what lets a reviewer challenge one name without dismissing the whole finding.
+    member_posteriors: dict[str, float] = field(default_factory=dict)
+    #: The prior this run used, stamped so a finding stays interpretable after the prior moves.
+    prior: float = 0.0
+    lr_version: str = ""
+    #: One human-readable line showing how the strongest pair's number was reached. A posterior with
+    #: no visible derivation is exactly as unaccountable as the score it replaced.
+    derivation: str = ""
 
 
 @dataclass

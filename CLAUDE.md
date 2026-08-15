@@ -9,8 +9,10 @@ re-introduce a bug this one already paid for.
 after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
 coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
 "The cohort coordination detector" below, and read its two rules before touching any threshold.
-Suite measured at **2006 passed, 8 skipped, 1 failed** (6m18s), the failure pre-existing and listed
-below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
+Suite measured at **2043 passed, 8 skipped, 1 failed** (7m37s), the failure pre-existing and listed
+below. A second session then rebuilt scoring as a calibrated probability and added the planet-scale
+tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
+likelihood ratio. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -58,7 +60,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2006 passed, 8 skipped, 1 failed** (6m18s, 2026-08-07):
+Current measured state: **2043 passed, 8 skipped, 1 failed** (7m37s, 2026-08-07):
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1439,28 +1441,64 @@ reading the same material are one kind of evidence seen twice: `verbatim_echo` +
 "these accounts emitted the same string", and counting method names would let one copy-paste
 observation clear a gate meant to need independent confirmation.
 
-**The gate is `discriminative AND ≥2 families`**, where `aggregate.py`'s is `discriminative OR ≥2`.
-That is deliberate and stricter: the engine's gate was calibrated on a mixed batch, where a lone
-discriminative hit stands out against ordinary accounts. Here everything is pre-selected for
-suspicion, so one lens is never enough. Failing the gate caps the score at `SUPPORTING_CEILING`
-(0.49, same value and meaning as the engine's) and the finding is a `lead`, which is recorded in the
-payload and **never written as a `Campaign` row**.
+Fusion is now **arithmetic, not heuristic**: likelihood ratios multiply only when the evidence is
+conditionally independent given the hypothesis, and the family map *is* that independence
+assumption written down. See "The probability model" below.
 
 Three more guards, each replacing a specific way this goes wrong:
 
 - **Edges, not clusters.** `CampaignService.merge_clusters` unions any two clusters sharing one
   account, so per-detector clusters let one account fuse two unrelated groups into a fake
-  mega-campaign. Communities come out member-disjoint and `record_clusters` is called **once per
+  mega-campaign. Findings come out member-disjoint and `record_clusters` is called **once per
   finding**.
-- **Density ≥ 0.60.** A path a-b-c-d is what you get when one account shares one property with each
-  of two others, and a partition hands a star back as a community. A group where most members have
-  never met is not an operation.
-- **Every edge carries an `artifact`** and `fuse_pairs` drops any that does not. The deterministic
-  form of "if you cannot quote it, you cannot claim it".
+- **Two independent links to join a group** (`MIN_LINKS_INTO_GROUP`). This replaced a density
+  ratio, which was a proxy for the same thing. If one account posts a script that four unrelated
+  people each copy, every spoke links to the hub at high probability while the spokes share
+  nothing; admitting all five would report "these five are running together" on evidence that only
+  ever said "each of these four echoed that one". **The rule triggers from the third member, not
+  the fourth** — requiring it only from the fourth let a three-account star through, which is the
+  smallest thing it exists to refuse.
+- **Every edge carries an `artifact`** and `pair_evidence` drops any that does not. The
+  deterministic form of "if you cannot quote it, you cannot claim it".
 
-Clustering is seeded Louvain over sorted input, and `test_the_same_input_always_gives_the_same_answer`
-pins it: these are published claims about named accounts, and a verdict that changes between runs is
-not a verdict.
+`test_the_same_input_always_gives_the_same_answer` pins determinism: these are published claims
+about named accounts, and a verdict that changes between runs is not a verdict.
+
+#### The probability model: `detector/probability.py`
+
+The output is a **calibrated posterior**, not a score. `posterior_odds = prior_odds × Π LR_family`.
+
+**The prior is stated**: P(two accounts in one 70+ cohort are coordinated) ≈ 0.033, derived from the
+documented base rates (9-15% of active accounts automated; an operation of ~5 inside a ~15-account
+cohort, present in ~35% of investigations). From there, clearing 0.95 needs **LR ≥ 551**, and that
+number is the entire discipline.
+
+**Two signals get their denominator for free.** `LR = P(E|coordinated) / P(E|independent)`, and
+`burst_lockstep` and `provisioning_window` already compute a p-value that *is* the denominator. The
+null models built for a different reason turn out to be exactly what Bayes wants underneath, so
+those two ratios are data-derived per observation rather than estimated once.
+
+**The old hardcoded gate is gone because the numbers do its job.** With honest ratios, no single
+family at any strength can clear the bar, and any two independent families can. `SUPPORTING_CEILING`
+and `EVIDENCE_EPS` were deleted, not ported. Every one of those refusals is pinned in
+`tests/test_coordination_probability.py`; if a ratio drifts, whichever refusal it breaks says so.
+
+**Both measured-null signals are capped per method, and the reason is not tidiness.** A p-value
+answers "how surprising is this under MY null", and each of these nulls has a confound it cannot
+see. `burst_lockstep` (cap 2.30) correctly refuses a viral post but cannot see an **external
+referral spike**: a post linked from a Discord or a subreddit makes real strangers arrive together,
+and that burst is precisely the deviation the null flags. `provisioning_window` (cap 2.00) rests on
+an empirical CDF over a few hundred creation dates that already needs a uniform floor for lack of
+resolution. The caps are where the unmodelled confound is priced in.
+
+**Membership is gated per account.** An account joins only when *its own* posterior link to the
+group is ≥ 0.95, and a group's headline number is its **weakest** member's, not its mean: a group is
+only as defensible as the least defensible person named in it, and that person is the one harmed if
+it is wrong. Every member carries its own admitting probability into the UI so a reviewer can
+challenge one name without dismissing the finding.
+
+**Nothing claims certainty.** Total log10 LR is capped at 4.0, so the reportable ceiling is ~0.997.
+Five estimates multiplied do not make a fact.
 
 #### Two passes, one core, one stored result
 
@@ -1480,6 +1518,70 @@ loading `payload_json`**. Same trap the archive list already paid for, and worse
 are the heaviest payloads in the product. Uniqueness is an `Index(..., unique=True)` and not a
 `UniqueConstraint`, because the boot-time upgrade pass backfills `table.indexes` and cannot see
 `table.constraints`.
+
+#### The planet-scale layer: `app/campaigns/tracking/`
+
+Three things a per-investigation detector cannot do, and the reason the layer exists.
+
+**It accumulates.** Every pair's evidence is folded into `CoordinationEdge` (extended with
+`log_lr_sum` / `families_json` / `contexts_json` / `platforms_json`), including pairs that did
+**not** clear the bar. That is the point: a pair at 0.86 today is below the threshold and still
+worth remembering, because the same pair on an unrelated post next month is what takes it over.
+Discarding sub-threshold evidence would mean the system could only ever learn from what it had
+already decided. Measured: one sighting 0.857 (refused, zero campaign rows), two sightings 0.988.
+
+Repeat sightings are **discounted by half** and capped at 5 contexts, because two observations of
+one pair are not independent (both accounts follow the same topics). And only a **distinct post**
+counts: `contexts_json` is a set, so re-scanning or a continuation batch cannot compound, which
+would otherwise let anyone strengthen a finding by pressing rescan. `last_shared_parent` could not
+serve here because it is overwritten, so one post scanned twice looked identical to two posts.
+
+**It survives account rotation.** A serious operation burns its accounts between runs, so
+`_match_or_create`'s member overlap finds nothing and forks a new campaign with a fresh random key
+— the system reports a first sighting of something it has seen three times. `tracking/signature.py`
+sketches the operation's **behaviour** (script shingles, handle skeletons, creation-month buckets,
+client strings, link domains) and **never account ids**, banded into `operation_signature_bands` for
+indexed lookup. Match order is now: member overlap, then signature collision verified at similarity
+≥ 0.40, then create. Measured: same operation with zero shared accounts, similarity 1.000 and 32/32
+bands colliding; a different operation, 0.031 and 0/32.
+
+**The hash family matters.** `verdict_coordination._minhash` derives permutations by XOR with a
+constant, which is not a universal family: the permutations are correlated, so the banding
+arithmetic does not hold. At one-investigation scale nobody noticed; at deployment scale, where band
+collisions decide what gets compared at all, it would produce a match rate nothing predicts. The
+tracking layer uses independently salted BLAKE2b (as `detector/textsim._hash64` already does).
+
+**Cross-platform is one rule.** A cross-platform edge may only be created by a **platform-neutral**
+family: text, network, timing. `client_signature` reads an X-only field, and handle conventions
+differ per platform so a shared skeleton across two would be evidence about the platforms rather
+than the accounts. Enforced once in `run._drop_illegal_cross_platform`, not inside seven signals
+that would each have to remember it.
+
+Two more fixes that landed here:
+
+- **`handle_template` fired on ordinary one-word handles.** Letter runs are capped at 9 in the
+  skeleton, so `marchingfern`, `quietwaterbird` and `brightpennylane` all reduce to `L9` and were
+  reported as sharing a template. A template needs more than one part; a bare single-word skeleton
+  is now refused alongside the auto-append shape.
+- **A large campaign swallowed every new cluster.** `jaccard >= 0.30 OR shared >= 3` is fine while
+  campaigns are small and absurd once one is large: three shared accounts linked a 5-account cluster
+  to a 500-account campaign at j = 0.006. Above `LARGE_CAMPAIGN_MEMBERS` the Jaccard floor is
+  required.
+
+#### What the calibration harness can and cannot tell you
+
+`python -m app.evaluation.coordination_probability` reports Brier, a reliability curve, and
+precision/recall per threshold over the committed scenarios. **Read the caveat it prints.** On the
+9 clean scenarios the detector is silent 9/9, which is the number that decides shippability and is
+genuinely meaningful. But those scenarios were built for the older per-scan detectors and carry no
+comment timestamps, no posting clients and no engagement targets, so four of seven signals cannot
+fire and **recall is not measurable from this corpus at all**. The harness says "no calls" rather
+than "precision 1.000" for exactly that reason: a metric that passes because it never looked is the
+same failure `/analyst/status` had before the preflight was written.
+
+The ratios are reasoned, not fitted, and stamped with `LR_VERSION`. ~200 labelled accounts can
+falsify a badly wrong ratio; they cannot fit seven. `AccountLabel` and the dismissals on
+`campaign_detections` are the reservoirs a real fit will eventually come from.
 
 #### Evidence that used to be thrown away
 

@@ -1,23 +1,34 @@
-"""Edges to findings: fuse, cluster, gate, score.
+"""Edges to findings: evidence in, calibrated probability out.
 
-Three guards live here and each one exists because of a specific way a coordination detector
-embarrasses itself:
+The rule this module implements is the product's rule, stated literally:
 
-1. **Family-max fusion, not method-max.** Two methods reading the same material are one kind of
-   evidence seen twice. `verbatim_echo` + `bio_echo` both say "these accounts emitted the same
-   string"; letting them stack would mean one copy-paste observation clears a gate designed to
-   need independent confirmation.
+    An account joins an operation only when ITS OWN posterior probability of being coordinated
+    with that group is at or above the threshold.
 
-2. **The density gate.** A path a-b-c-d is not an operation, it is what you get when one account
-   happens to share one property with each of two others. Community detection alone will happily
-   hand back that chain as a community.
+Per account, not per group. That distinction is the whole point. A group-level score lets a weakly
+connected account ride in on its neighbours' evidence, which is exactly how a real person standing
+next to an operation ends up named as part of it. Here every member has to earn its own place, and
+the evidence that admitted it is attached to it.
 
-3. **The corroboration guard, as AND not OR.** ``app/detection/coordination/aggregate.py`` gates on
-   "a discriminative detector OR two detectors", and its docstring records what it was written to
-   stop: a lone `style_match` scoring a group of unrelated professionals at 1.0. That gate was
-   calibrated on a mixed batch, where a lone discriminative hit stands out against a background of
-   ordinary accounts. Here the cohort is pre-selected for suspicion, so every member already looks
-   bad and one lens is never enough. Hence AND.
+---------------------------------------------------------------------------------------------------
+WHAT THIS REPLACES, AND WHY THE OLD GUARDS ARE GONE
+---------------------------------------------------------------------------------------------------
+
+The previous version scored a community with a noisy-OR over family contributions and then bolted
+on a gate: cap at 0.49 unless a discriminative family fired AND at least two families did. That gate
+was right about the world and wrong about where it lived. With honest likelihood ratios the same
+discipline falls out of the arithmetic (see ``probability.py``): no single family, at any strength,
+can lift the prior past 0.95. So ``SUPPORTING_CEILING`` and ``EVIDENCE_EPS`` are deleted rather than
+ported. ``tests/test_coordination_probability.py`` pins every refusal they used to enforce.
+
+Three guards survive, because none of them is a probability claim:
+
+* **Every edge must carry an artifact.** The deterministic form of "if you cannot quote it, you
+  cannot claim it". An unquotable claim about a named person is not evidence at any confidence.
+* **Minimum three members.** Two accounts agreeing is a coincidence with a good story.
+* **Within-family max, across-family product.** Now load-bearing arithmetic rather than a
+  heuristic: likelihood ratios multiply only when the evidence is conditionally independent, and
+  the family map is that independence assumption written down.
 """
 
 from __future__ import annotations
@@ -25,242 +36,315 @@ from __future__ import annotations
 import hashlib
 from collections import defaultdict
 
-from app.campaigns.detector.types import (
-    DISCRIMINATIVE_FAMILIES,
-    FAMILY_RELIABILITY,
-    METHOD_FAMILY,
-    Edge,
-    Finding,
+from app.campaigns.detector.probability import (
+    DECISION_THRESHOLD,
+    DEFAULT_PRIOR,
+    LR_VERSION,
+    explain,
+    posterior,
 )
+from app.campaigns.detector.types import METHOD_FAMILY, Edge, Finding
 
-#: Fused pair weight below which two accounts are not considered linked at all.
-EDGE_FLOOR = 0.35
-#: A family "fired" inside a community only above this contribution. Mirrors
-#: ``aggregate.EVIDENCE_EPS`` in spirit: a rounding-error contribution is not a corroboration.
-EVIDENCE_EPS = 0.10
-#: Fraction of a community's members a family must touch before it counts as explaining that
-#: community. A family linking 2 of 8 members explained a pair, not the group.
-MIN_FAMILY_COVERAGE = 0.50
-#: Fraction of all possible internal pairs that must carry an edge. This is the chain test.
-MIN_DENSITY = 0.60
-#: Matches ``CampaignService._MIN_MEMBERS``. Two accounts agreeing is a coincidence.
+#: Below this posterior a pair is not evidence of anything and is dropped before clustering. Well
+#: under the decision threshold on purpose: a pair at 0.5 cannot convict, but three such pairs
+#: pointing at one account are worth carrying into the growth step.
+LINK_FLOOR = 0.50
+
+#: Matches ``CampaignService._MIN_MEMBERS``.
 MIN_MEMBERS = 3
-#: Top of MODERATE. Same value and same meaning as ``aggregate.SUPPORTING_CEILING``.
-SUPPORTING_CEILING = 0.49
-#: A finding at or above this, having passed the guard, is what gets called a campaign.
-CAMPAIGN_SCORE = 0.60
+
+#: Once a group has three members, a new account must clear the bar against at least this many of
+#: them SEPARATELY. This is what stops a star.
+#:
+#: Per-member posterior alone is not enough here, and the reason is worth keeping: if one account
+#: posted a script that four unrelated people each copied, every one of those four links to the hub
+#: at high probability while sharing nothing with each other. Admitting them all would report five
+#: accounts as "running together" on evidence that only ever said "each of these four echoed that
+#: one". Requiring two independent links makes the claim mean what the sentence says. It also
+#: replaces the old density ratio with something better matched to the per-member framing: a
+#: threshold on the group's shape was a proxy for this, and this is the thing itself.
+MIN_LINKS_INTO_GROUP = 2
 
 LABEL_CORROBORATED = "corroborated"
 LABEL_LEAD = "lead"
 
 
-def fuse_pairs(edges: list[Edge]) -> dict[tuple[str, str], float]:
-    """Fused 0..1 weight per account pair.
+# ==================================================================================================
+# Pairwise posteriors
+# ==================================================================================================
+def pair_evidence(edges: list[Edge]) -> dict[tuple[str, str], dict[str, float]]:
+    """Per pair, the strongest log10 likelihood ratio each family contributed.
 
-    Within a family the strongest edge wins; across families a noisy-OR combines them. Edges with
-    an empty artifact are dropped before anything else: a claim nobody can check is not evidence,
-    and this is the one chokepoint every signal passes through.
+    Reduction to one value per family happens HERE and nowhere else, so the conditional-independence
+    assumption has exactly one implementation. Edges with no artifact are dropped first: this is the
+    single chokepoint every signal passes through, so an unquotable claim cannot reach a verdict by
+    any route.
     """
-    by_pair_family: dict[tuple[str, str], dict[str, float]] = defaultdict(dict)
+    out: dict[tuple[str, str], dict[str, float]] = defaultdict(dict)
     for e in edges:
         if not (e.artifact or "").strip():
             continue
-        fam = METHOD_FAMILY.get(e.method)
-        if fam is None:
+        family = METHOD_FAMILY.get(e.method)
+        if family is None:
             continue
-        cur = by_pair_family[e.pair].get(fam, 0.0)
-        if e.weight > cur:
-            by_pair_family[e.pair][fam] = e.weight
-
-    fused: dict[tuple[str, str], float] = {}
-    for pair, fams in by_pair_family.items():
-        not_or = 1.0
-        for fam, w in fams.items():
-            not_or *= (1.0 - FAMILY_RELIABILITY.get(fam, 0.5) * max(0.0, min(1.0, w)))
-        fused[pair] = 1.0 - not_or
-    return fused
+        contribution = e.log10_lr
+        if contribution <= 0:
+            continue
+        if contribution > out[e.pair].get(family, 0.0):
+            out[e.pair][family] = contribution
+    return dict(out)
 
 
-def _communities(nodes: list[str], fused: dict[tuple[str, str], float]) -> list[list[str]]:
-    """Partition the linked accounts.
+def pair_posteriors(
+    edges: list[Edge],
+    *,
+    prior: float = DEFAULT_PRIOR,
+    accumulated: dict[tuple[str, str], float] | None = None,
+) -> dict[tuple[str, str], float]:
+    """P(coordinated) for every pair with evidence.
 
-    Louvain with a fixed seed and sorted insertion order, so the same input always gives the same
-    partition. These findings name real people; a result that changes between two runs on one
-    worker is not a result. If networkx is somehow unavailable the fallback is connected
-    components, which is worse (it merges groups a bridge account touches) but never crashes a
-    scan, and the density gate still throws out the chains it produces.
+    ``accumulated`` carries cross-scan history from the tracking layer: log10 evidence this same
+    pair earned on OTHER posts, already discounted for context correlation. It is the mechanism that
+    makes a pair seen twice on unrelated posts decisive when one sighting alone was not.
     """
-    live = {p: w for p, w in fused.items() if w >= EDGE_FLOOR}
-    if not live:
-        return []
-    try:
-        import networkx as nx
-        from networkx.algorithms.community import louvain_communities
-
-        g = nx.Graph()
-        g.add_nodes_from(sorted({n for p in live for n in p} & set(nodes)))
-        for (a, b), w in sorted(live.items()):
-            if a in g and b in g:
-                g.add_edge(a, b, weight=w)
-        parts = louvain_communities(g, weight="weight", resolution=1.0, seed=0)
-        return [sorted(p) for p in parts]
-    except Exception:  # noqa: BLE001 - clustering must never break a scan
-        parent: dict[str, str] = {}
-
-        def find(x: str) -> str:
-            parent.setdefault(x, x)
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]
-                x = parent[x]
-            return x
-
-        for (a, b) in live:
-            ra, rb = find(a), find(b)
-            if ra != rb:
-                parent[ra] = rb
-        groups: dict[str, list[str]] = defaultdict(list)
-        for node in parent:
-            groups[find(node)].append(node)
-        return [sorted(v) for v in groups.values()]
+    acc = accumulated or {}
+    return {
+        pair: posterior(fams, prior=prior, extra_log10=acc.get(pair, 0.0))
+        for pair, fams in pair_evidence(edges).items()
+    }
 
 
-def _family_contributions(
-    members: list[str], edges: list[Edge],
-) -> tuple[dict[str, float], dict[str, float]]:
-    """Per family: its coverage-weighted contribution, and the share of members it touched.
+# ==================================================================================================
+# Growth
+# ==================================================================================================
+def _member_evidence(
+    candidate: str,
+    members: set[str],
+    evidence: dict[tuple[str, str], dict[str, float]],
+) -> dict[str, float]:
+    """One candidate's strongest evidence to a group, per family.
 
-    The contribution divides by *all possible* internal pairs rather than by the pairs the family
-    happened to link, so a family that links three pairs out of twenty-eight contributes like it
-    linked three, not like it was unanimous.
+    Takes the max to ANY member rather than summing over members, and that is deliberate. Four
+    accounts posting one script give a candidate four text edges, but they are four views of a
+    single fact. Summing them would let group size manufacture confidence, so a big group would
+    admit almost anyone, which is precisely the failure mode that makes coordination detectors
+    embarrassing.
     """
-    member_set = set(members)
-    n = len(members)
-    possible = max(1, n * (n - 1) // 2)
+    best: dict[str, float] = {}
+    for member in members:
+        pair = (candidate, member) if candidate <= member else (member, candidate)
+        for family, value in evidence.get(pair, {}).items():
+            if value > best.get(family, 0.0):
+                best[family] = value
+    return best
 
-    best: dict[str, dict[tuple[str, str], float]] = defaultdict(dict)
-    touched: dict[str, set[str]] = defaultdict(set)
-    for e in edges:
-        if e.a not in member_set or e.b not in member_set:
-            continue
-        if not (e.artifact or "").strip():
-            continue
-        fam = METHOD_FAMILY.get(e.method)
-        if fam is None:
-            continue
-        if e.weight > best[fam].get(e.pair, 0.0):
-            best[fam][e.pair] = e.weight
-        touched[fam].update((e.a, e.b))
 
-    contributions: dict[str, float] = {}
-    coverage: dict[str, float] = {}
-    for fam, pairs in best.items():
-        rel = FAMILY_RELIABILITY.get(fam, 0.5)
-        contributions[fam] = rel * (sum(pairs.values()) / possible)
-        coverage[fam] = len(touched[fam]) / n if n else 0.0
-    return contributions, coverage
+def grow(
+    seed: tuple[str, str],
+    evidence: dict[tuple[str, str], dict[str, float]],
+    candidates: set[str],
+    *,
+    prior: float = DEFAULT_PRIOR,
+    threshold: float = DECISION_THRESHOLD,
+    accumulated: dict[tuple[str, str], float] | None = None,
+) -> tuple[set[str], dict[str, float]]:
+    """Grow a group from a seed pair, admitting only accounts that clear the bar themselves.
+
+    Greedy and deterministic: at each step take the qualifying candidate with the highest posterior,
+    ties broken on id. Returns the members and each member's own admitting posterior, which is what
+    the UI shows so a reader can see WHY each specific person is on the list.
+    """
+    acc = accumulated or {}
+
+    def link(cand: str, members: set[str]) -> float:
+        fams = _member_evidence(cand, members, evidence)
+        if not fams:
+            return 0.0
+        extra = max(
+            (acc.get((cand, m) if cand <= m else (m, cand), 0.0) for m in members),
+            default=0.0,
+        )
+        return posterior(fams, prior=prior, extra_log10=extra)
+
+    def qualifying_links(cand: str, members: set[str]) -> int:
+        """How many members this candidate independently clears the bar against."""
+        n = 0
+        for m in members:
+            pair = (cand, m) if cand <= m else (m, cand)
+            fams = evidence.get(pair)
+            if not fams:
+                continue
+            if posterior(fams, prior=prior, extra_log10=acc.get(pair, 0.0)) >= threshold:
+                n += 1
+        return n
+
+    members = {seed[0], seed[1]}
+    seed_p = posterior(
+        evidence.get(seed, {}), prior=prior, extra_log10=acc.get(seed, 0.0),
+    )
+    admitted = {seed[0]: seed_p, seed[1]: seed_p}
+
+    while True:
+        best_id, best_p = None, 0.0
+        # Every admission after the seed pair needs MIN_LINKS_INTO_GROUP independent links. The
+        # seed is two accounts with one link between them, which is all a pair can have; from the
+        # third member on there is a group to join, and joining it means linking to more than one
+        # of its members. Requiring this only from the fourth member let a three-account star
+        # through, which is the smallest thing this rule exists to refuse.
+        need = MIN_LINKS_INTO_GROUP if len(members) >= 2 else 1
+        for cand in sorted(candidates - members):
+            p = link(cand, members)
+            if p < threshold or p <= best_p:
+                continue
+            if qualifying_links(cand, members) < need:
+                continue
+            best_id, best_p = cand, p
+        if best_id is None:
+            return members, admitted
+        members.add(best_id)
+        admitted[best_id] = best_p
 
 
 def _finding_id(members: list[str]) -> str:
-    """Stable across runs, so the admin API can address a finding and a re-run keeps the same
-    identity for the same group."""
-    joined = "|".join(sorted(members))
-    return "cf_" + hashlib.blake2b(joined.encode("utf-8"), digest_size=8).hexdigest()
+    """Stable across runs, so a re-run keeps the same identity for the same group."""
+    return "cf_" + hashlib.blake2b(
+        "|".join(sorted(members)).encode("utf-8"), digest_size=8,
+    ).hexdigest()
 
 
-def build_findings(nodes: list[str], edges: list[Edge]) -> list[Finding]:
-    """Everything from raw edges to scored, gated, labelled findings."""
-    fused = fuse_pairs(edges)
+def build_findings(
+    nodes: list[str],
+    edges: list[Edge],
+    *,
+    prior: float = DEFAULT_PRIOR,
+    threshold: float = DECISION_THRESHOLD,
+    accumulated: dict[tuple[str, str], float] | None = None,
+) -> list[Finding]:
+    """Every group whose members each clear the bar.
+
+    Groups are grown from qualifying seed pairs, strongest first, and an account is never placed in
+    two groups: the first (strongest) group that admits it keeps it, so findings come out
+    member-disjoint. That matters downstream because ``CampaignService.merge_clusters`` unions any
+    two clusters sharing one account, and overlapping findings would fuse into a fake mega-campaign.
+    """
+    evidence = pair_evidence(edges)
+    if not evidence:
+        return []
+
+    posts = {
+        pair: posterior(fams, prior=prior, extra_log10=(accumulated or {}).get(pair, 0.0))
+        for pair, fams in evidence.items()
+    }
+    live = {p: v for p, v in posts.items() if v >= LINK_FLOOR}
+    node_set = set(nodes)
+
     findings: list[Finding] = []
+    claimed: set[str] = set()
 
-    for members in _communities(sorted(set(nodes)), fused):
-        if len(members) < 2:
+    for seed in sorted(live, key=lambda p: (-live[p], p)):
+        if live[seed] < threshold:
+            break
+        if seed[0] in claimed or seed[1] in claimed:
             continue
-        member_set = set(members)
-        internal = [
-            e for e in edges
-            if e.a in member_set and e.b in member_set and (e.artifact or "").strip()
-        ]
-        live_pairs = {
-            p for p, w in fused.items()
-            if w >= EDGE_FLOOR and p[0] in member_set and p[1] in member_set
-        }
-        n = len(members)
-        possible = max(1, n * (n - 1) // 2)
-        density = len(live_pairs) / possible
-
-        contributions, coverage = _family_contributions(members, internal)
-        fired = sorted(
-            fam for fam, c in contributions.items()
-            if c > EVIDENCE_EPS and coverage.get(fam, 0.0) >= MIN_FAMILY_COVERAGE
+        members, admitted = grow(
+            seed, evidence, node_set - claimed,
+            prior=prior, threshold=threshold, accumulated=accumulated,
         )
-        silent = sorted(set(FAMILY_RELIABILITY) - set(fired))
+        if len(members) < MIN_MEMBERS:
+            continue
+        claimed |= members
+        findings.append(_finding(members, admitted, evidence, edges, prior))
 
-        not_or = 1.0
-        for fam in fired:
-            not_or *= (1.0 - min(0.999, contributions[fam]))
-        score = 1.0 - not_or
-
-        has_discriminative = any(f in DISCRIMINATIVE_FAMILIES for f in fired)
-        corroborated = has_discriminative and len(fired) >= 2
-
-        capped = False
-        notes: list[str] = []
-        if not corroborated and score > SUPPORTING_CEILING:
-            score = SUPPORTING_CEILING
-            capped = True
-        if not corroborated:
-            if not fired:
-                notes.append("No family of evidence covered enough of this group to count.")
-            elif not has_discriminative:
-                notes.append(
-                    "Only supporting evidence fired (" + ", ".join(fired) + "). "
-                    "A campaign needs at least one discriminative family."
-                )
-            else:
-                notes.append(
-                    "Only one family of evidence fired (" + ", ".join(fired) + "). "
-                    "A campaign needs a second, independent kind."
-                )
-        if density < MIN_DENSITY:
-            notes.append(
-                f"Members are linked in a chain rather than a group "
-                f"({len(live_pairs)} of {possible} possible pairs)."
-            )
-        if n < MIN_MEMBERS:
-            notes.append("Two accounts agreeing is a coincidence, not an operation.")
-
-        passes_structure = n >= MIN_MEMBERS and density >= MIN_DENSITY
-        label = (
-            LABEL_CORROBORATED
-            if (corroborated and passes_structure and score >= CAMPAIGN_SCORE)
-            else LABEL_LEAD
-        )
-
-        findings.append(Finding(
-            finding_id=_finding_id(members),
-            members=members,
-            score=round(score, 4),
-            label=label,
-            capped=capped,
-            density=round(density, 4),
-            families_fired=fired,
-            families_silent=silent,
-            methods=sorted({e.method for e in internal}),
-            edges=sorted(internal, key=lambda e: (-e.weight, e.method, e.a, e.b)),
-            notes=notes,
-        ))
+    # Anything left that linked above the floor but never cleared the bar is reported as a lead:
+    # visible to an operator, never written as a campaign, never published.
+    leads = {n for p, v in live.items() if v < threshold for n in p} - claimed
+    if len(leads) >= MIN_MEMBERS:
+        near = {n: max(
+            (v for p, v in live.items() if n in p), default=0.0,
+        ) for n in leads}
+        findings.append(_finding(leads, near, evidence, edges, prior, forced_label=LABEL_LEAD))
 
     findings.sort(key=lambda f: (-f.score, f.finding_id))
     return findings
 
 
-def lone_high_scorers(nodes: list[str], edges: list[Edge]) -> list[str]:
-    """Cohort accounts with no surviving link to anyone.
+def _finding(
+    members: set[str],
+    admitted: dict[str, float],
+    evidence: dict[tuple[str, str], dict[str, float]],
+    edges: list[Edge],
+    prior: float,
+    *,
+    forced_label: str | None = None,
+) -> Finding:
+    ordered = sorted(members)
+    internal = [
+        e for e in edges
+        if e.a in members and e.b in members and (e.artifact or "").strip()
+    ]
+    families = sorted({
+        fam
+        for pair, fams in evidence.items()
+        if pair[0] in members and pair[1] in members
+        for fam in fams
+    })
+    possible = max(1, len(ordered) * (len(ordered) - 1) // 2)
+    linked = sum(
+        1 for pair in evidence
+        if pair[0] in members and pair[1] in members
+    )
 
-    Reported separately and never as a campaign. These are accounts the per-account engine already
-    found suspicious and this detector found no partner for, which is the expected outcome for most
-    of them: a bought account with no visible network is still just one account.
+    # The group's headline number is its WEAKEST member's admitting posterior, not its strongest and
+    # not its mean. A group is only as defensible as the least defensible person named in it, and
+    # that person is the one who will be harmed if this is wrong.
+    weakest = min((admitted.get(m, 0.0) for m in ordered), default=0.0)
+
+    label = forced_label or (
+        LABEL_CORROBORATED
+        if weakest >= DECISION_THRESHOLD and len(ordered) >= MIN_MEMBERS
+        else LABEL_LEAD
+    )
+
+    notes: list[str] = []
+    if label == LABEL_LEAD:
+        notes.append(
+            f"Weakest member links at {weakest:.0%}, below the {DECISION_THRESHOLD:.0%} bar."
+            if weakest else "No member cleared the bar."
+        )
+    if len(ordered) < MIN_MEMBERS:
+        notes.append("Two accounts agreeing is a coincidence, not an operation.")
+
+    strongest_pair = max(
+        ((p, f) for p, f in evidence.items() if p[0] in members and p[1] in members),
+        key=lambda kv: sum(kv[1].values()), default=None,
+    )
+
+    return Finding(
+        finding_id=_finding_id(ordered),
+        members=ordered,
+        score=round(weakest, 4),
+        label=label,
+        capped=False,
+        density=round(linked / possible, 4),
+        families_fired=families,
+        families_silent=sorted(set(METHOD_FAMILY.values()) - set(families)),
+        methods=sorted({e.method for e in internal}),
+        edges=sorted(internal, key=lambda e: (-e.log10_lr, e.method, e.a, e.b)),
+        notes=notes,
+        member_posteriors={m: round(admitted.get(m, 0.0), 4) for m in ordered},
+        prior=prior,
+        lr_version=LR_VERSION,
+        derivation=explain(strongest_pair[1], prior=prior) if strongest_pair else "",
+    )
+
+
+def lone_high_scorers(nodes: list[str], edges: list[Edge]) -> list[str]:
+    """Cohort accounts with no link to anyone above the floor.
+
+    Reported separately and never as a campaign. For most of them this is the expected outcome: an
+    account the per-account engine found suspicious, with no partner visible. Suspicious alone is
+    not the same as acting together, and collapsing the two is how a detector turns a list of
+    individuals into an imaginary conspiracy.
     """
-    fused = fuse_pairs(edges)
-    linked = {n for p, w in fused.items() if w >= EDGE_FLOOR for n in p}
+    linked = {n for p, v in pair_posteriors(edges).items() if v >= LINK_FLOOR for n in p}
     return sorted(set(nodes) - linked)
