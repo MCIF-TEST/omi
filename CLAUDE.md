@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2093
-passed, 8 skipped, 1 failed** (6m31s, 2026-08-15), the failure pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2100
+passed, 8 skipped, 1 failed** (5m57s, 2026-08-16), the failure pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -62,7 +62,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2093 passed, 8 skipped, 1 failed** (6m31s, 2026-08-15):
+Current measured state: **2100 passed, 8 skipped, 1 failed** (5m57s, 2026-08-16):
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -780,6 +780,54 @@ the rest is the rules themselves. At mini-class pricing that is fractions of a c
 investigation, so the real reason to keep watching the number is that past some length a model
 follows each individual instruction *less* reliably. Additions must keep replacing rather than
 accumulating.
+
+### The verdict rewrite (v12): the analysis was right, the writing sold it short
+
+Driven by ~250 real scored rows across three live investigations. The scoring was defensible; the
+PROSE made a working product read as one that found nothing. Five failures, all present in that
+export, and none of them fixable by moving a score:
+
+- **Clean accounts written as a run of negations.** "No templated repetition, no machine boilerplate,
+  no repeated identical text, no pitch language" is four absences in a row and reads as though
+  nothing was examined. `A CLEAN ACCOUNT IS A FINDING` requires the positive facts instead.
+- **~60% of verdicts closed on "collecting more posts would increase confidence."** The last line is
+  the one a reader remembers, and ending on the analysis being insufficient tells someone who just
+  paid that they got nothing. Banned as a closing sentence; the hedge now goes INSIDE the sentence
+  carrying the fact (`THE HEDGE GOES IN THE WORDS` was reworded to say where it goes).
+- **~16% of accounts had NO posts collected and were described as fitting a benign explanation.**
+  This is the one rule here that is about honesty rather than tone, and the score discipline cannot
+  catch it because the score is correct and only the prose is false: an unexamined account was
+  getting a clean bill of health. Now one or two sentences, no padding, and never "looks ordinary".
+- **`evidence_against: None reported`** on a section of 100 ordinary people. The output contract's
+  escape hatch ("empty ONLY if confidence_rationale states no exculpatory signal") had become the
+  default, and `coerce_comprehensive_model_output` auto-appends that rationale, so nothing pushed
+  back. Multi-year histories, balanced ratios and overnight quiet periods ARE collected exculpatory
+  evidence, and on a clean section they are the substance of the report.
+- **Every paragraph opening "This account (created X) has N followers and follows M."** The rule
+  existed but was a sub-bullet of a sub-bullet inside `_CHECKABLE_CLAIMS`; promoted to its own rule.
+
+**Two of these were INSTRUCTED, not invented.** The base prompt's TONE section literally said "End
+the executive assessment with one sentence noting the findings are probabilistic and the human sets
+the final verdict", which is why it appeared on every scan; and the output contract's evidence_against
+clause is what taught the model that empty was acceptable. Grep the compiled protocol, never the file.
+
+`_FINISHED_VERDICT` sits immediately after `_CHECKABLE_CLAIMS` on purpose: that block decides what a
+sentence may ASSERT, this one decides how the finished paragraph READS, and they govern the same
+text. **It moves no score and that is pinned** (`test_the_reader_facing_rules_do_not_touch_the_score`
+asserts the base rate, the ambient-traits rule and the two-errors rule are all still there). The
+scoring recalibration from v10/v11 is untouched.
+
+Protocol recompiled to **`map:80d1363a513a6c358d827e56`, 105,765 chars**, zero em dashes, all drift
+guards green. `package_hash` -> `pkg:7646d2a7524aacd8a2416a16`. Constitution block count 19 -> 20.
+
+**Cost note, stated honestly:** 101,754 -> 105,765, about +1,000 input tokens per batch, and unlike
+past passes this one did NOT pay for itself by deduplication. The only material available to cut was
+score-discipline doctrine, and cutting that to fund a readability change would trade a false-positive
+guard for nicer prose. The +3.9% stands. If the protocol keeps growing, the next pass must find its
+budget inside `_SCORE_DISCIPLINE` (10.5k chars) and `_CONFUSABLE_ACCOUNTS` (4.3k), which overlap.
+
+**Not yet verified against the live model.** The deterministic half is test-pinned; whether the prose
+actually improves can only be seen by pasting the recompiled preset and re-scanning.
 
 ### The research pass (v11): what the literature says, and the hole it exposed
 
