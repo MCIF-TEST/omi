@@ -1491,7 +1491,17 @@ def persist_assessment(session, inv, assessment: dict, provider: str) -> dict:
     }
     # Alert BEFORE the write, so a persist failure cannot also swallow the alert. Reuses the same
     # predicate the route and the UI use, so all three agree on what "the model wrote this" means.
-    if not entry_is_model_backed(entry):
+    #
+    # A RUN STILL IN PROGRESS HAS NOT FAILED, so it is not alerted on. This function is called once
+    # per batch that lands, and one floored batch makes the merged entry non-model-backed for the
+    # whole rest of the run, so a four-batch scan raised FOUR AnalystFellBackToFloor events and four
+    # ERROR logs for a single fault. An alert that fires four times per fault is the same problem as
+    # one that fires on success: it is the reason people stop reading them. A later batch can also
+    # still land and make the entry model-backed, which would make the earlier alerts simply wrong.
+    # The final merge sets `complete`, so the settled state is still reported exactly once.
+    _batching = (assessment or {}).get("batching") or {}
+    _run_finished = (not _batching) or bool(_batching.get("complete"))
+    if _run_finished and not entry_is_model_backed(entry):
         _report_floor(inv, assessment, provider)
     try:
         with session.begin_nested():
@@ -1811,7 +1821,15 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     # cannot do (see ``batched_run_looks_alive``). Without them a second worker saw an incomplete
     # entry, concluded the run had been interrupted, and started a duplicate whose first write
     # replaced "3 of 4" with "1 of 4" and no accounts.
-    base["batching"] = {"total": total_batches, "done": done, "landed": len(completed),
+    # `landed` counts batches that PRODUCED ACCOUNTS, not batches that returned an object. It used
+    # to be `len(completed)`, which is every part that is not None, and a FLOORED batch is not None:
+    # it returns a complete deterministic Floor assessment carrying zero accounts. So a run where
+    # three of four batches floored reported `landed == 4`, restating exactly the lie `done` already
+    # tells. Two consequences, both live: the coverage figure was wrong, and `IncompleteCoverageNotice`
+    # is gated on `landed < total`, so the one notice whose entire job is to say "finished, but N
+    # batches yielded nothing" could never fire in the case it was written for.
+    landed = sum(1 for _i, p in completed if (p.get("commenter_assessments") or []))
+    base["batching"] = {"total": total_batches, "done": done, "landed": landed,
                         "batch_size": batch_size,
                         "complete": bool(run_finished) or done >= total_batches,
                         "run_id": run_id,
@@ -2021,7 +2039,11 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     # credential, a missing preset, an exhausted balance). Without it, a 12-batch scan against a
     # broken config would double its generations before giving up, spending real money to fail
     # twice as slowly. Two is enough to tell a config fault from a one-off bad draw.
+    # Guarded because `analyst_batch_concurrency` can put several batches in this counter at once,
+    # and `+= 1` on a shared cell is a read-modify-write. An undercount here means the breaker opens
+    # late and the run spends another generation against a config that cannot work.
     _dead_config_floors = [0]
+    _dead_config_lock = threading.Lock()
     MAX_DEAD_CONFIG_FLOORS = 2
 
     def _attempt(i: int, *, budget_multiplier: float = 1.0) -> dict | None:
@@ -2053,13 +2075,16 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
 
         reason = _classify_floor(((result or {}).get("investigation_trace")) or {})
         if not _floor_is_retryable(reason):
-            _dead_config_floors[0] += 1
+            with _dead_config_lock:
+                _dead_config_floors[0] += 1
             logger.error(
                 "analyst.batched: batch %d/%d floored for slug=%s reason=%s — NOT retrying, a "
                 "second call would fail identically", i + 1, total, inv_slug, reason,
             )
             return result
-        if _dead_config_floors[0] >= MAX_DEAD_CONFIG_FLOORS:
+        with _dead_config_lock:
+            _circuit_open = _dead_config_floors[0] >= MAX_DEAD_CONFIG_FLOORS
+        if _circuit_open:
             logger.error("analyst.batched: slug=%s circuit open after %d unfixable floors, "
                          "not retrying batch %d/%d", inv_slug, _dead_config_floors[0], i + 1, total)
             return result
