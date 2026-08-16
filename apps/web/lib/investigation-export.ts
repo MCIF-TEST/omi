@@ -173,7 +173,16 @@ export function buildExportRows(
     if (!used.has(id)) rows.push(rowFor(null, read));
   }
 
-  rows.sort((x, y) => (y.omi_score ?? y.engine_score ?? -1) - (x.omi_score ?? x.engine_score ?? -1));
+  // Worst first BY THE OMI SCORE ONLY, and an unassessed account sorts last.
+  //
+  // The engine is a backup and a secondary reference; it does not participate in the OMI score, so
+  // it must not decide the order of a customer's report either. Falling back to `engine_score`
+  // ranked accounts the analyst never read by a number the product does not treat as their score,
+  // which could put an unassessed account at the top of the file. It also disagreed with the page,
+  // where `lib/rank-accounts.ts` sorts a missing score last rather than substituting one, so the
+  // same investigation came out in two different orders on two surfaces.
+  const rank = (r: ExportRow) => (typeof r.omi_score === 'number' ? r.omi_score : -1);
+  rows.sort((x, y) => rank(y) - rank(x));
   return rows;
 }
 
