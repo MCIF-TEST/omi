@@ -91,7 +91,8 @@ class CompletionStatus:
     omitted_input_commenters: int        # accounts NOT shown to the model (upstream evidence budget)
     max_output_tokens: int | None        # the dynamic completion budget requested for this inference
     output_tokens: int | None            # actual completion size the gateway reported
-    incomplete_kind: str | None          # None | "truncated_output" | "missing_assessments" | "omitted_input"
+    incomplete_kind: str | None          # None | "truncated_output" | "missing_assessments"
+    #                                      #      | "omitted_input" | "summary_not_certified"
     reason: str
     estimated_remaining_commenters: int  # remaining work for a future continuation pass
 
@@ -127,6 +128,7 @@ def verify_completion(
     json_received: bool = True,
     schema_valid: bool = True,
     governor_valid: bool = True,
+    salvaged_reads: bool = False,
 ) -> CompletionStatus:
     """Decide whether the AI reasoning covered the COMPLETE investigation, and if not, why + how much
     remains. Precedence of incompleteness (most actionable first):
@@ -137,7 +139,15 @@ def verify_completion(
     * ``omitted_input`` — the upstream evidence budget did not show every commenter to the model.
 
     When the model was not reached (Floor), completeness is not applicable — reported as incomplete with a
-    clear reason so the UI never implies AI coverage that did not happen."""
+    clear reason so the UI never implies AI coverage that did not happen.
+
+    ``salvaged_reads`` is the case in between, and it has to be told apart from a true Floor. The
+    wrapper failed validation while ``_salvaged_account_reads`` kept the model's per-account rows, so
+    ``model_backed`` is False and yet every account genuinely does have AI reasoning. Reported live:
+    the panel printed "PARTIAL AI COVERAGE · 25 OF 25 COMMENTERS ASSESSED", "AI reasoning was not
+    produced (deterministic Floor)" and "~25 commenters remaining" as three lines of one box, sitting
+    directly above twenty-five model-written paragraphs. Every clause came from this function and no
+    two of them agreed."""
     represented = max(0, int(represented_commenters or 0))
     assessed = max(0, int(assessed_commenters or 0))
     omitted_input = max(0, int(omitted_input_commenters or 0))
@@ -145,7 +155,7 @@ def verify_completion(
     truncated = (finish_reason or "").lower() == "length"
     json_complete = bool(json_received) and not truncated
 
-    if not model_backed:
+    if not model_backed and not salvaged_reads:
         return CompletionStatus(
             complete=False, finish_reason=finish_reason, stopped_on_token_limit=truncated,
             json_complete=json_complete, schema_valid=bool(schema_valid),
@@ -155,6 +165,27 @@ def verify_completion(
             output_tokens=output_tokens, incomplete_kind=None,
             reason="AI reasoning was not produced (deterministic Floor); completeness not applicable.",
             estimated_remaining_commenters=represented + omitted_input,
+        )
+
+    if not model_backed:
+        # Salvaged: the per-account reads ARE the model's, only the synthesis above them is the
+        # Floor's. Coverage is therefore a real, answerable question, and the honest answer is the
+        # ordinary one — how many of the accounts shown got a read. `complete` stays False because
+        # the entry as a whole is not certified, but the reason says which half is missing instead of
+        # denying reasoning that is visibly on the page, and `remaining` counts the accounts actually
+        # still owed rather than restating the whole batch.
+        return CompletionStatus(
+            complete=False, finish_reason=finish_reason, stopped_on_token_limit=truncated,
+            json_complete=json_complete, schema_valid=bool(schema_valid),
+            governor_valid=bool(governor_valid), represented_commenters=represented,
+            assessed_commenters=assessed, missing_commenters=missing,
+            omitted_input_commenters=omitted_input, max_output_tokens=max_output_tokens,
+            output_tokens=output_tokens, incomplete_kind="summary_not_certified",
+            reason=(
+                "Every account below carries the model's own read. The investigation-level summary "
+                "above them did not pass validation, so it was withheld."
+            ),
+            estimated_remaining_commenters=missing + omitted_input,
         )
 
     if truncated:

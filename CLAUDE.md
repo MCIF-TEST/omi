@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2107
-passed, 8 skipped, 2 failed** (7m24s, 2026-08-18), the failure pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2121
+passed, 8 skipped, 2 failed** (8m26s, 2026-08-18), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -2202,6 +2202,88 @@ Two rules the customer wording follows, both learned from copy that was live: **
 about anything but the customer's own credits** (this product sells credits, so "the analysis service
 is out of credit" reads as "you are out of credit" and sends someone to the billing page over a fault
 of ours), and **name whose fault it is**, so nobody re-runs a scan that will fail identically.
+
+### A salvaged batch was buying itself a second full run
+
+Reported 2026-08-18 from a live 100-account scan, with screenshots. The customer read the
+per-account verdicts, then watched the panel reset to **"1 of 4"** and analyse the whole
+investigation again. The chain, and every link of it was working as designed:
+
+1. batch 1's synthesis wrapper fails validation;
+2. `_salvaged_account_reads` keeps its 25 per-account rows, which is the substance they paid for;
+3. `_merge_batch_parts` marks the MERGED entry `model_backed=False` on the strength of that one part;
+4. `routes/reasoning.py`'s floor self-heal keys on exactly that flag;
+5. it sets `refresh=True`, **which also bypasses the live-run guard** (`... and not refresh`);
+6. a second full run of every batch is submitted.
+
+**Nothing outside the OpenRouter bill would ever have shown this.** The customer's only symptom was
+the UI apparently restarting, and the analyst's own alerting stays quiet because a Floor is a
+*successful* code path.
+
+`entry_warrants_auto_regeneration()` is the fix and the distinction it draws is the point:
+
+| | asks | used by |
+|---|---|---|
+| `entry_is_model_backed` | is the SYNTHESIS WRAPPER the model's? | the serve gate |
+| `entry_warrants_auto_regeneration` | would a full billable re-run buy anything? | the self-heal |
+
+They come apart on the salvage path and **must stay apart**. Making `entry_is_model_backed` true for
+a salvaged entry would publish Floor prose as the model's; making the self-heal fire on it spends the
+customer's money to improve a paragraph they did not ask us to improve. A regeneration is warranted
+only when there are no per-account reads at all — nothing of the model's to lose. `AiUnavailable
+summaryOnly` already tells the reader the summary is missing, and the Retry button is still there:
+the choice stays theirs. Pinned by `tests/test_analyst_no_unrequested_regeneration.py`.
+
+### The coverage box was denying the reasoning printed beneath it
+
+Same report. Three lines of one box, sitting directly above twenty-five model-written paragraphs:
+
+```
+PARTIAL AI COVERAGE · 25 OF 25 COMMENTERS ASSESSED
+AI reasoning was not produced (deterministic Floor); completeness not applicable.
+~25 commenters remaining.
+25/25 analyzed · 12,970/23,250 out tokens · stop: stop
+```
+
+Every clause came from `verify_completion` and no two of them agreed. The cause is that **salvage was
+being reported as a Floor**: `model_backed` is False on that path, so the Floor branch fired even
+though every account genuinely had the model's own read. `verify_completion` now takes
+`salvaged_reads` and reports `summary_not_certified` instead, which names the half that is actually
+missing. `complete` stays False — the entry as a whole is not certified and the operator surfaces key
+on that — so only the SENTENCE changed.
+
+**`_merge_batch_parts` was also inheriting batch one's `reason` and `estimated_remaining`.** `base` is
+the first completed batch's payload, so a four-batch run whose first batch was clean and whose third
+floored rendered *"Complete, every commenter received AI reasoning"* inside a box whose own heading
+said coverage was partial. The counts were merged and the sentence explaining them was not. Both are
+now computed for the merge. Pinned by `tests/test_completion_under_salvage.py`.
+
+### One fact, six vocabularies
+
+The same live page stated its progress six times, in six different wordings, and two of them
+disagreed:
+
+| where | what it said |
+|---|---|
+| panel header | `100 accounts, every one this scan scored` |
+| progress strip | `SCORING IN BATCHES · 1 OF 4` · `25 ACCOUNTS · 5M 08S` · a track · `Waiting on batch 2 of 4` · a paragraph |
+| above the list | `25 accounts scored so far, listed below…` |
+| coverage box | `PARTIAL AI COVERAGE · 25 OF 25` (see above) |
+| list heading | `PER-ACCOUNT ASSESSMENTS · 25` |
+| below the list | `3 BATCHES TO GO` · `25 analyzed` · the SAME track again · another paragraph |
+
+**The strip is the one authoritative progress statement.** Everything else was cut back to what only
+it can say:
+
+- the strip keeps its line, its track and its "waiting on batch N", and lost its explanatory
+  paragraph;
+- the sentence above the list is gone entirely — the strip renders directly above it;
+- the coverage box **does not render while the run is working** (`running` prop). Mid-run, "partial
+  coverage" is not a finding, it is "not finished yet";
+- the trailing notice is one line, and says the only thing knowable at that position: the list has
+  ended and is not the whole answer. It no longer repeats the track;
+- the header count now says `Export covers all N scanned accounts`, because it describes the EXPORT,
+  not the run, and sat a few pixels from a live progress count with no way to tell them apart.
 
 ### One failed batch used to freeze the whole run
 

@@ -389,14 +389,16 @@ function BatchProgressStrip({
           {batching.batch_size ? ` · ${batching.batch_size} accounts` : ''}
         </p>
       )}
-      <p className="mt-2.5 text-2xs text-fg-mute leading-relaxed">
-        The scores below are final for the accounts already analyzed. The remaining accounts are being
-        analyzed right now and will appear underneath, ranked with the rest.
-        {failed > 0 && (
-          <> {failed} batch{failed === 1 ? '' : 'es'} came back empty, so {failed === 1 ? 'its' : 'their'}{' '}
-          accounts have no written read. You can retry once the run finishes.</>
-        )}
-      </p>
+      {/* Only the part a reader cannot get from the line and the track above. The sentence that
+          used to live here ("the scores below are final for the accounts already analyzed, the
+          remaining accounts are being analyzed right now") restated the strip in prose, and it was
+          one of SIX places on this page saying the same thing in a different vocabulary. */}
+      {failed > 0 && (
+        <p className="mt-2.5 text-2xs text-fg-mute leading-relaxed">
+          {failed} batch{failed === 1 ? '' : 'es'} came back empty, so {failed === 1 ? 'its' : 'their'}{' '}
+          accounts have no written read. You can retry once the run finishes.
+        </p>
+      )}
     </div>
   );
 }
@@ -471,27 +473,26 @@ function BatchTrailingNotice({
   const states = batchStates(batching, traces, record);
   const remaining = states.filter((s) => s === 'pending' || s === 'running').length;
   return (
+    // ONE LINE. This is a bookend, not a second progress panel.
+    //
+    // It used to repeat the strip's own track, its own counts and a paragraph of explanation, so a
+    // reader who scrolled to the end of the results met the whole progress display a second time,
+    // in slightly different words, and had to work out whether it was describing something new.
+    // What is genuinely only knowable HERE is that the list has ended and is not the whole answer.
     <div
-      className="mt-4 rounded-lg border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-3 space-y-2"
+      className="mt-4 rounded-sm border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-2.5
+                 flex items-center justify-between gap-3 flex-wrap"
       aria-live="polite"
     >
-      <div className="flex items-baseline justify-between gap-2 flex-wrap">
-        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2 flex items-center gap-1.5">
-          {/* A pulsing dot rather than a spinner. This sits below the results for the whole run, and
-              a spinner tracking a ten-minute wait reads as something stuck. */}
-          <span className="led motion-safe:animate-pulse-dot" style={{ ['--c' as string]: 'var(--violet-2)' }} aria-hidden />
-          {remaining} batch{remaining === 1 ? '' : 'es'} to go
-        </span>
-        <span className="font-mono text-2xs text-fg-mute tabular-nums">
-          {scored} analyzed
-        </span>
-      </div>
-      <BatchTrack states={states} />
-      <p className="text-2xs text-fg-mute leading-relaxed">
-        Each batch is a separate pass that reads every one of its accounts individually, so a large
-        scan can take a while. New accounts appear above as each one lands, and you don&apos;t need to
-        wait on this page.
-      </p>
+      <span className="meta text-violet-2 flex items-center gap-2">
+        {/* A lamp rather than a spinner. This sits below the results for the whole run, and a
+            spinner tracking a ten-minute wait reads as something stuck. */}
+        <span className="led motion-safe:animate-pulse-dot" style={{ ['--c' as string]: 'var(--violet-2)' }} aria-hidden />
+        End of the accounts analysed so far
+      </span>
+      <span className="meta tabular">
+        {scored} analysed · {remaining} pass{remaining === 1 ? '' : 'es'} to go
+      </span>
     </div>
   );
 }
@@ -814,15 +815,17 @@ function AssessmentView(
   if (!isModelBacked(a) && readCount > 0) {
     return (
       <div className="space-y-5">
-        {stillBatching ? (
-          <p className="text-sm text-fg-dim">
-            {readCount} account{readCount === 1 ? '' : 's'} scored so far, listed below. The
-            remaining batches are still running and will appear as they land.
-          </p>
-        ) : (
-          <AiUnavailable a={a} onRetry={onRetry} busy={busy} summaryOnly />
-        )}
-        <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
+        {/* Nothing is said here while the run is going. `BatchProgressStrip` renders directly above
+            this and already states the count, the pass, the elapsed clock and what happens next; the
+            sentence that used to sit here was a fourth restatement of it. When the run is OVER and
+            the summary floored, that IS new information and `AiUnavailable` says it. */}
+        {!stillBatching && <AiUnavailable a={a} onRetry={onRetry} busy={busy} summaryOnly />}
+        <CommenterAssessments
+          items={a.commenter_assessments}
+          completion={a.completion}
+          running={stillBatching}
+          slug={slug}
+        />
       </div>
     );
   }
@@ -1175,8 +1178,15 @@ function AccountMetadata({ r }: { r: CommenterAssessment }) {
 }
 
 function CommenterAssessments({
-  items, completion,
-}: { items?: CommenterAssessment[]; completion?: CompletionStatus; slug: string }) {
+  items, completion, running = false,
+}: {
+  items?: CommenterAssessment[];
+  completion?: CompletionStatus;
+  /** The run is still working. Suppresses the coverage banner: mid-run, "partial coverage" is not a
+   *  finding, it is just "not finished yet", which the progress strip already says. */
+  running?: boolean;
+  slug: string;
+}) {
   const rows = items ?? [];
   // Worst first, matching the shared report and both exports. Batch order was a consequence of how
   // a scan runs, not a decision about what a reader wants: it buried the highest-scoring account in
@@ -1190,7 +1200,11 @@ function CommenterAssessments({
         <Users size={11} /> Per-account assessments{resolved.length > 0 ? ` · ${resolved.length}` : ''}
       </CardLabel>
 
-      <CompletionBanner c={completion} />
+      {/* Not while the run is working. A box headed "PARTIAL AI COVERAGE" is a real statement about
+          a FINISHED run and pure noise about a running one, and mid-run it was the single most
+          confusing thing on the page: it appeared beside a progress strip that was already saying
+          how far along the run was, and said it in numbers that did not match. */}
+      {!running && <CompletionBanner c={completion} />}
 
       {resolved.length === 0 ? (
         <p className="text-xs text-fg-faint leading-relaxed flex items-start gap-2">

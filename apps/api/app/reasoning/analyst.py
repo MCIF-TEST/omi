@@ -994,7 +994,10 @@ def _assess_core(
             json_received=(inference.raw_obj is not None),
             # A model-backed result passed BOTH canonical-schema validation and the Governor (that is what
             # makes it model-backed) — certify them explicitly. On the Floor path both are False.
-            schema_valid=model_backed, governor_valid=bool(inference.trace.permitted))
+            schema_valid=model_backed, governor_valid=bool(inference.trace.permitted),
+            # Salvage is neither a success nor a Floor, and reporting it as a Floor produced a
+            # coverage box that denied the reasoning printed directly beneath it.
+            salvaged_reads=salvaged)
         governed["completion"] = _completion.to_dict()
         governed["ai_package"] = ai_package.provenance()
         governed["prompt_build"] = prompt_build
@@ -1404,6 +1407,50 @@ def entry_is_model_backed(entry: dict | None) -> bool:
     return bool(prov) and "fallback" not in prov and "deterministic" not in prov
 
 
+def entry_has_model_account_reads(entry: dict | None) -> bool:
+    """Whether this entry's PER-ACCOUNT reads are the model's own prose.
+
+    Distinct from :func:`entry_is_model_backed`, which answers a question about the SYNTHESIS
+    wrapper. The two come apart on the salvage path, and that gap is the whole reason this exists:
+    ``validate_comprehensive_model_output`` is all-or-nothing, so a reply whose twenty per-account
+    paragraphs were perfect and whose wrapper was missing one field floors the wrapper while
+    ``_salvaged_account_reads`` keeps the rows.
+
+    ``commenter_assessments`` is only ever populated from a model-backed part or from an explicit
+    salvage, so a non-empty list means real model prose either way.
+    """
+    if not isinstance(entry, dict):
+        return False
+    a = entry.get("assessment") or {}
+    return bool(a.get("commenter_assessments"))
+
+
+def entry_warrants_auto_regeneration(entry: dict | None) -> bool:
+    """Whether an automatic, unrequested, FULL BILLABLE re-run would actually buy anything.
+
+    THIS IS THE MONEY QUESTION, and it is deliberately not the same one
+    :func:`entry_is_model_backed` answers.
+
+    Reported live: a 100-account scan finished, the customer read its per-account verdicts, and then
+    watched the panel reset to "1 of 4" and analyse the whole thing again. The chain was: batch 1's
+    wrapper failed validation, its rows were salvaged, ``_merge_batch_parts`` marked the merged entry
+    non-model-backed on the strength of that one part, and the route's floor self-heal keys on
+    exactly that flag. So it set ``refresh=True``, which also bypasses the live-run guard, and
+    submitted a second full run of every batch. Nothing outside the OpenRouter bill would have shown
+    it, and the customer's only symptom was the UI apparently restarting.
+
+    A regeneration is worth spending only when there is nothing of the model's to lose: no
+    per-account reads at all. When the reads ARE there, the customer already has the substance they
+    paid for and what is missing is the synthesis paragraph above them, which is not worth a second
+    run of every batch nobody asked for. `AiUnavailable summaryOnly` already says so on the page,
+    and the Retry button is still there for a customer who decides otherwise. That is the difference
+    that matters: their choice, not ours.
+    """
+    if entry_is_model_backed(entry):
+        return False
+    return not entry_has_model_account_reads(entry)
+
+
 # Slugs whose FLOORED cache we've already auto-regenerated once this process. Kept as a cheap local
 # short-circuit in front of the durable claim below, so a poll loop on one worker does not hit the
 # database to be told "no" every 2.5 seconds.
@@ -1728,8 +1775,37 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     ass = sum((p.get("completion") or {}).get("assessed_commenters") or 0 for _i, p in completed)
     all_complete = (len(completed) == total_batches) and all(
         (p.get("completion") or {}).get("complete") for _i, p in completed)
+    # THE REASON MUST DESCRIBE THE MERGE, NOT BATCH ONE.
+    #
+    # `base` is the first completed batch's payload, so every unstated key here is inherited from it,
+    # and `reason` is the one a reader actually sees. A four-batch run whose first batch was clean
+    # and whose third floored therefore rendered "Complete, every commenter received AI reasoning"
+    # inside a box whose own heading said the coverage was partial. The counts were merged and the
+    # sentence explaining them was not.
+    _reason = (base.get("completion") or {}).get("reason")
+    if not all_complete:
+        _still_running = total_batches - len(completed)
+        _empty = sum(1 for _i, p in completed if not (p.get("commenter_assessments") or []))
+        if _still_running > 0:
+            _reason = (
+                f"{len(completed)} of {total_batches} passes have landed. "
+                f"{_still_running} more {'is' if _still_running == 1 else 'are'} still running."
+            )
+        elif _empty:
+            _reason = (
+                f"{_empty} of {total_batches} passes came back empty, so their accounts have no "
+                "written read. Every score shown is final."
+            )
     base["completion"] = {**(base.get("completion") or {}),
                           "represented_commenters": rep, "assessed_commenters": ass,
+                          "reason": _reason,
+                          # Inherited from batch one otherwise, where it meant "the accounts THIS
+                          # batch still owes". Merged, that read as 25 remaining beside 25 assessed.
+                          # Across the run, what is still owed is whatever the landed batches were
+                          # shown and did not assess; the batches yet to run are counted in passes,
+                          # by the progress strip, which is the only place that number belongs.
+                          "missing_commenters": max(0, rep - ass),
+                          "estimated_remaining_commenters": max(0, rep - ass),
                           "complete": bool(all_complete)}
 
     # Trace: keep the base trace, overlay batch telemetry + summed usage; model_backed = every
