@@ -40,35 +40,50 @@ def _env(monkeypatch):
 # Dynamic completion budget (pure)
 # =========================================================================== #
 def test_completion_budget_scales_and_clamps():
+    """The budget is a flat 50,000 output tokens for every request this product makes.
+
+    THESE ASSERTIONS CHANGED WITH THE SYSTEM, and the reason is worth stating. They used to describe
+    a budget that grew with the investigation, because a single inference carried the whole scan and
+    the ceiling sat far above anything real (150,000, set temporarily to measure true per-scan cost).
+    Neither is true now: work is split into fixed 25-account batches, and ceiling == floor == 50,000,
+    so the linear formula between them can never be reached. Asserting growth across sizes that all
+    clamp to the same number would be asserting a behaviour the product no longer has.
+    """
     assert completion_budget(0) == COMPLETION_FLOOR_TOKENS         # even 0 commenters gets the full synthesis
-    # Monotonic (non-decreasing), which is the property that matters: a bigger investigation is never
-    # given LESS room. Not strictly increasing, and deliberately so — the floor exists precisely to
-    # override the formula for small investigations, so every size under it shares one budget. The
-    # old assertion happened to pass only because the 16k floor was crossed at 9 accounts; at a 50k
-    # floor it is crossed at 85, and asserting strict growth below a floor is asserting the floor
-    # does not work.
+    # Never DECREASING with size, which is the property that survives clamping.
     assert completion_budget(10) <= completion_budget(50) <= completion_budget(150)
-    assert completion_budget(85) < completion_budget(150), "above the floor it must still scale"
-    from app.reasoning.completion import COMPLETION_BASE_TOKENS, COMPLETION_PER_COMMENTER_TOKENS
-    assert completion_budget(10) == max(
-        COMPLETION_FLOOR_TOKENS, COMPLETION_BASE_TOKENS + COMPLETION_PER_COMMENTER_TOKENS * 10)
-    assert completion_budget(10**9) == COMPLETION_CEILING_TOKENS   # ceiling binds on the huge case
-    # a small investigation gets a generous CAP (not a reservation — billing is on tokens generated),
-    # sized to prevent truncation, and still well below a large scan's budget.
-    assert COMPLETION_FLOOR_TOKENS <= completion_budget(10) < completion_budget(150)
+    # Flat, at every size the batcher can produce and well beyond it.
+    assert COMPLETION_FLOOR_TOKENS == COMPLETION_CEILING_TOKENS
+    for n in (0, 1, 17, 25, 150, 10**9):
+        assert completion_budget(n) == COMPLETION_CEILING_TOKENS, n
+    # The ceiling is what wins, so a deploy that lowers it to bound spend is honoured even below the
+    # floor. Cost control must never be silently overridden by a floor nobody remembered to move.
+    assert completion_budget(150, ceiling=8_000) == 8_000
 
 
-def test_commenter_capacity_matches_ceiling():
+def test_commenter_capacity_comfortably_exceeds_one_batch():
+    """Capacity is only ever asked about ONE REQUEST, and a request is one batch.
+
+    This used to assert `cap > 150`, from when a single inference carried a whole 150-commenter scan.
+    A request now carries `batch_plan.BATCH_SIZE` accounts, so that is the number capacity has to
+    clear, and tying the assertion to the constant keeps the two from drifting apart silently.
+    """
+    from app.reasoning.batch_plan import BATCH_SIZE
+
     cap = commenter_capacity()
     assert completion_budget(cap) <= COMPLETION_CEILING_TOKENS
-    assert cap > 150                                                # a single inference comfortably covers ~150
+    assert cap > BATCH_SIZE * 3, (
+        f"one request carries {BATCH_SIZE} accounts; a capacity of {cap} leaves no headroom"
+    )
 
 
-def test_default_ceiling_covers_a_full_scan_without_truncation():
-    # A full 150-commenter scan (the default OMI_SCAN_MAX_COMMENTERS) fits under the ceiling with no
-    # truncation. (The ceiling is temporarily high while measuring real per-scan cost.)
-    assert completion_budget(150) <= COMPLETION_CEILING_TOKENS
-    assert completion_budget(150) < completion_budget(10**9)      # 150 accounts do not hit the cap
+def test_a_full_batch_fits_under_the_ceiling_without_truncation():
+    from app.reasoning.batch_plan import BATCH_SIZE
+
+    assert completion_budget(BATCH_SIZE) == COMPLETION_CEILING_TOKENS
+    # Measured live: a 25-account batch spent 12,970 output tokens. The cap is the margin, and it is
+    # a cap rather than a reservation, so the margin is free until it is used.
+    assert completion_budget(BATCH_SIZE) > 12_970 * 2
 
 
 def test_completion_budget_honors_a_custom_ceiling():

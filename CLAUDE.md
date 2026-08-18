@@ -2210,12 +2210,23 @@ Product decision (2026-08-18). Batches are a fixed 25 accounts, so the linear fo
 is not a graceful degradation: the reply fails schema validation, the wrapper floors, and before the
 salvage path existed it took every per-account read in the batch with it. The margin is the point.
 
-**Raising `COMPLETION_FLOOR_TOKENS` is the change, not the ceiling or the per-commenter rate.** The
-ceiling is 150,000 and was never binding; the per-commenter rate only matters above ~85 accounts,
-which no batch reaches. At a 50k floor every batch this product can produce, remainder included,
-carries the same budget, so a 17-account remainder is not quietly given a third less room than the
-25s beside it. Set in `completion.py`, `config.py` and `render.yaml`
-(`OMI_ANALYST_COMPLETION_FLOOR_TOKENS`).
+**Ceiling and floor are BOTH 50,000, so the budget is flat.** `completion_budget` is
+`min(ceiling, max(floor, base + per*n))`, and with the two equal the linear formula between them is
+unreachable: every request asks for exactly 50k whatever its size. That is the point — batches are a
+fixed 25 accounts, so a per-size budget was arithmetic nobody could act on, and a 17-account
+remainder is not quietly given a third less room than the 25s beside it.
+
+The ceiling it replaces was **150,000**, set temporarily on 2026-07-22 to observe true per-scan
+output cost with no truncation. That measurement is in (12,970 for 25 accounts) and the number had
+never been checked against a real model. Set in `completion.py`, `config.py` and `render.yaml`
+(`OMI_ANALYST_COMPLETION_CEILING_TOKENS` + `_FLOOR_TOKENS`).
+
+**One guard goes quiet, and it is worth knowing.** The truncation retry multiplies the budget by 1.5
+to give a cut-off reply more room; with ceiling == floor that clamps straight back to 50k, so the
+escalation is a no-op. At ~2,000 output tokens per account against a measured ~519, truncation is not
+the binding risk. If it ever becomes one, raise the ceiling ABOVE the floor rather than raising both.
+The DOWNWARD retry below is unaffected, because the multiplier is applied after the clamp rather than
+through it.
 
 **A cap is not a spend.** OpenRouter bills tokens generated, so a run that finishes early costs
 exactly what it produced. What this does buy is a real risk, and it needed a guard.
@@ -2248,10 +2259,13 @@ ordinary bad requests billable twice. Status is still checked before the error s
 body happens to mention tokens is still a dead credential. Pinned by
 `tests/test_output_budget_headroom.py`.
 
-**One test moved deliberately.** `test_completion_budget_scales_and_clamps` asserted
-`budget(10) < budget(50) < budget(150)`, which passed only because the old 16k floor was crossed at 9
-accounts. At 50k it is crossed at 85, and asserting strict growth *below* a floor is asserting the
-floor does not work. It now asserts non-decreasing, plus strict growth above the floor.
+**Four tests moved deliberately, and the reason is the same in each.** They described a budget that
+GREW with the investigation, from when a single inference carried a whole scan and the ceiling sat far
+above anything real. Neither holds now: work is split into fixed 25-account batches and the budget is
+flat, so assertions about growth across sizes that all clamp to one number were asserting a behaviour
+the product no longer has. `test_commenter_capacity_matches_ceiling` in particular asserted
+`cap > 150` and is now tied to `batch_plan.BATCH_SIZE`, because capacity is only ever asked about ONE
+REQUEST and a request is one batch.
 
 ### The liveness window must not depend on an env var being right
 

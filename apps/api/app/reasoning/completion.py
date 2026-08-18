@@ -48,13 +48,25 @@ COMPLETION_PER_COMMENTER_TOKENS = 450   # per account: reasoning + a plain-Engli
 #: see `floor_reason.OUTPUT_BUDGET_TOO_LARGE`, which recognises that specific rejection and retries
 #: once at half the budget rather than leaving the deployment dead.
 COMPLETION_FLOOR_TOKENS = 50000
-COMPLETION_CEILING_TOKENS = 150000      # generous cap while we MEASURE real per-scan cost (temporary).
-# NOTE (2026-07-22): ceiling raised 32000 → 150000 DELIBERATELY and TEMPORARILY, to observe the true
-# per-investigation output cost on live runs with no truncation, before tuning it back down once real
-# cost data is in. It is a CEILING, not a reservation — billing is on tokens actually generated, so a
-# scan that finishes early still costs only what it produced (the per-account budget formula still asks
-# only ~base + 180×commenters, e.g. ~9k for 25 accounts). All four knobs are overridable per-deploy via
-# OMI_ANALYST_COMPLETION_* (see config.py) so the cap can be lowered WITHOUT a code deploy.
+#: 50,000, and equal to the floor on purpose: EVERY request asks for exactly 50k, whatever its size.
+#:
+#: The temporary 150,000 it replaces was set on 2026-07-22 to observe true per-scan output cost with
+#: no truncation. That measurement is in: a live 25-account batch spent 12,970. With batches fixed at
+#: 25 accounts the formula never came near 150k anyway, so the ceiling was doing nothing except
+#: leaving a number in the codebase that nobody had checked against a real model.
+#:
+#: Ceiling == floor makes the budget a flat, stated fact rather than something to compute, and it is
+#: the ceiling that wins in `completion_budget`, so this line alone bounds every request.
+#:
+#: ONE CONSEQUENCE, stated because it is a guard going quiet: the truncation retry multiplies the
+#: budget by 1.5 to give a cut-off reply more room, and with ceiling == floor that clamps straight
+#: back to 50k, so the escalation becomes a no-op. At ~2,000 output tokens per account against a
+#: measured ~519, truncation is not the binding risk; if it ever becomes one, raise this above the
+#: floor rather than raising both. The DOWNWARD retry (`output_budget_too_large`, x0.5) is unaffected
+#: because it is applied after the clamp.
+COMPLETION_CEILING_TOKENS = 50000
+# All four knobs are overridable per-deploy via OMI_ANALYST_COMPLETION_* (see config.py), so the cap
+# can be moved WITHOUT a code deploy.
 
 
 def completion_budget(

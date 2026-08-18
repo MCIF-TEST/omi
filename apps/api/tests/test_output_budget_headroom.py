@@ -28,11 +28,12 @@ class TestTheBudgetIsFiftyThousand:
         assert completion_budget(17) == 50_000
         assert completion_budget(1) == 50_000
 
-    def test_the_formula_still_takes_over_above_the_floor(self):
-        """The floor is a floor, not a fixed value: a hypothetical single request larger than ~84
-        accounts still scales, and the ceiling still caps it."""
-        assert completion_budget(100) == 12_000 + 450 * 100
-        assert completion_budget(10_000) == 150_000
+    def test_it_is_flat_at_every_size(self):
+        """Ceiling == floor == 50,000, so the linear formula between them is unreachable and the
+        budget is one stated number rather than something to compute. That is deliberate: batches are
+        a fixed 25 accounts, so a per-size budget was arithmetic nobody could act on."""
+        for n in (0, 1, 17, 25, 150, 10_000):
+            assert completion_budget(n) == 50_000, n
 
 
 class TestAnOverLargeAskIsSurvivable:

@@ -321,7 +321,7 @@ class Settings(BaseSettings):
     analyst_completion_base_tokens: int = 12000
     analyst_completion_per_commenter_tokens: int = 450
     analyst_completion_floor_tokens: int = 50000
-    analyst_completion_ceiling_tokens: int = 150000   # TEMP high cap to measure real scan cost; tune down later
+    analyst_completion_ceiling_tokens: int = 50000    # equals the floor: every request asks for 50k
     # Batched analyst inference. A single OpenRouter request carries AT MOST this many accounts; a larger
     # selection is split into ≤N-account batches sent as PARALLEL requests, merged first-to-last, and
     # persisted progressively so the UI shows batch 1's accounts while later batches still run.
