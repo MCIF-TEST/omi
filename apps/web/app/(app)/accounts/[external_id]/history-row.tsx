@@ -100,9 +100,9 @@ function SignalCard({ signal }: { signal: SignalResult }) {
           {Math.round(prob * 100)}%
         </span>
       </div>
-      <div className="h-1.5 w-full bg-border-1 rounded-full overflow-hidden mb-2">
+      <div className="h-2 w-full bg-bg-inset border border-border-1 rounded-[1px] overflow-hidden mb-2">
         <div
-          className={`h-full rounded-full ${barColor}`}
+          className={`h-full ${barColor}`}
           style={{ width: `${Math.round(prob * 100)}%`, opacity: Math.max(0.35, conf) }}
         />
       </div>

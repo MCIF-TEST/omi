@@ -52,16 +52,16 @@ export function AnalysisProgress({
   const slow = elapsedSec >= 75;
 
   return (
-    <div className="rounded-lg border border-border-1 bg-bg-elev-2/50 overflow-hidden">
+    <div className="panel tick-frame tick-frame-live overflow-hidden">
       {/* Real state and a real elapsed clock. No fabricated percentage. */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-divider">
+      <div className="panel-head">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-violet-2 animate-pulse-dot shrink-0" />
-          <span className="font-mono text-2xs tracking-[0.16em] uppercase text-violet-2 truncate">
+          <span className="led shrink-0" style={{ ['--c' as string]: 'var(--violet-2)' }} />
+          <span className="meta text-violet-2 truncate">
             {retrying ? 'Omi analyst · retrying' : 'Omi analyst · running'}
           </span>
         </span>
-        <span className="font-mono text-2xs text-fg-mute tabular-nums shrink-0">{formatElapsed(elapsedSec)}</span>
+        <span className="meta tabular shrink-0">{formatElapsed(elapsedSec)}</span>
       </div>
 
       <div className="p-5 space-y-4">
@@ -100,15 +100,17 @@ export function AnalysisProgress({
           aria-label={`Analysing batch ${current} of ${total}`}
         >
           {Array.from({ length: total }, (_, i) => (
-            <div key={i} className="relative h-1.5 flex-1 rounded-full bg-bg-inset overflow-hidden">
+            // Square segments. A rack of cells being filled left to right is a
+            // meter; the same cells with 999px corners are a set of pills.
+            <div key={i} className="relative h-2 flex-1 rounded-[1px] bg-bg-inset border border-border-1 overflow-hidden">
               <div
-                className={`absolute inset-0 rounded-full bg-violet-dim transition-opacity duration-300 ease-out ${
+                className={`absolute inset-0 bg-violet-dim transition-opacity duration-300 ease-out ${
                   i < current - 1 ? 'opacity-100' : i === current - 1 ? 'opacity-30' : 'opacity-0'
                 }`}
               />
               {i === current - 1 && (
                 <div
-                  className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
+                  className="absolute inset-y-0 left-0 w-1/3 bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
                   aria-hidden
                 />
               )}
@@ -119,7 +121,7 @@ export function AnalysisProgress({
         <ol className="space-y-2 analyst-sweep">
           {STAGES[phase].map((s, i) => (
             <li key={i} className="flex items-center gap-2.5 text-fg-mute" style={{ ['--i' as string]: i }}>
-              <span className="stage-dot w-1.5 h-1.5 rounded-full bg-border-hot shrink-0" />
+              <span className="stage-dot w-1.5 h-1.5 rounded-[1px] bg-border-hot shrink-0" />
               <span className="text-sm leading-snug">{s}</span>
             </li>
           ))}

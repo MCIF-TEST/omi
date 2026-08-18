@@ -33,7 +33,12 @@ export function ScrollProgress() {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 h-0.5 pointer-events-none" aria-hidden>
       <div
-        className="h-full bg-brand-gradient shadow-glow-sm transition-[width] duration-150 ease-out"
+        // Flat identity blue. This was `bg-brand-gradient`, which is the
+        // suspicion ramp (authentic to highly-suspicious). The design language
+        // reserves that ramp for surfaces where the scale IS the subject, so a
+        // reader scrolling to the end of a report watched the bar run red: the
+        // page's own scroll position rendered as a threat reading.
+        className="h-full bg-accent transition-[width] duration-150 ease-out"
         style={{ width: `${pct}%` }}
       />
     </div>

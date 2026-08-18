@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { apiServer } from '@/lib/api-server';
 import { type User } from '@/lib/api';
 import { DisputeQueue } from './dispute-queue';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Disputes · OMISPHERE' };
@@ -31,18 +32,12 @@ export default async function DisputesPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
-        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <div className="relative">
-          <span className="section-label">Admin</span>
-          <h1 className="display text-2xl font-semibold tracking-tight mt-3">Report disputes</h1>
-          <p className="text-sm text-fg-dim mt-1.5 max-w-2xl leading-relaxed">
-            People who believe a published report is wrong about them file here, without an account.
-            Filing does not unpublish anything on its own. Taking a report down is a decision made on
-            this page, and it works on any report, not only your own.
-          </p>
-        </div>
-      </header>
+      <ConsoleHeader
+        index={SECTION_INDEX['/disputes']}
+        eyebrow="Operations · Admin"
+        title="Report disputes"
+        lede="People who believe a published report is wrong about them file here, without an account. Filing does not unpublish anything on its own. Taking a report down is a decision made on this page, and it works on any report, not only your own."
+      />
 
       <DisputeQueue />
     </div>

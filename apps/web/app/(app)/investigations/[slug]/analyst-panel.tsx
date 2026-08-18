@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Brain, Loader2, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
-import { Card, CardLabel } from '@/components/ui/card';
+import { Card, CardHead, CardLabel } from '@/components/ui/card';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { AnalystLoading } from './analyst-loading';
@@ -12,6 +12,7 @@ import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
 import { byOmiScoreDesc } from '@/lib/rank-accounts';
 import { batchStates, formatElapsed, type BatchRecord, type BatchState } from '@/lib/analysis-progress';
+import { analystProviderLabel, scrubVendor } from '@/lib/analyst-identity';
 import {
   apiClient,
   ApiError,
@@ -223,25 +224,21 @@ export function AnalystPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  const providerLabel = customerProviderLabel(provider, {
+    running: pending || assessment?.batching?.complete === false,
+    hasReads: (assessment?.commenter_assessments?.length ?? 0) > 0,
+  });
+
   return (
-    <Card>
-      <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex items-center gap-3 flex-wrap">
-          <CardLabel className="m-0 flex items-center gap-1.5">
-            <Brain size={11} /> Omi Analyst assessment
-          </CardLabel>
-          {(() => {
-            const label = customerProviderLabel(provider, {
-              running: pending || assessment?.batching?.complete === false,
-              hasReads: (assessment?.commenter_assessments?.length ?? 0) > 0,
-            });
-            return label ? (
-              <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-                ▸ {label}
-              </span>
-            ) : null;
-          })()}
-        </div>
+    // The product's primary output, so it wears the panel header and the corner
+    // ticks: a named bar with the run's state on the right, over its own body.
+    // It used to be a padded card with a bold label floating inside it, which
+    // made the thing the customer paid for look like a section of a document.
+    <Card flush ticks>
+      <CardHead
+        label={<span className="inline-flex items-center gap-1.5"><Brain size={11} /> Omi Analyst assessment</span>}
+        meta={providerLabel || undefined}
+      >
         {/* Deliberately outside the assessment branches below. The engine scored every selected
             account even when the model reached none of them, so the export must not disappear with
             the analyst's prose: an investigation that was paid for is still exportable. */}
@@ -251,8 +248,9 @@ export function AnalystPanel({
           scanned={scanned}
           reads={assessment?.commenter_assessments}
         />
-      </div>
+      </CardHead>
 
+      <div className="p-[18px]">
       {disabled ? (
         <p className="text-sm text-fg-dim flex items-start gap-2">
           <TriangleAlert size={14} className="mt-0.5 shrink-0 text-fg-mute" />
@@ -332,6 +330,7 @@ export function AnalystPanel({
           {error}
         </p>
       )}
+      </div>
     </Card>
   );
 }
@@ -365,16 +364,16 @@ function BatchProgressStrip({
   const complete = states.filter((s) => s === 'done').length;
   const running = states.indexOf('running') === -1 ? null : states.indexOf('running');
   return (
-    <div className="mb-4 rounded-lg border border-violet/25 bg-violet/[0.06] px-3.5 py-3">
+    <div className="mb-4 rounded-sm border border-violet/25 bg-violet/[0.06] px-3.5 py-3">
       <div className="flex items-baseline justify-between gap-2 mb-2.5 flex-wrap">
         {/* The count in words as well as in the segments, and it counts batches that PRODUCED
             something. It used to print `batching.done`, which counts attempts, so a run that had
             tried three batches and got accounts out of one announced "3 of 4 done" directly beside
             "25 accounts scored". Both numbers were right and the pair of them was a lie. */}
-        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2">
+        <span className="meta text-violet-2">
           Scoring in batches · {complete} of {batching.total}
         </span>
-        <span className="font-mono text-2xs text-fg-mute tabular-nums">
+        <span className="meta tabular">
           {scored} account{scored === 1 ? '' : 's'} · {formatElapsed(elapsedSec)}
         </span>
       </div>
@@ -384,8 +383,8 @@ function BatchProgressStrip({
           batch". Saying it explicitly is the difference between a wait that reads as progress and
           one that reads as a hang, and it is the state a reader is in for most of a long scan. */}
       {running !== null && (
-        <p className="mt-2 font-mono text-2xs tracking-wider uppercase text-violet-2 flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-violet-2 motion-safe:animate-pulse-dot" aria-hidden />
+        <p className="mt-2 meta text-violet-2 flex items-center gap-2">
+          <span className="led motion-safe:animate-pulse-dot" style={{ ['--c' as string]: 'var(--violet-2)' }} aria-hidden />
           Waiting on batch {running + 1} of {batching.total}
           {batching.batch_size ? ` · ${batching.batch_size} accounts` : ''}
         </p>
@@ -427,12 +426,12 @@ function BatchTrack({ states }: { states: BatchState[] }) {
       aria-label={`Analysis batches completed: ${done} of ${states.length}`}
     >
       {states.map((state, i) => (
-        <div key={i} className="relative h-1.5 flex-1 rounded-full bg-bg-inset overflow-hidden">
+        <div key={i} className="relative h-2 flex-1 rounded-[1px] border border-border-1 bg-bg-inset overflow-hidden">
           {/* A failed batch is warn-coloured, not violet: it is not a quieter kind of progress, it
               is work that did not happen, and colouring it like a dim success is how "3 of 4 done"
               got told beside 25 accounts in the first place. */}
           <div
-            className={`absolute inset-0 rounded-full transition-opacity duration-300 ease-out ${
+            className={`absolute inset-0 transition-opacity duration-300 ease-out ${
               state === 'failed' ? 'bg-warn' : 'bg-violet-dim'
             } ${
               state === 'done' ? 'opacity-100'
@@ -443,7 +442,7 @@ function BatchTrack({ states }: { states: BatchState[] }) {
           />
           {state === 'running' && (
             <div
-              className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
+              className="absolute inset-y-0 left-0 w-1/3 bg-violet-2 opacity-0 motion-safe:opacity-70 motion-safe:animate-batch-sweep"
               aria-hidden
             />
           )}
@@ -480,7 +479,7 @@ function BatchTrailingNotice({
         <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2 flex items-center gap-1.5">
           {/* A pulsing dot rather than a spinner. This sits below the results for the whole run, and
               a spinner tracking a ten-minute wait reads as something stuck. */}
-          <span className="size-1.5 rounded-full bg-violet-2 motion-safe:animate-pulse-dot" aria-hidden />
+          <span className="led motion-safe:animate-pulse-dot" style={{ ['--c' as string]: 'var(--violet-2)' }} aria-hidden />
           {remaining} batch{remaining === 1 ? '' : 'es'} to go
         </span>
         <span className="font-mono text-2xs text-fg-mute tabular-nums">
@@ -568,7 +567,7 @@ function CorroborationStrip({ corr }: { corr?: AnalystAssessment['corroboration'
         methods.map((m) => (
           <span
             key={m}
-            className={`rounded-full border px-1.5 py-0.5 ${
+            className={`rounded-sm border px-1.5 py-0.5 ${
               DISCRIMINATIVE_METHODS.has(m)
                 ? 'border-accent/50 text-accent'
                 : 'border-border-1/60 text-fg-mute'
@@ -582,7 +581,7 @@ function CorroborationStrip({ corr }: { corr?: AnalystAssessment['corroboration'
       )}
       {corr.single_axis_capped && (
         <span
-          className="rounded-full border border-tier-moderate/40 text-tier-moderate px-1.5 py-0.5"
+          className="rounded-sm border border-tier-moderate/40 text-tier-moderate px-1.5 py-0.5"
           title="One axis carried the score; the coordinated read is capped."
         >
           single-axis capped
@@ -590,7 +589,7 @@ function CorroborationStrip({ corr }: { corr?: AnalystAssessment['corroboration'
       )}
       {corr.convergence && (
         <span
-          className="rounded-full border border-border-1/60 text-fg-mute px-1.5 py-0.5"
+          className="rounded-sm border border-border-1/60 text-fg-mute px-1.5 py-0.5"
           title="Two or more independent detectors converged."
         >
           convergence
@@ -691,14 +690,15 @@ function VerificationPanel({
   const c = a.completion;
   const aiBacked = t.model_backed === true;
   const rows: [string, React.ReactNode][] = [
-    ['Provider', t.provider ?? provider ?? '-'],
+    // Omi's own vocabulary, never the gateway's. See lib/analyst-identity.ts.
+    ['Provider', analystProviderLabel(t.provider ?? provider)],
     ['Served model', t.served_model ?? t.requested_model ?? '-'],
     ['Served model verified', t.served_model_verified == null
       ? '-'
       : t.served_model_verified
         ? `yes. ${t.served_model_expected ?? 'expected model'}`
         : `NO: expected ${t.served_model_expected ?? '?'}, served ${t.served_model ?? '?'}`],
-    ['Preset', t.openrouter_preset ?? '-'],
+    ['Protocol preset', t.openrouter_preset ?? '-'],
     ['Protocol version', t.master_prompt_version ?? '-'],
     ['Protocol hash', t.master_prompt_hash ?? '-'],
     ['Schema id / version', `${t.canonical_schema_id ?? '-'} / v${(a as { schema_version?: number }).schema_version ?? '-'}`],
@@ -716,7 +716,7 @@ function VerificationPanel({
     ['Estimated cost', fmtCost(t.endpoint_cost_usd)],
     ['Request id', t.endpoint_request_id ?? '-'],
     ['HTTP status', t.response_status ?? '-'],
-    ['Endpoint error', t.endpoint_error ?? '-'],
+    ['Endpoint error', scrubVendor(t.endpoint_error) || '-'],
     ['Generated at', generatedAt ?? '-'],
     // Phase 5H. Full-investigation completion certification
     ['completion', ''],
@@ -736,7 +736,7 @@ function VerificationPanel({
       <summary className="cursor-pointer select-none list-none px-3 py-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2">
           <span
-            className={`font-mono text-2xs tracking-wider uppercase rounded-full border px-2 py-0.5 ${
+            className={`font-mono text-2xs tracking-wider uppercase rounded-sm border px-2 py-0.5 ${
               aiBacked
                 ? 'border-tier-low/50 text-tier-low bg-tier-low/10'
                 : 'border-tier-moderate/50 text-tier-moderate bg-tier-moderate/10'
@@ -846,18 +846,28 @@ function AssessmentView(
     <div className="space-y-5">
       {/* ── LEAD INVESTIGATOR SYNTHESIS (Omi Analyst) ──────────────────────── */}
       <div className="space-y-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <TierBadge tier={a.suspicion_tier as Tier} />
-          <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-hot px-2.5 py-1 rounded-full bg-bg-elev-2">
-            {verdictLabel(a.verdict)} · recommended
-          </span>
-          <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute">
-            {a.confidence_band} confidence
-          </span>
+        {/* The verdict rack. Four labelled fields in one frame, not four
+            floating chips: as chips there was no hierarchy and no way to tell
+            what any of them was answering, so "high" and "coordination: none"
+            sat at the same weight as the tier that the whole page is about. */}
+        <div className="rounded-sm border border-border-1 bg-bg divide-y sm:divide-y-0 sm:divide-x divide-border-1 flex flex-col sm:flex-row">
+          <div className="px-3.5 py-2.5 flex flex-col gap-1.5 sm:min-w-[9rem]">
+            <span className="meta">Tier</span>
+            <TierBadge tier={a.suspicion_tier as Tier} />
+          </div>
+          <div className="px-3.5 py-2.5 readout flex-1">
+            <span className="meta">Recommended verdict</span>
+            <span className="readout-v text-[0.8125rem]">{verdictLabel(a.verdict)}</span>
+          </div>
+          <div className="px-3.5 py-2.5 readout sm:min-w-[8rem]">
+            <span className="meta">Confidence</span>
+            <span className="readout-v text-[0.8125rem] capitalize">{a.confidence_band}</span>
+          </div>
           {a.coordination_label && (
-            <span className="font-mono text-2xs tracking-wider uppercase text-fg-mute border border-border-1/60 px-2.5 py-1 rounded-full bg-bg-elev-2">
-              coordination: {a.coordination_label}
-            </span>
+            <div className="px-3.5 py-2.5 readout sm:min-w-[9rem]">
+              <span className="meta">Coordination</span>
+              <span className="readout-v text-[0.8125rem]">{a.coordination_label}</span>
+            </div>
           )}
         </div>
 
@@ -976,10 +986,10 @@ function AiUnavailableDiagnostics(
       : t.endpoint_error ? 'gateway error'
       : 'unknown');
   const diagnostics: [string, string][] = [
-    ['provider', t.provider ?? governanceProvider ?? '-'],
+    ['provider', analystProviderLabel(t.provider ?? governanceProvider)],
     ['reason', reason],
     ...(status !== null ? [['http status', String(status)] as [string, string]] : []),
-    ...(t.endpoint_error ? [['error', t.endpoint_error] as [string, string]] : []),
+    ...(t.endpoint_error ? [['error', scrubVendor(t.endpoint_error)] as [string, string]] : []),
     ...(t.requested_model ? [['requested', t.requested_model] as [string, string]] : []),
     ...(t.served_model ? [['served', t.served_model] as [string, string]] : []),
     ...(t.finish_reason ? [['finish', t.finish_reason] as [string, string]] : []),
@@ -1080,7 +1090,7 @@ function DomainPanel({
                 <span
                   key={i}
                   title={bad ? 'This citation does not resolve against the evidence.' : undefined}
-                  className={`font-mono text-2xs rounded-full border px-1.5 py-0.5 ${
+                  className={`font-mono text-2xs rounded-sm border px-1.5 py-0.5 ${
                     bad
                       ? 'text-danger border-danger/50 line-through'
                       : 'text-fg-mute border-border-1/60'
@@ -1223,7 +1233,7 @@ function CommenterAssessments({
               {r.citations.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {r.citations.map((c, i) => (
-                    <span key={i} className="font-mono text-2xs rounded-full border border-border-1/60 text-fg-mute px-1.5 py-0.5">
+                    <span key={i} className="font-mono text-2xs rounded-sm border border-border-1/60 text-fg-mute px-1.5 py-0.5">
                       {c}
                     </span>
                   ))}
@@ -1276,7 +1286,9 @@ function EvidenceList({
                 {/* impact = the detector's share of total score movement (echoed). Shown as a bar. */}
                 {typeof it.impact === 'number' && (
                   <div className="mt-1 pl-5 max-w-[180px]">
-                    <ProbabilityBar value={it.impact} size="sm" />
+                    {/* Share of score movement, not an OMI score: the tier
+                        graduations would mark boundaries this quantity has. */}
+                    <ProbabilityBar value={it.impact} size="sm" ungraduated />
                   </div>
                 )}
               </li>

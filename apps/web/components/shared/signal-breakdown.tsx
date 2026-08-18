@@ -55,16 +55,25 @@ function SignalRow({ signal }: { signal: AccountSignal }) {
         aria-expanded={open}
         className="w-full flex items-center gap-2 text-left py-0.5 group"
       >
-        <span className="font-mono text-2xs uppercase tracking-wider text-fg-dim flex-1 min-w-0 truncate group-hover:text-fg">
+        <span className="meta meta-on flex-1 min-w-0 truncate group-hover:text-fg">
           {meta?.label ?? signal.name}
         </span>
-        <span className="w-14 sm:w-16 shrink-0 h-1 bg-bg rounded-full overflow-hidden ring-1 ring-border-1/60">
+        {/* A graduated track, square, with the tier boundaries marked. Eight of
+            these stacked ARE the instrument face: unmarked rounded fills at
+            4px made 46 and 54 look the same, and those two numbers are a band
+            apart. An empty track still means "not measured", never zero. */}
+        <span className="relative w-16 sm:w-20 shrink-0 h-2 bg-bg-inset rounded-[1px] overflow-hidden border border-border-1">
           {score !== null && tier && (
             <span
-              className={cn('block h-full rounded-full', FILL[tier])}
+              className={cn('block h-full', FILL[tier])}
               style={{ width: `${Math.max(2, score)}%` }}
             />
           )}
+          <span className="absolute inset-0 pointer-events-none" aria-hidden>
+            {[25, 50, 75].map((m) => (
+              <span key={m} className="absolute top-0 bottom-0 w-px bg-bg-deep/70" style={{ left: `${m}%` }} />
+            ))}
+          </span>
         </span>
         <span
           className={cn(
@@ -117,19 +126,20 @@ export function SignalBreakdown({
   return (
     <div className={cn('border-t border-border-1/60 pt-2 space-y-1', className)}>
       <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="font-mono text-2xs uppercase tracking-[0.18em] text-fg-mute">
-          Signal breakdown
-        </span>
+        <span className="meta meta-hi">Signal breakdown</span>
         {conf !== null && (
           <span
-            className="font-mono text-2xs text-fg-faint ml-auto tabular-nums"
+            className="meta tabular ml-auto"
             title="How much evidence this account's read rests on."
           >
             confidence {conf}%
           </span>
         )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5">
+      {/* A rule between the columns. At two columns with only a gap, the meter of
+          the left dimension sits directly beside the label of the right one and
+          the eye reads across the pair as one row. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 sm:[&>*:nth-child(even)]:pl-6 sm:[&>*:nth-child(even)]:border-l sm:[&>*:nth-child(even)]:border-border-1/70">
         {rows.map((s) => (
           <SignalRow key={s.name} signal={s} />
         ))}

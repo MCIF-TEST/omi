@@ -359,6 +359,171 @@
     flex: none;
   }
 
+  /* ══ INSTRUMENT CHROME ════════════════════════════════════════════════════
+     The vocabulary that makes a surface read as a console rather than a page.
+
+     The design language above already had the right materials (near-black
+     ground, hairlines, tight corners, mono for data). What it did not have was
+     STRUCTURE: every panel was a padded box with content in it, so a page of
+     panels read as a feed of cards. An instrument frames its readouts. A
+     labelled header bar, a registration tick at each corner, and a fixed label
+     scale do almost all of that work, and they do it once here instead of
+     being retyped at each of ~200 call sites.
+
+     Everything here is composable with the existing primitives. `.panel` is
+     `Card` without the padding; `.meta` replaces the
+     `font-mono text-2xs uppercase tracking-[0.12em] text-fg-faint` string that
+     had drifted into four different spellings across the app.
+     ──────────────────────────────────────────────────────────────────────── */
+
+  /* The label scale. One spelling, three weights of quiet.
+     `.meta` is the workhorse: field labels, column heads, panel titles, status
+     words. Never a sentence: at 0.18em tracking, prose stops being readable
+     after about five words. */
+  .meta {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    line-height: 1.4;
+  }
+  .meta-hi { color: var(--text-mute); }
+  .meta-on { color: var(--text-dim); }
+
+  /* Panel. A framed readout: hairline, raised ground, square.
+     Distinct from `Card` only in that it owns no padding, because a panel's
+     header sits flush against its own border and a padded box cannot do that. */
+  .panel {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  /* Panel header bar. Label hard left, meta hard right, hairline under.
+     This one rule is most of what separates "card with a bold line at the top"
+     from "instrument panel": the label sits on its own ground, in the data
+     voice, at a fixed height, so a column of panels lines up like a rack. */
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 34px;
+    padding: 0 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    /* The header is a bar, so its corners follow the panel's at the top only. */
+    border-radius: 2px 2px 0 0;
+  }
+  .panel-body { padding: 14px 12px; }
+  .panel-body-lg { padding: 20px; }
+
+  /* Registration ticks. Four corner brackets drawn in the border colour,
+     inset one pixel so they sit ON the frame rather than inside it.
+     A single overlay with eight 1px gradients: no extra DOM, no cost, and it
+     inherits whatever radius the host has because it never paints a full edge.
+
+     This is the cheapest honest "measured instrument" cue there is, so it is
+     rationed: the primary readout on a page, never every panel on it. Ticks on
+     everything is decoration, and decoration is not a purpose. */
+  .tick-frame { position: relative; }
+  .tick-frame::after {
+    content: '';
+    position: absolute;
+    /* inset 0, NOT -1px. Every host that wants ticks also wants `overflow-hidden`
+       (a panel header has to be clipped to the frame's corners), and an overlay
+       hung one pixel outside the box is clipped away entirely by it: the ticks
+       were being drawn and then thrown out, on exactly the panels they were
+       rationed to. */
+    inset: 0;
+    pointer-events: none;
+    --tick: var(--accent-dim);
+    background:
+      linear-gradient(var(--tick) 0 0) 0    0    / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 0    0    / 10px 2px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 0    / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 0    / 10px 2px no-repeat,
+      linear-gradient(var(--tick) 0 0) 0    100% / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 0    100% / 10px 2px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 100% / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 100% / 10px 2px no-repeat;
+  }
+  /* Live subject: the ticks brighten to the full identity blue. Used for the
+     panel a scan is actively writing into, and nowhere else. */
+  .tick-frame-live::after { --tick: var(--accent-2); }
+
+  /* Readout. A label over a figure, which is how every number in this product
+     should be presented: the figure is evidence and carries the mono/tabular
+     voice, the label is chrome and stays quiet. */
+  .readout { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .readout > .readout-v {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9375rem;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.1;
+  }
+
+  /* Status LED. Square, steady, 6px.
+     Replaces a round dot inside a `animate-ping` halo. A pulsing halo is the
+     softest motion in the product and it was attached to the one element that
+     should read as an instrument lamp: a light that is on is not animated, it
+     is on. Motion here now means one specific thing, work in flight, and it is
+     `.led-work` alone. */
+  .led {
+    width: 6px; height: 6px;
+    border-radius: 1px;
+    background: var(--c, var(--text-faint));
+    flex: none;
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--c, var(--text-faint)) 30%, transparent);
+  }
+  .led-ok    { --c: var(--tier-low); }
+  .led-warn  { --c: var(--tier-moderate); }
+  .led-fail  { --c: var(--tier-high); }
+  .led-work  { --c: var(--accent); animation: led-blink 1.6s var(--ease-mech) infinite; }
+  .led-off   { --c: var(--unknown); }
+
+  /* Rack rule. A hairline with a hard 2px cap at the left, so a stack of
+     labelled rows reads as rows in a frame instead of a list with lines. */
+  .rule-rack {
+    height: 1px; border: 0;
+    background: linear-gradient(90deg, var(--border-hot) 0 10px, var(--border) 10px, var(--divider) 60%, transparent 100%);
+  }
+
+  /* Data table. Mono heads, hairline rows, no zebra.
+     Zebra striping is a readability aid for wide printed tables and reads as a
+     spreadsheet on screen; a hairline and a tabular column do the same job
+     without the texture. */
+  .rack-table { width: 100%; border-collapse: collapse; }
+  .rack-table thead th {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .rack-table tbody td { padding: 10px 12px; border-bottom: 1px solid var(--divider); vertical-align: top; }
+  .rack-table tbody tr:last-child td { border-bottom: 0; }
+  .rack-table tbody tr:hover td { background: var(--bg-elev-2); }
+
+  /* Focus. Square and hard, matching the corners it lands on.
+     The shared ring utility draws a 2px halo at a 2px offset, which on a 3px
+     corner reads as a soft glow around a hard object. An outline sits ON the
+     edge and follows the element's own radius. */
+  .focus-hard:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
   /* ── Button materials ─────────────────────────────────────────────────────
      Flat, quiet, purposeful. 1px of real travel on press. No glow. */
 
@@ -367,7 +532,7 @@
     background: var(--accent);
     color: #ffffff;
     border: 1px solid transparent;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     transition: background var(--dur-hover) ease, transform 0.06s ease;
   }
   .btn-lamp:hover:not(:disabled) { background: var(--accent-2); }
@@ -384,7 +549,7 @@
     background: var(--violet-solid);
     color: #ffffff;
     border: 1px solid transparent;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     transition: background var(--dur-hover) ease, transform 0.06s ease;
   }
   .btn-ai:hover:not(:disabled) { background: var(--violet-solid-2); }
@@ -423,7 +588,10 @@
     align-items: center;
     gap: 10px;
     padding: 7px 10px;
-    border-radius: 7px;
+    /* 3px, not 7px. This was the largest radius left in the product, on the
+       control a user looks at most, so the one persistently soft shape was in
+       the frame rather than in the content. */
+    border-radius: 3px;
     font-size: 0.875rem;
     font-weight: 450;
     color: var(--text-dim);
@@ -606,6 +774,12 @@
    corners and a warm fill are the two things that most separate this from
    a soft blue SaaS pill. One real pixel of travel on press, as everywhere
    else in the product. */
+/* WARM OFF-WHITE. Retired from primary actions.
+   The primary action is the instrument blue (`.btn-lamp`). Bone is the warmest material in a
+   near-black, cold palette, so putting it on the most prominent control on the page made the
+   friendliest element the one a reader looked at first, which is the opposite of what this product
+   is for. The class is kept because it is still the right material for a rare inverted surface,
+   but a primary CTA must never wear it. */
 .btn-bone {
   background: var(--bone);
   color: #06080b;
@@ -755,16 +929,28 @@
   50%      { opacity: 0.4; }
 }
 
+/* The work lamp. Opacity only, and it never reaches zero: a light that goes out
+   and comes back reads as a fault, whereas a light that dips reads as activity.
+   This is the only animated status indicator in the product. */
+@keyframes led-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stagger > *,
   .btn-glow:active,
   .btn-lamp:active,
   .btn-ai:active,
   .btn-slab:active,
+  .led-work,
   .dialog-panel {
     animation: none !important;
     transform: none !important;
   }
+  /* The work lamp still has to say "running" with the animation gone, so it
+     keeps the accent colour rather than falling back to a dead indicator. */
+  .led-work { opacity: 1; }
   [style*="hv-radar"], [style*="hv-ripple"], [style*="hv-node-pulse"],
   [style*="hv-chip-in"] {
     animation: none !important;

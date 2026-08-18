@@ -24,9 +24,7 @@ export function PageMasthead({
       <div className="flex items-center gap-3 mb-6">
         <span className="idx">{index}</span>
         <span className="h-px w-8 bg-border-hot" aria-hidden />
-        <span className="font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-mute">
-          {eyebrow}
-        </span>
+        <span className="meta meta-hi">{eyebrow}</span>
       </div>
 
       <h1
@@ -60,9 +58,7 @@ export function PageSection({
 }) {
   return (
     <section className={`mt-10 md:mt-12 ${className}`}>
-      <h2 className="font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-mute mb-4">
-        {label}
-      </h2>
+      <h2 className="meta meta-hi mb-4">{label}</h2>
       {children}
     </section>
   );

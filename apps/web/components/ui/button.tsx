@@ -30,10 +30,15 @@ const variantClasses: Record<Variant, string> = {
     'transition-[background-color,transform] duration-150 disabled:opacity-50 disabled:cursor-not-allowed',
 };
 
+// Console heights. `lg` came down from 44px: a 44px control is a touch target
+// on a marketing page and a slab in a dense workspace, and every `lg` in this
+// product sits on a desktop surface beside 34px panel headers.
+// Touch reach is handled where it belongs, by the mobile tab bar and by `sm`
+// controls keeping a 32px box.
 const sizeClasses: Record<Size, string> = {
   sm: 'h-8 px-3 text-xs rounded-md',
   md: 'h-9 px-4 text-sm rounded-md',
-  lg: 'h-11 px-6 text-[0.9rem] rounded-lg',
+  lg: 'h-10 px-5 text-[0.875rem] rounded-md',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -42,8 +47,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       className={cn(
         'inline-flex items-center justify-center gap-2 font-medium select-none whitespace-nowrap',
-        'tracking-[0.01em] ease-omi focus-visible:outline-none focus-visible:ring-2',
-        'focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep',
+        // Focus is a hard outline on the edge, not a ring at an offset. A 2px
+        // halo held 2px away from a 3px corner reads as a glow around a square
+        // object, which is the one thing the design language forbids outright.
+        'tracking-[0.01em] ease-omi focus-hard focus-visible:outline-none',
         variantClasses[variant],
         sizeClasses[size],
         className,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, X, ShieldAlert } from 'lucide-react';
+import { X, ShieldAlert } from 'lucide-react';
 
 interface Props {
   youtubeConfigured: boolean;
@@ -70,22 +70,18 @@ export function ServiceHealthPill({
     ? 'ok'
     : issues.some((i) => i.severity === 'high') ? 'high' : 'medium';
 
+  // A lamp and a state word, not an icon and a phrase.
+  //
+  // Three fixes here. The icons (a tick, a triangle, a shield) are consumer
+  // status glyphs, and a console reports state with a lamp. `All systems` was
+  // half a sentence, saying nothing about what those systems were doing. And
+  // the `high` state pulsed the ENTIRE pill, which on a sticky topbar is a
+  // whole control blinking in the corner of the eye for as long as the fault
+  // lasts; the lamp blinks, the frame around it holds still.
   const palette = {
-    ok: {
-      btn: 'border-tier-low/40 bg-tier-low/10 text-tier-low hover:bg-tier-low/15',
-      icon: <CheckCircle2 size={11} />,
-      label: 'All systems',
-    },
-    medium: {
-      btn: 'border-tier-moderate/40 bg-tier-moderate/10 text-tier-moderate hover:bg-tier-moderate/15',
-      icon: <AlertTriangle size={11} />,
-      label: 'Degraded',
-    },
-    high: {
-      btn: 'border-tier-high/40 bg-tier-high/10 text-tier-high hover:bg-tier-high/15 animate-pulse-dot',
-      icon: <ShieldAlert size={11} />,
-      label: 'Service down',
-    },
+    ok:     { btn: 'border-tier-low/40 bg-tier-low/10 text-tier-low hover:bg-tier-low/15', led: 'led-ok', label: 'Nominal' },
+    medium: { btn: 'border-tier-moderate/40 bg-tier-moderate/10 text-tier-moderate hover:bg-tier-moderate/15', led: 'led-warn', label: 'Degraded' },
+    high:   { btn: 'border-tier-high/40 bg-tier-high/10 text-tier-high hover:bg-tier-high/15', led: 'led-fail animate-pulse-dot', label: 'Offline' },
   }[highest];
 
   return (
@@ -97,7 +93,7 @@ export function ServiceHealthPill({
         aria-label={`Service health: ${palette.label}`}
         aria-expanded={open}
       >
-        {palette.icon}
+        <span className={`led ${palette.led}`} />
         <span className="hidden sm:inline">{palette.label}</span>
       </button>
 
@@ -105,11 +101,12 @@ export function ServiceHealthPill({
         <>
           {/* invisible scrim */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 w-80 bg-bg-elev border border-border-2 rounded-sm shadow-xl z-50 p-3">
+          {/* shadow-overlay, the product's own token: a tight drop plus a
+              hairline. `shadow-xl` is a large soft Tailwind default, which is
+              the one elevation move this design language does not use. */}
+          <div className="absolute right-0 mt-1 w-80 bg-bg-elev border border-border-2 rounded-sm shadow-overlay z-50 p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
-                Service status
-              </span>
+              <span className="meta meta-hi">Service status</span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -122,23 +119,23 @@ export function ServiceHealthPill({
 
             {issues.length === 0 ? (
               <div>
-                <div className="flex items-start gap-2 mb-3">
-                  <CheckCircle2 size={13} className="text-tier-low shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2.5 mb-3">
+                  <span className="led led-ok shrink-0 mt-1.5" />
                   <p className="text-xs text-fg-dim leading-relaxed">
                     All systems operational. Scanning, storage, and detection are healthy.
                   </p>
                 </div>
                 {isAdmin && quotaDailyLimit && quotaDailyLimit > 0 && quotaUsedToday !== undefined && (
                   <div className="pt-2 border-t border-border-1">
-                    <div className="flex items-center justify-between font-mono text-2xs text-fg-mute uppercase tracking-wider mb-1">
-                      <span>YT quota · last 24h</span>
-                      <span className="text-fg">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="meta">YT quota · last 24h</span>
+                      <span className="font-mono text-2xs tabular text-fg">
                         {quotaUsedToday.toLocaleString()} / {quotaDailyLimit.toLocaleString()}
                       </span>
                     </div>
-                    <div className="h-1 bg-border-1 rounded-full overflow-hidden">
+                    <div className="h-1 bg-border-1 rounded-[1px] overflow-hidden">
                       <div
-                        className="h-full bg-accent rounded-full"
+                        className="h-full bg-accent"
                         style={{
                           width: `${Math.min(100, (quotaUsedToday / quotaDailyLimit) * 100)}%`,
                         }}
@@ -150,14 +147,9 @@ export function ServiceHealthPill({
             ) : (
               <ul className="space-y-3">
                 {issues.map((issue, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <AlertTriangle
-                      size={13}
-                      className={
-                        issue.severity === 'high'
-                          ? 'text-tier-high shrink-0 mt-0.5'
-                          : 'text-tier-moderate shrink-0 mt-0.5'
-                      }
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span
+                      className={`led shrink-0 mt-1.5 ${issue.severity === 'high' ? 'led-fail' : 'led-warn'}`}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-fg leading-relaxed">{issue.user}</p>
@@ -177,7 +169,7 @@ export function ServiceHealthPill({
                 href="/v1/status"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block mt-3 pt-2 border-t border-border-1 text-2xs font-mono text-accent hover:text-accent-2 uppercase tracking-wider"
+                className="block mt-3 pt-2 border-t border-border-1 meta text-accent hover:text-accent-2"
               >
                 View /v1/status →
               </Link>
@@ -201,7 +193,7 @@ export function ServiceDegradedBanner({
 }) {
   if (youtubeConfigured) return null;
   return (
-    <div className="bg-tier-high/10 border-b border-tier-high/40 px-6 py-2.5 text-xs text-fg flex items-center gap-2 justify-center">
+    <div className="bg-tier-high/10 border-b border-tier-high/40 px-6 py-2.5 text-xs text-fg flex items-center gap-2.5 justify-center">
       <ShieldAlert size={13} className="text-tier-high shrink-0" />
       <span>
         <span className="font-medium">Scanning is temporarily unavailable.</span>{' '}

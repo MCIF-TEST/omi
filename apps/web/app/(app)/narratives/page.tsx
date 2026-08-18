@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { apiServer } from '@/lib/api-server';
 import { type User } from '@/lib/api';
 import { CoordinationQueue } from './coordination-queue';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Coordination · OMISPHERE' };
@@ -30,19 +31,12 @@ export default async function NarrativesPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
-        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <div className="relative">
-          <span className="section-label">Coordination</span>
-          <h1 className="display text-2xl font-semibold tracking-tight mt-3">
-            Coordinated campaigns
-          </h1>
-          <p className="text-sm text-fg-dim mt-1.5 max-w-2xl leading-relaxed">
-            Accounts an investigation scored at 70 or above, grouped by evidence they produced
-            themselves. Runs on every scan, costs nothing, and calls no model.
-          </p>
-        </div>
-      </header>
+      <ConsoleHeader
+        index={SECTION_INDEX['/narratives']}
+        eyebrow="Coordination · Admin"
+        title="Coordinated campaigns"
+        lede="Accounts an investigation scored at 70 or above, grouped by evidence they produced themselves. Runs on every scan, costs nothing, and calls no model."
+      />
 
       <CoordinationQueue />
 

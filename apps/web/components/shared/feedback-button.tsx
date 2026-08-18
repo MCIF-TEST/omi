@@ -74,7 +74,7 @@ export function FeedbackButton() {
 
             {state === 'done' ? (
               <div className="px-5 py-10 text-center">
-                <span className="mx-auto mb-3 grid place-items-center w-11 h-11 rounded-full bg-tier-low/15 text-tier-low">
+                <span className="mx-auto mb-3 grid place-items-center w-11 h-11 rounded-sm bg-tier-low/15 text-tier-low">
                   <Check size={22} />
                 </span>
                 <p className="text-sm text-fg font-medium">Thanks. Got it.</p>
@@ -88,7 +88,7 @@ export function FeedbackButton() {
                       key={c.value}
                       type="button"
                       onClick={() => setCategory(c.value)}
-                      className={`h-8 px-3 rounded-full text-xs font-medium border transition-colors ${
+                      className={`h-8 px-3 rounded-sm text-xs font-medium border transition-colors ${
                         category === c.value
                           ? 'border-accent bg-accent/10 text-accent-text'
                           : 'border-border-2 text-fg-mute hover:text-fg-dim'

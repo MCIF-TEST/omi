@@ -32,11 +32,11 @@ export default async function SpendPage() {
       <div>
         <Link
           href="/settings"
-          className="inline-flex items-center gap-1.5 text-xs text-fg-mute hover:text-fg-dim"
+          className="inline-flex items-center gap-1.5 meta meta-hi hover:text-fg-dim"
         >
           <ArrowLeft size={13} /> Settings
         </Link>
-        <h1 className="display text-2xl font-semibold tracking-tight mt-3">Upstream spend</h1>
+        <h1 className="display-hard-sm text-2xl mt-3">Upstream spend</h1>
         <p className="text-sm text-fg-dim mt-1.5 max-w-2xl leading-relaxed">
           Calls made to the paid platform APIs. This is the number that bills, not the number of
           requests the product served: one compile can page the provider several times.
@@ -157,7 +157,7 @@ function Figure({
 }) {
   return (
     <div>
-      <div className="text-2xs font-semibold tracking-[0.12em] text-fg-mute uppercase">{label}</div>
+      <div className="meta meta-hi">{label}</div>
       <div
         className={`stat-value mt-1 text-xl ${tone === 'bad' ? 'text-tier-high' : 'text-fg'}`}
       >

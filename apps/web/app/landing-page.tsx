@@ -43,7 +43,7 @@ export function LandingPage() {
         <Link
           href="/"
           aria-label="OMISPHERE home"
-          className="shrink min-w-0 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          className="shrink min-w-0 overflow-hidden focus-hard focus-visible:outline-none"
         >
           <Logo size="sm" />
         </Link>
@@ -55,13 +55,13 @@ export function LandingPage() {
         <nav className="flex items-center gap-1.5 ml-auto shrink-0">
           <Link
             href="/sign-in"
-            className="font-mono text-[0.625rem] tracking-[0.16em] uppercase text-fg-mute hover:text-fg transition-colors px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            className="font-mono text-[0.625rem] tracking-[0.16em] uppercase text-fg-mute hover:text-fg transition-colors px-3 py-2 focus-hard focus-visible:outline-none"
           >
             Log in
           </Link>
           <Link
             href="/sign-up"
-            className="btn-bone inline-flex items-center gap-1.5 h-8 px-3.5 font-mono text-[0.625rem] tracking-[0.14em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+            className="btn-lamp inline-flex items-center gap-1.5 h-8 px-3.5 font-mono text-[0.625rem] tracking-[0.14em] uppercase focus-hard focus-visible:outline-none"
           >
             Start free
             <ArrowRight size={11} />
@@ -75,7 +75,7 @@ export function LandingPage() {
           <div className="flex items-center gap-3 mb-7">
             <span className="idx">001</span>
             <span className="h-px w-8 bg-border-hot" aria-hidden />
-            <span className="font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-mute">
+            <span className="meta meta-hi">
               Private beta
             </span>
           </div>
@@ -104,14 +104,14 @@ export function LandingPage() {
                     incentive, and it asks nothing in return. */}
                 <a
                   href="#try"
-                  className="btn-bone inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+                  className="btn-lamp inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-hard focus-visible:outline-none"
                 >
                   Run a scan
                   <ArrowRight size={15} />
                 </a>
                 <Link
                   href="/sign-up"
-                  className="btn-hard inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+                  className="btn-hard inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] font-medium focus-hard focus-visible:outline-none"
                 >
                   Create an account
                 </Link>
@@ -210,10 +210,10 @@ export function LandingPage() {
           <Reveal from="up">
             <div className="border border-border-1 bg-bg-elev">
               <div className="px-4 md:px-5 py-3 border-b border-border-1 bg-bg flex items-center justify-between flex-wrap gap-2">
-                <span className="font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-mute">
+                <span className="meta meta-hi">
                   Free X scan
                 </span>
-                <span className="font-mono text-[0.625rem] tracking-[0.14em] uppercase text-fg-faint">
+                <span className="meta">
                   Compile · select · analyze
                 </span>
               </div>
@@ -233,7 +233,7 @@ export function LandingPage() {
         >
           <div className="grid lg:grid-cols-2 gap-px bg-border-1 border border-border-1">
             <div className="bg-bg p-5 md:p-6">
-              <div className="font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-mute mb-4">
+              <div className="meta meta-hi mb-4">
                 Does
               </div>
               <ul className="space-y-3">
@@ -246,7 +246,7 @@ export function LandingPage() {
               </ul>
             </div>
             <div className="bg-bg p-5 md:p-6">
-              <div className="font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-mute mb-4">
+              <div className="meta meta-hi mb-4">
                 Refuses
               </div>
               <ul className="space-y-3">
@@ -289,7 +289,7 @@ export function LandingPage() {
               </p>
               <Link
                 href="/pricing"
-                className="inline-flex items-center gap-1.5 mt-3.5 font-mono text-[0.625rem] tracking-[0.16em] uppercase text-fg-mute hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                className="inline-flex items-center gap-1.5 mt-3.5 font-mono text-[0.625rem] tracking-[0.16em] uppercase text-fg-mute hover:text-fg transition-colors focus-hard focus-visible:outline-none"
               >
                 Full pricing
                 <ArrowUpRight size={11} />
@@ -317,7 +317,7 @@ export function LandingPage() {
             <div className="lg:col-span-4 flex flex-col sm:flex-row lg:justify-end gap-2.5">
               <a
                 href="#try"
-                className="btn-bone inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+                className="btn-lamp inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-hard focus-visible:outline-none"
               >
                 Run a scan
                 <ArrowRight size={15} />
@@ -341,7 +341,7 @@ export function LandingPage() {
                 <Link
                   key={href}
                   href={href}
-                  className="px-2.5 py-1.5 hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                  className="px-2.5 py-1.5 hover:text-fg transition-colors focus-hard focus-visible:outline-none"
                 >
                   {label}
                 </Link>

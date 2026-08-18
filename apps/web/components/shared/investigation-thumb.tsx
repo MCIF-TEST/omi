@@ -44,8 +44,10 @@ export function InvestigationThumb({
         'relative overflow-hidden shrink-0 isolate',
         sizeCls,
         !showImage && isX && 'bg-[#0a0e14]',
-        !showImage && isYt && 'bg-gradient-to-br from-[#1a0a0a] via-bg-elev-2 to-bg-elev-3',
-        !showImage && !isX && !isYt && 'bg-gradient-to-br from-bg-elev-3 to-bg-elev-2',
+        // Flat platform tints. The placeholders were diagonal washes, which is
+        // the one elevation move this design language does not use.
+        !showImage && isYt && 'bg-[#150a0a]',
+        !showImage && !isX && !isYt && 'bg-bg-elev-2',
         className,
       )}
     >
@@ -66,8 +68,10 @@ export function InvestigationThumb({
             src={thumbnailUrl!}
             alt={label ? `Thumbnail for ${label}` : ''}
             className={cn(
-              'absolute inset-0 h-full w-full object-cover transition-all duration-500',
-              'group-hover:scale-[1.05]',
+              // No hover zoom. A thumbnail that swells under the pointer is a
+              // media-card behaviour; here the row is a record in an archive and
+              // the hairline brightening already says it is interactive.
+              'absolute inset-0 h-full w-full object-cover transition-opacity duration-300',
               loaded ? 'opacity-100' : 'opacity-0',
             )}
             loading="lazy"
@@ -174,7 +178,9 @@ function PlatformChip({
     <span
       className={cn(
         'inline-flex items-center gap-1 font-mono tracking-wider uppercase',
-        'rounded-full border shadow-sm',
+        // Square: this is a source label on a record, and every other labelled
+        // tag in the product is square now.
+        'rounded-sm border shadow-sm',
         compact ? 'text-[0.5rem] px-1 py-px' : 'text-[0.55rem] px-1.5 py-0.5',
         isYt && 'border-red-500/30 bg-black/55 text-red-200',
         isX && 'border-white/15 bg-black/55 text-fg',

@@ -10,6 +10,7 @@ import { usePolling } from '@/lib/use-polling';
 import { timeAgo } from '@/lib/format';
 import { WatchlistForm } from './watchlist-form';
 import { WatchlistRow } from './watchlist-row';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 const FEED_INTERVAL = 30_000;     // 30s
 const ALERTS_INTERVAL = 60_000;   // 60s
@@ -31,29 +32,21 @@ export function MonitoringClient() {
 
   return (
     <div className="space-y-8">
-      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
-        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <div className="relative flex items-baseline justify-between gap-4 flex-wrap">
-          <div>
-            <span className="section-label">Operations · Live intelligence</span>
-            <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-3">Monitoring</h1>
-            <p className="mt-1.5 text-sm text-fg-dim max-w-2xl leading-relaxed">
-              Narrative spikes, high-tier surges, and watchlist alerts. Polls every 30 seconds
-              while this tab is open; pauses when you switch away.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="font-mono text-2xs tracking-wider text-fg-mute uppercase">
-              {feed.loading ? 'Refreshing…' : 'Live'}
-            </span>
-            <span
-              className={`inline-block w-2 h-2 rounded-full ${
-                feed.loading ? 'bg-fg-mute' : 'bg-ok animate-pulse-dot'
-              }`}
-            />
-          </div>
-        </div>
-      </header>
+      <ConsoleHeader
+        index={SECTION_INDEX['/monitoring']}
+        eyebrow="Operations · Live intelligence"
+        title="Monitoring"
+        lede="Narrative spikes, high-tier surges, and watchlist alerts. Polls every 30 seconds while this tab is open; pauses when you switch away."
+        readout={
+          // Lamp first, then the word, matching the sidebar rack and the health
+          // pill. Refreshing is work in flight, so it gets the work lamp; idle
+          // is steady green, not a pulsing dot.
+          <span className="inline-flex items-center gap-2">
+            <span className={feed.loading ? 'led led-work' : 'led led-ok'} />
+            <span className="meta meta-hi">{feed.loading ? 'Refreshing' : 'Live'}</span>
+          </span>
+        }
+      />
 
       {/* Live anomaly feed */}
       <Card>
@@ -103,7 +96,7 @@ export function MonitoringClient() {
           <CardLabel className="m-0 flex items-center gap-1.5">
             <Bell size={11} /> Your alerts
             {alerts.data?.unread_count ? (
-              <span className="ml-2 px-1.5 rounded-full bg-danger/15 text-danger font-mono text-2xs">
+              <span className="ml-2 px-1.5 rounded-sm bg-danger/15 text-danger font-mono text-2xs tabular">
                 {alerts.data.unread_count} unread
               </span>
             ) : null}

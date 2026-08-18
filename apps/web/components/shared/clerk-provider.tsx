@@ -46,8 +46,12 @@ const clerkAppearance = {
       'border border-[#343c4b] bg-[#06080b] hover:bg-[#10141b] hover:border-[#4b5566] text-white normal-case',
     socialButtonsBlockButtonText: 'text-white font-medium',
     dividerLine: 'bg-[#232935]',
-    dividerText: 'text-[#7b8593] font-mono text-xs tracking-wider uppercase',
-    formFieldLabel: 'text-[#e3e8ef]',
+    dividerText: 'meta',
+    // The mono label voice, the same one `Label` and every panel header uses.
+    // Clerk renders into our DOM, so our stylesheet reaches these elements even
+    // though Clerk's own bundle cannot see our CSS variables. The form was the
+    // one place in the funnel whose field labels read as ordinary sans copy.
+    formFieldLabel: 'meta meta-on',
     formFieldInput: 'bg-[#030406] border border-[#232935] focus:border-[#3B82F6] text-white',
     footer: 'hidden',
     footerAction: 'hidden',

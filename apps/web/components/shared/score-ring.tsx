@@ -25,9 +25,16 @@ const RING: Record<Tier | 'none', string> = {
 };
 
 /**
- * Circular probability gauge. The stroke sweeps to its value with an
- * ease-out curve when it enters view, a satisfying, legible alternative
- * to a flat bar for headline scores.
+ * Circular probability gauge. The stroke sweeps to its value with an ease-out
+ * curve when it enters view.
+ *
+ * Read as an instrument, not as a progress donut: a graduated tick ring outside
+ * the track, a butt-capped arc that starts and ends exactly on its value, and no
+ * glow. The rounded cap was overhanging the reading by half a stroke at each
+ * end, which on a 96px ring is about two points of score, and the filter was
+ * `drop-shadow(0 0 6px var(--tier-low)66)`: a CSS variable with two characters
+ * concatenated onto it, so it was never a valid colour and never painted
+ * anything. It is gone rather than repaired.
  */
 export function ScoreRing({
   value,
@@ -77,6 +84,26 @@ export function ScoreRing({
   return (
     <div className={cn('relative inline-flex items-center justify-center', className)} style={{ width: size, height: size }}>
       <svg ref={ref} width={size} height={size} className="-rotate-90">
+        {/* Graduation. Twenty marks, every fifth one long: the ring becomes a
+            scale a reader can estimate against instead of a shape that is
+            simply more or less full. Suppressed on small instances, where the
+            marks would sit closer together than they can be drawn. */}
+        {size >= 64 && (
+          <g stroke="var(--border-2)" strokeWidth="1">
+            {Array.from({ length: 20 }).map((_, i) => {
+              const a = (i / 20) * Math.PI * 2;
+              const r0 = r + stroke / 2 + 2;
+              const r1 = r0 + (i % 5 === 0 ? 5 : 2.5);
+              const c = size / 2;
+              return (
+                <line key={i}
+                  x1={c + Math.cos(a) * r0} y1={c + Math.sin(a) * r0}
+                  x2={c + Math.cos(a) * r1} y2={c + Math.sin(a) * r1}
+                />
+              );
+            })}
+          </g>
+        )}
         <circle
           cx={size / 2} cy={size / 2} r={r}
           fill="none" stroke="var(--border)" strokeWidth={stroke}
@@ -86,10 +113,12 @@ export function ScoreRing({
           fill="none"
           stroke={color}
           strokeWidth={stroke}
-          strokeLinecap="round"
+          // Butt cap: the arc has to end ON the value it reports. A round cap
+          // adds half a stroke past each end of the sweep, which reads high.
+          strokeLinecap="butt"
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - progress)}
-          style={{ filter: `drop-shadow(0 0 6px ${color}66)`, transition: 'stroke 0.3s ease' }}
+          style={{ transition: 'stroke 0.3s ease' }}
         />
       </svg>
       {!hideLabel && (

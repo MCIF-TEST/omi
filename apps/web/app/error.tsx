@@ -22,7 +22,7 @@ export default function Error({
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6">
       <div className="max-w-md w-full text-center space-y-5">
-        <h1 className="display text-2xl font-semibold tracking-tight text-fg">Something went wrong</h1>
+        <h1 className="display-hard-sm text-2xl text-fg">Something went wrong</h1>
         <p className="text-sm text-fg-mute">
           This page hit an unexpected error. It&apos;s usually temporary. Try again, or head back and
           reopen it.

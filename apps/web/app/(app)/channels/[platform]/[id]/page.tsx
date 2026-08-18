@@ -85,21 +85,24 @@ export default async function ChannelIntelligencePage({
       </Link>
 
       {/* Channel header */}
-      <header className="aurora relative overflow-hidden bg-bg-elev border border-border-1 rounded-2xl p-6">
+      <header className="relative overflow-hidden bg-bg-elev border border-border-1 rounded-xl tick-frame p-6">
         <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
         <div className="relative flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-bg-elev-2 border border-border-2 flex items-center justify-center text-accent-2 shrink-0">
+          <div className="w-12 h-12 rounded-sm bg-bg-elev-2 border border-border-2 flex items-center justify-center text-accent-2 shrink-0">
             <User size={20} />
           </div>
           <div className="flex-1 min-w-0">
-            <span className="section-label">{data.platform} · Channel intelligence</span>
-            <div className="mt-2.5" />
-            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight truncate">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="meta shrink-0">{data.platform}</span>
+              <span className="h-px w-4 bg-border-hot shrink-0" aria-hidden />
+              <span className="meta meta-on truncate">Channel intelligence</span>
+            </div>
+            <h1 className="display-hard-sm text-2xl md:text-[1.9rem] text-fg truncate mt-2.5">
               {data.display_name || data.handle}
             </h1>
             {data.display_name && (
               <p className="font-mono text-xs text-fg-faint mt-0.5">
-                @{data.handle} · {data.external_id}
+                @{data.handle} · <span className="select-all">{data.external_id}</span>
               </p>
             )}
             {data.bio && (
@@ -107,16 +110,15 @@ export default async function ChannelIntelligencePage({
             )}
           </div>
           {data.follower_count != null && (
-            <div className="shrink-0 text-right">
-              <div className="stat-value text-xl font-semibold text-fg">
-                {data.follower_count.toLocaleString()}
-              </div>
-              <div className="font-mono text-2xs text-fg-mute uppercase tracking-wider">subscribers</div>
+            <div className="readout shrink-0 items-end">
+              <span className="meta">Subscribers</span>
+              <span className="readout-v text-xl">{data.follower_count.toLocaleString()}</span>
             </div>
           )}
         </div>
 
-        <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-5 pt-5 border-t border-border-1/60">
+        <hr className="rule-rack relative mt-5" />
+        <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 pt-4">
           <Stat label="Videos scanned" value={data.video_count} icon={<Video size={11} />} />
           <Stat
             label="Total commenters"
@@ -173,9 +175,9 @@ export default async function ChannelIntelligencePage({
                         {pct}% · {t.count.toLocaleString()}
                       </span>
                     </div>
-                    <div className="h-2 bg-border-1 rounded-full overflow-hidden">
+                    <div className="h-2 bg-bg-inset border border-border-1 rounded-[1px] overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${t.barCls} transition-all`}
+                        className={`h-full ${t.barCls} transition-[width] duration-500`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -380,7 +382,7 @@ function TierDistributionBar({ dist }: { dist: Record<string, number> }) {
   if (total === 0) return null;
   const seg = (count: number) => (count / total) * 100;
   return (
-    <div className="mt-1.5 flex h-1 w-full max-w-[280px] rounded-full overflow-hidden bg-border-1">
+    <div className="mt-1.5 flex h-1.5 w-full max-w-[280px] rounded-[1px] overflow-hidden bg-bg-inset border border-border-1">
       {dist.high > 0 && (
         <span
           className="h-full bg-tier-high"
@@ -423,12 +425,12 @@ function Stat({
   icon?: React.ReactNode;
 }) {
   return (
-    <div>
-      <div className="flex items-center gap-1 font-mono text-2xs text-fg-mute uppercase tracking-wider mb-0.5">
+    <div className="readout">
+      <span className="meta inline-flex items-center gap-1.5">
         {icon}
         {label}
-      </div>
-      <div className="font-mono text-lg font-semibold tabular-nums text-fg">{value}</div>
+      </span>
+      <span className="readout-v text-lg">{value}</span>
     </div>
   );
 }

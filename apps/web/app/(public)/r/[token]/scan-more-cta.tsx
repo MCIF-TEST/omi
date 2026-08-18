@@ -123,7 +123,7 @@ export function ScanMoreFooter({ token, coverage }: { token: string; coverage: C
   return (
     <section className="no-print rounded-lg border border-accent/30 bg-accent/[0.05] p-6 md:p-7">
       <span className="section-label">Your turn</span>
-      <h2 className="display text-xl md:text-2xl font-semibold text-fg tracking-tight mt-3 mb-2">
+      <h2 className="display-hard-sm text-xl md:text-2xl text-fg mt-3 mb-2">
         {HEADLINE}
       </h2>
       <p className="text-sm text-fg-dim leading-relaxed max-w-xl mb-5">

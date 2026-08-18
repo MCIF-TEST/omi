@@ -1451,16 +1451,140 @@ If a module already imports something at the top, use it; don't re-import it ins
 
 ## Design system (don't drift)
 
-Deep navy (`#09111f` / `#0e1728` / `#131e31`), blue identity (`#3b82f6` / `#5b9dff`), purple for the
-AI layer (`#8f7bf0` / `#5b3fd8`), tier colours green→amber→orange→red (authentic→bot). **No glow, no
-gradients, no glassmorphism.** Inter for interface (`.display`), JetBrains Mono for data/evidence.
+**The binding rules live at the top of `app/globals.css`, not here.** That comment block is the
+document; this section records what has bitten and why.
 
-**There is one display voice now: `.display` (Inter), on both sides of the login boundary.** The
-pre-login page used to run a second voice (Space Grotesk, `.display-alt`) so it would read as
-"marketing"; the effect was that the front page looked like a different product from the app a
-visitor was about to sign into. Space Grotesk is no longer loaded at all (`app/layout.tsx`), so don't
-reach for `.display-alt` — the class survives only as an Inter fallback so stray usage degrades
-instead of breaking.
+Near-black instrument ramp (`#010203` ground, `#0a0d12` panels), blue identity (`#3b82f6` /
+`#5b9dff`), purple for the AI layer (`#8f7bf0` / `#5b3fd8`), tier colours green→amber→orange→red
+(authentic→bot). **No glow, no gradient FILLS, no glassmorphism. Corners are 2 to 4px.** Archivo for
+display (`.display` / `.display-hard` / `.display-hard-sm`), Inter for interface, JetBrains Mono for
+data and evidence.
+
+This section used to describe a deep-navy ramp and Inter as the display face, long after both had
+changed. **A design note that describes the previous design is worse than none**: the next session
+reads it, believes it, and builds to it.
+
+**There is one display voice on both sides of the login boundary.** The pre-login page used to run a
+second one (Space Grotesk, `.display-alt`) so it would read as "marketing"; the effect was that the
+front page looked like a different product from the app a visitor was about to sign into. Space
+Grotesk is no longer loaded at all (`app/layout.tsx`), so don't reach for `.display-alt` — the class
+survives only as an Inter fallback so stray usage degrades instead of breaking. Headings at
+`text-xl` and above take `.display-hard-sm` (Archivo 800); `.display` at those sizes is a 600 weight
+and reads as a document heading rather than as signage.
+
+### Instrument chrome: the vocabulary, and the one rule that matters
+
+`@layer components` in `globals.css` carries the console vocabulary. Compose with it rather than
+re-typing its parts, which is how four spellings of one label appeared in the first place.
+
+| | |
+|---|---|
+| `.meta` (+ `.meta-hi`, `.meta-on`) | THE label voice. Mono, 10px, 0.18em, uppercase. Field labels, column heads, panel titles, status words. **Never a sentence**: past about five words the tracking stops being readable. |
+| `.panel` / `.panel-head` / `.panel-body` | A framed readout. The header is a 34px bar, label hard left, meta hard right, hairline under, on its own ground. |
+| `.tick-frame` (+ `.tick-frame-live`) | Corner registration ticks. |
+| `.readout` / `.readout-v` | A label over a figure. Every number in this product should be presented this way. |
+| `.led` (`-ok` `-warn` `-fail` `-work` `-off`) | Square status lamp. |
+| `.rack-table`, `.rule-rack`, `.focus-hard` | Data table, capped hairline, square focus outline. |
+
+`Card` gained `flush` (drops padding so a `CardHead` can touch the frame) and `ticks`. `CardHead` is
+the panel header. Default `Card` padding is **18px**, down from 24: at 24 the gaps inside a panel
+compete with the gaps between panels and a column of them reads as a feed of cards.
+
+**The ticks are rationed on purpose**: the primary readout on a page, never every panel on it.
+Today that is `ConsoleHeader`, the investigation case header, the account subject header, the
+analyst panel, and the live progress panels. Ticks on everything is decoration, and the design
+language's own rule is that decoration is not a purpose.
+
+**`.tick-frame::after` must stay at `inset: 0`.** It was `-1px`, to sit ON the border. Every host
+that wants ticks also wants `overflow-hidden` (a panel header has to be clipped to the frame's
+corners), so the overlay was clipped away entirely — drawn, then thrown out, on exactly the panels it
+had been rationed to. It rendered as nothing at all and looked like the class not working.
+
+### `ConsoleHeader` replaced eight copies of one header
+
+Eight workspace routes had each hand-rolled the same page-header slab and they had already drifted:
+different paddings, different heading margins, three spellings of the right-hand readout, and
+`/investigate` — the product's primary verb — with no slab at all. `components/shared/console-header.tsx`
+is the one implementation.
+
+**`SECTION_INDEX` is declared once, in that file, in the sidebar's own order.** A numeral that
+corresponds to nothing is decoration pretending to be a filing system, which is worse than no
+numeral, so pages take their number from the map rather than passing a literal.
+
+### Colour bugs that were live, and the class they belong to
+
+Every one of these was a value that had outlived the palette or the semantics around it. **When a
+colour token is retired, grep for its literal**, because the drift never lives in the token file.
+
+- **`rgba(217,164,74,…)`, a brass/amber left from a retired palette**, in four places. The worst was
+  `Input`'s focus state: a **14px amber glow**, in the one design language that forbids glow by name,
+  in the colour that means "elevated suspicion" everywhere else on the page. Also the whole
+  `RadialGraph` field, and the posting heatmap's intensity ramp, so every cell of every account's
+  calendar carried a warning tone before anyone had read it.
+- **`bg-brand-gradient` used as chrome.** It is the suspicion ramp and the design language reserves
+  it for surfaces where the scale IS the subject. It was painting the scroll-progress bar, so
+  reading to the end of a report ran the bar red, and it was the fill of every card's suspicion
+  meter, where a gradient along the LENGTH described the distance travelled rather than the reading.
+- **A blue→purple diagonal** on the archive empty state, forbidden by name (blue is the identity,
+  purple is the AI layer, a gradient between them says neither).
+- **Two `drop-shadow(0 0 6px ${color}66)` filters** where `color` was `var(--tier-low)`. String
+  concatenation onto a CSS variable produces `var(--tier-low)66`, which is not a colour, so the
+  declaration was dropped and the glow never painted. Removed rather than repaired.
+
+### Meters are square and graduated
+
+`ProbabilityBar`, `SignalBreakdown`, `ConfidenceBand`, the detector cards and the history rows all
+mark **25 / 50 / 75**, the real tier boundaries `ScoreScale` names. As unmarked stadium fills, 46 and
+54 were eight pixels apart and looked identical, and they are a band apart. `ProbabilityBar` takes
+`ungraduated` for the one quantity that is not on the 0-100 OMI scale (a detector's share of score
+movement), because marking boundaries a quantity does not have is worse than marking none.
+
+`ScoreRing` has a 20-mark graduation ring and a **butt cap**: a round cap adds half a stroke past
+each end of the sweep, which on a 96px ring reads about two points high.
+
+**`TierBadge` stays round.** It is the product's primary output and the tailwind config calls it out
+as a status pill by name. Everything else that was a stadium chip is now square.
+
+### `RadialGraph` was the most off-brand thing in the product
+
+It rendered as a deep-space scene: a warm radial-gradient ground, two Gaussian blur filters, glossy
+spheres with a specular bead, an animated focal ripple, and a private warm community palette that
+ignored the `--cluster-N` values the design system defines for exactly that purpose. Four rules
+broken at once, on the most analytical surface there is.
+
+Now: flat ground, a measurement grid, labelled range rings, bearing ticks at the rim (not spokes
+through the field, which cross every edge in the chart), a static focal reticle, square nodes with
+the **tier as a ring stroke outside the body** so community and tier stay separately readable, and a
+header stating node and edge counts.
+
+### `Reveal` fails open, and it has to
+
+The hidden state is `opacity-0`, so anything that stops the IntersectionObserver from firing leaves
+content permanently invisible with nothing on the page to say so. The one thing wrapped in a
+`Reveal` on this site is the **free scan form on the front page**, which is the entire pre-login
+conversion path: the failure would cost every anonymous visitor and appear in no log.
+
+It now shows immediately when `IntersectionObserver` is absent or its constructor throws, and a
+4-second backstop reveals it regardless. Content below the fold is off-screen when that fires, so
+the only thing lost is an animation nobody was positioned to watch. Same lesson as `AuthFormGate`'s
+12-second timeout and the analyst's "check back in a moment": **a state with no terminal branch is
+not a loading state, it is a silent failure.**
+
+### The gateway name is never rendered, and a test enforces it
+
+`lib/analyst-identity.ts` holds `ANALYST_NAME`, `analystProviderLabel()` and `scrubVendor()`. The
+vendor name is not in our copy at all: it arrives inside VALUES the API writes
+(`openrouter-omi-analyst-v1`, `ProviderError: openrouter HTTP 404`) and gets printed verbatim, so
+render time is the only place to stop it.
+
+`lib/analyst-identity.test.ts` scans every source file and fails on the literal, allowing exactly two
+paths: `lib/analyst-identity.ts` itself, and **`app/(marketing)/privacy/page.tsx`, where naming the
+real subprocessor is legally correct and must not be scrubbed.** The guard strips `//` comments and
+`*` JSDoc continuations but not JSX block comments, so a `{/* … */}` that spells the vendor fails the
+suite; word around it rather than loosening the guard.
+
+The last leak closed was `/r/<token>`, which printed `Generated by {commentary.provider}` raw on the
+**public** report, the surface most likely to be screenshotted and posted.
 
 The landing page (`app/landing-page.tsx`) is deliberately built from the **signed-in app's** grammar,
 not a marketing kit: the page-header slab from `/investigations` (rounded-2xl `bg-bg-elev`, top accent
@@ -1806,6 +1930,39 @@ it that a future session will otherwise re-break: a score-band-stratified permut
 degenerates when a cluster fills its own band (every draw is the cluster, p lands near 0.5, and a
 correct detection is thrown away), so `p_value=None` means "could not test" and must never be read
 as "not significant"; and a DBSCAN blob larger than 40% of the batch is the batch, not a cohort.
+
+### The analyst is called the Omi Analyst, and the gateway is never named
+
+Product rule (2026-08-18): **no rendered string in `apps/web` names the model gateway.** The product
+has one analyst and it is the Omi Analyst; the gateway it happens to run on is our implementation
+detail, and naming it tells a customer that the thing they pay for is somebody else's.
+
+The vendor name was never in the copy. It arrives inside **values** the backend writes and the UI
+prints verbatim, which is why the fix is a render-time function rather than a review rule:
+
+- `investigation_trace.provider` is `openrouter-omi-analyst-v1`, or
+  `openrouter->fallback:deterministic-analyst-v1` on a floored run.
+- `endpoint_error` is `ProviderError: openrouter HTTP 404`, `openrouter unreachable`, and similar.
+
+`lib/analyst-identity.ts` is the only place that matters. `analystProviderLabel()` returns Omi's own
+vocabulary and keeps the one distinction an operator needs (`Omi Analyst (model)` against
+`Omi Analyst (deterministic floor)`); `scrubVendor()` replaces the name inside a free-text
+diagnostic while keeping the rest, because the rest is exactly what someone debugging needs. Both
+are applied in `VerificationPanel` and `AiUnavailableDiagnostics`, which are `?verify=1` surfaces
+and were the only leaks: the customer-facing copy was already clean.
+
+Pinned by `lib/analyst-identity.test.ts`, which includes a **source-level guard** that walks every
+`.ts`/`.tsx` file and fails on the name in a rendered string. Two deliberate exemptions:
+
+- **`app/(marketing)/privacy/page.tsx`** names it as a **subprocessor**. That is a legal disclosure,
+  not branding: a privacy policy has to say who processes user data, and removing it would be a
+  data-protection problem rather than a win.
+- `openrouter_preset` as a FIELD name on the API type. The rendered label is "Protocol preset" and
+  the rendered value is the preset id, so nothing vendor-named reaches the page.
+
+Not covered, and a separate question: `requested_model` / `served_model` still render the model slug
+(`openai/gpt-5-mini@preset/...`) in the verify panel. That is a different vendor and it feeds
+`served_model_verified`, the check that catches a silent model swap, so it was left alone.
 
 ### No em dashes, and no decorative badges
 

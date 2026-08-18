@@ -107,17 +107,17 @@ export default async function ContentEntityPage({
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-full border border-border-2 text-fg-mute">
+            <span className="font-mono text-2xs tracking-wider uppercase px-1.5 py-0.5 rounded-sm border border-border-2 text-fg-mute">
               {e.platform}
             </span>
             <span
-              className={`inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-full border ${risk.cls}`}
+              className={`inline-flex items-center gap-1 font-mono text-2xs tracking-wider uppercase px-2 py-0.5 rounded-sm border ${risk.cls}`}
             >
               {risk.icon}
               {risk.label} risk
             </span>
           </div>
-          <h1 className="display text-xl font-semibold text-fg tracking-tight leading-tight">
+          <h1 className="display-hard-sm text-xl text-fg">
             {e.title || e.content_id}
           </h1>
           {e.author_handle && (
@@ -189,7 +189,7 @@ export default async function ContentEntityPage({
           <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-3">
             Author tier distribution
           </p>
-          <div className="flex h-3 rounded-full overflow-hidden gap-px">
+          <div className="flex h-3 rounded-[1px] overflow-hidden gap-px">
             {tierOrder.map((tier) => {
               const count = e.latest_tier_distribution[tier] || 0;
               const pct = tierTotal > 0 ? (count / tierTotal) * 100 : 0;

@@ -112,7 +112,7 @@ export function MobileNav({
                 <span className="relative">
                   <Icon size={21} strokeWidth={active ? 2.2 : 1.7} />
                   {t.href === '/monitoring' && unread > 0 && (
-                    <span className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-1 rounded-full bg-danger text-white text-[9px] leading-[15px] text-center font-mono">
+                    <span className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-1 rounded-[2px] bg-danger text-white text-[9px] leading-[15px] text-center font-mono tabular">
                       {unread > 99 ? '99+' : unread}
                     </span>
                   )}
@@ -151,7 +151,7 @@ export function MobileNav({
               <button
                 type="button"
                 onClick={() => setSheetOpen(false)}
-                className="tap inline-flex items-center justify-center w-9 h-9 -mr-2 rounded-full text-fg-mute hover:text-fg"
+                className="tap inline-flex items-center justify-center w-9 h-9 -mr-2 rounded-sm text-fg-mute hover:text-fg"
                 aria-label="Close menu"
               >
                 <X size={18} />
@@ -191,13 +191,13 @@ export function MobileNav({
             {/* Account */}
             <div className="border-t border-border-1 px-5 py-3 flex items-center justify-between gap-3">
               <span className="min-w-0">
-                <span className="block font-mono text-2xs text-fg-mute uppercase tracking-wider">Signed in</span>
+                <span className="meta meta-hi block">Signed in</span>
                 <span className="block text-sm text-fg-dim truncate">{email}</span>
               </span>
               <button
                 type="button"
                 onClick={onLogout}
-                className="tap inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border-2 text-fg-dim hover:text-fg hover:border-border-hot font-mono text-2xs uppercase tracking-wider"
+                className="tap inline-flex items-center gap-1.5 h-9 px-3 rounded-sm border border-border-2 text-fg-dim hover:text-fg hover:border-border-hot meta meta-on"
               >
                 <LogOut size={13} /> Log out
               </button>

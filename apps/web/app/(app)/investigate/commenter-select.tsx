@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertTriangle, Check, CheckSquare, ClipboardPaste, Layers, Loader2, Plus, Search, Square, Radar, ScanLine, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 import { AnalysisProgress } from '@/components/shared/analysis-progress';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
@@ -259,17 +260,21 @@ export function CommenterSelect({
 
   return (
     <div className="space-y-5 -mt-2">
-      <header className="flex items-baseline justify-between flex-wrap gap-3">
-        <div>
-          <span className="section-label">Intelligence · Workspace</span>
-          <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-2">Investigate</h1>
-        </div>
-        {platform && (
-          <span className="font-mono text-2xs tracking-[0.16em] uppercase text-fg-mute">
-            source · {platform === 'x' ? 'X / Twitter' : platform}
+      {/* This page had a bare heading while eight other workspace routes wore
+          the header slab, so the product's primary verb was the one screen with
+          no frame around it. */}
+      <ConsoleHeader
+        index={SECTION_INDEX['/investigate']}
+        eyebrow="Intelligence · Workspace"
+        title="Investigate"
+        lede="Paste a post to compile its commenters. Listing is free; you choose who gets scanned."
+        readout={platform ? (
+          <span className="readout items-end">
+            <span className="meta">Source</span>
+            <span className="readout-v text-[0.8rem]">{platform === 'x' ? 'X / Twitter' : platform}</span>
           </span>
-        )}
-      </header>
+        ) : undefined}
+      />
 
       {/* Arrived through the shared-report funnel: say where the report went, and what to do next.
           Without this the pre-filled URL and the already-scanned rows look arbitrary. */}
@@ -351,8 +356,8 @@ export function CommenterSelect({
                 : <><ScanLine size={16} className="shrink-0" /> Compile commenters</>}
           </button>
         </form>
-        <p className="mt-2.5 font-mono text-2xs tracking-wider text-fg-faint">
-          Listing the commenters is free, no scoring, no credits. You choose who to scan next.
+        <p className="mt-2.5 meta">
+          Compile is free · no scoring · no credits spent
         </p>
       </Card>
 
@@ -363,7 +368,7 @@ export function CommenterSelect({
         >
           <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />
           <div className="min-w-0">
-            <p className="font-mono text-2xs tracking-[0.16em] uppercase text-danger">Request failed</p>
+            <p className="meta text-danger">Request failed</p>
             <p className="text-sm text-fg-dim leading-relaxed mt-0.5">{error}</p>
           </div>
         </div>
@@ -377,14 +382,12 @@ export function CommenterSelect({
           {/* HUD header */}
           <div className="px-4 py-3 border-b border-divider bg-bg/60 space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="flex items-center gap-2 font-mono text-2xs tracking-[0.16em] uppercase text-accent-text">
+              <span className="flex items-center gap-2 meta text-accent-text">
                 <Radar size={13} className="text-accent" />
                 {query.trim() ? `${visibleRows.length} of ${rows.length}` : rows.length} commenter{rows.length === 1 ? '' : 's'}
                 {query.trim() ? ' shown' : ' found'}
               </span>
-              <span className="font-mono text-2xs tracking-[0.16em] uppercase text-violet-2">
-                {selCount} selected
-              </span>
+              <span className="meta text-violet-2">{selCount} selected</span>
               <div className="ml-auto flex items-center gap-2">
                 <button
                   onClick={toggleAll}
@@ -504,8 +507,8 @@ export function CommenterSelect({
 
           {/* action bar, on mobile the Scan button goes full-width + sticks to the bottom of the card */}
           <div className="flex items-center gap-3 flex-wrap px-4 py-3 border-t border-divider bg-bg/60 sticky bottom-0">
-            <p className="font-mono text-2xs tracking-wider text-fg-faint w-full sm:w-auto">
-              {hasMore ? 'More available. “Add 100” or “Load all” to pull the rest.' : 'Whole comment section loaded.'}
+            <p className="meta w-full sm:w-auto">
+              {hasMore ? 'Partial list · Add 100 or Load all to pull the rest' : 'Whole comment section loaded'}
             </p>
             <button
               onClick={() => void scan()}
@@ -522,7 +525,7 @@ export function CommenterSelect({
       {/* Compile succeeded but the post has no listable commenters. Say so instead of going blank. */}
       {phase === 'list' && rows.length === 0 && (
         <div className="rounded-xl border border-border-1 bg-bg-elev p-8 text-center">
-          <span className="mx-auto mb-4 grid place-items-center w-11 h-11 rounded-full bg-bg-elev-2 border border-border-1">
+          <span className="mx-auto mb-4 grid place-items-center w-11 h-11 rounded-sm bg-bg-elev-2 border border-border-1">
             <Radar size={19} className="text-fg-mute" />
           </span>
           <p className="text-sm text-fg font-medium">No commenters found on this post</p>
@@ -584,8 +587,12 @@ export function CommenterSelect({
         .comment-text { font-size: 0.95rem; line-height: 1.5; }
 
         /* Selection pip, the fun beat: an empty ring that fills with a spring when you pick someone. */
+        /* A square checkbox. Round was the last consumer shape on this screen,
+           and it sat on the control the whole page exists to operate: picking
+           rows out of a table is a checkbox, and every data tool in the world
+           draws that square. */
         .pip {
-          margin-top: 2px; width: 22px; height: 22px; flex: none; border-radius: 999px;
+          margin-top: 2px; width: 20px; height: 20px; flex: none; border-radius: 3px;
           border: 1.5px solid var(--border-hot); display: grid; place-items: center; color: #fff;
           transition: background 120ms ease, border-color 120ms ease;
         }
@@ -634,13 +641,22 @@ function Avatar({ src, handle }: { src?: string | null; handle: string }) {
 // The compile placeholder, a calm scanning indicator while the list is read.
 function CompilingState() {
   return (
-    <div className="rounded-xl border border-border-1 bg-bg-elev-2/50 p-8 flex items-center gap-4">
+    <div className="panel tick-frame tick-frame-live overflow-hidden">
+      <div className="panel-head">
+        <span className="meta meta-hi inline-flex items-center gap-2">
+          <span className="led led-work" />
+          Compiling
+        </span>
+        <span className="meta">Free · no credits</span>
+      </div>
+      <div className="p-6 flex items-center gap-4">
       <span className="relative grid place-items-center w-10 h-10 shrink-0">
         <Radar size={20} className="text-accent radar-spin" />
       </span>
       <div>
-        <p className="text-sm text-fg">Reading the post…</p>
+        <p className="text-sm text-fg">Reading the post</p>
         <p className="text-xs text-fg-mute mt-0.5">Collecting the commenters and their comments. No scoring yet.</p>
+      </div>
       </div>
       <style jsx>{`
         .radar-spin { animation: spin 1.6s linear infinite; }
