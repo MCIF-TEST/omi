@@ -36,6 +36,9 @@ from app.core.config import Settings, get_settings
 from app.core.observability import capture_exception
 # Module scope, not inside a function: this module runs closures on the background pool, and a
 # function-level import is invisible inside one (see CLAUDE.md, "A bug class worth knowing").
+# Module scope: this module runs closures on the background pool, where a
+# function-level import is invisible (see CLAUDE.md, "A bug class worth knowing").
+from app.reasoning.batch_plan import BATCH_SIZE, plan_batches
 from app.reasoning.floor_reason import (
     base_reason as _floor_base_reason,
     classify_floor as _classify_floor,
@@ -58,6 +61,17 @@ CACHE_KEY = "analyst_assessment_v1"
 # lever to reach for if per-batch latency ever starts racing OMI_ANALYST_TIMEOUT_SECONDS — more
 # batches means fewer accounts in each one.
 DEFAULT_ANALYST_BATCHES = 4
+# The hard ceiling on how many accounts may ride in ONE model request, whatever the batch count says.
+#
+# This is the guard that the fixed batch count quietly removed. Before it, `analyst_batch_accounts`
+# was a per-request SIZE and therefore bounded the request; turning it into a threshold made the
+# batch size scale with the selection instead, so a 197-account scan became four requests of ~50.
+# Measured on the deployment: 25 per request works, ~50 per request fails within about 30 seconds
+# with output that does not validate. 35 is the conservative middle, and it keeps the promised
+# four-batch shape for every selection up to 140 accounts, which covers the operator cap of 150.
+# Above that the count grows rather than the request, because a request nobody can serve returns
+# nothing for every account inside it.
+MAX_ACCOUNTS_PER_REQUEST = 35
 # Repo root: apps/api/app/reasoning/analyst.py -> parents[4] == repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _ML_ANALYST_PATH = str(_REPO_ROOT / "ml" / "analyst")
@@ -1625,34 +1639,20 @@ def _write_lease(session, inv, lease: dict | None) -> None:
 # while later batches are still generating.
 
 
-def _batch_sizes(total_accounts: int, batches: int) -> list[int]:
-    """Split ``total_accounts`` into ``batches`` parts as evenly as the count allows.
-
-    The remainder is spread one account at a time across the leading batches rather than piled onto
-    the last one. Slicing at a fixed ``ceil(n/k)`` looks equivalent and is not: at 126 over 4 it
-    gives 32/32/32/30, and at 5 over 4 it gives 2/2/1 — three batches, not four. Spreading gives
-    32/32/31/31 and 2/1/1/1, so the count is always exactly what was asked for and no single request
-    carries a disproportionate share of the work.
-    """
-    if total_accounts <= 0 or batches <= 0:
-        return []
-    batches = min(batches, total_accounts)          # never plan an empty request
-    base, extra = divmod(total_accounts, batches)
-    return [base + (1 if i < extra else 0) for i in range(batches)]
-
-
 def _split_batches(payload: dict, batch_size: int, *, batches: int = 0) -> list[dict] | None:
     """Split an investigation payload into per-request chunk payloads, or None when it fits in one.
 
-    ``batch_size`` is the threshold: a selection at or below it is one request, and nothing here
-    changes for a small scan. Above it, the selection is divided into a FIXED NUMBER of near-equal
-    batches (``batches``, from ``analyst_batch_count``) rather than sliced at a fixed size.
+    A FIXED SIZE, remainder last: 100 accounts is 4 requests of 25, 200 is 8 of 25, and 92 is
+    25/25/25/17. `app.reasoning.batch_plan.plan_batches` owns the arithmetic.
 
-    That is the product decision behind this function. A fixed slice size makes the batch count a
-    function of how many accounts someone happened to select, so the same customer sees 4 batches on
-    one post and 9 on the next with nothing to explain the difference, and a deployment tuning the
-    size for latency silently changes the shape of every scan. A fixed count reads the same every
-    time: 100 accounts is four batches of 25, 126 is four batches of 32/32/31/31.
+    THE SIZE IS WHAT BOUNDS THE REQUEST, AND THE REQUEST IS WHAT FAILS. A previous revision divided
+    the selection into a fixed NUMBER of batches instead, which made the size grow with the
+    selection: a 197-account scan became four calls of roughly 50 accounts each and every one of
+    them came back empty within about thirty seconds. Measured on this deployment, 25 per call
+    works. With a fixed size a larger scan is more requests, never a larger request.
+
+    ``batches`` is accepted and ignored. It is the old fixed-count argument, kept so an existing
+    caller or test cannot silently start passing something that no longer means anything.
 
     Selection order is preserved. Each chunk shares the investigation's non-account context; only
     ``video.commenters`` is sliced, since the evidence composer renders the Accounts table (and the
@@ -1660,16 +1660,14 @@ def _split_batches(payload: dict, batch_size: int, *, batches: int = 0) -> list[
     """
     video = payload.get("video") or {}
     commenters = video.get("commenters") or []
-    if len(commenters) <= batch_size:
+    size = max(1, int(batch_size or BATCH_SIZE))
+    if len(commenters) <= size:
         return None
-    sizes = _batch_sizes(len(commenters), batches or DEFAULT_ANALYST_BATCHES)
     chunks: list[dict] = []
-    start = 0
-    for size in sizes:
+    for lo, hi in plan_batches(len(commenters), size):
         chunk_payload = {k: v for k, v in payload.items() if k != CACHE_KEY}
-        chunk_payload["video"] = {**video, "commenters": commenters[start:start + size]}
+        chunk_payload["video"] = {**video, "commenters": commenters[lo:hi]}
         chunks.append(chunk_payload)
-        start += size
     return chunks
 
 
@@ -1834,6 +1832,21 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
                         "complete": bool(run_finished) or done >= total_batches,
                         "run_id": run_id,
                         "heartbeat": datetime.now(timezone.utc).isoformat()}
+    # THE PER-BATCH RECORD, and the reason it is here rather than derived by each reader.
+    #
+    # `total` / `done` / `landed` above are three numbers that look interchangeable and are not, and
+    # every reader that guessed wrong shipped a bug: a strip reading "3 of 4 done" beside 25
+    # accounts, a coverage notice that could never fire, a counter that ran backwards. This list says
+    # what actually happened to each request, so a caller never has to infer it from a count. The
+    # three legacy keys stay for entries written before this existed and for callers not yet moved
+    # over; `app.reasoning.batch_plan` is what derives everything from the list.
+    base["batching"]["batches"] = [
+        {"index": i,
+         "state": ("done" if (p.get("commenter_assessments") or []) else "failed")
+                  if p is not None else ("pending" if not run_finished else "failed"),
+         "accounts": len(p.get("commenter_assessments") or []) if p is not None else 0}
+        for i, p in enumerate(parts)
+    ]
     return base
 
 

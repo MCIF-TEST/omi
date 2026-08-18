@@ -290,9 +290,15 @@ def test_text_claims_require_a_verbatim_quote(protocol):
 
 def test_the_hedge_must_be_in_the_sentence_not_only_the_number(protocol):
     """The failure this prevents: a confident-sounding sentence carrying a low confidence score gets
-    quoted without the score, and then it is simply an overclaim in someone's feed."""
+    quoted without the score, and then it is simply an overclaim in someone's feed.
+
+    It now also pins WHERE the hedge goes. Live output ended roughly 60% of verdicts on a trailing
+    apology ("collecting more posts would increase confidence"), which is the hedge in the wrong
+    place: the last line is the one a reader remembers, and closing on the analysis being
+    insufficient tells someone who just paid that they got nothing."""
     assert "THE HEDGE GOES IN THE WORDS" in protocol
-    assert "will be quoted without the number" in protocol
+    assert "INSIDE the sentence" in protocol
+    assert "Do not save it for the end" in protocol
 
 
 def test_every_serious_claim_names_what_would_overturn_it(protocol):
@@ -554,3 +560,80 @@ def test_the_final_pass_does_not_restate_the_distribution_check():
     i = text.index("FINAL PASS OVER THE JSON")
     block = text[i:text.index("Do NOT produce Omi-owned", i)]
     assert "The distribution check above governs" in block
+
+
+# ==================================================================================================
+# FINISHED VERDICT (v12): the analysis was right and the writing sold it short
+#
+# Derived from ~250 real scored rows across three live investigations. Nothing in this section moves
+# a score or softens the score discipline above; every rule is about how a finished verdict READS.
+# The failures it fixes were all present in that export:
+#   * clean accounts written as four negations in a row, so a correct result read as "nothing found"
+#   * ~60% of verdicts closing on "collecting more posts would increase confidence"
+#   * ~16% of accounts with NO posts collected, described as fitting a benign explanation
+#   * `evidence_against: None reported` on a section of 100 ordinary people
+#   * every paragraph opening "This account (created X) has N followers and follows M"
+# ==================================================================================================
+def test_a_clean_account_must_be_written_as_a_finding(protocol):
+    """A correct low score is a result, and it was being written as an absence. Four negated clauses
+    in a row read as though nothing was examined, which is what made a working product feel empty."""
+    assert "A CLEAN ACCOUNT IS A FINDING" in protocol
+    assert "Say what the account IS" in protocol
+
+
+def test_a_verdict_may_not_close_by_asking_for_more_data(protocol):
+    """The last line is the one a reader remembers. Ending on the analysis being insufficient tells
+    someone who just paid for it that they received nothing."""
+    assert "NEVER CLOSE ON A REQUEST FOR MORE DATA" in protocol
+    assert "Collecting more posts would increase confidence" in protocol      # named and banned
+    assert "Close on what you found" in protocol
+
+
+def test_an_unexamined_account_may_never_be_described_as_looking_fine(protocol):
+    """The one rule here that is about honesty rather than tone, and the most important of the set.
+
+    Roughly one account in six comes back with no posts collected at all. Those were being scored
+    low, tiered `low`, and described as 'consistent with a real user' - a clean bill of health for
+    an account nobody looked at. The score discipline cannot catch this because the score is
+    correct; only the prose is false."""
+    assert "WHEN NOTHING WAS COLLECTED, SAY IT ONCE AND STOP" in protocol
+    assert "NOTHING WAS EXAMINED" in protocol
+    assert "not a clean" in protocol and "bill of health" in protocol
+    # And it must not be padded out to resemble an analysis.
+    assert "Do not pad it out" in protocol
+
+
+def test_the_verdict_does_not_editorialise_about_the_method(protocol):
+    """The product states its own scope on the report, the markdown export, the CSV footer and
+    /accuracy. A fifth copy inside the verdict only tells a paying reader the answer does not count.
+    This sentence was INSTRUCTED by the old base prompt, so it appeared on every single scan."""
+    assert "DO NOT EDITORIALISE ABOUT THE METHOD" in protocol
+    assert "the human analyst sets the final verdict" in protocol             # named and banned
+    assert "Your subject" in protocol and "is the account" in protocol
+
+
+def test_exculpatory_evidence_must_actually_be_written_down(protocol):
+    """`evidence_against: None reported` on a scan of 100 ordinary accounts. Multi-year histories,
+    balanced ratios and overnight quiet periods are collected exculpatory evidence, and on a clean
+    section they are the substance of the report rather than an empty panel."""
+    assert "EXCULPATORY EVIDENCE IS EVIDENCE" in protocol
+    assert "almost always a failure to write down what you saw" in protocol
+    # The output contract must agree, since that is where the escape hatch was.
+    assert "FILL evidence_against" in protocol
+
+
+def test_the_batch_may_not_be_written_from_one_skeleton(protocol):
+    """Twenty paragraphs on one template read as a mail merge, and a reader who spots it stops
+    believing any of the accounts were read individually."""
+    assert "NO TWO ACCOUNTS IN A BATCH OPEN THE SAME WAY" in protocol
+
+
+def test_the_reader_facing_rules_do_not_touch_the_score(protocol):
+    """The guard on this whole section. It exists to make correct results read well, never to make
+    weak evidence read strongly, and the discipline it sits next to is unchanged."""
+    assert "None of it moves a score" in protocol
+    assert "none of it licenses a claim the evidence does not carry" in protocol
+    # The bands and the mechanical gate are still exactly where they were.
+    assert "START FROM THE BASE RATE" in protocol
+    assert "AMBIENT TRAITS ARE NOT TELLS" in protocol
+    assert "THE TWO ERRORS ARE NOT EQUAL" in protocol

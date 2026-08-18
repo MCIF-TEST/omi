@@ -1095,7 +1095,20 @@ export interface AnalystAssessment {
    *  which makes it equal to `total` on any finished run. `landed` counts the batches that actually
    *  produced accounts, and is therefore the COVERAGE figure. Optional: entries written before it
    *  existed have no value, and the UI falls back rather than claiming coverage it cannot know. */
-  batching?: { total: number; done: number; landed?: number; batch_size: number; complete: boolean };
+  batching?: {
+    total: number;
+    /** Batches ATTEMPTED. Advances when one fails, so a run containing a failure still visibly moves. */
+    done: number;
+    /** Batches that PRODUCED accounts. Coverage, which is a different question from `done`. */
+    landed?: number;
+    batch_size: number;
+    /** The RUN IS OVER. Not "every batch succeeded". */
+    complete: boolean;
+    /** The per-batch record. Exact, so no reader has to infer a batch's state from the counts
+     *  above: those three numbers look interchangeable and every reader that guessed wrong shipped
+     *  a bug. Absent on entries written before it existed. See app/reasoning/batch_plan.py. */
+    batches?: Array<{ index: number; state: 'pending' | 'running' | 'done' | 'failed'; accounts: number }>;
+  };
   // The engine's corroboration state, echoed onto the assessment (overlaid from the deterministic
   // Floor, never model-fabricated. Apps/api runtime.py). It bounds the coordination read: a maximal
   // 'coordinated' verdict requires >=1 discriminative method AND single_axis_capped === false.

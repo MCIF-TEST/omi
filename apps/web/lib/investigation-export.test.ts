@@ -272,3 +272,35 @@ describe('exportFilename', () => {
     expect(exportFilename('s', 'not-a-date')).toBe('omisphere-s-accounts.csv');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The engine does not decide the order of a customer's report.
+//
+// It is a backup and a secondary reference; it takes no part in the OMI score. The sort used to
+// fall back to `engine_score` for accounts the analyst never read, which ranked them by a number
+// the product does not treat as their score, and disagreed with the page (lib/rank-accounts.ts
+// sorts a missing score last rather than substituting one).
+// ---------------------------------------------------------------------------
+describe('export ordering', () => {
+  it('ranks by the OMI score alone and puts an unassessed account last', () => {
+    const rows = buildExportRows(
+      [
+        account({ external_id: 'a', handle: 'assessed_low', tier: 'low', probability: 0.02 }),
+        // The exact shape from a live scan: a high engine probability on an account the analyst
+        // never assessed. It must not outrank a real analyst score.
+        account({ external_id: 'b', handle: 'unassessed', tier: 'elevated', probability: 0.73 }),
+        account({ external_id: 'c', handle: 'assessed_high', tier: 'low', probability: 0.01 }),
+      ],
+      [
+        read({ external_id: 'a', handle: 'assessed_low', omi_score: 20 }),
+        read({ external_id: 'c', handle: 'assessed_high', omi_score: 46 }),
+      ],
+      NOW,
+    );
+    expect(rows.map((r) => r.handle)).toEqual(['assessed_high', 'assessed_low', 'unassessed']);
+    expect(rows[0].omi_score).toBe(46);
+    expect(rows[rows.length - 1].omi_score).toBeNull();
+    // The engine's number still rides along for reference; it just does not order the file.
+    expect(rows[rows.length - 1].engine_score).toBe(73);
+  });
+});

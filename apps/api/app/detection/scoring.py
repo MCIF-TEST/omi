@@ -255,8 +255,8 @@ _WEAK_REASON: dict[str, str] = {
     "profile":    "Profile metadata is missing or sparse.",
     "voice":      "Not enough text to estimate first-person rate (need ~800 words).",
     "engagement": "Too few posts to detect engagement-spam patterns (need ~20+).",
-    "memory":     "Fingerprint database has no close neighbors yet — scan more accounts to train it.",
-    "coordination": "No cross-account signal — this account wasn't scanned with peers.",
+    "memory":     "Fingerprint database has no close neighbors yet, scan more accounts to train it.",
+    "coordination": "No cross-account signal, this account wasn't scanned with peers.",
     "narrative":  "Too few posts for narrative-injection pattern analysis (need ~3+).",
 }
 
@@ -315,7 +315,9 @@ _INTENT_LABELS: dict[str, str] = {
     "copy_paste_template": "Templated / copy-paste activity",
     "broadcast_persona": "Broadcast-style persona (low personal voice)",
     "multi_vector": "Multi-vector bot (combined spam + AI + coordination)",
-    "unclear": "Unclear — patterns are mixed",
+    # No em dash: this label renders directly on the product and in the CSV export (house rule,
+    # CLAUDE.md "No em dashes, and no decorative badges").
+    "unclear": "Unclear, patterns are mixed",
 }
 
 

@@ -279,7 +279,11 @@ def test_intelligence_inventory_is_grounded():
     # (write so a stranger can verify you, because these findings get published); the v11 research
     # pass added signal_dimensions, because the eight scored dimensions were named only inside the
     # worked example and defined nowhere, while the coherence check gated the omi_score on them.
-    assert inv["constitution"]["count"] == 19
+    # v12 added finished_verdict, from ~250 real scored rows: the analysis was sound and the prose
+    # read as a search that came up empty. It governs how a verdict READS (a clean account stated in
+    # the positive, no closing request for more data, an unexamined account never described as
+    # looking fine, exculpatory evidence actually written down) and moves no score.
+    assert inv["constitution"]["count"] == 20
     assert inv["playbook"]["count"] == 11
     assert inv["corpus_design"]["categories"] == 14
 
