@@ -44,6 +44,10 @@ const POLL_INTERVAL_MS = 2500;
 // 1000s budget was already inside one standard deviation of a single batch.
 const MAX_POLLS = 800;
 
+// How long with no batch landing before the panel says so. Above the slowest batch this deployment
+// has measured (857s), so a genuinely slow batch is never accused of having died.
+const STALL_NOTICE_SEC = 15 * 60;
+
 // A transport failure is not an answer, so it must not end the wait.
 //
 // A batched run polls every 2.5s for up to 10 minutes, which is ~240 fetches. Treating ONE failed
@@ -95,6 +99,13 @@ export function AnalystPanel({
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startRef = useRef<number>(0);
   const lastBatchDoneRef = useRef<number>(0);
+  // When a batch last landed. A run that dies mid-flight (a redeploy, a container restart) leaves
+  // the server serving its last partial result, so the panel keeps polling and the elapsed clock
+  // keeps ticking with nothing behind it. Reported live as "it did 2 of 4 batches then stopped, but
+  // the timer is still running". The clock alone cannot distinguish a slow batch from a dead run;
+  // time since the last LANDING can, and the reader deserves to be told which one they are watching.
+  const lastProgressAtRef = useRef<number>(0);
+  const [stalledSec, setStalledSec] = useState(0);
   // Most accounts published so far in THIS run, so a stale or duplicate poll cannot walk it back.
   const maxScoredRef = useRef<number>(0);
 
@@ -103,10 +114,12 @@ export function AnalystPanel({
   // Tick a real elapsed clock while the AI runs, so a two-minute wait reads as deliberate.
   useEffect(() => {
     if (!pending) return;
-    const t = setInterval(
-      () => setElapsedSec(Math.round((Date.now() - startRef.current) / 1000)),
-      500,
-    );
+    const t = setInterval(() => {
+      setElapsedSec(Math.round((Date.now() - startRef.current) / 1000));
+      if (lastProgressAtRef.current) {
+        setStalledSec(Math.round((Date.now() - lastProgressAtRef.current) / 1000));
+      }
+    }, 500);
     return () => clearInterval(t);
   }, [pending]);
 
@@ -125,6 +138,8 @@ export function AnalystPanel({
     // Reset per-run, here rather than at the call sites, so a slug change starts clean too.
     lastBatchDoneRef.current = 0;
     maxScoredRef.current = 0;
+    lastProgressAtRef.current = Date.now();
+    setStalledSec(0);
     let polls = 0;
     let transportFails = 0;
 
@@ -150,6 +165,8 @@ export function AnalystPanel({
           const done = r.assessment.batching?.done ?? 0;
           if (done > lastBatchDoneRef.current) {
             lastBatchDoneRef.current = done;
+            lastProgressAtRef.current = Date.now();
+            setStalledSec(0);
             polls = 0;
           }
           // Defence in depth against a reset the user should never see. The server now refuses to
@@ -281,6 +298,8 @@ export function AnalystPanel({
               traces={assessment.investigation_trace?.batches?.traces}
               record={assessment.batching.batches}
               elapsedSec={elapsedSec}
+              stalledSec={stalledSec}
+              onRetry={() => void run(true)}
               scored={assessment.commenter_assessments?.length ?? 0}
             />
           )}
@@ -346,6 +365,8 @@ function BatchProgressStrip({
   traces,
   record,
   elapsedSec,
+  stalledSec = 0,
+  onRetry,
   scored,
 }: {
   batching: NonNullable<AnalystAssessment['batching']>;
@@ -355,6 +376,10 @@ function BatchProgressStrip({
   /** The server's own per-batch record. Exact, and preferred over every inference. */
   record?: BatchRecord;
   elapsedSec: number;
+  /** Seconds since a batch last LANDED, which is a different question from how long the run has
+   *  been going and the only one that can tell a slow batch from a dead run. */
+  stalledSec?: number;
+  onRetry?: () => void;
   /** Accounts actually returned so far, the real count, not done × batch_size (the final batch is
    *  usually partial, which would overstate it). */
   scored: number;
@@ -398,6 +423,35 @@ function BatchProgressStrip({
           {failed} batch{failed === 1 ? '' : 'es'} came back empty, so {failed === 1 ? 'its' : 'their'}{' '}
           accounts have no written read. You can retry once the run finishes.
         </p>
+      )}
+
+      {/* A LIVE-LOOKING CLOCK IS NOT EVIDENCE THAT ANYTHING IS HAPPENING.
+          A run that dies mid-flight leaves the server serving its last partial result, so this
+          panel keeps polling and the elapsed clock keeps ticking with nothing behind it. Reported
+          live as "it did 2 of 4 batches then stopped, but the timer is still running".
+          The clock cannot tell a slow batch from a dead run; time since the last LANDING can.
+          The threshold sits above the slowest batch this deployment has measured (857s), so a
+          genuinely slow batch is never accused of being dead. Nothing is lost by waiting either:
+          the server picks an interrupted run back up from the batch it stopped on, so the retry
+          offered here is for a reader who would rather not wait. */}
+      {stalledSec >= STALL_NOTICE_SEC && (
+        <div className="mt-2.5 border-t border-violet/20 pt-2.5 flex items-start justify-between gap-3 flex-wrap">
+          <p className="text-2xs text-fg-mute leading-relaxed flex-1 min-w-[14rem]">
+            No new batch has landed in {formatElapsed(stalledSec)}. A batch normally takes a few
+            minutes, so this one is either unusually slow or the run stopped. Nothing is lost:
+            the batches already analysed are saved, and a restarted run continues from where this
+            one left off rather than starting again.
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="btn-slab h-8 px-3 rounded-md text-xs font-medium text-fg-dim shrink-0"
+            >
+              Restart the run
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

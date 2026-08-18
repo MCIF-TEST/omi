@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2132
-passed, 8 skipped, 2 failed** (8m28s, 2026-08-18), both failures pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2142
+passed, 8 skipped, 2 failed** (6m30s, 2026-08-18), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -2294,6 +2294,51 @@ Worth knowing: the route's live-run guard is `(... inflight or lease_is_live) an
 `refresh=True` bypasses it — but `generate_and_persist` claims the durable lease itself and returns
 early when someone else holds it, regardless of `refresh`. That second line of defence is what keeps
 the bypass from being a bug today; do not remove it on the grounds that the route already checks.
+
+### An interrupted run RESUMES, it does not start over
+
+Reported 2026-08-18: a scan finished **2 of 4 batches, stopped, and the elapsed clock kept running**.
+
+`_generate_batched` held every landed batch in a local `parts` list and nothing else. The merged view
+was persisted, but the per-batch pieces the merge is built FROM were not, so a run that died
+mid-flight (a redeploy — `background.shutdown` cancels in-flight work after a 5s grace — a container
+restart, an OOM) left the investigation with results it could not continue from. The route's
+interrupted-run branch then resubmitted the whole generation, `parts` started as `[None] * total`
+again, and batches 1 and 2 were re-sent to OpenRouter to produce answers already in the database.
+The customer paid twice and waited through work that was finished.
+
+`BATCH_PARTS_KEY` (`analyst_batch_parts_v1` in `payload_json`) checkpoints each batch as it lands.
+A new run seeds `parts` from it and skips those model calls, so it picks up at the first batch with
+no result. Four rules:
+
+- **`_chunk_signature` gates the reuse**, and it is the load-bearing part. It fingerprints which
+  accounts are in which batch, in order, so a different selection, a different batch size or a
+  re-ordered list all refuse to resume. A batch-3 result stapled onto a run whose batch 3 holds
+  different accounts would publish real model prose against the wrong handles, which is the single
+  worst thing this product can do.
+- **A floored batch is never resumed as done.** An empty part is re-run, because treating it as
+  finished would make an interruption permanently lose whichever batch it happened to interrupt.
+- **Cleared when the run ends.** It duplicates every landed batch's per-account prose and
+  `payload_json` is already the heaviest column in the product, so the cost is only ever paid by a
+  run actually in flight.
+- **It must never reach a public response.** It holds the RAW per-batch assessments, i.e. exactly
+  what the viewer gate filters, one batch at a time. `_public_payload` now strips both internal keys,
+  resolved BY NAME from the analyst module so a rename cannot silently stop the stripping.
+
+Pinned by `tests/test_analyst_batch_resume.py`.
+
+**Recovery still needs the page open.** `maybe_autogenerate` fires at scan time and the
+interrupted-run branch fires on a POST from the investigation page; there is **no sweeper** for
+analyst runs (unlike `reap_stale_scan_jobs` for scan jobs). So a run killed by a restart while
+nobody has the tab open stays stopped until someone opens it. Closing that needs a scheduler, which
+is the same missing piece as OMI-13.
+
+**A live-looking clock is not evidence that anything is happening.** The panel keeps polling and the
+elapsed timer keeps ticking against a dead run, which is what the report above actually describes.
+The clock cannot tell a slow batch from a dead run; time since the last LANDING can, so
+`BatchProgressStrip` now says so after `STALL_NOTICE_SEC` (15 min, above the measured 857s worst
+batch) and offers a restart. It also states that nothing is lost by waiting, which is true now that
+a restarted run continues from where the last one stopped.
 
 ### A salvaged batch was buying itself a second full run
 

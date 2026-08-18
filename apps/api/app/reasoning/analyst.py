@@ -2029,6 +2029,100 @@ def _entry_is_ahead(existing: dict | None, mine: dict, run_id: str | None) -> bo
     return int(batching.get("done") or 0) > int(((mine or {}).get("batching") or {}).get("done") or 0)
 
 
+#: Where an in-flight run's per-batch results live inside ``Investigation.payload_json``.
+#:
+#: WHY THIS EXISTS. A batched run held every landed batch in a local ``parts`` list and nothing else.
+#: The merged view was persisted, but the per-batch pieces the merge is built FROM were not, so a run
+#: that died mid-flight — a redeploy (``background.shutdown`` cancels in-flight work after a 5s
+#: grace), a container restart, an OOM — left the investigation with results it could not continue
+#: from. The route's interrupted-run branch then resubmitted the whole thing, and ``parts`` started
+#: as ``[None] * total`` again, so batches 1 and 2 were re-sent to OpenRouter and re-billed to
+#: produce answers already sitting in the database.
+#:
+#: Reported live: a scan finished 2 of 4 batches, stopped, and the elapsed clock kept running.
+#:
+#: Cleared the moment the run completes, so the cost is transient and only ever paid by a run that
+#: is actually in flight.
+BATCH_PARTS_KEY = "analyst_batch_parts_v1"
+
+
+def _chunk_signature(chunks: list[dict]) -> str:
+    """A fingerprint of the batch LAYOUT: which accounts are in which batch, in order.
+
+    Resuming is only safe when the stored parts describe the same work this run is about to do. A
+    different selection, a different batch size, or a re-ordered list all produce a different
+    signature, and a mismatch means the stored parts are ignored rather than misapplied — a batch 3
+    result stapled onto a run whose batch 3 holds different accounts would publish real prose against
+    the wrong handles, which is the single worst thing this product can do.
+    """
+    h = hashlib.blake2b(digest_size=16)
+    for chunk in chunks:
+        ids = [
+            str(c.get("external_id") or c.get("handle") or "")
+            for c in ((chunk.get("video") or {}).get("commenters") or [])
+        ]
+        h.update(b"|".join(i.encode("utf-8", "replace") for i in ids))
+        h.update(b"//")
+    return h.hexdigest()
+
+
+def _load_batch_parts(inv, signature: str, total: int) -> dict[int, dict]:
+    """Per-batch results a previous, interrupted run of this exact layout already paid for."""
+    store = (getattr(inv, "payload_json", None) or {}).get(BATCH_PARTS_KEY)
+    if not isinstance(store, dict):
+        return {}
+    if store.get("signature") != signature or int(store.get("total") or 0) != total:
+        return {}
+    parts = store.get("parts")
+    if not isinstance(parts, dict):
+        return {}
+    out: dict[int, dict] = {}
+    for k, v in parts.items():
+        try:
+            i = int(k)
+        except (TypeError, ValueError):
+            continue
+        # A stored part with no accounts is a floored batch. Deliberately NOT resumed: re-running it
+        # is the retry the customer is owed, and treating an empty result as done would make an
+        # interruption permanently lose the batch it happened to interrupt.
+        if 0 <= i < total and isinstance(v, dict) and (v.get("commenter_assessments") or []):
+            out[i] = v
+    return out
+
+
+def _save_batch_part(session, inv, signature: str, total: int, index: int, part: dict) -> None:
+    """Checkpoint one landed batch. Best effort: a failed checkpoint must never sink the batch."""
+    try:
+        with session.begin_nested():
+            payload = {**(inv.payload_json or {})}
+            store = payload.get(BATCH_PARTS_KEY)
+            if (not isinstance(store, dict) or store.get("signature") != signature
+                    or int(store.get("total") or 0) != total):
+                store = {"signature": signature, "total": total, "parts": {}}
+            store = {**store, "parts": {**(store.get("parts") or {}), str(index): part}}
+            payload[BATCH_PARTS_KEY] = store
+            inv.payload_json = payload  # reassign so SQLAlchemy sees the JSON mutation
+            session.add(inv)
+    except Exception:  # noqa: BLE001
+        logger.exception("analyst.batched: could not checkpoint batch %d for inv=%s",
+                         index + 1, getattr(inv, "slug", "?"))
+
+
+def _clear_batch_parts(session, inv) -> None:
+    """Drop the checkpoint once the run is over, so the payload does not carry it forever."""
+    try:
+        payload = inv.payload_json or {}
+        if BATCH_PARTS_KEY not in payload:
+            return
+        with session.begin_nested():
+            trimmed = {k: v for k, v in payload.items() if k != BATCH_PARTS_KEY}
+            inv.payload_json = trimmed
+            session.add(inv)
+    except Exception:  # noqa: BLE001
+        logger.exception("analyst.batched: could not clear the batch checkpoint for inv=%s",
+                         getattr(inv, "slug", "?"))
+
+
 def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks: list[dict],
                       *, platform: str, settings: Settings,
                       lease_id: str | None = None) -> dict | None:
@@ -2060,6 +2154,23 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     attempted = 0  # batches whose model call has returned, succeeded or not — what the UI counts
     # Identifies THIS run's writes, so a concurrent one can tell our progress from its own.
     run_id = uuid.uuid4().hex[:12]
+
+    # RESUME, DO NOT RESTART. An interrupted run left its landed batches checkpointed; re-sending
+    # them to OpenRouter would re-bill for answers already in the database and make the customer
+    # wait through work that was finished. A resumed run picks up at the first batch that has no
+    # result, which is also exactly the behaviour a reader expects from the progress strip.
+    signature = _chunk_signature(chunks)
+    resumed: set[int] = set()
+    with get_session() as session:
+        _inv = AccountRepository(session).get_investigation(slug=inv_slug, user_id=user_id)
+        if _inv is not None:
+            for i, part in _load_batch_parts(_inv, signature, total).items():
+                parts[i] = part
+                resumed.add(i)
+    if resumed:
+        logger.info("analyst.batched: slug=%s resuming, %d of %d batches already landed (%s)",
+                    inv_slug, len(resumed), total,
+                    ", ".join(str(i + 1) for i in sorted(resumed)))
 
     def _persist_progress(done: int, *, run_finished: bool = False) -> dict | None:
         merged = _merge_batch_parts(parts, batch_size=batch_size, done=done,
@@ -2131,6 +2242,13 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
         if parts[i] is None:
             logger.warning("analyst.batched: batch %d/%d returned no assessment (slug=%s)",
                            i + 1, total, inv_slug)
+        elif i not in resumed:
+            # Checkpointed the moment it lands, so an interruption after this point never re-bills
+            # this batch. Only new work is written: a resumed part is already stored.
+            with get_session() as _session:
+                _inv = AccountRepository(_session).get_investigation(slug=inv_slug, user_id=user_id)
+                if _inv is not None:
+                    _save_batch_part(_session, _inv, signature, total, i, parts[i])
         while flushed < total and parts[flushed] is not None:
             flushed += 1
         # `done` drives only the progress readout; the merge itself always uses every completed part.
@@ -2211,15 +2329,23 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
         return retried if result is None else result
 
     if workers == 1:
-        # Sequential: each batch is persisted the moment it lands, so the UI reveals accounts 1-25
-        # while 26-50 are still being generated.
+        # Sequential: one bundle of accounts goes to the model, its response is persisted the moment
+        # it lands so the UI can show it, and only then does the next bundle start. That order is the
+        # product behaviour, not an implementation detail — it is why batch 1's accounts are readable
+        # while batch 4 has not been asked for yet.
         for i in range(total):
-            parts[i] = _run(i)
+            if i in resumed:
+                logger.info("analyst.batched: slug=%s batch %d/%d already landed, not re-sending",
+                            inv_slug, i + 1, total)
+            else:
+                parts[i] = _run(i)
             _landed(i)
     else:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="omi-batch") as pool:
-            futures = {pool.submit(_run, i): i for i in range(total)}
+            futures = {pool.submit(_run, i): i for i in range(total) if i not in resumed}
+            for i in sorted(resumed):
+                _landed(i)
             for fut in as_completed(futures):
                 i = futures[fut]
                 parts[i] = fut.result()
@@ -2242,6 +2368,15 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                        inv_slug, landed, total)
     else:
         logger.info("analyst.batched: slug=%s complete — %d batches merged", inv_slug, total)
+
+    # The run is over either way, so the checkpoint has nothing left to protect. Dropped rather than
+    # left behind: it duplicates every landed batch's per-account prose, and `payload_json` is
+    # already the heaviest column in the product. The cost of resumability is paid only while a run
+    # is actually in flight.
+    with get_session() as session:
+        _inv = AccountRepository(session).get_investigation(slug=inv_slug, user_id=user_id)
+        if _inv is not None:
+            _clear_batch_parts(session, _inv)
     return entry
 
 
