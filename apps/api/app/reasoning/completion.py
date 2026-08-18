@@ -35,7 +35,19 @@ from dataclasses import dataclass
 # headroom (its assessment + citations + the model's reasoning) rather than the bare JSON size.
 COMPLETION_BASE_TOKENS = 12000          # the 7-section synthesis wrapper + reasoning headroom
 COMPLETION_PER_COMMENTER_TOKENS = 450   # per account: reasoning + a plain-English assessment + citations
-COMPLETION_FLOOR_TOKENS = 16000         # never below the model config's own comfortable default
+#: 50,000, and on today's fixed 25-account batches THIS is the number that governs, not the formula.
+#: `base + per * 25` is 23,250, so the floor wins and every request asks for 50k. That was the
+#: intent: a live run was observed spending 12,970 of 23,250, and the margin between a reasoning
+#: model's real appetite and the cap is the difference between a finished batch and a truncated one.
+#: Truncation is not a graceful degradation here — it fails schema validation, floors the wrapper,
+#: and (before the salvage path) discarded every per-account read in the batch.
+#:
+#: A CAP IS NOT A SPEND. OpenRouter bills tokens generated, so raising this costs nothing on a run
+#: that finishes early; the only thing it buys is room. What it does risk is a provider rejecting a
+#: `max_tokens` above the served model's own ceiling, which is a 4xx that would floor every scan —
+#: see `floor_reason.OUTPUT_BUDGET_TOO_LARGE`, which recognises that specific rejection and retries
+#: once at half the budget rather than leaving the deployment dead.
+COMPLETION_FLOOR_TOKENS = 50000
 COMPLETION_CEILING_TOKENS = 150000      # generous cap while we MEASURE real per-scan cost (temporary).
 # NOTE (2026-07-22): ceiling raised 32000 → 150000 DELIBERATELY and TEMPORARILY, to observe the true
 # per-investigation output cost on live runs with no truncation, before tuning it back down once real

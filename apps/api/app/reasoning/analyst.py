@@ -2192,10 +2192,13 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                          "not retrying batch %d/%d", inv_slug, _dead_config_floors[0], i + 1, total)
             return result
 
-        # A truncated reply is the one case where retrying UNCHANGED is pointless: it would truncate
-        # again at the same cap, which is exactly why the in-transport retry declines it. Give the
-        # second attempt more room instead, so it is a different question rather than the same one.
-        multiplier = 1.5 if _floor_base_reason(reason) == "truncated_output" else 1.0
+        # Two reasons make retrying UNCHANGED pointless, and they pull in opposite directions:
+        # a truncated reply would truncate again at the same cap, and a budget the provider refused
+        # as too large would be refused identically. Both are budget faults, so both are retried at a
+        # different budget rather than with the same question asked twice. `budget_multiplier_for`
+        # owns which way and by how much, so the rule lives beside the reasons it keys on.
+        from app.reasoning.floor_reason import budget_multiplier_for
+        multiplier = budget_multiplier_for(reason)
         logger.warning("analyst.batched: batch %d/%d floored for slug=%s reason=%s — retrying once "
                        "(budget x%.1f)", i + 1, total, inv_slug, reason, multiplier)
         retried = _attempt(i, budget_multiplier=multiplier)

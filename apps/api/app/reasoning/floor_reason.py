@@ -35,6 +35,9 @@ MODEL_TIMEOUT = "model_timeout"
 UNREACHABLE = "unreachable"
 GATEWAY_ERROR = "gateway_error"
 HTTP_ERROR = "http_error"
+#: The request asked for more output tokens than the served model will allow. A 4xx, and the ONE
+#: 4xx where the second request would not be identically wrong: ask for less and it succeeds.
+OUTPUT_BUDGET_TOO_LARGE = "output_budget_too_large"
 TRUNCATED_OUTPUT = "truncated_output"
 SCHEMA_INVALID = "model_output_not_schema_valid_json"
 GOVERNOR_REJECT = "governor_reject"
@@ -45,8 +48,17 @@ DETERMINISTIC_FLOOR = "deterministic_floor"
 #: for each, pinned by a test, so a new reason can never render as the generic message by omission.
 ALL_REASONS: tuple[str, ...] = (
     BAD_API_KEY, NO_CREDIT, PRESET_OR_MODEL_NOT_FOUND, RATE_LIMITED, MODEL_TIMEOUT,
-    UNREACHABLE, GATEWAY_ERROR, HTTP_ERROR, TRUNCATED_OUTPUT, SCHEMA_INVALID, GOVERNOR_REJECT,
-    NO_MODEL_CALL, DETERMINISTIC_FLOOR,
+    UNREACHABLE, GATEWAY_ERROR, HTTP_ERROR, OUTPUT_BUDGET_TOO_LARGE, TRUNCATED_OUTPUT,
+    SCHEMA_INVALID, GOVERNOR_REJECT, NO_MODEL_CALL, DETERMINISTIC_FLOOR,
+)
+
+#: Substrings a provider uses when it refuses a `max_tokens` above the model's own ceiling.
+#: Deliberately narrow. This carves a retryable case out of `http_error`, whose whole justification
+#: is that a 4xx means the request was wrong and the next one would be wrong the same way, so
+#: widening these hints would quietly make ordinary bad requests billable twice.
+_OUTPUT_BUDGET_HINTS = (
+    "max_tokens", "max_completion_tokens", "max_output_tokens",
+    "maximum context length", "exceeds the maximum",
 )
 
 #: Reasons where trying again can plausibly succeed.
@@ -67,7 +79,26 @@ ALL_REASONS: tuple[str, ...] = (
 #:   retryable: the request was fine and the far side was not.
 RETRYABLE: frozenset[str] = frozenset({
     RATE_LIMITED, UNREACHABLE, GATEWAY_ERROR, TRUNCATED_OUTPUT, SCHEMA_INVALID, DETERMINISTIC_FLOOR,
+    # Retried DOWNWARD, and it is the only reason that is. Every other retryable case re-asks the
+    # same question; this one asks a smaller one, because the request itself was the problem. See
+    # `budget_multiplier_for` — retrying it unchanged would be refused identically, which is exactly
+    # why `http_error` is not retryable and why this had to be carved out of it rather than folded in.
+    OUTPUT_BUDGET_TOO_LARGE,
 })
+
+#: How much of the original output budget a retry should ask for, by reason. 1.0 means "unchanged".
+#:
+#: Two reasons move it, in opposite directions, and both are about the same fact: retrying a budget
+#: fault at the same budget reproduces it exactly.
+_RETRY_BUDGET_MULTIPLIER: dict[str, float] = {
+    TRUNCATED_OUTPUT: 1.5,           # the reply did not fit; ask for more room
+    OUTPUT_BUDGET_TOO_LARGE: 0.5,    # the provider refused the ask; ask for less
+}
+
+
+def budget_multiplier_for(reason: str | None) -> float:
+    """What to scale the output-token budget by on a retry of ``reason``. 1.0 for everything else."""
+    return _RETRY_BUDGET_MULTIPLIER.get(base_reason(reason), 1.0)
 
 _TIMEOUT_HINTS = ("timeout", "timedout", "timed out", "readtimeout", "connecttimeout")
 
@@ -118,6 +149,15 @@ def classify_floor(trace: dict | None) -> str:
         if any(hint in lowered for hint in _TIMEOUT_HINTS):
             return MODEL_TIMEOUT
         if status and status >= 400:
+            # Checked BEFORE the generic 4xx, because it is the one 4xx a retry can fix.
+            #
+            # The completion floor is 50,000 output tokens and this deployment cannot verify the
+            # served model's own ceiling from anywhere in the codebase: the model is named by an env
+            # var and resolved by the gateway. If that number is ever too large the provider rejects
+            # the request outright, which would floor EVERY scan, permanently, until a human noticed.
+            # Recognising it costs one substring check and turns a dead deployment into a slower one.
+            if any(hint in lowered for hint in _OUTPUT_BUDGET_HINTS):
+                return OUTPUT_BUDGET_TOO_LARGE
             # A 4xx we have no specific word for. Carry the status so the log is still actionable.
             return f"{HTTP_ERROR}: {status}"
         return UNREACHABLE

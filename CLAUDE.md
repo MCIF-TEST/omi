@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2121
-passed, 8 skipped, 2 failed** (8m26s, 2026-08-18), both failures pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2132
+passed, 8 skipped, 2 failed** (8m28s, 2026-08-18), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -2202,6 +2202,56 @@ Two rules the customer wording follows, both learned from copy that was live: **
 about anything but the customer's own credits** (this product sells credits, so "the analysis service
 is out of credit" reads as "you are out of credit" and sends someone to the billing page over a fault
 of ours), and **name whose fault it is**, so nobody re-runs a scan that will fail identically.
+
+### The analyst's output budget is 50,000 tokens, and the FLOOR is what sets it
+
+Product decision (2026-08-18). Batches are a fixed 25 accounts, so the linear formula asks for
+`base + 450x25 = 23,250`, and a live run was observed spending **12,970 of 23,250**. Truncation here
+is not a graceful degradation: the reply fails schema validation, the wrapper floors, and before the
+salvage path existed it took every per-account read in the batch with it. The margin is the point.
+
+**Raising `COMPLETION_FLOOR_TOKENS` is the change, not the ceiling or the per-commenter rate.** The
+ceiling is 150,000 and was never binding; the per-commenter rate only matters above ~85 accounts,
+which no batch reaches. At a 50k floor every batch this product can produce, remainder included,
+carries the same budget, so a 17-account remainder is not quietly given a third less room than the
+25s beside it. Set in `completion.py`, `config.py` and `render.yaml`
+(`OMI_ANALYST_COMPLETION_FLOOR_TOKENS`).
+
+**A cap is not a spend.** OpenRouter bills tokens generated, so a run that finishes early costs
+exactly what it produced. What this does buy is a real risk, and it needed a guard.
+
+#### `output_budget_too_large`, the one 4xx that is worth retrying
+
+`max_tokens` above the served model's own ceiling is **rejected outright**. `http_error` is
+deliberately NOT retryable (a 4xx means the request was wrong and the next one would be wrong the
+same way), so that rejection would floor **every scan on the deployment, permanently**, until a human
+noticed. And nothing in this codebase can pre-empt it: the model is named by an env var
+(`OMI_OPENROUTER_MODEL`, today `openai/gpt-5-mini`) and resolved by the gateway, so the number cannot
+be checked against the model from here.
+
+So the rejection is recognised instead. `floor_reason.OUTPUT_BUDGET_TOO_LARGE` matches a narrow set
+of hints (`max_tokens`, `max_completion_tokens`, `max_output_tokens`, `maximum context length`,
+`exceeds the maximum`) on a 4xx, and is the **only reason retried DOWNWARD**:
+
+| reason | multiplier | why |
+|---|---|---|
+| `truncated_output` | **1.5** | the reply did not fit; ask for more room |
+| `output_budget_too_large` | **0.5** | the provider refused the ask; ask for less |
+| everything else | 1.0 | the budget was not the problem |
+
+`budget_multiplier_for()` owns that table so the rule lives beside the reasons it keys on, and
+`_generate_batched._run` reads it rather than testing for truncation by name.
+
+**Keep the hint list narrow.** It carves a retryable case out of `http_error`, whose entire
+justification is that an ordinary bad request would be refused identically; widening the hints makes
+ordinary bad requests billable twice. Status is still checked before the error string, so a 401 whose
+body happens to mention tokens is still a dead credential. Pinned by
+`tests/test_output_budget_headroom.py`.
+
+**One test moved deliberately.** `test_completion_budget_scales_and_clamps` asserted
+`budget(10) < budget(50) < budget(150)`, which passed only because the old 16k floor was crossed at 9
+accounts. At 50k it is crossed at 85, and asserting strict growth *below* a floor is asserting the
+floor does not work. It now asserts non-decreasing, plus strict growth above the floor.
 
 ### The liveness window must not depend on an env var being right
 

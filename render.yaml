@@ -289,6 +289,15 @@ services:
       # reservation — billing is on tokens actually generated.
       - key: OMI_ANALYST_COMPLETION_CEILING_TOKENS
         value: '150000'
+      # The FLOOR is what actually governs today. Batches are a fixed 25 accounts
+      # and the linear formula asks for base + 450x25 = 23,250, so this number is
+      # the one every request carries. A live run was observed spending 12,970 of
+      # 23,250: truncation here is not graceful, it fails schema validation and
+      # floors the batch, so the margin is the point. A cap is not a spend —
+      # billing is on tokens generated — and a rejection of an over-large
+      # max_tokens self-corrects (floor_reason.output_budget_too_large).
+      - key: OMI_ANALYST_COMPLETION_FLOOR_TOKENS
+        value: '50000'
       # GPT-5 reasoning effort (reasoning tokens bill as output). Unset lets the
       # preset decide; set minimal|low|medium|high to bound reasoning cost.
       # 'low' roughly halves reasoning spend vs 'high' for this task.

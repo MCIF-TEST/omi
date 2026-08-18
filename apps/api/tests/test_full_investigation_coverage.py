@@ -41,7 +41,14 @@ def _env(monkeypatch):
 # =========================================================================== #
 def test_completion_budget_scales_and_clamps():
     assert completion_budget(0) == COMPLETION_FLOOR_TOKENS         # even 0 commenters gets the full synthesis
-    assert completion_budget(10) < completion_budget(50) < completion_budget(150)  # monotonic
+    # Monotonic (non-decreasing), which is the property that matters: a bigger investigation is never
+    # given LESS room. Not strictly increasing, and deliberately so — the floor exists precisely to
+    # override the formula for small investigations, so every size under it shares one budget. The
+    # old assertion happened to pass only because the 16k floor was crossed at 9 accounts; at a 50k
+    # floor it is crossed at 85, and asserting strict growth below a floor is asserting the floor
+    # does not work.
+    assert completion_budget(10) <= completion_budget(50) <= completion_budget(150)
+    assert completion_budget(85) < completion_budget(150), "above the floor it must still scale"
     from app.reasoning.completion import COMPLETION_BASE_TOKENS, COMPLETION_PER_COMMENTER_TOKENS
     assert completion_budget(10) == max(
         COMPLETION_FLOOR_TOKENS, COMPLETION_BASE_TOKENS + COMPLETION_PER_COMMENTER_TOKENS * 10)
