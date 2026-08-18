@@ -36,6 +36,9 @@ from app.core.config import Settings, get_settings
 from app.core.observability import capture_exception
 # Module scope, not inside a function: this module runs closures on the background pool, and a
 # function-level import is invisible inside one (see CLAUDE.md, "A bug class worth knowing").
+# Module scope: this module runs closures on the background pool, where a
+# function-level import is invisible (see CLAUDE.md, "A bug class worth knowing").
+from app.reasoning.batch_plan import BATCH_SIZE, plan_batches
 from app.reasoning.floor_reason import (
     base_reason as _floor_base_reason,
     classify_floor as _classify_floor,
@@ -1636,34 +1639,20 @@ def _write_lease(session, inv, lease: dict | None) -> None:
 # while later batches are still generating.
 
 
-def _batch_sizes(total_accounts: int, batches: int) -> list[int]:
-    """Split ``total_accounts`` into ``batches`` parts as evenly as the count allows.
-
-    The remainder is spread one account at a time across the leading batches rather than piled onto
-    the last one. Slicing at a fixed ``ceil(n/k)`` looks equivalent and is not: at 126 over 4 it
-    gives 32/32/32/30, and at 5 over 4 it gives 2/2/1 — three batches, not four. Spreading gives
-    32/32/31/31 and 2/1/1/1, so the count is always exactly what was asked for and no single request
-    carries a disproportionate share of the work.
-    """
-    if total_accounts <= 0 or batches <= 0:
-        return []
-    batches = min(batches, total_accounts)          # never plan an empty request
-    base, extra = divmod(total_accounts, batches)
-    return [base + (1 if i < extra else 0) for i in range(batches)]
-
-
 def _split_batches(payload: dict, batch_size: int, *, batches: int = 0) -> list[dict] | None:
     """Split an investigation payload into per-request chunk payloads, or None when it fits in one.
 
-    ``batch_size`` is the threshold: a selection at or below it is one request, and nothing here
-    changes for a small scan. Above it, the selection is divided into a FIXED NUMBER of near-equal
-    batches (``batches``, from ``analyst_batch_count``) rather than sliced at a fixed size.
+    A FIXED SIZE, remainder last: 100 accounts is 4 requests of 25, 200 is 8 of 25, and 92 is
+    25/25/25/17. `app.reasoning.batch_plan.plan_batches` owns the arithmetic.
 
-    That is the product decision behind this function. A fixed slice size makes the batch count a
-    function of how many accounts someone happened to select, so the same customer sees 4 batches on
-    one post and 9 on the next with nothing to explain the difference, and a deployment tuning the
-    size for latency silently changes the shape of every scan. A fixed count reads the same every
-    time: 100 accounts is four batches of 25, 126 is four batches of 32/32/31/31.
+    THE SIZE IS WHAT BOUNDS THE REQUEST, AND THE REQUEST IS WHAT FAILS. A previous revision divided
+    the selection into a fixed NUMBER of batches instead, which made the size grow with the
+    selection: a 197-account scan became four calls of roughly 50 accounts each and every one of
+    them came back empty within about thirty seconds. Measured on this deployment, 25 per call
+    works. With a fixed size a larger scan is more requests, never a larger request.
+
+    ``batches`` is accepted and ignored. It is the old fixed-count argument, kept so an existing
+    caller or test cannot silently start passing something that no longer means anything.
 
     Selection order is preserved. Each chunk shares the investigation's non-account context; only
     ``video.commenters`` is sliced, since the evidence composer renders the Accounts table (and the
@@ -1671,20 +1660,14 @@ def _split_batches(payload: dict, batch_size: int, *, batches: int = 0) -> list[
     """
     video = payload.get("video") or {}
     commenters = video.get("commenters") or []
-    if len(commenters) <= batch_size:
+    size = max(1, int(batch_size or BATCH_SIZE))
+    if len(commenters) <= size:
         return None
-    # The COUNT is the product promise; the per-request CEILING is the safety rule, and it wins.
-    # Four batches of 50 is not four batches, it is four requests that come back empty.
-    wanted = batches or DEFAULT_ANALYST_BATCHES
-    needed = -(-len(commenters) // MAX_ACCOUNTS_PER_REQUEST)      # ceil
-    sizes = _batch_sizes(len(commenters), max(wanted, needed))
     chunks: list[dict] = []
-    start = 0
-    for size in sizes:
+    for lo, hi in plan_batches(len(commenters), size):
         chunk_payload = {k: v for k, v in payload.items() if k != CACHE_KEY}
-        chunk_payload["video"] = {**video, "commenters": commenters[start:start + size]}
+        chunk_payload["video"] = {**video, "commenters": commenters[lo:hi]}
         chunks.append(chunk_payload)
-        start += size
     return chunks
 
 
@@ -1849,6 +1832,21 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
                         "complete": bool(run_finished) or done >= total_batches,
                         "run_id": run_id,
                         "heartbeat": datetime.now(timezone.utc).isoformat()}
+    # THE PER-BATCH RECORD, and the reason it is here rather than derived by each reader.
+    #
+    # `total` / `done` / `landed` above are three numbers that look interchangeable and are not, and
+    # every reader that guessed wrong shipped a bug: a strip reading "3 of 4 done" beside 25
+    # accounts, a coverage notice that could never fire, a counter that ran backwards. This list says
+    # what actually happened to each request, so a caller never has to infer it from a count. The
+    # three legacy keys stay for entries written before this existed and for callers not yet moved
+    # over; `app.reasoning.batch_plan` is what derives everything from the list.
+    base["batching"]["batches"] = [
+        {"index": i,
+         "state": ("done" if (p.get("commenter_assessments") or []) else "failed")
+                  if p is not None else ("pending" if not run_finished else "failed"),
+         "accounts": len(p.get("commenter_assessments") or []) if p is not None else 0}
+        for i, p in enumerate(parts)
+    ]
     return base
 
 

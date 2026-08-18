@@ -11,7 +11,7 @@ import { ExportResults } from '@/components/shared/export-results';
 import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
 import { byOmiScoreDesc } from '@/lib/rank-accounts';
-import { batchStates, formatElapsed, type BatchState } from '@/lib/analysis-progress';
+import { batchStates, formatElapsed, type BatchRecord, type BatchState } from '@/lib/analysis-progress';
 import {
   apiClient,
   ApiError,
@@ -281,6 +281,7 @@ export function AnalystPanel({
             <BatchProgressStrip
               batching={assessment.batching}
               traces={assessment.investigation_trace?.batches?.traces}
+              record={assessment.batching.batches}
               elapsedSec={elapsedSec}
               scored={assessment.commenter_assessments?.length ?? 0}
             />
@@ -298,6 +299,7 @@ export function AnalystPanel({
             <BatchTrailingNotice
               batching={assessment.batching}
               traces={assessment.investigation_trace?.batches?.traces}
+              record={assessment.batching.batches}
               scored={assessment.commenter_assessments?.length ?? 0}
             />
           )}
@@ -343,6 +345,7 @@ export function AnalystPanel({
 function BatchProgressStrip({
   batching,
   traces,
+  record,
   elapsedSec,
   scored,
 }: {
@@ -350,14 +353,17 @@ function BatchProgressStrip({
   /** Per-batch outcomes, when the trace carries them. Exact beats inferred: without these the
    *  failed/done split falls back to counts and cannot say WHICH batch came back empty. */
   traces?: ReadonlyArray<{ batch: number; accounts: number }>;
+  /** The server's own per-batch record. Exact, and preferred over every inference. */
+  record?: BatchRecord;
   elapsedSec: number;
   /** Accounts actually returned so far, the real count, not done × batch_size (the final batch is
    *  usually partial, which would overstate it). */
   scored: number;
 }) {
-  const states = batchStates(batching, traces);
+  const states = batchStates(batching, traces, record);
   const failed = states.filter((s) => s === 'failed').length;
   const complete = states.filter((s) => s === 'done').length;
+  const running = states.indexOf('running') === -1 ? null : states.indexOf('running');
   return (
     <div className="mb-4 rounded-lg border border-violet/25 bg-violet/[0.06] px-3.5 py-3">
       <div className="flex items-baseline justify-between gap-2 mb-2.5 flex-wrap">
@@ -373,6 +379,17 @@ function BatchProgressStrip({
         </span>
       </div>
       <BatchTrack states={states} />
+      {/* WHICH BATCH IS ON THE WIRE RIGHT NOW. The run sends one request at a time, so between two
+          results there is a real interval where the only true statement is "waiting on the next
+          batch". Saying it explicitly is the difference between a wait that reads as progress and
+          one that reads as a hang, and it is the state a reader is in for most of a long scan. */}
+      {running !== null && (
+        <p className="mt-2 font-mono text-2xs tracking-wider uppercase text-violet-2 flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-violet-2 motion-safe:animate-pulse-dot" aria-hidden />
+          Waiting on batch {running + 1} of {batching.total}
+          {batching.batch_size ? ` · ${batching.batch_size} accounts` : ''}
+        </p>
+      )}
       <p className="mt-2.5 text-2xs text-fg-mute leading-relaxed">
         The scores below are final for the accounts already analyzed. The remaining accounts are being
         analyzed right now and will appear underneath, ranked with the rest.
@@ -444,13 +461,15 @@ function BatchTrack({ states }: { states: BatchState[] }) {
 function BatchTrailingNotice({
   batching,
   traces,
+  record,
   scored,
 }: {
   batching: NonNullable<AnalystAssessment['batching']>;
   traces?: ReadonlyArray<{ batch: number; accounts: number }>;
+  record?: BatchRecord;
   scored: number;
 }) {
-  const states = batchStates(batching, traces);
+  const states = batchStates(batching, traces, record);
   const remaining = states.filter((s) => s === 'pending' || s === 'running').length;
   return (
     <div

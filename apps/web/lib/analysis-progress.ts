@@ -4,26 +4,14 @@
  */
 
 /**
- * The THRESHOLD, mirroring `analyst_batch_accounts` on the API: at or below this, the analyst makes
- * one request and there are no batches to wait on.
+ * Accounts per model request, mirroring `analyst_batch_accounts` on the API (and
+ * `BATCH_SIZE` in `app/reasoning/batch_plan.py`). At or below this, the analyst makes one call and
+ * there are no batches to wait on.
  *
- * A deployment can lower it (`OMI_ANALYST_BATCH_ACCOUNTS` is 12 in `render.yaml`), which makes a
- * small selection batch sooner than this predicts. That is tolerable and deliberately not wired
- * through as another public env var: this whole module is the estimate shown BEFORE the first batch
- * lands, and real server progress replaces it the moment one does. The number that actually governs
- * a long wait is the count below, and that one is exact.
+ * A SIZE, not a count: 100 accounts is 4 calls of 25, 200 is 8 of 25, 92 is 25/25/25/17. The size is
+ * what bounds the request, so a larger scan is more requests rather than a larger one.
  */
 export const ACCOUNTS_PER_BATCH = 25;
-
-/**
- * How many batches a selection above the threshold becomes. Mirrors `analyst_batch_count` on the
- * API, which is a fixed COUNT rather than a slice size: 100 accounts is four passes of 25, and 126
- * is four passes of 32/32/31/31.
- *
- * It used to be derived as `ceil(accounts / 25)` here, which stopped being true when the server
- * moved to a fixed count: a 126-account scan would have promised six passes and run four.
- */
-export const ANALYST_BATCH_COUNT = 4;
 
 /**
  * How long the displayed batch pointer waits before moving itself on.
@@ -61,12 +49,21 @@ export const BATCH_ADVANCE_SEC = 120;
  */
 export type BatchState = 'done' | 'failed' | 'running' | 'pending';
 
+/** The exact per-batch record when the server sent one. Preferred over every inference below:
+ *  those exist only for entries written before the record did. */
+export type BatchRecord = ReadonlyArray<{ index: number; state: BatchState; accounts: number }>;
+
 export function batchStates(
   { total, done, landed, complete }: {
     total: number; done: number; landed?: number; complete?: boolean;
   },
   traces?: ReadonlyArray<{ batch: number; accounts: number }>,
+  record?: BatchRecord,
 ): BatchState[] {
+  // The server's own record wins outright. It is the only source that can say WHICH batch failed
+  // rather than how many did, and it is what `batch_plan.RunPlan.states()` derived from the actual
+  // outcomes. Everything after this line is reconstruction for older entries.
+  if (record && record.length > 0) return record.map((b) => b.state);
   const n = Math.max(1, total);
   const attempted = Math.min(Math.max(0, done), n);
   const byBatch = new Map((traces ?? []).map((t) => [t.batch, t.accounts]));
@@ -99,9 +96,10 @@ export function formatElapsed(sec: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-/** Total batches for a selection of N accounts, which the client can derive without the server. */
+/** Total batches for a selection of N accounts, which the client can derive without the server.
+ *  Mirrors `plan_batches`: a fixed size with the remainder taking its own request. */
 export function batchesFor(accounts: number): number {
-  return Math.max(0, accounts) > ACCOUNTS_PER_BATCH ? ANALYST_BATCH_COUNT : 1;
+  return Math.max(1, Math.ceil(Math.max(0, accounts) / ACCOUNTS_PER_BATCH));
 }
 
 /**

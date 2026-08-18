@@ -1,22 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { ACCOUNTS_PER_BATCH, ANALYST_BATCH_COUNT, batchStates, batchesFor, displayedBatch } from './analysis-progress';
+import { ACCOUNTS_PER_BATCH, batchStates, batchesFor, displayedBatch } from './analysis-progress';
 
 describe('batchesFor', () => {
-  it('matches the API threshold and batch count', () => {
+  it('matches the API batch size', () => {
     expect(ACCOUNTS_PER_BATCH).toBe(25);
-    expect(ANALYST_BATCH_COUNT).toBe(4);
   });
 
-  it('splits a selection the way the analyst does: a FIXED count, not a slice size', () => {
-    // The server divides anything above the threshold into `analyst_batch_count` near-equal
-    // batches. Deriving `ceil(accounts / 25)` here promised six passes for a 126-account scan that
-    // actually runs four, and the promise is the number a customer watches count down.
+  it('splits a selection the way the analyst does: a fixed SIZE, remainder last', () => {
+    // Mirrors plan_batches on the API. The size bounds the request; a larger scan is more requests.
     expect(batchesFor(1)).toBe(1);
     expect(batchesFor(25)).toBe(1);
-    expect(batchesFor(26)).toBe(4);
+    expect(batchesFor(26)).toBe(2);
+    expect(batchesFor(92)).toBe(4);
     expect(batchesFor(100)).toBe(4);
-    expect(batchesFor(126)).toBe(4);
-    expect(batchesFor(150)).toBe(4);
+    expect(batchesFor(200)).toBe(8);
   });
 
   it('never claims zero batches, however odd the input', () => {

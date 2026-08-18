@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2102
-passed, 8 skipped, 2 failed** (7m31s, 2026-08-18), the failure pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2107
+passed, 8 skipped, 2 failed** (7m24s, 2026-08-18), the failure pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -62,7 +62,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2102 passed, 8 skipped, 2 failed** (7m31s, 2026-08-18), both documented below:
+Current measured state: **2107 passed, 8 skipped, 2 failed** (7m24s, 2026-08-18), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -282,10 +282,10 @@ Pinned by the last four tests in `tests/test_clerk_provisioning.py`.
 
 ### The analyst is batched, sequential, and progressive
 
-For a selection larger than `analyst_batch_accounts` (25 in code, **12 on the deployment**),
+For a selection larger than `analyst_batch_accounts` (**25**, in code and on the deployment),
 `_generate_batched` in `apps/api/app/reasoning/analyst.py`:
 
-1. splits the payload into **exactly `analyst_batch_count` (4)** ordered, near-equal chunks,
+1. splits the payload into ordered chunks of **`analyst_batch_accounts` (25)**, remainder last,
 2. issues them **one at a time** (`analyst_batch_concurrency = 1`) — *not* in parallel,
 3. persists the merged result the moment each batch lands,
 
@@ -295,32 +295,31 @@ route serves the merged-so-far entry with `status: "partial"`; `analyst-panel.ts
 progress", not "10 minutes total"). Two indicators show progress: a strip above the results and a
 trailing notice below them.
 
-**The split is by COUNT, not by size, and the two settings mean different things.**
-`analyst_batch_accounts` is only the *threshold* (at or below it, one request);
-`analyst_batch_count` decides how many batches everything above it becomes. Slicing at a fixed size
-made the batch count a function of how many accounts someone happened to select, so the same
-customer saw 4 batches on one post and 9 on the next with nothing on the page to explain the
-difference, and the deployment lowering the size to 12 for latency reshaped every scan silently. Now
-100 accounts is always 25/25/25/25 and 126 is always 32/32/31/31 — `_batch_sizes` spreads the
-remainder across the leading batches rather than piling it on the last, because slicing at
-`ceil(n/k)` produces *fewer* batches than asked for at small counts (5 over 4 gives 2/2/1).
+**The split is a fixed SIZE, and the remainder takes its own request.** 100 accounts is 4 calls of
+25, 200 is 8 of 25, 92 is 25/25/25/17. `app/reasoning/batch_plan.py` owns the arithmetic
+(`plan_batches`), and `apps/web/lib/analysis-progress.ts` mirrors it in `batchesFor`.
 
-**The count is a FLOOR, and `MAX_ACCOUNTS_PER_REQUEST` (35) outranks it.** The fixed count quietly
-removed the guard that `analyst_batch_accounts` used to provide: as a per-request SIZE it bounded
-how much rode in one call, and as a threshold it stopped doing that, so the batch size began scaling
-with the selection. A live 197-account scan became four requests of ~50 and **every one of them came
-back empty within about 30 seconds**. The ceiling grows the COUNT rather than the request, so 197
-runs as six batches of ~33 while 100 is still 4x25 and 126 is still 32/32/31/31. 25 per request is
-proven on this deployment and ~50 is proven to fail; 35 is the conservative middle and it preserves
-the four-batch shape to 140 accounts, above the 150 operator cap divided by four.
+**The size is what bounds the request, and the request is what fails.** A revision in between divided
+the selection into a fixed NUMBER of batches (4), which made the size grow with the selection
+instead: a live 197-account scan became four calls of roughly 50 accounts and **every one came back
+empty within about thirty seconds**. 25 per call is measured working on this deployment. A larger
+scan must mean more requests, never a larger request. There is no batch-count setting any more.
 
-**If per-batch latency starts racing `OMI_ANALYST_TIMEOUT_SECONDS` (1800), raise the COUNT, not the
-threshold.** That is the whole reason the deployment had dropped to 12-account slices: latency
-scales with the account count while the ~25k-token protocol overhead is fixed. Six or eight batches
-buys the same headroom without making the shape of a scan unpredictable, and it is one env var
-(`OMI_ANALYST_BATCH_COUNT`).
+**Progress is ONE record, not three counters.** `batching.batches` is a per-batch list
+(`index` / `state` / `accounts`) written by `_merge_batch_parts`, and `RunPlan` in `batch_plan.py`
+derives every number anyone wants from it. The three legacy keys remain for entries written before
+the record existed:
 
-Three landmines here, all previously live bugs:
+| key | means | the bug when it was read as another |
+|---|---|---|
+| `done` | batches ATTEMPTED | the strip said "3 of 4 done" beside 25 accounts |
+| `landed` | batches that PRODUCED accounts | a floored batch counted as landed, so the incomplete-coverage notice could never fire |
+| `model_backed` | is the prose the model's | a mixed run rendered as a total failure |
+
+They look interchangeable and they are not. Anything new reads `batching.batches`; the UI already
+prefers it (`batchStates(..., record)`) and only falls back to inference for older entries.
+
+Three landmines here, all previously live bugs:Three landmines here, all previously live bugs:
 
 - **`get_session` must stay a module-level import in `analyst.py`.** It was imported inside
   `generate_and_persist`, which made it a local there; the nested persist closure resolved the name

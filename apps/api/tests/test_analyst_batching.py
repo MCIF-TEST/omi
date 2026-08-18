@@ -24,7 +24,7 @@ def _batching_core(merged: dict) -> dict:
     asserting on the whole dict would be asserting on the current time.
     """
     return {k: v for k, v in (merged["batching"] or {}).items()
-            if k not in ("run_id", "heartbeat")}
+            if k not in ("run_id", "heartbeat", "batches")}
 
 
 def _payload(n_accounts: int) -> dict:
@@ -59,74 +59,29 @@ def _part(*, scores: list[int], overall: int, model_backed: bool = True,
 
 # --------------------------------------------------------------------------- #
 # Split
+#
+# The arithmetic lives in tests/test_batch_plan.py now: the split is a fixed SIZE (25, remainder
+# last) rather than a fixed count, because the size is what bounds the request and the request is
+# what fails. Kept here: that the THRESHOLD still decides whether to batch at all.
 # --------------------------------------------------------------------------- #
+def test_a_selection_that_fits_in_one_request_is_not_split():
+    assert _split_batches(_payload(25), 25) is None
+    assert _split_batches(_payload(1), 25) is None
+
+
+def test_a_larger_selection_splits_at_the_size_with_the_remainder_last():
+    sizes = [len(c["video"]["commenters"]) for c in _split_batches(_payload(92), 25)]
+    assert sizes == [25, 25, 25, 17]
+    chunks = _split_batches(_payload(100), 25)
+    assert chunks[0]["video"]["commenters"][0]["handle"] == "user0"
+    assert chunks[1]["video"]["commenters"][0]["handle"] == "user25"
+    assert chunks[3]["video"]["commenters"][-1]["handle"] == "user99"
+    assert all(c["overall_probability"] == 0.4 for c in chunks)
 def test_small_selection_is_not_split():
     assert _split_batches(_payload(50), 50) is None
     assert _split_batches(_payload(1), 50) is None
 
 
-def test_a_large_selection_splits_into_a_FIXED_NUMBER_of_batches():
-    """The batch count is a constant, not a function of the selection size.
-
-    Slicing at a fixed size made the count depend on how many accounts someone happened to pick: the
-    same customer saw 4 batches on one post and 9 on the next, with nothing on the page to explain
-    the difference, and a deployment tuning the slice size for latency silently reshaped every scan.
-    100 accounts is four batches of 25, whatever the threshold is set to.
-    """
-    chunks = _split_batches(_payload(100), 12, batches=4)
-    assert chunks is not None
-    assert [len(c["video"]["commenters"]) for c in chunks] == [25, 25, 25, 25]
-    # Selection order preserved across every boundary.
-    assert chunks[0]["video"]["commenters"][0]["handle"] == "user0"
-    assert chunks[1]["video"]["commenters"][0]["handle"] == "user25"
-    assert chunks[3]["video"]["commenters"][-1]["handle"] == "user99"
-    # Non-account context rides along; the cached-assessment key never leaks into a chunk.
-    assert all(c["overall_probability"] == 0.4 for c in chunks)
-
-
-def test_a_remainder_is_spread_across_the_batches_not_dumped_on_the_last():
-    """126 over four is 32/32/31/31, not 32/32/32/30.
-
-    Slicing at ceil(n/k) looks equivalent and is not: it concentrates the shortfall in one request
-    and, at small counts, produces FEWER batches than asked for (5 over 4 slices to 2/2/1, three
-    batches). Spreading the remainder keeps the count exact at every size.
-    """
-    assert A._batch_sizes(126, 4) == [32, 32, 31, 31]
-    assert sum(A._batch_sizes(126, 4)) == 126
-    for n in range(5, 200):
-        sizes = A._batch_sizes(n, 4)
-        assert len(sizes) == 4, n
-        assert sum(sizes) == n, n
-        assert max(sizes) - min(sizes) <= 1, n
-
-
-def test_the_count_never_plans_an_empty_request():
-    """Fewer accounts than batches. A request carrying no accounts costs a full protocol send and
-    can only come back empty."""
-    assert A._batch_sizes(3, 4) == [1, 1, 1]
-    assert A._batch_sizes(0, 4) == []
-
-
-def test_the_threshold_still_decides_whether_to_batch_at_all():
-    """`analyst_batch_accounts` did not change meaning for a small scan: at or below it, one request.
-    A 13-account selection above a 12 threshold becomes four batches, not thirteen."""
-    assert _split_batches(_payload(12), 12, batches=4) is None
-    sizes = [len(c["video"]["commenters"]) for c in _split_batches(_payload(13), 12, batches=4)]
-    assert sizes == [4, 3, 3, 3]
-
-
-def test_the_shipped_default_is_four_batches():
-    """The product decision, pinned. `render.yaml` can raise it if per-batch latency starts racing
-    the timeout, but four is what a customer sees unless someone chose otherwise."""
-    assert A.DEFAULT_ANALYST_BATCHES == 4
-    assert get_settings().analyst_batch_count == 4
-    # And the default is what an omitted argument uses, so no call site can quietly diverge.
-    assert len(_split_batches(_payload(100), 12)) == 4
-
-
-# --------------------------------------------------------------------------- #
-# Merge — ordered, progressive, telemetry-summing
-# --------------------------------------------------------------------------- #
 def test_merge_concatenates_accounts_first_to_last():
     parts = [_part(scores=[10, 20], overall=15), _part(scores=[80, 90], overall=85)]
     merged = _merge_batch_parts(parts, batch_size=2, done=2)
@@ -753,33 +708,3 @@ def test_a_fully_successful_run_still_reports_full_coverage():
 # --------------------------------------------------------------------------- #
 # The batch COUNT is a promise; the per-request CEILING is a safety rule
 # --------------------------------------------------------------------------- #
-def test_no_single_request_may_exceed_the_per_request_ceiling():
-    """The guard the fixed batch count quietly removed.
-
-    `analyst_batch_accounts` used to be a per-request SIZE, so it bounded how much rode in one call.
-    Turning it into a threshold made the batch size scale with the SELECTION instead: a live
-    197-account scan became four requests of ~50, and every one of them came back empty inside about
-    30 seconds. Four batches of 50 is not four batches, it is four requests that return nothing for
-    every account inside them.
-    """
-    for n in (150, 197, 300, 1000):
-        sizes = [len(c["video"]["commenters"])
-                 for c in _split_batches(_payload(n), 12, batches=4)]
-        assert max(sizes) <= A.MAX_ACCOUNTS_PER_REQUEST, (n, sizes)
-        assert sum(sizes) == n
-
-
-def test_the_ceiling_grows_the_COUNT_rather_than_dropping_accounts():
-    """Bounding the request must never silently analyse fewer accounts than were selected."""
-    sizes = [len(c["video"]["commenters"]) for c in _split_batches(_payload(197), 12, batches=4)]
-    assert sum(sizes) == 197
-    assert len(sizes) > 4, "the count grows when four batches cannot hold the selection"
-    assert max(sizes) - min(sizes) <= 1, "and the work stays evenly spread"
-
-
-def test_the_promised_four_batch_shape_survives_every_realistic_scan():
-    """The product promise, and the reason the ceiling is 35 rather than lower: it must not reshape
-    the scans the customer actually runs. 140 accounts is the largest four-batch selection."""
-    for n, expected in ((100, [25, 25, 25, 25]), (126, [32, 32, 31, 31]), (140, [35, 35, 35, 35])):
-        sizes = [len(c["video"]["commenters"]) for c in _split_batches(_payload(n), 12, batches=4)]
-        assert sizes == expected, (n, sizes)
