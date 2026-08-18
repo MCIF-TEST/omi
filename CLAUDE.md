@@ -1807,6 +1807,39 @@ degenerates when a cluster fills its own band (every draw is the cluster, p land
 correct detection is thrown away), so `p_value=None` means "could not test" and must never be read
 as "not significant"; and a DBSCAN blob larger than 40% of the batch is the batch, not a cohort.
 
+### The analyst is called the Omi Analyst, and the gateway is never named
+
+Product rule (2026-08-18): **no rendered string in `apps/web` names the model gateway.** The product
+has one analyst and it is the Omi Analyst; the gateway it happens to run on is our implementation
+detail, and naming it tells a customer that the thing they pay for is somebody else's.
+
+The vendor name was never in the copy. It arrives inside **values** the backend writes and the UI
+prints verbatim, which is why the fix is a render-time function rather than a review rule:
+
+- `investigation_trace.provider` is `openrouter-omi-analyst-v1`, or
+  `openrouter->fallback:deterministic-analyst-v1` on a floored run.
+- `endpoint_error` is `ProviderError: openrouter HTTP 404`, `openrouter unreachable`, and similar.
+
+`lib/analyst-identity.ts` is the only place that matters. `analystProviderLabel()` returns Omi's own
+vocabulary and keeps the one distinction an operator needs (`Omi Analyst (model)` against
+`Omi Analyst (deterministic floor)`); `scrubVendor()` replaces the name inside a free-text
+diagnostic while keeping the rest, because the rest is exactly what someone debugging needs. Both
+are applied in `VerificationPanel` and `AiUnavailableDiagnostics`, which are `?verify=1` surfaces
+and were the only leaks: the customer-facing copy was already clean.
+
+Pinned by `lib/analyst-identity.test.ts`, which includes a **source-level guard** that walks every
+`.ts`/`.tsx` file and fails on the name in a rendered string. Two deliberate exemptions:
+
+- **`app/(marketing)/privacy/page.tsx`** names it as a **subprocessor**. That is a legal disclosure,
+  not branding: a privacy policy has to say who processes user data, and removing it would be a
+  data-protection problem rather than a win.
+- `openrouter_preset` as a FIELD name on the API type. The rendered label is "Protocol preset" and
+  the rendered value is the preset id, so nothing vendor-named reaches the page.
+
+Not covered, and a separate question: `requested_model` / `served_model` still render the model slug
+(`openai/gpt-5-mini@preset/...`) in the verify panel. That is a different vendor and it feeds
+`served_model_verified`, the check that catches a silent model swap, so it was left alone.
+
 ### No em dashes, and no decorative badges
 
 Two house rules, both enforced by the product owner's explicit decision (2026-07-28):

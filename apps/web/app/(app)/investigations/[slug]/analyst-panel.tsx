@@ -12,6 +12,7 @@ import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
 import { byOmiScoreDesc } from '@/lib/rank-accounts';
 import { batchStates, formatElapsed, type BatchRecord, type BatchState } from '@/lib/analysis-progress';
+import { analystProviderLabel, scrubVendor } from '@/lib/analyst-identity';
 import {
   apiClient,
   ApiError,
@@ -691,14 +692,15 @@ function VerificationPanel({
   const c = a.completion;
   const aiBacked = t.model_backed === true;
   const rows: [string, React.ReactNode][] = [
-    ['Provider', t.provider ?? provider ?? '-'],
+    // Omi's own vocabulary, never the gateway's. See lib/analyst-identity.ts.
+    ['Provider', analystProviderLabel(t.provider ?? provider)],
     ['Served model', t.served_model ?? t.requested_model ?? '-'],
     ['Served model verified', t.served_model_verified == null
       ? '-'
       : t.served_model_verified
         ? `yes. ${t.served_model_expected ?? 'expected model'}`
         : `NO: expected ${t.served_model_expected ?? '?'}, served ${t.served_model ?? '?'}`],
-    ['Preset', t.openrouter_preset ?? '-'],
+    ['Protocol preset', t.openrouter_preset ?? '-'],
     ['Protocol version', t.master_prompt_version ?? '-'],
     ['Protocol hash', t.master_prompt_hash ?? '-'],
     ['Schema id / version', `${t.canonical_schema_id ?? '-'} / v${(a as { schema_version?: number }).schema_version ?? '-'}`],
@@ -716,7 +718,7 @@ function VerificationPanel({
     ['Estimated cost', fmtCost(t.endpoint_cost_usd)],
     ['Request id', t.endpoint_request_id ?? '-'],
     ['HTTP status', t.response_status ?? '-'],
-    ['Endpoint error', t.endpoint_error ?? '-'],
+    ['Endpoint error', scrubVendor(t.endpoint_error) || '-'],
     ['Generated at', generatedAt ?? '-'],
     // Phase 5H. Full-investigation completion certification
     ['completion', ''],
@@ -976,10 +978,10 @@ function AiUnavailableDiagnostics(
       : t.endpoint_error ? 'gateway error'
       : 'unknown');
   const diagnostics: [string, string][] = [
-    ['provider', t.provider ?? governanceProvider ?? '-'],
+    ['provider', analystProviderLabel(t.provider ?? governanceProvider)],
     ['reason', reason],
     ...(status !== null ? [['http status', String(status)] as [string, string]] : []),
-    ...(t.endpoint_error ? [['error', t.endpoint_error] as [string, string]] : []),
+    ...(t.endpoint_error ? [['error', scrubVendor(t.endpoint_error)] as [string, string]] : []),
     ...(t.requested_model ? [['requested', t.requested_model] as [string, string]] : []),
     ...(t.served_model ? [['served', t.served_model] as [string, string]] : []),
     ...(t.finish_reason ? [['finish', t.finish_reason] as [string, string]] : []),
