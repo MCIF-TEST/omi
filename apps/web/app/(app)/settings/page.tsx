@@ -193,9 +193,7 @@ export default async function SettingsPage() {
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="font-mono text-2xs tracking-[0.16em] text-fg-mute uppercase mb-0.5">
-        {label}
-      </dt>
+      <dt className="meta meta-hi mb-0.5">{label}</dt>
       <dd className="text-fg">{value}</dd>
     </div>
   );

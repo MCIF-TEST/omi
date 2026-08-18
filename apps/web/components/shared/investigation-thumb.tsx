@@ -178,7 +178,9 @@ function PlatformChip({
     <span
       className={cn(
         'inline-flex items-center gap-1 font-mono tracking-wider uppercase',
-        'rounded-full border shadow-sm',
+        // Square: this is a source label on a record, and every other labelled
+        // tag in the product is square now.
+        'rounded-sm border shadow-sm',
         compact ? 'text-[0.5rem] px-1 py-px' : 'text-[0.55rem] px-1.5 py-0.5',
         isYt && 'border-red-500/30 bg-black/55 text-red-200',
         isX && 'border-white/15 bg-black/55 text-fg',

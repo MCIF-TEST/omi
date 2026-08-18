@@ -21,18 +21,18 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         <Link
           href="/"
           aria-label="OMISPHERE home"
-          className="shrink min-w-0 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          className="shrink min-w-0 overflow-hidden focus-hard focus-visible:outline-none"
         >
           <Logo size="sm" />
         </Link>
 
-        <nav className="flex items-center gap-0.5 sm:gap-1.5 ml-auto shrink-0 font-mono text-[0.625rem] tracking-[0.16em] uppercase">
+        <nav className="flex items-center gap-0.5 sm:gap-1.5 ml-auto shrink-0 meta">
           {[['Pricing', '/pricing'], ['Accuracy', '/accuracy'], ['About', '/about']].map(
             ([label, href]) => (
               <Link
                 key={href}
                 href={href}
-                className="hidden sm:block text-fg-mute hover:text-fg transition-colors px-2.5 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                className="hidden sm:block meta meta-hi hover:text-fg transition-colors px-2.5 py-2 focus-hard focus-visible:outline-none"
               >
                 {label}
               </Link>
@@ -40,13 +40,13 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           )}
           <Link
             href="/sign-in"
-            className="text-fg-mute hover:text-fg transition-colors px-2.5 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            className="meta meta-hi hover:text-fg transition-colors px-2.5 py-2 focus-hard focus-visible:outline-none"
           >
             Log in
           </Link>
           <Link
             href="/sign-up"
-            className="btn-lamp inline-flex items-center gap-1.5 h-8 px-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+            className="btn-lamp inline-flex items-center gap-1.5 h-8 px-3.5 focus-hard focus-visible:outline-none"
           >
             Start free
             <ArrowRight size={11} />
@@ -64,24 +64,22 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           The inner one is the reading measure, left-anchored rather than centred: 1152px of prose
           would be unreadable, but the fix is a narrower column, not a re-centred one. */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 md:px-8 py-12 md:py-16">
-        <div className="max-w-3xl">{children}</div>
+        <div className="max-w-3xl lg:border-r lg:border-border-1 lg:pr-10">{children}</div>
       </main>
 
       <footer className="border-t border-border-1 px-4 md:px-8 py-7">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-5">
           <div className="flex items-center gap-4 min-w-0">
             <Logo size="sm" />
-            <span className="font-mono text-[0.625rem] tracking-[0.16em] uppercase text-fg-faint">
-              Online media intelligence
-            </span>
+            <span className="meta">Online media intelligence</span>
           </div>
-          <div className="flex items-center flex-wrap gap-x-1 gap-y-1 font-mono text-[0.625rem] text-fg-mute tracking-[0.14em] uppercase">
+          <div className="flex items-center flex-wrap gap-x-1 gap-y-1 meta meta-hi">
             {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Accuracy', '/accuracy'], ['Pricing', '/pricing'], ['About', '/about']].map(
               ([label, href]) => (
                 <Link
                   key={href}
                   href={href}
-                  className="px-2.5 py-1.5 hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                  className="px-2.5 py-1.5 hover:text-fg transition-colors focus-hard focus-visible:outline-none"
                 >
                   {label}
                 </Link>

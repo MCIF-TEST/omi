@@ -41,7 +41,7 @@ export default async function ActivityPage({
       <div>
         <Link
           href="/settings"
-          className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg-dim font-mono tracking-wider uppercase"
+          className="inline-flex items-center gap-1.5 meta meta-hi hover:text-fg-dim"
         >
           <ArrowLeft size={14} /> Settings
         </Link>

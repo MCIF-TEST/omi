@@ -23,13 +23,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <Link
           href="/"
           aria-label="OMISPHERE home"
-          className="shrink min-w-0 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          className="shrink min-w-0 overflow-hidden focus-hard focus-visible:outline-none"
         >
           <Logo size="sm" />
         </Link>
-        <span className="hidden md:block ml-4 font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-faint">
-          Online media intelligence
-        </span>
+        <span className="hidden md:block ml-4 meta">Online media intelligence</span>
       </header>
 
       <main className="flex-1 flex items-center justify-center px-4 py-10 md:pb-24">
@@ -37,13 +35,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </main>
 
       <footer className="border-t border-border-1 px-4 md:px-8 py-6">
-        <div className="flex items-center justify-center flex-wrap gap-x-1 gap-y-1 font-mono text-[0.625rem] text-fg-mute tracking-[0.14em] uppercase">
+        <div className="flex items-center justify-center flex-wrap gap-x-1 gap-y-1 meta meta-hi">
           {[['Terms', '/terms'], ['Privacy', '/privacy'], ['Accuracy', '/accuracy'], ['Pricing', '/pricing']].map(
             ([label, href]) => (
               <Link
                 key={href}
                 href={href}
-                className="px-2.5 py-1.5 hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                className="px-2.5 py-1.5 hover:text-fg transition-colors focus-hard focus-visible:outline-none"
               >
                 {label}
               </Link>

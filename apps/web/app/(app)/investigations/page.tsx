@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { InvestigationThumb } from '@/components/shared/investigation-thumb';
+import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { type InvestigationSummary, type InvestigationsListResponse, VERDICT_LABELS } from '@/lib/api';
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
@@ -15,7 +16,7 @@ import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header
 export const metadata = { title: 'Previous investigations. OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
-const CHIP = 'font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-full border transition-colors';
+const CHIP = 'font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-sm border transition-colors';
 const CHIP_ON = 'border-accent/70 bg-accent/15 text-accent-text';
 const CHIP_OFF = 'border-border-2 text-fg-dim hover:text-fg hover:border-border-hot';
 
@@ -249,7 +250,7 @@ function InvestigationCard({ inv }: { inv: InvestigationSummary }) {
   return (
     <Link
       href={`/investigations/${inv.slug}`}
-      className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-xl"
+      className="group block h-full focus-hard focus-visible:outline-none rounded-xl"
     >
       <article className="h-full flex flex-col bg-bg-elev border border-border-1 rounded-xl overflow-hidden card-interactive transition-all duration-300 group-hover:border-border-hot group-hover:shadow-card-lg">
         <InvestigationThumb
@@ -266,7 +267,7 @@ function InvestigationCard({ inv }: { inv: InvestigationSummary }) {
               {inv.confidence != null && inv.confidence < 0.4 && (
                 <span
                   title={`Low confidence (${Math.round(inv.confidence * 100)}%). Limited data backed this verdict.`}
-                  className="font-mono text-[0.55rem] tracking-wider uppercase text-confidence-weak border border-border-2 rounded-full px-1.5 py-px"
+                  className="font-mono text-[0.55rem] tracking-wider uppercase text-confidence-weak border border-border-2 rounded-sm px-1.5 py-px"
                 >
                   low conf
                 </span>
@@ -286,18 +287,25 @@ function InvestigationCard({ inv }: { inv: InvestigationSummary }) {
             )}
           </div>
 
-          {/* Probability bar */}
+          {/* Suspicion meter. The shared graduated bar, filled flat in this
+              record's OWN tier colour.
+              It used to be a `bg-brand-gradient` fill, which is the whole
+              suspicion ramp (green through red) painted along the length of one
+              bar: a card at 43% showed green fading to amber and a card at 90%
+              showed green through red, so the colour under the number described
+              the distance travelled rather than the reading. One value, one
+              colour, against marked boundaries. */}
           <div className="mt-auto">
-            <div className="flex items-center justify-between font-mono text-2xs mb-1.5">
-              <span className="text-fg-mute uppercase tracking-wider">Suspicion</span>
-              <span className="text-fg tabular">{pct}%</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="meta meta-hi">Suspicion</span>
+              <span className="font-mono text-2xs text-fg tabular">{pct}%</span>
             </div>
-            <div className="h-1 bg-bg-elev-3 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full bg-brand-gradient transition-all"
-                style={{ width: `${Math.min(100, Math.max(2, pct))}%` }}
-              />
-            </div>
+            <ProbabilityBar
+              value={inv.overall_probability}
+              tier={inv.overall_tier}
+              size="sm"
+              showLabel={false}
+            />
           </div>
 
           <div className="flex items-center justify-between pt-0.5 font-mono text-2xs text-fg-mute uppercase tracking-wider">

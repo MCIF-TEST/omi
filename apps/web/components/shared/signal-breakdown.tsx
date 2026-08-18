@@ -136,7 +136,10 @@ export function SignalBreakdown({
           </span>
         )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5">
+      {/* A rule between the columns. At two columns with only a gap, the meter of
+          the left dimension sits directly beside the label of the right one and
+          the eye reads across the pair as one row. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 sm:[&>*:nth-child(even)]:pl-6 sm:[&>*:nth-child(even)]:border-l sm:[&>*:nth-child(even)]:border-border-1/70">
         {rows.map((s) => (
           <SignalRow key={s.name} signal={s} />
         ))}

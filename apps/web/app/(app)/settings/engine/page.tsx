@@ -41,11 +41,11 @@ export default async function EnginePage() {
       <div>
         <Link
           href="/settings"
-          className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg-dim font-mono tracking-wider uppercase mb-4"
+          className="inline-flex items-center gap-1.5 meta meta-hi hover:text-fg-dim mb-4"
         >
           <ArrowLeft size={14} /> Back to settings
         </Link>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1 flex items-center gap-2">
+        <p className="meta meta-hi mb-1 flex items-center gap-2">
           <Gauge size={12} className="text-accent" /> Admin · engine intelligence
         </p>
         <h1 className="text-2xl font-semibold text-fg tracking-tight">Engine intelligence</h1>
@@ -269,7 +269,7 @@ function MlStatusCard({ ml }: { ml: MlScorerStatus | null }) {
           <div className="flex items-center gap-2 mb-2">
             <CardTitle className="mb-0">The learned detector</CardTitle>
             <span
-              className={`font-mono text-2xs uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+              className={`font-mono text-2xs uppercase tracking-wider px-2 py-0.5 rounded-sm border ${
                 ml.active
                   ? 'text-tier-low border-tier-low/40 bg-tier-low/10'
                   : 'text-fg-mute border-border-2 bg-bg-elev'

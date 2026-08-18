@@ -433,22 +433,27 @@
   .tick-frame::after {
     content: '';
     position: absolute;
-    inset: -1px;
+    /* inset 0, NOT -1px. Every host that wants ticks also wants `overflow-hidden`
+       (a panel header has to be clipped to the frame's corners), and an overlay
+       hung one pixel outside the box is clipped away entirely by it: the ticks
+       were being drawn and then thrown out, on exactly the panels they were
+       rationed to. */
+    inset: 0;
     pointer-events: none;
-    --tick: var(--border-hot);
+    --tick: var(--accent-dim);
     background:
-      linear-gradient(var(--tick) 0 0) 0    0    / 1px 7px no-repeat,
-      linear-gradient(var(--tick) 0 0) 0    0    / 7px 1px no-repeat,
-      linear-gradient(var(--tick) 0 0) 100% 0    / 1px 7px no-repeat,
-      linear-gradient(var(--tick) 0 0) 100% 0    / 7px 1px no-repeat,
-      linear-gradient(var(--tick) 0 0) 0    100% / 1px 7px no-repeat,
-      linear-gradient(var(--tick) 0 0) 0    100% / 7px 1px no-repeat,
-      linear-gradient(var(--tick) 0 0) 100% 100% / 1px 7px no-repeat,
-      linear-gradient(var(--tick) 0 0) 100% 100% / 7px 1px no-repeat;
+      linear-gradient(var(--tick) 0 0) 0    0    / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 0    0    / 10px 2px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 0    / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 0    / 10px 2px no-repeat,
+      linear-gradient(var(--tick) 0 0) 0    100% / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 0    100% / 10px 2px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 100% / 2px 10px no-repeat,
+      linear-gradient(var(--tick) 0 0) 100% 100% / 10px 2px no-repeat;
   }
-  /* Live subject: the ticks pick up the identity colour. Used for the panel a
-     scan is actively writing into, and nowhere else. */
-  .tick-frame-live::after { --tick: var(--accent); }
+  /* Live subject: the ticks brighten to the full identity blue. Used for the
+     panel a scan is actively writing into, and nowhere else. */
+  .tick-frame-live::after { --tick: var(--accent-2); }
 
   /* Readout. A label over a figure, which is how every number in this product
      should be presented: the figure is evidence and carries the mono/tabular

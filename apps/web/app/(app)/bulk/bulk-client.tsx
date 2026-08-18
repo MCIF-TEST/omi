@@ -81,7 +81,7 @@ export function BulkClient({ credits }: { credits: number }) {
             onChange={(e) => setUrlText(e.target.value)}
             placeholder={`https://youtube.com/watch?v=abc123\nhttps://youtube.com/watch?v=xyz789\nhttps://youtube.com/@ChannelName`}
             rows={10}
-            className="w-full px-4 py-3 bg-bg-elev-2 border border-border-2 rounded-lg text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 transition-colors font-mono resize-y"
+            className="w-full px-4 py-3 bg-bg-inset border border-border-2 rounded-sm text-sm text-fg placeholder:text-fg-faint focus:border-accent focus-hard transition-colors font-mono resize-y"
           />
           {urlText && urls.length > 20 && (
             <p className="text-xs text-amber-400 mt-1">
@@ -173,9 +173,9 @@ export function BulkClient({ credits }: { credits: number }) {
 
           {/* Progress bar */}
           <div>
-            <div className="h-2 bg-border-1 rounded-full overflow-hidden">
+            <div className="h-2 bg-bg-inset border border-border-1 rounded-[1px] overflow-hidden">
               <div
-                className="h-full bg-accent rounded-full transition-all duration-500"
+                className="h-full bg-accent transition-[width] duration-500"
                 style={{ width: `${job.total ? (job.completed / job.total) * 100 : 0}%` }}
               />
             </div>
@@ -276,7 +276,7 @@ function StatusBadge({ status }: { status: string }) {
     failed: 'text-danger border-danger/40 bg-danger/10',
   };
   return (
-    <span className={`px-2 py-0.5 rounded-full border font-mono text-2xs uppercase tracking-wider ${styles[status] ?? styles.queued}`}>
+    <span className={`px-2 py-0.5 rounded-sm border font-mono text-2xs uppercase tracking-wider ${styles[status] ?? styles.queued}`}>
       {status}
     </span>
   );

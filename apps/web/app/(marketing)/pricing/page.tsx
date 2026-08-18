@@ -63,12 +63,8 @@ export default function PricingPage() {
           hard edge rather than a card with a gradient behind it. */}
       <div className="border border-border-1">
         <div className="px-5 py-4 border-b border-border-1 bg-bg flex items-baseline justify-between gap-3 flex-wrap">
-          <span className="font-mono text-[0.625rem] tracking-[0.18em] uppercase text-fg-mute">
-            {PLAN_NAME}
-          </span>
-          <span className="font-mono text-[0.625rem] tracking-[0.14em] uppercase text-fg-faint tabular">
-            {MONTHLY_CREDITS} credits / month
-          </span>
+          <span className="meta meta-hi">{PLAN_NAME}</span>
+          <span className="meta tabular">{MONTHLY_CREDITS} credits / month</span>
         </div>
 
         <div className="p-5 md:p-7">
@@ -76,14 +72,14 @@ export default function PricingPage() {
             <span className="stat-value text-5xl md:text-6xl text-fg">{SUBSCRIPTION_PRICE}</span>
             <span className="font-mono text-sm text-fg-mute">/ month</span>
           </div>
-          <p className="font-mono text-[0.6875rem] tracking-wide text-fg-faint mb-7">
+          <p className="font-mono text-[0.6875rem] tracking-wide text-fg-faint mb-7 max-w-[52ch]">
             {TRIAL_CREDITS_LABEL} on signup, no card. One credit covers up to 50 accounts.
           </p>
 
           <ul className="space-y-2.5 mb-8">
             {INCLUDED.map((f) => (
               <li key={f} className="flex gap-3 text-sm text-fg-dim leading-relaxed">
-                <span className="mt-[0.45rem] h-1 w-3 shrink-0 bg-tier-low" aria-hidden />
+                <span className="mt-[0.45rem] h-px w-3 shrink-0 bg-border-hot" aria-hidden />
                 <span className="min-w-0">{f}</span>
               </li>
             ))}
@@ -91,7 +87,7 @@ export default function PricingPage() {
 
           <Link
             href="/sign-up"
-            className="btn-lamp inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+            className="btn-lamp inline-flex items-center justify-center gap-2 h-11 px-6 text-[0.9375rem] focus-hard focus-visible:outline-none"
           >
             Create an account
             <ArrowRight size={15} />
@@ -101,8 +97,12 @@ export default function PricingPage() {
 
       <PageSection label="Questions">
         <dl className="grid sm:grid-cols-2 gap-px bg-border-1 border border-border-1">
-          {FAQ.map(({ q, a }) => (
+          {FAQ.map(({ q, a }, i) => (
             <div key={q} className="bg-bg-deep p-4 md:p-5">
+              <div className="flex items-center gap-2.5 mb-2.5">
+                <span className="meta tabular">Q{String(i + 1).padStart(2, '0')}</span>
+                <span className="h-px flex-1 bg-border-1" aria-hidden />
+              </div>
               <dt className="text-sm font-semibold text-fg mb-2">{q}</dt>
               <dd className="text-sm text-fg-mute leading-relaxed">{a}</dd>
             </div>

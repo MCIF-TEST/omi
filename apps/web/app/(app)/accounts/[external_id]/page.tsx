@@ -109,22 +109,28 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           <ArrowLeft size={14} /> Back
         </Link>
 
-        <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev p-6 md:p-7">
+        {/* The subject file. Ticked, like the investigation case header: this is
+            the record the rest of the page is evidence about. */}
+        <header className="relative overflow-hidden rounded-xl border border-border-1 bg-bg-elev tick-frame p-6 md:p-7">
           <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
           <div className="relative flex items-center gap-5 flex-wrap">
             {latest && (
               <ScoreRing value={latest.overall_probability} tier={latest.tier} size={92} stroke={7} />
             )}
             <div className="flex-1 min-w-[200px]">
-              <span className="section-label">Account · {platform}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="meta shrink-0">Account</span>
+                <span className="h-px w-4 bg-border-hot shrink-0" aria-hidden />
+                <span className="meta meta-on truncate">{platform}</span>
+              </div>
               <div className="flex items-baseline gap-3 flex-wrap mt-2.5">
-                <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight">{history.handle}</h1>
+                <h1 className="display-hard-sm text-2xl md:text-[1.9rem] text-fg">{history.handle}</h1>
                 {history.display_name && (
                   <span className="text-fg-mute">· {history.display_name}</span>
                 )}
                 {latest && <TierBadge tier={latest.tier} size="lg" />}
               </div>
-              <p className="mt-1.5 font-mono text-xs text-fg-faint truncate">{history.external_id}</p>
+              <p className="mt-1.5 font-mono text-xs text-fg-faint truncate select-all">{history.external_id}</p>
             </div>
           </div>
         </header>
@@ -141,9 +147,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
               <Video size={18} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-mono text-2xs tracking-[0.18em] text-accent uppercase mb-0.5">
-                Channel intelligence available
-              </p>
+              <p className="meta text-accent mb-0.5">Channel intelligence available</p>
               <p className="text-sm text-fg">
                 {channel.video_count} video{channel.video_count === 1 ? '' : 's'} scanned ·{' '}
                 {channel.audience_composition.total_commenters.toLocaleString()} audience interactions ·{' '}
@@ -190,7 +194,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
             <span className="stat-value text-3xl font-semibold text-fg">
               {pct(latest.overall_probability)}
             </span>
-            <span className={`px-2.5 py-0.5 rounded-full border font-mono text-2xs uppercase tracking-wider ${tierBg(latest.tier)}`}>
+            <span className={`px-2.5 py-0.5 rounded-sm border font-mono text-2xs uppercase tracking-wider ${tierBg(latest.tier)}`}>
               {latest.tier} suspicion
             </span>
             <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
@@ -399,16 +403,24 @@ function SignalCard({ signal }: { signal: SignalResult }) {
   return (
     <div className="bg-bg-elev-2/40 border border-border-1 rounded-xl p-3.5 card-interactive">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">{label}</span>
+        <span className="meta meta-hi">{label}</span>
         <span className={`font-mono font-bold text-sm tabular ${textColor}`}>
           {Math.round(prob * 100)}%
         </span>
       </div>
-      <div className="h-1.5 w-full bg-bg-elev-3 rounded-full overflow-hidden mb-2">
+      {/* Graduated at the tier boundaries, like every other meter in the
+          product, so a detector reading can be placed on the scale rather than
+          only compared to the detector beside it. */}
+      <div className="relative h-2 w-full bg-bg-inset border border-border-1 rounded-[1px] overflow-hidden mb-2">
         <div
-          className={`h-full rounded-full ${barColor}`}
+          className={`h-full ${barColor}`}
           style={{ width: `${Math.round(prob * 100)}%`, opacity: Math.max(0.35, conf) }}
         />
+        <span className="absolute inset-0 pointer-events-none" aria-hidden>
+          {[25, 50, 75].map((m) => (
+            <span key={m} className="absolute top-0 bottom-0 w-px bg-bg-deep/70" style={{ left: `${m}%` }} />
+          ))}
+        </span>
       </div>
       <div className="flex items-center justify-between text-2xs font-mono text-fg-faint">
         <span className="truncate max-w-[180px]">{topEvidence ?? 'No evidence noted.'}</span>

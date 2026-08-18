@@ -35,11 +35,11 @@ export default async function CalibrationPage() {
       <div>
         <Link
           href="/settings"
-          className="inline-flex items-center gap-1.5 text-sm text-fg-mute hover:text-fg-dim font-mono tracking-wider uppercase mb-4"
+          className="inline-flex items-center gap-1.5 meta meta-hi hover:text-fg-dim mb-4"
         >
           <ArrowLeft size={14} /> Back to settings
         </Link>
-        <p className="font-mono text-2xs tracking-[0.18em] text-fg-mute uppercase mb-1">
+        <p className="meta meta-hi mb-1">
           Admin · ground truth
         </p>
         <h1 className="text-2xl font-semibold text-fg tracking-tight">Calibration</h1>

@@ -60,11 +60,11 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
 
           <div className="flex-1 min-w-[180px]">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className={cn('inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2.5 py-1 rounded-full border', risk.bg, risk.text)}>
+              <span className={cn('inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2.5 py-1 rounded-sm border', risk.bg, risk.text)}>
                 <AlertTriangle size={11} />
                 {risk.label}
               </span>
-              <span className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2.5 py-1 rounded-full border border-tier-low/40 bg-tier-low/10 text-tier-low">
+              <span className="inline-flex items-center gap-1.5 font-mono text-2xs tracking-wider uppercase px-2.5 py-1 rounded-sm border border-tier-low/40 bg-tier-low/10 text-tier-low">
                 <ShieldCheck size={11} />
                 {auth}% authentic
               </span>
@@ -181,12 +181,12 @@ function ThreatBar({
             <span className={text}>{icon}</span>
             {label}
             {isPrimary && (
-              <span className="font-mono text-[0.55rem] tracking-wider text-tier-high border border-tier-high/40 bg-tier-high/10 rounded-full px-1.5 py-px">
+              <span className="font-mono text-[0.55rem] tracking-wider text-tier-high border border-tier-high/40 bg-tier-high/10 rounded-sm px-1.5 py-px">
                 primary
               </span>
             )}
             {contextual && (
-              <span className="font-mono text-[0.55rem] tracking-wider text-fg-mute border border-border-2 bg-bg-elev/40 rounded-full px-1.5 py-px">
+              <span className="font-mono text-[0.55rem] tracking-wider text-fg-mute border border-border-2 bg-bg-elev/40 rounded-sm px-1.5 py-px">
                 context
               </span>
             )}
@@ -198,9 +198,10 @@ function ThreatBar({
             )}
           </span>
         </div>
-        <div className="h-1.5 w-full bg-border-1 rounded-full overflow-hidden">
+        {/* Square and graduated, matching every other meter. */}
+        <div className="relative h-2 w-full bg-bg-inset border border-border-1 rounded-[1px] overflow-hidden">
           <div
-            className={cn('h-full rounded-full bar-fill transition-[width] duration-700 ease-omi', bar)}
+            className={cn('h-full bar-fill transition-[width] duration-700 ease-omi', bar)}
             style={{ width: `${value}%` }}
           />
         </div>

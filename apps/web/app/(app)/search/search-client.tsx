@@ -8,6 +8,7 @@ import { TierBadge } from '@/components/shared/tier-badge';
 import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { apiClient, type AccountSearchResponse, type AccountSearchResult } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 export function SearchClient({ initialQuery }: { initialQuery: string }) {
   const router = useRouter();
@@ -58,32 +59,32 @@ export function SearchClient({ initialQuery }: { initialQuery: string }) {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <header>
-        <span className="section-label">Intelligence · Database</span>
-        <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-3 mb-4">Account search</h1>
-
-        {/* Search input */}
+      <ConsoleHeader
+        index={SECTION_INDEX['/search']}
+        eyebrow="Intelligence · Database"
+        title="Account search"
+        lede="Searches every account scanned on this platform. No credit cost."
+      >
+        {/* A query line, not a search box: prompt caret, mono field, hard focus,
+            matching the command line in the topbar this page is reached from. */}
         <div className="relative">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-mute pointer-events-none" />
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-accent-text leading-none pointer-events-none select-none" aria-hidden>&gt;</span>
           <input
             aria-label="Search accounts"
             type="text"
             value={query}
             onChange={(e) => handleChange(e.target.value)}
-            placeholder="Search by handle, display name, or channel ID…"
-            className="w-full pl-11 pr-4 py-3 bg-bg-elev-2 border border-border-2 rounded-lg text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 transition-colors text-sm"
+            placeholder="Search by handle, display name, or channel ID"
+            className="w-full pl-9 pr-28 h-11 bg-bg-inset border border-border-2 rounded-sm text-fg placeholder:text-fg-faint font-mono text-sm focus:border-accent focus-hard transition-colors"
             autoFocus
           />
           {loading && (
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 font-mono text-2xs text-fg-mute animate-pulse">
-              searching…
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 meta meta-hi inline-flex items-center gap-2">
+              <span className="led led-work" /> Searching
             </span>
           )}
         </div>
-        <p className="mt-2 text-xs text-fg-mute">
-          Searches every account scanned on this platform. No credit cost.
-        </p>
-      </header>
+      </ConsoleHeader>
 
       {error && (
         <p className="text-sm text-danger bg-danger/10 border border-danger/30 rounded-sm px-4 py-3">

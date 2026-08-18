@@ -25,8 +25,8 @@ export function CardGridSkeleton({ count = 6, cols = 'md:grid-cols-2' }: { count
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="rounded-lg border border-border-1 bg-bg-elev p-5 space-y-3">
           <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-16 rounded-full" />
-            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-5 w-16 rounded-sm" />
+            <Skeleton className="h-5 w-20 rounded-sm" />
           </div>
           <Skeleton className="h-5 w-3/4" />
           <Skeleton className="h-2 w-full" />
@@ -61,7 +61,7 @@ export function DetailSkeleton() {
       <div className="rounded-2xl border border-border-1 bg-bg-elev p-5 flex items-start gap-5">
         <Skeleton className="h-[88px] w-[88px] rounded-full shrink-0" />
         <div className="flex-1 space-y-2.5 min-w-0">
-          <Skeleton className="h-5 w-24 rounded-full" />
+          <Skeleton className="h-5 w-24 rounded-sm" />
           <Skeleton className="h-7 w-1/2" />
           <Skeleton className="h-4 w-2/3" />
           <Skeleton className="h-4 w-full max-w-md" />
@@ -88,7 +88,7 @@ export function ListSkeleton({ rows = 6 }: { rows?: number }) {
             <Skeleton className="h-4 w-1/3" />
             <Skeleton className="h-3 w-1/2" />
           </div>
-          <Skeleton className="h-5 w-12 rounded-full shrink-0" />
+          <Skeleton className="h-5 w-12 rounded-sm shrink-0" />
         </div>
       ))}
     </div>

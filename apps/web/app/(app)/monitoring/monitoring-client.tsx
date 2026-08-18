@@ -96,7 +96,7 @@ export function MonitoringClient() {
           <CardLabel className="m-0 flex items-center gap-1.5">
             <Bell size={11} /> Your alerts
             {alerts.data?.unread_count ? (
-              <span className="ml-2 px-1.5 rounded-full bg-danger/15 text-danger font-mono text-2xs">
+              <span className="ml-2 px-1.5 rounded-sm bg-danger/15 text-danger font-mono text-2xs tabular">
                 {alerts.data.unread_count} unread
               </span>
             ) : null}

@@ -29,7 +29,7 @@ export default function SignUpPage({
     <div className="w-full">
       {claim && <RememberClaim token={claim} />}
       <div className="mb-7 text-center">
-        <h1 className="display text-2xl font-semibold tracking-tight text-fg mb-1.5">
+        <h1 className="display-hard-sm text-2xl text-fg mb-1.5">
           {claim ? 'Create your account to scan this post' : 'Create your account'}
         </h1>
         <p className="text-sm text-fg-mute">

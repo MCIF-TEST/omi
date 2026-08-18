@@ -16,7 +16,7 @@ export default function SignInPage() {
   return (
     <div className="w-full">
       <div className="mb-7 text-center">
-        <h1 className="display text-2xl font-semibold tracking-tight text-fg mb-1.5">Welcome back</h1>
+        <h1 className="display-hard-sm text-2xl text-fg mb-1.5">Welcome back</h1>
         <p className="text-sm text-fg-mute">Sign in to continue your investigations.</p>
       </div>
 

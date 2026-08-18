@@ -13,7 +13,7 @@ export default async function FeedbackAdminPage() {
     <div className="space-y-5 -mt-2">
       <header>
         <span className="section-label">Admin · Feedback</span>
-        <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-2">Feedback queue</h1>
+        <h1 className="display-hard-sm text-2xl text-fg mt-2">Feedback queue</h1>
         <p className="text-sm text-fg-mute mt-1">Everything users have sent. Search by keyword or email.</p>
       </header>
       <FeedbackQueue />
