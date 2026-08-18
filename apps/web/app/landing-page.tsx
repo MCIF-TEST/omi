@@ -61,7 +61,7 @@ export function LandingPage() {
           </Link>
           <Link
             href="/sign-up"
-            className="btn-bone inline-flex items-center gap-1.5 h-8 px-3.5 font-mono text-[0.625rem] tracking-[0.14em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+            className="btn-lamp inline-flex items-center gap-1.5 h-8 px-3.5 font-mono text-[0.625rem] tracking-[0.14em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
           >
             Start free
             <ArrowRight size={11} />
@@ -104,7 +104,7 @@ export function LandingPage() {
                     incentive, and it asks nothing in return. */}
                 <a
                   href="#try"
-                  className="btn-bone inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+                  className="btn-lamp inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
                 >
                   Run a scan
                   <ArrowRight size={15} />
@@ -317,7 +317,7 @@ export function LandingPage() {
             <div className="lg:col-span-4 flex flex-col sm:flex-row lg:justify-end gap-2.5">
               <a
                 href="#try"
-                className="btn-bone inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+                className="btn-lamp inline-flex items-center justify-center gap-2 h-12 px-6 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
               >
                 Run a scan
                 <ArrowRight size={15} />

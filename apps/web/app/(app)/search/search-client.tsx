@@ -155,7 +155,10 @@ function AccountRow({ account }: { account: AccountSearchResult }) {
           </div>
           {account.overall_probability != null && (
             <div className="mt-2 flex items-center gap-3">
-              <ProbabilityBar value={prob} tier={account.tier ?? 'low'} showLabel={false} className="flex-1 h-1" />
+              {/* `size`, not an `h-1` on the wrapper: className lands on the
+                  flex container, so the height class was squeezing the row
+                  rather than the meter inside it. */}
+              <ProbabilityBar value={prob} tier={account.tier ?? 'low'} showLabel={false} size="sm" className="flex-1" />
               <span className="font-mono text-2xs text-fg-dim shrink-0">
                 {Math.round(prob * 100)}% inauthentic
               </span>

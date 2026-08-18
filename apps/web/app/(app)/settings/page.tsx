@@ -9,6 +9,7 @@ import { ManageSubscriptionButton, type BillingStatus } from './manage-subscript
 import { NotificationsBlock } from './notifications-block';
 import { ReferralBlock } from './referral-block';
 import { DeleteAccountButton } from './delete-account-button';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 export const metadata = { title: 'Settings. OMISPHERE' };
 
@@ -29,11 +30,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-8 max-w-3xl">
-      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6">
-        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <span className="section-label">Operations · Account</span>
-        <h1 className="display text-2xl font-semibold text-fg tracking-tight mt-3">Settings</h1>
-      </header>
+      <ConsoleHeader
+        index={SECTION_INDEX['/settings']}
+        eyebrow="Operations · Account"
+        title="Settings"
+      />
 
       <Card>
         <CardLabel>Account</CardLabel>

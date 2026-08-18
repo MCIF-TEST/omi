@@ -39,7 +39,7 @@ export function ConfidenceBand({
 
   return (
     <div>
-      <div className="flex items-center justify-between font-mono text-2xs uppercase tracking-[0.18em] text-fg-mute mb-1.5">
+      <div className="flex items-center justify-between meta meta-hi mb-1.5">
         <span>{label}</span>
         <span
           className={cn('tabular', confText)}
@@ -49,7 +49,7 @@ export function ConfidenceBand({
         </span>
       </div>
       <div
-        className="relative h-3 bg-bg-inset inset-hairline rounded-md overflow-hidden"
+        className="relative h-3 bg-bg-inset inset-hairline rounded-[1px] overflow-hidden"
         role="img"
         aria-label={`Probability ${Math.round(pCl * 100)}%, confidence ${Math.round(cCl * 100)}%`}
       >
@@ -58,11 +58,19 @@ export function ConfidenceBand({
           style={{ left: `${leftPct}%`, width: `${bandPct}%`, opacity: bandOpacity }}
         />
         <div
-          className="absolute top-0 bottom-0 w-[3px] bg-accent rounded-full shadow-glow-sm"
+          className="absolute top-0 bottom-0 w-[3px] bg-accent"
           style={{ left: `calc(${tickPct}% - 1.5px)` }}
         />
+        {/* Quarter graduations, matching every other meter in the product, so
+            the uncertainty band can be read against the scale rather than only
+            compared to itself. */}
+        <span className="absolute inset-0 pointer-events-none" aria-hidden>
+          {[25, 50, 75].map((m) => (
+            <span key={m} className="absolute top-0 bottom-0 w-px bg-border-1" style={{ left: `${m}%` }} />
+          ))}
+        </span>
       </div>
-      <div className="mt-1 flex justify-between font-mono text-[0.55rem] uppercase tracking-[0.18em] text-fg-faint tabular">
+      <div className="mt-1 flex justify-between meta tabular">
         <span>0%</span>
         <span>50%</span>
         <span>100%</span>

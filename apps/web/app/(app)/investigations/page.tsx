@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import {
-  Search, ArrowRight, CheckCircle2, FolderSearch, Sparkles,
+  Search, ArrowRight, CheckCircle2, FolderSearch,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,12 +10,13 @@ import { type InvestigationSummary, type InvestigationsListResponse, VERDICT_LAB
 import { apiServer } from '@/lib/api-server';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 export const metadata = { title: 'Previous investigations. OMISPHERE' };
 export const dynamic = 'force-dynamic';
 
 const CHIP = 'font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-full border transition-colors';
-const CHIP_ON = 'border-transparent bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(217,164,74,0.4)]';
+const CHIP_ON = 'border-accent/70 bg-accent/15 text-accent-text';
 const CHIP_OFF = 'border-border-2 text-fg-dim hover:text-fg hover:border-border-hot';
 
 const PLATFORM_FILTERS = [
@@ -55,48 +56,47 @@ export default async function InvestigationsPage({
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <header className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-7">
-        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <div className="relative flex items-end justify-between gap-4 flex-wrap">
-          <div className="min-w-0">
-            <span className="section-label inline-flex items-center gap-1.5">
-              <Sparkles size={11} className="text-accent" />
-              Intelligence · Archive
-            </span>
-            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mt-3">
-              Previous investigations
-            </h1>
-            <p className="text-sm text-fg-dim mt-1.5 max-w-xl leading-relaxed">
-              Your personal archive of every scan. YouTube videos and X posts with
-              thumbnails, verdicts, and evidence in one place.
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3 font-mono text-2xs text-fg-mute uppercase tracking-wider">
-              <span className="text-fg-dim tabular">
-                {investigations.length} shown
+      <ConsoleHeader
+        index={SECTION_INDEX['/investigations']}
+        eyebrow="Intelligence · Archive"
+        title="Previous investigations"
+        lede="Your personal archive of every scan. YouTube videos and X posts with thumbnails, verdicts, and evidence in one place."
+        readout={
+          // The archive's own census, as labelled readouts rather than a row of
+          // interpuncted words. These are counts, and a count belongs under a
+          // label in the data voice.
+          <div className="flex items-stretch border border-border-1 rounded-sm bg-bg divide-x divide-border-1">
+            <span className="readout px-3 py-1.5">
+              <span className="meta">Shown</span>
+              <span className="readout-v text-[0.8125rem]">
+                {investigations.length}
                 {(platformFilter || query) && data.investigations?.length
-                  ? ` of ${data.investigations.length}`
+                  ? <span className="text-fg-faint"> / {data.investigations.length}</span>
                   : ''}
               </span>
-              {ytCount > 0 && (
-                <>
-                  <span className="text-border-2">·</span>
-                  <span>{ytCount} YouTube</span>
-                </>
-              )}
-              {xCount > 0 && (
-                <>
-                  <span className="text-border-2">·</span>
-                  <span>{xCount} X</span>
-                </>
-              )}
-              {concluded.length > 0 && (
-                <>
-                  <span className="text-border-2">·</span>
-                  <span>{concluded.length} concluded</span>
-                </>
-              )}
-            </div>
+            </span>
+            {ytCount > 0 && (
+              <span className="readout px-3 py-1.5">
+                <span className="meta">YouTube</span>
+                <span className="readout-v text-[0.8125rem]">{ytCount}</span>
+              </span>
+            )}
+            {xCount > 0 && (
+              <span className="readout px-3 py-1.5">
+                <span className="meta">X</span>
+                <span className="readout-v text-[0.8125rem]">{xCount}</span>
+              </span>
+            )}
+            {concluded.length > 0 && (
+              <span className="readout px-3 py-1.5">
+                <span className="meta">Concluded</span>
+                <span className="readout-v text-[0.8125rem]">{concluded.length}</span>
+              </span>
+            )}
           </div>
+        }
+      >
+        <div className="relative flex items-end justify-end gap-4 flex-wrap">
           <div className="flex gap-2.5 shrink-0">
             <Link href="/bulk"><Button variant="secondary">Bulk scan</Button></Link>
             <Link href="/investigate">
@@ -106,7 +106,7 @@ export default async function InvestigationsPage({
             </Link>
           </div>
         </div>
-      </header>
+      </ConsoleHeader>
 
       {/* Search + filters */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -120,7 +120,7 @@ export default async function InvestigationsPage({
               name="q"
               defaultValue={searchParams.q || ''}
               placeholder="Search titles, URLs, IDs…"
-              className="w-full pl-9 pr-3 h-10 bg-bg-elev-2 border border-border-2 rounded-md text-sm text-fg placeholder:text-fg-mute focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 transition-colors"
+              className="w-full pl-9 pr-3 h-10 bg-bg-inset border border-border-2 rounded-sm text-sm text-fg placeholder:text-fg-mute focus:border-accent focus-hard transition-colors"
               autoComplete="off"
             />
           </div>
@@ -149,7 +149,10 @@ export default async function InvestigationsPage({
 
       {(data.investigations ?? []).length === 0 ? (
         <Card className="text-center py-14">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl border border-border-2 bg-gradient-to-br from-accent/15 to-violet/10 flex items-center justify-center text-accent">
+          {/* Flat tint. This was a blue-to-purple diagonal, which the design
+              language forbids by name: blue is the identity and purple is the
+              AI layer, so a gradient between them says neither. */}
+          <div className="w-14 h-14 mx-auto mb-4 rounded-xl border border-border-2 bg-accent/10 flex items-center justify-center text-accent">
             <FolderSearch size={22} strokeWidth={1.5} />
           </div>
           <h3 className="display text-base font-semibold text-fg mb-1.5">Your archive is empty</h3>

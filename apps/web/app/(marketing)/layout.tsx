@@ -46,7 +46,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </Link>
           <Link
             href="/sign-up"
-            className="btn-bone inline-flex items-center gap-1.5 h-8 px-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
+            className="btn-lamp inline-flex items-center gap-1.5 h-8 px-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deep"
           >
             Start free
             <ArrowRight size={11} />

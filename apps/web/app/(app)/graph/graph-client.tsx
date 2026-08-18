@@ -5,6 +5,7 @@ import { Network, Plus, Trash2, Pencil, Check, X, Users, MousePointerClick, Arro
 import { apiClient, ApiError, type UserGraphOut, type UserGraphDetail, type UserGraphMemberOut, type Tier, type GraphNode } from '@/lib/api';
 import { TierBadge } from '@/components/shared/tier-badge';
 import { RadialGraph } from '@/components/viz/radial-graph';
+import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 // ---------------------------------------------------------------------------
 // State types
@@ -139,32 +140,25 @@ export function GraphClient() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <header className="aurora relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev px-6 py-6 md:px-8 md:py-7">
-        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <div className="relative flex items-start justify-between gap-4 flex-wrap">
-          <div className="max-w-2xl">
-            <span className="section-label">Coordination · Network graphs</span>
-            <h1 className="display text-2xl md:text-3xl font-semibold text-fg tracking-tight mt-3">
-              Network graphs
-            </h1>
-            <p className="mt-2.5 text-sm text-fg-dim leading-relaxed">
-              Build named graphs of commenter profiles. Omi automatically draws coordination
-              edges between members based on cross-scan detection data. Add profiles from
-              the commenter detail panel during an investigation.
-            </p>
-          </div>
+      <ConsoleHeader
+        index={SECTION_INDEX['/graph']}
+        eyebrow="Coordination · Network graphs"
+        title="Network graphs"
+        lede="Build named graphs of commenter profiles. Omi automatically draws coordination edges between members based on cross-scan detection data. Add profiles from the commenter detail panel during an investigation."
+        readout={
           <button
             type="button"
             onClick={() => { setCreating(true); setNewName(''); }}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 font-mono text-2xs uppercase tracking-wider transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-sm border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 meta meta-on transition-colors shrink-0"
           >
             <Plus size={13} /> New graph
           </button>
-        </div>
+        }
+      >
 
         {/* Inline create form */}
         {creating && (
-          <div className="relative mt-4 flex items-center gap-2">
+          <div className="relative flex items-center gap-2">
             <input
               autoFocus
               aria-label="New graph name"
@@ -192,13 +186,11 @@ export function GraphClient() {
             </button>
           </div>
         )}
-      </header>
+      </ConsoleHeader>
 
       {/* Graph list */}
       {list.status === 'loading' && (
-        <div className="text-center py-16 text-fg-mute font-mono text-2xs uppercase tracking-wider animate-pulse">
-          Loading graphs…
-        </div>
+        <div className="text-center py-16 meta meta-hi animate-pulse">Loading graphs</div>
       )}
 
       {list.status === 'error' && (

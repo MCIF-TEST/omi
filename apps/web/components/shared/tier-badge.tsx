@@ -11,7 +11,7 @@ const BG: Record<Tier | 'unknown', string> = {
   low:      'bg-tier-low/10 border-tier-low/40 text-tier-low',
   moderate: 'bg-tier-moderate/10 border-tier-moderate/40 text-tier-moderate',
   elevated: 'bg-tier-elevated/10 border-tier-elevated/40 text-tier-elevated',
-  high:     'bg-tier-high/10 border-tier-high/40 text-tier-high shadow-glow-danger',
+  high:     'bg-tier-high/10 border-tier-high/40 text-tier-high',
   unknown:  'bg-bg-elev border-border-2 text-fg-mute',
 };
 

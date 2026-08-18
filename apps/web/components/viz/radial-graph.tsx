@@ -4,13 +4,20 @@ import { useMemo, useState } from 'react';
 import { type GraphEdge, type GraphNode, type Tier } from '@/lib/api';
 
 /**
- * Radial SVG graph view. Focal account at center, neighbors arrayed
- * around it in concentric rings sorted by tie-strength. Nodes colored
- * by Louvain community; ring assignment is BFS-based (1-hop inner, 2+
- * hop outer).
+ * Link-analysis display. Focal account at the centre, neighbours arrayed on
+ * labelled concentric rings sorted by tie strength. Node colour is the Louvain
+ * community; ring assignment is BFS hop distance (1-hop inner, 2+ outer).
  *
- * Zero dependencies, no physics, deterministic placement, but with
- * glow, curved edges, hover-tracing, and a live focal pulse.
+ * Zero dependencies, no physics, deterministic placement.
+ *
+ * This used to render as a deep-space scene: a warm radial gradient ground, two
+ * Gaussian-blur glow filters, glossy spheres with a specular bead, and an
+ * animated ripple on the focal node. Every one of those is forbidden by the
+ * design language at the top of globals.css (no glow, no gradient fills,
+ * elevation by tone and hairline), and together they made the product's most
+ * analytical surface its most decorative one. It now reads the way a link chart
+ * in an analysis tool reads: flat ground, measured rings, square nodes, tier
+ * carried by a ring stroke that survives being screenshotted.
  */
 
 interface Props {
@@ -20,17 +27,25 @@ interface Props {
   onSelect?: (node: GraphNode) => void;
 }
 
-// Brand-aligned community palette
-const COMMUNITY_COLORS = [
-  '#c0734e', '#4f8fd6', '#4a9e6f', '#b06ad0',
-  '#b58936', '#2f9db2', '#d06a86', '#7f86e0',
+/**
+ * Community identity. These are the design system's own `--cluster-N` values,
+ * read off the stylesheet rather than restated here: the palette exists exactly
+ * for "persistent categorical hue per cluster" and this component was carrying
+ * a private warm array that predated it, so a community was one colour in the
+ * graph and a different one everywhere else it appeared.
+ */
+const COMMUNITY_VARS = [
+  'var(--cluster-1)', 'var(--cluster-2)', 'var(--cluster-3)', 'var(--cluster-4)',
+  'var(--cluster-5)', 'var(--cluster-6)', 'var(--cluster-7)', 'var(--cluster-8)',
 ];
 
-const TIER_HALO: Record<Tier, string> = {
-  low:      'rgba(46, 207, 150, 0.30)',
-  moderate: 'rgba(242, 188, 46, 0.42)',
-  elevated: 'rgba(248, 118, 58, 0.55)',
-  high:     'rgba(244, 63, 104, 0.65)',
+/** Tier is a ring around the node, in the tier colour. A stroke stays legible
+ *  in a screenshot and at print size; a blurred halo does not. */
+const TIER_STROKE: Record<Tier, string> = {
+  low:      'var(--tier-low)',
+  moderate: 'var(--tier-moderate)',
+  elevated: 'var(--tier-elevated)',
+  high:     'var(--tier-high)',
 };
 
 export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
@@ -50,17 +65,15 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
 
   if (nodes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-20 rounded-2xl border border-border-1 bg-bg-deep">
-        <div className="w-12 h-12 rounded-2xl border border-border-2 bg-bg-elev flex items-center justify-center text-fg-faint">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <div className="panel tick-frame flex flex-col items-center justify-center gap-3 py-20">
+        <div className="w-10 h-10 rounded-[3px] border border-border-2 bg-bg-inset flex items-center justify-center text-fg-faint">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="12" cy="12" r="3" /><circle cx="5" cy="6" r="2" /><circle cx="19" cy="6" r="2" />
             <circle cx="5" cy="18" r="2" /><circle cx="19" cy="18" r="2" />
             <path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3" />
           </svg>
         </div>
-        <p className="text-center text-fg-mute font-mono text-2xs tracking-[0.18em] uppercase">
-          No coordination edges yet for this account.
-        </p>
+        <p className="meta text-center">No coordination edges yet for this account</p>
       </div>
     );
   }
@@ -74,78 +87,104 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
   const isActive = (id: string) =>
     !hoverId || hoverId === id || neighbors[hoverId]?.has(id);
 
+  const hoverNode = hoverId ? nodes.find((n) => n.external_id === hoverId) : undefined;
+
   return (
-    <div className="relative">
+    <div className="panel overflow-hidden">
+      {/* Header bar. A chart with no readout is a picture; a chart that states
+          its own node and edge counts, and what the cursor is on, is an
+          instrument. The hover slot is reserved at a fixed width so the bar
+          does not reflow as the pointer moves across the field. */}
+      <div className="panel-head">
+        <span className="meta meta-hi">Coordination network</span>
+        <span className="flex items-center gap-4 shrink-0">
+          <span className="meta tabular">{nodes.length} nodes</span>
+          <span className="meta tabular">{edges.length} edges</span>
+          <span className="meta meta-on tabular hidden sm:inline-block w-[15ch] text-right truncate">
+            {hoverNode ? truncate(hoverNode.handle, 15) : ''}
+          </span>
+        </span>
+      </div>
+
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
         height={H}
-        className="rounded-2xl border border-border-1"
+        className="block"
         role="img"
-        aria-label="Coordination network"
+        aria-label={`Coordination network: ${nodes.length} accounts, ${edges.length} links`}
       >
         <defs>
-          {/* Deep-space background */}
-          <radialGradient id="rg-bg" cx="50%" cy="50%" r="70%">
-            <stop offset="0%"   stopColor="#1a1610" />
-            <stop offset="60%"  stopColor="#0b0908" />
-            <stop offset="100%" stopColor="#060505" />
-          </radialGradient>
-          {/* Node glow */}
-          <filter id="rg-glow" x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-          <filter id="rg-glow-focal" x="-120%" y="-120%" width="340%" height="340%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
+          {/* Measurement grid. The ground is flat and near-black; structure is
+              the grid, exactly as it is everywhere else in the product. */}
+          <pattern id="rg-grid" width="36" height="36" patternUnits="userSpaceOnUse">
+            <path d="M36 0H0V36" fill="none" stroke="var(--border)" strokeOpacity="0.28" strokeWidth="1" />
+          </pattern>
         </defs>
 
-        {/* Background */}
-        <rect x="0" y="0" width={W} height={H} fill="url(#rg-bg)" />
+        <rect x="0" y="0" width={W} height={H} fill="var(--bg-inset)" />
+        <rect x="0" y="0" width={W} height={H} fill="url(#rg-grid)" />
 
-        {/* Concentric guide rings */}
-        <circle cx={cx} cy={cy} r={ringSize.inner} fill="none" stroke="rgba(217,164,74,0.16)" strokeDasharray="2 6" />
-        <circle cx={cx} cy={cy} r={ringSize.outer} fill="none" stroke="rgba(217,164,74,0.10)" strokeDasharray="2 7" />
-        {/* Radial spokes (faint) */}
-        <g stroke="rgba(217,164,74,0.06)" strokeWidth="0.5">
+        {/* Range rings, labelled. A ring nobody can read the value of is
+            decoration; these say which hop they are. */}
+        <g fill="none" stroke="var(--border-2)" strokeDasharray="3 5">
+          <circle cx={cx} cy={cy} r={ringSize.inner} />
+          <circle cx={cx} cy={cy} r={ringSize.outer} />
+        </g>
+        <g className="meta" fill="var(--text-faint)" fontSize="9" letterSpacing="1.6">
+          <text x={cx + 5} y={cy - ringSize.inner - 5}>1 HOP</text>
+          <text x={cx + 5} y={cy - ringSize.outer - 5}>2+ HOP</text>
+        </g>
+
+        {/* Bearing ticks. Short marks at the ring edge rather than spokes
+            running through the whole field: spokes cross every edge in the
+            chart and compete with the data for the same lines. */}
+        <g stroke="var(--border-2)" strokeWidth="1">
           {Array.from({ length: 12 }).map((_, i) => {
             const a = (i / 12) * Math.PI * 2;
+            const r0 = ringSize.outer;
+            const r1 = ringSize.outer + (i % 3 === 0 ? 10 : 5);
             return (
               <line key={i}
-                x1={cx} y1={cy}
-                x2={cx + Math.cos(a) * ringSize.outer}
-                y2={cy + Math.sin(a) * ringSize.outer}
+                x1={cx + Math.cos(a) * r0} y1={cy + Math.sin(a) * r0}
+                x2={cx + Math.cos(a) * r1} y2={cy + Math.sin(a) * r1}
               />
             );
           })}
         </g>
 
-        {/* Edges. Curved, bundled toward center */}
+        {/* Focal crosshair. A static reticle instead of an animated ripple:
+            the centre of a link chart is a fixed reference, and something
+            pulsing at the centre of the field reads as an alert. */}
+        <g stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1">
+          <line x1={cx - ringSize.outer - 14} y1={cy} x2={cx - 34} y2={cy} />
+          <line x1={cx + 34} y1={cy} x2={cx + ringSize.outer + 14} y2={cy} />
+          <line x1={cx} y1={cy - ringSize.outer - 14} x2={cx} y2={cy - 34} />
+          <line x1={cx} y1={cy + 34} x2={cx} y2={cy + ringSize.outer + 14} />
+        </g>
+
+        {/* Edges. Gently bundled toward the centre. */}
         <g>
           {edges.map((e, i) => {
             const pa = positions[e.a];
             const pb = positions[e.b];
             if (!pa || !pb) return null;
             const active = isActive(e.a) && isActive(e.b);
-            const traced = hoverId && (hoverId === e.a || hoverId === e.b);
+            const traced = Boolean(hoverId) && (hoverId === e.a || hoverId === e.b);
             const ax = cx + pa.x, ay = cy + pa.y;
             const bx = cx + pb.x, by = cy + pb.y;
-            // Control point: midpoint pulled 18% toward center for organic bundling
+            // Control point: midpoint pulled 18% toward centre for readable bundling
             const mx = (ax + bx) / 2, my = (ay + by) / 2;
             const qx = mx + (cx - mx) * 0.18;
             const qy = my + (cy - my) * 0.18;
-            const baseOpacity = hoverId ? (active ? 1 : 0.07) : 1;
-            const stroke = traced ? 'rgba(236,194,117,' : 'rgba(168,158,140,';
             return (
               <path
                 key={i}
                 d={`M${ax},${ay} Q${qx},${qy} ${bx},${by}`}
                 fill="none"
-                stroke={`${stroke}${(0.14 + e.strength * 0.6).toFixed(2)})`}
-                strokeWidth={(0.6 + e.strength * 3) * (traced ? 1.5 : 1)}
-                strokeOpacity={baseOpacity}
+                stroke={traced ? 'var(--accent-2)' : 'var(--border-hot)'}
+                strokeWidth={(0.6 + e.strength * 2.4) * (traced ? 1.6 : 1)}
+                strokeOpacity={hoverId ? (active ? (traced ? 0.95 : 0.5) : 0.05) : 0.16 + e.strength * 0.5}
                 strokeLinecap="round"
                 style={{ transition: 'stroke-opacity 0.2s ease, stroke-width 0.2s ease' }}
               />
@@ -153,14 +192,15 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
           })}
         </g>
 
-        {/* Nodes */}
+        {/* Nodes. Squares, because a link chart is a diagram and a diagram uses
+            shapes. Round beads with a highlight read as buttons. */}
         {nodes.map((n) => {
           const p = positions[n.external_id];
           if (!p) return null;
           const isFocal = n.external_id === focal;
-          const r = isFocal ? 17 : 9;
-          const fill = COMMUNITY_COLORS[n.community_id % COMMUNITY_COLORS.length];
-          const halo = n.tier ? TIER_HALO[n.tier] : 'rgba(168, 158, 140, 0.22)';
+          const half = isFocal ? 11 : 6;
+          const fill = COMMUNITY_VARS[n.community_id % COMMUNITY_VARS.length];
+          const tier = n.tier ? TIER_STROKE[n.tier] : null;
           const hovered = hoverId === n.external_id;
           const active = isActive(n.external_id);
           const tx = cx + p.x, ty = cy + p.y;
@@ -168,42 +208,50 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
             <g
               key={n.external_id}
               transform={`translate(${tx}, ${ty})`}
-              style={{ cursor: 'pointer', opacity: active ? 1 : 0.25, transition: 'opacity 0.2s ease' }}
+              style={{ cursor: 'pointer', opacity: active ? 1 : 0.22, transition: 'opacity 0.2s ease' }}
               onMouseEnter={() => setHoverId(n.external_id)}
               onMouseLeave={() => setHoverId(null)}
               onClick={() => onSelect?.(n)}
             >
-              {/* Focal ripple rings */}
-              {isFocal && (
-                <>
-                  <circle r={r} fill="none" stroke="var(--accent)" strokeWidth="1.5"
-                    style={{ transformOrigin: 'center', animation: 'hv-ripple 2.6s ease-out infinite' }} />
-                  <circle r={r} fill="none" stroke="var(--accent)" strokeWidth="1"
-                    style={{ transformOrigin: 'center', animation: 'hv-ripple 2.6s ease-out infinite', animationDelay: '1.3s' }} />
-                </>
+              {/* Tier ring. Drawn OUTSIDE the body so community colour and tier
+                  are separately readable: they are two different facts about
+                  the account and blending them loses one of them. */}
+              {tier && (
+                <rect
+                  x={-half - 4} y={-half - 4}
+                  width={(half + 4) * 2} height={(half + 4) * 2}
+                  rx="1" fill="none" stroke={tier}
+                  strokeWidth={hovered || isFocal ? 2 : 1.5}
+                />
               )}
-              {/* tier halo */}
-              <circle r={r + (hovered ? 9 : 6)} fill={halo} style={{ transition: 'r 0.2s ease' }} />
-              {/* node body */}
-              <circle
-                r={r}
+              {/* Selection brackets on the focal node: the corner ticks used
+                  everywhere else in the interface, at node scale. */}
+              {isFocal && (
+                <g stroke="var(--accent)" strokeWidth="1.5" fill="none">
+                  {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy], i) => (
+                    <path
+                      key={i}
+                      d={`M${sx * (half + 10)},${sy * (half + 4)} L${sx * (half + 10)},${sy * (half + 10)} L${sx * (half + 4)},${sy * (half + 10)}`}
+                    />
+                  ))}
+                </g>
+              )}
+              <rect
+                x={-half} y={-half} width={half * 2} height={half * 2}
+                rx="1"
                 fill={fill}
-                stroke={isFocal ? 'var(--accent-2)' : '#0b0908'}
-                strokeWidth={isFocal ? 2.5 : 1.5}
-                filter={isFocal ? 'url(#rg-glow-focal)' : hovered ? 'url(#rg-glow)' : undefined}
-                style={isFocal ? { animation: 'hv-node-pulse 3s ease-in-out infinite' } : undefined}
+                stroke={hovered ? 'var(--text)' : 'var(--bg-inset)'}
+                strokeWidth={1.5}
+                style={{ transition: 'stroke 0.15s ease' }}
               />
-              {/* inner highlight */}
-              <circle r={r * 0.4} cx={-r * 0.25} cy={-r * 0.25} fill="rgba(255,250,240,0.35)" />
               {(isFocal || hovered) && (
                 <text
-                  y={r + 17}
+                  y={half + 16}
                   textAnchor="middle"
                   fill="var(--text)"
-                  fontSize={12}
-                  fontWeight={isFocal ? 600 : 400}
-                  fontFamily="JetBrains Mono, monospace"
-                  style={{ paintOrder: 'stroke', stroke: '#0b0908', strokeWidth: 3 }}
+                  fontSize={11}
+                  fontFamily="var(--font-mono), ui-monospace, monospace"
+                  style={{ paintOrder: 'stroke', stroke: 'var(--bg-inset)', strokeWidth: 4 }}
                 >
                   {truncate(n.handle, 22)}
                 </text>
@@ -213,27 +261,39 @@ export function RadialGraph({ focal, nodes, edges, onSelect }: Props) {
         })}
       </svg>
 
-      {/* Legend */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-2xs uppercase tracking-wider text-fg-mute">
-        <LegendDot color={COMMUNITY_COLORS[0]} label="community 0" />
-        <LegendDot color={COMMUNITY_COLORS[1]} label="community 1" />
-        <LegendDot color={COMMUNITY_COLORS[2]} label="community 2" />
-        <span className="text-border-2">·</span>
-        <span><span className="inline-block w-3 h-3 rounded-full mr-1 align-middle" style={{ background: TIER_HALO.high }} /> high halo</span>
-        <span><span className="inline-block w-3 h-3 rounded-full mr-1 align-middle" style={{ background: TIER_HALO.elevated }} /> elevated</span>
-        <span className="text-border-2">·</span>
-        <span>edge = coordination strength</span>
+      {/* Legend. On its own ground under a hairline, so the chart field ends
+          where the chart ends. */}
+      <div className="border-t border-border-1 bg-bg px-3 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+        <span className="meta">Community</span>
+        <LegendSwatch color={COMMUNITY_VARS[0]} label="0" />
+        <LegendSwatch color={COMMUNITY_VARS[1]} label="1" />
+        <LegendSwatch color={COMMUNITY_VARS[2]} label="2" />
+        <span className="w-px h-3 bg-border-2" />
+        <span className="meta">Ring</span>
+        <LegendRing color={TIER_STROKE.elevated} label="elevated" />
+        <LegendRing color={TIER_STROKE.high} label="high" />
+        <span className="w-px h-3 bg-border-2" />
+        <span className="meta">Edge weight = tie strength</span>
       </div>
     </div>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function LegendSwatch({ color, label }: { color: string; label: string }) {
   return (
-    <span>
+    <span className="meta meta-on inline-flex items-center gap-1.5">
+      <span className="inline-block w-2.5 h-2.5 rounded-[1px]" style={{ background: color }} />
+      {label}
+    </span>
+  );
+}
+
+function LegendRing({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="meta meta-on inline-flex items-center gap-1.5">
       <span
-        className="inline-block w-3 h-3 rounded-full mr-1 align-middle"
-        style={{ background: color, boxShadow: `0 0 6px ${color}99` }}
+        className="inline-block w-2.5 h-2.5 rounded-[1px] border-[1.5px]"
+        style={{ borderColor: color }}
       />
       {label}
     </span>

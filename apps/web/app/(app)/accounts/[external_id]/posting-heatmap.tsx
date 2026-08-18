@@ -104,10 +104,15 @@ export function PostingHeatmap({ comments }: Props) {
                     key={h}
                     className="flex-1 aspect-square rounded-[2px] transition-all"
                     style={{
+                      // Posting volume is DATA, not a verdict. This ramp used
+                      // to be amber, which is the moderate-suspicion colour
+                      // everywhere else in the product, so every cell on every
+                      // account's calendar carried a warning tone before anyone
+                      // had read it. The identity blue says "measured".
                       backgroundColor:
                         intensity === 0
-                          ? 'rgba(245,241,232,0.04)'
-                          : `rgba(217, 164, 74, ${Math.max(0.15, intensity)})`,
+                          ? 'rgba(148,163,184,0.05)'
+                          : `rgba(59, 130, 246, ${Math.max(0.16, intensity)})`,
                     }}
                     title={`${day} ${h}:00. ${count} comment${count === 1 ? '' : 's'}`}
                   />
@@ -132,7 +137,7 @@ export function PostingHeatmap({ comments }: Props) {
             <div
               key={a}
               className="w-3 h-3 rounded-[2px]"
-              style={{ backgroundColor: `rgba(217, 164, 74, ${a})` }}
+              style={{ backgroundColor: `rgba(59, 130, 246, ${a})` }}
             />
           ))}
           <span className="uppercase tracking-wider">More</span>

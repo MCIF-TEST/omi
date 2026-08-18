@@ -34,15 +34,22 @@ export function ThreatBreakdown({ score, className }: { score: OmiScore; classNa
   return (
     <div className={cn('space-y-5', className)}>
       {/* Headline row: composite OmiScore + risk + authenticity */}
-      <div className="relative overflow-hidden rounded-2xl border border-border-1 bg-gradient-to-br from-bg-elev-2/60 to-bg-elev/20 p-5">
+      {/* Flat ground and a hairline. The gradient fill here was the only
+          diagonal wash left in the product, on the panel carrying its headline
+          number. */}
+      <div className="relative overflow-hidden rounded-2xl border border-border-1 bg-bg-elev tick-frame p-5">
         <div className="relative flex items-center gap-5 flex-wrap">
           {/* Composite score dial */}
           <div className="relative shrink-0 w-[88px] h-[88px]">
             <svg viewBox="0 0 88 88" className="w-full h-full -rotate-90">
               <circle cx="44" cy="44" r="38" fill="none" stroke="var(--border)" strokeWidth="7" />
-              <circle cx="44" cy="44" r="38" fill="none" stroke={risk.ring} strokeWidth="7" strokeLinecap="round"
+              {/* Butt cap and no filter, matching ScoreRing: a round cap
+                  overhangs the value by half a stroke at each end, and the
+                  filter concatenated two characters onto a CSS variable, so it
+                  never resolved to a colour. */}
+              <circle cx="44" cy="44" r="38" fill="none" stroke={risk.ring} strokeWidth="7" strokeLinecap="butt"
                 strokeDasharray={`${(omi / 100) * 2 * Math.PI * 38} ${2 * Math.PI * 38}`}
-                style={{ filter: `drop-shadow(0 0 6px ${risk.ring}66)`, transition: 'stroke-dasharray 0.9s cubic-bezier(0.16,1,0.3,1)' }}
+                style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(0.16,1,0.3,1)' }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">

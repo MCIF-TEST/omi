@@ -2,9 +2,8 @@
 
 import { useCallback } from 'react';
 import Link from 'next/link';
-import { Bell, Search, Zap } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
-import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/logo';
 import { FeedbackButton } from '@/components/shared/feedback-button';
 import { apiClient, type AlertsResponse, type User } from '@/lib/api';
@@ -50,34 +49,42 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
         <Logo size="sm" />
       </Link>
 
-      {/* Engine telemetry (desktop) */}
-      <div className="hidden lg:flex items-center gap-2.5 font-mono text-2xs text-fg-mute tracking-wider shrink-0">
-        {engineStatus && (
-          <>
-            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev">
-              <span className="w-1.5 h-1.5 rounded-full bg-tier-low" />
-              <span>FP</span>
-              <span className="text-fg-dim tabular">{engineStatus.fingerprints_stored.toLocaleString()}</span>
+      {/* Engine telemetry (desktop). A readout strip: label over figure, one
+          framed group, hairline between the fields. These were two separate
+          bordered pills, which made two related readings look like two
+          unrelated controls, and put a rounded chip in the frame. */}
+      {engineStatus && (
+        <div className="hidden lg:flex items-stretch shrink-0 border border-border-1 bg-bg-elev rounded-sm divide-x divide-border-1">
+          <span className="flex flex-col justify-center px-2.5 py-1">
+            <span className="meta leading-none">Fingerprints</span>
+            <span className="font-mono text-2xs tabular text-fg-dim leading-none mt-1">
+              {engineStatus.fingerprints_stored.toLocaleString()}
             </span>
-            <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border-1 bg-bg-elev">
-              <span>SCANS</span>
-              <span className="text-fg-dim tabular">{engineStatus.total_scans.toLocaleString()}</span>
+          </span>
+          <span className="flex flex-col justify-center px-2.5 py-1">
+            <span className="meta leading-none">Scans</span>
+            <span className="font-mono text-2xs tabular text-fg-dim leading-none mt-1">
+              {engineStatus.total_scans.toLocaleString()}
             </span>
-          </>
-        )}
-      </div>
+          </span>
+        </div>
+      )}
 
-      {/* Command bar, the primary verb (search + jump) */}
+      {/* Command line, the primary verb (search + jump).
+          A prompt caret and a mono field, not a rounded search pill with a
+          magnifier and an ellipsis. The two say different things about what
+          this row is: one is a box you type a query into, the other is the
+          line you drive the system from. */}
       <Link
         href="/search"
         className="group hidden md:flex items-center gap-2.5 flex-1 max-w-xl mx-auto h-9 px-3
-                   rounded-lg border border-border-2 bg-bg-elev/70 hover:border-border-hot
-                   hover:bg-bg-elev transition-colors"
+                   rounded-sm border border-border-2 bg-bg-inset hover:border-accent/60
+                   transition-colors"
         aria-label="Search and command"
       >
-        <Search size={14} className="text-fg-mute group-hover:text-fg-dim transition-colors" />
-        <span className="flex-1 text-sm text-fg-mute truncate">
-          Search accounts & narratives…
+        <span className="font-mono text-sm text-accent-text leading-none select-none" aria-hidden>&gt;</span>
+        <span className="flex-1 meta meta-hi truncate group-hover:text-fg-dim transition-colors">
+          Search accounts, narratives, investigations
         </span>
         <span className="kbd">⌘K</span>
       </Link>
@@ -101,21 +108,27 @@ export function Topbar({ user, engineStatus }: TopbarProps) {
         {/* Alerts. Phones reach alerts from the tab bar, so this duplicate is tablet-up. */}
         <Link
           href="/monitoring"
-          className="relative hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border-2 bg-bg-elev hover:border-border-hot hover:text-fg-dim text-fg-mute transition-colors"
+          className="relative hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-sm border border-border-2 bg-bg-elev hover:border-border-hot hover:text-fg-dim text-fg-mute transition-colors"
           aria-label={`Alerts${unread > 0 ? ` (${unread} unread)` : ''}`}
         >
           <Bell size={15} />
           {unread > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] leading-4 text-center font-mono tabular">
+            // Square counter, seated on the corner. A round red pill on a square
+            // control is the one consumer-notification shape in the frame.
+            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-[2px] bg-danger text-white text-[10px] leading-4 text-center font-mono tabular">
               {unread > 99 ? '99+' : unread}
             </span>
           )}
         </Link>
 
-        {/* Credits */}
-        <span className={cn('inline-flex items-center gap-1 font-mono text-2xs tabular', creditTone)}>
-          <Zap size={10} />
-          {credits}
+        {/* Credits. A labelled figure, not a lightning bolt beside a number.
+            The bolt is a games-and-streaks icon and this is the balance that
+            decides whether a scan runs; the label also makes the number
+            self-explanatory to someone seeing the app for the first time.
+            Colour still carries the warning. */}
+        <span className="inline-flex items-center gap-1.5 shrink-0" title={`${credits} credits remaining`}>
+          <span className="meta hidden sm:inline">Credits</span>
+          <span className={cn('font-mono text-xs tabular', creditTone)}>{credits}</span>
         </span>
 
         {/* Email */}

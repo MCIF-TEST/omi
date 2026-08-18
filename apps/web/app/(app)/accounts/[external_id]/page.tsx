@@ -136,7 +136,7 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
           href={`/channels/${platform}/${encodeURIComponent(history.external_id)}`}
           className="block group"
         >
-          <div className="flex items-center gap-4 p-4 rounded-xl border border-accent/30 bg-accent/[0.05] hover:border-accent/60 hover:bg-accent/[0.09] hover:shadow-glow-sm transition-all">
+          <div className="flex items-center gap-4 p-4 rounded-xl border border-accent/30 bg-accent/[0.05] hover:border-accent/60 hover:bg-accent/[0.09] transition-colors">
             <div className="shrink-0 w-10 h-10 rounded-lg border border-accent/40 bg-bg flex items-center justify-center text-accent">
               <Video size={18} />
             </div>
