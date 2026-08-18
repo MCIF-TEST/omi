@@ -58,6 +58,17 @@ CACHE_KEY = "analyst_assessment_v1"
 # lever to reach for if per-batch latency ever starts racing OMI_ANALYST_TIMEOUT_SECONDS — more
 # batches means fewer accounts in each one.
 DEFAULT_ANALYST_BATCHES = 4
+# The hard ceiling on how many accounts may ride in ONE model request, whatever the batch count says.
+#
+# This is the guard that the fixed batch count quietly removed. Before it, `analyst_batch_accounts`
+# was a per-request SIZE and therefore bounded the request; turning it into a threshold made the
+# batch size scale with the selection instead, so a 197-account scan became four requests of ~50.
+# Measured on the deployment: 25 per request works, ~50 per request fails within about 30 seconds
+# with output that does not validate. 35 is the conservative middle, and it keeps the promised
+# four-batch shape for every selection up to 140 accounts, which covers the operator cap of 150.
+# Above that the count grows rather than the request, because a request nobody can serve returns
+# nothing for every account inside it.
+MAX_ACCOUNTS_PER_REQUEST = 35
 # Repo root: apps/api/app/reasoning/analyst.py -> parents[4] == repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _ML_ANALYST_PATH = str(_REPO_ROOT / "ml" / "analyst")
@@ -1662,7 +1673,11 @@ def _split_batches(payload: dict, batch_size: int, *, batches: int = 0) -> list[
     commenters = video.get("commenters") or []
     if len(commenters) <= batch_size:
         return None
-    sizes = _batch_sizes(len(commenters), batches or DEFAULT_ANALYST_BATCHES)
+    # The COUNT is the product promise; the per-request CEILING is the safety rule, and it wins.
+    # Four batches of 50 is not four batches, it is four requests that come back empty.
+    wanted = batches or DEFAULT_ANALYST_BATCHES
+    needed = -(-len(commenters) // MAX_ACCOUNTS_PER_REQUEST)      # ceil
+    sizes = _batch_sizes(len(commenters), max(wanted, needed))
     chunks: list[dict] = []
     start = 0
     for size in sizes:

@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2100
-passed, 8 skipped, 1 failed** (5m57s, 2026-08-16), the failure pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2102
+passed, 8 skipped, 2 failed** (7m31s, 2026-08-18), the failure pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -62,7 +62,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2100 passed, 8 skipped, 1 failed** (5m57s, 2026-08-16):
+Current measured state: **2102 passed, 8 skipped, 2 failed** (7m31s, 2026-08-18), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -305,7 +305,16 @@ difference, and the deployment lowering the size to 12 for latency reshaped ever
 remainder across the leading batches rather than piling it on the last, because slicing at
 `ceil(n/k)` produces *fewer* batches than asked for at small counts (5 over 4 gives 2/2/1).
 
-**If per-batch latency starts racing `OMI_ANALYST_TIMEOUT_SECONDS` (900), raise the COUNT, not the
+**The count is a FLOOR, and `MAX_ACCOUNTS_PER_REQUEST` (35) outranks it.** The fixed count quietly
+removed the guard that `analyst_batch_accounts` used to provide: as a per-request SIZE it bounded
+how much rode in one call, and as a threshold it stopped doing that, so the batch size began scaling
+with the selection. A live 197-account scan became four requests of ~50 and **every one of them came
+back empty within about 30 seconds**. The ceiling grows the COUNT rather than the request, so 197
+runs as six batches of ~33 while 100 is still 4x25 and 126 is still 32/32/31/31. 25 per request is
+proven on this deployment and ~50 is proven to fail; 35 is the conservative middle and it preserves
+the four-batch shape to 140 accounts, above the 150 operator cap divided by four.
+
+**If per-batch latency starts racing `OMI_ANALYST_TIMEOUT_SECONDS` (1800), raise the COUNT, not the
 threshold.** That is the whole reason the deployment had dropped to 12-account slices: latency
 scales with the account count while the ~25k-token protocol overhead is fixed. Six or eight batches
 buys the same headroom without making the shape of a scan unpredictable, and it is one env var

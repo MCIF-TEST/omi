@@ -327,6 +327,11 @@ services:
       # FIXED, so this is the lever to raise (6, 8) if batches start racing OMI_ANALYST_TIMEOUT_
       # SECONDS above. The cost of raising it is paying the protocol more times, which at mini-class
       # pricing is fractions of a cent. Lowering it below 4 makes the progress strip coarser.
+      #
+      # This is a FLOOR, not a fixed number. MAX_ACCOUNTS_PER_REQUEST in analyst.py (35) caps how
+      # many accounts may ride in one call, and the count grows past this value whenever the
+      # selection needs it: a 197-account scan runs as six batches of ~33, not four of ~50. Four
+      # requests of 50 was measured on this deployment and every one of them came back empty.
       - key: OMI_ANALYST_BATCH_COUNT
         value: '4'
       #

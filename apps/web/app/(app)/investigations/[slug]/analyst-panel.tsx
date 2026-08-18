@@ -302,9 +302,14 @@ export function AnalystPanel({
             />
           )}
           {/* Finished, but a batch produced nothing. Say so plainly rather than letting a short list
-              read as the whole answer, and offer the retry that would fill it in. */}
+              read as the whole answer, and offer the retry that would fill it in.
+              NOT shown when the run produced no reads at all: AssessmentView is already rendering
+              the terminal failure notice with its own Retry button, and stacking a second warning
+              box saying an overlapping version of the same thing (with a second identical button)
+              is how one fault came to occupy two panels on the live page. */}
           {assessment.batching
             && assessment.batching.complete
+            && (assessment.commenter_assessments?.length ?? 0) > 0
             && (assessment.batching.landed ?? assessment.batching.total)
                < assessment.batching.total && (
             <IncompleteCoverageNotice
@@ -487,14 +492,18 @@ function IncompleteCoverageNotice({
   onRetry: () => void;
   busy: boolean;
 }) {
-  const missing = batching.total - (batching.landed ?? batching.total);
+  // COUNT WHAT LANDED, NEVER WHAT WAS ATTEMPTED. This read `batching.done`, which counts attempts,
+  // so a run where every batch came back empty announced "4 of 4 batches were analyzed. 4 batches
+  // came back empty" in one breath. Both halves were true of `done` and the sentence was nonsense.
+  const landed = batching.landed ?? batching.total;
+  const missing = Math.max(0, batching.total - landed);
   return (
     <div className="mt-4 rounded-lg border border-warn/35 bg-warn/[0.07] px-3.5 py-3 flex items-start gap-2.5 flex-wrap">
       <TriangleAlert size={13} className="mt-0.5 shrink-0 text-warn" />
       <p className="text-2xs text-fg-dim leading-relaxed flex-1 min-w-[12rem]">
-        {batching.done} of {batching.total} batches were analyzed. {missing} batch
-        {missing === 1 ? '' : 'es'} came back empty, so some of the accounts you selected have no
-        assessment below. The scores that are shown are final.
+        {landed} of {batching.total} batches produced results. {missing} came back empty, so{' '}
+        {landed === 0 ? 'none of' : 'some of'} the accounts you selected have a written read below.
+        The scores that are shown are final.
       </p>
       <button
         type="button"

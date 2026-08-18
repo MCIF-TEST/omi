@@ -748,3 +748,38 @@ def test_a_fully_successful_run_still_reports_full_coverage():
     merged = _merge_batch_parts(parts, batch_size=25, done=4, run_finished=True)
     assert merged["batching"]["landed"] == 4
     assert merged["batching"]["landed"] == merged["batching"]["total"]
+
+
+# --------------------------------------------------------------------------- #
+# The batch COUNT is a promise; the per-request CEILING is a safety rule
+# --------------------------------------------------------------------------- #
+def test_no_single_request_may_exceed_the_per_request_ceiling():
+    """The guard the fixed batch count quietly removed.
+
+    `analyst_batch_accounts` used to be a per-request SIZE, so it bounded how much rode in one call.
+    Turning it into a threshold made the batch size scale with the SELECTION instead: a live
+    197-account scan became four requests of ~50, and every one of them came back empty inside about
+    30 seconds. Four batches of 50 is not four batches, it is four requests that return nothing for
+    every account inside them.
+    """
+    for n in (150, 197, 300, 1000):
+        sizes = [len(c["video"]["commenters"])
+                 for c in _split_batches(_payload(n), 12, batches=4)]
+        assert max(sizes) <= A.MAX_ACCOUNTS_PER_REQUEST, (n, sizes)
+        assert sum(sizes) == n
+
+
+def test_the_ceiling_grows_the_COUNT_rather_than_dropping_accounts():
+    """Bounding the request must never silently analyse fewer accounts than were selected."""
+    sizes = [len(c["video"]["commenters"]) for c in _split_batches(_payload(197), 12, batches=4)]
+    assert sum(sizes) == 197
+    assert len(sizes) > 4, "the count grows when four batches cannot hold the selection"
+    assert max(sizes) - min(sizes) <= 1, "and the work stays evenly spread"
+
+
+def test_the_promised_four_batch_shape_survives_every_realistic_scan():
+    """The product promise, and the reason the ceiling is 35 rather than lower: it must not reshape
+    the scans the customer actually runs. 140 accounts is the largest four-batch selection."""
+    for n, expected in ((100, [25, 25, 25, 25]), (126, [32, 32, 31, 31]), (140, [35, 35, 35, 35])):
+        sizes = [len(c["video"]["commenters"]) for c in _split_batches(_payload(n), 12, batches=4)]
+        assert sizes == expected, (n, sizes)
