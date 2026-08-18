@@ -2203,6 +2203,34 @@ about anything but the customer's own credits** (this product sells credits, so 
 is out of credit" reads as "you are out of credit" and sends someone to the billing page over a fault
 of ours), and **name whose fault it is**, so nobody re-runs a scan that will fail identically.
 
+### The liveness window must not depend on an env var being right
+
+Same report, and this is the half that explains a reset seen MID-run rather than after one.
+
+`batch_heartbeat_stale_sec()` is `max(BATCH_HEARTBEAT_STALE_SEC, analyst_timeout + 300)`, and it
+decides whether another worker may conclude a run has crashed and start a duplicate.
+`Settings.analyst_timeout_seconds` **defaults to 500**, so a service where
+`OMI_ANALYST_TIMEOUT_SECONDS` is not actually applied computed `max(420, 800) = 800s`. A batch has
+been measured on this deployment at **857s**. A perfectly healthy batch could therefore outlive the
+window by a minute, mid-run, and the duplicate republished "1 of 4" over what the customer was
+reading and billed a second full run to do it.
+
+`render.yaml` commits `1800`, but a Render dashboard value can disagree with what is committed (see
+the billing and Clerk notes for the same class), and **a duplicate billable run is not a failure mode
+worth leaving to configuration**. The floor is now **1800**, and the asymmetry is the whole argument:
+
+- declaring a live run dead too EARLY costs a second full generation and a visible reset;
+- declaring a crashed run dead too LATE costs a delayed self-heal on a run that produced nothing,
+  with the Retry button right there.
+
+Pinned by `test_the_floor_alone_outlives_the_slowest_batch_this_deployment_has_measured`, which
+asserts against the measured 857s with the env var **absent**.
+
+Worth knowing: the route's live-run guard is `(... inflight or lease_is_live) and not refresh`, so
+`refresh=True` bypasses it — but `generate_and_persist` claims the durable lease itself and returns
+early when someone else holds it, regardless of `refresh`. That second line of defence is what keeps
+the bypass from being a bug today; do not remove it on the grounds that the route already checks.
+
 ### A salvaged batch was buying itself a second full run
 
 Reported 2026-08-18 from a live 100-account scan, with screenshots. The customer read the

@@ -1939,8 +1939,22 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
 #: A run cannot be declared dead until longer than one model call could possibly take, so the floor
 #: is the configured timeout plus a margin for the persist that follows it. Raising
 #: OMI_ANALYST_TIMEOUT_SECONDS now moves this automatically instead of silently re-opening the bug.
+#: THE FLOOR IS 1800, NOT 420, AND THE ASYMMETRY IS THE WHOLE ARGUMENT.
+#:
+#: Declaring a live run dead too EARLY starts a duplicate: a second full billable generation, and a
+#: customer watching results they were reading get republished from "1 of 4". Declaring a genuinely
+#: crashed run dead too LATE costs a delayed self-heal on a run that produced nothing, and the Retry
+#: button is right there. Those two mistakes are nowhere near equally expensive, so the window is
+#: sized for the expensive one.
+#:
+#: The old floor could not survive this deployment's own measurements. A batch has been measured at
+#: 857s. `Settings.analyst_timeout_seconds` defaults to 500, so a service where
+#: OMI_ANALYST_TIMEOUT_SECONDS is not actually applied (render.yaml commits 1800, and CLAUDE.md
+#: records that a Render dashboard value can disagree with what is committed) computed a window of
+#: max(420, 800) = 800s. An 857s batch outlives that by a minute, mid-run, while perfectly healthy.
+#: A guard whose correctness depends on an env var being right is not a guard.
 BATCH_HEARTBEAT_MARGIN_SEC = 300
-BATCH_HEARTBEAT_STALE_SEC = 420      # the floor, and what a caller with no settings falls back to
+BATCH_HEARTBEAT_STALE_SEC = 1800     # the floor, and what a caller with no settings falls back to
 
 
 def batch_heartbeat_stale_sec(settings: Settings | None = None) -> float:
