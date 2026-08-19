@@ -2429,6 +2429,31 @@ it can say:
 - the header count now says `Export covers all N scanned accounts`, because it describes the EXPORT,
   not the run, and sat a few pixels from a live progress count with no way to tell them apart.
 
+### The completion box was written for us, and a customer reads it
+
+Reported 2026-08-19 looking at a live scan: *"it shouldn't say the token budget, this is a consumer
+app not just for me."* The line was `12,592/50,000 out tokens · stop: stop`, sitting under the
+coverage heading on the page a customer reads about their own investigation.
+
+**Tokens are the worst of it, because they invite a question that has no good answer.** This product
+sells credits at one per 50 accounts. Nobody is charged for tokens, and printing a token budget
+beside their results is the only thing on the page that suggests otherwise. `CompletionStats` now
+shows coverage always (an incomplete investigation must never be hidden from the person who paid for
+it) and puts the token figures and `stop:` behind `verificationEnabled()`, which is exactly the
+operator surface they belong on: to somebody debugging a truncation that line is the whole diagnosis.
+
+**The sentences beside it were the same defect.** Every `reason` string in `verify_completion` is
+rendered into that box, and they were written in our vocabulary: "deterministic Floor", "output-token
+ceiling", "a single inference", "schema / Governor / JSON completeness", "citable", "the upstream
+evidence budget". Each names our infrastructure and answers no question the reader has. All are
+rewritten in plain English. **`incomplete_kind` is untouched** and is the machine-readable half that
+code and operators key on.
+
+Two tests in `tests/test_completion_under_salvage.py` hold it: one walks every branch and fails on
+operator vocabulary, and one asserts each branch still says something (a guard that only forbids
+words passes happily on an empty string). Two existing tests keyed on the old jargon and now assert
+the branch's STRUCTURE instead, which is the behaviour; the wording is copy and may change again.
+
 ### 103 of 100: an account written up twice is two verdicts about one person
 
 Reported 2026-08-19 from a live 100-account scan. The page read **PER-ACCOUNT ASSESSMENTS · 103**

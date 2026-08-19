@@ -165,6 +165,13 @@ def verify_completion(
     When the model was not reached (Floor), completeness is not applicable — reported as incomplete with a
     clear reason so the UI never implies AI coverage that did not happen.
 
+    EVERY ``reason`` HERE IS RENDERED TO A CUSTOMER, on the page about their own scan, so it is
+    written in their vocabulary and not ours. "Deterministic Floor", "output-token ceiling", "a
+    single inference", "schema / Governor / JSON completeness" and "citable" all shipped on that
+    page: each names our infrastructure, answers no question the reader has, and invites one they
+    should never have to ask. The machine-readable half is ``incomplete_kind``, which is what code
+    and operators key on and which is unchanged.
+
     ``salvaged_reads`` is the case in between, and it has to be told apart from a true Floor. The
     wrapper failed validation while ``_salvaged_account_reads`` kept the model's per-account rows, so
     ``model_backed`` is False and yet every account genuinely does have AI reasoning. Reported live:
@@ -187,7 +194,8 @@ def verify_completion(
             assessed_commenters=assessed, missing_commenters=missing,
             omitted_input_commenters=omitted_input, max_output_tokens=max_output_tokens,
             output_tokens=output_tokens, incomplete_kind=None,
-            reason="AI reasoning was not produced (deterministic Floor); completeness not applicable.",
+            reason=("The written analysis could not be produced for this scan, so there is no "
+                    "coverage to report. Every account score is unaffected."),
             estimated_remaining_commenters=represented + omitted_input,
         )
 
@@ -214,30 +222,32 @@ def verify_completion(
 
     if truncated:
         kind, reason = "truncated_output", (
-            "Generation reached the output-token ceiling before finishing; the investigation exceeded a "
-            "single inference. No commenters were dropped silently — the unassessed accounts are recorded."
+            "The analysis ran out of room before it finished. Nothing was dropped quietly: the "
+            "commenters that did not receive a written read are recorded."
         )
         remaining = missing if missing else omitted_input
     elif missing:
         kind, reason = "missing_assessments", (
-            f"{missing} of {represented} shown commenters did not receive an AI assessment in this response."
+            f"{missing} of {represented} commenters did not receive a written read in this response."
         )
         remaining = missing
     elif omitted_input:
         kind, reason = "omitted_input", (
-            f"{omitted_input} commenter(s) were not shown to the model by the upstream evidence budget; "
-            "they remain citable but did not receive a per-account assessment."
+            f"{omitted_input} commenter(s) could not be included in the evidence gathered for this "
+            "scan, so they did not receive a written read."
         )
         remaining = omitted_input
     else:
-        kind, reason, remaining = None, "Complete — every commenter in the investigation received AI reasoning.", 0
+        kind, reason, remaining = (
+            None, "Complete. Every commenter in this investigation received a written read.", 0)
 
     # Complete requires: no coverage gap AND the output certified valid + intact. schema_valid /
     # governor_valid are True by construction on the model-backed path (the output had to pass both to
     # be model-backed), recorded here explicitly for certification.
     complete = (kind is None) and bool(schema_valid) and bool(governor_valid) and json_complete
     if kind is None and not complete:
-        reason = "Model output did not fully certify (schema / Governor / JSON completeness)."
+        reason = ("The analysis finished, but its output did not pass every validation check, so "
+                  "it is not certified complete.")
     return CompletionStatus(
         complete=complete, finish_reason=finish_reason, stopped_on_token_limit=truncated,
         json_complete=json_complete, schema_valid=bool(schema_valid), governor_valid=bool(governor_valid),

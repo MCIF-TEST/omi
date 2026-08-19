@@ -1190,14 +1190,23 @@ function DomainPanel({
 // never emits a per-account number). When the model produced none, an honest empty state is shown instead
 // of any deterministic fallback. `resolved: false` items (alias didn't map to a known commenter) are
 // summarized as a count rather than shown as fabricated identities.
-// Completion statistics, always shown so the user knows the AI coverage of THIS investigation
-// (expected vs analyzed, the dynamic budget, actual output). Never hides an incomplete investigation.
+// Completion statistics. Coverage is always shown, because an incomplete investigation must never be
+// hidden from the person who paid for it.
+//
+// THE TOKEN BUDGET AND THE STOP REASON ARE NOT COVERAGE, and they are gated behind the verify
+// surface. This is a consumer product: "12,592/50,000 out tokens · stop: stop" describes our own
+// infrastructure in our own vocabulary, and it renders on the page a customer reads about their
+// scan. It answers no question they have, and it invites one they should never have to ask ("am I
+// being charged for tokens?" — they are not, they are charged in credits per 50 accounts). To an
+// operator debugging a truncation it is exactly the right line, which is what `?verify=1` is for.
 function CompletionStats({ c }: { c: CompletionStatus }) {
   const expected = c.represented_commenters + c.omitted_input_commenters;
   const bits: string[] = [`${c.assessed_commenters}/${expected} analyzed`];
-  if (typeof c.output_tokens === 'number' && c.max_output_tokens)
-    bits.push(`${c.output_tokens.toLocaleString()}/${c.max_output_tokens.toLocaleString()} out tokens`);
-  if (c.finish_reason) bits.push(`stop: ${c.finish_reason}`);
+  if (verificationEnabled()) {
+    if (typeof c.output_tokens === 'number' && c.max_output_tokens)
+      bits.push(`${c.output_tokens.toLocaleString()}/${c.max_output_tokens.toLocaleString()} out tokens`);
+    if (c.finish_reason) bits.push(`stop: ${c.finish_reason}`);
+  }
   return <p className="text-2xs font-mono text-fg-faint mt-0.5">{bits.join(' · ')}</p>;
 }
 
