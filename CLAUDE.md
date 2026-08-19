@@ -789,6 +789,140 @@ investigation, so the real reason to keep watching the number is that past some 
 follows each individual instruction *less* reliably. Additions must keep replacing rather than
 accumulating.
 
+### The v13 recalibration: the gate migrated down and the product stopped finding anything
+
+Driven by four live investigation exports (2026-08-19), roughly 400 scored accounts. **Exactly ONE
+account cleared 50 and none reached 75.** Three of the four investigations have a maximum below 40.
+The protocol's own stated expectation is "roughly one in ten" at 50 or above, so on that corpus it
+should have been about 40. This is the mirror of the v10 defect (90 of 250 at 50+) and it is worse
+for the product: a customer pays a credit and is told every account looks fine.
+
+**The cause is the 75+ mechanical gate being applied at the 50 boundary**, and the model says so in
+its own prose. `dickensian1776`, scored 44: *"If the account were found to have the identical
+authored sentence posted on multiple separate days, the score would rise into elevated territory."*
+Elevated is 50-74. That sentence, in variations, is on most rows in the corpus. Three structural
+reasons, all fixed:
+
+- **The gate outweighed the band rule about ten to one in words.** The gate is ~700 words with seven
+  lettered sub-items; 50-74 was one clause inside a sentence that also defined 0-24 and 25-49.
+- **The 50-74 band had no list of its own.** "Two independent discriminative indicators" pointed at
+  nothing, so the only enumerated list of indicators in the block was the gate's.
+- **Every tiebreaker pointed down** and the distribution check only ever fired when *too many*
+  accounts were high. A run returning nothing above 49 triggered nothing at all.
+
+What changed in `_SCORE_DISCIPLINE`:
+
+- **`THE 50 TO 74 INDICATORS`**, the elevated band's own list, at comparable length to the gate:
+  non-reciprocal follower acquisition, interchangeable engagement at volume, promotion as the
+  dominant mode, an abrupt history, a profile that argues with itself. Two independent ones, and
+  **none of them has to be mechanical** (stated in those words, because that is the failure).
+- **The gate now scopes itself**: `THIS GATE GOVERNS 75 AND ABOVE. IT IS NOT THE TEST FOR 50`, and
+  it names the exact tell of the failure ("if you find yourself writing that a repeated line *would
+  raise this to elevated*, you have applied the wrong test").
+- **`WHAT IS ACTUALLY DISCRIMINATIVE` was DELETED**, which is what paid for the addition. It was a
+  near-restatement of the gate sitting a few hundred words below it, and that duplication is the most
+  likely reason the model read the two thresholds as one. This is the pattern to keep: additions
+  replace, they do not accumulate.
+- **The distribution check runs in both directions.** `TOO FEW IS ALSO WRONG` re-reads accounts that
+  already have a quoted indicator, and explicitly refuses to become a quota ("Do not invent an
+  indicator to fill the quota"). A genuinely clean batch of 25 is still a real answer.
+- **A zero-post carve-out that is arithmetic, not behaviour.** The ceiling was absolute ("always,
+  whatever the follower counts look like"), which was right about behaviour and wrong about counts:
+  `Kingofcountry_2` has 348 followers, follows 2, and is 36 days old, which is computed rather than
+  inferred. Ceiling 49 instead of 20, confidence still capped at 35, and **never above 49 on profile
+  numbers alone** so the original bug (two identical states scoring 30 points apart) cannot return.
+- **A large audience is evidence in NEITHER direction**, phrased like the existing rule about account
+  age. A live verdict used 18,742 followers to argue a LOW score ("the large audience weigh toward a
+  genuine influencer"), which reasons backwards from the exact commodity being bought and sold.
+
+**Deliberately NOT done: an engine-disagreement rule.** Eleven accounts have the engine at elevated
+(up to 70) and the model at 13-18. It is tempting to have the model explain the gap, and it is not
+possible: `_account_evidence` renders no engine field to the model ("Computed engine fields retained
+on the object for OTHER features; NOT rendered to the model"), and showing them would inject exactly
+the anchoring `NO CONTAGION` forbids. Product rule, from the owner: **the engine's only relationship
+to the analyst is sending an evidence bundle.** Do not add one.
+
+Protocol recompiled to **`map:e5794383e611a87fd9d1bf2f`, 112,109 chars**, zero em dashes, all drift
+guards green. Constitution block count unchanged (every change extended an existing block). Pinned by
+`tests/test_score_discipline.py`, which now asserts the gate and the band list are separately
+reachable, and that the reader-facing rules still do not touch the score.
+
+### Banning one sentence teaches substitution, so the rule is structural now
+
+v12 banned *"collecting more posts would increase confidence"* as a closing sentence. The model
+complied and immediately built a replacement: *"The one observation that would most change this read
+is finding identical templated text repeated across its own posts"* now closes the majority of every
+run, near word for word. That is worse than what it replaced, because it is a template on a product
+whose central accusation is that other people use templates.
+
+Two halves, and the deterministic one is the load-bearing part:
+
+- **`_FINISHED_VERDICT`** gains `DO NOT REPLACE IT WITH A DIFFERENT STOCK CLOSER` and
+  `THE RULE IS STRUCTURAL, NOT A WORD LIST`. The opener rule (which had been in the document since
+  v12 and never landed) now names the exact failing sentence and tells the model its output is
+  machine-checked, which is the strongest prompt lever available.
+- **`check_boilerplate` compares opening and closing sentence SHAPES across a batch.** Whole-paragraph
+  Jaccard could never see this: twenty-five verdicts share one skeleton while their middles differ
+  enough to stay far under the threshold. `_sentence_shape` collapses digits to a marker and keys on
+  the first eight words, so "created 2019-04-02 / 400 followers" and "created 2023-11-18 / 51
+  followers" register as one template. Fires at 5/5 on the live pattern, silent on varied prose and
+  on two-of-five convergence (`REPEATED_SENTENCE_SHARE` = 0.34).
+
+**SOFT, and it must stay SOFT.** A repeated opener is a writing failure, not a false claim about a
+person, and withholding a true paragraph over a stylistic tic is the trade `check_style` already
+settled once.
+
+### Cross-account contamination was reaching the page, in two forms nothing checked
+
+Found in the same exports and reproduced against `check_figures` directly. `jamesthatcher_` is a 2023
+account with 322 followers and 349 following. The product published:
+
+> "A long-running account (2009) with 337 followers and 2,263 following and fifty sampled posts"
+
+`2,263 following` and the 2009 year belong to `unique59`, four rows away in the same batch. Two holes,
+both about the FORM the model writes a figure in rather than the check being absent:
+
+- **`_FOLLOWING_RE` matched only the verb-first order.** `follows 2,263` was caught;
+  **`2,263 following` was not matched at all** and number-first is what the model actually writes on
+  most rows ("384 followers and 782 following", "103 followers vs 9 following"). The trailing
+  `(?!\s*followers)` guard on the verb form stays, or `follows?` matches inside "followers".
+- **No creation-date check existed in any form the model writes.** "N years old" was checked;
+  `(created 2023-07-04)`, `A 2009 account` and `account (2009)` were not, and those are the forms the
+  protocol's own opening-sentence rule produces. CLAUDE.md already recorded a live contamination on
+  exactly this field (`JohnWSavio`) and it was still reachable.
+
+`_check_created` holds a full date to the day and a bare year only to the year, deliberately: "a 2009
+account" is a true statement about anything created in 2009, and demanding more would withhold honest
+prose. A year is only read as a claim when it sits next to a creation word or the word "account", so
+"the 2020 election" and a year inside a quoted post are left alone. One wrong date reports once, not
+twice. Pinned by the contamination section of `tests/test_grounding.py`.
+
+**The withhold rate is the other half of this and is NOT yet diagnosed.** About 36 of 400 verdicts
+came back withheld, and in one investigation it is ~28 of ~130 (**21%**). That clustering says a
+checker over-firing on a phrasing habit, not 28 hallucinations. Diagnosing it needs the withheld text
+and codes from `assessment_unverified` / `grounding` in `payload_json`, which is why the field is
+kept. Note the checker was simultaneously too strict on innocent prose and too loose on the one thing
+that mattered.
+
+### OMI_OPENROUTER_MODEL overrides the preset, so a dashboard model change does nothing
+
+Same two-sided-contract class as the preset NAME and the Clerk keys, and it bit on 2026-08-19. The
+model was changed on the OpenRouter preset; `render.yaml` still committed
+`OMI_OPENROUTER_MODEL: 'openai/gpt-5-mini'`, so every request kept going out as
+`openai/gpt-5-mini@preset/omi-master-v2` and **the change had no effect, with no error anywhere.**
+
+Both model variables are now `''`:
+
+- **`OMI_OPENROUTER_MODEL`** must stay empty while the preset names a model, so the dashboard is the
+  single source. Empty is safe (`if self.model` is falsy, so the reference resolves to
+  `@preset/<name>` alone) and is NOT the same as wrong: a bad slug answers 404 and floors **every**
+  scan (`floor_reason.preset_or_model_not_found`). Set it again only if the preset goes back to
+  "can be used with any model", where the preset alone does not resolve.
+- **`OMI_OPENROUTER_EXPECTED_MODEL`** is emptied because it compares a committed string against what
+  the gateway reports serving; leaving the old value would log a mismatch on every scan that is not a
+  fault. **Fill it in with the exact slug** read off `GET /v1/investigations/analyst/preflight` after
+  the deploy, and the proof-of-provenance check comes back on.
+
 ### The verdict rewrite (v12): the analysis was right, the writing sold it short
 
 Driven by ~250 real scored rows across three live investigations. The scoring was defensible; the

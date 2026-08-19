@@ -88,13 +88,71 @@ def test_ambient_traits_cannot_reach_the_high_bands(protocol):
 
 
 def test_the_discriminative_evidence_is_defined_separately(protocol):
-    """The counterpart to the ambient list: what genuinely is hard to explain innocently."""
-    assert "WHAT IS ACTUALLY DISCRIMINATIVE" in protocol
-    for tell in ("near-verbatim text reused across this account's OWN posts",
-                 "a scheduler is a better explanation than a person",
-                 "no topical continuity",
-                 "follow-for-follow, link in bio, DM to earn"):
-        assert tell in protocol
+    """The counterpart to the ambient list: what genuinely is hard to explain innocently.
+
+    This used to assert on a "WHAT IS ACTUALLY DISCRIMINATIVE" bullet that has been removed. It was
+    a near-restatement of the mechanical gate sitting a few hundred words below it, and duplication
+    is what this document keeps paying for: the model read the two lists as one and applied the 75+
+    gate at the 50 boundary, which is why four consecutive live runs returned nothing above 49.
+
+    The counterpart the ambient list needs is now the ELEVATED band's own list, which is a different
+    and lower bar than the gate on purpose. What matters is that BOTH still exist and stay distinct,
+    so this asserts the two are separately reachable and that the gate no longer stands alone.
+    """
+    assert "THE 50 TO 74 INDICATORS" in protocol
+    assert "THE MECHANICAL GATE" in protocol
+    assert "THIS GATE GOVERNS 75 AND ABOVE. IT IS NOT THE TEST FOR 50." in protocol
+    for indicator in ("NON-RECIPROCAL FOLLOWER ACQUISITION",
+                      "INTERCHANGEABLE ENGAGEMENT AT VOLUME",
+                      "PROMOTION AS THE DOMINANT MODE",
+                      "AN ABRUPT HISTORY",
+                      "A PROFILE THAT ARGUES WITH ITSELF"):
+        assert indicator in protocol, indicator
+    # The gate keeps its own tells, which are the strong forms and are NOT the list above.
+    for tell in ("the same or near-identical text on two or more of this account's OWN posts",
+                 "a posting rhythm a person does not produce",
+                 "as an AI language model"):
+        assert tell in protocol, tell
+
+
+def test_the_elevated_band_does_not_require_a_mechanical_tell(protocol):
+    """The single change with the largest expected effect, and the one most easily undone.
+
+    Four live investigations, roughly 400 accounts, produced exactly ONE score at 50 or above and
+    none at 75. The model was enforcing the mechanical gate at the 50 boundary and saying so in its
+    own prose ("would rise into elevated territory"), because the gate was ~700 words with seven
+    lettered items while the 50-74 rule was one clause pointing at nothing.
+    """
+    assert "You do NOT need a" in protocol and "mechanical tell to reach this band" in protocol
+    assert "would raise this to elevated" not in protocol.split("THE 50 TO 74 INDICATORS")[0]
+
+
+def test_the_distribution_check_runs_in_both_directions(protocol):
+    """It only ever pushed down. A run that found nothing anywhere triggered no check at all, while
+    every tiebreaker in the block ("take the lower", "never round up") points the same way."""
+    assert "IN BOTH DIRECTIONS" in protocol
+    assert "TOO FEW IS ALSO WRONG" in protocol
+    assert "TOO MANY IS WRONG" in protocol
+    # The floor must not become a quota. Inventing a finding to fill it is the failure it replaces.
+    assert "Do not invent an indicator to fill the quota" in protocol
+
+
+def test_a_profile_with_no_posts_can_still_be_read_when_the_numbers_are_the_evidence(protocol):
+    """The zero-post ceiling was absolute ("always, whatever the follower counts look like"), which
+    was right about behaviour and wrong about arithmetic: 348 followers against 2 following on a
+    36-day-old account is computed from two counts, not inferred from what the account does."""
+    assert "THE ONE EXCEPTION" in protocol
+    assert "the ceiling is 49, not 20" in protocol
+    # And it must stay bounded: the original bug was two identical states scoring 30 points apart.
+    assert "It may never go above 49 on profile numbers alone" in protocol
+    assert "two accounts in the same state still come out the same" in protocol
+
+
+def test_a_large_audience_is_not_read_as_exculpatory(protocol):
+    """A live verdict used 18,742 followers as a reason to score LOW ("the large audience weigh
+    toward a genuine influencer"). Followers are the commodity being bought and sold here."""
+    assert "A LARGE AUDIENCE IS EVIDENCE IN NEITHER DIRECTION" in protocol
+    assert "NOT A REASON TO LOWER ONE" in protocol
 
 
 def test_the_bands_require_converging_independent_evidence(protocol):
@@ -637,3 +695,35 @@ def test_the_reader_facing_rules_do_not_touch_the_score(protocol):
     assert "START FROM THE BASE RATE" in protocol
     assert "AMBIENT TRAITS ARE NOT TELLS" in protocol
     assert "THE TWO ERRORS ARE NOT EQUAL" in protocol
+
+
+
+# ==================================================================================================
+# The verdict must not converge on one sentence
+# ==================================================================================================
+def test_banning_one_closer_is_replaced_by_a_structural_rule(protocol):
+    """v12 banned "collecting more posts would increase confidence" as a closer. The model complied
+    and built a replacement that then closed the majority of every run, near word for word. Banning
+    a sentence teaches substitution, so the rule is now about repetition itself."""
+    assert "DO NOT REPLACE IT WITH A DIFFERENT STOCK CLOSER" in protocol
+    assert "THE RULE IS STRUCTURAL, NOT A WORD LIST" in protocol
+    # The old ban stays: it is still the worst individual closer.
+    assert "NEVER CLOSE ON A REQUEST FOR MORE DATA" in protocol
+
+
+def test_the_opening_rule_names_the_sentence_that_keeps_breaking_it(protocol):
+    """A generic instruction not to repeat yourself has been in this document since v12 and did not
+    land. The failing form is named exactly, and the model is told its output is checked."""
+    assert "NO TWO ACCOUNTS IN A BATCH OPEN THE SAME WAY" in protocol
+    assert "YOUR OWN OUTPUT IS CHECKED FOR THIS" in protocol
+
+
+def test_the_reader_facing_rules_still_do_not_touch_the_score(protocol):
+    """The v12 guarantee, re-asserted after this pass. Everything above changes how a verdict READS
+    and what evidence reaches the ELEVATED band; none of it relaxes the discipline that keeps a real
+    person from being called bought."""
+    assert "may NEVER take an account above the moderate band" in protocol
+    assert "THE TWO ERRORS ARE NOT EQUAL" in protocol
+    assert "A MOSTLY-REPOST TIMELINE IS NOT A FINDING" in protocol
+    assert "NOTHING REACHES 75 WITHOUT ONE" in protocol
+    assert "RUN THE ALTERNATIVE-EXPLANATION TEST BEFORE ANY SCORE OF 50 OR MORE" in protocol

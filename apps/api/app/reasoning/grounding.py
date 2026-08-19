@@ -62,6 +62,10 @@ AGE_TOLERANCE = 0.12
 RATIO_TOLERANCE = 0.15
 # Word 5-shingle overlap above which two per-account paragraphs are the same paragraph.
 BOILERPLATE_JACCARD = 0.72
+# Share of a batch that may open (or close) on one sentence shape before it is a template.
+# A third is generous: some convergence is natural when every account is described from the
+# same fields, and the rule is aimed at the runs where it was nearly all of them.
+REPEATED_SENTENCE_SHARE = 0.34
 # Mean words per sentence above which prose stops being readable by the person it is about.
 MAX_MEAN_SENTENCE_WORDS = 30
 
@@ -204,9 +208,40 @@ _FOLLOWERS_RE = re.compile(_NUM + r"\s+followers\b", re.I)
 #: the same line" are ordinary sentences that got compared against the following count and withheld a
 #: true paragraph. The live contamination this check exists to catch ("following 1,281 people while
 #: only 505 follow back") is caught by the verb form, so nothing is lost by dropping the bare one.
+#:
+#: BOTH WORD ORDERS, and the second one is why a real contamination reached a customer. The verb-first
+#: form ("follows 2,263") was the only one matched, so the NUMBER-FIRST form ("2,263 following") was
+#: never checked at all -- and number-first is what the model actually writes, on most rows: "384
+#: followers and 782 following", "103 followers vs 9 following". `jamesthatcher_` (really 322/349)
+#: was published as "337 followers and 2,263 following", figures belonging to another account in the
+#: same batch, and nothing fired. The trailing `(?!\s*followers)` on the verb form stays: without it
+#: `follows?` matches inside "followers" and a follower count gets compared against the wrong truth.
 _HEDGE = r"(?:about\s+|around\s+|roughly\s+|~\s*|just\s+|only\s+|over\s+|under\s+)?"
 _FOLLOWING_RE = re.compile(
-    r"follow(?:s|ing)\s+" + _HEDGE + _NUM + r"\b(?!\s*followers)", re.I)
+    r"follow(?:s|ing)\s+" + _HEDGE + _NUM + r"\b(?!\s*followers)"
+    r"|" + _NUM + r"\s+following\b", re.I)
+
+#: THE CREATION DATE, in the forms the model actually writes it.
+#:
+#: `_DAYS_RE` / `_YEARS_RE` below check "N days old" and "N years old". The model almost never writes
+#: either. It writes "(created 2023-07-04)" or "A 2009 account" or "This 2016 account", on nearly
+#: every row, and none of those were checked in any form. CLAUDE.md already records a live
+#: contamination on exactly this field -- `JohnWSavio`, created 2014-02-07, published as "created on
+#: 2024-08-03", which was a different account's date -- and it was still reachable.
+#:
+#: A full date is checked to the day; a bare year only to the year, because "a 2009 account" is a
+#: true statement about any account created in 2009 and pinning it tighter would flag honest prose.
+_CREATED_DATE_RE = re.compile(
+    r"(?:created|joined|registered|opened|since)\D{0,12}?(\d{4})-(\d{2})-(\d{2})", re.I)
+#: "A 2009 account", "This 2016 account", "created 2009", "(created in 2023)". The year must be
+#: adjacent to a creation word or to the word "account", so an ordinary year in a quote or a topic
+#: ("the 2020 election", "since 2016 the platform") is not read as a claim about the profile.
+_CREATED_YEAR_RE = re.compile(
+    r"(?:created|joined|registered|opened)\D{0,12}?(\d{4})\b"
+    r"|\b(?:a|an|this|the)\s+(\d{4})[- ]?(?:created\s+)?account\b"
+    # "account (2009)" -- the year in parentheses AFTER the noun. This is the form the live
+    # contamination took: "A long-running account (2009) with 337 followers".
+    r"|\baccount\s*\((\d{4})\)", re.I)
 _POSTS_RE = re.compile(
     _NUM + r"\s+(?:posts?|tweets?|replies)\b|posted\s+" + _HEDGE + _NUM + r"\s+times?\b", re.I)
 _DAYS_RE = re.compile(_NUM + r"\s*days?\s*old", re.I)
@@ -293,9 +328,59 @@ def check_figures(assessment: str, account: dict | None) -> list[Violation]:
     compare(_DAYS_RE, age, "age in days", AGE_TOLERANCE)
     if age is not None:
         compare(_YEARS_RE, age / 365.25, "age in years", AGE_TOLERANCE)
+    out.extend(_check_created(text, account))
 
     if followers not in (None, 0) and following is not None:
         out.extend(_check_ratio(text, float(following) / float(followers)))
+    return out
+
+
+def _check_created(text: str, account: dict) -> list[Violation]:
+    """A stated creation date must be the account's own.
+
+    This is the second half of the cross-account contamination the figure checks exist to stop, and
+    it was unguarded. The date is the single most-repeated fact in a verdict (the protocol asks for
+    the age in every one), and a batch of 25 accounts gives the model 25 nearly identical dates to
+    pick the wrong one from.
+
+    A FULL DATE is held to the day. A BARE YEAR is held only to the year, deliberately: "a 2009
+    account" is a true statement about anything created in 2009, and demanding more would withhold
+    honest prose over a rounding the protocol never forbade.
+    """
+    created = (account or {}).get("account_created_at")
+    if isinstance(created, str):
+        try:
+            created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+        except ValueError:
+            return []
+    if not isinstance(created, datetime):
+        return []
+
+    out: list[Violation] = []
+    for m in _CREATED_DATE_RE.finditer(text):
+        y, mo, d = (int(g) for g in m.groups())
+        if (y, mo, d) != (created.year, created.month, created.day):
+            out.append(Violation(
+                "figure_mismatch", HARD,
+                f"said created {y:04d}-{mo:02d}-{d:02d}, evidence says "
+                f"{created.year:04d}-{created.month:02d}-{created.day:02d}",
+            ))
+    # A full date already reported is not reported again as a bare year. One wrong date is one
+    # error, and a violation list that says the same thing twice reads to an operator as two.
+    year_text = _CREATED_DATE_RE.sub(" ", text)
+    for m in _CREATED_YEAR_RE.finditer(year_text):
+        raw = next((g for g in m.groups() if g), None)
+        if raw is None:
+            continue
+        year = int(raw)
+        # A four-digit number that is not a plausible account year is not a claim about the profile.
+        if not 2006 <= year <= created.year + 1:
+            continue
+        if year != created.year:
+            out.append(Violation(
+                "figure_mismatch", HARD,
+                f"said created in {year}, evidence says {created.year}",
+            ))
     return out
 
 
@@ -372,7 +457,64 @@ def check_boilerplate(assessments: dict[str, str]) -> dict[str, list[Violation]]
                 msg = f"{jac:.0%} identical to the paragraph written for {{other}}"
                 out[refs[i]].append(Violation("boilerplate", SOFT, msg.format(other=refs[j])))
                 out[refs[j]].append(Violation("boilerplate", SOFT, msg.format(other=refs[i])))
+
+    # THE OPENING AND CLOSING SENTENCES, COUNTED SEPARATELY FROM THE PARAGRAPH.
+    #
+    # Whole-paragraph Jaccard cannot see this and never fired on it: twenty-five verdicts can share
+    # one opening skeleton and one closing sentence while their middles differ enough to stay well
+    # under the threshold. That is exactly what the live runs did. Every verdict began "This account
+    # (created DATE) has N followers and follows M", and a clear majority closed on "the one
+    # observation that would most change this read is finding identical templated text repeated
+    # across its own posts" -- a template, on a product whose whole claim is that templates are a
+    # tell.
+    #
+    # Banning the specific sentence is what produced the second one: the model substituted rather
+    # than varied. So this counts SHAPES across the batch and reports the repetition itself, which is
+    # the thing that is actually wrong and cannot be worked around by picking new words.
+    for position, pick in (("opening", _first_sentence), ("closing", _last_sentence)):
+        buckets: dict[tuple, list[str]] = {}
+        for r in refs:
+            shape = _sentence_shape(pick(assessments[r]))
+            if shape:
+                buckets.setdefault(shape, []).append(r)
+        for shape, group in buckets.items():
+            if len(group) < max(3, int(len(refs) * REPEATED_SENTENCE_SHARE)):
+                continue
+            for r in group:
+                out[r].append(Violation(
+                    "repeated_" + position, SOFT,
+                    f"{len(group)} of {len(refs)} accounts share this {position} sentence shape",
+                ))
     return out
+
+
+def _first_sentence(text: str) -> str:
+    parts = [p for p in _SENTENCE_SPLIT.split(text or "") if p.strip()]
+    return parts[0] if parts else ""
+
+
+def _last_sentence(text: str) -> str:
+    parts = [p for p in _SENTENCE_SPLIT.split(text or "") if p.strip()]
+    return parts[-1] if parts else ""
+
+
+def _sentence_shape(sentence: str) -> tuple:
+    """The reusable skeleton of a sentence, with the account-specific parts removed.
+
+    Two sentences have the same SHAPE when they would be the same sentence with different numbers,
+    dates and handles filled in. That is the thing being measured: "This account (created 2019-04-02)
+    has 400 followers and follows 900" and "This account (created 2023-11-18) has 51 followers and
+    follows 2,204" are one template used twice, and no word-level comparison catches them because
+    almost every word already matches. Digits collapse to a single marker, then the first several
+    remaining words are the key -- enough to identify the skeleton, short enough that a genuinely
+    different sentence sharing an opening preposition does not collide.
+    """
+    norm = _norm(sentence or "")
+    if not norm:
+        return ()
+    norm = re.sub(r"[0-9][0-9,.:\-]*", " 0 ", norm)
+    words = _WORD_RE.findall(norm)
+    return tuple(words[:8]) if len(words) >= 5 else ()
 
 
 def check_readability(assessment: str) -> list[Violation]:
