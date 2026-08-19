@@ -1786,6 +1786,7 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     if not all_complete:
         _still_running = total_batches - len(completed)
         _empty = sum(1 for _i, p in completed if not (p.get("commenter_assessments") or []))
+        _short = max(0, rep - ass)
         if _still_running > 0:
             _reason = (
                 f"{len(completed)} of {total_batches} passes have landed. "
@@ -1795,6 +1796,25 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
             _reason = (
                 f"{_empty} of {total_batches} passes came back empty, so their accounts have no "
                 "written read. Every score shown is final."
+            )
+        elif _short:
+            # EVERY PASS LANDED AND SOME ACCOUNTS STILL DID NOT GET A READ.
+            #
+            # Caught in an end-to-end run: `complete` was false with `missing_commenters: 2`, while
+            # the reason inherited from batch one still read "Complete, every commenter in the
+            # investigation received AI reasoning". The two earlier branches only cover passes that
+            # are missing or empty, and a pass can land, be counted, and still return fewer accounts
+            # than it was shown (the model skips one, or grounding withholds it).
+            _reason = (
+                f"{_short} of {rep} accounts did not receive a written read, though every pass "
+                "landed. Every score shown is final."
+            )
+        else:
+            # Not complete for a reason none of the above explains (the output did not certify).
+            # Whatever it is, it is NOT "complete", and inheriting batch one's sentence said exactly
+            # that inside a box whose own heading said otherwise.
+            _reason = (
+                "The analysis finished but did not fully certify. Every score shown is final."
             )
     base["completion"] = {**(base.get("completion") or {}),
                           "represented_commenters": rep, "assessed_commenters": ass,

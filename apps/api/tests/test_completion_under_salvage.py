@@ -76,3 +76,53 @@ class TestAHealthyRunIsUnchanged:
             assessed_commenters=25, omitted_input_commenters=0)
         assert c.complete is True
         assert c.incomplete_kind is None
+
+
+class TestTheMergedReasonNeverContradictsTheHeading:
+    """Caught in an end-to-end run of a real 100-account investigation.
+
+    `_merge_batch_parts` starts from the FIRST completed batch's payload, so every unstated key is
+    inherited from it — including `reason`, which is the sentence a reader actually sees. The run
+    came back `complete: false` with `missing_commenters: 2` and the inherited sentence "Complete,
+    every commenter in the investigation received AI reasoning", inside a box whose own heading said
+    the coverage was partial.
+    """
+
+    def _merged(self, parts, total):
+        from app.reasoning.analyst import _merge_batch_parts
+        return _merge_batch_parts(parts, batch_size=25, done=total, run_finished=True,
+                                  run_id="t")["completion"]
+
+    def _part(self, accounts: int, represented: int, complete: bool) -> dict:
+        return {
+            "commenter_assessments": [{"ref": f"A{i}", "resolved": True} for i in range(accounts)],
+            "omi_score": 20,
+            "completion": {
+                "complete": complete, "represented_commenters": represented,
+                "assessed_commenters": accounts,
+                "reason": ("Complete — every commenter in the investigation received AI reasoning."
+                           if complete else "something else"),
+            },
+            "investigation_trace": {"model_backed": True},
+        }
+
+    def test_every_pass_landed_but_accounts_are_short(self):
+        """THE REGRESSION. Four passes, all landed, two accounts never got a read."""
+        parts = [self._part(25, 25, True), self._part(24, 25, False),
+                 self._part(24, 25, False), self._part(25, 25, True)]
+        c = self._merged(parts, 4)
+        assert c["complete"] is False
+        assert "complete" not in c["reason"].lower() or "did not" in c["reason"].lower()
+        assert "2 of 100" in c["reason"], c["reason"]
+
+    def test_an_empty_pass_is_still_named_as_such(self):
+        parts = [self._part(25, 25, True), self._part(0, 25, False),
+                 self._part(25, 25, True), self._part(25, 25, True)]
+        c = self._merged(parts, 4)
+        assert "came back empty" in c["reason"], c["reason"]
+
+    def test_a_wholly_clean_run_still_says_complete(self):
+        parts = [self._part(25, 25, True) for _ in range(4)]
+        c = self._merged(parts, 4)
+        assert c["complete"] is True
+        assert "Complete" in c["reason"]
