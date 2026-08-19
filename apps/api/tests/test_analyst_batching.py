@@ -198,11 +198,33 @@ def batched(monkeypatch):
 def test_batches_run_one_at_a_time_and_persist_as_they_land(batched):
     """The point of the whole design: batch 1's accounts are saved (and therefore renderable) BEFORE
     batch 2 is even sent. If the batches were fired together, no persist would have happened when
-    batches 2 and 3 started."""
+    batches 2 and 3 started.
+
+    TWO writes per batch, not one. The second is made when the request OPENS, so the stored record
+    can name the batch that is on the wire for the whole time it is on the wire; without it the
+    entire duration of a batch was described by a write made before it started. Batch 1 is the
+    exception at both ends: nothing can be written before it, because there is no merge yet.
+    """
     starts, persisted = batched([True, True, True])
-    assert starts == [0, 1, 2]
-    assert [b["done"] for b in persisted] == [1, 2, 3]
-    assert [b["complete"] for b in persisted] == [False, False, True]
+    assert starts == [0, 2, 4], (
+        "each batch must start strictly after the previous one's results were written")
+    # `done` counts batches ATTEMPTED AND FINISHED, so the open-of-request write repeats the
+    # previous number rather than claiming the in-flight batch as attempted. What that write adds is
+    # the `running` marker, asserted separately below.
+    assert [b["done"] for b in persisted] == [1, 1, 2, 2, 3]
+    assert [b["complete"] for b in persisted] == [False, False, False, False, True]
+
+
+def test_the_batch_on_the_wire_is_named_while_it_is_on_the_wire(batched):
+    """`batchStates` prefers the server's record over its own reconstruction, so while every
+    incomplete batch was written as "pending" the strip's "Waiting on batch N of M" line was
+    unreachable and a reader watching a long batch was told nothing at all."""
+    _starts, persisted = batched([True, True, True])
+    running = [next((b["index"] for b in (w.get("batches") or []) if b["state"] == "running"), None)
+               for w in persisted]
+    assert 1 in running and 2 in running, (
+        f"batches after the first must be named while running (saw {running})")
+    assert running[-1] is None, "a finished run has nothing on the wire"
 
 
 def test_get_session_is_importable_at_module_scope():
@@ -248,9 +270,15 @@ def test_a_first_batch_failure_still_ends_complete(batched):
 
 def test_a_fully_successful_run_is_not_persisted_twice(batched):
     """The last progressive flush already wrote the complete entry — writing it again is a wasted
-    round trip on the hot path of every large scan."""
+    round trip on the hot path of every large scan.
+
+    Three writes for two batches: batch 1 landing, batch 2's request opening, batch 2 landing. The
+    property this test exists for is that NOTHING follows the last landing, which is exactly what
+    "exactly one write is marked complete, and it is the last one" says.
+    """
     _starts, persisted = batched([True, True])
-    assert len(persisted) == 2
+    assert len(persisted) == 3
+    assert [b["complete"] for b in persisted] == [False, False, True]
 
 
 # --------------------------------------------------------------------------- #

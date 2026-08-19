@@ -2473,7 +2473,17 @@ Three rules the tests pin:
   any batch lands, because there is no merge to write; the page has no batching record to render at
   that point either.
 
-Pinned by the attempt-record section of `tests/test_analyst_batch_retry.py`.
+Pinned by the attempt-record section of `tests/test_analyst_batch_retry.py`, and by
+`test_the_batch_on_the_wire_is_named_while_it_is_on_the_wire` in `tests/test_analyst_batching.py`.
+
+**Two writes per batch now, not one, and two tests in that file pin the arithmetic.**
+`test_batches_run_one_at_a_time_and_persist_as_they_land` and
+`test_a_fully_successful_run_is_not_persisted_twice` both encoded one write per batch. Their intent
+is unchanged and still asserted: a batch's results are written before the next batch is sent, and
+nothing is written after the last landing (exactly one write is marked `complete`, and it is the
+last one). Note `done` counts batches attempted AND FINISHED, so the open-of-request write repeats
+the previous number rather than claiming the in-flight batch; what that write adds is the `running`
+marker.
 
 ### One failed batch used to freeze the whole run
 
