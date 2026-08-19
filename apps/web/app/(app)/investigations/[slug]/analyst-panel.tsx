@@ -394,6 +394,11 @@ function BatchProgressStrip({
   const failed = states.filter((s) => s === 'failed').length;
   const complete = states.filter((s) => s === 'done').length;
   const running = states.indexOf('running') === -1 ? null : states.indexOf('running');
+  // A batch on its second model call is the single slowest thing that happens to a run, and it
+  // looked exactly like a slow first call: "the fourth batch has been running about ten minutes and
+  // the others were quick" is this state, with nothing on the page able to say so. A missing value
+  // means the entry predates the record and is read as the ordinary first attempt, never as unknown.
+  const runningAttempt = running === null ? 1 : (record?.[running]?.attempt ?? 1);
   return (
     <div className="mb-4 rounded-sm border border-violet/25 bg-violet/[0.06] px-3.5 py-3">
       <div className="flex items-baseline justify-between gap-2 mb-2.5 flex-wrap">
@@ -418,6 +423,13 @@ function BatchProgressStrip({
           <span className="led motion-safe:animate-pulse-dot" style={{ ['--c' as string]: 'var(--violet-2)' }} aria-hidden />
           Waiting on batch {running + 1} of {batching.total}
           {batching.batch_size ? ` · ${batching.batch_size} accounts` : ''}
+          {runningAttempt > 1 ? ` · attempt ${runningAttempt}` : ''}
+        </p>
+      )}
+      {running !== null && runningAttempt > 1 && (
+        <p className="mt-1.5 text-2xs text-fg-mute leading-relaxed">
+          This batch did not come back the first time and is being asked again. That is one extra
+          request, not a restart: every batch already scored below stays exactly as it is.
         </p>
       )}
       {/* Only the part a reader cannot get from the line and the track above. The sentence that

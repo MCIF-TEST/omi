@@ -93,9 +93,14 @@ def batched(monkeypatch):
     def fake_session():
         yield object()
 
+    persists: list[dict] = []
+
+    def fake_persist(_s, _i, merged, _p):
+        persists.append(merged)
+        return {"assessment": merged}
+
     monkeypatch.setattr(analyst, "get_session", fake_session)
-    monkeypatch.setattr(analyst, "persist_assessment",
-                        lambda _s, _i, merged, _p: {"assessment": merged})
+    monkeypatch.setattr(analyst, "persist_assessment", fake_persist)
     monkeypatch.setattr(analyst, "cached_assessment", lambda _inv: None)
     monkeypatch.setattr("app.storage.repository.AccountRepository", _Repo)
 
@@ -125,6 +130,9 @@ def batched(monkeypatch):
         return (entry or {}).get("assessment")
 
     run.calls = calls
+    # Every merge the run WROTE, in order. The final entry alone cannot answer what the page said
+    # while the run was still going, which is the whole subject of the attempt record below.
+    run.persists = persists
     return run
 
 
@@ -367,3 +375,94 @@ def test_scheduling_never_raises_even_with_no_pool(monkeypatch):
     monkeypatch.setattr("app.core.background.submit",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no pool")))
     boot_preflight.schedule_boot_preflight()      # must not raise
+
+
+# ==================================================================================================
+# The attempt record: a retry has to be visible WHILE it is happening
+# ==================================================================================================
+# Reported live: "the fourth batch has been running about ten minutes and the others were quick."
+# That is a batch on its second model call, and nothing on the page could say so — a retried batch
+# and a slow first attempt rendered identically as "waiting on batch 4 of 4". One batch can honestly
+# occupy a very long time across attempts (a per-request timeout, up to two in-transport retries,
+# then the whole call again), so the number of the attempt is the fact that makes the wait legible.
+def _record(merged: dict) -> list[dict]:
+    return (merged.get("batching") or {}).get("batches") or []
+
+
+def test_an_ordinary_batch_reports_its_first_attempt(batched):
+    merged = batched({})
+    assert [b["attempt"] for b in _record(merged)] == [1, 1]
+
+
+def test_a_retried_batch_reports_the_second_attempt(batched):
+    merged = batched({0: [_floored(FR.RATE_LIMITED)]})
+    rec = _record(merged)
+    assert rec[0]["attempt"] == 2, "the retried batch must say it cost two calls"
+    assert rec[1]["attempt"] == 1, "an untouched batch must not inherit its neighbour's count"
+
+
+def test_the_retry_is_published_before_the_second_call_not_after_it(batched):
+    """Saying so once the retry is over is saying so too late to help anyone watching the strip.
+
+    The write happens between the two calls, so there must be a persisted merge in which the batch
+    is on attempt 2, is marked running, and has NOT yet produced accounts.
+
+    Batch 1 rather than batch 0 on purpose: nothing can be published before the first batch lands,
+    because there is no merge to write. A retry of the very first batch is therefore invisible by
+    construction, which is honest — the page has no batching record to render at that point either.
+    """
+    batched({1: [_floored(FR.RATE_LIMITED)]}, accounts=6, batch_size=2)
+    mid = [m for m in batched.persists
+           if any(b["index"] == 1 and b.get("attempt") == 2 and b["state"] == "running"
+                  for b in _record(m))]
+    assert mid, "no progress was published while the retry was in flight"
+
+
+def test_the_batch_on_the_wire_is_marked_running_not_pending(batched):
+    """The client prefers the server's record over its own reconstruction, so the moment the record
+    shipped with every incomplete batch as "pending", the strip's "Waiting on batch N of M" line
+    became unreachable and a reader watching a long batch was told nothing about it."""
+    batched({1: [_floored(FR.RATE_LIMITED)]}, accounts=6, batch_size=2)
+    live = [m for m in batched.persists if any(b["state"] == "running" for b in _record(m))]
+    assert live, "no write ever named the batch that was on the wire"
+    states = _record(live[0])
+    assert sum(1 for b in states if b["state"] == "running") == 1, (
+        "a sequential run holds exactly one request open")
+
+
+def test_a_finished_run_has_nothing_running(batched):
+    """A batch that floored to nothing is finished and failed, not still in flight."""
+    merged = batched({0: [_floored(FR.BAD_API_KEY), None], 1: [None, None]})
+    assert not any(b["state"] == "running" for b in _record(merged))
+
+
+def test_a_batch_that_is_never_retried_never_claims_a_second_attempt(batched):
+    """The count is calls actually made. A dead credential is refused a retry, so reporting two
+    would tell an operator money was spent that was not."""
+    merged = batched({0: [_floored(FR.BAD_API_KEY)]})
+    assert _record(merged)[0]["attempt"] == 1
+
+
+def test_a_resumed_batch_is_not_counted_as_an_attempt_by_this_run(batched, monkeypatch):
+    """A checkpointed batch costs this run no model call at all, so it must not report one."""
+    monkeypatch.setattr(analyst, "_load_batch_parts",
+                        lambda _inv, _sig, _total: {0: _good(2)})
+    merged = batched({})
+    assert len(_calls_for(batched.calls, 0)) == 0
+    assert _record(merged)[0]["attempt"] == 1, (
+        "a batch this run never sent must read as the ordinary first attempt, not as zero")
+
+
+def test_the_running_batch_is_named_for_the_whole_time_it_is_running(batched):
+    """Not just during a retry. Progress used to be written only when a batch LANDED, so for the
+    entire duration of an ordinary batch — which is all of the time anyone spends waiting — the
+    stored record described it as pending and the strip could say nothing about it."""
+    batched({}, accounts=6, batch_size=2)
+    named = set()
+    for m in batched.persists:
+        for b in _record(m):
+            if b["state"] == "running":
+                named.add(b["index"])
+    assert named == {1, 2}, (
+        "every batch after the first must be named while it is on the wire "
+        f"(named {sorted(named)}); batch 0 cannot be, there is no merge to write yet")

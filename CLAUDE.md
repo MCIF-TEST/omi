@@ -5,7 +5,7 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-08-07 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
+**Last updated:** 2026-08-19 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
 after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
 coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
 "The cohort coordination detector" below, and read its two rules before touching any threshold.
@@ -2428,6 +2428,62 @@ it can say:
   ended and is not the whole answer. It no longer repeats the track;
 - the header count now says `Export covers all N scanned accounts`, because it describes the EXPORT,
   not the run, and sat a few pixels from a live progress count with no way to tell them apart.
+
+### The strip could not say which batch was on the wire, or that it was on its second try
+
+Reported 2026-08-19: *"it's been running the fourth batch for about ten minutes, and it took the
+other ones fairly quickly."* The run was behaving correctly. The page simply had no way to say what
+it was doing, for two separate reasons that compound.
+
+**Every incomplete batch was recorded as `pending`.** `batchStates` prefers the server's
+`batching.batches` record over its own reconstruction whenever the record exists, and only the
+reconstruction ever produced `running`. So the day the record shipped, the strip's *"Waiting on
+batch N of M"* line became **unreachable on every modern entry** — dead code hiding behind a truthy
+guard, with nothing failing anywhere to say so. `_merge_batch_parts` now takes the set of requests
+actually open (`inflight`) and marks those `running`. It is passed rather than inferred because "the
+first index without a result" is wrong twice: a batch that floored to `None` is finished and failed,
+and a concurrent run holds several open at once.
+
+**Progress was only ever written when a batch LANDED**, so the whole duration of a batch — which is
+all of the time anyone spends waiting — was described by a record written before it started.
+`_run` now persists once when the request opens as well. That costs one extra write per batch and
+buys two things: the strip can name the batch on the wire for the entire time it is on the wire, and
+the lease heartbeat is re-stamped mid-run rather than only between batches (the gap between two
+heartbeats used to be one entire model call, which is the whole reason the stale window had to be
+floored at 1800s).
+
+**A retried batch looked identical to a slow one.** One batch can honestly occupy a very long time:
+a per-request timeout of 1800s, up to two in-transport retries, then `_run`'s own whole re-attempt.
+Nothing recorded that a second call had been made, so ten minutes on batch 4 was indistinguishable
+from ten minutes on batch 4. Each batch record now carries `attempt`, and `_run` publishes the
+increment **before** the second call rather than after it — announcing a retry once it is over is
+announcing it too late to be of use to somebody watching. The strip adds `· attempt 2` and one
+sentence saying it is an extra request rather than a restart, because a number going up next to a
+progress bar otherwise reads as the scan starting over, which is the thing this page has already
+been wrong about twice.
+
+Three rules the tests pin:
+
+- **The count is calls actually made.** A batch refused a retry (a dead credential, an exhausted
+  balance) reports `attempt: 1`, and a resumed batch that cost this run no call at all reports 1 too.
+  Reporting 2 would tell an operator money was spent that was not.
+- **A missing `attempt` is read as 1, never as unknown.** Entries written before the field existed
+  are the ordinary case, not a mystery.
+- **A retry of the FIRST batch is invisible, and that is honest.** Nothing can be published before
+  any batch lands, because there is no merge to write; the page has no batching record to render at
+  that point either.
+
+Pinned by the attempt-record section of `tests/test_analyst_batch_retry.py`, and by
+`test_the_batch_on_the_wire_is_named_while_it_is_on_the_wire` in `tests/test_analyst_batching.py`.
+
+**Two writes per batch now, not one, and two tests in that file pin the arithmetic.**
+`test_batches_run_one_at_a_time_and_persist_as_they_land` and
+`test_a_fully_successful_run_is_not_persisted_twice` both encoded one write per batch. Their intent
+is unchanged and still asserted: a batch's results are written before the next batch is sent, and
+nothing is written after the last landing (exactly one write is marked `complete`, and it is the
+last one). Note `done` counts batches attempted AND FINISHED, so the open-of-request write repeats
+the previous number rather than claiming the in-flight batch; what that write adds is the `running`
+marker.
 
 ### One failed batch used to freeze the whole run
 
