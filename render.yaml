@@ -148,7 +148,7 @@ services:
       # Keep NEXT_PUBLIC_TRIAL_CREDITS (web service, below) equal to this value or
       # the displayed copy lies about what a new account gets.
       - key: OMI_FREE_TRIAL_CREDITS
-        value: '1'
+        value: '5'
       - key: OMI_SUPER_ADMIN_EMAILS
         value: 'andrewexiga@gmail.com,landonnorris116@gmail.com,exigahayden1@gmail.com,couldbewiser@yahoo.com'
       - key: OMI_SCAN_MAX_COMMENTERS
@@ -283,12 +283,22 @@ services:
         value: 'openai/gpt-5-mini'
       #
       # --- Cost guardrails (tune WITHOUT a code deploy) ---
-      # Per-scan output-token ceiling — the single biggest lever on OpenRouter
-      # spend. TEMPORARILY high (150000) to MEASURE real per-scan cost with no
-      # truncation; lower it once cost data is in. It is a cap, not a
-      # reservation — billing is on tokens actually generated.
+      # Per-scan output-token ceiling, and equal to the floor below on purpose:
+      # every request asks for exactly 50k whatever its size. It is a cap, not a
+      # reservation — billing is on tokens actually generated, so a batch that
+      # finishes in 13k costs 13k. Replaces a temporary 150000 set to measure
+      # true per-scan cost; that measurement is in (12,970 for 25 accounts).
       - key: OMI_ANALYST_COMPLETION_CEILING_TOKENS
-        value: '150000'
+        value: '50000'
+      # The FLOOR is what actually governs today. Batches are a fixed 25 accounts
+      # and the linear formula asks for base + 450x25 = 23,250, so this number is
+      # the one every request carries. A live run was observed spending 12,970 of
+      # 23,250: truncation here is not graceful, it fails schema validation and
+      # floors the batch, so the margin is the point. A cap is not a spend —
+      # billing is on tokens generated — and a rejection of an over-large
+      # max_tokens self-corrects (floor_reason.output_budget_too_large).
+      - key: OMI_ANALYST_COMPLETION_FLOOR_TOKENS
+        value: '50000'
       # GPT-5 reasoning effort (reasoning tokens bill as output). Unset lets the
       # preset decide; set minimal|low|medium|high to bound reasoning cost.
       # 'low' roughly halves reasoning spend vs 'high' for this task.
@@ -391,7 +401,7 @@ services:
       # time into marketing/UI copy). MUST match OMI_FREE_TRIAL_CREDITS and
       # OMI_MONTHLY_CREDIT_GRANT on omisphere-api, or the site lies.
       - key: NEXT_PUBLIC_TRIAL_CREDITS
-        value: '1'
+        value: '5'
       - key: NEXT_PUBLIC_MONTHLY_CREDITS
         value: '20'
       # Pricing-page copy only. The real charge is the Stripe Price behind

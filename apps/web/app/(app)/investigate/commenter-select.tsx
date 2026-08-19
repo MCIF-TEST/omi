@@ -9,7 +9,7 @@ import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header
 import { AnalysisProgress } from '@/components/shared/analysis-progress';
 import { ApiError, listCommenters, scoreSelection, type CommenterCandidate } from '@/lib/api';
 import { resumeLinkScanJob, ScanCancelledError } from '@/lib/scan-job';
-import { TRIAL_CREDITS_LABEL } from '@/lib/plan';
+import { CREDIT_NOUN, TRIAL_ACCOUNTS, TRIAL_CREDITS_LABEL } from '@/lib/plan';
 
 type Phase = 'idle' | 'compiling' | 'list' | 'scanning';
 
@@ -291,7 +291,8 @@ export function CommenterSelect({
             </p>
             <p className="text-xs text-fg-dim leading-relaxed mt-1">
               Accounts the original report already covered are marked as scanned. Your{' '}
-              {TRIAL_CREDITS_LABEL} covers up to 50 more.
+              {TRIAL_CREDITS_LABEL} {CREDIT_NOUN === 'credit' ? 'covers' : 'cover'} up to{' '}
+              {TRIAL_ACCOUNTS.toLocaleString()} more.
             </p>
           </div>
         </div>

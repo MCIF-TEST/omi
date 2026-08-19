@@ -52,6 +52,9 @@ export const FAILURE_SENTENCES: Record<string, string | null> = {
 
   // The model answered, and what came back was not usable.
   truncated_output: 'The analysis was cut off before it finished.',
+  // Ours, and self-correcting: the run asks for less room and tries again on its own. The customer
+  // is told what happened without being told to do anything, because there is nothing for them to do.
+  output_budget_too_large: 'This scan asked the analysis service for more room than it allows. That is a setting on our side, and the run retries itself with less.',
   http_error: 'The analysis service refused this request.',
   model_output_not_schema_valid_json: 'The analysis came back in a form we could not read.',
   governor_reject: 'The written analysis was produced but did not pass our own quality checks, so it was withheld.',

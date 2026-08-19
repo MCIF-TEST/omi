@@ -142,7 +142,20 @@ def generate_analyst_assessment(
                 # the resubmission below regenerates it rather than serving a half-finished result.
                 entry = None
         if entry and not refresh:
-            if analyst.entry_is_model_backed(entry):
+            # Served as a finished result in TWO cases, and the second one is the fix for a
+            # regeneration nobody asked for:
+            #
+            #   1. model-backed — the ordinary success.
+            #   2. not model-backed, but the per-account reads are the model's own prose
+            #      (`_salvaged_account_reads` kept them under a floored wrapper).
+            #
+            # Case 2 used to fall through to the self-heal below, which fires a full billable re-run
+            # of every batch and republishes it from "1 of 4" over results the customer was reading.
+            # See `entry_warrants_auto_regeneration` for the whole chain. The page already renders
+            # this state honestly (`AiUnavailable summaryOnly` above the reads) and still offers
+            # Retry, so the customer keeps the choice; what they lose is us spending their money on
+            # their behalf to improve a paragraph.
+            if not analyst.entry_warrants_auto_regeneration(entry):
                 return AnalystResponse(
                     slug=inv.slug, enabled=True, status="ready", cached=True,
                     assessment=analyst.assessment_for_viewer(

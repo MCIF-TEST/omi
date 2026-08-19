@@ -890,6 +890,11 @@ export interface InvestigationDetailResponse {
   label: string;
   input_url: string;
   kind: string;
+  /** "x" | "youtube" | "unknown". Resolved server-side from the denormalised column, never from the
+   *  payload. Decides which graphs an account on this investigation may be added to: a graph's
+   *  members inherit ITS platform and the coordination-edge query filters on that, so a mismatched
+   *  member is stored mislabelled and can never draw an edge. See `lib/graph-membership`. */
+  platform: string;
   overall_probability: number;
   overall_tier: Tier;
   summary: string;
@@ -1063,7 +1068,10 @@ export interface CompletionStatus {
   omitted_input_commenters: number;
   max_output_tokens: number | null; // completion budget requested
   output_tokens: number | null;     // actual completion size
-  incomplete_kind: 'truncated_output' | 'missing_assessments' | 'omitted_input' | null;
+  // `summary_not_certified` is the salvage case: every account carries the model's own read and the
+  // investigation-level summary above them did not certify. Mirrors `completion.py`.
+  incomplete_kind:
+    | 'truncated_output' | 'missing_assessments' | 'omitted_input' | 'summary_not_certified' | null;
   reason: string;
   estimated_remaining_commenters: number;
 }

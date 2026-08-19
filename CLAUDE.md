@@ -12,8 +12,8 @@ coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/co
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2107
-passed, 8 skipped, 2 failed** (7m24s, 2026-08-18), the failure pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2142
+passed, 8 skipped, 2 failed** (6m30s, 2026-08-18), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -1069,9 +1069,9 @@ the easy mistake, because both get called "the free scans":
 | Pre-login demo | Any visitor, metered per IP | **1 scan**, ≤25 accounts | `DEMO_FREE_SCANS_PER_IP` + `DEMO_MAX_COMMENTERS`, hardcoded in `app/routes/scan_async.py` / `scan.py`, test-pinned |
 | Signup trial | A new account | **1 credit**, then they pay | `OMI_FREE_TRIAL_CREDITS` in `render.yaml` (code default in `config.py` also 1) |
 
-The signup trial was **25**, then 5, now **3** — an explicit product decision (2026-07). At the
-1-credit-per-50-accounts rate with `OMI_SCAN_MAX_COMMENTERS=150`, 3 credits is one full 150-account
-investigation *or* three small ≤50-account ones. Don't raise it back without being asked.
+The signup trial is **5** (2026-08-19, at the owner's request). It has been 25, then 5, then 3,
+then 1, and is now 5 again. At the 1-credit-per-50-accounts rate that is up to **250 accounts** for a
+new account before they pay. Don't move it without being asked.
 
 Two traps around this value:
 
@@ -1257,11 +1257,18 @@ pre-filled URL and the already-scanned rows look arbitrary. Accounts the origina
 already come back marked `scanned` by the compile step, so "scan more" is literally what the page
 offers.
 
-**The signup trial is 1 credit** (was 3, was 25). One credit covers up to 50 accounts, so a funnel
-signup gets exactly one real scan of the post they arrived from, then they subscribe. Set in **four**
-places and `test_deployed_credit_contract.py` fails on drift between the env pair:
-`OMI_FREE_TRIAL_CREDITS` + `NEXT_PUBLIC_TRIAL_CREDITS` in `render.yaml`, `config.py`'s default, and
-`plan.ts`'s default.
+**The signup trial is 5 credits.** One credit covers up to 50 accounts, so a funnel signup can
+scan up to 250 accounts before paying. Set in **four** places and
+`test_deployed_credit_contract.py` fails on drift between the env pair: `OMI_FREE_TRIAL_CREDITS` +
+`NEXT_PUBLIC_TRIAL_CREDITS` in `render.yaml`, `config.py`'s default, and `plan.ts`'s default.
+(`.env.example` is a fifth, unchecked copy; it had been stale at 3 for two changes.)
+
+**Anything the copy STATES about the trial must be derived from it, not written out.** `CREDIT_NOUN`
+already existed because hardcoding "credits" became "1 free credits" in five places the moment the
+trial was cut to one. Moving it back to 5 broke the next layer: the investigate page read "your 1
+free credit covers up to 50 more", which became "your 5 free credits covers up to 50 more" — wrong
+about the verb AND wrong about the number, since 5 credits is 250 accounts. `ACCOUNTS_PER_CREDIT`
+and `TRIAL_ACCOUNTS` in `plan.ts` are the derived facts; use them.
 
 Copy around that number goes through **`TRIAL_CREDITS_LABEL`** / **`CREDIT_NOUN`** (`lib/plan.ts`).
 Hardcoding "credits" read fine at 3 and became "1 free credits" in five places the moment the trial
@@ -2202,6 +2209,225 @@ Two rules the customer wording follows, both learned from copy that was live: **
 about anything but the customer's own credits** (this product sells credits, so "the analysis service
 is out of credit" reads as "you are out of credit" and sends someone to the billing page over a fault
 of ours), and **name whose fault it is**, so nobody re-runs a scan that will fail identically.
+
+### The analyst's output budget is 50,000 tokens, and the FLOOR is what sets it
+
+Product decision (2026-08-18). Batches are a fixed 25 accounts, so the linear formula asks for
+`base + 450x25 = 23,250`, and a live run was observed spending **12,970 of 23,250**. Truncation here
+is not a graceful degradation: the reply fails schema validation, the wrapper floors, and before the
+salvage path existed it took every per-account read in the batch with it. The margin is the point.
+
+**Ceiling and floor are BOTH 50,000, so the budget is flat.** `completion_budget` is
+`min(ceiling, max(floor, base + per*n))`, and with the two equal the linear formula between them is
+unreachable: every request asks for exactly 50k whatever its size. That is the point — batches are a
+fixed 25 accounts, so a per-size budget was arithmetic nobody could act on, and a 17-account
+remainder is not quietly given a third less room than the 25s beside it.
+
+The ceiling it replaces was **150,000**, set temporarily on 2026-07-22 to observe true per-scan
+output cost with no truncation. That measurement is in (12,970 for 25 accounts) and the number had
+never been checked against a real model. Set in `completion.py`, `config.py` and `render.yaml`
+(`OMI_ANALYST_COMPLETION_CEILING_TOKENS` + `_FLOOR_TOKENS`).
+
+**One guard goes quiet, and it is worth knowing.** The truncation retry multiplies the budget by 1.5
+to give a cut-off reply more room; with ceiling == floor that clamps straight back to 50k, so the
+escalation is a no-op. At ~2,000 output tokens per account against a measured ~519, truncation is not
+the binding risk. If it ever becomes one, raise the ceiling ABOVE the floor rather than raising both.
+The DOWNWARD retry below is unaffected, because the multiplier is applied after the clamp rather than
+through it.
+
+**A cap is not a spend.** OpenRouter bills tokens generated, so a run that finishes early costs
+exactly what it produced. What this does buy is a real risk, and it needed a guard.
+
+#### `output_budget_too_large`, the one 4xx that is worth retrying
+
+`max_tokens` above the served model's own ceiling is **rejected outright**. `http_error` is
+deliberately NOT retryable (a 4xx means the request was wrong and the next one would be wrong the
+same way), so that rejection would floor **every scan on the deployment, permanently**, until a human
+noticed. And nothing in this codebase can pre-empt it: the model is named by an env var
+(`OMI_OPENROUTER_MODEL`, today `openai/gpt-5-mini`) and resolved by the gateway, so the number cannot
+be checked against the model from here.
+
+So the rejection is recognised instead. `floor_reason.OUTPUT_BUDGET_TOO_LARGE` matches a narrow set
+of hints (`max_tokens`, `max_completion_tokens`, `max_output_tokens`, `maximum context length`,
+`exceeds the maximum`) on a 4xx, and is the **only reason retried DOWNWARD**:
+
+| reason | multiplier | why |
+|---|---|---|
+| `truncated_output` | **1.5** | the reply did not fit; ask for more room |
+| `output_budget_too_large` | **0.5** | the provider refused the ask; ask for less |
+| everything else | 1.0 | the budget was not the problem |
+
+`budget_multiplier_for()` owns that table so the rule lives beside the reasons it keys on, and
+`_generate_batched._run` reads it rather than testing for truncation by name.
+
+**Keep the hint list narrow.** It carves a retryable case out of `http_error`, whose entire
+justification is that an ordinary bad request would be refused identically; widening the hints makes
+ordinary bad requests billable twice. Status is still checked before the error string, so a 401 whose
+body happens to mention tokens is still a dead credential. Pinned by
+`tests/test_output_budget_headroom.py`.
+
+**Four tests moved deliberately, and the reason is the same in each.** They described a budget that
+GREW with the investigation, from when a single inference carried a whole scan and the ceiling sat far
+above anything real. Neither holds now: work is split into fixed 25-account batches and the budget is
+flat, so assertions about growth across sizes that all clamp to one number were asserting a behaviour
+the product no longer has. `test_commenter_capacity_matches_ceiling` in particular asserted
+`cap > 150` and is now tied to `batch_plan.BATCH_SIZE`, because capacity is only ever asked about ONE
+REQUEST and a request is one batch.
+
+### The liveness window must not depend on an env var being right
+
+Same report, and this is the half that explains a reset seen MID-run rather than after one.
+
+`batch_heartbeat_stale_sec()` is `max(BATCH_HEARTBEAT_STALE_SEC, analyst_timeout + 300)`, and it
+decides whether another worker may conclude a run has crashed and start a duplicate.
+`Settings.analyst_timeout_seconds` **defaults to 500**, so a service where
+`OMI_ANALYST_TIMEOUT_SECONDS` is not actually applied computed `max(420, 800) = 800s`. A batch has
+been measured on this deployment at **857s**. A perfectly healthy batch could therefore outlive the
+window by a minute, mid-run, and the duplicate republished "1 of 4" over what the customer was
+reading and billed a second full run to do it.
+
+`render.yaml` commits `1800`, but a Render dashboard value can disagree with what is committed (see
+the billing and Clerk notes for the same class), and **a duplicate billable run is not a failure mode
+worth leaving to configuration**. The floor is now **1800**, and the asymmetry is the whole argument:
+
+- declaring a live run dead too EARLY costs a second full generation and a visible reset;
+- declaring a crashed run dead too LATE costs a delayed self-heal on a run that produced nothing,
+  with the Retry button right there.
+
+Pinned by `test_the_floor_alone_outlives_the_slowest_batch_this_deployment_has_measured`, which
+asserts against the measured 857s with the env var **absent**.
+
+Worth knowing: the route's live-run guard is `(... inflight or lease_is_live) and not refresh`, so
+`refresh=True` bypasses it — but `generate_and_persist` claims the durable lease itself and returns
+early when someone else holds it, regardless of `refresh`. That second line of defence is what keeps
+the bypass from being a bug today; do not remove it on the grounds that the route already checks.
+
+### An interrupted run RESUMES, it does not start over
+
+Reported 2026-08-18: a scan finished **2 of 4 batches, stopped, and the elapsed clock kept running**.
+
+`_generate_batched` held every landed batch in a local `parts` list and nothing else. The merged view
+was persisted, but the per-batch pieces the merge is built FROM were not, so a run that died
+mid-flight (a redeploy — `background.shutdown` cancels in-flight work after a 5s grace — a container
+restart, an OOM) left the investigation with results it could not continue from. The route's
+interrupted-run branch then resubmitted the whole generation, `parts` started as `[None] * total`
+again, and batches 1 and 2 were re-sent to OpenRouter to produce answers already in the database.
+The customer paid twice and waited through work that was finished.
+
+`BATCH_PARTS_KEY` (`analyst_batch_parts_v1` in `payload_json`) checkpoints each batch as it lands.
+A new run seeds `parts` from it and skips those model calls, so it picks up at the first batch with
+no result. Four rules:
+
+- **`_chunk_signature` gates the reuse**, and it is the load-bearing part. It fingerprints which
+  accounts are in which batch, in order, so a different selection, a different batch size or a
+  re-ordered list all refuse to resume. A batch-3 result stapled onto a run whose batch 3 holds
+  different accounts would publish real model prose against the wrong handles, which is the single
+  worst thing this product can do.
+- **A floored batch is never resumed as done.** An empty part is re-run, because treating it as
+  finished would make an interruption permanently lose whichever batch it happened to interrupt.
+- **Cleared when the run ends.** It duplicates every landed batch's per-account prose and
+  `payload_json` is already the heaviest column in the product, so the cost is only ever paid by a
+  run actually in flight.
+- **It must never reach a public response.** It holds the RAW per-batch assessments, i.e. exactly
+  what the viewer gate filters, one batch at a time. `_public_payload` now strips both internal keys,
+  resolved BY NAME from the analyst module so a rename cannot silently stop the stripping.
+
+Pinned by `tests/test_analyst_batch_resume.py`.
+
+**Recovery still needs the page open.** `maybe_autogenerate` fires at scan time and the
+interrupted-run branch fires on a POST from the investigation page; there is **no sweeper** for
+analyst runs (unlike `reap_stale_scan_jobs` for scan jobs). So a run killed by a restart while
+nobody has the tab open stays stopped until someone opens it. Closing that needs a scheduler, which
+is the same missing piece as OMI-13.
+
+**A live-looking clock is not evidence that anything is happening.** The panel keeps polling and the
+elapsed timer keeps ticking against a dead run, which is what the report above actually describes.
+The clock cannot tell a slow batch from a dead run; time since the last LANDING can, so
+`BatchProgressStrip` now says so after `STALL_NOTICE_SEC` (15 min, above the measured 857s worst
+batch) and offers a restart. It also states that nothing is lost by waiting, which is true now that
+a restarted run continues from where the last one stopped.
+
+### A salvaged batch was buying itself a second full run
+
+Reported 2026-08-18 from a live 100-account scan, with screenshots. The customer read the
+per-account verdicts, then watched the panel reset to **"1 of 4"** and analyse the whole
+investigation again. The chain, and every link of it was working as designed:
+
+1. batch 1's synthesis wrapper fails validation;
+2. `_salvaged_account_reads` keeps its 25 per-account rows, which is the substance they paid for;
+3. `_merge_batch_parts` marks the MERGED entry `model_backed=False` on the strength of that one part;
+4. `routes/reasoning.py`'s floor self-heal keys on exactly that flag;
+5. it sets `refresh=True`, **which also bypasses the live-run guard** (`... and not refresh`);
+6. a second full run of every batch is submitted.
+
+**Nothing outside the OpenRouter bill would ever have shown this.** The customer's only symptom was
+the UI apparently restarting, and the analyst's own alerting stays quiet because a Floor is a
+*successful* code path.
+
+`entry_warrants_auto_regeneration()` is the fix and the distinction it draws is the point:
+
+| | asks | used by |
+|---|---|---|
+| `entry_is_model_backed` | is the SYNTHESIS WRAPPER the model's? | the serve gate |
+| `entry_warrants_auto_regeneration` | would a full billable re-run buy anything? | the self-heal |
+
+They come apart on the salvage path and **must stay apart**. Making `entry_is_model_backed` true for
+a salvaged entry would publish Floor prose as the model's; making the self-heal fire on it spends the
+customer's money to improve a paragraph they did not ask us to improve. A regeneration is warranted
+only when there are no per-account reads at all — nothing of the model's to lose. `AiUnavailable
+summaryOnly` already tells the reader the summary is missing, and the Retry button is still there:
+the choice stays theirs. Pinned by `tests/test_analyst_no_unrequested_regeneration.py`.
+
+### The coverage box was denying the reasoning printed beneath it
+
+Same report. Three lines of one box, sitting directly above twenty-five model-written paragraphs:
+
+```
+PARTIAL AI COVERAGE · 25 OF 25 COMMENTERS ASSESSED
+AI reasoning was not produced (deterministic Floor); completeness not applicable.
+~25 commenters remaining.
+25/25 analyzed · 12,970/23,250 out tokens · stop: stop
+```
+
+Every clause came from `verify_completion` and no two of them agreed. The cause is that **salvage was
+being reported as a Floor**: `model_backed` is False on that path, so the Floor branch fired even
+though every account genuinely had the model's own read. `verify_completion` now takes
+`salvaged_reads` and reports `summary_not_certified` instead, which names the half that is actually
+missing. `complete` stays False — the entry as a whole is not certified and the operator surfaces key
+on that — so only the SENTENCE changed.
+
+**`_merge_batch_parts` was also inheriting batch one's `reason` and `estimated_remaining`.** `base` is
+the first completed batch's payload, so a four-batch run whose first batch was clean and whose third
+floored rendered *"Complete, every commenter received AI reasoning"* inside a box whose own heading
+said coverage was partial. The counts were merged and the sentence explaining them was not. Both are
+now computed for the merge. Pinned by `tests/test_completion_under_salvage.py`.
+
+### One fact, six vocabularies
+
+The same live page stated its progress six times, in six different wordings, and two of them
+disagreed:
+
+| where | what it said |
+|---|---|
+| panel header | `100 accounts, every one this scan scored` |
+| progress strip | `SCORING IN BATCHES · 1 OF 4` · `25 ACCOUNTS · 5M 08S` · a track · `Waiting on batch 2 of 4` · a paragraph |
+| above the list | `25 accounts scored so far, listed below…` |
+| coverage box | `PARTIAL AI COVERAGE · 25 OF 25` (see above) |
+| list heading | `PER-ACCOUNT ASSESSMENTS · 25` |
+| below the list | `3 BATCHES TO GO` · `25 analyzed` · the SAME track again · another paragraph |
+
+**The strip is the one authoritative progress statement.** Everything else was cut back to what only
+it can say:
+
+- the strip keeps its line, its track and its "waiting on batch N", and lost its explanatory
+  paragraph;
+- the sentence above the list is gone entirely — the strip renders directly above it;
+- the coverage box **does not render while the run is working** (`running` prop). Mid-run, "partial
+  coverage" is not a finding, it is "not finished yet";
+- the trailing notice is one line, and says the only thing knowable at that position: the list has
+  ended and is not the whole answer. It no longer repeats the track;
+- the header count now says `Export covers all N scanned accounts`, because it describes the EXPORT,
+  not the run, and sat a few pixels from a live progress count with no way to tell them apart.
 
 ### One failed batch used to freeze the whole run
 

@@ -596,6 +596,31 @@ def test_liveness_never_raises_however_broken_the_settings_are(monkeypatch):
     assert A.batch_heartbeat_stale_sec() == A.BATCH_HEARTBEAT_STALE_SEC
 
 
+def test_the_floor_alone_outlives_the_slowest_batch_this_deployment_has_measured(monkeypatch):
+    """THE GUARD MUST NOT DEPEND ON AN ENV VAR BEING RIGHT.
+
+    A batch has been measured at 857s on this deployment. `analyst_timeout_seconds` defaults to 500,
+    so a service where OMI_ANALYST_TIMEOUT_SECONDS is not actually applied used to compute a window
+    of max(420, 800) = 800s, and that batch outlived it by a minute while perfectly healthy: another
+    worker concluded the run had crashed and started a duplicate billable one.
+
+    render.yaml commits 1800, but a Render dashboard value can disagree with what is committed, and
+    a duplicate run is not a failure mode worth leaving to configuration.
+    """
+    from app.core.config import get_settings
+
+    MEASURED_SLOWEST_BATCH_SEC = 857
+    monkeypatch.delenv("OMI_ANALYST_TIMEOUT_SECONDS", raising=False)
+    get_settings.cache_clear()
+    try:
+        assert A.batch_heartbeat_stale_sec() > MEASURED_SLOWEST_BATCH_SEC * 2, (
+            "a healthy batch must not be able to outlive the window that decides whether to start "
+            "a second billable run"
+        )
+    finally:
+        get_settings.cache_clear()
+
+
 # --------------------------------------------------------------------------- #
 # Three ways a duplicate run used to get started, and all three cost real money
 # --------------------------------------------------------------------------- #

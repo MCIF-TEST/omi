@@ -994,7 +994,10 @@ def _assess_core(
             json_received=(inference.raw_obj is not None),
             # A model-backed result passed BOTH canonical-schema validation and the Governor (that is what
             # makes it model-backed) — certify them explicitly. On the Floor path both are False.
-            schema_valid=model_backed, governor_valid=bool(inference.trace.permitted))
+            schema_valid=model_backed, governor_valid=bool(inference.trace.permitted),
+            # Salvage is neither a success nor a Floor, and reporting it as a Floor produced a
+            # coverage box that denied the reasoning printed directly beneath it.
+            salvaged_reads=salvaged)
         governed["completion"] = _completion.to_dict()
         governed["ai_package"] = ai_package.provenance()
         governed["prompt_build"] = prompt_build
@@ -1404,6 +1407,50 @@ def entry_is_model_backed(entry: dict | None) -> bool:
     return bool(prov) and "fallback" not in prov and "deterministic" not in prov
 
 
+def entry_has_model_account_reads(entry: dict | None) -> bool:
+    """Whether this entry's PER-ACCOUNT reads are the model's own prose.
+
+    Distinct from :func:`entry_is_model_backed`, which answers a question about the SYNTHESIS
+    wrapper. The two come apart on the salvage path, and that gap is the whole reason this exists:
+    ``validate_comprehensive_model_output`` is all-or-nothing, so a reply whose twenty per-account
+    paragraphs were perfect and whose wrapper was missing one field floors the wrapper while
+    ``_salvaged_account_reads`` keeps the rows.
+
+    ``commenter_assessments`` is only ever populated from a model-backed part or from an explicit
+    salvage, so a non-empty list means real model prose either way.
+    """
+    if not isinstance(entry, dict):
+        return False
+    a = entry.get("assessment") or {}
+    return bool(a.get("commenter_assessments"))
+
+
+def entry_warrants_auto_regeneration(entry: dict | None) -> bool:
+    """Whether an automatic, unrequested, FULL BILLABLE re-run would actually buy anything.
+
+    THIS IS THE MONEY QUESTION, and it is deliberately not the same one
+    :func:`entry_is_model_backed` answers.
+
+    Reported live: a 100-account scan finished, the customer read its per-account verdicts, and then
+    watched the panel reset to "1 of 4" and analyse the whole thing again. The chain was: batch 1's
+    wrapper failed validation, its rows were salvaged, ``_merge_batch_parts`` marked the merged entry
+    non-model-backed on the strength of that one part, and the route's floor self-heal keys on
+    exactly that flag. So it set ``refresh=True``, which also bypasses the live-run guard, and
+    submitted a second full run of every batch. Nothing outside the OpenRouter bill would have shown
+    it, and the customer's only symptom was the UI apparently restarting.
+
+    A regeneration is worth spending only when there is nothing of the model's to lose: no
+    per-account reads at all. When the reads ARE there, the customer already has the substance they
+    paid for and what is missing is the synthesis paragraph above them, which is not worth a second
+    run of every batch nobody asked for. `AiUnavailable summaryOnly` already says so on the page,
+    and the Retry button is still there for a customer who decides otherwise. That is the difference
+    that matters: their choice, not ours.
+    """
+    if entry_is_model_backed(entry):
+        return False
+    return not entry_has_model_account_reads(entry)
+
+
 # Slugs whose FLOORED cache we've already auto-regenerated once this process. Kept as a cheap local
 # short-circuit in front of the durable claim below, so a poll loop on one worker does not hit the
 # database to be told "no" every 2.5 seconds.
@@ -1728,8 +1775,57 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     ass = sum((p.get("completion") or {}).get("assessed_commenters") or 0 for _i, p in completed)
     all_complete = (len(completed) == total_batches) and all(
         (p.get("completion") or {}).get("complete") for _i, p in completed)
+    # THE REASON MUST DESCRIBE THE MERGE, NOT BATCH ONE.
+    #
+    # `base` is the first completed batch's payload, so every unstated key here is inherited from it,
+    # and `reason` is the one a reader actually sees. A four-batch run whose first batch was clean
+    # and whose third floored therefore rendered "Complete, every commenter received AI reasoning"
+    # inside a box whose own heading said the coverage was partial. The counts were merged and the
+    # sentence explaining them was not.
+    _reason = (base.get("completion") or {}).get("reason")
+    if not all_complete:
+        _still_running = total_batches - len(completed)
+        _empty = sum(1 for _i, p in completed if not (p.get("commenter_assessments") or []))
+        _short = max(0, rep - ass)
+        if _still_running > 0:
+            _reason = (
+                f"{len(completed)} of {total_batches} passes have landed. "
+                f"{_still_running} more {'is' if _still_running == 1 else 'are'} still running."
+            )
+        elif _empty:
+            _reason = (
+                f"{_empty} of {total_batches} passes came back empty, so their accounts have no "
+                "written read. Every score shown is final."
+            )
+        elif _short:
+            # EVERY PASS LANDED AND SOME ACCOUNTS STILL DID NOT GET A READ.
+            #
+            # Caught in an end-to-end run: `complete` was false with `missing_commenters: 2`, while
+            # the reason inherited from batch one still read "Complete, every commenter in the
+            # investigation received AI reasoning". The two earlier branches only cover passes that
+            # are missing or empty, and a pass can land, be counted, and still return fewer accounts
+            # than it was shown (the model skips one, or grounding withholds it).
+            _reason = (
+                f"{_short} of {rep} accounts did not receive a written read, though every pass "
+                "landed. Every score shown is final."
+            )
+        else:
+            # Not complete for a reason none of the above explains (the output did not certify).
+            # Whatever it is, it is NOT "complete", and inheriting batch one's sentence said exactly
+            # that inside a box whose own heading said otherwise.
+            _reason = (
+                "The analysis finished but did not fully certify. Every score shown is final."
+            )
     base["completion"] = {**(base.get("completion") or {}),
                           "represented_commenters": rep, "assessed_commenters": ass,
+                          "reason": _reason,
+                          # Inherited from batch one otherwise, where it meant "the accounts THIS
+                          # batch still owes". Merged, that read as 25 remaining beside 25 assessed.
+                          # Across the run, what is still owed is whatever the landed batches were
+                          # shown and did not assess; the batches yet to run are counted in passes,
+                          # by the progress strip, which is the only place that number belongs.
+                          "missing_commenters": max(0, rep - ass),
+                          "estimated_remaining_commenters": max(0, rep - ass),
                           "complete": bool(all_complete)}
 
     # Trace: keep the base trace, overlay batch telemetry + summed usage; model_backed = every
@@ -1863,8 +1959,22 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
 #: A run cannot be declared dead until longer than one model call could possibly take, so the floor
 #: is the configured timeout plus a margin for the persist that follows it. Raising
 #: OMI_ANALYST_TIMEOUT_SECONDS now moves this automatically instead of silently re-opening the bug.
+#: THE FLOOR IS 1800, NOT 420, AND THE ASYMMETRY IS THE WHOLE ARGUMENT.
+#:
+#: Declaring a live run dead too EARLY starts a duplicate: a second full billable generation, and a
+#: customer watching results they were reading get republished from "1 of 4". Declaring a genuinely
+#: crashed run dead too LATE costs a delayed self-heal on a run that produced nothing, and the Retry
+#: button is right there. Those two mistakes are nowhere near equally expensive, so the window is
+#: sized for the expensive one.
+#:
+#: The old floor could not survive this deployment's own measurements. A batch has been measured at
+#: 857s. `Settings.analyst_timeout_seconds` defaults to 500, so a service where
+#: OMI_ANALYST_TIMEOUT_SECONDS is not actually applied (render.yaml commits 1800, and CLAUDE.md
+#: records that a Render dashboard value can disagree with what is committed) computed a window of
+#: max(420, 800) = 800s. An 857s batch outlives that by a minute, mid-run, while perfectly healthy.
+#: A guard whose correctness depends on an env var being right is not a guard.
 BATCH_HEARTBEAT_MARGIN_SEC = 300
-BATCH_HEARTBEAT_STALE_SEC = 420      # the floor, and what a caller with no settings falls back to
+BATCH_HEARTBEAT_STALE_SEC = 1800     # the floor, and what a caller with no settings falls back to
 
 
 def batch_heartbeat_stale_sec(settings: Settings | None = None) -> float:
@@ -1939,6 +2049,100 @@ def _entry_is_ahead(existing: dict | None, mine: dict, run_id: str | None) -> bo
     return int(batching.get("done") or 0) > int(((mine or {}).get("batching") or {}).get("done") or 0)
 
 
+#: Where an in-flight run's per-batch results live inside ``Investigation.payload_json``.
+#:
+#: WHY THIS EXISTS. A batched run held every landed batch in a local ``parts`` list and nothing else.
+#: The merged view was persisted, but the per-batch pieces the merge is built FROM were not, so a run
+#: that died mid-flight — a redeploy (``background.shutdown`` cancels in-flight work after a 5s
+#: grace), a container restart, an OOM — left the investigation with results it could not continue
+#: from. The route's interrupted-run branch then resubmitted the whole thing, and ``parts`` started
+#: as ``[None] * total`` again, so batches 1 and 2 were re-sent to OpenRouter and re-billed to
+#: produce answers already sitting in the database.
+#:
+#: Reported live: a scan finished 2 of 4 batches, stopped, and the elapsed clock kept running.
+#:
+#: Cleared the moment the run completes, so the cost is transient and only ever paid by a run that
+#: is actually in flight.
+BATCH_PARTS_KEY = "analyst_batch_parts_v1"
+
+
+def _chunk_signature(chunks: list[dict]) -> str:
+    """A fingerprint of the batch LAYOUT: which accounts are in which batch, in order.
+
+    Resuming is only safe when the stored parts describe the same work this run is about to do. A
+    different selection, a different batch size, or a re-ordered list all produce a different
+    signature, and a mismatch means the stored parts are ignored rather than misapplied — a batch 3
+    result stapled onto a run whose batch 3 holds different accounts would publish real prose against
+    the wrong handles, which is the single worst thing this product can do.
+    """
+    h = hashlib.blake2b(digest_size=16)
+    for chunk in chunks:
+        ids = [
+            str(c.get("external_id") or c.get("handle") or "")
+            for c in ((chunk.get("video") or {}).get("commenters") or [])
+        ]
+        h.update(b"|".join(i.encode("utf-8", "replace") for i in ids))
+        h.update(b"//")
+    return h.hexdigest()
+
+
+def _load_batch_parts(inv, signature: str, total: int) -> dict[int, dict]:
+    """Per-batch results a previous, interrupted run of this exact layout already paid for."""
+    store = (getattr(inv, "payload_json", None) or {}).get(BATCH_PARTS_KEY)
+    if not isinstance(store, dict):
+        return {}
+    if store.get("signature") != signature or int(store.get("total") or 0) != total:
+        return {}
+    parts = store.get("parts")
+    if not isinstance(parts, dict):
+        return {}
+    out: dict[int, dict] = {}
+    for k, v in parts.items():
+        try:
+            i = int(k)
+        except (TypeError, ValueError):
+            continue
+        # A stored part with no accounts is a floored batch. Deliberately NOT resumed: re-running it
+        # is the retry the customer is owed, and treating an empty result as done would make an
+        # interruption permanently lose the batch it happened to interrupt.
+        if 0 <= i < total and isinstance(v, dict) and (v.get("commenter_assessments") or []):
+            out[i] = v
+    return out
+
+
+def _save_batch_part(session, inv, signature: str, total: int, index: int, part: dict) -> None:
+    """Checkpoint one landed batch. Best effort: a failed checkpoint must never sink the batch."""
+    try:
+        with session.begin_nested():
+            payload = {**(inv.payload_json or {})}
+            store = payload.get(BATCH_PARTS_KEY)
+            if (not isinstance(store, dict) or store.get("signature") != signature
+                    or int(store.get("total") or 0) != total):
+                store = {"signature": signature, "total": total, "parts": {}}
+            store = {**store, "parts": {**(store.get("parts") or {}), str(index): part}}
+            payload[BATCH_PARTS_KEY] = store
+            inv.payload_json = payload  # reassign so SQLAlchemy sees the JSON mutation
+            session.add(inv)
+    except Exception:  # noqa: BLE001
+        logger.exception("analyst.batched: could not checkpoint batch %d for inv=%s",
+                         index + 1, getattr(inv, "slug", "?"))
+
+
+def _clear_batch_parts(session, inv) -> None:
+    """Drop the checkpoint once the run is over, so the payload does not carry it forever."""
+    try:
+        payload = inv.payload_json or {}
+        if BATCH_PARTS_KEY not in payload:
+            return
+        with session.begin_nested():
+            trimmed = {k: v for k, v in payload.items() if k != BATCH_PARTS_KEY}
+            inv.payload_json = trimmed
+            session.add(inv)
+    except Exception:  # noqa: BLE001
+        logger.exception("analyst.batched: could not clear the batch checkpoint for inv=%s",
+                         getattr(inv, "slug", "?"))
+
+
 def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks: list[dict],
                       *, platform: str, settings: Settings,
                       lease_id: str | None = None) -> dict | None:
@@ -1970,6 +2174,23 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
     attempted = 0  # batches whose model call has returned, succeeded or not — what the UI counts
     # Identifies THIS run's writes, so a concurrent one can tell our progress from its own.
     run_id = uuid.uuid4().hex[:12]
+
+    # RESUME, DO NOT RESTART. An interrupted run left its landed batches checkpointed; re-sending
+    # them to OpenRouter would re-bill for answers already in the database and make the customer
+    # wait through work that was finished. A resumed run picks up at the first batch that has no
+    # result, which is also exactly the behaviour a reader expects from the progress strip.
+    signature = _chunk_signature(chunks)
+    resumed: set[int] = set()
+    with get_session() as session:
+        _inv = AccountRepository(session).get_investigation(slug=inv_slug, user_id=user_id)
+        if _inv is not None:
+            for i, part in _load_batch_parts(_inv, signature, total).items():
+                parts[i] = part
+                resumed.add(i)
+    if resumed:
+        logger.info("analyst.batched: slug=%s resuming, %d of %d batches already landed (%s)",
+                    inv_slug, len(resumed), total,
+                    ", ".join(str(i + 1) for i in sorted(resumed)))
 
     def _persist_progress(done: int, *, run_finished: bool = False) -> dict | None:
         merged = _merge_batch_parts(parts, batch_size=batch_size, done=done,
@@ -2041,6 +2262,13 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
         if parts[i] is None:
             logger.warning("analyst.batched: batch %d/%d returned no assessment (slug=%s)",
                            i + 1, total, inv_slug)
+        elif i not in resumed:
+            # Checkpointed the moment it lands, so an interruption after this point never re-bills
+            # this batch. Only new work is written: a resumed part is already stored.
+            with get_session() as _session:
+                _inv = AccountRepository(_session).get_investigation(slug=inv_slug, user_id=user_id)
+                if _inv is not None:
+                    _save_batch_part(_session, _inv, signature, total, i, parts[i])
         while flushed < total and parts[flushed] is not None:
             flushed += 1
         # `done` drives only the progress readout; the merge itself always uses every completed part.
@@ -2102,10 +2330,13 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                          "not retrying batch %d/%d", inv_slug, _dead_config_floors[0], i + 1, total)
             return result
 
-        # A truncated reply is the one case where retrying UNCHANGED is pointless: it would truncate
-        # again at the same cap, which is exactly why the in-transport retry declines it. Give the
-        # second attempt more room instead, so it is a different question rather than the same one.
-        multiplier = 1.5 if _floor_base_reason(reason) == "truncated_output" else 1.0
+        # Two reasons make retrying UNCHANGED pointless, and they pull in opposite directions:
+        # a truncated reply would truncate again at the same cap, and a budget the provider refused
+        # as too large would be refused identically. Both are budget faults, so both are retried at a
+        # different budget rather than with the same question asked twice. `budget_multiplier_for`
+        # owns which way and by how much, so the rule lives beside the reasons it keys on.
+        from app.reasoning.floor_reason import budget_multiplier_for
+        multiplier = budget_multiplier_for(reason)
         logger.warning("analyst.batched: batch %d/%d floored for slug=%s reason=%s — retrying once "
                        "(budget x%.1f)", i + 1, total, inv_slug, reason, multiplier)
         retried = _attempt(i, budget_multiplier=multiplier)
@@ -2118,15 +2349,23 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
         return retried if result is None else result
 
     if workers == 1:
-        # Sequential: each batch is persisted the moment it lands, so the UI reveals accounts 1-25
-        # while 26-50 are still being generated.
+        # Sequential: one bundle of accounts goes to the model, its response is persisted the moment
+        # it lands so the UI can show it, and only then does the next bundle start. That order is the
+        # product behaviour, not an implementation detail — it is why batch 1's accounts are readable
+        # while batch 4 has not been asked for yet.
         for i in range(total):
-            parts[i] = _run(i)
+            if i in resumed:
+                logger.info("analyst.batched: slug=%s batch %d/%d already landed, not re-sending",
+                            inv_slug, i + 1, total)
+            else:
+                parts[i] = _run(i)
             _landed(i)
     else:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="omi-batch") as pool:
-            futures = {pool.submit(_run, i): i for i in range(total)}
+            futures = {pool.submit(_run, i): i for i in range(total) if i not in resumed}
+            for i in sorted(resumed):
+                _landed(i)
             for fut in as_completed(futures):
                 i = futures[fut]
                 parts[i] = fut.result()
@@ -2149,6 +2388,15 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                        inv_slug, landed, total)
     else:
         logger.info("analyst.batched: slug=%s complete — %d batches merged", inv_slug, total)
+
+    # The run is over either way, so the checkpoint has nothing left to protect. Dropped rather than
+    # left behind: it duplicates every landed batch's per-account prose, and `payload_json` is
+    # already the heaviest column in the product. The cost of resumability is paid only while a run
+    # is actually in flight.
+    with get_session() as session:
+        _inv = AccountRepository(session).get_investigation(slug=inv_slug, user_id=user_id)
+        if _inv is not None:
+            _clear_batch_parts(session, _inv)
     return entry
 
 

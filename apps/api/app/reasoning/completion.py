@@ -35,14 +35,38 @@ from dataclasses import dataclass
 # headroom (its assessment + citations + the model's reasoning) rather than the bare JSON size.
 COMPLETION_BASE_TOKENS = 12000          # the 7-section synthesis wrapper + reasoning headroom
 COMPLETION_PER_COMMENTER_TOKENS = 450   # per account: reasoning + a plain-English assessment + citations
-COMPLETION_FLOOR_TOKENS = 16000         # never below the model config's own comfortable default
-COMPLETION_CEILING_TOKENS = 150000      # generous cap while we MEASURE real per-scan cost (temporary).
-# NOTE (2026-07-22): ceiling raised 32000 → 150000 DELIBERATELY and TEMPORARILY, to observe the true
-# per-investigation output cost on live runs with no truncation, before tuning it back down once real
-# cost data is in. It is a CEILING, not a reservation — billing is on tokens actually generated, so a
-# scan that finishes early still costs only what it produced (the per-account budget formula still asks
-# only ~base + 180×commenters, e.g. ~9k for 25 accounts). All four knobs are overridable per-deploy via
-# OMI_ANALYST_COMPLETION_* (see config.py) so the cap can be lowered WITHOUT a code deploy.
+#: 50,000, and on today's fixed 25-account batches THIS is the number that governs, not the formula.
+#: `base + per * 25` is 23,250, so the floor wins and every request asks for 50k. That was the
+#: intent: a live run was observed spending 12,970 of 23,250, and the margin between a reasoning
+#: model's real appetite and the cap is the difference between a finished batch and a truncated one.
+#: Truncation is not a graceful degradation here — it fails schema validation, floors the wrapper,
+#: and (before the salvage path) discarded every per-account read in the batch.
+#:
+#: A CAP IS NOT A SPEND. OpenRouter bills tokens generated, so raising this costs nothing on a run
+#: that finishes early; the only thing it buys is room. What it does risk is a provider rejecting a
+#: `max_tokens` above the served model's own ceiling, which is a 4xx that would floor every scan —
+#: see `floor_reason.OUTPUT_BUDGET_TOO_LARGE`, which recognises that specific rejection and retries
+#: once at half the budget rather than leaving the deployment dead.
+COMPLETION_FLOOR_TOKENS = 50000
+#: 50,000, and equal to the floor on purpose: EVERY request asks for exactly 50k, whatever its size.
+#:
+#: The temporary 150,000 it replaces was set on 2026-07-22 to observe true per-scan output cost with
+#: no truncation. That measurement is in: a live 25-account batch spent 12,970. With batches fixed at
+#: 25 accounts the formula never came near 150k anyway, so the ceiling was doing nothing except
+#: leaving a number in the codebase that nobody had checked against a real model.
+#:
+#: Ceiling == floor makes the budget a flat, stated fact rather than something to compute, and it is
+#: the ceiling that wins in `completion_budget`, so this line alone bounds every request.
+#:
+#: ONE CONSEQUENCE, stated because it is a guard going quiet: the truncation retry multiplies the
+#: budget by 1.5 to give a cut-off reply more room, and with ceiling == floor that clamps straight
+#: back to 50k, so the escalation becomes a no-op. At ~2,000 output tokens per account against a
+#: measured ~519, truncation is not the binding risk; if it ever becomes one, raise this above the
+#: floor rather than raising both. The DOWNWARD retry (`output_budget_too_large`, x0.5) is unaffected
+#: because it is applied after the clamp.
+COMPLETION_CEILING_TOKENS = 50000
+# All four knobs are overridable per-deploy via OMI_ANALYST_COMPLETION_* (see config.py), so the cap
+# can be moved WITHOUT a code deploy.
 
 
 def completion_budget(
@@ -91,7 +115,8 @@ class CompletionStatus:
     omitted_input_commenters: int        # accounts NOT shown to the model (upstream evidence budget)
     max_output_tokens: int | None        # the dynamic completion budget requested for this inference
     output_tokens: int | None            # actual completion size the gateway reported
-    incomplete_kind: str | None          # None | "truncated_output" | "missing_assessments" | "omitted_input"
+    incomplete_kind: str | None          # None | "truncated_output" | "missing_assessments"
+    #                                      #      | "omitted_input" | "summary_not_certified"
     reason: str
     estimated_remaining_commenters: int  # remaining work for a future continuation pass
 
@@ -127,6 +152,7 @@ def verify_completion(
     json_received: bool = True,
     schema_valid: bool = True,
     governor_valid: bool = True,
+    salvaged_reads: bool = False,
 ) -> CompletionStatus:
     """Decide whether the AI reasoning covered the COMPLETE investigation, and if not, why + how much
     remains. Precedence of incompleteness (most actionable first):
@@ -137,7 +163,15 @@ def verify_completion(
     * ``omitted_input`` — the upstream evidence budget did not show every commenter to the model.
 
     When the model was not reached (Floor), completeness is not applicable — reported as incomplete with a
-    clear reason so the UI never implies AI coverage that did not happen."""
+    clear reason so the UI never implies AI coverage that did not happen.
+
+    ``salvaged_reads`` is the case in between, and it has to be told apart from a true Floor. The
+    wrapper failed validation while ``_salvaged_account_reads`` kept the model's per-account rows, so
+    ``model_backed`` is False and yet every account genuinely does have AI reasoning. Reported live:
+    the panel printed "PARTIAL AI COVERAGE · 25 OF 25 COMMENTERS ASSESSED", "AI reasoning was not
+    produced (deterministic Floor)" and "~25 commenters remaining" as three lines of one box, sitting
+    directly above twenty-five model-written paragraphs. Every clause came from this function and no
+    two of them agreed."""
     represented = max(0, int(represented_commenters or 0))
     assessed = max(0, int(assessed_commenters or 0))
     omitted_input = max(0, int(omitted_input_commenters or 0))
@@ -145,7 +179,7 @@ def verify_completion(
     truncated = (finish_reason or "").lower() == "length"
     json_complete = bool(json_received) and not truncated
 
-    if not model_backed:
+    if not model_backed and not salvaged_reads:
         return CompletionStatus(
             complete=False, finish_reason=finish_reason, stopped_on_token_limit=truncated,
             json_complete=json_complete, schema_valid=bool(schema_valid),
@@ -155,6 +189,27 @@ def verify_completion(
             output_tokens=output_tokens, incomplete_kind=None,
             reason="AI reasoning was not produced (deterministic Floor); completeness not applicable.",
             estimated_remaining_commenters=represented + omitted_input,
+        )
+
+    if not model_backed:
+        # Salvaged: the per-account reads ARE the model's, only the synthesis above them is the
+        # Floor's. Coverage is therefore a real, answerable question, and the honest answer is the
+        # ordinary one — how many of the accounts shown got a read. `complete` stays False because
+        # the entry as a whole is not certified, but the reason says which half is missing instead of
+        # denying reasoning that is visibly on the page, and `remaining` counts the accounts actually
+        # still owed rather than restating the whole batch.
+        return CompletionStatus(
+            complete=False, finish_reason=finish_reason, stopped_on_token_limit=truncated,
+            json_complete=json_complete, schema_valid=bool(schema_valid),
+            governor_valid=bool(governor_valid), represented_commenters=represented,
+            assessed_commenters=assessed, missing_commenters=missing,
+            omitted_input_commenters=omitted_input, max_output_tokens=max_output_tokens,
+            output_tokens=output_tokens, incomplete_kind="summary_not_certified",
+            reason=(
+                "Every account below carries the model's own read. The investigation-level summary "
+                "above them did not pass validation, so it was withheld."
+            ),
+            estimated_remaining_commenters=missing + omitted_input,
         )
 
     if truncated:

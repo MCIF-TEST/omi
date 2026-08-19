@@ -126,6 +126,10 @@ def _to_detail(inv) -> InvestigationDetailResponse:
         label=inv.label,
         input_url=inv.input_url,
         kind=inv.kind,
+        # Carried so the page can offer only the graphs an account may legally join. Cheap here (the
+        # detail route already loads the row) and correct: deriving it in the browser would mean
+        # re-parsing the payload, which is the blob this whole module works to avoid touching.
+        platform=_platform_of(inv),
         overall_probability=inv.overall_probability,
         overall_tier=Tier(inv.overall_tier),
         summary=inv.summary,

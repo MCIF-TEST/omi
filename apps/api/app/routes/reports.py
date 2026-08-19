@@ -150,22 +150,34 @@ def _read_count(token: str) -> int | None:
         return None
 
 
-def _public_payload(payload: dict | None) -> dict:
-    """The scan payload with the internal analyst cache removed, for the public JSON export.
+#: Keys inside ``payload_json`` that carry the analyst's internals and must never reach an
+#: unauthenticated response. Both hold the admin-only eight-signal breakdown and internal provenance
+#: (trace ids, prompt hashes, token counts); the checkpoint additionally holds the RAW per-batch
+#: assessments, i.e. exactly what the viewer gate exists to filter, one batch at a time.
+_PAYLOAD_KEYS_NEVER_PUBLIC = ("CACHE_KEY", "BATCH_PARTS_KEY")
 
-    ``payload_json`` carries the analyst entry under its cache key, and that entry holds the
-    admin-only eight-signal breakdown plus internal provenance (trace ids, prompt hashes, token
-    counts). Dumping it raw on an UNAUTHENTICATED route bypassed the viewer gate entirely: the page
-    and the markdown export both filter, and this one handed over everything.
+
+def _public_payload(payload: dict | None) -> dict:
+    """The scan payload with the analyst's internal state removed, for the public JSON export.
+
+    ``payload_json`` carries the analyst entry under its cache key, and an in-flight run's per-batch
+    checkpoint under another. Both hold the admin-only eight-signal breakdown plus internal
+    provenance (trace ids, prompt hashes, token counts). Dumping the payload raw on an
+    UNAUTHENTICATED route bypassed the viewer gate entirely: the page and the markdown export both
+    filter, and this one handed over everything.
 
     The filtered per-account reads are already on ``investigation.account_reads``, so a programmatic
     consumer still gets the analyst's conclusions, just not the unfinished feature or the internals.
+
+    Resolved by NAME from the analyst module, so a key renamed there cannot silently stop being
+    stripped here.
     """
-    from app.reasoning.analyst import CACHE_KEY
+    from app.reasoning import analyst as _analyst
 
     if not isinstance(payload, dict):
         return {}
-    return {k: v for k, v in payload.items() if k != CACHE_KEY}
+    drop = {getattr(_analyst, name) for name in _PAYLOAD_KEYS_NEVER_PUBLIC}
+    return {k: v for k, v in payload.items() if k not in drop}
 
 
 def _account_reads(inv: Investigation) -> list[dict]:

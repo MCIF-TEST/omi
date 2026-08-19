@@ -8,6 +8,7 @@ import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { AnalystLoading } from './analyst-loading';
 import { SignalBreakdown } from '@/components/shared/signal-breakdown';
 import { ExportResults } from '@/components/shared/export-results';
+import { AddToGraph } from '@/components/shared/add-to-graph';
 import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
 import { byOmiScoreDesc } from '@/lib/rank-accounts';
@@ -44,6 +45,10 @@ const POLL_INTERVAL_MS = 2500;
 // 1000s budget was already inside one standard deviation of a single batch.
 const MAX_POLLS = 800;
 
+// How long with no batch landing before the panel says so. Above the slowest batch this deployment
+// has measured (857s), so a genuinely slow batch is never accused of having died.
+const STALL_NOTICE_SEC = 15 * 60;
+
 // A transport failure is not an answer, so it must not end the wait.
 //
 // A batched run polls every 2.5s for up to 10 minutes, which is ~240 fetches. Treating ONE failed
@@ -78,8 +83,12 @@ export function AnalystPanel({
   slug,
   scanned = [],
   createdAt,
+  platform,
 }: {
   slug: string;
+  /** The investigation's platform ("x" | "youtube" | "unknown"), carried on the detail response.
+   *  Decides which of the operator's graphs each account may be added to. */
+  platform?: string | null;
   /** Every account this scan scored, projected server-side. Feeds the CSV / clipboard export, which
    *  covers the whole investigation rather than only the accounts the analyst reached. */
   scanned?: ScannedAccount[];
@@ -95,6 +104,13 @@ export function AnalystPanel({
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startRef = useRef<number>(0);
   const lastBatchDoneRef = useRef<number>(0);
+  // When a batch last landed. A run that dies mid-flight (a redeploy, a container restart) leaves
+  // the server serving its last partial result, so the panel keeps polling and the elapsed clock
+  // keeps ticking with nothing behind it. Reported live as "it did 2 of 4 batches then stopped, but
+  // the timer is still running". The clock alone cannot distinguish a slow batch from a dead run;
+  // time since the last LANDING can, and the reader deserves to be told which one they are watching.
+  const lastProgressAtRef = useRef<number>(0);
+  const [stalledSec, setStalledSec] = useState(0);
   // Most accounts published so far in THIS run, so a stale or duplicate poll cannot walk it back.
   const maxScoredRef = useRef<number>(0);
 
@@ -103,10 +119,12 @@ export function AnalystPanel({
   // Tick a real elapsed clock while the AI runs, so a two-minute wait reads as deliberate.
   useEffect(() => {
     if (!pending) return;
-    const t = setInterval(
-      () => setElapsedSec(Math.round((Date.now() - startRef.current) / 1000)),
-      500,
-    );
+    const t = setInterval(() => {
+      setElapsedSec(Math.round((Date.now() - startRef.current) / 1000));
+      if (lastProgressAtRef.current) {
+        setStalledSec(Math.round((Date.now() - lastProgressAtRef.current) / 1000));
+      }
+    }, 500);
     return () => clearInterval(t);
   }, [pending]);
 
@@ -125,6 +143,8 @@ export function AnalystPanel({
     // Reset per-run, here rather than at the call sites, so a slug change starts clean too.
     lastBatchDoneRef.current = 0;
     maxScoredRef.current = 0;
+    lastProgressAtRef.current = Date.now();
+    setStalledSec(0);
     let polls = 0;
     let transportFails = 0;
 
@@ -150,6 +170,8 @@ export function AnalystPanel({
           const done = r.assessment.batching?.done ?? 0;
           if (done > lastBatchDoneRef.current) {
             lastBatchDoneRef.current = done;
+            lastProgressAtRef.current = Date.now();
+            setStalledSec(0);
             polls = 0;
           }
           // Defence in depth against a reset the user should never see. The server now refuses to
@@ -281,6 +303,8 @@ export function AnalystPanel({
               traces={assessment.investigation_trace?.batches?.traces}
               record={assessment.batching.batches}
               elapsedSec={elapsedSec}
+              stalledSec={stalledSec}
+              onRetry={() => void run(true)}
               scored={assessment.commenter_assessments?.length ?? 0}
             />
           )}
@@ -289,6 +313,7 @@ export function AnalystPanel({
             slug={slug}
             onRetry={() => void run(true)}
             busy={pending}
+            platform={platform}
           />
           {/* The same live state repeated where the results END: the user reading down the list
               reaches the last scored account here, and needs to know more are still coming rather
@@ -346,6 +371,8 @@ function BatchProgressStrip({
   traces,
   record,
   elapsedSec,
+  stalledSec = 0,
+  onRetry,
   scored,
 }: {
   batching: NonNullable<AnalystAssessment['batching']>;
@@ -355,6 +382,10 @@ function BatchProgressStrip({
   /** The server's own per-batch record. Exact, and preferred over every inference. */
   record?: BatchRecord;
   elapsedSec: number;
+  /** Seconds since a batch last LANDED, which is a different question from how long the run has
+   *  been going and the only one that can tell a slow batch from a dead run. */
+  stalledSec?: number;
+  onRetry?: () => void;
   /** Accounts actually returned so far, the real count, not done × batch_size (the final batch is
    *  usually partial, which would overstate it). */
   scored: number;
@@ -389,14 +420,45 @@ function BatchProgressStrip({
           {batching.batch_size ? ` · ${batching.batch_size} accounts` : ''}
         </p>
       )}
-      <p className="mt-2.5 text-2xs text-fg-mute leading-relaxed">
-        The scores below are final for the accounts already analyzed. The remaining accounts are being
-        analyzed right now and will appear underneath, ranked with the rest.
-        {failed > 0 && (
-          <> {failed} batch{failed === 1 ? '' : 'es'} came back empty, so {failed === 1 ? 'its' : 'their'}{' '}
-          accounts have no written read. You can retry once the run finishes.</>
-        )}
-      </p>
+      {/* Only the part a reader cannot get from the line and the track above. The sentence that
+          used to live here ("the scores below are final for the accounts already analyzed, the
+          remaining accounts are being analyzed right now") restated the strip in prose, and it was
+          one of SIX places on this page saying the same thing in a different vocabulary. */}
+      {failed > 0 && (
+        <p className="mt-2.5 text-2xs text-fg-mute leading-relaxed">
+          {failed} batch{failed === 1 ? '' : 'es'} came back empty, so {failed === 1 ? 'its' : 'their'}{' '}
+          accounts have no written read. You can retry once the run finishes.
+        </p>
+      )}
+
+      {/* A LIVE-LOOKING CLOCK IS NOT EVIDENCE THAT ANYTHING IS HAPPENING.
+          A run that dies mid-flight leaves the server serving its last partial result, so this
+          panel keeps polling and the elapsed clock keeps ticking with nothing behind it. Reported
+          live as "it did 2 of 4 batches then stopped, but the timer is still running".
+          The clock cannot tell a slow batch from a dead run; time since the last LANDING can.
+          The threshold sits above the slowest batch this deployment has measured (857s), so a
+          genuinely slow batch is never accused of being dead. Nothing is lost by waiting either:
+          the server picks an interrupted run back up from the batch it stopped on, so the retry
+          offered here is for a reader who would rather not wait. */}
+      {stalledSec >= STALL_NOTICE_SEC && (
+        <div className="mt-2.5 border-t border-violet/20 pt-2.5 flex items-start justify-between gap-3 flex-wrap">
+          <p className="text-2xs text-fg-mute leading-relaxed flex-1 min-w-[14rem]">
+            No new batch has landed in {formatElapsed(stalledSec)}. A batch normally takes a few
+            minutes, so this one is either unusually slow or the run stopped. Nothing is lost:
+            the batches already analysed are saved, and a restarted run continues from where this
+            one left off rather than starting again.
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="btn-slab h-8 px-3 rounded-md text-xs font-medium text-fg-dim shrink-0"
+            >
+              Restart the run
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -471,27 +533,26 @@ function BatchTrailingNotice({
   const states = batchStates(batching, traces, record);
   const remaining = states.filter((s) => s === 'pending' || s === 'running').length;
   return (
+    // ONE LINE. This is a bookend, not a second progress panel.
+    //
+    // It used to repeat the strip's own track, its own counts and a paragraph of explanation, so a
+    // reader who scrolled to the end of the results met the whole progress display a second time,
+    // in slightly different words, and had to work out whether it was describing something new.
+    // What is genuinely only knowable HERE is that the list has ended and is not the whole answer.
     <div
-      className="mt-4 rounded-lg border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-3 space-y-2"
+      className="mt-4 rounded-sm border border-dashed border-violet/30 bg-violet/[0.04] px-3.5 py-2.5
+                 flex items-center justify-between gap-3 flex-wrap"
       aria-live="polite"
     >
-      <div className="flex items-baseline justify-between gap-2 flex-wrap">
-        <span className="font-mono text-2xs tracking-[0.14em] uppercase text-violet-2 flex items-center gap-1.5">
-          {/* A pulsing dot rather than a spinner. This sits below the results for the whole run, and
-              a spinner tracking a ten-minute wait reads as something stuck. */}
-          <span className="led motion-safe:animate-pulse-dot" style={{ ['--c' as string]: 'var(--violet-2)' }} aria-hidden />
-          {remaining} batch{remaining === 1 ? '' : 'es'} to go
-        </span>
-        <span className="font-mono text-2xs text-fg-mute tabular-nums">
-          {scored} analyzed
-        </span>
-      </div>
-      <BatchTrack states={states} />
-      <p className="text-2xs text-fg-mute leading-relaxed">
-        Each batch is a separate pass that reads every one of its accounts individually, so a large
-        scan can take a while. New accounts appear above as each one lands, and you don&apos;t need to
-        wait on this page.
-      </p>
+      <span className="meta text-violet-2 flex items-center gap-2">
+        {/* A lamp rather than a spinner. This sits below the results for the whole run, and a
+            spinner tracking a ten-minute wait reads as something stuck. */}
+        <span className="led motion-safe:animate-pulse-dot" style={{ ['--c' as string]: 'var(--violet-2)' }} aria-hidden />
+        End of the accounts analysed so far
+      </span>
+      <span className="meta tabular">
+        {scored} analysed · {remaining} pass{remaining === 1 ? '' : 'es'} to go
+      </span>
     </div>
   );
 }
@@ -787,8 +848,9 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
 }
 
 function AssessmentView(
-  { a, slug, onRetry, busy }:
-  { a: AnalystAssessment; slug: string; onRetry: () => void; busy: boolean },
+  { a, slug, onRetry, busy, platform }:
+  { a: AnalystAssessment; slug: string; onRetry: () => void; busy: boolean;
+    platform?: string | null },
 ) {
   // A batched run that is still going is NOT a failed run. `batching.complete === false` means more
   // batches are queued, and a later one can still land a model-backed result that makes the merged
@@ -814,15 +876,18 @@ function AssessmentView(
   if (!isModelBacked(a) && readCount > 0) {
     return (
       <div className="space-y-5">
-        {stillBatching ? (
-          <p className="text-sm text-fg-dim">
-            {readCount} account{readCount === 1 ? '' : 's'} scored so far, listed below. The
-            remaining batches are still running and will appear as they land.
-          </p>
-        ) : (
-          <AiUnavailable a={a} onRetry={onRetry} busy={busy} summaryOnly />
-        )}
-        <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
+        {/* Nothing is said here while the run is going. `BatchProgressStrip` renders directly above
+            this and already states the count, the pass, the elapsed clock and what happens next; the
+            sentence that used to sit here was a fourth restatement of it. When the run is OVER and
+            the summary floored, that IS new information and `AiUnavailable` says it. */}
+        {!stillBatching && <AiUnavailable a={a} onRetry={onRetry} busy={busy} summaryOnly />}
+        <CommenterAssessments
+          items={a.commenter_assessments}
+          completion={a.completion}
+          running={stillBatching}
+          platform={platform}
+          slug={slug}
+        />
       </div>
     );
   }
@@ -895,7 +960,8 @@ function AssessmentView(
       </div>
 
       {/* ── PER-ACCOUNT ASSESSMENTS (one AI reading per commenter, over the ONE response) ── */}
-      <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
+      <CommenterAssessments items={a.commenter_assessments} completion={a.completion}
+                            platform={platform} slug={slug} />
 
       {/* ── DOMAIN REASONING (six views over the ONE comprehensive response) ── */}
       <DomainReasoning
@@ -1175,8 +1241,18 @@ function AccountMetadata({ r }: { r: CommenterAssessment }) {
 }
 
 function CommenterAssessments({
-  items, completion,
-}: { items?: CommenterAssessment[]; completion?: CompletionStatus; slug: string }) {
+  items, completion, running = false, platform,
+}: {
+  items?: CommenterAssessment[];
+  completion?: CompletionStatus;
+  /** The run is still working. Suppresses the coverage banner: mid-run, "partial coverage" is not a
+   *  finding, it is just "not finished yet", which the progress strip already says. */
+  running?: boolean;
+  /** The investigation's platform, carried on the detail response. Decides which graphs an account
+   *  may join; see `lib/graph-membership`. */
+  platform?: string | null;
+  slug: string;
+}) {
   const rows = items ?? [];
   // Worst first, matching the shared report and both exports. Batch order was a consequence of how
   // a scan runs, not a decision about what a reader wants: it buried the highest-scoring account in
@@ -1190,7 +1266,11 @@ function CommenterAssessments({
         <Users size={11} /> Per-account assessments{resolved.length > 0 ? ` · ${resolved.length}` : ''}
       </CardLabel>
 
-      <CompletionBanner c={completion} />
+      {/* Not while the run is working. A box headed "PARTIAL AI COVERAGE" is a real statement about
+          a FINISHED run and pure noise about a running one, and mid-run it was the single most
+          confusing thing on the page: it appeared beside a progress strip that was already saying
+          how far along the run was, and said it in numbers that did not match. */}
+      {!running && <CompletionBanner c={completion} />}
 
       {resolved.length === 0 ? (
         <p className="text-xs text-fg-faint leading-relaxed flex items-start gap-2">
@@ -1208,6 +1288,16 @@ function CommenterAssessments({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-fg break-all">{r.handle ?? r.ref}</span>
                 {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
+                {/* Beside the identity, because that is the moment the reader is deciding about
+                    THIS account. It renders nothing when the account has no external id or the
+                    investigation's platform is unknown, rather than offering an action that would
+                    silently store the account under the wrong platform. */}
+                <AddToGraph
+                  externalId={r.external_id}
+                  handle={r.handle}
+                  tier={r.suspicion_tier}
+                  platform={platform}
+                />
                 {typeof r.omi_score === 'number' && (
                   <span className="flex items-baseline gap-1 ml-auto" title="This account's OMI score (0-100).">
                     <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">OMI</span>

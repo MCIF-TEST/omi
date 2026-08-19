@@ -149,7 +149,7 @@ class Settings(BaseSettings):
     # When False, all scans are unauthenticated and unlimited (local-mode).
     require_auth: bool = False
     # Free trial credits handed out at signup.
-    free_trial_credits: int = 1
+    free_trial_credits: int = 5
     # Credits added when a subscription becomes active or renews.
     monthly_credit_grant: int = 20
 
@@ -320,8 +320,8 @@ class Settings(BaseSettings):
     # scan never truncates and silently drops per-account results. Reasoning tokens count against the cap.
     analyst_completion_base_tokens: int = 12000
     analyst_completion_per_commenter_tokens: int = 450
-    analyst_completion_floor_tokens: int = 16000
-    analyst_completion_ceiling_tokens: int = 150000   # TEMP high cap to measure real scan cost; tune down later
+    analyst_completion_floor_tokens: int = 50000
+    analyst_completion_ceiling_tokens: int = 50000    # equals the floor: every request asks for 50k
     # Batched analyst inference. A single OpenRouter request carries AT MOST this many accounts; a larger
     # selection is split into ≤N-account batches sent as PARALLEL requests, merged first-to-last, and
     # persisted progressively so the UI shows batch 1's accounts while later batches still run.

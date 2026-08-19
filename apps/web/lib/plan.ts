@@ -7,7 +7,7 @@
  * OMI_FREE_TRIAL_CREDITS (see render.yaml, where both are set side by side).
  * Defaults match the API's config default so local dev stays truthful.
  */
-export const TRIAL_CREDITS = Number(process.env.NEXT_PUBLIC_TRIAL_CREDITS || 1);
+export const TRIAL_CREDITS = Number(process.env.NEXT_PUBLIC_TRIAL_CREDITS || 5);
 
 /**
  * The trial figure is configurable, so the copy around it has to agree with whatever it is set to.
@@ -16,6 +16,23 @@ export const TRIAL_CREDITS = Number(process.env.NEXT_PUBLIC_TRIAL_CREDITS || 1);
  */
 export const CREDIT_NOUN = TRIAL_CREDITS === 1 ? 'credit' : 'credits';
 export const TRIAL_CREDITS_LABEL = `${TRIAL_CREDITS} free ${CREDIT_NOUN}`;
+
+/**
+ * One credit covers up to this many accounts, mirroring `compute_scan_credits` on the API
+ * (`ceil(accounts / 50) x credits_per_batch`, minimum 1). Same rate for X and YouTube.
+ */
+export const ACCOUNTS_PER_CREDIT = 50;
+
+/**
+ * How many accounts the signup trial actually buys.
+ *
+ * DERIVED, because the last hardcoding of it went stale the moment the trial figure moved: copy on
+ * the investigate page read "your 1 free credit covers up to 50 more", and at five credits the same
+ * sentence became "your 5 free credits covers up to 50 more" — wrong about the number and wrong
+ * about the verb. The trial figure is configurable, so everything stated about it has to be
+ * computed from it.
+ */
+export const TRIAL_ACCOUNTS = TRIAL_CREDITS * ACCOUNTS_PER_CREDIT;
 
 /**
  * What the paid plan is called, everywhere it is named.

@@ -88,10 +88,15 @@ export function ExportResults({ slug, createdAt, scanned, reads }: Props) {
           <Download size={12} /> CSV
         </Button>
       </div>
-      <p className="font-mono text-2xs text-fg-mute" aria-live="polite">
+      {/* Says what the EXPORT contains, not how the run is going.
+          "100 accounts, every one this scan scored" sat in the panel header a
+          few pixels from a live "25 accounts" progress readout, and a reader had
+          no way to tell that one was the export's scope and the other was the
+          analyst's progress. The word "export" is what disambiguates it. */}
+      <p className="meta" aria-live="polite">
         {copied
           ? `${rows.length} row${rows.length === 1 ? '' : 's'} copied, paste into a spreadsheet`
-          : `${rows.length} account${rows.length === 1 ? '' : 's'}, every one this scan scored`}
+          : `Export covers all ${rows.length} scanned account${rows.length === 1 ? '' : 's'}`}
       </p>
       {failed && <p className="font-mono text-2xs text-danger">{failed}</p>}
     </div>
