@@ -2429,6 +2429,40 @@ it can say:
 - the header count now says `Export covers all N scanned accounts`, because it describes the EXPORT,
   not the run, and sat a few pixels from a live progress count with no way to tell them apart.
 
+### 103 of 100: an account written up twice is two verdicts about one person
+
+Reported 2026-08-19 from a live 100-account scan. The page read **PER-ACCOUNT ASSESSMENTS · 103**
+beside **PARTIAL AI COVERAGE · 103 OF 100 COMMENTERS ASSESSED**.
+
+`assessed_commenters` counts rows that RESOLVED to a real account, so 103 of 100 never meant three
+strangers had been invented. It meant three of the hundred were each written up **twice**, and both
+paragraphs rendered. That is the specific harm this product exists not to cause: these are scored
+claims about named real people, they get posted publicly, and two independently reached verdicts
+about one person are free to disagree about the score, the tier and the evidence. A reader cannot
+tell which one we stand behind, and neither can we.
+
+`_dedupe_account_reads` keeps the FIRST row per account at the join and drops the rest. First is not
+arbitrary: the output contract asks for the accounts in legend order, so the first mention is the
+model's intended sweep and the later one is the slip.
+
+**The key is the account, never the alias, and getting that wrong deletes most of a run.**
+`build_alias_legend` numbers `A1..An` within ONE package and every batch builds its own, so `A1`
+means a different person in each of four batches. Deduplicating on the alias would silently discard
+three quarters of a 100-account scan. The join keys on the resolved `author_ref`; a row that
+resolved to nobody has no identity, so it falls back to its alias and is only ever compared against
+rows in its own batch. Two unresolved rows are never collapsed together: "we could not tell who this
+is" is not evidence that two of them are the same account.
+
+`_merge_batch_parts` dedupes again **across** batches, and there the only valid key is `external_id`
+(the identity that survives the join). A cross-batch duplicate means the selection carried the same
+account twice and chunking dealt it to two requests.
+
+**`completion.assessed_commenters` is now counted from the MERGED rows**, not summed from each
+batch's own figure. Each batch computes its count before the merge exists, so a row the merge drops
+was still being counted by the batch that produced it, and the box claimed coverage for a paragraph
+that is not on the page. Pinned by `tests/test_duplicate_account_reads.py` (8 tests), including the
+regression an alias-keyed fix would introduce.
+
 ### The strip could not say which batch was on the wire, or that it was on its second try
 
 Reported 2026-08-19: *"it's been running the fourth batch for about ten minutes, and it took the
