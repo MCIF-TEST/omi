@@ -1069,9 +1069,9 @@ the easy mistake, because both get called "the free scans":
 | Pre-login demo | Any visitor, metered per IP | **1 scan**, ≤25 accounts | `DEMO_FREE_SCANS_PER_IP` + `DEMO_MAX_COMMENTERS`, hardcoded in `app/routes/scan_async.py` / `scan.py`, test-pinned |
 | Signup trial | A new account | **1 credit**, then they pay | `OMI_FREE_TRIAL_CREDITS` in `render.yaml` (code default in `config.py` also 1) |
 
-The signup trial was **25**, then 5, now **3** — an explicit product decision (2026-07). At the
-1-credit-per-50-accounts rate with `OMI_SCAN_MAX_COMMENTERS=150`, 3 credits is one full 150-account
-investigation *or* three small ≤50-account ones. Don't raise it back without being asked.
+The signup trial is **5** (2026-08-19, at the owner's request). It has been 25, then 5, then 3,
+then 1, and is now 5 again. At the 1-credit-per-50-accounts rate that is up to **250 accounts** for a
+new account before they pay. Don't move it without being asked.
 
 Two traps around this value:
 
@@ -1257,11 +1257,18 @@ pre-filled URL and the already-scanned rows look arbitrary. Accounts the origina
 already come back marked `scanned` by the compile step, so "scan more" is literally what the page
 offers.
 
-**The signup trial is 1 credit** (was 3, was 25). One credit covers up to 50 accounts, so a funnel
-signup gets exactly one real scan of the post they arrived from, then they subscribe. Set in **four**
-places and `test_deployed_credit_contract.py` fails on drift between the env pair:
-`OMI_FREE_TRIAL_CREDITS` + `NEXT_PUBLIC_TRIAL_CREDITS` in `render.yaml`, `config.py`'s default, and
-`plan.ts`'s default.
+**The signup trial is 5 credits.** One credit covers up to 50 accounts, so a funnel signup can
+scan up to 250 accounts before paying. Set in **four** places and
+`test_deployed_credit_contract.py` fails on drift between the env pair: `OMI_FREE_TRIAL_CREDITS` +
+`NEXT_PUBLIC_TRIAL_CREDITS` in `render.yaml`, `config.py`'s default, and `plan.ts`'s default.
+(`.env.example` is a fifth, unchecked copy; it had been stale at 3 for two changes.)
+
+**Anything the copy STATES about the trial must be derived from it, not written out.** `CREDIT_NOUN`
+already existed because hardcoding "credits" became "1 free credits" in five places the moment the
+trial was cut to one. Moving it back to 5 broke the next layer: the investigate page read "your 1
+free credit covers up to 50 more", which became "your 5 free credits covers up to 50 more" — wrong
+about the verb AND wrong about the number, since 5 credits is 250 accounts. `ACCOUNTS_PER_CREDIT`
+and `TRIAL_ACCOUNTS` in `plan.ts` are the derived facts; use them.
 
 Copy around that number goes through **`TRIAL_CREDITS_LABEL`** / **`CREDIT_NOUN`** (`lib/plan.ts`).
 Hardcoding "credits" read fine at 3 and became "1 free credits" in five places the moment the trial
