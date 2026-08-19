@@ -1723,7 +1723,9 @@ def _tier_for_score(score: int) -> str:
 
 
 def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
-                       run_finished: bool = False, run_id: str | None = None) -> dict | None:
+                       run_finished: bool = False, run_id: str | None = None,
+                       attempts: dict[int, int] | None = None,
+                       running: set[int] | None = None) -> dict | None:
     """Merge per-batch assessments into ONE progressive assessment, strictly first-to-last.
 
     ``parts`` is indexed by batch; entries still pending (or failed) are None. The first completed
@@ -1938,9 +1940,29 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     # over; `app.reasoning.batch_plan` is what derives everything from the list.
     base["batching"]["batches"] = [
         {"index": i,
+         # WHICH BATCH IS ON THE WIRE, said by the only party that knows.
+         #
+         # This used to be "pending" for every incomplete batch, and the client's own reconstruction
+         # was the only thing that ever produced "running" — but the client prefers this record
+         # whenever it exists, so the moment the record shipped, "Waiting on batch N of M"
+         # became unreachable on every modern entry. A reader watching a long batch was told
+         # nothing at all about what the run was doing.
+         #
+         # In flight is not the same as "the first one without a result": a batch that floored to
+         # None is finished and failed, and under concurrency several are in flight at once. So the
+         # caller passes the set it is actually holding open rather than having this infer it.
          "state": ("done" if (p.get("commenter_assessments") or []) else "failed")
-                  if p is not None else ("pending" if not run_finished else "failed"),
-         "accounts": len(p.get("commenter_assessments") or []) if p is not None else 0}
+                  if p is not None
+                  else ("failed" if run_finished
+                        else ("running" if i in (running or set()) else "pending")),
+         "accounts": len(p.get("commenter_assessments") or []) if p is not None else 0,
+         # WHICH ATTEMPT THIS BATCH IS ON. Reported live: "the fourth batch has been running about
+         # ten minutes and the others were quick." A batch that failed once and is now on its
+         # second attempt looked exactly like one still on its first, because nothing recorded the
+         # difference. One batch can legitimately occupy a long time across attempts (a per-request
+         # timeout of 1800s, up to two in-transport retries on 429/5xx, then one whole re-attempt),
+         # and through all of it the strip said only "batch 4 of 4".
+         "attempt": int((attempts or {}).get(i, 1) or 1)}
         for i, p in enumerate(parts)
     ]
     return base
@@ -2170,6 +2192,14 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
                 "sequential" if workers == 1 else f"concurrency={workers}")
 
     parts: list[dict | None] = [None] * total
+    # How many model calls each batch has cost so far. Reported live, because a batch on its second
+    # attempt is indistinguishable from a slow first one otherwise: "the fourth batch has been
+    # running about ten minutes and the others were quick" is exactly that state, and nothing in the
+    # UI could say so.
+    attempts: dict[int, int] = {}
+    # The batches whose request is open right now. Sequential runs hold exactly one; the set is what
+    # lets the merge say "running" instead of "pending" without guessing which index that is.
+    inflight: set[int] = set()
     flushed = 0    # longest contiguous run of completed batches (0..total)
     attempted = 0  # batches whose model call has returned, succeeded or not — what the UI counts
     # Identifies THIS run's writes, so a concurrent one can tell our progress from its own.
@@ -2194,7 +2224,8 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
 
     def _persist_progress(done: int, *, run_finished: bool = False) -> dict | None:
         merged = _merge_batch_parts(parts, batch_size=batch_size, done=done,
-                                    run_finished=run_finished, run_id=run_id)
+                                    run_finished=run_finished, run_id=run_id, attempts=attempts,
+                                    running=inflight)
         if merged is None:
             return None
         gov = merged.get("governance") or {}
@@ -2310,6 +2341,20 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
         (a malformed response, a truncated one, a transient 429) without spending anything on the
         deterministic ones.
         """
+        attempts[i] = 1
+        inflight.add(i)
+        # Published when the request OPENS, not only when it closes. Progress used to be written
+        # exclusively on landing, which left the whole duration of a batch — the only part of a run
+        # a reader actually waits through — described by a record saying that batch was "pending".
+        # It also re-stamps the lease heartbeat here, so the gap between two heartbeats is no longer
+        # one entire model call.
+        _persist_progress(attempted)
+        try:
+            return _run_inner(i)
+        finally:
+            inflight.discard(i)
+
+    def _run_inner(i: int) -> dict | None:
         result = _attempt(i)
         if result is not None and entry_is_model_backed({"assessment": result}):
             return result
@@ -2339,6 +2384,12 @@ def _generate_batched(inv_slug: str, user_id: int | None, payload: dict, chunks:
         multiplier = budget_multiplier_for(reason)
         logger.warning("analyst.batched: batch %d/%d floored for slug=%s reason=%s — retrying once "
                        "(budget x%.1f)", i + 1, total, inv_slug, reason, multiplier)
+        # Published BEFORE the second call, not after it. A retry is the slowest thing that can
+        # happen to one batch (a per-request timeout, up to two in-transport retries, then the whole
+        # call again), so saying so once it is over is saying so too late to be of any use to
+        # somebody watching the strip. This also re-stamps the lease heartbeat mid-batch.
+        attempts[i] = 2
+        _persist_progress(attempted)
         retried = _attempt(i, budget_multiplier=multiplier)
         if retried is not None and entry_is_model_backed({"assessment": retried}):
             logger.info("analyst.batched: batch %d/%d recovered on retry for slug=%s", i + 1, total,

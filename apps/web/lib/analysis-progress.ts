@@ -51,7 +51,15 @@ export type BatchState = 'done' | 'failed' | 'running' | 'pending';
 
 /** The exact per-batch record when the server sent one. Preferred over every inference below:
  *  those exist only for entries written before the record did. */
-export type BatchRecord = ReadonlyArray<{ index: number; state: BatchState; accounts: number }>;
+export type BatchRecord = ReadonlyArray<{
+  index: number;
+  state: BatchState;
+  accounts: number;
+  /** Which model call this batch is on. 1 for the ordinary case; 2 means the first one floored for
+   *  a reason a retry can fix and the second is on the wire now. Absent on entries written before
+   *  the server recorded it, which is why nothing may treat a missing value as anything but 1. */
+  attempt?: number;
+}>;
 
 export function batchStates(
   { total, done, landed, complete }: {

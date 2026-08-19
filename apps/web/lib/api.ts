@@ -1115,7 +1115,15 @@ export interface AnalystAssessment {
     /** The per-batch record. Exact, so no reader has to infer a batch's state from the counts
      *  above: those three numbers look interchangeable and every reader that guessed wrong shipped
      *  a bug. Absent on entries written before it existed. See app/reasoning/batch_plan.py. */
-    batches?: Array<{ index: number; state: 'pending' | 'running' | 'done' | 'failed'; accounts: number }>;
+    batches?: Array<{
+      index: number;
+      state: 'pending' | 'running' | 'done' | 'failed';
+      accounts: number;
+      /** Which model call this batch is on (1 = first). A batch on its second attempt is otherwise
+       *  indistinguishable from a slow first one, and a retry is the slowest thing that happens to
+       *  one batch. Absent on entries written before it was recorded. */
+      attempt?: number;
+    }>;
   };
   // The engine's corroboration state, echoed onto the assessment (overlaid from the deterministic
   // Floor, never model-fabricated. Apps/api runtime.py). It bounds the coordination read: a maximal
