@@ -7,6 +7,7 @@ import {
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { Sparkline } from '@/components/shared/sparkline';
 import { TierBadge } from '@/components/shared/tier-badge';
+import { AddToGraph } from '@/components/shared/add-to-graph';
 import { ScoreRing } from '@/components/shared/score-ring';
 import { ConfidenceBand } from '@/components/shared/confidence-band';
 import { TrustList } from '@/components/shared/trust-lists';
@@ -129,6 +130,16 @@ export default async function AccountHistoryPage({ params, searchParams }: PageP
                   <span className="text-fg-mute">· {history.display_name}</span>
                 )}
                 {latest && <TierBadge tier={latest.tier} size="lg" />}
+                {/* THE commenter detail panel. `/v1/graphs`' own docstring has named this exact
+                    surface as where profiles get added since the API shipped; until now nothing
+                    here could do it. */}
+                <AddToGraph
+                  externalId={history.external_id}
+                  handle={history.handle}
+                  tier={latest?.tier}
+                  platform={platform}
+                  className="self-center"
+                />
               </div>
               <p className="mt-1.5 font-mono text-xs text-fg-faint truncate select-all">{history.external_id}</p>
             </div>

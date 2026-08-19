@@ -8,6 +8,7 @@ import { ProbabilityBar } from '@/components/shared/probability-bar';
 import { AnalystLoading } from './analyst-loading';
 import { SignalBreakdown } from '@/components/shared/signal-breakdown';
 import { ExportResults } from '@/components/shared/export-results';
+import { AddToGraph } from '@/components/shared/add-to-graph';
 import type { ScannedAccount } from '@/lib/investigation-export';
 import { failureReason } from '@/lib/analyst-failure';
 import { byOmiScoreDesc } from '@/lib/rank-accounts';
@@ -82,8 +83,12 @@ export function AnalystPanel({
   slug,
   scanned = [],
   createdAt,
+  platform,
 }: {
   slug: string;
+  /** The investigation's platform ("x" | "youtube" | "unknown"), carried on the detail response.
+   *  Decides which of the operator's graphs each account may be added to. */
+  platform?: string | null;
   /** Every account this scan scored, projected server-side. Feeds the CSV / clipboard export, which
    *  covers the whole investigation rather than only the accounts the analyst reached. */
   scanned?: ScannedAccount[];
@@ -308,6 +313,7 @@ export function AnalystPanel({
             slug={slug}
             onRetry={() => void run(true)}
             busy={pending}
+            platform={platform}
           />
           {/* The same live state repeated where the results END: the user reading down the list
               reaches the last scored account here, and needs to know more are still coming rather
@@ -842,8 +848,9 @@ function OmiScore({ score, tier }: { score: number; tier: Tier }) {
 }
 
 function AssessmentView(
-  { a, slug, onRetry, busy }:
-  { a: AnalystAssessment; slug: string; onRetry: () => void; busy: boolean },
+  { a, slug, onRetry, busy, platform }:
+  { a: AnalystAssessment; slug: string; onRetry: () => void; busy: boolean;
+    platform?: string | null },
 ) {
   // A batched run that is still going is NOT a failed run. `batching.complete === false` means more
   // batches are queued, and a later one can still land a model-backed result that makes the merged
@@ -878,6 +885,7 @@ function AssessmentView(
           items={a.commenter_assessments}
           completion={a.completion}
           running={stillBatching}
+          platform={platform}
           slug={slug}
         />
       </div>
@@ -952,7 +960,8 @@ function AssessmentView(
       </div>
 
       {/* ── PER-ACCOUNT ASSESSMENTS (one AI reading per commenter, over the ONE response) ── */}
-      <CommenterAssessments items={a.commenter_assessments} completion={a.completion} slug={slug} />
+      <CommenterAssessments items={a.commenter_assessments} completion={a.completion}
+                            platform={platform} slug={slug} />
 
       {/* ── DOMAIN REASONING (six views over the ONE comprehensive response) ── */}
       <DomainReasoning
@@ -1232,13 +1241,16 @@ function AccountMetadata({ r }: { r: CommenterAssessment }) {
 }
 
 function CommenterAssessments({
-  items, completion, running = false,
+  items, completion, running = false, platform,
 }: {
   items?: CommenterAssessment[];
   completion?: CompletionStatus;
   /** The run is still working. Suppresses the coverage banner: mid-run, "partial coverage" is not a
    *  finding, it is just "not finished yet", which the progress strip already says. */
   running?: boolean;
+  /** The investigation's platform, carried on the detail response. Decides which graphs an account
+   *  may join; see `lib/graph-membership`. */
+  platform?: string | null;
   slug: string;
 }) {
   const rows = items ?? [];
@@ -1276,6 +1288,16 @@ function CommenterAssessments({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-fg break-all">{r.handle ?? r.ref}</span>
                 {r.suspicion_tier && <TierBadge tier={r.suspicion_tier} size="sm" />}
+                {/* Beside the identity, because that is the moment the reader is deciding about
+                    THIS account. It renders nothing when the account has no external id or the
+                    investigation's platform is unknown, rather than offering an action that would
+                    silently store the account under the wrong platform. */}
+                <AddToGraph
+                  externalId={r.external_id}
+                  handle={r.handle}
+                  tier={r.suspicion_tier}
+                  platform={platform}
+                />
                 {typeof r.omi_score === 'number' && (
                   <span className="flex items-baseline gap-1 ml-auto" title="This account's OMI score (0-100).">
                     <span className="font-mono text-2xs uppercase tracking-wider text-fg-mute">OMI</span>

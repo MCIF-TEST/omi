@@ -144,7 +144,7 @@ export function GraphClient() {
         index={SECTION_INDEX['/graph']}
         eyebrow="Coordination · Network graphs"
         title="Network graphs"
-        lede="Build named graphs of commenter profiles. Omi automatically draws coordination edges between members based on cross-scan detection data. Add profiles from the commenter detail panel during an investigation."
+        lede="Build named graphs of commenter profiles. Omi automatically draws coordination edges between members based on cross-scan detection data. Add an account from the Graph button on any per-account read in an investigation, or from the account's own page."
         readout={
           <button
             type="button"
@@ -206,8 +206,10 @@ export function GraphClient() {
           </div>
           <div className="text-center">
             <p className="text-sm text-fg font-medium mb-1">No graphs yet</p>
-            <p className="text-xs text-fg-mute max-w-[32ch]">
-              Create a graph and add commenter profiles from the investigation panel.
+            <p className="text-xs text-fg-mute max-w-[34ch] leading-relaxed">
+              Open an investigation and press <span className="text-fg-dim">Graph</span> on any
+              account to put it in one. A graph only draws edges between accounts on its own
+              platform, so it is created to match the account you start from.
             </p>
           </div>
           <button

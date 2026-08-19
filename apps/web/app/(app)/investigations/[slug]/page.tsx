@@ -118,7 +118,8 @@ export default async function InvestigationPage({ params }: { params: { slug: st
       {/* Single governed AI surface: the Omi Analyst assessment is generated from the one
           model-backed inference per investigation. The former free-text commentary block
           (separate Anthropic/template path) is retired to keep one report from one inference. */}
-      <AnalystPanel slug={inv.slug} scanned={scanned} createdAt={inv.created_at} />
+      <AnalystPanel slug={inv.slug} scanned={scanned} createdAt={inv.created_at}
+                    platform={inv.platform} />
 
       <ShareBlock
         slug={inv.slug}

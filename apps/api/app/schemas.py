@@ -682,6 +682,11 @@ class InvestigationDetailResponse(BaseModel):
     label: str
     input_url: str
     kind: str
+    #: "x" | "youtube" | "unknown". Resolved by `_platform_of` from the denormalised column, never
+    #: from the payload. The page needs it to offer only the graphs an account can legally join: a
+    #: graph's members inherit ITS platform, and the coordination-edge query filters on that, so an
+    #: X account added to a YouTube graph is stored mislabelled and can never draw an edge.
+    platform: str = "unknown"
     overall_probability: float
     overall_tier: Tier
     summary: str
