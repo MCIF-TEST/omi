@@ -15,9 +15,12 @@ from datetime import datetime, timedelta, timezone
 
 from app.reasoning.grounding import (
     HARD,
+    SOFT,
     WITHHELD_NOTICE,
+    _sentence_shape,
     check_alias_in_prose,
     check_boilerplate,
+    check_closing_ask,
     check_coherence,
     check_figures,
     check_phrasing,
@@ -434,3 +437,221 @@ def test_an_unresolvable_account_alias_is_removed_rather_than_printed():
     from app.reasoning.grounding import resolve_aliases_in_prose
     out = resolve_aliases_in_prose("The pattern centres on A77 and A78.", {})
     assert "A77" not in out and "A78" not in out
+
+
+# ==================================================================================================
+# Cross-account contamination, the half that was reaching the page
+# ==================================================================================================
+# Found 2026-08-19 in a live export. `jamesthatcher_` is a 2023 account with 322 followers and 349
+# following, and the product published this about them:
+#
+#   "A long-running account (2009) with 337 followers and 2,263 following and fifty sampled posts"
+#
+# Every one of those figures belongs to `unique59`, four rows away in the same batch. Two holes let
+# it through, and both are about the FORM the model writes a figure in rather than about the check
+# being absent:
+#
+#   * `_FOLLOWING_RE` matched only the verb-first order ("follows 2,263"). The number-first order
+#     ("2,263 following") is what the model actually writes, on most rows, and was unchecked.
+#   * No creation-date check existed in any form the model writes. "N years old" was checked;
+#     "(created 2023-07-04)", "A 2009 account" and "account (2009)" were not, and those are the
+#     forms the protocol's own opening-sentence rule produces.
+#
+# Every case in the CLEAN half below is a sentence the protocol asks for. That is the standard for
+# adding to this file: a HARD rule that fires on prose the constitution demands is the rule being
+# wrong, not the model.
+_CONTAMINATED = {
+    "handle": "jamesthatcher_", "follower_count": 322, "following_count": 349,
+    "account_created_at": "2023-07-04T00:28:48Z", "history_size": 50, "recent_activity": [],
+}
+
+
+def _codes(text, account=_CONTAMINATED):
+    return [v.code for v in check_figures(text, account)]
+
+
+def test_the_live_contamination_is_caught_on_both_figures():
+    served = ("A long-running account (2009) with 337 followers and 2,263 following and fifty "
+              "sampled posts of opinion and retweets.")
+    details = [v.detail for v in check_figures(served, _CONTAMINATED)]
+    assert any("following" in d for d in details), f"following count not checked: {details}"
+    assert any("2009" in d for d in details), f"creation year not checked: {details}"
+    assert all(v.severity == HARD for v in check_figures(served, _CONTAMINATED))
+
+
+class TestAFollowingCountIsCheckedInBothWordOrders:
+    def test_number_first_is_checked(self):
+        assert _codes("2,263 following") == ["figure_mismatch"]
+
+    def test_verb_first_is_still_checked(self):
+        assert _codes("follows 2,263 accounts") == ["figure_mismatch"]
+
+    def test_the_true_number_passes_in_both_orders(self):
+        assert _codes("322 followers and 349 following") == []
+        assert _codes("follows 349 accounts while 322 follow back") == []
+
+    def test_a_follower_count_is_not_read_as_a_following_count(self):
+        """The trailing guard on the verb form. Without it `follows?` matches inside "followers"
+        and every clean paragraph in this file failed."""
+        assert _codes("322 followers") == []
+
+
+class TestTheCreationDateIsChecked:
+    def test_a_wrong_iso_date_is_caught(self):
+        assert _codes("This account (created 2009-05-11) posts daily.") == ["figure_mismatch"]
+
+    def test_the_right_iso_date_passes(self):
+        assert _codes("This account (created 2023-07-04) posts daily.") == []
+
+    def test_a_wrong_bare_year_is_caught(self):
+        assert _codes("A 2009 account with a long history.") == ["figure_mismatch"]
+        assert _codes("A long-running account (2009) with a personal voice.") == ["figure_mismatch"]
+
+    def test_the_right_bare_year_passes(self):
+        """A bare year is held only to the year. "A 2023 account" is a true statement about anything
+        created in 2023, and demanding the day would withhold prose the protocol never forbade."""
+        assert _codes("A 2023 account with a long history.") == []
+
+    def test_one_wrong_date_is_reported_once(self):
+        """A full date already reported must not also be reported as a bare year: one wrong date is
+        one error, and a doubled violation reads to an operator as two separate faults."""
+        assert len(_codes("This account (created 2009-05-11) is old.")) == 1
+
+    def test_a_year_that_is_not_about_the_account_is_left_alone(self):
+        """Years appear constantly in quoted posts and in topics. Only a year adjacent to a creation
+        word or to the word "account" is a claim about the profile."""
+        for ordinary in ("the 2020 election was contested",
+                         "posts about the 2016 primaries",
+                         'wrote "I have said this since 2011"',
+                         "commentary on the 1776 project"):
+            assert _codes(ordinary) == [], ordinary
+
+    def test_an_account_with_no_creation_date_is_not_guessed_at(self):
+        blank = {**_CONTAMINATED, "account_created_at": None}
+        assert _codes("A 2009 account.", blank) == []
+
+
+# ==================================================================================================
+# The opening and closing sentences are counted separately from the paragraph
+# ==================================================================================================
+# Whole-paragraph Jaccard never fired on the live runs, and could not: twenty-five verdicts shared
+# one opening skeleton and one closing sentence while their middles differed enough to stay far
+# under the threshold.
+#
+# v12 banned "collecting more posts would increase confidence" as a closer. The model complied and
+# built a replacement, which then closed the majority of every run: "the one observation that would
+# most change this read is finding identical templated text repeated across its own posts." Banning
+# a sentence teaches substitution. Counting SHAPES measures the thing that is actually wrong.
+#
+# SOFT throughout. A repeated opener is a writing failure, not a false claim, and withholding a true
+# paragraph over a stylistic tic is the trade this file has already paid for four times.
+def _batch_with_shared_skeleton(n=5):
+    mids = ["It posts about football and local news most days.",
+            "Its timeline is mostly reposts of political commentary with a few originals.",
+            "The account writes long threads about marine biology and shares photographs.",
+            "Replies dominate, mostly short reactions to sports results and weather.",
+            "It shares recipes, family photographs and occasional book recommendations."]
+    return {
+        f"A{i + 1}": (
+            f"This account (created 20{11 + i}-04-0{1 + i % 9}) has {100 * i + 7} followers and "
+            f"follows {90 * i + 3}. {mids[i % len(mids)]} The one observation that would most "
+            "change this read is finding identical templated text repeated across its own posts."
+        )
+        for i in range(n)
+    }
+
+
+def test_a_shared_opening_skeleton_is_reported():
+    out = check_boilerplate(_batch_with_shared_skeleton())
+    assert all(any(v.code == "repeated_opening" for v in vs) for vs in out.values())
+
+
+def test_a_shared_closing_sentence_is_reported():
+    out = check_boilerplate(_batch_with_shared_skeleton())
+    assert all(any(v.code == "repeated_closing" for v in vs) for vs in out.values())
+
+
+def test_the_repetition_report_is_soft_and_never_withholds():
+    """A repeated opener is a writing failure, not a false claim about a person."""
+    out = check_boilerplate(_batch_with_shared_skeleton())
+    assert all(v.severity == SOFT for vs in out.values() for v in vs)
+
+
+def test_the_shape_ignores_the_numbers_that_differ():
+    """Two sentences are one template when they differ only in the figures filled into them, and no
+    word-level comparison catches that because nearly every word already matches."""
+    a = "This account (created 2019-04-02) has 400 followers and follows 900."
+    b = "This account (created 2023-11-18) has 51 followers and follows 2,204."
+    assert _sentence_shape(a) == _sentence_shape(b)
+
+
+def test_genuinely_varied_verdicts_are_left_alone():
+    varied = {
+        "A1": ("Fourteen years of continuous posting, 3,512 followers against 4,696 following, and "
+               "no posts between 02:00 and 09:00 on any day in the sample."),
+        "A2": ("The timeline opens in 2019 and runs unbroken to last week, mostly reposts of county "
+               "cricket results. Nothing in it is written twice."),
+        "A3": ('Wrote "the ferry was late again and I have opinions" on 4 March, one of nine posts '
+               "that read as one continuing complaint about the same commute."),
+        "A4": ("A ratio of 51 followers to 2,204 following is the only thing here that stands out, "
+               "and following widely is how many people build a feed."),
+        "A5": ("Its posts are photographs of allotments, captioned in Welsh, spread across six "
+               "growing seasons."),
+    }
+    assert all(vs == [] for vs in check_boilerplate(varied).values())
+
+
+def test_a_couple_of_accounts_sharing_a_shape_is_not_a_template():
+    """Some convergence is natural when every account is described from the same fields. The rule
+    is aimed at the runs where it was nearly all of them, not at two."""
+    batch = _batch_with_shared_skeleton(2)
+    batch["A3"] = "Its posts are photographs of allotments, captioned in Welsh, over six seasons."
+    batch["A4"] = "The timeline opens in 2019 and runs unbroken, mostly county cricket results."
+    batch["A5"] = "Wrote \"the ferry was late again\" on 4 March, one of nine such complaints."
+    assert all(not any(v.code.startswith("repeated_") for v in vs)
+               for vs in check_boilerplate(batch).values())
+
+
+# ==================================================================================================
+# The closing sentence must not ask the reader for more data
+# ==================================================================================================
+# The constitution bans this by name and it is still being written verbatim. "More posts would be
+# needed to change the read" shipped in a live export and is almost word for word one of the three
+# strings the rule lists. The batch-level shape check cannot see a dozen scattered leaks, because it
+# only fires when a third of the batch shares one shape, so this reads one paragraph's last sentence.
+#
+# SOFT, like every other writing rule in this file: ending badly is not a false claim about a person.
+def test_the_banned_closer_is_reported():
+    for closer in ("More posts would be needed to change the read.",
+                   "Collecting more of its replies for patterning would increase confidence.",
+                   "A larger recent post sample would raise confidence.",
+                   "Gathering even a handful of its own posts would enable a real read."):
+        assert [v.code for v in check_closing_ask(closer)] == ["closing_ask_for_data"], closer
+
+
+def test_it_is_soft_and_never_withholds():
+    v = check_closing_ask("More posts would increase confidence.")
+    assert all(x.severity == SOFT for x in v)
+
+
+def test_the_sentence_the_protocol_requires_is_not_flagged():
+    """At 50 and above the assessment MUST name what would overturn the read. That sentence is
+    shaped like a request for more data and is the opposite of one, so a rule that caught it would
+    fire on prose the constitution demands."""
+    assert check_closing_ask(
+        "Finding the same sentence on two of its own posts would overturn this.") == []
+    assert check_closing_ask(
+        "Finding that the replies answer what they are under would bring it down.") == []
+
+
+def test_a_hedge_inside_the_sentence_is_not_a_closing_ask():
+    """The constitution requires thin evidence to be admitted INSIDE the sentence carrying the fact.
+    That is the correct form and must survive."""
+    assert check_closing_ask(
+        "On the four posts collected, the read is weak, and it still says nothing about itself.") == []
+
+
+def test_only_the_last_sentence_counts():
+    """A mid-paragraph mention of the sample is fine. It is the closing line that a reader remembers."""
+    assert check_closing_ask(
+        "More posts would help here. But the account follows 7,420 while 2,281 follow back.") == []

@@ -57,16 +57,26 @@ class TestATrueFloorIsUnchanged:
         c = verify_completion(
             model_backed=False, finish_reason="stop", represented_commenters=25,
             assessed_commenters=0, omitted_input_commenters=0, salvaged_reads=False)
-        assert "was not produced" in c.reason.lower()
+        assert "could not be produced" in c.reason.lower()
         assert c.estimated_remaining_commenters == 25
         assert c.complete is False
+        # The structural signature of this branch, which is what the UI actually keys on. Asserted
+        # alongside the sentence because the sentence is customer copy and may be reworded: the
+        # branch firing is the behaviour, its wording is not.
+        assert c.incomplete_kind is None
 
     def test_salvage_defaults_off(self):
-        """Every existing caller keeps the old behaviour without being edited."""
+        """Every existing caller keyed on the sentence naming the deterministic Floor, which was
+        operator vocabulary on a customer's page and is gone. The branch is identified by its
+        structure instead: not certified, no coverage claimed, and the whole batch still owed."""
         c = verify_completion(
             model_backed=False, finish_reason="stop", represented_commenters=4,
             assessed_commenters=0, omitted_input_commenters=0)
-        assert "deterministic floor" in c.reason.lower()
+        assert c.incomplete_kind is None
+        assert c.complete is False
+        assert c.estimated_remaining_commenters == 4
+        assert "deterministic floor" not in c.reason.lower(), (
+            "the customer-facing reason must not name our own internals")
 
 
 class TestAHealthyRunIsUnchanged:
@@ -126,3 +136,63 @@ class TestTheMergedReasonNeverContradictsTheHeading:
         c = self._merged(parts, 4)
         assert c["complete"] is True
         assert "Complete" in c["reason"]
+
+
+# ==================================================================================================
+# The box is read by a customer, not by us
+# ==================================================================================================
+# Reported 2026-08-19 looking at a live scan: "it shouldn't say the token budget, this is a consumer
+# app not just for me." The line was `12,592/50,000 out tokens · stop: stop`, and the sentences
+# beside it were the same defect: "deterministic Floor", "output-token ceiling", "a single
+# inference", "schema / Governor / JSON completeness", "citable". Every one names our own
+# infrastructure on the page a customer reads about their own scan. None answers a question they
+# have, and "tokens" invites one they should never have to ask, since they are charged in credits
+# per 50 accounts and never in tokens.
+#
+# `incomplete_kind` is the machine-readable half and is deliberately not covered here: code and
+# operators key on it, and it is meant to be our vocabulary.
+_OPERATOR_WORDS = (
+    "deterministic floor", "token", "inference", "schema", "governor", "json", "citable",
+    "upstream", "generation reached",
+)
+
+
+def _every_reason() -> list[str]:
+    """One reason from each branch of `verify_completion`."""
+    common = dict(finish_reason="stop", omitted_input_commenters=0)
+    return [
+        # Floor
+        verify_completion(model_backed=False, represented_commenters=25, assessed_commenters=0,
+                          **common).reason,
+        # Salvage
+        verify_completion(model_backed=False, represented_commenters=25, assessed_commenters=25,
+                          salvaged_reads=True, **common).reason,
+        # Truncated
+        verify_completion(model_backed=True, represented_commenters=25, assessed_commenters=20,
+                          finish_reason="length", omitted_input_commenters=0).reason,
+        # Missing assessments
+        verify_completion(model_backed=True, represented_commenters=25, assessed_commenters=20,
+                          **common).reason,
+        # Omitted input
+        verify_completion(model_backed=True, finish_reason="stop", represented_commenters=25,
+                          assessed_commenters=25, omitted_input_commenters=3).reason,
+        # Complete
+        verify_completion(model_backed=True, represented_commenters=25, assessed_commenters=25,
+                          **common).reason,
+        # Model-backed but not certified
+        verify_completion(model_backed=True, represented_commenters=25, assessed_commenters=25,
+                          json_received=False, **common).reason,
+    ]
+
+
+def test_no_completion_reason_speaks_in_our_vocabulary():
+    for reason in _every_reason():
+        low = reason.lower()
+        for word in _OPERATOR_WORDS:
+            assert word not in low, f"operator vocabulary {word!r} in a customer sentence: {reason}"
+
+
+def test_every_branch_still_says_something():
+    """A guard that only forbids words would pass on an empty string."""
+    for reason in _every_reason():
+        assert len(reason.split()) >= 6, f"reason too thin to be useful: {reason!r}"

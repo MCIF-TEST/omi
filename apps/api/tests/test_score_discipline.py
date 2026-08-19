@@ -88,13 +88,71 @@ def test_ambient_traits_cannot_reach_the_high_bands(protocol):
 
 
 def test_the_discriminative_evidence_is_defined_separately(protocol):
-    """The counterpart to the ambient list: what genuinely is hard to explain innocently."""
-    assert "WHAT IS ACTUALLY DISCRIMINATIVE" in protocol
-    for tell in ("near-verbatim text reused across this account's OWN posts",
-                 "a scheduler is a better explanation than a person",
-                 "no topical continuity",
-                 "follow-for-follow, link in bio, DM to earn"):
-        assert tell in protocol
+    """The counterpart to the ambient list: what genuinely is hard to explain innocently.
+
+    This used to assert on a "WHAT IS ACTUALLY DISCRIMINATIVE" bullet that has been removed. It was
+    a near-restatement of the mechanical gate sitting a few hundred words below it, and duplication
+    is what this document keeps paying for: the model read the two lists as one and applied the 75+
+    gate at the 50 boundary, which is why four consecutive live runs returned nothing above 49.
+
+    The counterpart the ambient list needs is now the ELEVATED band's own list, which is a different
+    and lower bar than the gate on purpose. What matters is that BOTH still exist and stay distinct,
+    so this asserts the two are separately reachable and that the gate no longer stands alone.
+    """
+    assert "THE 50 TO 74 INDICATORS" in protocol
+    assert "THE MECHANICAL GATE" in protocol
+    assert "THIS GATE GOVERNS 75 AND ABOVE. IT IS NOT THE TEST FOR 50." in protocol
+    for indicator in ("NON-RECIPROCAL FOLLOWER ACQUISITION",
+                      "INTERCHANGEABLE ENGAGEMENT AT VOLUME",
+                      "PROMOTION AS THE DOMINANT MODE",
+                      "AN ABRUPT HISTORY",
+                      "A PROFILE THAT ARGUES WITH ITSELF"):
+        assert indicator in protocol, indicator
+    # The gate keeps its own tells, which are the strong forms and are NOT the list above.
+    for tell in ("the same or near-identical text on two or more of this account's OWN posts",
+                 "a posting rhythm a person does not produce",
+                 "as an AI language model"):
+        assert tell in protocol, tell
+
+
+def test_the_elevated_band_does_not_require_a_mechanical_tell(protocol):
+    """The single change with the largest expected effect, and the one most easily undone.
+
+    Four live investigations, roughly 400 accounts, produced exactly ONE score at 50 or above and
+    none at 75. The model was enforcing the mechanical gate at the 50 boundary and saying so in its
+    own prose ("would rise into elevated territory"), because the gate was ~700 words with seven
+    lettered items while the 50-74 rule was one clause pointing at nothing.
+    """
+    assert "You do NOT need a" in protocol and "mechanical tell to reach this band" in protocol
+    assert "would raise this to elevated" not in protocol.split("THE 50 TO 74 INDICATORS")[0]
+
+
+def test_the_distribution_check_runs_in_both_directions(protocol):
+    """It only ever pushed down. A run that found nothing anywhere triggered no check at all, while
+    every tiebreaker in the block ("take the lower", "never round up") points the same way."""
+    assert "IN BOTH DIRECTIONS" in protocol
+    assert "TOO FEW IS ALSO WRONG" in protocol
+    assert "TOO MANY IS WRONG" in protocol
+    # The floor must not become a quota. Inventing a finding to fill it is the failure it replaces.
+    assert "Do not invent an indicator to fill the quota" in protocol
+
+
+def test_a_profile_with_no_posts_can_still_be_read_when_the_numbers_are_the_evidence(protocol):
+    """The zero-post ceiling was absolute ("always, whatever the follower counts look like"), which
+    was right about behaviour and wrong about arithmetic: 348 followers against 2 following on a
+    36-day-old account is computed from two counts, not inferred from what the account does."""
+    assert "THE ONE EXCEPTION" in protocol
+    assert "the ceiling is 49, not 20" in protocol
+    # And it must stay bounded: the original bug was two identical states scoring 30 points apart.
+    assert "It may never go above 49 on profile numbers alone" in protocol
+    assert "two accounts in the same state still come out the same" in protocol
+
+
+def test_a_large_audience_is_not_read_as_exculpatory(protocol):
+    """A live verdict used 18,742 followers as a reason to score LOW ("the large audience weigh
+    toward a genuine influencer"). Followers are the commodity being bought and sold here."""
+    assert "A LARGE AUDIENCE IS EVIDENCE IN NEITHER DIRECTION" in protocol
+    assert "NOT A REASON TO LOWER ONE" in protocol
 
 
 def test_the_bands_require_converging_independent_evidence(protocol):
@@ -179,8 +237,16 @@ def test_the_rhythm_tell_carries_a_method_and_not_just_a_name(protocol):
     """The bundle has always shipped a created_at per post and the protocol never said to read it,
     so 'scheduler-regular' was a vibe the model could assert without arithmetic. The tell now names
     what to compute and what a human pattern looks like, so it can be checked by a reader."""
-    assert "WORK IT OUT from the" in protocol and "created_at" in protocol
-    assert "no multi-hour quiet period" in protocol
+    # The method changed from "you do the arithmetic" to "read the arithmetic we did", because across
+    # four live investigations the model never once did it: eleven rhythm claims, zero figures, and
+    # every one of them exculpatory. The tell still carries a method; the method is now four named
+    # columns it must quote rather than an instruction to compute that was ignored three times over.
+    assert "post_gap_median_min" in protocol and "post_gap_stdev_min" in protocol
+    assert "longest_daily_quiet_min" in protocol and "distinct_post_hours" in protocol
+    assert "Quote the figures" in protocol
+    # The "nothing that sleeps" shape must still travel with the scheduler shape: they are two
+    # different machines and only one of them has a regular interval.
+    assert "nothing that sleeps" in protocol or "because people sleep" in protocol
     # The human inverse has to travel with it or the method just manufactures a new false positive.
     assert "posting at similar times each day is a routine" in protocol
 
@@ -395,7 +461,10 @@ def test_every_account_in_the_example_carries_all_eight_signals():
     rows = obj["commenter_assessments"]
     # Four now: a genuine account, a promotional shell, an account with no collected history, and a
     # heavy reposter. The last two exist because both were being scored wrongly in production.
-    assert len(rows) == 4
+    # Five, since v14 added the elevated worked account. Before it, the only non-low example in the
+    # entire protocol was an 82 resting on leaked machine boilerplate, so the model had never been
+    # shown what an ordinary elevated account looks like and the 50-74 band had no picture at all.
+    assert len(rows) == 5
     for row in rows:
         assert len(row["signals"]) == 8, f"{row['ref']} does not show all eight"
         assert isinstance(row["confidence"], int)
@@ -637,3 +706,99 @@ def test_the_reader_facing_rules_do_not_touch_the_score(protocol):
     assert "START FROM THE BASE RATE" in protocol
     assert "AMBIENT TRAITS ARE NOT TELLS" in protocol
     assert "THE TWO ERRORS ARE NOT EQUAL" in protocol
+
+
+
+# ==================================================================================================
+# The verdict must not converge on one sentence
+# ==================================================================================================
+def test_banning_one_closer_is_replaced_by_a_structural_rule(protocol):
+    """v12 banned "collecting more posts would increase confidence" as a closer. The model complied
+    and built a replacement that then closed the majority of every run, near word for word. Banning
+    a sentence teaches substitution, so the rule is now about repetition itself."""
+    assert "DO NOT REPLACE IT WITH A DIFFERENT STOCK CLOSER" in protocol
+    assert "THE RULE IS STRUCTURAL, NOT A WORD LIST" in protocol
+    # The old ban stays: it is still the worst individual closer.
+    assert "NEVER CLOSE ON A REQUEST FOR MORE DATA" in protocol
+
+
+def test_the_opening_rule_names_the_sentence_that_keeps_breaking_it(protocol):
+    """A generic instruction not to repeat yourself has been in this document since v12 and did not
+    land. The failing form is named exactly, and the model is told its output is checked."""
+    assert "NO TWO ACCOUNTS IN A BATCH OPEN THE SAME WAY" in protocol
+    assert "YOUR OWN OUTPUT IS CHECKED FOR THIS" in protocol
+
+
+def test_the_reader_facing_rules_still_do_not_touch_the_score(protocol):
+    """The v12 guarantee, re-asserted after this pass. Everything above changes how a verdict READS
+    and what evidence reaches the ELEVATED band; none of it relaxes the discipline that keeps a real
+    person from being called bought."""
+    assert "may NEVER take an account above the moderate band" in protocol
+    assert "THE TWO ERRORS ARE NOT EQUAL" in protocol
+    assert "A MOSTLY-REPOST TIMELINE IS NOT A FINDING" in protocol
+    assert "NOTHING REACHES 75 WITHOUT ONE" in protocol
+    assert "RUN THE ALTERNATIVE-EXPLANATION TEST BEFORE ANY SCORE OF 50 OR MORE" in protocol
+
+
+# ==================================================================================================
+# v14: the arithmetic reason nothing scored above 49
+# ==================================================================================================
+# Across investigations 2 to 4, six dimension scores out of roughly 1,200 reached 50. Five of those
+# six belonged to two accounts and exactly ONE account had two. Dossier Loop 3c permits a score of 50
+# only where two dimensions are substantially elevated, so that one account was also the only account
+# in four investigations scoring above 49. The band rules were never the binding constraint; the
+# dimension scale was, and it was never anchored.
+def test_the_dimension_scale_is_anchored_to_a_number(protocol):
+    """3c gates every score on "substantially elevated" and the phrase was defined nowhere in
+    112,000 characters. The model was asked to enforce a threshold it was never given."""
+    assert "USE THE WHOLE SCALE" in protocol
+    assert "50-74 IS SUBSTANTIALLY ELEVATED" in protocol
+    assert "meaning 50 or above on the scale the EIGHT DIMENSIONS block defines" in protocol
+
+
+def test_the_coherence_check_runs_in_both_directions(protocol):
+    """It only ever caught a score that was too high for its dimensions. A score too LOW for its
+    dimensions is the failure that actually happened."""
+    assert "the SCORE is the thing that does not follow" in protocol
+
+
+def test_the_profile_dimension_sees_both_shapes_of_imbalance(protocol):
+    """Measured: the dimension fired at 45-65 on following-heavy accounts and sat at 10-22 on
+    follower-heavy ones at far more extreme ratios. 348 followers against 2 following scored 18."""
+    assert "RUNS IN BOTH DIRECTIONS" in protocol
+    assert "ACQUIRED-AUDIENCE" in protocol
+    assert "348 followers against 2" in protocol
+
+
+def test_ai_writing_null_is_the_default_not_a_permission(protocol):
+    """The rule said "almost always null" and the model returned 0 or 10 on essentially every row.
+    Zero claims the writing was examined and found human, which is a claim style cannot support."""
+    assert "THE DEFAULT VALUE OF THIS DIMENSION IS null" in protocol
+    assert "Do not substitute a small number such as 0 or 10" in protocol
+
+
+def test_the_example_teaches_the_elevated_band(protocol):
+    """Models copy examples over rules. The only non-low example was an 82 resting on leaked machine
+    boilerplate, so the 50-74 band had no picture anywhere in the document."""
+    import json
+    obj = json.loads(protocol[protocol.rfind('{"omi_score"'):])
+    rows = obj["commenter_assessments"]
+    elevated = [r for r in rows if 50 <= r["omi_score"] <= 74]
+    assert len(elevated) == 1, "the elevated band needs exactly one worked account"
+    a = elevated[0]
+    assert a["suspicion_tier"] == "elevated"
+    # It must be reachable WITHOUT a mechanical tell, or it teaches the gate again.
+    hi = [s["name"] for s in a["signals"]
+          if isinstance(s.get("score"), int) and s["score"] >= 50]
+    assert len(hi) >= 2, "3c needs two elevated dimensions and the example must demonstrate that"
+    assert "semantic" not in hi and "temporal" not in hi, (
+        "the elevated example must not rest on a mechanical tell, or it teaches the 75+ gate")
+
+
+def test_the_example_does_not_demonstrate_a_sentence_the_constitution_bans(protocol):
+    """It used to close on "Findings are probabilistic; the human analyst sets the verdict", which
+    _FINISHED_VERDICT forbids by name. A rule competing with a demonstration of itself loses."""
+    example = protocol[protocol.rfind("EXAMPLE of a valid output object"):]
+    body = example[:example.rfind('"limits_statement"')]
+    assert "Findings are probabilistic" not in body
+    assert "the human analyst sets the verdict" not in body

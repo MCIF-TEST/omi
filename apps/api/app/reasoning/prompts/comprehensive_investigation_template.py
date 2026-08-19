@@ -345,7 +345,8 @@ _OUTPUT_EXAMPLE = (
     "normal balance of followers and a varied posting history. A3 had no posts collected at all, so it "
     "is scored low with low confidence and nothing is read into the gap. A4 reposts almost everything "
     "it shares and writes little of its own, which is an ordinary way to use the platform rather than a "
-    'finding. Findings are probabilistic; the human analyst sets the verdict.", '
+    'finding. A5 is the one that needs a second look: an audience that outran its own replies, and '
+    'fifty comments that would fit under anybody else\'s post.", '
     '"evidence_for": [{"signal": "amplifier_profile", "claim": "A2 is brand-new, follows thousands while '
     'almost no one follows it back, and has no real posting history.", "evidence_refs": ["A2"], '
     '"direction": "raises", "impact": 0.6}], '
@@ -445,7 +446,30 @@ _OUTPUT_EXAMPLE = (
     "08:00 on any day, which is a person who sleeps rather than a scheduler that does not. With no "
     "pitch and no repeated template either, the narrow subject and the thin original writing are "
     "describing a habit rather than a machine.\", "
-    '"citations": ["A4"]}]}'
+    '"citations": ["A4"]}, {"ref": "A5", "omi_score": 61, "suspicion_tier": "elevated", '
+    '"confidence": 72, "signals": [{"name": "temporal", "score": 20, "reason": "Gaps run from 6 '
+    'minutes to 14 hours with nothing between 03:00 and 09:00, which is a person sleeping."}, '
+    '{"name": "semantic", "score": 35, "reason": "The replies share a shape but no two are word for '
+    'word the same, so there is no template to quote."}, {"name": "ai_writing", "score": null, '
+    '"reason": "No machine boilerplate in any collected post."}, {"name": "profile", "score": 62, '
+    '"reason": "Follows 7,420 while 2,281 follow back, on an account 255 days old."}, '
+    '{"name": "voice", "score": 55, "reason": "Across fifty replies it says nothing about its own '
+    'life, work or place."}, {"name": "engagement", "score": 58, "reason": "Every collected post is '
+    'a short reply under someone else, at volume."}, {"name": "account_maturity", "score": 45, '
+    '"reason": "An audience of 2,281 built in 255 days with no original posting behind it."}, '
+    '{"name": "history_authenticity", "score": 30, "reason": "Continuous, but consisting entirely of '
+    'one activity."}], "assessment": "Fifty collected posts are all short replies under other '
+    'people, and they are interchangeable rather than repeated: \\"This is a key issue. I would love '
+    'to hear your thoughts.\\" would sit unchanged under almost any of them, and no two are word for '
+    'word the same. It follows 7,420 accounts while 2,281 follow back, on a profile created 255 days '
+    'before this post, so the audience arrived faster than these replies could have earned it. '
+    'Either fact alone would be weak, and a genuinely enthusiastic commenter really does reply '
+    'constantly to people they like. What the two together do not explain is the absence of anything '
+    'specific: across fifty replies there is no job, no place, and no opinion argued in its own '
+    'words. Nothing is repeated verbatim and the gaps between posts scatter normally, which is why '
+    'this sits in the elevated band and not higher. Finding that the replies answer what they are '
+    'under, rather than being portable between threads, would bring it down.", '
+    '"citations": ["A5"]}]}'
 )
 
 
@@ -611,12 +635,18 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "THE METHOD, THE DOSSIER LOOP (mandatory; this is how the mission is executed). Work the accounts "
     "strictly ONE AT A TIME, in alias order. A1, then A2, … through the LAST row of the Accounts "
     "table. For the current account, and it alone: (1) EXTRACT its own cells. Derive its age by "
-    "comparing account_created_at to the post times, read its follower_count and following_count, its "
-    "post_count, and what its sampled posts and its comment(s) on this post actually say (a null cell "
-    "means 'not collected', never zero). Also READ THE TIMESTAMPS, which most readings of this "
-    "evidence skip: walk the created_at column of its own posts, note the gaps between consecutive "
-    "posts, and note the longest quiet period in a day. That is where a scheduler shows up and where "
-    "an ordinary human sleep gap shows up, and neither is visible from the post text; "
+    "comparing account_created_at to the post times, read its follower_count and following_count "
+    "AGAINST EACH OTHER IN BOTH DIRECTIONS, its post_count, ITS BIO AND ITS VERIFIED FLAG, and "
+    "what its sampled posts and its comment(s) on this post actually say (a null cell means "
+    "'not collected', never zero, and an EMPTY bio is a different fact from a missing one). The "
+    "bio is the cell most often skipped and it is the only one that can contradict the rest of "
+    "the row, which is a finding on its own. Then READ THE MEASURED TIMING COLUMNS, which are "
+    "supplied on the row and are the ones most often ignored: post_gap_median_min, "
+    "post_gap_stdev_min, longest_daily_quiet_min, distinct_post_hours. A scheduler and a human "
+    "sleep pattern both live in those four numbers and neither is visible from the post text. "
+    "They are already computed, so there is no arithmetic to do and no excuse for describing a "
+    "rhythm without citing one of them; when they are null, fewer than ten timestamps were "
+    "collected and there is no rhythm to read; "
     "(2) MATCH those facts against the tells, sorting what you "
     "found into DISCRIMINATIVE evidence and AMBIENT traits exactly as the constitution's SCORE "
     "DISCIPLINE block defines them. DISCRIMINATIVE is behaviour a person does not produce by accident: "
@@ -652,7 +682,11 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "overall, low when the signal list is null-heavy; "
     "(3c) CHECK YOUR OWN COHERENCE before moving on. The omi_score must be explainable by the eight "
     "you just wrote: if the score is 50 or more, at least two dimensions must be substantially "
-    "elevated, and if it is 75 or more, several must be, each on a different kind of evidence. "
+    "elevated, meaning 50 or above on the scale the EIGHT DIMENSIONS block defines, and if it is "
+    "75 or more, several must be, each on a different kind of evidence. This check runs in both "
+    "directions: if you have written two dimensions at 50 or above and then scored the account "
+    "in the twenties, the SCORE is the thing that does not follow, and you should re-read it "
+    "before moving on. "
     "ai_writing does NOT count toward either of those, ever: judging authorship from writing style is "
     "measurably unreliable, so it may accompany a finding and can never be one of the dimensions that "
     "licenses it. If the "
@@ -660,9 +694,13 @@ COMPREHENSIVE_INVESTIGATION_SYSTEM_TASK = (
     "against the confusable shapes: a business, a fan account, a news feed, a new user, a returning "
     "user, a small private account, someone writing in a second language. If the account fits one, "
     "name that in the assessment and score the behaviour rather than the resemblance; "
-    "(4) WRITE its plain-English reason as 4 to 7 full sentences. This is what the customer reads "
-    "and the schema enforces a floor on it, so a one-line verdict is a failed answer: three "
-    "sentences cannot carry a figure, a quote, both explanations and a limit. Lead with the single "
+    "(4) WRITE its plain-English reason. THE LENGTH IS NOT THE RULE, THE CONTENTS ARE, and the "
+    "count is only a consequence of them: a paragraph carries (i) at least one computed figure "
+    "from this account's own row, (ii) something it actually wrote, quoted or closely described, "
+    "(iii) the innocent explanation and whether the evidence fits it, and (iv) at 50 or above, "
+    "what would overturn the read. Four things do not fit in two sentences, which is why this "
+    "lands at 4 to 7. Verdicts of two and three sentences have shipped and every one of them was "
+    "missing item (ii) or (iii): count the four before you count the sentences. Lead with the single "
     "most checkable concrete "
     "fact, state computed figures rather than impressions of them (the following-to-followers ratio as "
     "a number, the age in days or years), put any claim about what it wrote in a SHORT verbatim quote, "

@@ -478,6 +478,47 @@ def _salvaged_account_reads(raw_obj: dict | None, legend, payload: dict, *,
     return rows if any(r.get("resolved") for r in rows) else []
 
 
+def _dedupe_account_reads(rows: list[dict], accounts: dict, legend) -> list[dict]:
+    """One account, one published verdict. Keeps the FIRST row for each account and drops the rest.
+
+    Observed live on a 100-account scan: the page read "PER-ACCOUNT ASSESSMENTS · 103" and "PARTIAL
+    AI COVERAGE · 103 OF 100 COMMENTERS". `assessed_commenters` counts rows that RESOLVED to a real
+    account, so 103 of 100 does not mean three strangers were invented, it means three accounts were
+    each written up twice. Both rows render, and this product publishes scored claims about named
+    real people: two paragraphs about one person, reached independently and free to disagree on the
+    score, the tier and the evidence, is worse than either of them alone. A reader cannot tell which
+    one we stand behind, and neither can we.
+
+    Keeping the first is not arbitrary. The output contract asks for the accounts in the order of the
+    alias legend, so the first mention is the one the model wrote in its intended sweep and the later
+    one is the slip.
+
+    The key is the account's own identity, never the alias. Aliases are assigned PER BATCH
+    (`build_alias_legend` numbers A1..An within one package), so A1 exists in every batch and means a
+    different person in each. Deduplicating on the alias would silently delete three quarters of a
+    four-batch run. A row that resolved to nobody has no identity to key on, so it falls back to its
+    alias and is only ever compared against rows in its own batch, which is the same list.
+    """
+    seen: set = set()
+    kept: list[dict] = []
+    dropped = 0
+    for row in rows:
+        alias = row.get("ref")
+        author_ref = accounts.get(alias) or (legend.resolve(alias) if alias else None)
+        key = ("ref", author_ref) if author_ref else ("alias", alias)
+        if key in seen:
+            dropped += 1
+            logger.warning("analyst: dropped a duplicate per-account read for %s (alias=%s)",
+                           author_ref or "an unresolved alias", alias)
+            continue
+        seen.add(key)
+        kept.append(row)
+    if dropped:
+        logger.warning("analyst: %d duplicate per-account read(s) dropped from a batch of %d",
+                       dropped, len(rows))
+    return kept
+
+
 def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> list[dict]:
     """Join each model-authored per-account assessment (keyed by alias) with the account's real identity.
     AI-first: the per-account OMI score + tier are the MODEL'S (it reasons them from that account's raw
@@ -547,6 +588,8 @@ def _join_commenter_assessments(raw_obj: dict | None, legend, payload: dict) -> 
             if _eng is not None:
                 row["engine_probability"] = _eng
         joined.append(row)
+
+    joined = _dedupe_account_reads(joined, accounts, legend)
 
     # Deterministic grounding pass. This is the ONLY thing inspecting the sentences that get
     # screenshotted: the Governor's S9 lint does not see `commenter_assessments[].assessment`, and
@@ -1739,9 +1782,32 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
         return None
     base = json.loads(json.dumps(completed[0][1], default=str))
 
+    # One account, one row, ACROSS batches as well as inside one.
+    #
+    # `_dedupe_account_reads` runs per batch and cannot see this: it keys on the batch's own alias
+    # legend, and aliases are per-package (A1 means a different person in every batch). The identity
+    # that survives the join is `external_id`, so that is the only key valid here. A duplicate across
+    # two batches means the selection carried the same account twice, which chunking then dealt to
+    # two different requests; the customer is charged for it once and must be told about it once.
+    #
+    # Only a row that actually resolved has an identity. Unresolved rows are passed through
+    # untouched rather than collapsed together, because "we could not tell who this is" is not
+    # evidence that two such rows are the same account.
     merged_accounts: list[dict] = []
+    _seen_ids: set = set()
+    _cross_batch_dupes = 0
     for _i, p in completed:
-        merged_accounts.extend(p.get("commenter_assessments") or [])
+        for row in (p.get("commenter_assessments") or []):
+            ext = row.get("external_id") if isinstance(row, dict) else None
+            if ext is not None:
+                if ext in _seen_ids:
+                    _cross_batch_dupes += 1
+                    continue
+                _seen_ids.add(ext)
+            merged_accounts.append(row)
+    if _cross_batch_dupes:
+        logger.warning("analyst: %d per-account read(s) dropped as duplicates across batches",
+                       _cross_batch_dupes)
     base["commenter_assessments"] = merged_accounts
 
     # Overall = weighted mean of each batch's overall score by its account count (model judgment,
@@ -1774,7 +1840,11 @@ def _merge_batch_parts(parts: list[dict | None], *, batch_size: int, done: int,
     # Completion: sums across completed batches; complete only when EVERY batch landed and completed.
     total_batches = len(parts)
     rep = sum((p.get("completion") or {}).get("represented_commenters") or 0 for _i, p in completed)
-    ass = sum((p.get("completion") or {}).get("assessed_commenters") or 0 for _i, p in completed)
+    # Counted from the MERGED rows, not summed from the batches' own counts. Each batch computes its
+    # figure before the merge can see it, so a row dropped here as a cross-batch duplicate would
+    # still be counted by the batch that produced it: the box would claim coverage for a paragraph
+    # that is not on the page. This is the count of what a reader can actually read.
+    ass = sum(1 for r in merged_accounts if isinstance(r, dict) and r.get("resolved"))
     all_complete = (len(completed) == total_batches) and all(
         (p.get("completion") or {}).get("complete") for _i, p in completed)
     # THE REASON MUST DESCRIBE THE MERGE, NOT BATCH ONE.

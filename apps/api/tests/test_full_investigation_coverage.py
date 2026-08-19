@@ -123,7 +123,11 @@ def test_verify_omitted_input():
 def test_verify_floor_not_applicable():
     s = verify_completion(model_backed=False, finish_reason=None, represented_commenters=150,
                           assessed_commenters=0, omitted_input_commenters=0)
-    assert s.complete is False and s.incomplete_kind is None and "not produced" in s.reason.lower()
+    # Structure first: not certified, and no coverage gap named, which is the Floor's signature.
+    # The sentence is customer copy (it used to say "deterministic Floor", which was our vocabulary
+    # on their page), so it is checked for meaning rather than for a phrase.
+    assert s.complete is False and s.incomplete_kind is None
+    assert "could not be produced" in s.reason.lower()
 
 
 # =========================================================================== #

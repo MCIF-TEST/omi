@@ -99,7 +99,11 @@ def test_the_shipped_worked_example_validates(worked_example):
     """Models copy the example over the rules, so an example that cannot pass our own validator would
     teach every response to fail it. This is cheap and it closes the loop between the prompt we ship
     and the validator that judges the reply."""
-    assert [a["ref"] for a in worked_example["commenter_assessments"]] == ["A1", "A2", "A3", "A4"]
+    # A5 is the elevated worked account added in v14. Before it, the only non-low example in the
+    # whole protocol was an 82 resting on leaked machine boilerplate, so the 50-74 band had no
+    # picture at all and the model had never been shown what an ordinary elevated account is.
+    assert [a["ref"] for a in worked_example["commenter_assessments"]] == [
+        "A1", "A2", "A3", "A4", "A5"]
     errs = validate_comprehensive_model_output(
         worked_example,
         schema=comprehensive_investigation_canonical_schema(),

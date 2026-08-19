@@ -43,7 +43,17 @@ class RenderedEvidence:
 # AI-first (raw metadata only): the account row carries the objective, collected facts about the account —
 # NO engine probability / tier / detector score. The model reasons its OWN per-account omi_score from these.
 _ACCOUNT_COLUMNS = ["account", "follower_count", "following_count", "account_created_at",
-                    "verified", "bio", "post_count", "recent_posts"]
+                    "verified", "bio", "post_count",
+                    # MEASURED timing over this account's own post timestamps. Arithmetic, not a
+                    # score: the protocol asks the model to compute a posting rhythm from the
+                    # created_at column and across four live investigations it never once did,
+                    # while every unmeasured rhythm claim it wrote ran exculpatory. Measuring is
+                    # what the Evidence Compiler is for, so the figures are supplied and the model
+                    # reads them like any other collected fact. Null when fewer than ten timestamps
+                    # were collected, because a handful of gaps is not a rhythm.
+                    "post_gap_median_min", "post_gap_stdev_min", "longest_daily_quiet_min",
+                    "distinct_post_hours",
+                    "recent_posts"]
 _POST_COLUMNS = ["text", "created_at"]
 
 
@@ -65,6 +75,10 @@ def _account_row(a, alias: AliasLegend) -> list:
         getattr(a, "verified", None),
         getattr(a, "bio", None),
         a.post_count,
+        getattr(a, "post_gap_median_min", None),
+        getattr(a, "post_gap_stdev_min", None),
+        getattr(a, "longest_daily_quiet_min", None),
+        getattr(a, "distinct_post_hours", None),
         [[p.text, p.created_at] for p in getattr(a, "recent_posts", ())],
     ]
 

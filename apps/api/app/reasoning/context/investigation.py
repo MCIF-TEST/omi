@@ -29,7 +29,9 @@ notes, not this layer.)
 from __future__ import annotations
 
 import hashlib
+import statistics
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from app.evidence.binder import Binder
@@ -198,6 +200,26 @@ class AccountEvidence(Section):
     post_count: int | None = None               # size of this account's activity history
     recent_posts: tuple[RawPostSample, ...] = ()  # raw sample of this account's own posts (text + time)
     activity_sample_count: int = 0
+    # --- MEASURED TIMING (raw arithmetic over this account's own post timestamps, NOT a score) ---
+    #
+    # The protocol's strongest per-account tell is a posting rhythm no person produces, and it tells
+    # the model three separate times to WORK IT OUT from the created_at column. Across four live
+    # investigations and roughly 400 accounts it never once did: eleven claims about rhythm were
+    # written and not one carried a figure, while `signal_temporal` never exceeded about 35. Worse,
+    # every uncomputed claim ran exculpatory ("human-like quiet periods", "not machine-regular"), so
+    # an unmeasured impression was being used to hold scores DOWN.
+    #
+    # Computing forty-nine gaps for each of twenty-five accounts is arithmetic, not judgement, and
+    # arithmetic is what the Evidence Compiler is for: it already measures every other field on this
+    # object. These are descriptive statistics over timestamps the bundle already carries. They carry
+    # no verdict, no threshold and no engine opinion, so the analyst still reasons from raw facts.
+    post_gap_median_min: float | None = None      # median gap between consecutive posts, minutes
+    post_gap_min_min: float | None = None         # shortest gap, minutes
+    post_gap_max_min: float | None = None         # longest gap, minutes
+    post_gap_stdev_min: float | None = None       # spread of the gaps; a scheduler's is near zero
+    longest_daily_quiet_min: float | None = None  # longest stretch in any 24h with no post, minutes
+    distinct_post_hours: int | None = None        # how many of the 24 clock hours carry any post
+    timing_sample_size: int = 0                   # timestamps the figures were computed from
     from_cache: bool = False
     matched_prior_neighbors: int = 0
     # --- COMPUTED engine fields (retained on the object for OTHER features — alerts/campaigns — but NO
@@ -515,6 +537,50 @@ def _int_or_none(v) -> int | None:
         return None
 
 
+def _timing_stats(activity: list) -> dict:
+    """Descriptive statistics over one account's own post timestamps. No thresholds, no verdict.
+
+    Returns an empty dict when there are too few usable timestamps to say anything: the protocol's
+    own rule is that fewer than about ten gaps cannot show a rhythm, and reporting a "median gap"
+    computed from three posts would invite exactly the unearned confidence this is meant to replace.
+
+    ``longest_daily_quiet_min`` is the largest gap that falls inside the observed span, which is what
+    a human sleep period looks like. ``distinct_post_hours`` counts how many of the 24 clock hours
+    carry any post at all: a person covers a subset, a scheduler that never rests covers all of them.
+    """
+    stamps: list[datetime] = []
+    for a in activity or []:
+        if not isinstance(a, dict):
+            continue
+        raw = a.get("created_at")
+        if not raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        stamps.append(dt)
+    # Ten timestamps give nine gaps, which is the protocol's own floor for reading a rhythm at all.
+    if len(stamps) < 10:
+        return {"timing_sample_size": len(stamps)}
+    stamps.sort()
+    gaps = [(b - a).total_seconds() / 60.0 for a, b in zip(stamps, stamps[1:])]
+    gaps = [g for g in gaps if g >= 0]
+    if not gaps:
+        return {"timing_sample_size": len(stamps)}
+    return {
+        "post_gap_median_min": round(statistics.median(gaps), 1),
+        "post_gap_min_min": round(min(gaps), 1),
+        "post_gap_max_min": round(max(gaps), 1),
+        "post_gap_stdev_min": round(statistics.pstdev(gaps), 1) if len(gaps) > 1 else 0.0,
+        "longest_daily_quiet_min": round(max(gaps), 1),
+        "distinct_post_hours": len({d.astimezone(timezone.utc).hour for d in stamps}),
+        "timing_sample_size": len(stamps),
+    }
+
+
 def _account_evidence(c: dict, platform: str) -> AccountEvidence:
     ident = c.get("handle") or c.get("external_id") or ""
     signals = tuple(_signal(s) for s in (c.get("signals") or []) if isinstance(s, dict))
@@ -533,6 +599,7 @@ def _account_evidence(c: dict, platform: str) -> AccountEvidence:
         post_count = len(activity)
     return AccountEvidence(
         present=True, ref=_pseudo(str(ident)), platform=str(c.get("platform") or platform),
+        **_timing_stats(activity),
         # RAW metadata the AI reasons from — no computed score.
         follower_count=_int_or_none(c.get("follower_count")),
         following_count=_int_or_none(c.get("following_count")),

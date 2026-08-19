@@ -264,23 +264,38 @@ services:
       # Secret — set the value in the Render dashboard, never in this file.
       - key: OPENROUTER_API_KEY
         sync: false
-      # The preset in the dashboard currently has NO model configured ("can be used
-      # with any model"), so the preset alone does not resolve to one and the request
-      # has nothing to route to. Naming the model here layers it onto the preset as
-      # <slug>@preset/<name>, which is the supported form. If a model is later pinned
-      # ON the preset, unset this again so the dashboard stays the single source.
+      # UNSET ON PURPOSE (2026-08-19). The model is now chosen ON the preset in the
+      # OpenRouter dashboard, so the dashboard is the single source and this must stay
+      # empty. THIS VARIABLE OVERRIDES THE PRESET: while it held 'openai/gpt-5-mini'
+      # every request went out as openai/gpt-5-mini@preset/omi-master-v2, so changing
+      # the model in the dashboard changed nothing at all and the scans kept running on
+      # the old model with no error anywhere. Same two-sided-contract class as the
+      # preset NAME and the Clerk keys: two systems, one fact, nothing reconciling them.
+      #
+      # Set this again ONLY if the preset goes back to having no model ("can be used
+      # with any model"), in which case the preset alone does not resolve and the
+      # request has nothing to route to. An empty value is not the same as a wrong one:
+      # a bad slug here answers 404 and floors EVERY scan
+      # (floor_reason.preset_or_model_not_found).
       - key: OMI_OPENROUTER_MODEL
-        value: 'openai/gpt-5-mini'
+        value: ''
       #
       # The model we EXPECT the preset to serve. NOT sent on the wire (so a bad
       # value can never brick the AI path) — after each scan the code compares
       # it against the model OpenRouter reports serving and records
-      # served_model_verified on the trace, so every investigation PROVES its
-      # assessments + OMI scores came from GPT-5 Mini; a silent model swap is
+      # served_model_verified on the trace, so every investigation PROVES which
+      # model produced its assessments + OMI scores; a silent model swap is
       # logged loudly (analyst.verify SERVED-MODEL MISMATCH). Prefix-tolerant, so
       # a dated snapshot still verifies. Set to '' to disable the check.
+      #
+      # EMPTY BECAUSE THE MODEL NOW LIVES ON THE PRESET. This check compares a
+      # committed string against what the gateway reports serving, so leaving the
+      # old 'openai/gpt-5-mini' here would make every scan log a mismatch that is
+      # not a fault. Fill it in with the exact slug the dashboard is set to, read
+      # off GET /v1/investigations/analyst/preflight after the next deploy, and
+      # the proof-of-provenance check comes back on.
       - key: OMI_OPENROUTER_EXPECTED_MODEL
-        value: 'openai/gpt-5-mini'
+        value: ''
       #
       # --- Cost guardrails (tune WITHOUT a code deploy) ---
       # Per-scan output-token ceiling, and equal to the floor below on purpose:
