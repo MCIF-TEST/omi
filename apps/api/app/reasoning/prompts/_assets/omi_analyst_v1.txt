@@ -172,32 +172,17 @@ Anchor it to how strongly the account's OWN evidence fits the bought-account pat
 dramatic the story feels. Each scan is judged independently on the evidence in front of you. Do not
 emit a separate "inauthenticity" probability.
 
-HOW TO TELL A BOUGHT ACCOUNT FROM A REAL ONE (the signal library)
-The constitution's SCORE DISCIPLINE block is authoritative on which observations count and which do
-not, and its AMBIENT TRAITS list is the complete answer to "does this raise a score?". Do not run a
-competing shortlist here. What follows is only the shape of the strongest tells, so you know what
-you are looking for while you read a row:
-  • Amplifier profile: follows a very large number of accounts while almost none follow back
-    (following ≫ followers by a wide margin), especially on a young account with little content.
-  • Empty or engagement-only history: no real original posts, the entire visible history is one-line
-    generic praise ("great video!", "🔥🔥", "love this"), reactions, or comments, with nothing a real
-    person posts about their own life or interests.
-  • Templated / reused content: the account's OWN posts or comments are near-identical to each other or
-    verbatim-repeated across unrelated posts. Copy-paste behavior a person rarely shows.
-  • Spam / scam / promo intent in its own content: "link in bio", "DM me to earn", "follow for
-    follow", giveaway-claim links, crypto/forex signal pitches, adult-spam.
-  • A posting rhythm you COMPUTED from its timestamps: gaps that keep landing on nearly the same
-    value, or activity in all 24 hours with no multi-hour quiet period. State the figure. Bursts on a
-    busy day and a nightly gap are what a person looks like, not a tell.
-  • Machine boilerplate the account left in its own text ("as an AI language model", a refusal
-    template, a leaked prompt fragment). This is the ONLY writing-style observation that is evidence;
-    fluency, tidiness and formality are not, at any volume.
-  • A break in its own continuity: a sharp pivot in topic, language or persona, or an account years
-    old whose entire visible history starts a few weeks ago. Aged accounts get resold, so continuity
-    is the question and age by itself answers nothing.
+HOW TO TELL A BOUGHT ACCOUNT FROM A REAL ONE
+The constitution is authoritative and complete on this, and it is directly below: SCORE DISCIPLINE
+decides which observations count, its AMBIENT TRAITS list is the whole answer to "does this raise a
+score?", THE 50 TO 74 INDICATORS is the elevated band's list, and the MECHANICAL GATE is the 75+
+list. Work from those. A second shortlist used to sit here restating them, and the duplication is
+the likeliest reason the 75+ gate came to be applied at the 50 boundary: told the same list twice,
+in two places, with two different thresholds attached, a reader keeps one threshold.
 GENUINE-account counter-signals (lower the score, and say so): a normal, roughly balanced
 follower/following count for its size; a varied posting history about real and changing topics;
-original posts (not just reactions); real conversational replies; a coherent, lived-in profile.
+original posts (not just reactions); real conversational replies; a coherent, lived-in profile; a
+wide spread between its post gaps and a daily quiet period, which is what sleeping looks like.
 Sophisticated fakes imitate this, so the ABSENCE of crude tells is not proof of authenticity, but a
 score still needs positive, observed evidence, and a genuine-looking account scores low.
 

@@ -81,14 +81,25 @@ def test_aliasing_is_reversible_and_evidence_neutral():
 
 
 def test_account_rows_carry_raw_metadata_not_computed_scores():
-    """AI-first: the account row is RAW metadata — profile counts, creation time, post count, and the
-    account's own raw posts. NO engine probability / tier / detector score reaches the model."""
+    """AI-first: the account row is RAW metadata — profile counts, creation time, post count, the
+    account's own raw posts, and descriptive statistics over its own post timestamps. NO engine
+    probability / tier / detector score reaches the model.
+
+    The timing columns are the one place that distinction needs stating, because they are computed.
+    Computed is not the same as judged: they are arithmetic over timestamps already in the bundle,
+    carrying no threshold and no opinion, in exactly the way `account_created_at` is a fact the model
+    turns into an age. They exist because the protocol asked the model to do that arithmetic itself,
+    three times over, and across four live investigations it never once did, while every rhythm claim
+    it wrote without a figure ran exculpatory.
+    """
     rv = render_investigation_evidence(_package(_small_payload()))
     acct = rv.sections["account_analysis"]
     cols = acct["columns"]
     assert cols == ["account", "follower_count", "following_count", "account_created_at",
-                    "verified", "bio", "post_count", "recent_posts"]
-    # no computed columns anywhere in the account section
+                    "verified", "bio", "post_count",
+                    "post_gap_median_min", "post_gap_stdev_min", "longest_daily_quiet_min",
+                    "distinct_post_hours", "recent_posts"]
+    # The engine's own judgement still reaches nothing. This is the guard that matters.
     for banned in ("signals", "contributions", "overall_probability", "tier", "confidence", "omiscore"):
         assert banned not in cols
     row = next(r for r in acct["rows"] if r[0] == "A1")
@@ -252,3 +263,62 @@ def _is_bridge_ref(pkg, ref) -> bool:
     from app.reasoning.investigation_render.budget import compute_account_coverage
     cov = compute_account_coverage(pkg)
     return ref in cov and cov[ref].is_bridge
+
+
+# ==================================================================================================
+# Measured post timing
+# ==================================================================================================
+# The mechanical gate's rhythm tell (item b) was unreachable for four live investigations. The
+# protocol told the model to work the gaps out of the created_at column three separate times, in the
+# strongest wording in the document, and across roughly 400 accounts it produced eleven rhythm claims
+# and NOT ONE figure, while `signal_temporal` never exceeded about 35. Every unmeasured claim ran
+# exculpatory ("human-like quiet periods"), so an impression nobody computed was holding scores down.
+#
+# Computing 49 gaps for each of 25 accounts is arithmetic, and arithmetic is what the Evidence
+# Compiler is for. These are descriptive statistics with no threshold and no verdict attached.
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from app.reasoning.context.investigation import _account_evidence  # noqa: E402
+
+
+def _account_posting_every(minutes_between, n, handle="a"):
+    t = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    acts = []
+    for gap in (minutes_between if isinstance(minutes_between, list) else [minutes_between] * n):
+        acts.append({"text": "x", "created_at": t.isoformat().replace("+00:00", "Z")})
+        t += timedelta(minutes=gap)
+    return _account_evidence({"handle": handle, "recent_activity": acts,
+                              "history_size": len(acts)}, "x")
+
+
+def test_a_scheduler_and_a_person_come_out_different():
+    """The whole point. A spread near zero is a machine; a spread in the hundreds is a person."""
+    bot = _account_posting_every(62, 20)
+    human = _account_posting_every(
+        [13, 240, 7, 1100, 45, 9, 600, 22, 180, 31, 900, 5, 77, 410, 18, 66, 240, 12, 333], 0)
+    assert bot.post_gap_stdev_min == 0.0
+    assert human.post_gap_stdev_min > 100
+    # People sleep, so a real timeline has a long daily quiet stretch and covers fewer clock hours.
+    assert human.longest_daily_quiet_min > bot.longest_daily_quiet_min
+    assert human.distinct_post_hours < bot.distinct_post_hours
+
+
+def test_too_few_timestamps_yields_nulls_rather_than_a_confident_figure():
+    """The protocol's own floor: fewer than about ten gaps cannot show a rhythm. Reporting a median
+    computed from four posts would manufacture exactly the unearned confidence this replaces."""
+    thin = _account_posting_every(30, 4)
+    assert thin.timing_sample_size == 4
+    assert thin.post_gap_median_min is None
+    assert thin.distinct_post_hours is None
+
+
+def test_an_account_with_no_posts_is_all_nulls():
+    a = _account_evidence({"handle": "a", "recent_activity": []}, "x")
+    assert a.timing_sample_size == 0
+    assert a.post_gap_stdev_min is None
+
+
+def test_unparseable_timestamps_are_skipped_not_guessed_at():
+    acts = [{"text": "x", "created_at": "not-a-date"} for _ in range(12)]
+    a = _account_evidence({"handle": "a", "recent_activity": acts}, "x")
+    assert a.timing_sample_size == 0 and a.post_gap_median_min is None

@@ -550,6 +550,22 @@ _ALIAS_RE = re.compile(r"\b[AC]\d{1,3}\b")
 # SOFT on purpose: a paragraph can be perfectly true and still be written this way, and withholding a
 # correct assessment over a stylistic tic would be a worse outcome than printing it. HARD is reserved
 # for claims the evidence contradicts.
+#: Closing sentences that ask the reader for more data. The constitution bans these outright, and they
+#: are still being written verbatim: "More posts would be needed to change the read" appeared in a live
+#: export and is almost word for word one of the three strings the rule names. The batch-level shape
+#: check cannot catch a dozen scattered leaks, because it only fires when a third of the batch shares
+#: one shape, so this looks at a single paragraph's last sentence.
+#:
+#: SOFT, like every other writing rule here. Ending badly is not a false claim about a person, and
+#: withholding a true paragraph over its last sentence is the trade this file has already settled.
+_MORE_DATA_CLOSERS = (
+    "more posts would", "collecting more", "more of its posts would", "additional posts would",
+    "a larger sample would", "would increase confidence", "would raise confidence",
+    "would improve confidence", "would be needed to change", "would clarify",
+    "would materially change this read", "would settle this", "would allow a", "would enable a",
+    "would permit a", "more data would", "further posts would", "sampling its posts",
+)
+
 _STYLE_TICS = ("i settled on", "rather than one", "more like a ", "more like an ",
                "reads more like", "i landed on")
 
@@ -582,6 +598,24 @@ def check_alias_in_prose(assessment: str) -> list[Violation]:
         "alias_in_prose", HARD,
         f"names internal alias(es) {', '.join(found[:4])} that the reader cannot resolve",
     )]
+
+
+def check_closing_ask(assessment: str) -> list[Violation]:
+    """The last sentence must not ask the reader for more data.
+
+    The last line is the one a reader remembers, and ending on the analysis being insufficient tells
+    somebody who just paid for it that they received nothing. The constitution bans it by name; this
+    is the check that notices when the ban is ignored.
+    """
+    parts = [p for p in _SENTENCE_SPLIT.split(assessment or "") if p.strip()]
+    if not parts:
+        return []
+    last = _norm(parts[-1])
+    hit = next((c for c in _MORE_DATA_CLOSERS if c in last), None)
+    if not hit:
+        return []
+    return [Violation("closing_ask_for_data", SOFT,
+                      f'closes on a request for more data: "{parts[-1].strip()[:90]}"')]
 
 
 def check_style(assessment: str) -> list[Violation]:
@@ -649,6 +683,7 @@ def verify_row(row: dict, account: dict | None) -> GroundingReport:
     violations += check_phrasing(assessment)
     violations += check_alias_in_prose(assessment)
     violations += check_style(assessment)
+    violations += check_closing_ask(assessment)
     violations += check_readability(assessment)
     violations += check_coherence(row)
     quotes = [m for m in _QUOTE_RE.finditer(assessment)

@@ -128,7 +128,10 @@ def test_prompt_assembles_from_package_assets_and_reuses_existing_schema():
     # + v12: the finished_verdict block (how a verdict READS: a clean account stated in the
     # positive, no closing request for more data, an unexamined account never described as looking
     # fine, exculpatory evidence actually written down). Moves no score.
-    assert pp.manifest["package_hash"] == "pkg:c6ddbe89ad90ecf02f8d2802"
+    # Moves with every prompt-asset change by design: the package hash is what makes a scaffolding
+    # edit an attributable package version. v14 changed the constitution, the investigation task and
+    # the base prompt, so it moved.
+    assert pp.manifest["package_hash"] == "pkg:ed85aaf0e3dd508a0ee81add"
     assert pp.manifest["investigation_summary_bundle_id"] == b.bundle_id()
 
 

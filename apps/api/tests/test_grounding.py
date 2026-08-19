@@ -20,6 +20,7 @@ from app.reasoning.grounding import (
     _sentence_shape,
     check_alias_in_prose,
     check_boilerplate,
+    check_closing_ask,
     check_coherence,
     check_figures,
     check_phrasing,
@@ -609,3 +610,48 @@ def test_a_couple_of_accounts_sharing_a_shape_is_not_a_template():
     batch["A5"] = "Wrote \"the ferry was late again\" on 4 March, one of nine such complaints."
     assert all(not any(v.code.startswith("repeated_") for v in vs)
                for vs in check_boilerplate(batch).values())
+
+
+# ==================================================================================================
+# The closing sentence must not ask the reader for more data
+# ==================================================================================================
+# The constitution bans this by name and it is still being written verbatim. "More posts would be
+# needed to change the read" shipped in a live export and is almost word for word one of the three
+# strings the rule lists. The batch-level shape check cannot see a dozen scattered leaks, because it
+# only fires when a third of the batch shares one shape, so this reads one paragraph's last sentence.
+#
+# SOFT, like every other writing rule in this file: ending badly is not a false claim about a person.
+def test_the_banned_closer_is_reported():
+    for closer in ("More posts would be needed to change the read.",
+                   "Collecting more of its replies for patterning would increase confidence.",
+                   "A larger recent post sample would raise confidence.",
+                   "Gathering even a handful of its own posts would enable a real read."):
+        assert [v.code for v in check_closing_ask(closer)] == ["closing_ask_for_data"], closer
+
+
+def test_it_is_soft_and_never_withholds():
+    v = check_closing_ask("More posts would increase confidence.")
+    assert all(x.severity == SOFT for x in v)
+
+
+def test_the_sentence_the_protocol_requires_is_not_flagged():
+    """At 50 and above the assessment MUST name what would overturn the read. That sentence is
+    shaped like a request for more data and is the opposite of one, so a rule that caught it would
+    fire on prose the constitution demands."""
+    assert check_closing_ask(
+        "Finding the same sentence on two of its own posts would overturn this.") == []
+    assert check_closing_ask(
+        "Finding that the replies answer what they are under would bring it down.") == []
+
+
+def test_a_hedge_inside_the_sentence_is_not_a_closing_ask():
+    """The constitution requires thin evidence to be admitted INSIDE the sentence carrying the fact.
+    That is the correct form and must survive."""
+    assert check_closing_ask(
+        "On the four posts collected, the read is weak, and it still says nothing about itself.") == []
+
+
+def test_only_the_last_sentence_counts():
+    """A mid-paragraph mention of the sample is fine. It is the closing line that a reader remembers."""
+    assert check_closing_ask(
+        "More posts would help here. But the account follows 7,420 while 2,281 follow back.") == []

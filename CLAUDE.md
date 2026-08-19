@@ -789,6 +789,91 @@ investigation, so the real reason to keep watching the number is that past some 
 follows each individual instruction *less* reliably. Additions must keep replacing rather than
 accumulating.
 
+### v14: the dimensions were the binding constraint all along, and one of them was half blind
+
+v13 fixed the band rules and did not move the distribution, because the band rules were never what
+was holding it. Measured across investigations 2 to 4 (~150 accounts, so ~1,200 dimension scores),
+**exactly six dimension scores reached 50**. Five of the six belong to two accounts, and **exactly
+one account has two**. Dossier Loop 3c permits a score of 50 only where two dimensions are
+substantially elevated, so that one account (`ChadestGroyper`, 58) is also the only account in four
+investigations scoring above 49. The match is the rule executing, not a coincidence.
+
+**So the elevated-band list cannot lift anything on its own.** 3c gates on the dimensions, the
+dimensions never move, and everything else is downstream. Four causes, all now fixed:
+
+- **`substantially elevated` was defined nowhere.** The phrase appeared once in 112,000 characters,
+  inside 3c, with no number attached: the model was asked to enforce a threshold it was never given.
+  `USE THE WHOLE SCALE` in `_SIGNAL_DIMENSIONS` now states the bands (50-74 IS substantially
+  elevated) and 3c points at it rather than restating it. 3c also runs **both ways** now: a score too
+  LOW for its dimensions is the failure that actually happened, and it used to catch only the
+  opposite.
+- **`PROFILE` exemplified one direction of imbalance.** "such as following thousands while almost
+  nobody follows back" was the only shape named, and models follow the example over the definition.
+  Measured: the dimension fires at 45-65 on following-heavy accounts and sits at **10-22** on
+  follower-heavy ones at far more extreme ratios. `Kingofcountry_2` (348 followers, follows 2, 36
+  days old) scored 18; `gary_colwe88304` (1,249 / 8) scored 15. The definition now names the
+  **ACQUIRED-AUDIENCE** shape beside the amplifier one and says they are equally elevated.
+- **There was no worked example of an elevated account anywhere.** The four examples scored 12, 82,
+  14, 22, and the only non-low one rests on leaked `as an AI language model` plus a repeated sentence
+  plus a 390:1 ratio. The 50-74 band had no picture at all, so the only image of a raised score was
+  the most extreme case available. A fifth account (`A5`, 61) now sits in the example, built on two
+  NON-mechanical indicators, with `semantic` and `temporal` deliberately below 50 so it cannot be
+  read as teaching the gate. Pinned by `test_the_example_teaches_the_elevated_band`.
+- **`ai_writing` was 0 or 10 on essentially every row** when the rule said null. Zero claims the
+  writing was examined and found human, which is an authorship claim style cannot support. Null is
+  now stated as the default state rather than a permission.
+
+**The worked example was demonstrating a sentence the constitution bans.** It closed on "Findings are
+probabilistic; the human analyst sets the verdict", which `_FINISHED_VERDICT` forbids by name. That
+is very likely why the v12 ban did not land: a rule competing with a demonstration of itself loses.
+Gone, and pinned.
+
+#### The rhythm tell was unreachable, and the fix is a measurement, not more prompt
+
+Gate item (b) is the strongest per-account tell available and **it has never once been used**. The
+protocol told the model to work the gaps out of the `created_at` column three separate times, in the
+strongest wording in the document. Across ~400 accounts it wrote **eleven rhythm claims and not one
+figure** ("the timeline shows human-like quiet periods", "not machine-regular"), and `signal_temporal`
+never exceeded ~35. Worse, **every unmeasured claim ran exculpatory**: an impression nobody computed
+was being used to hold scores down.
+
+More prompt was not going to fix an instruction already stated three times and ignored. Computing 49
+gaps for each of 25 accounts is arithmetic, and arithmetic is what the Evidence Compiler is for, so
+`_timing_stats` now measures it and the row carries `post_gap_median_min`, `post_gap_stdev_min`,
+`longest_daily_quiet_min` and `distinct_post_hours`. TEMPORAL and gate (b) both read those columns
+instead of asking for the sum.
+
+- **Computed is not judged.** These are descriptive statistics over timestamps already in the bundle,
+  with no threshold and no opinion, exactly as `account_created_at` is a fact the model turns into an
+  age. **The engine's own probability, tier and intent still reach the model nowhere**, which is the
+  product rule and is separately pinned.
+- **Nulls below ten timestamps**, which is the protocol's own floor for reading a rhythm. Reporting a
+  median from four posts would manufacture the unearned confidence this replaces.
+- Measured separation: a 62-minute scheduler gives stdev 0.0 across 20 hours of the clock; a real
+  timeline gives stdev 311.6 with an 18-hour quiet stretch across 10 hours.
+
+#### Two more rules that were being ignored, and the size budget
+
+`NEVER CLOSE ON A REQUEST FOR MORE DATA` is still violated verbatim: `Bunnedette56021` closed on
+"More posts would be needed to change the read", almost word for word one of the three banned
+strings. The batch-level shape check cannot see scattered leaks (it needs a third of a batch), so
+`check_closing_ask` reads one paragraph's last sentence. **SOFT**, and the load-bearing test is that
+it does NOT fire on "Finding the same sentence on two of its own posts would overturn this", which
+the protocol *requires* at 50 and above and which is shaped like a request for more data.
+
+The 4-to-7-sentence floor was also being missed (two- and three-sentence verdicts shipped). It is now
+stated as the four things a paragraph must CONTAIN, since the count was only ever a proxy for them.
+
+**Paid for by deleting the base prompt's signal library**, which said "Do not run a competing
+shortlist here" and then ran one: seven tells restating the mechanical gate item for item. That
+duplication is the likeliest reason the 75+ gate came to be applied at the 50 boundary, since the
+same list appeared twice with two different thresholds attached. Net growth is still +4,862 over v13,
+and **the three ignored rules above are the argument for stopping**: rules already written down are
+already not being followed, so v15 must cut before it adds.
+
+Protocol recompiled to **`map:4b3ba3f45db2b994de5fc37f`, 116,971 chars**, zero em dashes, all drift
+guards green, committed artifact regenerated at `ml/analyst/omi_master_v1_preset.txt`.
+
 ### The v13 recalibration: the gate migrated down and the product stopped finding anything
 
 Driven by four live investigation exports (2026-08-19), roughly 400 scored accounts. **Exactly ONE

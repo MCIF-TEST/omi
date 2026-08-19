@@ -237,8 +237,16 @@ def test_the_rhythm_tell_carries_a_method_and_not_just_a_name(protocol):
     """The bundle has always shipped a created_at per post and the protocol never said to read it,
     so 'scheduler-regular' was a vibe the model could assert without arithmetic. The tell now names
     what to compute and what a human pattern looks like, so it can be checked by a reader."""
-    assert "WORK IT OUT from the" in protocol and "created_at" in protocol
-    assert "no multi-hour quiet period" in protocol
+    # The method changed from "you do the arithmetic" to "read the arithmetic we did", because across
+    # four live investigations the model never once did it: eleven rhythm claims, zero figures, and
+    # every one of them exculpatory. The tell still carries a method; the method is now four named
+    # columns it must quote rather than an instruction to compute that was ignored three times over.
+    assert "post_gap_median_min" in protocol and "post_gap_stdev_min" in protocol
+    assert "longest_daily_quiet_min" in protocol and "distinct_post_hours" in protocol
+    assert "Quote the figures" in protocol
+    # The "nothing that sleeps" shape must still travel with the scheduler shape: they are two
+    # different machines and only one of them has a regular interval.
+    assert "nothing that sleeps" in protocol or "because people sleep" in protocol
     # The human inverse has to travel with it or the method just manufactures a new false positive.
     assert "posting at similar times each day is a routine" in protocol
 
@@ -453,7 +461,10 @@ def test_every_account_in_the_example_carries_all_eight_signals():
     rows = obj["commenter_assessments"]
     # Four now: a genuine account, a promotional shell, an account with no collected history, and a
     # heavy reposter. The last two exist because both were being scored wrongly in production.
-    assert len(rows) == 4
+    # Five, since v14 added the elevated worked account. Before it, the only non-low example in the
+    # entire protocol was an 82 resting on leaked machine boilerplate, so the model had never been
+    # shown what an ordinary elevated account looks like and the 50-74 band had no picture at all.
+    assert len(rows) == 5
     for row in rows:
         assert len(row["signals"]) == 8, f"{row['ref']} does not show all eight"
         assert isinstance(row["confidence"], int)
@@ -727,3 +738,67 @@ def test_the_reader_facing_rules_still_do_not_touch_the_score(protocol):
     assert "A MOSTLY-REPOST TIMELINE IS NOT A FINDING" in protocol
     assert "NOTHING REACHES 75 WITHOUT ONE" in protocol
     assert "RUN THE ALTERNATIVE-EXPLANATION TEST BEFORE ANY SCORE OF 50 OR MORE" in protocol
+
+
+# ==================================================================================================
+# v14: the arithmetic reason nothing scored above 49
+# ==================================================================================================
+# Across investigations 2 to 4, six dimension scores out of roughly 1,200 reached 50. Five of those
+# six belonged to two accounts and exactly ONE account had two. Dossier Loop 3c permits a score of 50
+# only where two dimensions are substantially elevated, so that one account was also the only account
+# in four investigations scoring above 49. The band rules were never the binding constraint; the
+# dimension scale was, and it was never anchored.
+def test_the_dimension_scale_is_anchored_to_a_number(protocol):
+    """3c gates every score on "substantially elevated" and the phrase was defined nowhere in
+    112,000 characters. The model was asked to enforce a threshold it was never given."""
+    assert "USE THE WHOLE SCALE" in protocol
+    assert "50-74 IS SUBSTANTIALLY ELEVATED" in protocol
+    assert "meaning 50 or above on the scale the EIGHT DIMENSIONS block defines" in protocol
+
+
+def test_the_coherence_check_runs_in_both_directions(protocol):
+    """It only ever caught a score that was too high for its dimensions. A score too LOW for its
+    dimensions is the failure that actually happened."""
+    assert "the SCORE is the thing that does not follow" in protocol
+
+
+def test_the_profile_dimension_sees_both_shapes_of_imbalance(protocol):
+    """Measured: the dimension fired at 45-65 on following-heavy accounts and sat at 10-22 on
+    follower-heavy ones at far more extreme ratios. 348 followers against 2 following scored 18."""
+    assert "RUNS IN BOTH DIRECTIONS" in protocol
+    assert "ACQUIRED-AUDIENCE" in protocol
+    assert "348 followers against 2" in protocol
+
+
+def test_ai_writing_null_is_the_default_not_a_permission(protocol):
+    """The rule said "almost always null" and the model returned 0 or 10 on essentially every row.
+    Zero claims the writing was examined and found human, which is a claim style cannot support."""
+    assert "THE DEFAULT VALUE OF THIS DIMENSION IS null" in protocol
+    assert "Do not substitute a small number such as 0 or 10" in protocol
+
+
+def test_the_example_teaches_the_elevated_band(protocol):
+    """Models copy examples over rules. The only non-low example was an 82 resting on leaked machine
+    boilerplate, so the 50-74 band had no picture anywhere in the document."""
+    import json
+    obj = json.loads(protocol[protocol.rfind('{"omi_score"'):])
+    rows = obj["commenter_assessments"]
+    elevated = [r for r in rows if 50 <= r["omi_score"] <= 74]
+    assert len(elevated) == 1, "the elevated band needs exactly one worked account"
+    a = elevated[0]
+    assert a["suspicion_tier"] == "elevated"
+    # It must be reachable WITHOUT a mechanical tell, or it teaches the gate again.
+    hi = [s["name"] for s in a["signals"]
+          if isinstance(s.get("score"), int) and s["score"] >= 50]
+    assert len(hi) >= 2, "3c needs two elevated dimensions and the example must demonstrate that"
+    assert "semantic" not in hi and "temporal" not in hi, (
+        "the elevated example must not rest on a mechanical tell, or it teaches the 75+ gate")
+
+
+def test_the_example_does_not_demonstrate_a_sentence_the_constitution_bans(protocol):
+    """It used to close on "Findings are probabilistic; the human analyst sets the verdict", which
+    _FINISHED_VERDICT forbids by name. A rule competing with a demonstration of itself loses."""
+    example = protocol[protocol.rfind("EXAMPLE of a valid output object"):]
+    body = example[:example.rfind('"limits_statement"')]
+    assert "Findings are probabilistic" not in body
+    assert "the human analyst sets the verdict" not in body
