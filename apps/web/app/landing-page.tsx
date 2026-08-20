@@ -7,6 +7,7 @@ import { ScoreScale } from '@/components/shared/score-scale';
 import { DemoScanForm } from './demo-scan-form';
 import {
   TRIAL_CREDITS, CREDIT_NOUN, MONTHLY_CREDITS, SUBSCRIPTION_PRICE, PLAN_NAME,
+  ACCOUNTS_PER_CREDIT,
 } from '@/lib/plan';
 
 /**
@@ -272,8 +273,8 @@ export function LandingPage() {
                 <span className="text-fg font-medium">X</span> and{' '}
                 <span className="text-fg font-medium">YouTube</span> today.{' '}
                 <span className="text-fg font-medium">Reddit</span> and{' '}
-                <span className="text-fg font-medium">TikTok</span> November 1st. The engine is
-                platform-agnostic, so those need an ingestion adapter, not new detection work.
+                <span className="text-fg font-medium">Reddit</span> is next. The engine is
+                platform-agnostic, so that needs an ingestion adapter, not new detection work.
               </p>
             </div>
             <div className="bg-bg-deep p-5 md:p-6">
@@ -281,11 +282,13 @@ export function LandingPage() {
                 Price
               </div>
               <div className="flex items-baseline gap-2 mb-2.5">
+                <span className="font-mono text-xs text-fg-mute">from</span>
                 <span className="stat-value text-4xl text-fg">{SUBSCRIPTION_PRICE}</span>
                 <span className="font-mono text-xs text-fg-mute">/ month</span>
               </div>
               <p className="text-sm text-fg-dim leading-relaxed">
-                {PLAN_NAME}. {MONTHLY_CREDITS} credits a month, one credit per 50 accounts.
+                {PLAN_NAME}. Three plans, from {MONTHLY_CREDITS} credits a month. One credit
+                covers {ACCOUNTS_PER_CREDIT} accounts.
               </p>
               <Link
                 href="/pricing"

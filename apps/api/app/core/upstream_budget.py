@@ -279,3 +279,129 @@ def _bump(session, *, scope: str, scope_id: str, day: str, platform: str, calls:
         row.requests = int(row.requests or 0) + 1
         row.updated_at = datetime.now(timezone.utc)
     session.flush()
+
+
+# --------------------------------------------------------------------------- #
+# The monthly, plan-derived ceiling
+# --------------------------------------------------------------------------- #
+#
+# WHY A SECOND CEILING EXISTS ALONGSIDE THE DAILY ONE.
+#
+# The daily budget above is a runaway guard: it answers "is something looping right now". It is not
+# a business control, and it was never sized as one. At ~$0.006 per upstream call, its 1,500/user/day
+# default is $9 a day, i.e. **$270 a month from one $14.99 subscriber**, and reaching it requires no
+# abuse at all — just somebody browsing a lot of comment sections and scanning a few of them.
+#
+# Credits already bound how many accounts get SCORED. They do not bound compile, which charges no
+# credits and still calls the provider. So the plan's economics rested on customers not using the
+# free half of the product very much, which is not a control.
+#
+# This ceiling closes that. It is:
+#   * MONTHLY and aligned to the customer's billing period, so it resets when their credits do.
+#     A meter that reset on a different day from the thing it meters would be its own support load.
+#   * DERIVED FROM THE PLAN (``PlanTier.monthly_call_ceiling``) rather than configured separately,
+#     so it cannot drift from what the tier was priced to afford.
+#   * SIZED ABOVE what the tier's credits can spend on scans, by a compile allowance. Browsing has
+#     to feel free even though it is not, or the product loses the moment that sells it.
+#
+# It is a METER, NOT A WALL. Hitting it offers a top-up rather than ending the month, because a hard
+# stop turns the most engaged customers into churn. The whole design is: bound what a subscription
+# includes so it can be priced, then sell more to anyone who wants more.
+
+def _month_floor(dt: datetime) -> datetime:
+    return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _minus_one_month(dt: datetime) -> datetime:
+    """One calendar month earlier, clamping the day so the 31st never overflows a short month."""
+    year, month = (dt.year, dt.month - 1) if dt.month > 1 else (dt.year - 1, 12)
+    # 28 is safe in every month; the period start only needs to be stable, not exact to the day.
+    day = min(dt.day, 28)
+    return dt.replace(year=year, month=month, day=day)
+
+
+def billing_period_start(user) -> str:
+    """First day (UTC date string) of the user's current billing period.
+
+    Anchored to ``subscription_renews_at`` when there is one, so the call meter and the credit grant
+    reset together. A customer whose credits refill on the 17th but whose call allowance refills on
+    the 1st would reasonably conclude one of the two numbers is broken.
+
+    Falls back to the calendar month for accounts with no subscription, which is the only sensible
+    period when there is no billing cycle to borrow.
+    """
+    now = datetime.now(timezone.utc)
+    renews = getattr(user, "subscription_renews_at", None)
+    if isinstance(renews, datetime):
+        if renews.tzinfo is None:
+            renews = renews.replace(tzinfo=timezone.utc)
+        # ONLY a renewal still in the future describes a live period. A date in the past means the
+        # subscription lapsed, or our copy is stale, and anchoring to it would open a window running
+        # from whenever that was: a 400-day-old renewal would sum fourteen months of usage into one
+        # allowance. The calendar month is the honest answer for an account with no live cycle.
+        if renews > now:
+            return _minus_one_month(renews).strftime("%Y-%m-%d")
+    return _month_floor(now).strftime("%Y-%m-%d")
+
+
+def calls_this_period(session, *, user_id: int | None, since: str) -> int:
+    """Upstream calls charged to this user since ``since`` (inclusive), across every platform."""
+    from sqlalchemy import func as _func
+
+    total = session.execute(
+        select(_func.coalesce(_func.sum(UpstreamUsage.api_calls), 0)).where(
+            UpstreamUsage.scope == USER_SCOPE,
+            UpstreamUsage.scope_id == _scope_id_for(user_id),
+            UpstreamUsage.usage_date >= since,
+        )
+    ).scalar()
+    return int(total or 0)
+
+
+def period_usage(session, user) -> tuple[int, int]:
+    """``(calls_used, calls_included)`` for this user's current billing period.
+
+    ``calls_included`` of 0 means unmetered (an admin, or a deployment that has switched the ceiling
+    off), never "no allowance". Callers must treat 0 as "do not enforce" — reading it as an
+    exhausted budget would lock out precisely the accounts meant to be exempt.
+    """
+    from app.core import plans
+
+    if getattr(user, "is_admin", False):
+        return (0, 0)
+    tier = plans.get_tier(getattr(user, "plan_tier", None))
+    since = billing_period_start(user)
+    return (calls_this_period(session, user_id=getattr(user, "id", None), since=since),
+            int(tier.monthly_call_ceiling))
+
+
+def enforce_period_budget(session, user, *, what: str, projected: int = 0) -> None:
+    """Refuse when this billing period's plan call ceiling is spent. Call BEFORE any upstream fetch.
+
+    ``projected`` is how many calls the caller is about to make, and is what lets a SCAN be refused
+    up front instead of half way through. That distinction is the whole reason this takes a
+    projection at all: a compile can simply be declined (it costs the customer nothing), but a scan
+    consumes credits, so it must be refused BEFORE the charge or the customer pays for a scan that
+    gets cut off. Pass 0 for the compile path, where the call count is not knowable in advance.
+    """
+    used, included = period_usage(session, user)
+    if included <= 0:
+        return                                   # unmetered: admin, or the ceiling is switched off
+    if used + max(0, projected) < included:
+        return
+
+    from app.core import plans
+
+    tier = plans.get_tier(getattr(user, "plan_tier", None))
+    log.warning(
+        "plan call ceiling reached: user=%s used=%s projected=%s ceiling=%s tier=%s (%s)",
+        getattr(user, "id", None), used, projected, included, tier.slug, what,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail=(
+            f"This month's {tier.display_name} allowance is used up "
+            f"({used:,} of {included:,} lookups). Buy a credit pack or move up a plan to keep "
+            "going. Everything you have already scanned stays available."
+        ),
+    )

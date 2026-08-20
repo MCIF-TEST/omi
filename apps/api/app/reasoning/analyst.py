@@ -1395,39 +1395,64 @@ def cached_assessment(inv) -> dict | None:
 #: and not the per-dimension scoring behind it. `confidence` is part of the same block and goes with
 #: it. Flip the feature on by emptying this set; nothing else needs touching.
 #:
+#: The eight-dimension breakdown. Gated on the PLAN, not on being an operator: it is the headline
+#: feature of the Reporter tier (app/core/plans.FEATURE_SIGNAL_BREAKDOWN). Admins always see it.
+#:
+#: Still filtered on SERVE, never on persist, and that is the load-bearing part: the signals stay in
+#: ``payload_json`` for every scan, so a customer who upgrades today gets the breakdown on
+#: investigations they ran last month, and no model output anyone paid for is ever discarded.
+#: Stripping at persist time would make the gate irreversible for all history.
 ADMIN_ONLY_ACCOUNT_FIELDS = frozenset({"signals", "confidence"})
 
-#: Fields that are admin-only FOREVER, not pending a product decision. Kept in a separate set from
-#: the one above precisely so "empty the set to ship the breakdown" stays a one-line change that
-#: cannot also release these by accident.
+#: Fields that are admin-only FOREVER, not pending a product decision or a plan. Kept in a separate
+#: set from the one above precisely so entitling a tier to the breakdown cannot also release these.
 #:
 #: These are the verification pass's working notes (app/reasoning/grounding.py): which checks a
 #: paragraph failed, and the refused paragraph itself. An operator needs both to see whether the
 #: model is drifting. A customer shown the refused text beside the notice explaining that it was
-#: refused would simply read the refused text, which defeats the entire point of refusing it.
+#: refused would simply read the refused text, which defeats the entire point of refusing it. That
+#: is true of a paying Research customer exactly as much as of a free one, which is why plan
+#: entitlements deliberately cannot reach this set.
 NEVER_PUBLIC_ACCOUNT_FIELDS = frozenset({"grounding", "assessment_unverified"})
 
 
-def assessment_for_viewer(assessment: dict | None, *, is_admin: bool) -> dict | None:
+def assessment_for_viewer(
+    assessment: dict | None,
+    *,
+    is_admin: bool,
+    features: frozenset[str] | set[str] | None = None,
+) -> dict | None:
     """The assessment as this viewer is allowed to see it.
 
-    Filtered on SERVE, never on persist, and that distinction is the whole point. The signals stay
-    in ``payload_json``, so the day the breakdown ships to customers every investigation already
-    generated has one, and no model output anyone paid for is thrown away. Stripping at persist time
-    would make the gate irreversible for all history.
+    ``features`` is the viewer's PLAN entitlements (slugs from app/core/plans.py). It can unlock the
+    signal breakdown and nothing else: ``NEVER_PUBLIC_ACCOUNT_FIELDS`` is unreachable from here at
+    any price, because those fields are the reason a paragraph was withheld and showing them to the
+    reader would undo the withholding.
 
-    It also stops a 150-account investigation shipping the better part of 150 KB of JSON that the
-    page renders nowhere: eight dimensions per account, each with a reason up to 240 chars.
+    Defaults to no entitlements so a caller that forgets the argument shows LESS, not more. Every
+    unauthenticated surface (the public report, the demo) relies on that default.
 
-    Returns a copy. Mutating the cached entry in place would poison it for the next reader (it is the
-    live ``payload_json`` object) and could be flushed back to the database by SQLAlchemy.
+    Returns a copy when it filters anything. Mutating the cached entry in place would poison it for
+    the next reader (it is the live ``payload_json`` object) and could be flushed back to the
+    database by SQLAlchemy, permanently deleting the signals for everyone including admins.
     """
-    if is_admin or not isinstance(assessment, dict):
+    if not isinstance(assessment, dict):
         return assessment
+
+    have = frozenset(features or ())
+    hidden: set[str] = set()
+    if not is_admin:
+        hidden |= set(NEVER_PUBLIC_ACCOUNT_FIELDS)
+        from app.core.plans import FEATURE_SIGNAL_BREAKDOWN
+
+        if FEATURE_SIGNAL_BREAKDOWN not in have:
+            hidden |= set(ADMIN_ONLY_ACCOUNT_FIELDS)
+    if not hidden:
+        return assessment
+
     rows = assessment.get("commenter_assessments")
     if not isinstance(rows, list) or not rows:
         return assessment
-    hidden = ADMIN_ONLY_ACCOUNT_FIELDS | NEVER_PUBLIC_ACCOUNT_FIELDS
     out = dict(assessment)
     out["commenter_assessments"] = [
         {k: v for k, v in r.items() if k not in hidden}

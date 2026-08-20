@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.auth import CurrentUser, require_user
+from app.core.auth import CurrentUser, require_feature, require_user
+from app.core.plans import FEATURE_MONITORING
 from app.monitoring.service import MonitoringService
 from app.schemas import WatchlistIn, WatchlistOut, WatchlistsResponse
 from app.storage.db import get_session
@@ -43,10 +44,16 @@ def list_watchlists(
         )
 
 
+# Monitoring is a Reporter feature, gated on ADDING a watch, never on reading or removing one.
+#
+# Same rule as saved graphs: a customer who downgrades keeps what they built and can still see it,
+# and can always stop watching something. Only growing the set costs a plan. Taking away someone's
+# ability to DELETE their own row would be worse than pointless, since watches are what generate the
+# upstream calls the tier is meant to pay for.
 @router.post("", response_model=WatchlistOut)
 def add_watchlist(
     payload: WatchlistIn,
-    current: CurrentUser = Depends(require_user),
+    current: CurrentUser = Depends(require_feature(FEATURE_MONITORING)),
 ) -> WatchlistOut:
     if current.id == 0:
         raise HTTPException(

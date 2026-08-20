@@ -156,6 +156,8 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("investigations", "notes", "TEXT"),
     # Investigation overall confidence (derived from payload) — list readability
     ("investigations", "confidence", "DOUBLE PRECISION"),
+    # Plan tier (three-tier pricing). NULL = Free; see app/core/plans.py.
+    ("users", "plan_tier", "VARCHAR(32)"),
     # Platform + thumbnail denormalised out of payload_json so the archive list never loads the blob
     # (see Investigation.platform). Existing rows stay NULL and fall back to URL heuristics.
     ("investigations", "platform", "VARCHAR(16)"),

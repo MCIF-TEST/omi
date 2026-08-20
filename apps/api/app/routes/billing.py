@@ -25,7 +25,7 @@ The product is created **once** in the Stripe dashboard:
     Product: "OmiSphere Monthly"
     Price:   $13.99 USD / month, recurring  ->  copy the price_… id into OMI_STRIPE_PRICE_ID
 
-Each paid invoice grants ``settings.monthly_credit_grant`` credits (20).
+Each paid invoice grants the credits of the TIER its Stripe Price names (app/core/plans.py).
 
 WHY THIS FILE IS SHAPED THE WAY IT IS
 This is the money path, so it is built around two rules that are easy to get
@@ -64,11 +64,21 @@ from sqlalchemy.orm import Session
 from app.core.auth import CurrentUser, require_user
 from app.core.billing_sync import reconcile_billing
 from app.core.config import Settings, get_settings
+from app.core.observability import capture_exception
 from app.core.referrals import grant_subscription_bonus_if_due
 from app.storage.db import get_session
 from app.storage.models import BillingEvent, User
 
 log = logging.getLogger("omi.billing")
+
+class UnknownStripePrice(RuntimeError):
+    """A paid invoice carried no Price id this deployment recognises.
+
+    Typed so it is greppable in the error tracker. A Floor-shaped fault: nothing raises on its own,
+    the customer simply receives no credits, and the only other symptom is a support email. Reported
+    rather than raised, because failing the webhook would make Stripe retry into the same wall.
+    """
+
 
 router = APIRouter(prefix="/v1/billing", tags=["billing"])
 
@@ -80,6 +90,12 @@ GRANTING_BILLING_REASONS = (
     "subscription_cycle",    # the recurring monthly charge
     "subscription_create",   # the first charge
     "subscription_update",   # plan change / proration
+    # A one-off credit pack. Checkout in `payment` mode with invoice_creation enabled produces an
+    # invoice whose billing_reason is "manual", so without this a top-up takes the money and grants
+    # nothing. This is only safe because WHAT to grant is now decided by the Stripe Price on the
+    # invoice: a manual invoice carrying no configured price resolves to no purchase and grants
+    # nothing, so widening the reasons cannot turn an arbitrary dashboard invoice into free credits.
+    "manual",
 )
 
 # The events to tick when registering the endpoint in the Stripe dashboard.
@@ -169,26 +185,53 @@ def _billing_is_configured(settings: Settings) -> bool:
     return True
 
 
-def _require_price_id(settings: Settings) -> str:
-    """Stripe Price ids look like ``price_1ABC…``. Dollar amounts are not valid."""
-    raw = (settings.stripe_price_id or "").strip()
+def _price_id_for_tier(settings: Settings, tier) -> str:
+    """The configured Stripe Price id for one tier, or a 503 explaining exactly what to set.
+
+    Stripe Price ids look like ``price_1ABC…``. A dollar amount is not one, and that mistake is
+    common enough to be worth naming in the error: the amount lives on the Price object in Stripe,
+    which is precisely why no code here can charge the wrong number.
+    """
+    env = f"OMI_{tier.price_setting.upper()}"
+    raw = (getattr(settings, tier.price_setting, None) or "").strip()
+
+    # The legacy single-plan price still backs Starter for deployments that have not created the new
+    # Prices yet, so an upgrade of this code alone never takes checkout offline.
+    if not raw and tier.slug == "starter":
+        raw = (settings.stripe_price_id or "").strip()
+        env = "OMI_STRIPE_PRICE_ID"
+
     if not raw:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "OMI_STRIPE_PRICE_ID is not set. In Stripe Dashboard → Product catalogue, open "
-                "your monthly recurring price and copy the id that starts with price_ (not the "
-                "dollar amount)."
+                f"{env} is not set, so the {tier.display_name} plan cannot be sold. In Stripe "
+                "Dashboard, Product catalogue, open that plan's monthly recurring price and copy "
+                "the id that starts with price_ (not the dollar amount)."
             ),
         )
     if not raw.startswith("price_"):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                f"OMI_STRIPE_PRICE_ID is set to {raw!r}, which is not a Stripe Price id. "
-                "It must look like price_1ABC… (Dashboard → Product catalogue → your product → "
-                "the recurring monthly price → copy Price ID). Do not put 13.99 or $13.99 here, "
-                "the amount lives on the Price object in Stripe."
+                f"{env} is set to {raw!r}, which is not a Stripe Price id. It must look like "
+                "price_1ABC… (Dashboard, Product catalogue, your product, the recurring monthly "
+                f"price, copy Price ID). Do not put {tier.price_display} here: the amount lives on "
+                "the Price object in Stripe."
+            ),
+        )
+    return raw
+
+
+def _require_topup_price_id(settings: Settings) -> str:
+    """The one-off top-up Price. Separate from the tiers because it is mode=payment, not a plan."""
+    raw = (settings.stripe_price_topup or "").strip()
+    if not raw.startswith("price_"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "OMI_STRIPE_PRICE_TOPUP is not set to a Stripe Price id, so credit packs cannot be "
+                "sold. Create a ONE-OFF (not recurring) price in Stripe and copy its price_… id."
             ),
         )
     return raw
@@ -355,6 +398,21 @@ def _customer_has_live_subscription(stripe, customer_id: str) -> bool:
     return False
 
 
+class CheckoutRequest(BaseModel):
+    """Which plan to buy. A SLUG, never a price id or an amount.
+
+    The server resolves the slug against the catalog, so the worst a tampered body can do is select
+    a different real plan at the price Stripe holds for it.
+    """
+
+    tier: str | None = None
+
+
+class TopupResponse(BaseModel):
+    url: str
+    credits: int
+
+
 class CheckoutResponse(BaseModel):
     url: str
 
@@ -366,8 +424,20 @@ class BillingStatusResponse(BaseModel):
     credits_remaining: int
     subscription_status: str | None
     subscription_renews_at: datetime | None
-    price_display: str               # e.g. "$13.99"
-    credits_per_period: int          # e.g. 20
+    price_display: str               # e.g. "$14.99" — the tier they are ON, not the cheapest one
+    credits_per_period: int          # e.g. 12
+    # Which plan the account is entitled to, and what it unlocks. The UI renders gates from these
+    # rather than re-deriving them, so a feature can never appear enabled on one screen and locked
+    # on another.
+    plan_tier: str
+    plan_name: str
+    plan_features: list[str]
+    # Upstream-call meter for the current billing month. This is the ceiling that makes the price
+    # possible, so the customer gets to see it rather than discovering it at a refusal.
+    calls_used: int = 0
+    calls_included: int = 0
+    topup_credits: int = 0           # what one credit pack contains
+    topup_price_display: str = ""
 
 
 @router.get("/status", response_model=BillingStatusResponse)
@@ -385,13 +455,28 @@ def billing_status(
         if user is None:
             raise HTTPException(status_code=401, detail="Session invalid.")
         reconcile_billing(session, user, settings=settings, reason="status")
+
+        from app.core import plans
+        from app.core.upstream_budget import period_usage
+
+        tier = plans.get_tier(user.plan_tier)
+        used, included = period_usage(session, user)
         return BillingStatusResponse(
             configured=_billing_is_configured(settings),
             credits_remaining=user.credits_remaining,
             subscription_status=user.subscription_status,
             subscription_renews_at=user.subscription_renews_at,
-            price_display=settings.subscription_price_display,
-            credits_per_period=settings.monthly_credit_grant,
+            # The tier the customer is actually ON. Reading a single global price setting here was
+            # correct with one plan and would now show a Research subscriber the Starter price.
+            price_display=tier.price_display,
+            credits_per_period=tier.monthly_credits,
+            plan_tier=tier.slug,
+            plan_name=tier.display_name,
+            plan_features=sorted(tier.features),
+            calls_used=used,
+            calls_included=included,
+            topup_credits=int(settings.topup_pack_credits),
+            topup_price_display=plans.TOPUP_PRICE_DISPLAY,
         )
 
 
@@ -638,9 +723,30 @@ def billing_preflight(
         ))
 
     # --- 5. What they get ---------------------------------------------------------------------
+    # Which plans this deployment can actually sell. A tier with no configured Price is invisible
+    # to customers AND, worse, its renewal invoices resolve to no tier and grant nothing, so naming
+    # the unconfigured ones here is the difference between a five-minute fix and a support thread.
+    from app.core import plans
+
+    sellable = [t for t in plans.paid_tiers() if (getattr(settings, t.price_setting, None) or "").strip()]
+    missing = [t for t in plans.paid_tiers() if t not in sellable]
     checks.append(PreflightCheck(
-        name="credit_grant", ok=settings.monthly_credit_grant > 0,
-        detail=f"{settings.monthly_credit_grant} credits granted per paid invoice.",
+        name="plans", ok=bool(sellable),
+        detail=(
+            ", ".join(f"{t.display_name} {t.price_display} -> {t.monthly_credits} credits"
+                      for t in sellable) or "no plan has a Stripe Price configured"
+        ) + (
+            f". NOT SELLABLE (no Price id set): {', '.join(f'{t.display_name} (OMI_{t.price_setting.upper()})' for t in missing)}"
+            if missing else ""
+        ),
+    ))
+    checks.append(PreflightCheck(
+        name="topup", ok=bool((settings.stripe_price_topup or "").strip()),
+        detail=(
+            f"Credit packs of {settings.topup_pack_credits} are on sale."
+            if (settings.stripe_price_topup or "").strip()
+            else "OMI_STRIPE_PRICE_TOPUP is unset, so a customer who runs out has nothing to buy."
+        ),
     ))
 
     # --- 6. The webhook: the primary crediting path -------------------------------------------
@@ -760,17 +866,33 @@ def billing_preflight(
 
 @router.post("/create-checkout-session", response_model=CheckoutResponse)
 def create_checkout_session(
+    body: CheckoutRequest | None = None,
     current: CurrentUser = Depends(require_user),
     settings: Settings = Depends(get_settings),
 ) -> CheckoutResponse:
-    """Create a Stripe Checkout session for the monthly subscription.
+    """Create a Stripe Checkout session for a subscription tier.
 
     Returns the hosted-checkout URL for the browser to follow. Stripe collects the card; no card
     detail ever reaches this server.
+
+    The tier is validated against the catalog rather than trusted: the request names a SLUG and the
+    server looks up the Price, so a tampered body can only ever select a plan that exists at the
+    price Stripe holds for it. It can never name its own price id or amount.
     """
+    from app.core import plans
+
+    requested = (body.tier if body and body.tier else plans.STARTER.slug)
+    tier = plans.BY_SLUG.get(str(requested).strip().lower())
+    if tier is None or not tier.price_setting:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown plan {requested!r}. Choose one of: "
+                   + ", ".join(x.slug for x in plans.paid_tiers()),
+        )
+
     stripe = _stripe(settings)
     base = _public_base(settings)
-    price_id = _require_price_id(settings)
+    price_id = _price_id_for_tier(settings, tier)
 
     # Fail fast with a clear message when the configured price cannot back a subscription.
     # Without this, a one-off / archived / wrong-mode price only surfaces as a vague 502 at click.
@@ -781,16 +903,16 @@ def create_checkout_session(
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=(
-                    f"OMI_STRIPE_PRICE_ID ({price_id}) is a one-off price, not a "
+                    f"The {tier.display_name} price ({price_id}) is a one-off price, not a "
                     "recurring subscription price. Create a monthly recurring price in Stripe and "
-                    "set OMI_STRIPE_PRICE_ID to its price_… id."
+                    f"set OMI_{tier.price_setting.upper()} to its price_… id."
                 ),
             )
         if not bool(getattr(price, "active", False)):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=(
-                    f"OMI_STRIPE_PRICE_ID ({price_id}) is archived in Stripe. "
+                    f"The {tier.display_name} price ({price_id}) is archived in Stripe. "
                     "Activate it or point the env var at an active recurring price."
                 ),
             )
@@ -801,7 +923,7 @@ def create_checkout_session(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                f"Could not load OMI_STRIPE_PRICE_ID ({price_id}) from Stripe: {_stripe_user_message(e)}. "
+                f"Could not load the {tier.display_name} price ({price_id}) from Stripe: {_stripe_user_message(e)}. "
                 "Confirm it is a price_… id from the SAME mode (test/live) as OMI_STRIPE_SECRET_KEY."
             ),
         ) from e
@@ -961,6 +1083,87 @@ def create_checkout_session(
             detail="Stripe created a session but returned no checkout URL. Check the Stripe dashboard logs.",
         )
     return CheckoutResponse(url=s.url)
+
+
+@router.post("/create-topup-session", response_model=TopupResponse)
+def create_topup_session(
+    current: CurrentUser = Depends(require_user),
+    settings: Settings = Depends(get_settings),
+) -> TopupResponse:
+    """Buy a one-off credit pack.
+
+    WHY THIS EXISTS AT ALL. Credits bound how much a subscriber can spend, and that bound is what
+    makes a price possible: before it, one customer could run up hundreds of dollars of upstream
+    calls against a $14.99 subscription. A hard ceiling with no way past it would just turn the
+    heaviest, most engaged users into churn. So the ceiling is a meter, not a wall: go past what
+    your plan includes and you buy more at a price that covers what it costs to serve.
+
+    THREE THINGS IT MUST NOT DO, all of which a subscription checkout does:
+      * mode is ``payment``, not ``subscription`` — this bills once and creates no plan;
+      * it never touches ``plan_tier`` or ``subscription_status``, so a lapsed account buying a
+        pack does not read as having a live subscription, and a Starter customer buying overage
+        stays on Starter;
+      * it never redirects to the Customer Portal. A user with a live subscription is exactly who
+        buys a pack, so the "already subscribed, send them to the portal" branch would make this
+        endpoint unreachable for its own audience.
+
+    Credits land through the same per-invoice claim as everything else, so a double-submitted
+    checkout grants once.
+    """
+    stripe = _stripe(settings)
+    base = _public_base(settings)
+    price_id = _require_topup_price_id(settings)
+    credits = int(settings.topup_pack_credits)
+
+    with get_session() as session:
+        user = session.get(User, current.id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Session invalid.")
+        customer_id = _ensure_stripe_customer(stripe, user)
+
+    success = f"{base}/settings?billing=topup&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel = f"{base}/settings?billing=cancel"
+    idem = f"omi-topup-{current.id}-{price_id}-{int(time.time()) // 30}"
+
+    args = {
+        "mode": "payment",
+        "customer": customer_id,
+        "line_items": [{"price": price_id, "quantity": 1}],
+        "success_url": success,
+        "cancel_url": cancel,
+        "allow_promotion_codes": True,
+        "billing_address_collection": "auto",
+        "customer_update": {"address": "auto", "name": "auto"},
+        "client_reference_id": str(current.id),
+        "metadata": {"omi_user_id": str(current.id), "omi_topup_credits": str(credits)},
+        # A one-off Checkout only produces an invoice when asked to, and the invoice id is the key
+        # the exactly-once grant claims. Without this the payment succeeds and nothing grants.
+        "invoice_creation": {
+            "enabled": True,
+            "invoice_data": {"metadata": {"omi_user_id": str(current.id)}},
+        },
+    }
+
+    try:
+        s = stripe.checkout.Session.create(
+            payment_method_types=_payment_method_types(settings),
+            idempotency_key=idem,
+            **args,
+        )
+    except Exception as e:  # noqa: BLE001
+        msg = _stripe_user_message(e)
+        log.exception("stripe topup session create failed for user=%s: %s", current.id, msg)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not start checkout for a credit pack: {msg}",
+        ) from e
+
+    if not getattr(s, "url", None):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Stripe created a session but returned no checkout URL.",
+        )
+    return TopupResponse(url=s.url, credits=credits)
 
 
 @router.post("/portal", response_model=CheckoutResponse)
@@ -1151,6 +1354,53 @@ def _grant_credits_once(session: Session, user: User, *, key: str, amount: int, 
     return True
 
 
+def invoice_price_ids(obj: dict) -> list[str]:
+    """Every Stripe Price id on an invoice, newest-API shape first.
+
+    Stripe has moved this field twice. Recent API versions put it at
+    ``lines.data[].pricing.price_details.price``; before that it was ``lines.data[].price.id``; and
+    older subscription invoices carried ``lines.data[].plan.id``. Reading only one shape yields an
+    empty list on the others, and an empty list here means "no tier could be resolved", which fails
+    closed to Free — i.e. a paying customer silently loses their plan on renewal.
+
+    So all three are read, and the caller takes the first that resolves to a known tier.
+    """
+    out: list[str] = []
+    for line in ((obj.get("lines") or {}).get("data") or []):
+        if not isinstance(line, dict):
+            continue
+        pricing = line.get("pricing") or {}
+        details = pricing.get("price_details") or {} if isinstance(pricing, dict) else {}
+        for candidate in (
+            details.get("price") if isinstance(details, dict) else None,
+            (line.get("price") or {}).get("id") if isinstance(line.get("price"), dict) else line.get("price"),
+            (line.get("plan") or {}).get("id") if isinstance(line.get("plan"), dict) else None,
+        ):
+            if isinstance(candidate, str) and candidate and candidate not in out:
+                out.append(candidate)
+    return out
+
+
+def resolve_invoice_purchase(obj: dict, settings: Settings):
+    """What an invoice actually bought: ``("tier", PlanTier)``, ``("topup", None)``, or ``None``.
+
+    Kept as one function so the webhook and the reconciliation backstop cannot disagree about what a
+    given invoice means. They race for the same grant row by design, and two different readings of
+    one invoice would make whichever arrived first decide the customer's plan.
+    """
+    from app.core import plans
+
+    ids = invoice_price_ids(obj)
+    for pid in ids:
+        tier = plans.tier_for_price_id(pid, settings)
+        if tier is not None:
+            return ("tier", tier)
+    for pid in ids:
+        if plans.is_topup_price(pid, settings):
+            return ("topup", None)
+    return None
+
+
 def _handle_invoice_paid(session: Session, obj: dict, settings: Settings) -> None:
     """Money moved — this is the ONLY place credits are granted."""
     if obj.get("billing_reason") not in GRANTING_BILLING_REASONS:
@@ -1169,10 +1419,43 @@ def _handle_invoice_paid(session: Session, obj: dict, settings: Settings) -> Non
         log.error("invoice.paid with no invoice id; refusing to grant un-keyable credits")
         return
 
-    _grant_credits_once(
+    purchase = resolve_invoice_purchase(obj, settings)
+
+    if purchase is not None and purchase[0] == "topup":
+        # A one-off credit pack. It adds credits and touches NOTHING else: not the tier, not the
+        # subscription status, not the renewal date. Someone on Starter who buys overage is still on
+        # Starter, and a top-up bought by a lapsed account must not read as a live subscription.
+        _grant_credits_once(
+            session, user, key=str(invoice_id),
+            amount=settings.topup_pack_credits, reason="topup",
+        )
+        return
+
+    tier = purchase[1] if purchase is not None else None
+    if tier is None:
+        # Money moved on an invoice whose Price we do not recognise. Granting a default would be
+        # guessing at what somebody paid for, so grant nothing and make the operator visible to
+        # themselves: this is a misconfigured Price id, and it is the kind of fault that otherwise
+        # only shows up as a customer complaining they got nothing.
+        log.error(
+            "invoice %s paid but no configured Stripe Price matched (%s); granted nothing. "
+            "Check OMI_STRIPE_PRICE_STARTER/_REPORTER/_RESEARCH/_TOPUP against the dashboard.",
+            invoice_id, ", ".join(invoice_price_ids(obj)) or "no price on invoice",
+        )
+        capture_exception(UnknownStripePrice(f"invoice {invoice_id} has no configured price"))
+        return
+
+    granted = _grant_credits_once(
         session, user, key=str(invoice_id),
-        amount=settings.monthly_credit_grant, reason="invoice_paid",
+        amount=tier.monthly_credits, reason=f"invoice_paid:{tier.slug}",
     )
+    # The tier is set whether or not the grant won its race: losing the race means the OTHER path
+    # already granted this same invoice's credits, and the entitlement it implies is identical.
+    # Skipping the assignment there would leave a customer paid-up but on the wrong plan.
+    if user.plan_tier != tier.slug:
+        log.info("user=%s plan %s -> %s (invoice %s)", user.id, user.plan_tier, tier.slug, invoice_id)
+        user.plan_tier = tier.slug
+    _ = granted
 
     if user.subscription_status not in PAID_STATUSES:
         user.subscription_status = "active"
@@ -1213,12 +1496,19 @@ def _handle_subscription_update(session: Session, obj: dict) -> None:
 
 
 def _handle_subscription_deleted(session: Session, obj: dict) -> None:
-    """Cancelled. Credits already bought are the user's — they keep them."""
+    """Cancelled. Credits already bought are the user's — they keep them.
+
+    The ENTITLEMENT does lapse, though, and those are different things. Credits were paid for and
+    are still spendable; the tier's features (the signal breakdown, saved graphs, coordination) are
+    a subscription benefit and stop with the subscription. Stripe emits this at the real end of the
+    paid period, not at the moment someone clicks cancel, so nothing is taken away early.
+    """
     user = _resolve_user(session, obj)
     if user is None:
         return
     user.subscription_status = "canceled"
     user.subscription_renews_at = None
+    user.plan_tier = None
 
 
 def _handle_payment_failed(session: Session, obj: dict) -> None:

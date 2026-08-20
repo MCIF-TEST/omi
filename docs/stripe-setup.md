@@ -1,4 +1,4 @@
-# Stripe setup: $13.99/month for 20 credits (webhook + API backstop)
+# Stripe setup: three plans plus credit packs (webhook + API backstop)
 
 Everything you need to take the first real payment. Do it once in **test mode**, verify with a test
 card, then repeat the same steps in **live mode** with live keys.
@@ -12,9 +12,15 @@ so whichever path arrives first grants and the other does nothing. The webhook m
 reconciliation means a webhook you forgot to register, pointed at the wrong host, or whose secret you
 rotated is an inconvenience rather than a customer who paid and got nothing.
 
-Setup is four env vars on the **API** service: `OMI_STRIPE_SECRET_KEY` (`sk_…`),
-`OMI_STRIPE_PRICE_ID` (`price_…` recurring monthly), `OMI_PUBLIC_BASE_URL` (your **web** URL), and
+Setup is seven env vars on the **API** service: `OMI_STRIPE_SECRET_KEY` (`sk_…`), one Price id
+per plan (`OMI_STRIPE_PRICE_STARTER` / `_REPORTER` / `_RESEARCH`), one for the credit pack
+(`OMI_STRIPE_PRICE_TOPUP`), `OMI_PUBLIC_BASE_URL` (your **web** URL), and
 `OMI_STRIPE_WEBHOOK_SECRET` (`whsec_…`, from step 3).
+
+**The Price on an invoice is what decides which plan was bought**, and therefore how many credits
+are granted. That is why each tier needs its own Price id: a plan whose id is not configured does
+not merely fail to sell, its renewal invoices resolve to no tier and grant **nothing**.
+`GET /v1/billing/preflight` names any that are missing.
 
 **Publishable keys (`pk_…` / `STRIPE_PUBLISHABLE_KEY`) are not used.** Checkout is Stripe-hosted;
 no Stripe.js runs in the browser. A publishable key alone cannot make Subscribe work.
@@ -47,30 +53,40 @@ charged — which the scan path always does before refusing anyone.
 
 ---
 
-## 1. Create the product and price
+## 1. Create the products and prices
 
-Stripe Dashboard → **Product catalogue → Add product**
+You need **four** Prices: three recurring plans and one one-off credit pack.
 
-| Field | Value |
-|---|---|
-| Name | `Omi Premium Member` |
-| Description | `20 analysis credits per month` |
-| Price | `13.99` **USD** |
-| Billing period | **Monthly** (recurring) |
+Stripe Dashboard → **Product catalogue → Add product**, once per row.
 
-Save, then open the price and copy its id — it looks like `price_1QxxxxxxxxxxxxxxxxxxXXXX`.
-That is `OMI_STRIPE_PRICE_ID`.
+| Product name | Price | Billing | Env var | Grants |
+|---|---|---|---|---|
+| `Omi Premium Starter` | `14.99` USD | **Monthly** (recurring) | `OMI_STRIPE_PRICE_STARTER` | 12 credits |
+| `Omi Premium Reporter` | `79.00` USD | **Monthly** (recurring) | `OMI_STRIPE_PRICE_REPORTER` | 75 credits |
+| `Omi Premium Research` | `249.00` USD | **Monthly** (recurring) | `OMI_STRIPE_PRICE_RESEARCH` | 250 credits |
+| `Omi Credit Pack` | `25.00` USD | **One-off** (not recurring) | `OMI_STRIPE_PRICE_TOPUP` | 25 credits |
 
-> **The product Name must match `PLAN_NAME` in `apps/web/lib/plan.ts`** (currently
-> `Omi Premium Member`). The site names the plan, then Stripe Checkout shows whatever this field says,
-> and a customer who sees two different plan names at the moment they hand over a card reasonably
-> wonders what they are buying. Nothing in the repo can detect that drift, so if you rename the plan
-> in one place, rename it in the other. Renaming an existing product is safe: it does not change the
-> price id, so no env var needs updating and no subscription is affected.
+Save each one, open its price, and copy the id — it looks like `price_1QxxxxxxxxxxxxxxxxxxXXXX`.
 
-> One credit covers up to 50 analysed accounts, so 20 credits ≈ 1,000 accounts a month. If you ever
-> want to change what a subscription is worth, change `OMI_MONTHLY_CREDIT_GRANT` — the amount charged
-> is the Stripe Price, and the two are deliberately independent.
+> **The credit pack MUST be one-off, not recurring.** A recurring price here would silently sign
+> customers up to a second monthly subscription when they meant to buy overage once. The checkout
+> route uses `mode: payment` and will reject a recurring price.
+
+> **Keep the legacy `OMI_STRIPE_PRICE_ID` set.** It is the pre-tier single-plan price, and every
+> current subscriber's renewal invoices carry it forever. The server maps it to Starter. Removing it
+> would leave the only people already paying unable to name a tier on their next renewal, which
+> fails closed to Free: a silent downgrade of exactly the customers you have.
+
+> **The product names must match `PLAN_NAME` + the tier names in `apps/web/lib/plan.ts`.** The site
+> names the plan, then Checkout shows whatever this field says, and a customer who sees two
+> different names at the moment they hand over a card reasonably wonders what they are buying.
+> Nothing in the repo can detect that drift. Renaming an existing product is safe: it does not
+> change the price id, so no env var needs updating and no subscription is affected.
+
+> **What each plan grants is in the repo, not in Stripe.** The amount charged is the Stripe Price;
+> the credits and the monthly lookup ceiling are `app/core/plans.py`. The two are deliberately
+> independent, and both are pinned against the website's copy by
+> `tests/test_deployed_credit_contract.py`. One credit covers 20 analysed accounts.
 
 ## 2. Get your API keys
 
@@ -127,6 +143,15 @@ ever been received, the endpoint is registered against the wrong host or the oth
 Dashboard → **Settings → Billing → Customer portal** → enable it, and allow customers to update
 payment methods and cancel. Without this, "Manage subscription" fails when clicked.
 
+**Then, in the same screen, turn on "Customers can switch plans" and add all three products to the
+allowed list.** This is the step that makes upgrades and downgrades work, and it is easy to miss
+because nothing in the app fails visibly without it — an existing subscriber clicking a different
+plan simply lands in a portal that offers no way to switch.
+
+Stripe's portal is used for plan changes deliberately: it prorates a mid-cycle switch correctly, and
+re-implementing proration by hand is one of the more reliable ways to double-charge somebody. The
+app only opens a fresh Checkout for customers who have **no** live subscription.
+
 ---
 
 ## 5. Render environment variables
@@ -136,20 +161,31 @@ payment methods and cancel. Without this, "Manage subscription" fails when click
 | Variable | Example | Notes |
 |---|---|---|
 | `OMI_STRIPE_SECRET_KEY` | `sk_test_51Q…` | **Secret.** The only credential billing needs. |
-| `OMI_STRIPE_PRICE_ID` | `price_1Q…` | Not secret, but must match the price you want to charge. |
+| `OMI_STRIPE_PRICE_STARTER` | `price_1Q…` | $14.99/mo. Grants 12 credits. |
+| `OMI_STRIPE_PRICE_REPORTER` | `price_1Q…` | $79/mo. Grants 75 credits + the signal breakdown, saved graphs and monitoring. |
+| `OMI_STRIPE_PRICE_RESEARCH` | `price_1Q…` | $249/mo. Grants 250 credits + coordination detection and API access. |
+| `OMI_STRIPE_PRICE_TOPUP` | `price_1Q…` | **One-off**, $25. Grants `OMI_TOPUP_PACK_CREDITS`. Unset means a customer who runs out has nothing to buy. |
+| `OMI_STRIPE_PRICE_ID` | `price_1Q…` | The **legacy** single-plan price. Keep it: existing subscribers' renewals carry it and it resolves to Starter. |
+| `OMI_TOPUP_PACK_CREDITS` | `25` | What one pack contains. Stripe sets what it costs; this sets what it holds. Keep them at $1/credit. |
 | `OMI_STRIPE_WEBHOOK_SECRET` | `whsec_1Q…` | **Secret.** The signing secret from the endpoint in step 3 — not the API key, not the endpoint id. Unset = the webhook is inert and crediting falls back to reconciliation. |
-| `OMI_PUBLIC_BASE_URL` | `https://omisphere-web.onrender.com` | The **web** URL. Stripe sends the customer back here after checkout — set it to the site people actually visit, not the API host, or they land on an API 404. |
-| `OMI_MONTHLY_CREDIT_GRANT` | `20` | Credits added per paid invoice. |
-| `OMI_FREE_TRIAL_CREDITS` | `3` | Credits a new signup starts with. |
-| `OMI_SUBSCRIPTION_PRICE_DISPLAY` | `$13.99` | Display only. Keep it in step with the Stripe price. |
+| `OMI_PUBLIC_BASE_URL` | `https://omisphere.online` | The **web** URL. Stripe sends the customer back here after checkout — set it to the site people actually visit, not the API host, or they land on an API 404. |
+| `OMI_FREE_TRIAL_CREDITS` | `5` | Credits a new signup starts with. |
+| `OMI_SUBSCRIPTION_PRICE_DISPLAY` | `$14.99` | Fallback label only. `/v1/billing/status` reports the price of the tier the customer is actually on. |
+
+> `OMI_MONTHLY_CREDIT_GRANT` **no longer exists.** What an invoice grants is a property of the tier
+> its Price names. A single global grant could only ever have been right for one of three plans.
 
 ### Web service (`omisphere-web`)
 
 | Variable | Example | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_MONTHLY_CREDITS` | `20` | Marketing copy only. Must match `OMI_MONTHLY_CREDIT_GRANT`. |
-| `NEXT_PUBLIC_TRIAL_CREDITS` | `3` | Must match `OMI_FREE_TRIAL_CREDITS`. |
-| `NEXT_PUBLIC_SUBSCRIPTION_PRICE` | `$13.99` | Pricing-page copy only. Must match `OMI_SUBSCRIPTION_PRICE_DISPLAY`. |
+| `NEXT_PUBLIC_TRIAL_CREDITS` | `5` | Marketing copy only. Must match `OMI_FREE_TRIAL_CREDITS`. |
+| `NEXT_PUBLIC_TOPUP_PACK_CREDITS` | `25` | Must match `OMI_TOPUP_PACK_CREDITS`. |
+
+> Per-tier credits, prices and lookup ceilings are **not** env vars. They live in
+> `apps/web/lib/plan.ts` and are checked against `app/core/plans.py` by
+> `tests/test_deployed_credit_contract.py`. Nine more env vars nobody reconciles is the drift this
+> repo has already been bitten by three times.
 
 **Never put `OMI_STRIPE_SECRET_KEY` or `OMI_STRIPE_WEBHOOK_SECRET` on the web service.** Anything
 prefixed `NEXT_PUBLIC_` is compiled into JavaScript that every visitor downloads; the two Stripe

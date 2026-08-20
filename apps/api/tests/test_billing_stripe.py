@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.core.config import get_settings
+from app.core.plans import STARTER
 from app.main import app
 from app.storage.db import get_session, reset_db_for_tests
 from app.storage.models import BillingEvent, User
@@ -36,7 +37,7 @@ def client(monkeypatch):
     monkeypatch.setenv("OMI_STRIPE_SECRET_KEY", "sk_test_dummy")
     monkeypatch.setenv("OMI_STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET)
     monkeypatch.setenv("OMI_STRIPE_PRICE_ID", "price_test_dummy")
-    monkeypatch.setenv("OMI_MONTHLY_CREDIT_GRANT", "20")
+    monkeypatch.setenv("OMI_STRIPE_PRICE_STARTER", "price_test_dummy")
     get_settings.cache_clear()
     reset_db_for_tests("sqlite:///:memory:")
     from app.core.rate_limit import SIGNUP_LIMITER, LOGIN_LIMITER
@@ -77,13 +78,35 @@ def _send(client: TestClient, event: dict, *, secret: str = WEBHOOK_SECRET):
     )
 
 
+#: The Price the fixture's subscription is on. A REAL invoice always names one, and since tiers
+#: exist the Price is what decides which plan (and therefore how many credits) an invoice bought.
+#: An invoice carrying no configured Price grants nothing, deliberately: guessing at what somebody
+#: paid for is worse than telling the operator their Price ids are misconfigured.
+PRICE = "price_test_dummy"
+
+#: What that Price grants. Derived, never written out: the tier's credit figure is a pricing
+#: decision that moves with the unit economics, and a literal here would silently start asserting
+#: the wrong number the first time it does.
+GRANT = STARTER.monthly_credits
+
+
+def _lines(price: str = PRICE) -> dict:
+    """Invoice line items in the CURRENT Stripe shape.
+
+    ``invoice_price_ids`` reads three shapes because Stripe has moved this field twice; the other
+    two are covered by their own tests. This is the modern one.
+    """
+    return {"data": [{"pricing": {"price_details": {"price": price}}}]}
+
+
 def _invoice_paid(event_id: str, invoice_id: str, *, reason: str = "subscription_cycle",
-                  amount: int = 999) -> dict:
+                  amount: int = 999, price: str = PRICE) -> dict:
     return {
         "id": event_id, "type": "invoice.paid",
         "data": {"object": {
             "id": invoice_id, "customer": CUSTOMER,
             "billing_reason": reason, "amount_paid": amount,
+            "lines": _lines(price),
         }},
     }
 
@@ -94,7 +117,7 @@ def _invoice_paid(event_id: str, invoice_id: str, *, reason: str = "subscription
 def test_a_paid_invoice_grants_the_monthly_credits(client):
     _set_credits(0)
     assert _send(client, _invoice_paid("evt_1", "in_1")).status_code == 200
-    assert _credits() == 20
+    assert _credits() == GRANT
 
 
 def test_renewal_ADDS_credits_and_never_flattens_a_balance(client):
@@ -102,14 +125,14 @@ def test_renewal_ADDS_credits_and_never_flattens_a_balance(client):
     renewed holding 20+ credits paid the full price and received NOTHING, because max(25, 20) == 25."""
     _set_credits(25)
     assert _send(client, _invoice_paid("evt_2", "in_2")).status_code == 200
-    assert _credits() == 45, "a paid renewal must add its credits on top of the existing balance"
+    assert _credits() == 25 + GRANT, "a paid renewal must add its credits on top of the existing balance"
 
 
 def test_unused_credits_survive_several_renewals(client):
     _set_credits(0)
     for i in range(3):
         _send(client, _invoice_paid(f"evt_r{i}", f"in_r{i}"))
-    assert _credits() == 60
+    assert _credits() == 3 * GRANT
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +144,7 @@ def test_a_redelivered_event_does_not_grant_twice(client):
     _send(client, _invoice_paid("evt_dup", "in_dup"))
     _send(client, _invoice_paid("evt_dup", "in_dup"))
     _send(client, _invoice_paid("evt_dup", "in_dup"))
-    assert _credits() == 20
+    assert _credits() == GRANT
 
 
 def test_the_same_invoice_under_a_DIFFERENT_event_id_does_not_grant_twice(client):
@@ -130,7 +153,7 @@ def test_the_same_invoice_under_a_DIFFERENT_event_id_does_not_grant_twice(client
     _set_credits(0)
     _send(client, _invoice_paid("evt_a", "in_same"))
     _send(client, _invoice_paid("evt_b", "in_same"))
-    assert _credits() == 20
+    assert _credits() == GRANT
 
 
 def test_a_new_subscription_grants_once_despite_two_lifecycle_events(client):
@@ -145,7 +168,7 @@ def test_a_new_subscription_grants_once_despite_two_lifecycle_events(client):
         }},
     })
     _send(client, _invoice_paid("evt_first_invoice", "in_first", reason="subscription_create"))
-    assert _credits() == 20
+    assert _credits() == GRANT
 
 
 # --------------------------------------------------------------------------- #
@@ -198,7 +221,7 @@ def test_a_failed_handler_leaves_the_event_unclaimed_so_stripes_retry_works(clie
 
     second = _send(client, _invoice_paid("evt_retry", "in_retry"))
     assert second.status_code == 200
-    assert _credits() == 20, "Stripe's retry must actually deliver the credits"
+    assert _credits() == GRANT, "Stripe's retry must actually deliver the credits"
 
 
 # --------------------------------------------------------------------------- #
@@ -213,8 +236,42 @@ def test_a_zero_value_invoice_grants_nothing(client):
 
 def test_an_unrelated_billing_reason_grants_nothing(client):
     _set_credits(0)
-    _send(client, _invoice_paid("evt_manual", "in_manual", reason="manual"))
+    _send(client, _invoice_paid("evt_thresh", "in_thresh", reason="subscription_threshold"))
     assert _credits() == 0
+
+
+def test_a_manual_invoice_whose_price_we_do_not_know_grants_nothing(client):
+    """"manual" IS a granting reason, because a one-off credit pack arrives as one.
+
+    That widening is only safe because the PRICE decides what an invoice bought. This is the test
+    that keeps it safe: an invoice raised by hand in the Stripe dashboard, for anything that is not
+    a configured Price, must grant nothing at all. Without this property, adding "manual" to the
+    granting reasons would have turned any dashboard invoice into free credits.
+    """
+    _set_credits(0)
+    _send(client, _invoice_paid("evt_hand", "in_hand", reason="manual", price="price_not_ours"))
+    assert _credits() == 0
+
+
+def test_a_top_up_grants_its_pack_and_does_not_imply_a_subscription(client, monkeypatch):
+    """A credit pack adds credits and touches nothing else.
+
+    The two failures this pins are opposite and both bad: a pack that grants nothing (the whole
+    point of selling it), and a pack that marks a lapsed account as an active subscriber, which
+    would hand them a paid tier's features for the price of some credits.
+    """
+    monkeypatch.setenv("OMI_STRIPE_PRICE_TOPUP", "price_topup_dummy")
+    monkeypatch.setenv("OMI_TOPUP_PACK_CREDITS", "25")
+    get_settings.cache_clear()
+    _set_credits(0)
+
+    _send(client, _invoice_paid("evt_top", "in_top", reason="manual", price="price_topup_dummy"))
+
+    assert _credits() == 25
+    with get_session() as s:
+        user = s.execute(select(User).where(User.email == "payer@t.com")).scalar_one()
+        assert user.plan_tier is None, "a credit pack is not a plan"
+        assert user.subscription_status != "active", "a credit pack is not a subscription"
 
 
 def test_an_event_for_an_unknown_customer_grants_nothing_and_still_acks(client):
@@ -240,9 +297,10 @@ def test_metadata_resolves_the_user_when_the_customer_link_is_missing(client):
         "id": "evt_meta", "type": "invoice.paid",
         "data": {"object": {"id": "in_meta", "customer": "cus_unlinked",
                             "billing_reason": "subscription_cycle", "amount_paid": 999,
+                            "lines": _lines(),
                             "metadata": {"omi_user_id": str(uid)}}},
     })
-    assert _credits() == 20
+    assert _credits() == GRANT
     with get_session() as s:
         # ...and the link is repaired so later events take the fast path.
         assert s.get(User, uid).stripe_customer_id == "cus_unlinked"
@@ -307,13 +365,29 @@ def test_a_failed_payment_marks_past_due_and_a_later_payment_restores_active(cli
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
-def test_billing_status_reports_the_configured_price_and_grant(client):
-    r = client.get("/v1/billing/status")
-    assert r.status_code == 200, r.text
-    body = r.json()
+def test_billing_status_reports_the_plan_the_customer_is_actually_on(client):
+    """The figures follow the TIER, not a single global setting.
+
+    With one plan a global price string was correct. With three it would show a Research subscriber
+    the Starter price, on the page where they check what they are paying.
+    """
+    # Before paying: the free tier's own figures, which are honestly zero rather than a preview of
+    # what subscribing would grant.
+    body = client.get("/v1/billing/status").json()
     assert body["configured"] is True
-    assert body["credits_per_period"] == 20
-    assert body["price_display"] == "$13.99"
+    assert body["plan_tier"] == "free"
+    assert body["credits_per_period"] == 0
+
+    _send(client, _invoice_paid("evt_status", "in_status"))
+
+    body = client.get("/v1/billing/status").json()
+    assert body["plan_tier"] == STARTER.slug
+    assert body["plan_name"] == STARTER.display_name
+    assert body["credits_per_period"] == GRANT
+    assert body["price_display"] == STARTER.price_display
+    # The call ceiling is part of what they bought, so the page can show it rather than letting the
+    # customer discover it at a refusal.
+    assert body["calls_included"] == STARTER.monthly_call_ceiling
 
 
 def test_an_unconfigured_server_acks_webhooks_instead_of_making_stripe_retry(monkeypatch):

@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from app.core import billing_sync
 from app.core.config import get_settings
+from app.core.plans import STARTER
 from app.main import app
 from app.storage.db import get_session, reset_db_for_tests
 from app.storage.models import User
@@ -71,8 +72,19 @@ def _sub(status="active", sub_id="sub_1", period_end=2_000_000_000):
     return {"id": sub_id, "status": status, "current_period_end": period_end, "created": 1}
 
 
-def _invoice(invoice_id, *, reason="subscription_cycle", amount=999):
-    return {"id": invoice_id, "billing_reason": reason, "amount_paid": amount, "status": "paid"}
+#: The Price the fake subscription is on. Since tiers exist, the Price on an invoice is what says
+#: which plan was bought, so a fake invoice has to carry one exactly as a real one does.
+PRICE = "price_test_dummy"
+
+#: Derived, not written out: the tier's credit figure moves with the unit economics.
+GRANT = STARTER.monthly_credits
+
+
+def _invoice(invoice_id, *, reason="subscription_cycle", amount=999, price=PRICE):
+    return {
+        "id": invoice_id, "billing_reason": reason, "amount_paid": amount, "status": "paid",
+        "lines": {"data": [{"pricing": {"price_details": {"price": price}}}]},
+    }
 
 
 def _install(monkeypatch, fake: FakeStripe) -> None:
@@ -87,7 +99,7 @@ def client(monkeypatch):
     monkeypatch.setenv("OMI_FREE_TRIAL_CREDITS", "3")
     monkeypatch.setenv("OMI_STRIPE_SECRET_KEY", "sk_test_dummy")
     monkeypatch.setenv("OMI_STRIPE_PRICE_ID", "price_test_dummy")
-    monkeypatch.setenv("OMI_MONTHLY_CREDIT_GRANT", "20")
+    monkeypatch.setenv("OMI_STRIPE_PRICE_STARTER", "price_test_dummy")
     monkeypatch.delenv("OMI_STRIPE_WEBHOOK_SECRET", raising=False)  # NO webhook configured
     get_settings.cache_clear()
     reset_db_for_tests("sqlite:///:memory:")
@@ -129,10 +141,10 @@ def test_sync_grants_credits_for_a_paid_invoice(client, monkeypatch):
     r = client.post("/v1/billing/sync")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["granted"] == 1 and body["credits_added"] == 20
-    assert body["credits_remaining"] == 20
+    assert body["granted"] == 1 and body["credits_added"] == GRANT
+    assert body["credits_remaining"] == GRANT
     assert body["subscription_status"] == "active"
-    assert _credits() == 20
+    assert _credits() == GRANT
 
 
 def test_sync_is_idempotent_however_many_times_it_runs(client, monkeypatch):
@@ -141,7 +153,7 @@ def test_sync_is_idempotent_however_many_times_it_runs(client, monkeypatch):
     _install(monkeypatch, FakeStripe(subscriptions=[_sub()], invoices=[_invoice("in_dup")]))
     for _ in range(5):
         client.post("/v1/billing/sync")
-    assert _credits() == 20
+    assert _credits() == GRANT
 
 
 def test_a_renewal_is_picked_up_on_the_next_sync_and_ADDS(client, monkeypatch):
@@ -149,12 +161,12 @@ def test_a_renewal_is_picked_up_on_the_next_sync_and_ADDS(client, monkeypatch):
     fake = FakeStripe(subscriptions=[_sub()], invoices=[_invoice("in_month1")])
     _install(monkeypatch, fake)
     client.post("/v1/billing/sync")
-    assert _credits() == 20
+    assert _credits() == GRANT
 
     # A month later Stripe has charged again.
     fake._invoices = [_invoice("in_month2"), _invoice("in_month1")]
     client.post("/v1/billing/sync")
-    assert _credits() == 40, "the renewal must add on top, not flatten the balance"
+    assert _credits() == 2 * GRANT, "the renewal must add on top, not flatten the balance"
 
 
 def test_a_long_absence_replays_every_missed_invoice_once(client, monkeypatch):
@@ -165,9 +177,9 @@ def test_a_long_absence_replays_every_missed_invoice_once(client, monkeypatch):
         invoices=[_invoice(f"in_{i}") for i in range(3)],
     ))
     client.post("/v1/billing/sync")
-    assert _credits() == 60
+    assert _credits() == 3 * GRANT
     client.post("/v1/billing/sync")
-    assert _credits() == 60
+    assert _credits() == 3 * GRANT
 
 
 # --------------------------------------------------------------------------- #
@@ -182,7 +194,8 @@ def test_a_zero_value_invoice_grants_nothing(client, monkeypatch):
 
 def test_an_unrelated_billing_reason_grants_nothing(client, monkeypatch):
     _set_credits(0)
-    _install(monkeypatch, FakeStripe(subscriptions=[_sub()], invoices=[_invoice("in_x", reason="manual")]))
+    _install(monkeypatch, FakeStripe(
+        subscriptions=[_sub()], invoices=[_invoice("in_x", reason="subscription_threshold")]))
     client.post("/v1/billing/sync")
     assert _credits() == 0
 
@@ -260,7 +273,7 @@ def test_billing_works_with_no_webhook_secret_configured(client, monkeypatch):
     _set_credits(0)
     _install(monkeypatch, FakeStripe(subscriptions=[_sub()], invoices=[_invoice("in_nowebhook")]))
     client.post("/v1/billing/sync")
-    assert _credits() == 20
+    assert _credits() == GRANT
 
 
 # --------------------------------------------------------------------------- #
@@ -301,7 +314,7 @@ def test_a_renewed_subscriber_is_not_refused_a_scan_over_a_stale_balance(client,
     remaining = consume_credits(
         _user().id, 1, platform="x", scan_type="link", target_input=None,
     )
-    assert remaining == 19, "the renewal should have been picked up and the scan allowed"
+    assert remaining == GRANT - 1, "the renewal should have been picked up and the scan allowed"
 
 
 def test_a_genuinely_broke_user_still_gets_a_clean_402(client, monkeypatch):

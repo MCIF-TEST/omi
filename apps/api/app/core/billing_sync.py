@@ -198,13 +198,21 @@ def _sync_subscription(stripe, session, user: User) -> None:
 
 def _grant_unclaimed_invoices(stripe, session, user: User, settings: Settings) -> tuple[int, int]:
     """Grant credits for every PAID invoice we have not already credited. Returns (invoices, credits)."""
-    from app.routes.billing import GRANTING_BILLING_REASONS, _grant_credits_once
+    from app.routes.billing import (
+        GRANTING_BILLING_REASONS,
+        _grant_credits_once,
+        resolve_invoice_purchase,
+    )
 
     invoices = stripe.Invoice.list(
         customer=user.stripe_customer_id, status="paid", limit=INVOICE_LOOKBACK,
     )
     granted = 0
     added = 0
+    # Whether a SUBSCRIPTION invoice was seen. Deliberately not `granted`: a top-up grants credits
+    # without being a subscription, and flipping status to active off a credit pack would tell a
+    # lapsed customer they have a live plan.
+    subscribed = False
     # Oldest first, so a long gap replays in the order the customer actually paid.
     for raw in reversed(getattr(invoices, "data", None) or []):
         inv = _plain(raw)
@@ -215,14 +223,34 @@ def _grant_unclaimed_invoices(stripe, session, user: User, settings: Settings) -
         invoice_id = inv.get("id")
         if not invoice_id:
             continue
+        # WHAT the invoice bought is resolved by the same function the webhook uses. The two paths
+        # race for the same grant row on purpose, and if they read one invoice differently then
+        # whichever arrived first would silently decide the customer's plan.
+        purchase = resolve_invoice_purchase(inv, settings)
+        if purchase is None:
+            log.error(
+                "invoice %s is paid but matches no configured Stripe Price; granting nothing",
+                invoice_id,
+            )
+            continue
+
+        kind, tier = purchase
+        amount = settings.topup_pack_credits if kind == "topup" else tier.monthly_credits
         if _grant_credits_once(
             session, user, key=str(invoice_id),
-            amount=settings.monthly_credit_grant, reason="api_sync",
+            amount=amount, reason=f"api_sync:{kind if kind == 'topup' else tier.slug}",
         ):
             granted += 1
-            added += settings.monthly_credit_grant
+            added += amount
 
-    if granted and user.subscription_status not in ("active", "trialing"):
+        # A top-up is not a subscription and must not imply one. Only a tier invoice sets the plan.
+        if kind == "tier" and user.plan_tier != tier.slug:
+            log.info("user=%s plan %s -> %s (sync, invoice %s)",
+                     user.id, user.plan_tier, tier.slug, invoice_id)
+            user.plan_tier = tier.slug
+            subscribed = True
+
+    if subscribed and user.subscription_status not in ("active", "trialing"):
         user.subscription_status = "active"
     return granted, added
 

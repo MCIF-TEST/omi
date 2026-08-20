@@ -134,7 +134,9 @@ def generate_analyst_assessment(
                     return AnalystResponse(
                         slug=inv.slug, enabled=True, status="partial", cached=False,
                         assessment=analyst.assessment_for_viewer(
-                            entry["assessment"], is_admin=current.is_admin),
+                            entry["assessment"],
+                            is_admin=current.is_admin, features=current.features,
+                    ),
                         provider=entry.get("provider"),
                         generated_at=entry.get("generated_at"),
                     )
@@ -159,7 +161,9 @@ def generate_analyst_assessment(
                 return AnalystResponse(
                     slug=inv.slug, enabled=True, status="ready", cached=True,
                     assessment=analyst.assessment_for_viewer(
-                        entry["assessment"], is_admin=current.is_admin),
+                        entry["assessment"],
+                        is_admin=current.is_admin, features=current.features,
+                    ),
                     provider=entry.get("provider"),
                     generated_at=entry.get("generated_at"),
                 )
@@ -173,7 +177,9 @@ def generate_analyst_assessment(
                 return AnalystResponse(
                     slug=inv.slug, enabled=True, status="ready", cached=True,
                     assessment=analyst.assessment_for_viewer(
-                        entry["assessment"], is_admin=current.is_admin),
+                        entry["assessment"],
+                        is_admin=current.is_admin, features=current.features,
+                    ),
                     provider=entry.get("provider"),
                     generated_at=entry.get("generated_at"),
                 )
@@ -189,7 +195,9 @@ def generate_analyst_assessment(
                 return AnalystResponse(
                     slug=inv.slug, enabled=True, status="ready", cached=True,
                     assessment=analyst.assessment_for_viewer(
-                        entry["assessment"], is_admin=current.is_admin),
+                        entry["assessment"],
+                        is_admin=current.is_admin, features=current.features,
+                    ),
                     provider=entry.get("provider"),
                     generated_at=entry.get("generated_at"),
                 )

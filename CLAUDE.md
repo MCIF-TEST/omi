@@ -5,7 +5,7 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-08-19 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
+**Last updated:** 2026-08-20 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
 after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
 coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
 "The cohort coordination detector" below, and read its two rules before touching any threshold.
@@ -1389,11 +1389,113 @@ subscriber's 20 monthly credits buy ~1000 accounts, so a whole month of heavy le
 
 Pinned by `tests/test_upstream_budget.py` (23 tests).
 
+### Three plans, and the ceiling that makes them possible
+
+Product decision (2026-08-20). `app/core/plans.py` is the catalog and the single place any question
+about a plan is answered. Mirrored in `apps/web/lib/plan.ts`; `tests/test_deployed_credit_contract.py`
+reads BOTH sources and fails on drift in name, price, credits or ceiling.
+
+| tier | price | credits | accounts | lookup ceiling | adds |
+|---|---|---|---|---|---|
+| Starter | $14.99 | 12 | 240 | 640 | the core product |
+| Reporter | $79 | 75 | 1,500 | 3,409 | signal breakdown, saved graphs, monitoring |
+| Research | $249 | 250 | 5,000 | 10,869 | coordination detection, API access |
+
+**1 credit = 20 accounts now, not 50, and the old rate was losing money.** At ~2 upstream calls per
+account and ~$0.005-0.006 a call, 20 credits at 50 accounts each is ~1,000 accounts for $11-15 of
+upstream against $14.26 of net revenue: a **6% gross margin on X**, negative on a metered API. The
+number nobody had run was call volume x call price against revenue. `scan_batch_unit` is 20 and
+`test_the_charged_rate_matches_the_rate_the_plans_are_priced_against` pins it to
+`plans.ACCOUNTS_PER_CREDIT`.
+
+**The ceiling is the actual fix, not the credit rate.** Credits bound how many accounts get SCORED.
+Nothing bounded **compile**, which charges no credits and still calls a provider that bills. Its only
+limit was `OMI_UPSTREAM_DAILY_CALLS_PER_USER` at 1500/day, which at $0.006 a call is **$270 a month
+from one $14.99 subscriber** and needs no abuse to reach: somebody browsing many comment sections and
+scanning a few. `enforce_period_budget` closes it, and four things about it are load-bearing:
+
+- **Monthly and aligned to the customer's billing period**, so the meter resets when the credits do.
+  A lookup allowance refilling on a different day from the credits is its own support load.
+- **Derived from the tier**, never configured separately, so it cannot drift from what the plan was
+  priced to afford. `test_a_tier_can_spend_every_credit_it_includes` fails if a ceiling ever drops
+  below the scan cost of its own credits.
+- **A scan is refused UP FRONT, with its projected cost**; a compile is simply declined. That
+  asymmetry is the whole reason enforcement takes a `projected` argument: declining a compile costs
+  the customer nothing, while a scan takes credits, so refusing one mid-flight means they paid for
+  work that got cut off.
+- **`calls_included == 0` means UNMETERED, never "exhausted".** Reading it the other way locks out
+  admins, the accounts the exemption exists for. Same shape as `score: null` vs `0`.
+
+**It is a meter, not a wall.** `POST /v1/billing/create-topup-session` sells credit packs at $1/credit
+(~70% margin). A hard stop turns the most engaged customers into churn; selling them more turns the
+same person into revenue, and it is what makes a bounded plan honest. The top-up is `mode: payment`,
+never touches `plan_tier` or `subscription_status`, and never redirects to the Customer Portal (the
+people who buy overage are exactly the people who already have a subscription).
+
+**Margin is flat across the ladder, and that is deliberate.** Worst-case upstream share of list price
+is 25.6% / 25.9% / 26.2%. Upstream cost here is purely variable and perfectly linear, so a per-unit
+volume discount comes straight out of margin rather than out of fixed cost being spread; modelled
+with normal SaaS discounting, Reporter and Research fell to 46% and 41%. The bigger tiers are worth
+more because of FEATURES, whose marginal cost is zero. `test_margin_does_not_erode_as_the_tiers_grow`
+is the guard.
+
+#### The Stripe Price is what decides the tier
+
+`_handle_invoice_paid` reads the Price off the invoice and looks it up in the catalog. Consequences:
+
+- **A tier whose Price id is unset does not merely fail to sell: its renewals resolve to no tier and
+  grant NOTHING.** `/v1/billing/preflight` names every missing one. An unrecognised Price grants
+  nothing and reports `UnknownStripePrice` to the tracker rather than guessing at a default, because
+  guessing would pay out a subscription tier for a one-off credit pack.
+- **`invoice_price_ids` reads THREE shapes.** Stripe has moved this field twice
+  (`lines.data[].pricing.price_details.price`, then `.price.id`, then `.plan.id`). Reading one shape
+  yields an empty list on the others, which fails closed to Free — a silent downgrade of every
+  paying customer on their next renewal.
+- **`"manual"` is now a granting billing_reason**, because a `payment`-mode Checkout invoice carries
+  it and without it a top-up takes the money and grants nothing. That widening is only safe BECAUSE
+  the Price gates the grant: a hand-raised dashboard invoice for an unconfigured Price grants
+  nothing. `test_a_manual_invoice_whose_price_we_do_not_know_grants_nothing` is what keeps it safe.
+- **`OMI_STRIPE_PRICE_ID` (the legacy single-plan price) must stay set.** Every current subscriber's
+  renewal invoices carry it forever; it maps to Starter. Dropping it downgrades exactly the customers
+  you already have.
+- **`OMI_MONTHLY_CREDIT_GRANT` is gone**, along with `settings.monthly_credit_grant`. One global
+  grant could only be right for one of three plans, and leaving it as a fallback would let a
+  misconfigured Price quietly pay out the wrong tier instead of surfacing the fault.
+- **Plan CHANGES go through the Stripe Customer Portal**, which prorates correctly. The portal needs
+  all three products added to its allowed list in the dashboard, and nothing in the app fails
+  visibly without that: the subscriber just lands in a portal with no switch offered.
+
+#### The three feature gates, and the one that is not an entitlement check
+
+`require_feature(...)` (`core/auth.py`) is the dependency; `CurrentUser.features` carries the
+entitlements so a hot path does not re-query. It answers **402, not 403** — "forbidden" reads as a
+permissions bug and sends a customer to support, "payment required" is true and is answerable in one
+click.
+
+- **Signal breakdown** (Reporter). `assessment_for_viewer` now takes `features`. Still filtered on
+  SERVE, never on persist, so a customer who upgrades today gets the breakdown on investigations
+  they ran last month. `NEVER_PUBLIC_ACCOUNT_FIELDS` stays unreachable at any price: those are the
+  reasons a paragraph was withheld, and showing them undoes the withholding.
+- **Saved graphs and monitoring** (Reporter). Gated on **writes only**. A customer who downgrades
+  keeps their graphs and watchlists and can still read them; making somebody's own saved work vanish
+  on a plan change arrives as "the product lost my data", not as an upgrade prompt.
+- **Coordination** (Research) is **NOT** a plain entitlement check, and this is the important one.
+  A `Campaign` has no owner by design (one operation seen by two customers is one campaign), which
+  is exactly why `/campaigns` and `/narratives` are admin-only: opening them to customers previously
+  exposed other people's `context_id` values. `CampaignDetection` is different — it is one run over
+  ONE investigation and carries that investigation's `user_id`. So `_coordination_scope` returns an
+  **owner id, not a boolean**, and every query filters on it. A gate that only said "allowed" would
+  let a caller reach an unfiltered query, which is precisely how the original exposure happened. A
+  non-owner gets **404, not 403**: 403 would confirm that somebody else's scan found coordination
+  there.
+
 ### Billing
 
-`compute_scan_credits = ceil(accounts / 50) × credits_per_batch[platform]`, minimum 1. **1 credit per
-50 accounts, same rate for X and YouTube** (100 accounts = 2 credits). This was an explicit product
-decision; don't "fix" the asymmetry back in.
+`compute_scan_credits = ceil(accounts / scan_batch_unit) × credits_per_batch[platform]`, minimum 1.
+**1 credit per 20 accounts, same rate on every platform** (100 accounts = 5 credits). It was 1 per 50
+until 2026-08-20 and 50 was loss-making: see "Three plans, and the ceiling that makes them possible"
+above for the arithmetic. The per-platform knobs stay because upstream prices can move independently;
+they are equal today because measured per-account cost is within ~20% across X, Reddit and YouTube.
 
 **There are two separate free tiers, and neither one is derived from the other.** Confusing them is
 the easy mistake, because both get called "the free scans":
@@ -1404,7 +1506,7 @@ the easy mistake, because both get called "the free scans":
 | Signup trial | A new account | **1 credit**, then they pay | `OMI_FREE_TRIAL_CREDITS` in `render.yaml` (code default in `config.py` also 1) |
 
 The signup trial is **5** (2026-08-19, at the owner's request). It has been 25, then 5, then 3,
-then 1, and is now 5 again. At the 1-credit-per-50-accounts rate that is up to **250 accounts** for a
+then 1, and is now 5 again. At the 1-credit-per-20-accounts rate that is up to **100 accounts** for a
 new account before they pay. Don't move it without being asked.
 
 Two traps around this value:
@@ -1592,7 +1694,7 @@ already come back marked `scanned` by the compile step, so "scan more" is litera
 offers.
 
 **The signup trial is 5 credits.** One credit covers up to 50 accounts, so a funnel signup can
-scan up to 250 accounts before paying. Set in **four** places and
+scan up to 100 accounts before paying. Set in **four** places and
 `test_deployed_credit_contract.py` fails on drift between the env pair: `OMI_FREE_TRIAL_CREDITS` +
 `NEXT_PUBLIC_TRIAL_CREDITS` in `render.yaml`, `config.py`'s default, and `plan.ts`'s default.
 (`.env.example` is a fifth, unchecked copy; it had been stale at 3 for two changes.)
@@ -1601,7 +1703,8 @@ scan up to 250 accounts before paying. Set in **four** places and
 already existed because hardcoding "credits" became "1 free credits" in five places the moment the
 trial was cut to one. Moving it back to 5 broke the next layer: the investigate page read "your 1
 free credit covers up to 50 more", which became "your 5 free credits covers up to 50 more" — wrong
-about the verb AND wrong about the number, since 5 credits is 250 accounts. `ACCOUNTS_PER_CREDIT`
+about the verb AND wrong about the number, since 5 credits is 5x whatever the rate is (250
+accounts then, 100 now). `ACCOUNTS_PER_CREDIT`
 and `TRIAL_ACCOUNTS` in `plan.ts` are the derived facts; use them.
 
 Copy around that number goes through **`TRIAL_CREDITS_LABEL`** / **`CREDIT_NOUN`** (`lib/plan.ts`).
@@ -2770,7 +2873,7 @@ app not just for me."* The line was `12,592/50,000 out tokens · stop: stop`, si
 coverage heading on the page a customer reads about their own investigation.
 
 **Tokens are the worst of it, because they invite a question that has no good answer.** This product
-sells credits at one per 50 accounts. Nobody is charged for tokens, and printing a token budget
+sells credits at one per 20 accounts. Nobody is charged for tokens, and printing a token budget
 beside their results is the only thing on the page that suggests otherwise. `CompletionStats` now
 shows coverage always (an incomplete investigation must never be hidden from the person who paid for
 it) and puts the token figures and `stop:` behind `verificationEnabled()`, which is exactly the

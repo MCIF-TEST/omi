@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { Target, ArrowRight, Clock, Gauge, MessageSquarePlus, Wallet } from 'lucide-react';
 import { Card, CardLabel, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/auth';
-import { PLAN_NAME } from '@/lib/plan';
+import {
+  ACCOUNTS_PER_CREDIT, FREE_TIER, PLAN_NAME, PLAN_TIERS, TOPUP_CREDITS, TOPUP_PRICE,
+} from '@/lib/plan';
 import { apiServer } from '@/lib/api-server';
 import { ManageSubscriptionButton, type BillingStatus } from './manage-subscription-button';
 import { NotificationsBlock } from './notifications-block';
@@ -24,9 +26,21 @@ export default async function SettingsPage() {
     credits_remaining: user.credits_remaining,
     subscription_status: user.subscription_status ?? null,
     subscription_renews_at: null,
-    price_display: '$13.99',
-    credits_per_period: 20,
+    // Derived from the catalog, never written out: a hardcoded fallback price is a number that
+    // silently goes stale and then advertises the wrong figure on the one page about money.
+    price_display: PLAN_TIERS[0].price,
+    credits_per_period: PLAN_TIERS[0].credits,
+    plan_tier: 'free',
+    plan_name: FREE_TIER.name,
+    plan_features: [],
+    calls_used: 0,
+    calls_included: 0,
+    topup_credits: TOPUP_CREDITS,
+    topup_price_display: TOPUP_PRICE,
   }));
+
+  const isSubscribed =
+    billing.subscription_status === 'active' || billing.subscription_status === 'trialing';
 
   return (
     <div className="space-y-8 max-w-3xl">
@@ -70,15 +84,40 @@ export default async function SettingsPage() {
         <CardLabel>Billing</CardLabel>
         {/* Figures come from the API, which reads them from the same settings that drive the actual
             charge and grant, so this card cannot drift from what a customer is really billed. */}
-        <CardTitle>{PLAN_NAME}</CardTitle>
+        {/* The plan NAME comes from the server, which resolved it from the Stripe Price on the
+            invoice the customer actually paid. Reading a single global plan name here was right
+            with one plan and would now show a Research subscriber the entry tier. */}
+        <CardTitle>{billing.plan_name || PLAN_NAME}</CardTitle>
         <p className="font-mono text-2xs uppercase tracking-wider text-fg-mute mb-3">
           {billing.price_display} / month · {billing.credits_per_period} credits
         </p>
         <p className="text-sm text-fg-dim mb-5">
-          {billing.subscription_status === 'active' || billing.subscription_status === 'trialing'
-            ? `${billing.credits_per_period} credits are added each month. Update your card or cancel any time from Stripe.`
-            : `${billing.credits_per_period} credits a month, one credit covers up to 50 accounts, so that is up to ${(billing.credits_per_period * 50).toLocaleString()} accounts analysed.`}
+          {isSubscribed
+            ? `${billing.credits_per_period} credits are added each month, covering up to ${(billing.credits_per_period * ACCOUNTS_PER_CREDIT).toLocaleString()} accounts. Update your card, change plan or cancel any time from Stripe.`
+            : `One credit covers ${ACCOUNTS_PER_CREDIT} accounts. Choose a plan to get monthly credits.`}
         </p>
+
+        {/* The lookup meter. Loading a comment section calls the platform whether or not anyone is
+            scanned, so this ceiling is what lets the plan be priced. The customer should meet it
+            here, with room to act, rather than at a refusal in the middle of an investigation. */}
+        {billing.calls_included > 0 && (
+          <div className="border-t border-border-1 pt-3 mb-5">
+            <div className="flex items-baseline justify-between gap-3 mb-1.5">
+              <span className="meta">Lookups this month</span>
+              <span className="font-mono text-xs text-fg tabular-nums">
+                {billing.calls_used.toLocaleString()} / {billing.calls_included.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-1 bg-bg-elev overflow-hidden" role="presentation">
+              <div
+                className="h-full bg-border-hot"
+                style={{
+                  width: `${Math.min(100, (billing.calls_used / billing.calls_included) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
         <Suspense fallback={null}>
           <ManageSubscriptionButton initial={billing} isAdmin={user.is_admin} />
         </Suspense>

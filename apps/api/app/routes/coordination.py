@@ -31,12 +31,39 @@ logger = logging.getLogger(__name__)
 admin_router = APIRouter(prefix="/v1/admin/coordination", tags=["admin-coordination"])
 
 
-def _require_admin(current: CurrentUser) -> None:
-    """Local mode (``OMI_REQUIRE_AUTH=false``) resolves to ``is_admin=True``, which is why a test
-    that means to prove this gate must set ``OMI_REQUIRE_AUTH=true`` and sign up a real user.
-    Production refuses the local configuration at boot."""
-    if not current.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admins only.")
+def _coordination_scope(current: CurrentUser) -> int | None:
+    """Who this caller may see coordination findings for. ``None`` means everyone (admin only).
+
+    THIS IS THE SECURITY BOUNDARY FOR THE RESEARCH TIER AND IT IS NOT THE SAME GATE AS /campaigns.
+
+    A ``Campaign`` has no owner by design: one operation seen by two customers on two different
+    posts is ONE campaign, and that cross-customer accumulation is the whole point of the tracking
+    layer. There is therefore no such thing as "your campaigns", which is exactly why those routes
+    are admin-gated: opening them to customers previously exposed other people's ``context_id``
+    values (the id of a post somebody else scanned) and let anyone mint a public report from a
+    campaign assembled out of other customers' scans.
+
+    ``CampaignDetection`` is a different object. It is one run of the detector over ONE
+    investigation and it carries that investigation's ``user_id``, so it can be scoped. A Research
+    subscriber sees coordination findings ON THEIR OWN SCANS, which is the product value, while the
+    cross-customer library stays admin-only. Returning an owner id here rather than a boolean is
+    what forces every query below to filter: a gate that only said "allowed" would let a caller
+    through to an unfiltered query, which is precisely how the original exposure happened.
+    """
+    if current.is_admin:
+        return None
+    from app.core.plans import FEATURE_COORDINATION
+
+    if not current.can(FEATURE_COORDINATION):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Coordination detection is part of the Research plan.",
+        )
+    if not current.id:
+        # A caller entitled by plan but with no identity cannot be scoped to their own rows, and an
+        # unscoped query is the bug this function exists to prevent. Refuse rather than widen.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Coordination detection is unavailable.")
+    return int(current.id)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -136,10 +163,12 @@ def list_detections(
     payloads in the product, so a list of fifty would deserialise hundreds of megabytes to render a
     table of numbers. Same trap the archive list already paid for.
     """
-    _require_admin(current)
+    owner = _coordination_scope(current)
 
     with get_session() as session:
         q = select(CampaignDetection)
+        if owner is not None:
+            q = q.where(CampaignDetection.user_id == owner)
         if status_filter != "all":
             q = q.where(CampaignDetection.status == status_filter)
         if only_campaigns:
@@ -159,21 +188,39 @@ def list_detections(
         ).scalars().all()
 
         labels = _labels_for(session, [r.investigation_slug for r in rows])
-        open_count = session.execute(
-            select(func.count()).select_from(CampaignDetection)
-            .where(CampaignDetection.status == "open")
-        ).scalar_one()
-        campaign_count = session.execute(
-            select(func.count()).select_from(CampaignDetection)
-            .where(CampaignDetection.campaign_count > 0)
-        ).scalar_one()
+        # Scoped exactly like the list above. An unscoped count would leak the size of the whole
+        # deployment's queue to a customer entitled only to their own rows.
+        def _count(*where):
+            q2 = select(func.count()).select_from(CampaignDetection).where(*where)
+            if owner is not None:
+                q2 = q2.where(CampaignDetection.user_id == owner)
+            return int(session.execute(q2).scalar_one())
+
+        open_count = _count(CampaignDetection.status == "open")
+        campaign_count = _count(CampaignDetection.campaign_count > 0)
 
         return DetectionsResponse(
             detections=[_summary(r, labels.get(r.investigation_slug, "")) for r in rows],
             total=int(total),
-            open_count=int(open_count),
-            campaign_count=int(campaign_count),
+            open_count=open_count,
+            campaign_count=campaign_count,
         )
+
+
+def _detection_or_404(session, slug: str, owner: int | None) -> CampaignDetection:
+    """The detection row for ``slug``, refusing anything outside the caller's scope.
+
+    A non-owner gets 404 rather than 403, deliberately: 403 confirms the investigation exists and
+    that somebody else's scan found coordination in it, which is a fact about another customer's
+    data. 404 is the same answer they would get for a slug that does not exist, so the response
+    leaks nothing either way.
+    """
+    row = session.execute(
+        select(CampaignDetection).where(CampaignDetection.investigation_slug == slug)
+    ).scalar_one_or_none()
+    if row is None or (owner is not None and row.user_id != owner):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No detection for that investigation.")
+    return row
 
 
 @admin_router.get("/{slug}", response_model=DetectionDetail)
@@ -185,16 +232,12 @@ def get_detection(
 
     This is the only route that loads ``payload_json``, and it loads exactly one row.
     """
-    _require_admin(current)
+    owner = _coordination_scope(current)
 
     from app.campaigns.detector import persist
 
     with get_session() as session:
-        row = session.execute(
-            select(CampaignDetection).where(CampaignDetection.investigation_slug == slug)
-        ).scalar_one_or_none()
-        if row is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "No detection for that investigation.")
+        row = _detection_or_404(session, slug, owner)
         inv = session.execute(
             select(Investigation).where(Investigation.slug == slug)
         ).scalar_one_or_none()
@@ -227,7 +270,7 @@ def rerun_detection(
     Costs nothing: no provider call, no model call, no credit. It reads the payload that is already
     stored, which is what makes re-running safe to offer as a button.
     """
-    _require_admin(current)
+    scope = _coordination_scope(current)
 
     from app.campaigns.detector import run as detector
 
@@ -235,7 +278,9 @@ def rerun_detection(
         inv = session.execute(
             select(Investigation).where(Investigation.slug == slug)
         ).scalar_one_or_none()
-        if inv is None:
+        # Scoped on the INVESTIGATION's owner, not the detection row's: a re-run reads that
+        # investigation's stored payload, so being allowed to re-run it is being allowed to read it.
+        if inv is None or (scope is not None and inv.user_id != scope):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such investigation.")
         owner = inv.user_id
 
@@ -255,14 +300,10 @@ def dismiss_detection(
     reasoned rather than fitted, so a growing set of admin-labelled false positives is what a future
     calibration gets to work from.
     """
-    _require_admin(current)
+    owner = _coordination_scope(current)
 
     with get_session() as session:
-        row = session.execute(
-            select(CampaignDetection).where(CampaignDetection.investigation_slug == slug)
-        ).scalar_one_or_none()
-        if row is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "No detection for that investigation.")
+        row = _detection_or_404(session, slug, owner)
         row.status = "dismissed"
         row.resolution_note = (req.note or "").strip()[:1000] or None
         row.resolved_at = datetime.now(timezone.utc)
@@ -276,14 +317,10 @@ def reopen_detection(
     slug: str,
     current: CurrentUser = Depends(require_user),
 ) -> DetectionDetail:
-    _require_admin(current)
+    owner = _coordination_scope(current)
 
     with get_session() as session:
-        row = session.execute(
-            select(CampaignDetection).where(CampaignDetection.investigation_slug == slug)
-        ).scalar_one_or_none()
-        if row is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "No detection for that investigation.")
+        row = _detection_or_404(session, slug, owner)
         row.status = "open"
         row.resolved_at = None
         session.flush()

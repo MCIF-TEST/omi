@@ -25,9 +25,18 @@
 #
 # Required on omisphere-api (dashboard secrets):
 #   OMI_STRIPE_SECRET_KEY     sk_test_… or sk_live_…   (SECRET — not the pk_ key)
-#   OMI_STRIPE_PRICE_ID       price_… recurring monthly, same mode as the secret
-#   OMI_PUBLIC_BASE_URL       https://<your-web-host>  (WEB URL, not the API host)
-#   OMI_STRIPE_WEBHOOK_SECRET whsec_…  (from the endpoint you register, below)
+#   OMI_STRIPE_PRICE_STARTER   price_… recurring monthly, $14.99  -> 12 credits
+#   OMI_STRIPE_PRICE_REPORTER  price_… recurring monthly, $79     -> 75 credits
+#   OMI_STRIPE_PRICE_RESEARCH  price_… recurring monthly, $249    -> 250 credits
+#   OMI_STRIPE_PRICE_TOPUP     price_… ONE-OFF (mode=payment), $25 -> 25 credits
+#   OMI_STRIPE_PRICE_ID        the LEGACY single-plan price. Keep it: existing subscribers'
+#                              renewal invoices carry it forever, and it resolves to Starter.
+#   OMI_PUBLIC_BASE_URL        https://<your-web-host>  (WEB URL, not the API host)
+#   OMI_STRIPE_WEBHOOK_SECRET  whsec_…  (from the endpoint you register, below)
+#
+# THE PRICE ON AN INVOICE IS WHAT DECIDES THE TIER. A plan whose Price id is not set here does not
+# just fail to sell: its renewals resolve to no tier and grant nothing. /v1/billing/preflight names
+# every tier that is missing one.
 #
 # Registering the webhook:
 #   Stripe Dashboard → Developers → Webhooks → Add endpoint
@@ -45,8 +54,9 @@
 # which host to give you, and says so rather than printing a wrong one.
 #
 # Optional on omisphere-api:
-#   OMI_SUBSCRIPTION_PRICE_DISPLAY   $13.99  (UI label only)
-#   OMI_MONTHLY_CREDIT_GRANT         20
+#   OMI_SUBSCRIPTION_PRICE_DISPLAY   $14.99  (fallback label only; /v1/billing/status reports the
+#                                    price of the tier the customer is actually on)
+#   OMI_TOPUP_PACK_CREDITS           25      (must match NEXT_PUBLIC_TOPUP_PACK_CREDITS on web)
 #
 # NOT used by current billing:
 #   STRIPE_PUBLISHABLE_KEY / pk_… keys — Checkout never loads Stripe.js in the
@@ -102,8 +112,15 @@ services:
           property: connectionString
       - key: PYTHON_VERSION
         value: '3.11.9'
-      - key: OMI_MONTHLY_CREDIT_GRANT
-        value: '20'
+      # NOTE: OMI_MONTHLY_CREDIT_GRANT is GONE. What a paid invoice grants is a property of the
+      # TIER the customer bought (app/core/plans.py), resolved from the Stripe Price on the invoice.
+      # A single global grant could only ever be right for one of three plans.
+      #
+      # How many credits ONE top-up pack contains. The Stripe Price sets what the pack COSTS; this
+      # sets what it CONTAINS, and the two live in different systems, so keep them in agreement:
+      # sized at $1 per credit against the Price you create for OMI_STRIPE_PRICE_TOPUP.
+      - key: OMI_TOPUP_PACK_CREDITS
+        value: '25'
       # Clerk auth. The API verifies Clerk session JWTs (see app/core/clerk_auth.py).
       # The SECRET key is server-only and set in the Render dashboard, NEVER committed.
       # The publishable key is PUBLIC (it ships in the browser bundle by design) and is
@@ -201,6 +218,25 @@ services:
       # Create: Product catalogue → Add product → recurring monthly → copy price id.
       - key: OMI_STRIPE_PRICE_ID
         sync: false
+      # --- The three plan Prices -----------------------------------------------------------
+      # One recurring monthly Price per tier. The Price on a paid invoice is what tells the server
+      # WHICH PLAN was bought, so a tier with no Price id set here is not merely unsellable: its
+      # renewal invoices resolve to no tier and grant NOTHING. /v1/billing/preflight names any that
+      # are missing. All must be from the SAME mode (test vs live) as OMI_STRIPE_SECRET_KEY.
+      #
+      # Starter  $14.99/mo -> 12 credits  (240 accounts,    640 lookups)
+      # Reporter $79/mo    -> 75 credits  (1,500 accounts,  3,409 lookups)
+      # Research $249/mo   -> 250 credits (5,000 accounts, 10,869 lookups)
+      - key: OMI_STRIPE_PRICE_STARTER
+        sync: false
+      - key: OMI_STRIPE_PRICE_REPORTER
+        sync: false
+      - key: OMI_STRIPE_PRICE_RESEARCH
+        sync: false
+      # A ONE-OFF (mode=payment) Price for a credit pack, NOT a recurring one. Without it a customer
+      # who exhausts their plan has nothing to buy, which turns your heaviest users into churn.
+      - key: OMI_STRIPE_PRICE_TOPUP
+        sync: false
       # Checkout methods while Cards may still be pending approval. Default in code is link,card
       # (Link + Apple Pay via card wallets). Set to "link" only if card is fully blocked.
       - key: OMI_STRIPE_PAYMENT_METHOD_TYPES
@@ -212,9 +248,10 @@ services:
       # If it points at the API host instead, paying customers get a 404 after checkout.
       - key: OMI_PUBLIC_BASE_URL
         sync: false
-      # Display only — label next to Subscribe. The real charge is the Stripe Price.
+      # Display only, and now only a FALLBACK: /v1/billing/status reports the price of the tier the
+      # customer is actually on, read from app/core/plans.py. The real charge is the Stripe Price.
       - key: OMI_SUBSCRIPTION_PRICE_DISPLAY
-        value: '$13.99'
+        value: '$14.99'
       # REQUIRED for instant crediting. The SIGNING SECRET (whsec_…) shown on the
       # endpoint's page in Stripe — not the API key, not the endpoint id. While
       # empty the webhook route is inert (acks with 200, credits nothing) and
@@ -412,18 +449,18 @@ services:
           name: omisphere-api
           type: web
           property: hostport
-      # Display-only mirrors of the API's credit grants (inlined at build
-      # time into marketing/UI copy). MUST match OMI_FREE_TRIAL_CREDITS and
-      # OMI_MONTHLY_CREDIT_GRANT on omisphere-api, or the site lies.
+      # Display-only mirror of the API's SIGNUP grant, inlined at build time into marketing copy.
+      # MUST match OMI_FREE_TRIAL_CREDITS on omisphere-api, or the site lies to new users;
+      # tests/test_deployed_credit_contract.py fails on that drift.
       - key: NEXT_PUBLIC_TRIAL_CREDITS
         value: '5'
-      - key: NEXT_PUBLIC_MONTHLY_CREDITS
-        value: '20'
-      # Pricing-page copy only. The real charge is the Stripe Price behind
-      # OMI_STRIPE_PRICE_ID; this must match OMI_SUBSCRIPTION_PRICE_DISPLAY on the
-      # API or the site advertises a number customers are not charged.
-      - key: NEXT_PUBLIC_SUBSCRIPTION_PRICE
-        value: '$13.99'
+      # How many credits one top-up pack contains. MUST match OMI_TOPUP_PACK_CREDITS on the API.
+      - key: NEXT_PUBLIC_TOPUP_PACK_CREDITS
+        value: '25'
+      # NOTE: NEXT_PUBLIC_MONTHLY_CREDITS and NEXT_PUBLIC_SUBSCRIPTION_PRICE are GONE. Per-tier
+      # credits, prices and lookup ceilings live in apps/web/lib/plan.ts, which is checked against
+      # app/core/plans.py by tests/test_deployed_credit_contract.py. An env var per number, per
+      # tier, would be nine more values nothing reconciles.
       # Same WEB public URL as on the API (no trailing slash), i.e. https://omisphere.online.
       # Used for absolute links, including the /r/<token> share URL the Share block copies, so a
       # stale value here is what makes promoted links point at the wrong host.

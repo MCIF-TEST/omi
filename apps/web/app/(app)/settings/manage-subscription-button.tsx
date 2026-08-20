@@ -4,15 +4,26 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { apiClient, ApiError } from '@/lib/api';
-import { PLAN_NAME } from '@/lib/plan';
+import { PLAN_NAME, PLAN_TIERS, accountsFor } from '@/lib/plan';
 
 export interface BillingStatus {
   configured: boolean;
   credits_remaining: number;
   subscription_status: string | null;
   subscription_renews_at: string | null;
+  /** The price of the tier the customer is ON, not the cheapest one. */
   price_display: string;
   credits_per_period: number;
+  /** Slug from app/core/plans.py. 'free' when they have never paid or have lapsed. */
+  plan_tier: string;
+  plan_name: string;
+  /** Entitlements, so the UI gates from the same list the server enforces. */
+  plan_features: string[];
+  /** Upstream-lookup meter for the current billing period. 0 included means unmetered. */
+  calls_used: number;
+  calls_included: number;
+  topup_credits: number;
+  topup_price_display: string;
 }
 
 /** What POST /v1/billing/sync returns after reconciling against Stripe. */
@@ -105,15 +116,30 @@ export function ManageSubscriptionButton({
     };
   }, [settling, router, checkoutSessionId]);
 
-  const onClick = async () => {
+  /**
+   * Open Stripe.
+   *
+   * ``tier`` picks which plan to buy; omitted, an existing subscriber goes to the Customer Portal
+   * instead. That is deliberate for CHANGING plan as well as for cancelling: Stripe's portal
+   * handles proration and mid-cycle switches correctly, and re-implementing that by hand is how
+   * customers get double-charged. The portal must have all three products enabled in the dashboard
+   * for the switch to be offered, which is a dashboard step, not a code one.
+   *
+   * ``topup`` buys a one-off credit pack and deliberately does NOT route to the portal, because the
+   * people who buy overage are exactly the people who already have a subscription.
+   */
+  const open = async (opts: { tier?: string; topup?: boolean } = {}) => {
     setError(null);
     setPending(true);
     try {
-      const path =
-        active || pastDue ? '/v1/billing/portal' : '/v1/billing/create-checkout-session';
+      const path = opts.topup
+        ? '/v1/billing/create-topup-session'
+        : (active || pastDue) && !opts.tier
+          ? '/v1/billing/portal'
+          : '/v1/billing/create-checkout-session';
       const { url } = await apiClient<{ url: string }>(path, {
         method: 'POST',
-        body: '{}',
+        body: JSON.stringify(opts.tier ? { tier: opts.tier } : {}),
       });
       if (!url || typeof url !== 'string' || !url.startsWith('https://')) {
         setError(
@@ -188,15 +214,49 @@ export function ManageSubscriptionButton({
         </p>
       )}
 
-      <Button onClick={onClick} disabled={pending || settling}>
-        {pending
-          ? 'Opening Stripe…'
-          : pastDue
-            ? 'Update payment method'
-            : active
-              ? 'Manage subscription'
-              : `Become an ${PLAN_NAME} · ${status.price_display}/mo`}
-      </Button>
+      {active || pastDue ? (
+        <div className="space-y-2">
+          <Button onClick={() => void open()} disabled={pending || settling}>
+            {pending
+              ? 'Opening Stripe…'
+              : pastDue
+                ? 'Update payment method'
+                : 'Manage subscription'}
+          </Button>
+          {/* Overage. A ceiling with nothing past it turns the most engaged customers into churn,
+              so hitting the limit sells more rather than ending the month. */}
+          <button
+            type="button"
+            onClick={() => void open({ topup: true })}
+            disabled={pending || settling}
+            className="block font-mono text-2xs uppercase tracking-wider text-fg-mute hover:text-fg transition-colors disabled:opacity-50 focus-hard focus-visible:outline-none"
+          >
+            Buy {status.topup_credits} more credits · {status.topup_price_display} each
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {/* One button per plan, so a customer picks a tier here rather than being sent to the
+              pricing page and back. The figures come from the server's own catalog. */}
+          {PLAN_TIERS.map((tier) => (
+            <Button
+              key={tier.slug}
+              onClick={() => void open({ tier: tier.slug })}
+              disabled={pending || settling}
+              variant={tier.slug === 'starter' ? 'primary' : 'secondary'}
+              className="w-full justify-between"
+            >
+              <span>{tier.name}</span>
+              <span className="font-mono text-xs tabular-nums">
+                {tier.price}/mo · {accountsFor(tier).toLocaleString()} accounts
+              </span>
+            </Button>
+          ))}
+          <p className="font-mono text-2xs uppercase tracking-wider text-fg-faint pt-0.5">
+            {PLAN_NAME} · cancel any time
+          </p>
+        </div>
+      )}
 
       {error && (
         <p className="text-xs text-danger font-mono whitespace-pre-wrap break-words" role="alert">
