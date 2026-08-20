@@ -611,6 +611,8 @@ class AddGraphMemberRequest(BaseModel):
     handle: str = ""
     display_name: str | None = None
     tier: str | None = None
+    #: The account's real OMI score. Carried so the graph never has to rebuild one from the tier.
+    omi_score: int | None = Field(default=None, ge=0, le=100)
     avatar_url: str | None = None
 
 
@@ -621,8 +623,63 @@ class UserGraphMemberOut(BaseModel):
     handle: str
     display_name: str | None = None
     tier: str | None = None
+    #: NULL means the score was not captured when this member was added. Different from zero: the
+    #: UI renders an unsized node rather than a confidently small one.
+    omi_score: int | None = None
     avatar_url: str | None = None
     added_at: datetime
+    #: Which cluster this member falls in, from community detection over the graph's OWN edges.
+    #: 0 means unconnected: it shares no coordination evidence with anything else in the graph.
+    community_id: int = 0
+    #: How many other members it is linked to. Zero is the honest, common answer.
+    degree: int = 0
+
+
+class GraphCoordinationEdge(BaseModel):
+    """One link, WITH the reason it exists.
+
+    The previous shape was ``{a, b, strength}``, a single float from ``mean_cluster_score``, while
+    the stored row already carried the accumulated likelihood ratio, which evidence families fired,
+    and how many distinct posts the pair was seen under. A graph that draws a line it cannot explain
+    is asking to be trusted rather than read, which is the opposite of what the rest of this product
+    does, so every field the answer rests on travels with the edge.
+    """
+
+    a: str
+    b: str
+    #: P(coordinated | evidence), the calibrated posterior the detector itself uses. This is the
+    #: number to read; everything else on this object is the derivation behind it.
+    posterior: float = Field(ge=0.0, le=1.0)
+    #: Independent evidence families that have fired on this pair (text, timing, network,
+    #: infrastructure, identity). TWO families is the whole bar: one is never enough on its own.
+    families: list[str] = Field(default_factory=list)
+    #: How many DISTINCT posts the pair has co-occurred under. One is a coincidence with a story;
+    #: several unrelated posts is the thing that makes an edge worth believing.
+    contexts: int = 0
+    #: Detector method names, secondary to families and kept for operators.
+    methods: list[str] = Field(default_factory=list)
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+
+
+class GraphSuggestion(BaseModel):
+    """An account NOT in the graph that is strongly linked to one that is.
+
+    The single most useful thing a coordination graph can do, and the old endpoint could not do it
+    at all: edges were only ever drawn between accounts the user had already added, so the graph
+    could only show back what its owner already knew.
+    """
+
+    external_id: str
+    platform: str
+    #: The strongest link into the graph, and which member it runs to.
+    posterior: float = Field(ge=0.0, le=1.0)
+    linked_to: str
+    families: list[str] = Field(default_factory=list)
+    contexts: int = 0
+    #: How many DIFFERENT members of this graph this account is linked to. Two or more is much
+    #: stronger than one strong link, and it is what ranks a suggestion above a coincidence.
+    links_into_graph: int = 1
 
 
 class UserGraphOut(BaseModel):
@@ -636,7 +693,12 @@ class UserGraphOut(BaseModel):
 
 class UserGraphDetail(UserGraphOut):
     members: list[UserGraphMemberOut]
-    edges: list[GraphEdge]
+    edges: list[GraphCoordinationEdge]
+    suggestions: list[GraphSuggestion] = Field(default_factory=list)
+    #: Distinct communities among the members, counting the unconnected band as one when present.
+    community_count: int = 0
+    #: True when the member list was capped. The UI says so rather than quietly showing a subset.
+    truncated: bool = False
 
 
 # ---------------------------------------------------------------------------

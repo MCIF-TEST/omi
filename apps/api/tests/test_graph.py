@@ -308,4 +308,183 @@ def test_graph_detail_includes_coordination_edges_between_members():
         assert len(detail["edges"]) == 1
         edge = detail["edges"][0]
         assert {edge["a"], edge["b"]} == {"UCmem1", "UCmem2"}
-        assert 0.0 <= edge["strength"] <= 1.0
+        # An edge now carries the REASON it exists, not one opaque float. `strength` was a per-scan
+        # mean cluster score, which is not a probability of anything; a line drawn between two named
+        # people has to be readable or it is asking to be trusted rather than checked.
+        assert "strength" not in edge
+        assert 0.0 <= edge["posterior"] <= 1.0
+        for field in ("families", "contexts", "methods", "first_seen", "last_seen"):
+            assert field in edge, field
+        assert "co_engagement" in edge["methods"]
+
+
+# ==================================================================================================
+# The redesigned graph: explainable edges, real communities, and who is missing
+# ==================================================================================================
+# What was wrong, and what each test here holds:
+#
+#   * every edge collapsed to one float (`mean_cluster_score`) while the row already carried the
+#     accumulated likelihood ratio, the evidence families and the distinct posts;
+#   * the client hardcoded `community_id: 0` for every node, so the whole community dimension of the
+#     visualisation was dead, while `_louvain` sat unwired in app/graph/algorithms.py;
+#   * the client rebuilt a score from the tier band (high -> 0.9) and sized nodes by it, which is an
+#     invented figure on a product whose claim is that it does not invent figures;
+#   * edges only ever ran between accounts the user had already added, so a graph could only show
+#     back what its owner already knew.
+def _mk_graph(tc, name: str, platform: str = "youtube") -> int:
+    return tc.post("/v1/graphs", json={"name": name, "platform": platform}).json()["id"]
+
+
+def _seed_edge(a: str, b: str, *, log_lr: float, families: list[str],
+               contexts: list[str], platform: str = "youtube") -> None:
+    """Write a coordination edge with real accumulated evidence on it."""
+    from app.storage.models import CoordinationEdge
+
+    with get_session() as session:
+        session.add(CoordinationEdge(
+            platform=platform, account_a=a, account_b=b,
+            observation_count=len(contexts), methods_json=["verbatim_echo"],
+            mean_cluster_score=0.5, log_lr_sum=log_lr,
+            families_json=families, contexts_json=contexts, platforms_json=[platform],
+        ))
+        session.commit()
+
+
+class TestAnEdgeCarriesItsReasoning:
+    def test_the_posterior_comes_from_accumulated_evidence_not_a_cluster_mean(self):
+        """`mean_cluster_score` is a per-scan average, not a probability. The posterior is the same
+        number the detector uses to decide a pair is coordinated, so the graph and the detector now
+        agree by construction."""
+        _seed_edge("UCp1", "UCp2", log_lr=3.0, families=["text", "timing"], contexts=["v1", "v2"])
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "posterior-test")
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCp1"})
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCp2"})
+            edge = tc.get(f"/v1/graphs/{gid}").json()["edges"][0]
+        # mean_cluster_score was 0.5; a log10 LR of 3.0 against the stated prior is far above it.
+        assert edge["posterior"] > 0.9
+        assert edge["families"] == ["text", "timing"]
+        assert edge["contexts"] == 2
+
+    def test_an_edge_from_before_the_accumulation_layer_still_renders(self):
+        """log_lr_sum 0 means "seen, but before we were measuring", not "no evidence". Collapsing
+        such an edge to the prior would silently blank every graph built before that layer."""
+        _seed_edge("UCold1", "UCold2", log_lr=0.0, families=[], contexts=[])
+        with get_session() as session:
+            from app.storage.models import CoordinationEdge
+            from sqlalchemy import select as sel
+            row = session.execute(sel(CoordinationEdge).where(
+                CoordinationEdge.account_a == "UCold1")).scalar_one()
+            row.mean_cluster_score = 0.62
+            session.commit()
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "legacy-edge")
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCold1"})
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCold2"})
+            edge = tc.get(f"/v1/graphs/{gid}").json()["edges"][0]
+        assert edge["posterior"] == pytest.approx(0.62, abs=1e-3)
+
+
+class TestCommunitiesAreDetectedNotHardcoded:
+    def test_unconnected_members_are_community_zero(self):
+        """The honest and by far most common state for a curated graph. It must be visually
+        distinct rather than dressed up as a cluster of one."""
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "no-edges")
+            for ext in ("UCa", "UCb", "UCc"):
+                tc.post(f"/v1/graphs/{gid}/members", json={"external_id": ext})
+            d = tc.get(f"/v1/graphs/{gid}").json()
+        assert all(m["community_id"] == 0 for m in d["members"])
+        assert all(m["degree"] == 0 for m in d["members"])
+        assert d["community_count"] == 0
+
+    def test_two_separate_clusters_get_different_ids(self):
+        """The reason this dimension exists: one saved graph can hold two unrelated operations."""
+        _seed_edge("UCx1", "UCx2", log_lr=3.0, families=["text"], contexts=["v1"])
+        _seed_edge("UCy1", "UCy2", log_lr=3.0, families=["text"], contexts=["v2"])
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "two-clusters")
+            for ext in ("UCx1", "UCx2", "UCy1", "UCy2"):
+                tc.post(f"/v1/graphs/{gid}/members", json={"external_id": ext})
+            d = tc.get(f"/v1/graphs/{gid}").json()
+        by_id = {m["external_id"]: m["community_id"] for m in d["members"]}
+        assert by_id["UCx1"] == by_id["UCx2"] != 0
+        assert by_id["UCy1"] == by_id["UCy2"] != 0
+        assert by_id["UCx1"] != by_id["UCy1"]
+        assert all(m["degree"] == 1 for m in d["members"])
+
+
+class TestSuggestions:
+    def test_an_account_linked_into_the_graph_is_suggested(self):
+        """The most useful thing a coordination graph can do, and the old endpoint could not do it
+        at all: it only ever drew edges between accounts already added."""
+        _seed_edge("UCin1", "UCout", log_lr=3.0, families=["text", "timing"], contexts=["v1", "v2"])
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "suggest-1")
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCin1"})
+            d = tc.get(f"/v1/graphs/{gid}").json()
+        assert [s["external_id"] for s in d["suggestions"]] == ["UCout"]
+        s = d["suggestions"][0]
+        assert s["linked_to"] == "UCin1" and s["links_into_graph"] == 1
+        assert s["families"] == ["text", "timing"]
+
+    def test_an_account_tied_to_several_members_ranks_first(self):
+        """One strong edge can be a coincidence with a good story. An account tied to two separate
+        members of a curated set is the shape of an operation, so that ordering is the point."""
+        # 2.5 and not 2.0: a log10 LR of 2.0 lands at posterior 0.773, just under the suggestion
+        # bar, which is the gate working rather than a bug. Both links must clear it for the
+        # multi-link ranking to be the thing under test.
+        _seed_edge("UCm1", "UCmany", log_lr=2.5, families=["text"], contexts=["v1"])
+        _seed_edge("UCm2", "UCmany", log_lr=2.5, families=["timing"], contexts=["v2"])
+        _seed_edge("UCm1", "UCsingle", log_lr=6.0, families=["text"], contexts=["v3"])
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "suggest-rank")
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCm1"})
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCm2"})
+            d = tc.get(f"/v1/graphs/{gid}").json()
+        names = [s["external_id"] for s in d["suggestions"]]
+        assert names[0] == "UCmany", f"multi-link account must rank first, got {names}"
+        assert d["suggestions"][0]["links_into_graph"] == 2
+        # And it accumulates the families across both of its links into the graph.
+        assert d["suggestions"][0]["families"] == ["text", "timing"]
+
+    def test_a_weak_link_is_not_suggested(self):
+        """Offering a lead the evidence does not support trains the operator to add accounts on our
+        say-so. A suggestion has to clear the same bar the detector uses."""
+        _seed_edge("UCw1", "UCweak", log_lr=0.2, families=["text"], contexts=["v1"])
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "suggest-weak")
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCw1"})
+            d = tc.get(f"/v1/graphs/{gid}").json()
+        assert d["suggestions"] == []
+
+    def test_an_existing_member_is_never_suggested(self):
+        _seed_edge("UCboth1", "UCboth2", log_lr=3.0, families=["text"], contexts=["v1"])
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "suggest-member")
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCboth1"})
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCboth2"})
+            d = tc.get(f"/v1/graphs/{gid}").json()
+        assert d["suggestions"] == []
+        assert len(d["edges"]) == 1
+
+
+class TestTheScoreIsCarriedNotInvented:
+    def test_the_real_score_round_trips(self):
+        """The UI used to rebuild a number from the tier band and size every node by it. A tier is a
+        band and a band cannot be un-rounded: 50 and 74 are both elevated and are not the same."""
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "score-test")
+            tc.post(f"/v1/graphs/{gid}/members",
+                    json={"external_id": "UCs1", "tier": "elevated", "omi_score": 63})
+            m = tc.get(f"/v1/graphs/{gid}").json()["members"][0]
+        assert m["omi_score"] == 63 and m["tier"] == "elevated"
+
+    def test_a_member_added_without_a_score_reports_null_not_zero(self):
+        """Null means not captured. Zero would say this account looks like a real person, which is a
+        different claim and one nobody made."""
+        with TestClient(app) as tc:
+            gid = _mk_graph(tc, "score-null")
+            tc.post(f"/v1/graphs/{gid}/members", json={"external_id": "UCs2", "tier": "low"})
+            m = tc.get(f"/v1/graphs/{gid}").json()["members"][0]
+        assert m["omi_score"] is None

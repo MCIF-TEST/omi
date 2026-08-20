@@ -1447,8 +1447,48 @@ export interface UserGraphMemberOut {
   handle: string;
   display_name: string | null;
   tier: Tier | null;
+  /** The account's REAL score. null means it was not captured when this member was added, which is
+   *  different from zero: the node renders unsized rather than confidently small. The client used
+   *  to rebuild this from the tier band (high -> 0.9) and size every node by it, which is an
+   *  invented figure on a surface whose whole claim is that it does not invent figures. */
+  omi_score: number | null;
   avatar_url: string | null;
   added_at: string;
+  /** Cluster from community detection over the graph's OWN edges. 0 = unconnected, which is the
+   *  honest and most common state and is drawn as its own band rather than as a cluster of one. */
+  community_id: number;
+  /** How many other members this one links to. Zero is a real answer. */
+  degree: number;
+}
+
+/** One link, with the reason it exists. Replaces `{a, b, strength}`, where strength was a per-scan
+ *  mean cluster score: a number that is not a probability of anything, drawn as a line between two
+ *  named people with nothing a reader could check. */
+export interface GraphCoordinationEdge {
+  a: string;
+  b: string;
+  /** P(coordinated | evidence): the calibrated posterior the detector itself decides on. */
+  posterior: number;
+  /** Independent evidence families that fired. TWO is the bar; one is never enough alone. */
+  families: string[];
+  /** Distinct posts the pair co-occurred under. Several unrelated ones is what makes it credible. */
+  contexts: number;
+  methods: string[];
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+/** An account NOT in the graph that links strongly into it. The old endpoint could not produce
+ *  these at all, so a graph could only ever show its owner what they already knew to add. */
+export interface GraphSuggestion {
+  external_id: string;
+  platform: string;
+  posterior: number;
+  linked_to: string;
+  families: string[];
+  contexts: number;
+  /** How many DIFFERENT members it links to. Two or more outranks one strong link. */
+  links_into_graph: number;
 }
 
 export interface UserGraphOut {
@@ -1462,7 +1502,12 @@ export interface UserGraphOut {
 
 export interface UserGraphDetail extends UserGraphOut {
   members: UserGraphMemberOut[];
-  edges: GraphEdge[];
+  edges: GraphCoordinationEdge[];
+  suggestions: GraphSuggestion[];
+  /** Distinct clusters among members. 0 when nothing is connected, which is not "one community". */
+  community_count: number;
+  /** True when the member list was capped. Said out loud rather than silently showing a subset. */
+  truncated: boolean;
 }
 
 export interface NarrativesResponse {

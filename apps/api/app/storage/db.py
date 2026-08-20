@@ -189,6 +189,10 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("campaigns", "dormant_since", "TIMESTAMP WITH TIME ZONE"),
     ("campaigns", "resurfaced_count", "INTEGER DEFAULT 0"),
     ("campaigns", "platforms_json", "JSON"),
+    # The member's real OMI score. The graph UI used to rebuild a number from the tier band and size
+    # every node by it, which is an invented figure. NULL on rows added before this existed, which
+    # correctly means "not captured" rather than zero.
+    ("user_graph_members", "omi_score", "INTEGER"),
 ]
 
 

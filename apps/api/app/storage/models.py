@@ -550,6 +550,13 @@ class UserGraphMember(Base):
     handle: Mapped[str] = mapped_column(String(280), default="")
     display_name: Mapped[str | None] = mapped_column(String(280), nullable=True)
     tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # THE REAL SCORE, not one derived from the tier. The graph UI used to rebuild a number from the
+    # tier band (high -> 0.9, elevated -> 0.7, moderate -> 0.45) and size every node by it, which is
+    # an invented figure on a surface whose whole claim is that it does not invent figures. A tier is
+    # a band and a band cannot be un-rounded: 50 and 74 are both "elevated" and are not the same
+    # account. NULL means the score was not captured when the member was added, which is different
+    # from zero and renders as an unsized node rather than a confident small one.
+    omi_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
