@@ -1,21 +1,20 @@
-"""The deployed credit grants must agree with the numbers the website prints.
+"""The deployed credit economy must agree with what the website prints, and with itself.
 
-`render.yaml` sets the credit economy twice, on purpose: the API service owns the real grant
-(`OMI_FREE_TRIAL_CREDITS`, `OMI_MONTHLY_CREDIT_GRANT`) and the web service carries a display-only
-mirror that Next inlines into marketing copy at build time (`NEXT_PUBLIC_TRIAL_CREDITS`,
-`NEXT_PUBLIC_MONTHLY_CREDITS`). Nothing at runtime reconciles the two: the API grants what it grants,
-and the landing page, pricing page, and sign-up page independently print whatever the mirror says.
+Three declarations of one set of facts, none of which the runtime reconciles:
 
-So a one-sided edit does not fail anything. It just makes the site lie to customers about what they
-get for signing up or paying, which is the kind of bug you find out about from a refund request. The
-trial value has already been changed more than once, each time by hand, in two places.
+  1. ``app/core/plans.py``      what the SERVER grants and enforces
+  2. ``apps/web/lib/plan.ts``   what the SITE advertises, inlined into the bundle at build time
+  3. ``render.yaml``            the trial figure, set once per service
 
-These tests are the reconciliation. They read `render.yaml` directly, because the value that matters
-is the DEPLOYED one, not `Settings`' local default.
+A one-sided edit fails nothing. It just makes the product lie to customers about what they get for
+paying, which is the kind of bug you learn about from a refund request. The trial value alone has
+been changed by hand more than once, in two places, and went stale in a third.
 
-Note the Render dashboard can also hold a manually-edited value for these keys. A blueprint sync
-re-applies what is committed here, so this file is the source of truth and a dashboard edit that
-disagrees with it is temporary.
+These tests are that reconciliation. They read ``render.yaml`` and the TypeScript SOURCE directly,
+because the values that matter are the deployed and shipped ones, not ``Settings``' local defaults.
+
+Note the Render dashboard can also hold a manually-edited value. A blueprint sync re-applies what is
+committed, so render.yaml is the source of truth and a dashboard edit that disagrees is temporary.
 """
 
 from __future__ import annotations
@@ -76,65 +75,113 @@ def test_displayed_trial_credits_match_the_granted_trial_credits():
     )
 
 
-def test_displayed_monthly_credits_match_the_granted_monthly_credits():
-    """Same contract for the paid grant: what an invoice buys vs what pricing claims it buys."""
-    granted = _env_int("OMI_MONTHLY_CREDIT_GRANT")
-    displayed = _env_int("NEXT_PUBLIC_MONTHLY_CREDITS")
-    assert granted == displayed, (
-        f"render.yaml grants {granted} credits per paid invoice (OMI_MONTHLY_CREDIT_GRANT) but the "
-        f"pricing page advertises {displayed} (NEXT_PUBLIC_MONTHLY_CREDITS). A subscriber who "
-        f"counts what they received will notice."
-    )
-
-
-def test_displayed_price_matches_the_price_the_api_reports():
-    """The price is quoted in two places and nothing at runtime reconciles them.
-
-    The API serves OMI_SUBSCRIPTION_PRICE_DISPLAY on /v1/billing/status (the settings page reads
-    it); the pricing page prints NEXT_PUBLIC_SUBSCRIPTION_PRICE, inlined at build time. Both are
-    display-only, so neither can charge the wrong amount, but they can advertise one, which is worse
-    than useless on a pricing page. The real charge is the Stripe Price behind OMI_STRIPE_PRICE_ID
-    and is deliberately not knowable from this repo.
-    """
-    api = _env_value("OMI_SUBSCRIPTION_PRICE_DISPLAY")
-    web = _env_value("NEXT_PUBLIC_SUBSCRIPTION_PRICE")
-    assert api == web, (
-        f"the API reports {api!r} as the price (OMI_SUBSCRIPTION_PRICE_DISPLAY, omisphere-api) "
-        f"while the pricing page prints {web!r} (NEXT_PUBLIC_SUBSCRIPTION_PRICE, omisphere-web). "
-        f"One of them is lying to customers. Both must also match the amount on the Stripe Price "
-        f"that OMI_STRIPE_PRICE_ID points at, which /v1/billing/preflight verifies against Stripe."
-    )
-
-
 def test_trial_grant_is_a_sane_trial():
     """A trial is a taste, not a free month. Catches a fat-fingered extra digit."""
+    from app.core.plans import paid_tiers
+
     granted = _env_int("OMI_FREE_TRIAL_CREDITS")
-    monthly = _env_int("OMI_MONTHLY_CREDIT_GRANT")
+    entry = paid_tiers()[0].monthly_credits
     assert granted > 0, "a zero trial grant means new accounts cannot scan at all"
-    assert granted <= monthly, (
-        f"the free trial grants {granted} credits while a paid month grants {monthly}. A trial that "
-        f"matches or beats the paid tier removes the reason to subscribe, so this is almost "
-        f"certainly a typo."
+    assert granted <= entry, (
+        f"the free trial grants {granted} credits while the cheapest paid plan grants {entry}. A "
+        f"trial that matches or beats the entry tier removes the reason to subscribe, so this is "
+        f"almost certainly a typo."
     )
 
 
-def test_the_pre_login_free_scans_are_independent_of_the_signup_grant():
-    """The front page's free scans and the signup credits are two separate free tiers.
+# --------------------------------------------------------------------------------------------- #
+# The two catalogs
+# --------------------------------------------------------------------------------------------- #
+WEB_PLAN_TS = _REPO_ROOT / "apps" / "web" / "lib" / "plan.ts"
 
-    A visitor gets N real scans before signing up (metered per IP, hardcoded and pinned here), and a
-    NEW ACCOUNT separately gets `OMI_FREE_TRIAL_CREDITS`. Neither number is derived from the other,
-    which is exactly why it is easy to change one believing you changed both. This test states the
-    boundary so a future edit to the trial grant does not silently look like it also re-tuned the
-    anonymous demo.
+
+def _ts_tiers() -> dict[str, dict]:
+    """Parse the tier table out of the TypeScript source.
+
+    A regex over source rather than a build step, matching how ``test_signal_names_contract.py`` and
+    the floor-reason contract already read their TypeScript counterparts. The alternative is running
+    the bundler inside a Python test, which is a much larger dependency for the same assertion.
     """
-    from app.routes.scan import DEMO_MAX_COMMENTERS
-    from app.routes.scan_async import DEMO_FREE_SCANS_PER_IP
+    text = WEB_PLAN_TS.read_text(encoding="utf-8")
+    # Only the PURCHASABLE table. FREE_TIER below it has the identical shape, and including it made
+    # this test demand the server "sell" a plan nobody buys.
+    start = text.index("export const PLAN_TIERS")
+    text = text[start:text.index("export const FREE_TIER", start)]
+    out: dict[str, dict] = {}
+    for block in re.finditer(
+        r"\{\s*slug:\s*'([a-z]+)',\s*name:\s*'([^']+)',\s*price:\s*'([^']+)',\s*"
+        r"credits:\s*(\d+),\s*callCeiling:\s*(\d+),",
+        text,
+    ):
+        slug, name, price, credits, ceiling = block.groups()
+        out[slug] = {
+            "name": name, "price": price,
+            "credits": int(credits), "ceiling": int(ceiling),
+        }
+    return out
 
-    assert DEMO_FREE_SCANS_PER_IP == 1, (
-        "the pre-login front page is specified as ONE free scan per visitor; this constant is the "
-        "only thing enforcing that and it is not read from settings or render.yaml"
+
+def test_the_web_catalog_lists_exactly_the_plans_the_server_sells():
+    from app.core.plans import paid_tiers
+
+    server = [t.slug for t in paid_tiers()]
+    web = list(_ts_tiers())
+    assert web == server, (
+        f"apps/web/lib/plan.ts advertises {web} but the server sells {server}. A plan on the site "
+        f"that the server cannot resolve produces a checkout that 400s; a plan the server sells but "
+        f"the site never shows is revenue nobody can reach."
     )
-    assert DEMO_MAX_COMMENTERS == 25, (
-        "each free pre-login scan analyzes up to 25 accounts; this is a separate cap from "
-        "OMI_SCAN_MAX_COMMENTERS, which bounds a signed-in scan"
-    )
+
+
+@pytest.mark.parametrize("field", ["name", "price", "credits", "ceiling"])
+def test_every_tier_agrees_between_python_and_typescript(field):
+    """The numbers a customer reads must be the numbers the server enforces.
+
+    Each of these is a promise made on the pricing page and kept (or not) by the API: the price they
+    are charged, the credits they receive, and the lookup ceiling that decides when they are cut
+    off. Nothing at runtime compares them.
+    """
+    from app.core.plans import paid_tiers
+
+    web = _ts_tiers()
+    for tier in paid_tiers():
+        got = web.get(tier.slug)
+        assert got is not None, f"{tier.slug} is missing from apps/web/lib/plan.ts"
+        expected = {
+            "name": tier.display_name,
+            "price": tier.price_display,
+            "credits": tier.monthly_credits,
+            "ceiling": tier.monthly_call_ceiling,
+        }[field]
+        assert got[field] == expected, (
+            f"{tier.slug}.{field}: the server says {expected!r} and the site says {got[field]!r}."
+        )
+
+
+def test_the_accounts_per_credit_rate_agrees_across_both_languages():
+    """What a credit BUYS is stated in three places and drives what customers are charged."""
+    from app.core.config import Settings
+    from app.core.plans import ACCOUNTS_PER_CREDIT
+
+    text = WEB_PLAN_TS.read_text(encoding="utf-8")
+    m = re.search(r"export const ACCOUNTS_PER_CREDIT = (\d+);", text)
+    assert m, "ACCOUNTS_PER_CREDIT is not declared in apps/web/lib/plan.ts"
+    assert int(m.group(1)) == ACCOUNTS_PER_CREDIT == Settings.model_fields["scan_batch_unit"].default
+
+
+def test_every_tier_can_actually_spend_its_credits():
+    """A ceiling below what the credits can buy would sell a plan that cannot be used.
+
+    The ceiling exists to bound COMPILE, which charges no credits. If it ever dropped below the
+    scan cost of the tier's own credits, customers would be refused part way through work they had
+    already paid for, and the refusal would look like a bug rather than a limit.
+    """
+    from app.core.plans import CALLS_PER_ACCOUNT, paid_tiers
+
+    for tier in paid_tiers():
+        need = tier.monthly_accounts * CALLS_PER_ACCOUNT
+        assert tier.monthly_call_ceiling > need, (
+            f"{tier.slug} includes {tier.monthly_credits} credits ({tier.monthly_accounts} "
+            f"accounts, {need} scan calls) but caps lookups at {tier.monthly_call_ceiling}. "
+            f"The customer could not spend what they bought."
+        )

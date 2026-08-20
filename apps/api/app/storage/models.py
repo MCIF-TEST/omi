@@ -183,6 +183,15 @@ class User(Base):
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     subscription_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     subscription_renews_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Which plan this account is entitled to (a slug from app/core/plans.py). Written when an
+    # invoice is paid, from the Stripe Price on that invoice, so the entitlement always comes from
+    # money that actually moved rather than from what a client claimed.
+    #
+    # NULL means Free, and every read goes through ``plans.get_tier`` which maps NULL and any
+    # unknown slug to Free. Failing closed matters here: rows written before this column existed
+    # (i.e. every current subscriber) must not resolve to a paid tier by accident, and a customer
+    # wrongly shown Free can fix it in one click while the reverse gives the product away.
+    plan_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # Soft role flag — set manually in the DB for now. Future: admin panel.
     is_admin: Mapped[bool] = mapped_column(Integer, default=0)

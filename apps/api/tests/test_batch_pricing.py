@@ -81,11 +81,29 @@ def test_both_platforms_charge_the_same():
         assert compute_scan_credits("youtube", n, s) == compute_scan_credits("twitter", n, s), f"n={n}"
 
 
-def test_production_default_is_1_credit_per_50_both_platforms():
-    """Pin the shipped default so a future edit can't silently change what users are charged."""
-    assert Settings.model_fields["scan_batch_unit"].default == 50
+def test_production_default_is_1_credit_per_20_accounts_on_every_platform():
+    """Pin the shipped rate so a future edit cannot silently change what users are charged.
+
+    IT WAS 50 AND 50 LOST MONEY. At ~2 upstream calls per account and ~$0.005-0.006 a call, a
+    subscriber's monthly credits at 50 accounts each bought roughly 1,000 accounts for about
+    $11-15 of upstream against ~$14 of net revenue. 20 is what holds a ~70% margin at full
+    utilisation; the whole derivation is in app/core/plans.py.
+    """
+    assert Settings.model_fields["scan_batch_unit"].default == 20
     assert Settings.model_fields["credits_per_batch_youtube"].default == 1
     assert Settings.model_fields["credits_per_batch_twitter"].default == 1
+
+
+def test_the_charged_rate_matches_the_rate_the_plans_are_priced_against():
+    """The billing formula and the plan catalog must agree on what a credit buys.
+
+    They are declared separately (``Settings.scan_batch_unit`` is what CHARGES; ``ACCOUNTS_PER_CREDIT``
+    is what every tier's economics were computed FROM), and nothing at runtime reconciles them. Move
+    one and each tier silently sells a different amount of product than it was priced for.
+    """
+    from app.core.plans import ACCOUNTS_PER_CREDIT
+
+    assert Settings.model_fields["scan_batch_unit"].default == ACCOUNTS_PER_CREDIT
 
 
 def test_the_multiplier_still_scales_when_configured():

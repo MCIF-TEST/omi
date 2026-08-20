@@ -14,9 +14,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
+from app.core.plans import REPORTER
 from app.main import app
 from app.storage.db import get_session, reset_db_for_tests
-from app.storage.models import Investigation
+from app.storage.models import Investigation, User
 
 
 @pytest.fixture(autouse=True)
@@ -29,10 +30,21 @@ def _fresh(monkeypatch):
     get_settings.cache_clear()
 
 
-def _signup(tc: TestClient, email: str = "op@t.com") -> int:
+def _signup(tc: TestClient, email: str = "op@t.com", *, tier: str | None = REPORTER.slug) -> int:
+    """Sign up and, by default, put the account on the tier that includes saved graphs.
+
+    Saved graphs are a Reporter feature, so a Free signup gets 402 from every write here. These
+    tests are about graph BEHAVIOUR, not about entitlement, so the fixture grants the plan rather
+    than each test asserting the gate. ``test_the_graph_is_a_paid_feature`` below is where the gate
+    itself is pinned; pass ``tier=None`` to exercise an unentitled caller.
+    """
     r = tc.post("/v1/auth/signup", json={"email": email, "password": "password12345"})
     assert r.status_code == 200, r.text
-    return r.json()["id"]
+    uid = r.json()["id"]
+    if tier:
+        with get_session() as s:
+            s.get(User, uid).plan_tier = tier
+    return uid
 
 
 def _seed_investigation(user_id: int, *, slug: str = "inv_g1", platform: str = "x") -> None:
@@ -134,3 +146,52 @@ class TestAddingAnAccountToAGraph:
             _signup(tc2, "stranger@t.com")
             r = tc2.post(f"/v1/graphs/{gid}/members", json={"external_id": "1", "handle": "a"})
             assert r.status_code == 404, r.text
+
+
+class TestSavedGraphsAreAPaidFeature:
+    """The entitlement gate itself.
+
+    Split from the behaviour tests above deliberately: those grant the plan in their fixture so they
+    can be about graphs, and this class is the one place that proves the gate exists at all. Without
+    it, a fixture that silently grants Reporter to everybody would make the whole feature free and
+    every test would still pass.
+    """
+
+    def test_a_free_account_cannot_create_a_graph_and_is_told_it_costs_money(self):
+        with TestClient(app) as tc:
+            _signup(tc, tier=None)
+            r = tc.post("/v1/graphs", json={"name": "mine", "platform": "x"})
+            # 402, not 403. "Forbidden" reads as a permissions bug and sends the customer to
+            # support; "payment required" is true and is answerable with one click.
+            assert r.status_code == 402, r.text
+            assert "Reporter" in r.json()["detail"]
+
+    def test_a_free_account_cannot_add_members_to_a_graph_it_somehow_has(self):
+        with TestClient(app) as tc:
+            uid = _signup(tc)                       # Reporter: create the graph
+            gid = tc.post("/v1/graphs", json={"name": "g", "platform": "x"}).json()["id"]
+            _seed_investigation(uid, platform="x")
+            with get_session() as s:                # ...then the plan lapses
+                s.get(User, uid).plan_tier = None
+
+            r = tc.post(f"/v1/graphs/{gid}/members", json={
+                "external_id": "u1", "handle": "one", "platform": "x",
+            })
+            assert r.status_code == 402, r.text
+
+    def test_a_lapsed_customer_can_still_READ_the_graphs_they_built(self):
+        """Downgrading must not make somebody's own saved work vanish.
+
+        Deleting access to their data on a plan change would arrive as "the product lost my work"
+        rather than as an upgrade prompt, and it is a worse failure than letting them read it. What
+        a lapsed customer loses is the ability to build MORE.
+        """
+        with TestClient(app) as tc:
+            uid = _signup(tc)
+            gid = tc.post("/v1/graphs", json={"name": "kept", "platform": "x"}).json()["id"]
+            with get_session() as s:
+                s.get(User, uid).plan_tier = None
+
+            assert tc.get("/v1/graphs").status_code == 200
+            assert [g["name"] for g in tc.get("/v1/graphs").json()] == ["kept"]
+            assert tc.get(f"/v1/graphs/{gid}").status_code == 200

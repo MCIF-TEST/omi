@@ -150,8 +150,11 @@ class Settings(BaseSettings):
     require_auth: bool = False
     # Free trial credits handed out at signup.
     free_trial_credits: int = 5
-    # Credits added when a subscription becomes active or renews.
-    monthly_credit_grant: int = 20
+    # NOTE: there is no `monthly_credit_grant` any more. What a paid invoice grants is a property
+    # of the TIER the customer bought (app/core/plans.py), resolved from the Stripe Price on the
+    # invoice. A single global grant could only ever be right for one of three plans, and leaving it
+    # here as a fallback would mean a misconfigured Price silently paid out the wrong tier's credits
+    # instead of telling the operator their Price ids are wrong.
 
     # -----------------------------------------------------------------------
     # Batch-based scan pricing.
@@ -166,19 +169,23 @@ class Settings(BaseSettings):
     # Credits charged = ceil(accounts_scored / scan_batch_unit)
     #                   × credits_per_batch[platform].
     #
-    # Flat rate for BOTH platforms: 1 credit per 50 accounts analyzed. So 1–50
-    # accounts = 1 credit, 51–100 = 2, 101–150 = 3, and so on (100 accounts = 2
-    # credits). The count is the number of accounts actually scored (the user's
-    # selection), which is exactly what OpenRouter analyzes.
+    # Flat rate for EVERY platform: 1 credit per 20 accounts analyzed. So 1-20
+    # accounts = 1 credit, 21-40 = 2, and so on (100 accounts = 5 credits). The
+    # count is the number of accounts actually scored (the user's selection),
+    # which is exactly what the analyst reads.
     #
-    # NOTE on Twitter economics: X's API costs far more per account than YouTube
-    # (~$0.005 per post read; a 50-account batch with ~10 posts of history each is
-    # ~$3.50 of API spend). Charging X at the same 1-credit-per-50 rate as YouTube
-    # is a deliberate product choice (simple, uniform pricing) that runs thin or
-    # negative margin on deep-history X scans — keep the X history depth lean, or
-    # raise credits_per_batch_twitter (env: OMI_CREDITS_PER_BATCH_TWITTER) if the
-    # X API cost outgrows the credit price.
-    scan_batch_unit: int = 50
+    # THIS WAS 50 AND 50 WAS LOSS-MAKING. At ~2 upstream calls per account and
+    # ~$0.005-0.006 per call, 20 credits at 50 accounts each is ~1,000 accounts
+    # and ~$11-15 of upstream against $14.26 of net revenue: a ~6% gross margin
+    # on X, and negative on the SocialCrawl platforms. 20 accounts per credit is
+    # what holds ~70% at full utilisation. See app/core/plans.py for the full
+    # arithmetic, and keep this equal to plans.ACCOUNTS_PER_CREDIT and to
+    # ACCOUNTS_PER_CREDIT in apps/web/lib/plan.ts.
+    #
+    # The per-platform knobs below stay because upstream prices differ per
+    # platform and can move independently; they are currently equal because the
+    # measured per-account cost is within ~20% across X, Reddit and YouTube.
+    scan_batch_unit: int = 20
     credits_per_batch_youtube: int = 1
     credits_per_batch_twitter: int = 1
     # Comma-separated list of email addresses auto-promoted to admin on
@@ -200,6 +207,26 @@ class Settings(BaseSettings):
     # AMOUNT LIVES IN STRIPE, never here — this server never sends an amount, so a bug in our code
     # cannot charge the wrong price.
     stripe_price_id: str | None = None
+    # --- Per-tier Stripe Prices -------------------------------------------------------------
+    # One recurring Price per plan (see app/core/plans.py for what each grants and why). Created in
+    # the dashboard; the AMOUNT LIVES IN STRIPE, so a bug here can advertise the wrong plan but can
+    # never charge the wrong number.
+    #
+    # ``stripe_price_id`` above is the LEGACY single-plan price and is deliberately still honoured:
+    # existing subscribers are on it, and their renewal invoices carry that price id forever. It
+    # resolves to Starter (see plans.tier_for_price_id). Dropping it would leave every current
+    # customer's renewal unable to name a tier, which fails closed to Free — i.e. it would silently
+    # downgrade the only people already paying.
+    stripe_price_starter: str | None = None
+    stripe_price_reporter: str | None = None
+    stripe_price_research: str | None = None
+    # price_…  A ONE-OFF (mode=payment) Price for a top-up credit pack. Not a subscription: it must
+    # never move subscription_status or the renewal date, only add credits.
+    stripe_price_topup: str | None = None
+    # How many credits one top-up pack grants. The Stripe Price sets what the pack COSTS; this sets
+    # what it CONTAINS, and the two are configured in different systems, so they must be kept in
+    # agreement by hand. Sized at $1/credit against the Price you create.
+    topup_pack_credits: int = 25
     # Comma-separated Checkout payment_method_types (pure API / hosted Checkout).
     # Default "link,card": Link works while Cards are still pending approval; `card` is also what
     # powers Apple Pay / Google Pay wallets on Checkout (they are not separate type strings).
@@ -433,18 +460,30 @@ class Settings(BaseSettings):
     # ~43,000 provider calls a day from one account, and until this existed nothing recorded that it
     # had happened: the first signal would have been the invoice.
     #
-    # Sizing, at roughly $0.005 per X call. A 150-account investigation costs ~300 calls (profile +
-    # history per account) plus ~30 to compile the list. A subscriber's 20 monthly credits buy about
-    # 1000 accounts, so a whole month of legitimate heavy use is ~2000-3000 calls. 1500 in a single
-    # day therefore leaves room for several full investigations back to back while capping a runaway
-    # at about $7.50 rather than $216.
-    # Env: OMI_UPSTREAM_DAILY_CALLS_PER_USER. 0 disables.
-    upstream_daily_calls_per_user: int = 1500
+    # THE PER-USER DAILY BUDGET IS NOW A BURST GUARD, NOT THE SPEND CONTROL.
+    #
+    # It used to be the only thing bounding compile, and it was never sized for that job: at ~$0.006
+    # a call, its old 1500/day default is $9 a day, i.e. **$270 a month from one $14.99 subscriber**,
+    # reachable without any abuse at all. The real control is now the plan's monthly call ceiling
+    # (``PlanTier.monthly_call_ceiling``, enforced by upstream_budget.enforce_period_budget), which
+    # is derived from what each tier was priced to afford.
+    #
+    # What is left for this one to do is stop a single day eating a whole month's allowance to a
+    # loop or a stuck client. It is deliberately set just above the largest tier's ceiling divided
+    # over a few days rather than at a month's worth. 0 disables.
+    # Env: OMI_UPSTREAM_DAILY_CALLS_PER_USER.
+    upstream_daily_calls_per_user: int = 4000
     # Deployment-wide circuit breaker, NOT a business limit. It refuses paying customers when it
     # trips (with a 503 that says the fault is ours), so it is set well above any plausible real day
     # and exists only to stop a bug or an attack emptying the API budget overnight. Raise it rather
-    # than removing it. Env: OMI_UPSTREAM_DAILY_CALLS_GLOBAL. 0 disables.
-    upstream_daily_calls_global: int = 50_000
+    # than removing it.
+    #
+    # Sizing, at ~$0.006 a call: 50,000/day is $300/day, i.e. $9,000 a month, which is far more than
+    # the business can absorb and was chosen when a call was a free YouTube quota unit. 12,000/day is
+    # $72/day, comfortably above real traffic at launch scale while capping a runaway at something
+    # survivable. RAISE IT as paying volume grows: tripping it is an outage, not a saving.
+    # Env: OMI_UPSTREAM_DAILY_CALLS_GLOBAL. 0 disables.
+    upstream_daily_calls_global: int = 12_000
 
     # Largest accepted request body (BodySizeLimitMiddleware). Neither Starlette nor uvicorn caps this
     # by default, and ten routes take an unvalidated `payload: dict`, so an oversized JSON body was

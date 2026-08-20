@@ -25,6 +25,7 @@ from sqlalchemy import select
 
 from app.core import billing_sync
 from app.core.config import get_settings
+from app.core.plans import STARTER
 from app.main import app
 from app.routes import billing
 from app.storage.db import get_session, reset_db_for_tests
@@ -32,6 +33,11 @@ from app.storage.models import BillingEvent, User
 
 WEBHOOK_SECRET = "whsec_test_secret_for_signing"
 CUSTOMER = "cus_webhook_primary"
+
+#: A real invoice names the Price it charged, and since tiers exist that Price is what decides
+#: which plan (and how many credits) the payment bought.
+PRICE = "price_test_dummy"
+GRANT = STARTER.monthly_credits
 
 
 # --------------------------------------------------------------------------- #
@@ -127,7 +133,7 @@ def client(monkeypatch):
     monkeypatch.setenv("OMI_STRIPE_SECRET_KEY", "sk_test_dummy")
     monkeypatch.setenv("OMI_STRIPE_PRICE_ID", "price_test_dummy")
     monkeypatch.setenv("OMI_STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET)
-    monkeypatch.setenv("OMI_MONTHLY_CREDIT_GRANT", "20")
+    monkeypatch.setenv("OMI_STRIPE_PRICE_STARTER", "price_test_dummy")
     # Deliberately NOT setting OMI_PUBLIC_BASE_URL here: the session cookie is marked Secure when it
     # starts with https:// (app/core/auth.py), and TestClient speaks plain http, so an https value
     # set before signup means the cookie is never sent back and every authenticated call 401s.
@@ -181,6 +187,7 @@ def _invoice_paid_event(event_id: str, invoice_id: str) -> dict:
         "data": {"object": {
             "id": invoice_id, "customer": CUSTOMER,
             "billing_reason": "subscription_cycle", "amount_paid": 999,
+            "lines": {"data": [{"pricing": {"price_details": {"price": PRICE}}}]},
         }},
     }
 
@@ -202,20 +209,21 @@ def test_webhook_and_reconciliation_never_both_credit_the_same_invoice(client, m
 
     # 1. Stripe pushes the payment. Instant credit.
     assert _send(client, _invoice_paid_event("evt_1", "in_shared")).status_code == 200
-    assert _credits() == 20
+    assert _credits() == GRANT
 
     # 2. The backstop runs later over the same invoice.
     _install(monkeypatch, FakeStripe(
         subscriptions=[{"id": "sub_1", "status": "active",
                         "current_period_end": 2_000_000_000, "created": 1}],
         invoices=[{"id": "in_shared", "billing_reason": "subscription_cycle",
-                   "amount_paid": 999, "status": "paid"}],
+                   "amount_paid": 999, "status": "paid",
+                   "lines": {"data": [{"pricing": {"price_details": {"price": PRICE}}}]}}],
     ))
     r = client.post("/v1/billing/sync")
     assert r.status_code == 200, r.text
 
     assert r.json()["credits_added"] == 0, "reconciliation re-credited a webhook-granted invoice"
-    assert _credits() == 20, "customer was credited twice for one charge"
+    assert _credits() == GRANT, "customer was credited twice for one charge"
 
 
 def test_reconciliation_still_credits_when_the_webhook_never_arrives(client, monkeypatch):
@@ -225,10 +233,11 @@ def test_reconciliation_still_credits_when_the_webhook_never_arrives(client, mon
         subscriptions=[{"id": "sub_1", "status": "active",
                         "current_period_end": 2_000_000_000, "created": 1}],
         invoices=[{"id": "in_missed", "billing_reason": "subscription_cycle",
-                   "amount_paid": 999, "status": "paid"}],
+                   "amount_paid": 999, "status": "paid",
+                   "lines": {"data": [{"pricing": {"price_details": {"price": PRICE}}}]}}],
     ))
-    assert client.post("/v1/billing/sync").json()["credits_added"] == 20
-    assert _credits() == 20
+    assert client.post("/v1/billing/sync").json()["credits_added"] == GRANT
+    assert _credits() == GRANT
 
 
 # --------------------------------------------------------------------------- #
@@ -303,10 +312,11 @@ def test_grant_markers_are_not_mistaken_for_webhook_deliveries(client, monkeypat
         subscriptions=[{"id": "sub_1", "status": "active",
                         "current_period_end": 2_000_000_000, "created": 1}],
         invoices=[{"id": "in_api_only", "billing_reason": "subscription_cycle",
-                   "amount_paid": 999, "status": "paid"}],
+                   "amount_paid": 999, "status": "paid",
+                   "lines": {"data": [{"pricing": {"price_details": {"price": PRICE}}}]}}],
     ))
     client.post("/v1/billing/sync")
-    assert _credits() == 20  # a grant row now exists
+    assert _credits() == GRANT  # a grant row now exists
 
     with get_session() as s:
         assert s.query(BillingEvent).count() >= 1

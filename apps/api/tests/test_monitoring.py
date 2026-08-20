@@ -196,6 +196,7 @@ def test_watchlist_api_round_trips_platform(monkeypatch):
     """The HTTP contract the History link depends on: platform is captured on
     create, defaults to youtube when omitted, and is returned on list."""
     from app.core.config import get_settings
+    from app.core.plans import REPORTER
     from app.core.rate_limit import LOGIN_LIMITER, SIGNUP_LIMITER
 
     monkeypatch.setenv("OMI_REQUIRE_AUTH", "true")
@@ -206,7 +207,12 @@ def test_watchlist_api_round_trips_platform(monkeypatch):
     LOGIN_LIMITER._windows.clear()
     try:
         with TestClient(app) as tc:
-            tc.post("/v1/auth/signup", json={"email": "wl@x.com", "password": "password12345"})
+            r = tc.post("/v1/auth/signup", json={"email": "wl@x.com", "password": "password12345"})
+            # Monitoring is a Reporter feature, so a Free signup gets 402 from the create route.
+            # This test is about the platform round-trip, not the gate (which is pinned in
+            # test_add_account_to_graph.py alongside the other entitlement tests), so grant the plan.
+            with get_session() as s:
+                s.get(User, r.json()["id"]).plan_tier = REPORTER.slug
             x = tc.post("/v1/watchlists", json={
                 "kind": "channel", "target_id": "bot_x", "platform": "x", "label": "@botx",
             })

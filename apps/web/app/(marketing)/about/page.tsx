@@ -76,8 +76,7 @@ const SECTIONS = [
 const ROADMAP = [
   { platform: 'X', state: 'live', detail: 'Per-account scoring, fingerprinting, posting-history analysis' },
   { platform: 'YouTube', state: 'live', detail: 'Full comment analysis, per-account scoring, channel intelligence' },
-  { platform: 'Reddit', state: 'Nov 1', detail: 'Post and comment analysis' },
-  { platform: 'TikTok', state: 'Nov 1', detail: 'Comment-section analysis, creator audience intelligence' },
+  { platform: 'Reddit', state: 'next', detail: 'Thread and comment analysis, karma and account age' },
 ];
 
 export default function AboutPage() {

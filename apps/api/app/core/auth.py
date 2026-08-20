@@ -175,6 +175,27 @@ class CurrentUser:
     is_admin: bool
     referral_code: str | None = None
     referral_credits_earned: int = 0
+    #: Plan slug (app/core/plans.py). None means Free, and every read goes through
+    #: ``plans.get_tier``, which maps None and any unknown value to Free. Carried on the dependency
+    #: so a route that already has the caller does not need a second query to answer "may they see
+    #: this", which is asked on hot paths (every analyst poll, every investigation render).
+    plan_tier: str | None = None
+
+    @property
+    def features(self) -> frozenset[str]:
+        """What this caller's plan entitles them to.
+
+        Admins get everything. Note this grants FEATURES, never the never-public fields: those are
+        gated separately in ``assessment_for_viewer`` and no plan can reach them.
+        """
+        from app.core import plans
+
+        if self.is_admin:
+            return plans.ALL_FEATURES
+        return plans.get_tier(self.plan_tier).features
+
+    def can(self, feature: str) -> bool:
+        return feature in self.features
 
     @classmethod
     def from_row(cls, u: User) -> "CurrentUser":
@@ -187,7 +208,41 @@ class CurrentUser:
             is_admin=bool(u.is_admin),
             referral_code=u.referral_code,
             referral_credits_earned=u.referral_credits_earned or 0,
+            plan_tier=getattr(u, "plan_tier", None),
         )
+
+
+def require_feature(feature: str):
+    """A dependency that refuses callers whose plan does not include ``feature``.
+
+    Returns the ``CurrentUser`` so a route can depend on this INSTEAD of ``require_user`` rather
+    than as well as it, which keeps the signature honest about what the route needs.
+
+    WHAT THIS IS AND IS NOT. This is an entitlement check, not an authorisation boundary. Every
+    route it guards is already scoped to the caller's own rows by other means; all this decides is
+    whether a paying relationship covers the feature. Where a surface has no natural owner (the
+    campaign library, narratives) an entitlement check is NOT sufficient and must not be used on its
+    own: see ``routes/coordination._coordination_scope`` for the shape that is.
+
+    The 402 is deliberate. 403 says "not allowed", which reads as a permissions error and sends the
+    customer to support; 402 says "this costs money", which is true and is answerable in one click.
+    """
+
+    def _dep(current: CurrentUser = Depends(require_user)) -> CurrentUser:
+        if current.can(feature):
+            return current
+        from app.core import plans
+
+        needed = next(
+            (t for t in plans.paid_tiers() if t.has(feature)), None,
+        )
+        where = f" It is part of the {needed.display_name} plan." if needed else ""
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Your plan does not include this feature.{where}",
+        )
+
+    return _dep
 
 
 # ---------------------------------------------------------------------------

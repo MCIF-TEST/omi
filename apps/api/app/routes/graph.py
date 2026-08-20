@@ -19,7 +19,8 @@ from sqlalchemy.exc import IntegrityError
 
 from sqlalchemy import or_
 
-from app.core.auth import CurrentUser, require_user
+from app.core.auth import CurrentUser, require_feature, require_user
+from app.core.plans import FEATURE_SAVED_GRAPHS
 from app.schemas import (
     AddGraphMemberRequest,
     CreateGraphRequest,
@@ -145,10 +146,18 @@ def list_graphs(current: CurrentUser = Depends(require_user)) -> list[UserGraphO
         return [_graph_out(row.UserGraph, row.mc) for row in rows]
 
 
+# Saved graphs are a Reporter feature, and the gate is on WRITES ONLY.
+#
+# Reading is deliberately left open to every plan: a customer who downgrades keeps their graphs and
+# can still look at them. Making somebody's own saved work vanish because their card changed tier is
+# a worse failure than letting them read it, and it would arrive as "the product deleted my data"
+# rather than as an upgrade prompt. What they lose is the ability to build MORE.
+#
+# No security follows from this gate. Every route here is already scoped by ``_require_graph``.
 @router.post("", response_model=UserGraphOut, status_code=status.HTTP_201_CREATED)
 def create_graph(
     body: CreateGraphRequest,
-    current: CurrentUser = Depends(require_user),
+    current: CurrentUser = Depends(require_feature(FEATURE_SAVED_GRAPHS)),
 ) -> UserGraphOut:
     """Create a new named graph."""
     with get_session() as session:
@@ -394,7 +403,7 @@ def delete_graph(graph_id: int, current: CurrentUser = Depends(require_user)) ->
 def add_member(
     graph_id: int,
     body: AddGraphMemberRequest,
-    current: CurrentUser = Depends(require_user),
+    current: CurrentUser = Depends(require_feature(FEATURE_SAVED_GRAPHS)),
 ) -> UserGraphMemberOut:
     """Add a commenter profile to a graph. Idempotent — returns existing if already present."""
     with get_session() as session:

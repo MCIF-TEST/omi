@@ -487,7 +487,9 @@ class EngineStatus(BaseModel):
     # Multi-tenant flags for the UI
     auth_required: bool = False
     billing_configured: bool = False
-    monthly_credit_grant: int = 20
+    # Credits on the CHEAPEST paid plan. There is no single monthly grant any more: each tier
+    # grants its own, so a status field can only honestly report the entry point.
+    entry_plan_credits: int = 0
     # True when the DB lives on an ephemeral disk (SQLite). UI shows a banner
     # so operators know data won't survive a redeploy.
     storage_ephemeral: bool = False

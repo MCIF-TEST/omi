@@ -54,7 +54,7 @@ from app.integrations.youtube_errors import YouTubeClientError
 from app.schemas import ComprehensiveScanRequest, ComprehensiveScanResult, Tier
 from app.storage.db import get_session
 from app.storage.models import (
-    CandidateList, CommenterCandidate, DemoScanLog, Investigation, ScanJob,
+    CandidateList, CommenterCandidate, DemoScanLog, Investigation, ScanJob, User,
 )
 
 log = logging.getLogger("omi.scan")
@@ -432,7 +432,11 @@ def list_commenters(
     page_max = settings.candidate_page_max
     first_page = settings.candidate_first_page
 
-    from app.core.upstream_budget import enforce_daily_budget, record_calls
+    from app.core.upstream_budget import (
+        enforce_daily_budget,
+        enforce_period_budget,
+        record_calls,
+    )
 
     # A provider error must not discard the ledger row for the calls it already made. Raising it
     # straight out of the session block would roll back the whole transaction, including the
@@ -448,6 +452,15 @@ def list_commenters(
         enforce_daily_budget(
             session, user_id=uid, is_admin=current.is_admin, what="commenter-list",
         )
+
+        # The PLAN ceiling. Compile charges no credits and still calls a provider that bills, so
+        # this is the only thing standing between a subscription price and unbounded upstream spend.
+        # No projection is passed: how many pages a compile needs is not knowable before it runs,
+        # and declining a compile costs the customer nothing, so a small overshoot is the right
+        # trade against refusing work that would have fitted.
+        budget_user = session.get(User, current.id) if current.id else None
+        if budget_user is not None:
+            enforce_period_budget(session, budget_user, what="commenter-list")
 
         # Duplicate-tolerant on purpose; see _candidate_list_for.
         cl = _candidate_list_for(session, platform, content_id, uid)
@@ -778,6 +791,27 @@ def scan_link_start(
             lambda: scan_mod._resolve_client(settings)
         )
         source = YouTubeSource(yt_factory())
+
+    # The PLAN call ceiling, checked BEFORE the charge and with the scan's own projected cost.
+    #
+    # The projection is what makes this safe. The compile path can just be declined, because
+    # declining costs the customer nothing; a scan takes credits, so a mid-flight refusal would
+    # leave them paying for work that got cut off. Refusing up front means they keep the credits and
+    # can buy a pack or move up a plan.
+    #
+    # Deliberately NOT a reservation: the existing daily budget's own note explains why, and the
+    # same holds here. A scan's exact call count is not knowable in advance, and one scan past the
+    # line is not the runaway this guards against.
+    from app.core.plans import CALLS_PER_ACCOUNT
+    from app.core.upstream_budget import enforce_period_budget
+
+    with get_session() as session:
+        budget_user = session.get(User, current.id) if current.id else None
+        if budget_user is not None:
+            enforce_period_budget(
+                session, budget_user, what="scan",
+                projected=max_commenters * CALLS_PER_ACCOUNT,
+            )
 
     # Charge up front (the worker refunds on ANY failure) so an out-of-credits
     # user gets an immediate 402 instead of discovering it after a poll.

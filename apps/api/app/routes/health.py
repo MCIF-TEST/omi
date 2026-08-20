@@ -15,6 +15,18 @@ from app.storage.models import Account, CommenterEngagement, Scan, VideoScan
 router = APIRouter(tags=["health"])
 
 
+def _entry_plan_credits() -> int:
+    """Credits on the cheapest paid plan.
+
+    There is no single "monthly grant" any more: each tier grants its own, resolved from the Stripe
+    Price on the invoice. A status endpoint can only honestly report the entry point, so it does.
+    """
+    from app.core import plans
+
+    paid = plans.paid_tiers()
+    return int(paid[0].monthly_credits) if paid else 0
+
+
 def _twitter_available(settings) -> bool:
     """Twitter scanning is only truly available when the key is set AND the
     httpx runtime dependency is importable. Surfaced in /v1/status so the
@@ -107,7 +119,7 @@ def engine_status() -> EngineStatus:
         billing_configured=bool(
             settings.stripe_secret_key and settings.stripe_price_id
         ),
-        monthly_credit_grant=int(settings.monthly_credit_grant),
+        entry_plan_credits=_entry_plan_credits(),
         storage_ephemeral=settings.database_url.startswith("sqlite"),
         youtube_quota_used_today=int(quota_today or 0),
         youtube_quota_daily_limit=int(settings.youtube_daily_quota),
