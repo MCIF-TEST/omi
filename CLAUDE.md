@@ -789,6 +789,70 @@ investigation, so the real reason to keep watching the number is that past some 
 follows each individual instruction *less* reliably. Additions must keep replacing rather than
 accumulating.
 
+### The saved-graph redesign: an edge now says why it exists
+
+`/graph` was inert, and the reasons were structural rather than cosmetic.
+
+**Every edge collapsed to one float.** The route served
+`strength=min(1.0, e.mean_cluster_score)`, a per-scan average that is not a probability of
+anything, while the `CoordinationEdge` row already carried `log_lr_sum` (the accumulated log10
+likelihood ratio, discounted for context correlation), `families_json`, `contexts_json` and
+`observation_count`. All of it was discarded at the serialiser. A line drawn between two named
+people that nobody can interrogate is asking to be trusted rather than read, which is the opposite
+of what the rest of this product does.
+
+`GraphCoordinationEdge` now carries the **calibrated posterior** (`_edge_posterior`, the same number
+`app/campaigns/detector/probability.py` uses to decide a pair is coordinated at all, so the graph
+and the detector agree by construction), the independent evidence **families**, how many **distinct
+posts**, and first/last seen. `log_lr_sum` at 0 falls back to the old mean rather than collapsing to
+the prior: that means "seen, but before we were accumulating", and blanking those would erase every
+graph built before the tracking layer.
+
+**The client hardcoded `community_id: 0` for every node**, so the whole community dimension of the
+visualisation was dead, while `_louvain` sat unwired in `app/graph/algorithms.py`. `_communities`
+now runs it over the graph's own edges. **Community 0 is reserved for the UNCONNECTED band** and
+`community_count` deliberately excludes it, because counting it would report "1 community" for a
+graph with no edges at all.
+
+**Suggestions are the feature the old endpoint could not have.** Edges were only ever drawn between
+accounts the user had already added, so a graph could only show its owner what they already knew.
+`_suggestions` returns accounts OUTSIDE the graph that link into it, ranked by how many DIFFERENT
+members they touch before raw strength: one strong edge can be a coincidence with a good story, and
+an account tied to three separate members of a curated set is the shape of an operation. Gated at
+`SUGGESTION_MIN_POSTERIOR` (0.80), because offering a lead the evidence does not support trains the
+operator to add accounts on our say-so.
+
+One query serves both: every edge touching any member, partitioned into both-inside (the graph's
+edges) and one-inside (the leads). The old code ran a two-`IN` query over an unbounded member set;
+`MAX_GRAPH_MEMBERS` (250) now bounds it and a capped response says `truncated` rather than quietly
+showing a subset.
+
+#### The score was being invented, and that is the part that mattered most
+
+`tierToScore()` in the client rebuilt a number from the tier band (high -> 0.9, elevated -> 0.7,
+moderate -> 0.45) and sized every node by it. **A tier is a band and a band cannot be un-rounded**:
+50 and 74 are both "elevated" and are not the same account. `UserGraphMember.omi_score` now carries
+the real value, `AddGraphMemberRequest` accepts it, and **null is not zero**: an unscored member
+draws HOLLOW rather than small, because a confidently tiny node claims the account was measured and
+came back clean.
+
+#### The layout answers a question the data can support
+
+`RadialGraph` picked a `focal` node and BFS'd hop rings around it. A saved graph is a set the
+operator assembled and has no centre, and coordination edges are sparse by design, so in the common
+case nearly every node fell into its `orphans` bucket.
+
+`lib/graph-layout.ts` is pure and pinned by `lib/graph-layout.test.ts` (17 tests). Nodes group by
+community, clusters pack by phyllotaxis and ring the canvas largest-first, and the unconnected band
+gets its own labelled strip along the bottom, so **"nothing links these" reads as a finding rather
+than as a drawing that failed**. Deterministic on purpose: no force simulation, because a node
+moving between renders is a signal the data changed when it did not.
+
+`RadialGraph` itself is untouched and still correct for the account-subgraph surface, where there IS
+a focal account. `radial-graph-island.tsx` and `graph-explorer.tsx` in `app/(app)/graph/` are
+currently imported by nothing; left in place rather than tidied, per the note about unimported code
+in the campaigns section.
+
 ### The preset goes out as a copy page, every time
 
 **Standing instruction from the owner (2026-08-19): every protocol change ships with a paste-ready

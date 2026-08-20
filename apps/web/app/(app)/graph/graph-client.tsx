@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Network, Plus, Trash2, Pencil, Check, X, Users, MousePointerClick, ArrowRight } from 'lucide-react';
-import { apiClient, ApiError, type UserGraphOut, type UserGraphDetail, type UserGraphMemberOut, type Tier, type GraphNode } from '@/lib/api';
+import { apiClient, ApiError, type UserGraphOut, type UserGraphDetail, type UserGraphMemberOut, type Tier, type GraphCoordinationEdge, type GraphSuggestion } from '@/lib/api';
 import { TierBadge } from '@/components/shared/tier-badge';
-import { RadialGraph } from '@/components/viz/radial-graph';
+import { CoordinationCanvas } from '@/components/viz/coordination-canvas';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 // ---------------------------------------------------------------------------
@@ -26,26 +26,14 @@ type DetailState =
 // Helpers
 // ---------------------------------------------------------------------------
 
-function tierToScore(tier: Tier | null): number | null {
-  switch (tier) {
-    case 'high':     return 0.9;
-    case 'elevated': return 0.7;
-    case 'moderate': return 0.45;
-    case 'low':      return 0.1;
-    default:         return null;
-  }
-}
-
-function membersToGraphNodes(members: UserGraphMemberOut[]): GraphNode[] {
-  return members.map((m) => ({
-    external_id: m.external_id,
-    handle: m.handle || m.external_id,
-    display_name: m.display_name,
-    tier: m.tier,
-    last_score: tierToScore(m.tier),
-    community_id: 0,
-  }));
-}
+// `tierToScore` used to live here, rebuilding a number from the tier band (high -> 0.9, elevated ->
+// 0.7) so the canvas could size nodes by it. That is an invented figure, on the one product whose
+// claim is that it does not invent figures: a tier is a band, and a band cannot be un-rounded, so 50
+// and 74 are both "elevated" and are not the same account. The member row now carries the account's
+// real `omi_score`, and `null` renders as a hollow node rather than a confidently small one.
+//
+// `membersToGraphNodes` went with it. It also hardcoded `community_id: 0` for every node, which made
+// the whole community dimension of the visualisation dead while `_louvain` sat unwired in the API.
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -134,6 +122,22 @@ export function GraphClient() {
       await loadList();
     } catch (e) {
       alert(e instanceof ApiError ? e.message : 'Failed to remove member.');
+    }
+  };
+
+  /** Add a suggested account. The suggestion carries no handle or score, because it was found
+   *  through the coordination edge rather than through a scan: the account will fill in with the
+   *  real metadata the next time it appears in one. Guessing them here would be inventing data. */
+  const handleAddSuggestion = async (graphId: number, externalId: string) => {
+    try {
+      await apiClient(`/v1/graphs/${graphId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ external_id: externalId }),
+      });
+      await loadDetail(graphId);
+      await loadList();
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed to add account.');
     }
   };
 
@@ -247,6 +251,7 @@ export function GraphClient() {
         <GraphDetailPanel
           state={detail}
           onRemoveMember={(extId) => handleRemoveMember(activeId, extId)}
+          onAddSuggestion={(extId) => handleAddSuggestion(activeId, extId)}
         />
       )}
     </div>
@@ -335,11 +340,14 @@ function GraphCard({
 function GraphDetailPanel({
   state,
   onRemoveMember,
+  onAddSuggestion,
 }: {
   state: DetailState;
   onRemoveMember: (externalId: string) => void;
+  onAddSuggestion: (externalId: string) => void;
 }) {
   const [selected, setSelected] = useState<UserGraphMemberOut | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<GraphCoordinationEdge | null>(null);
 
   if (state.status === 'loading') {
     return (
@@ -360,8 +368,6 @@ function GraphDetailPanel({
   if (state.status !== 'ready') return null;
 
   const { data } = state;
-  const nodes = membersToGraphNodes(data.members);
-  const focal = data.members[0]?.external_id ?? '';
 
   return (
     <div className="space-y-4">
@@ -369,8 +375,14 @@ function GraphDetailPanel({
       <div className="flex items-center gap-2.5 flex-wrap">
         <span className="section-label">{data.name}</span>
         <span className="font-mono text-2xs text-fg-mute uppercase tracking-wider">
-          {data.member_count} member{data.member_count !== 1 ? 's' : ''} · {data.edges.length} coordination edge{data.edges.length !== 1 ? 's' : ''}
+          {data.member_count} member{data.member_count !== 1 ? 's' : ''} · {data.edges.length} link{data.edges.length !== 1 ? 's' : ''}
+          {data.community_count > 0 && ` · ${data.community_count} cluster${data.community_count !== 1 ? 's' : ''}`}
         </span>
+        {data.truncated && (
+          <span className="font-mono text-2xs text-tier-moderate uppercase tracking-wider">
+            showing the first {data.members.length}
+          </span>
+        )}
       </div>
 
       {data.members.length === 0 ? (
@@ -382,15 +394,27 @@ function GraphDetailPanel({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
           {/* Network visualization */}
-          <RadialGraph
-            focal={focal}
-            nodes={nodes}
-            edges={data.edges}
-            onSelect={(n) => {
-              const m = data.members.find((m) => m.external_id === n.external_id) ?? null;
-              setSelected(m);
-            }}
-          />
+          <div className="space-y-4">
+            <CoordinationCanvas
+              members={data.members}
+              edges={data.edges}
+              selectedId={selected?.external_id ?? null}
+              onSelectNode={(m) => { setSelected(m); setSelectedEdge(null); }}
+              onSelectEdge={(e) => { setSelectedEdge(e); setSelected(null); }}
+            />
+            {selectedEdge && (
+              <EdgeEvidence
+                edge={selectedEdge}
+                members={data.members}
+                onClose={() => setSelectedEdge(null)}
+              />
+            )}
+            <Suggestions
+              suggestions={data.suggestions}
+              members={data.members}
+              onAdd={onAddSuggestion}
+            />
+          </div>
 
           {/* Members list / selected node detail */}
           <div className="space-y-3">
@@ -473,6 +497,134 @@ function GraphDetailPanel({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Why one link exists.
+ *
+ * The whole reason the edge shape changed. A line drawn between two named accounts with a single
+ * opaque strength asks to be trusted; this asks to be read. Every number here is stored on the edge
+ * and none of it is derived at render time.
+ */
+function EdgeEvidence({
+  edge,
+  members,
+  onClose,
+}: {
+  edge: GraphCoordinationEdge;
+  members: UserGraphMemberOut[];
+  onClose: () => void;
+}) {
+  const name = (id: string) => members.find((m) => m.external_id === id)?.handle || id;
+  const pct = (edge.posterior * 100).toFixed(1);
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <span className="meta meta-hi">Why this link</span>
+        <button type="button" onClick={onClose} className="text-fg-mute hover:text-fg" aria-label="Close">
+          <X size={13} />
+        </button>
+      </div>
+      <div className="panel-body space-y-3">
+        <p className="text-sm text-fg">
+          <span className="font-mono">{name(edge.a)}</span>
+          <span className="text-fg-faint"> and </span>
+          <span className="font-mono">{name(edge.b)}</span>
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <div className="readout">
+            <span className="meta">Probability coordinated</span>
+            <span className="stat-value tabular">{pct}%</span>
+          </div>
+          <div className="readout">
+            <span className="meta">Evidence families</span>
+            <span className="stat-value tabular">{edge.families.length}</span>
+          </div>
+          <div className="readout">
+            <span className="meta">Distinct posts</span>
+            <span className="stat-value tabular">{edge.contexts}</span>
+          </div>
+        </div>
+        {edge.families.length > 0 && (
+          <p className="text-xs text-fg-dim">
+            Independent evidence: {edge.families.join(', ')}.{' '}
+            {edge.families.length === 1
+              ? 'One family on its own is a lead, not a finding.'
+              : 'Separate kinds of evidence agreeing is what makes this worth acting on.'}
+          </p>
+        )}
+        <p className="text-xs text-fg-mute">
+          {edge.contexts <= 1
+            ? 'Seen together under a single post, which one coincidence can explain.'
+            : `Seen together under ${edge.contexts} different posts, which is much harder to explain as coincidence.`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Accounts outside the graph that link into it.
+ *
+ * The feature the old graph could not have: edges were only ever drawn between accounts already
+ * added, so it could only show its owner what they already knew. Ranked by how many DIFFERENT
+ * members each one connects to, because one strong link can be a coincidence with a good story and
+ * three separate ones is the shape of an operation.
+ */
+function Suggestions({
+  suggestions,
+  members,
+  onAdd,
+}: {
+  suggestions: GraphSuggestion[];
+  members: UserGraphMemberOut[];
+  onAdd: (externalId: string) => void;
+}) {
+  if (!suggestions || suggestions.length === 0) {
+    return (
+      <div className="panel">
+        <div className="panel-head"><span className="meta meta-hi">Not in this graph</span></div>
+        <div className="panel-body">
+          <p className="text-xs text-fg-mute leading-relaxed">
+            No accounts outside this graph share strong coordination evidence with the ones in it.
+            That is the ordinary result: this evidence is rare by design, and its absence is not a
+            statement that these accounts are unconnected, only that nothing mechanical was found.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  const name = (id: string) => members.find((m) => m.external_id === id)?.handle || id;
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <span className="meta meta-hi">Not in this graph</span>
+        <span className="meta tabular">{suggestions.length} linked</span>
+      </div>
+      <ul className="divide-y divide-border">
+        {suggestions.map((sg) => (
+          <li key={sg.external_id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+            <div className="min-w-0">
+              <p className="font-mono text-xs text-fg truncate">{sg.external_id}</p>
+              <p className="text-2xs text-fg-mute mt-0.5">
+                {(sg.posterior * 100).toFixed(0)}% likely coordinated with{' '}
+                <span className="text-fg-dim">{name(sg.linked_to)}</span>
+                {sg.links_into_graph > 1 && ` and ${sg.links_into_graph - 1} other member${sg.links_into_graph > 2 ? 's' : ''}`}
+                {sg.contexts > 1 && ` · ${sg.contexts} posts`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onAdd(sg.external_id)}
+              className="shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm border border-border-2 text-fg-dim hover:text-fg hover:border-border-hot font-mono text-2xs uppercase tracking-wider transition-colors"
+            >
+              <Plus size={11} /> Add
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
