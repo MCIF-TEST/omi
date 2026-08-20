@@ -121,6 +121,20 @@ services:
       # sized at $1 per credit against the Price you create for OMI_STRIPE_PRICE_TOPUP.
       - key: OMI_TOPUP_PACK_CREDITS
         value: '25'
+      # ---- PRE-LAUNCH LOCKDOWN ---------------------------------------------------------------
+      # While this is 'true', ONLY ADMINS can use the product. Every other signed-in user is
+      # refused on product routes and sent to the waitlist; the anonymous demo scan is off; the
+      # marketing pages, sign-up, sign-in and public /r/<token> reports stay open.
+      #
+      # TO OPEN THE SITE: set this to 'false' here, set NEXT_PUBLIC_LOCKDOWN to 'false' on the WEB
+      # service below, and redeploy BOTH. They are committed side by side and
+      # tests/test_deployed_credit_contract.py fails if they disagree, because a half-lifted gate
+      # shows visitors a product the API then refuses.
+      #
+      # The code default is false, so deleting these two variables also opens the site. The API
+      # logs which mode it is in on every boot.
+      - key: OMI_LOCKDOWN
+        value: 'true'
       # Clerk auth. The API verifies Clerk session JWTs (see app/core/clerk_auth.py).
       # The SECRET key is server-only and set in the Render dashboard, NEVER committed.
       # The publishable key is PUBLIC (it ships in the browser bundle by design) and is
@@ -457,6 +471,20 @@ services:
       # How many credits one top-up pack contains. MUST match OMI_TOPUP_PACK_CREDITS on the API.
       - key: NEXT_PUBLIC_TOPUP_PACK_CREDITS
         value: '25'
+      # Mirror of OMI_LOCKDOWN on the API service. MUST match it.
+      #
+      # A second copy exists only because the landing page deliberately makes no API call (see
+      # apps/web/app/page.tsx: putting FastAPI in the critical path of the page traffic is bought
+      # for capped its throughput at the API's), so it cannot ask the server what mode it is in.
+      # Everything behind sign-in reads the mode from the user object instead, so this value is used
+      # by exactly one page. It is NOT the control: the API refuses the demo on its own, so a stale
+      # value here renders a form that then reports the product is not open.
+      - key: NEXT_PUBLIC_LOCKDOWN
+        value: 'true'
+      # Copy on the coming-soon page and the landing waitlist. Moving the date is this value plus a
+      # redeploy of the web service; it does NOT open the site, which is a deliberate human action.
+      - key: NEXT_PUBLIC_LAUNCH_DATE
+        value: 'September 20'
       # NOTE: NEXT_PUBLIC_MONTHLY_CREDITS and NEXT_PUBLIC_SUBSCRIPTION_PRICE are GONE. Per-tier
       # credits, prices and lookup ceilings live in apps/web/lib/plan.ts, which is checked against
       # app/core/plans.py by tests/test_deployed_credit_contract.py. An env var per number, per

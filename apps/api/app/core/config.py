@@ -145,6 +145,15 @@ class Settings(BaseSettings):
     # Required for production. A random 64+ char string used to sign session
     # cookies. Rotate this and every existing session is invalidated.
     session_secret: str = "dev-only-change-me-please-12345678901234567890"
+    # PRE-LAUNCH LOCKDOWN. When true, only admins can use the product: every other signed-in user
+    # is refused on product routes and sent to the waitlist. Marketing pages, sign-up, sign-in and
+    # public shared reports stay open. See app/core/lockdown.py for what is allowed through and why.
+    #
+    # Default False so that deleting the variable OPENS the site rather than silently leaving it
+    # shut; render.yaml commits 'true' explicitly while the campaign is running. The boot log states
+    # which mode is live on every start.
+    lockdown: bool = False
+
     # When True, /v1/scan/* requires an authenticated user with credits.
     # When False, all scans are unauthenticated and unlimited (local-mode).
     require_auth: bool = False

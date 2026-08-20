@@ -29,6 +29,7 @@ from fastapi import Depends, HTTPException, Request, Response, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.core.config import Settings, get_settings
+from app.core import lockdown
 from app.storage.db import get_session
 from app.storage.models import User
 
@@ -403,6 +404,15 @@ def _resolve_clerk_user(request: Request, settings: Settings) -> CurrentUser | N
             referred_by_user_id=referrer_id,
             last_login_at=datetime.utcnow(),
         )
+        # A signup during the pre-launch lockdown is a waitlist entry: they cannot use the
+        # product yet, so what they have actually done is ask to be told when they can. Joining
+        # here rather than only on the coming-soon form means somebody who goes straight to
+        # sign-up is not silently left off the launch email. Idempotent and never raises, so it
+        # cannot fail a signup.
+        from app.routes.waitlist import join_waitlist
+
+        join_waitlist(session, acct_email, source="signup", ip_hash=ip_hash)
+
         _ensure_referral_code(session, u)
         session.add(u)
         try:
@@ -448,11 +458,20 @@ def get_optional_user(
 
 
 def require_user(
+    request: Request,
     current: CurrentUser | None = Depends(get_optional_user),
     settings: Settings = Depends(get_settings),
 ) -> CurrentUser:
     """Strict auth: 401 if no logged-in user. Bypassed when require_auth=False
-    in local mode — returns a synthetic local user with unlimited credits."""
+    in local mode — returns a synthetic local user with unlimited credits.
+
+    ALSO THE PRE-LAUNCH GATE. Every product route depends on this, so it is the one place that can
+    refuse a signed-in non-admin while the product is locked without listing routes twice. The
+    check is deliberately here rather than only in the web app: a redirect in a Next.js layout stops
+    somebody browsing to the product, and does nothing about the same person calling the scan
+    endpoint directly with the cookie their browser already holds. The money is spent by the API,
+    so the refusal belongs to the API.
+    """
     if not settings.require_auth:
         return CurrentUser(
             id=0,
@@ -467,6 +486,10 @@ def require_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Please log in to use OMI.",
         )
+
+    lockdown.enforce(
+        path=request.url.path, is_admin=bool(current.is_admin), settings=settings,
+    )
     return current
 
 

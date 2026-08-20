@@ -11,6 +11,18 @@ export const metadata = { robots: { index: false, follow: false } };
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect('/sign-in');
+
+  // PRE-LAUNCH LOCKDOWN. Everybody who is not an admin goes to the waitlist.
+  //
+  // `lockdown` comes from the API on the user object rather than from a NEXT_PUBLIC_ env var here,
+  // so there is exactly one switch. Two copies would eventually disagree, and both directions are
+  // bad: showing the product to somebody the API then refuses, or hiding it from somebody allowed
+  // in.
+  //
+  // This redirect is the COURTESY, not the control. The API refuses the same person on every
+  // product route (app/core/lockdown.py), because a signed-in non-admin can call the scan endpoint
+  // directly with the cookie their browser already holds and spend real upstream money doing it.
+  if (user.lockdown && !user.is_admin) redirect('/coming-soon');
   return (
     <>
       {/* Reaching here means the SERVER verified the session. Clear any auth-recovery flag so a later

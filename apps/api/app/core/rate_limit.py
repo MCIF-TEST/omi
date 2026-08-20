@@ -146,6 +146,12 @@ RESET_LIMITER = SlidingWindowLimiter(max_hits=5, per_seconds=3600)
 # single scraper hammering one IP is capped (and can't flood the EventLog).
 PUBLIC_REPORT_LIMITER = SlidingWindowLimiter(max_hits=60, per_seconds=60)
 
+#: Joining the waitlist. Unauthenticated and free, so the only thing to bound is somebody scripting
+#: junk addresses into the list a campaign exists to build. Generous per IP, because a shared office
+#: or carrier NAT can legitimately produce several joins in a minute and refusing a real backer is
+#: worse than accepting a few bogus rows an operator can delete.
+WAITLIST_LIMITER = SlidingWindowLimiter(max_hits=10, per_seconds=3600)
+
 
 def public_report_rate_limit(request: Request) -> None:
     """FastAPI dependency: per-IP throttle for the public report routers.

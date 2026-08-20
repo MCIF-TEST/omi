@@ -1317,3 +1317,37 @@ class UpstreamUsage(Base):
     requests: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class WaitlistEntry(Base):
+    """Somebody who asked to be told when OmiSphere opens.
+
+    The list a pre-launch campaign exists to build. Two things about it are load-bearing:
+
+    **The email is unique.** Somebody who submits the form twice, or who joins from the landing page
+    and then creates an account, is ONE person. Without the constraint the launch blast mails them
+    twice, which is the single most obvious way to look amateur on the one day everybody is looking.
+
+    **``notified_at`` is the idempotency key for the launch email.** It is stamped per address as the
+    mail is accepted, not after the whole run, so a blast that dies half way through resumes instead
+    of restarting. Re-running it is therefore always safe, which matters because the operator will
+    almost certainly run it twice.
+    """
+
+    __tablename__ = "waitlist"
+    __table_args__ = (
+        Index("ix_waitlist_notified", "notified_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: Lowercased and stripped before insert, so Foo@Bar.com and foo@bar.com are one person.
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    #: Where they came from: "landing", "coming_soon", "signup". Tells you which surface actually
+    #: converts, which is worth knowing before spending money driving traffic to one of them.
+    source: Mapped[str] = mapped_column(String(32), default="coming_soon")
+    #: Abuse triage only. A hash, never the address itself: this table is a list of people who have
+    #: done nothing but express interest, and it should not also be a log of where they live.
+    ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    #: When the launch email was accepted for this address. NULL means still owed one.
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
