@@ -19,6 +19,7 @@ from app.core.auth import (
     verify_password,
 )
 from app.core.config import Settings, get_settings
+from app.core import lockdown as lockdown_mod
 from app.core.ip import client_ip, hash_ip
 from app.core.referrals import (
     generate_unique_code,
@@ -55,6 +56,13 @@ class UserOut(BaseModel):
     is_admin: bool
     referral_code: str | None = None
     referral_credits_earned: int = 0
+    #: Whether the product is in pre-launch lockdown (app/core/lockdown.py).
+    #:
+    #: Carried on the USER rather than read from a second env var in the web app, because two
+    #: copies of one switch is the drift class this codebase keeps paying for: the site would show
+    #: the product to somebody the API then refuses, or hide it from somebody who is allowed in.
+    #: The server decides, the browser is told.
+    lockdown: bool = False
 
 
 @router.post("/signup", response_model=UserOut)
@@ -123,6 +131,15 @@ def signup(req: SignupRequest, request: Request, response: Response, settings: S
             referral_code=generate_unique_code(session),
             referred_by_user_id=referrer.id if referrer else None,
         )
+        # A signup during the pre-launch lockdown is a waitlist entry: they cannot use the product
+        # yet, so what they have actually done is ask to be told when they can. Joining here rather
+        # than only on the coming-soon form means somebody who goes straight to sign-up is not
+        # silently left off the launch email. Idempotent and never raises, so it cannot fail a
+        # signup.
+        from app.routes.waitlist import join_waitlist
+
+        join_waitlist(session, email, source="signup", ip_hash=ip_hash)
+
         session.add(user)
         try:
             session.flush()  # populate user.id; surfaces unique violations
@@ -152,6 +169,7 @@ def signup(req: SignupRequest, request: Request, response: Response, settings: S
             is_admin=bool(user.is_admin),
             referral_code=user.referral_code,
             referral_credits_earned=user.referral_credits_earned,
+            lockdown=lockdown_mod.is_locked(settings),
         )
 
 
@@ -184,6 +202,7 @@ def login(req: LoginRequest, request: Request, response: Response, settings: Set
             is_admin=bool(user.is_admin),
             referral_code=user.referral_code,
             referral_credits_earned=user.referral_credits_earned,
+            lockdown=lockdown_mod.is_locked(settings),
         )
 
 
@@ -327,6 +346,7 @@ def reset_password(
             is_admin=bool(user.is_admin),
             referral_code=user.referral_code,
             referral_credits_earned=user.referral_credits_earned,
+            lockdown=lockdown_mod.is_locked(settings),
         )
 
 
@@ -443,6 +463,7 @@ def me(
         is_admin=current.is_admin,
         referral_code=current.referral_code,
         referral_credits_earned=current.referral_credits_earned,
+        lockdown=lockdown_mod.is_locked(settings),
     )
 
 

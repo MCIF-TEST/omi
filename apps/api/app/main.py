@@ -33,7 +33,7 @@ from app.routes import (
     accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, coordination,
     feedback, graph, health, improvement, intelligence, investigations, labels, learning, memory,
     metrics, monitoring, narratives, reasoning, reports, scan, scan_async, shadow, usage,
-    watchlists,
+    waitlist, watchlists,
 )
 from app.storage.db import init_db
 
@@ -101,6 +101,17 @@ def _log_optional_feature_state() -> None:
     # it into the first thing the deploy log says.
     parts.append(f"Analyst canonical validator: {_validator_state()}")
     logger.info("Optional features: %s", " | ".join(parts))
+
+    # Its OWN line, at WARNING when active, because this one changes who can use the product at all.
+    # Buried in the features list it would be read past; the failure it prevents is an operator
+    # wondering for an hour why every customer is being refused, or the reverse, a lockdown quietly
+    # outliving its launch date. Either way nobody should have to guess which mode is live.
+    from app.core import lockdown
+
+    if lockdown.is_locked(s):
+        logger.warning(lockdown.boot_line(s))
+    else:
+        logger.info(lockdown.boot_line(s))
 
 
 def _validator_state() -> str:
@@ -402,6 +413,11 @@ def create_app() -> FastAPI:
 
     # ---- Routers ----
     app.include_router(health.router)
+    # Public and admin halves of the waitlist. The public one must stay reachable while the
+    # product is locked (app/core/lockdown.OPEN_PREFIXES); it is the only thing a visitor can
+    # do before launch.
+    app.include_router(waitlist.router)
+    app.include_router(waitlist.admin_router)
     app.include_router(analyze.router)
     app.include_router(intelligence.router)
     app.include_router(scan.router)

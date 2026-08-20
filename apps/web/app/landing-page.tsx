@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
 import { Reveal } from '@/components/shared/reveal';
+import { WaitlistForm } from '@/components/shared/waitlist-form';
+import { LAUNCH_DATE_LABEL, LOCKED } from '@/lib/launch';
 import { ScorecardPreview } from '@/components/shared/scorecard-preview';
 import { ScoreScale } from '@/components/shared/score-scale';
 import { DemoScanForm } from './demo-scan-form';
@@ -206,24 +208,45 @@ export function LandingPage() {
           </div>
         </Chapter>
 
-        {/* ══ 005 · The free scan ════════════════════════════════════════════ */}
-        <Chapter n="005" id="try" title="Run one now." lede="Real engine. 25 accounts. No account.">
-          <Reveal from="up">
-            <div className="border border-border-1 bg-bg-elev">
-              <div className="px-4 md:px-5 py-3 border-b border-border-1 bg-bg flex items-center justify-between flex-wrap gap-2">
-                <span className="meta meta-hi">
-                  Free X scan
-                </span>
-                <span className="meta">
-                  Compile · select · analyze
-                </span>
+        {/* ══ 005 · The free scan, or the waitlist while we are not open ═════ */}
+        {LOCKED ? (
+          <Chapter
+            n="005"
+            id="try"
+            title={`Opens ${LAUNCH_DATE_LABEL}.`}
+            lede="One email when it does. Nothing else."
+          >
+            <Reveal from="up">
+              <div className="border border-border-1 bg-bg-elev">
+                <div className="px-4 md:px-5 py-3 border-b border-border-1 bg-bg flex items-center justify-between flex-wrap gap-2">
+                  <span className="meta meta-hi">Waitlist</span>
+                  <span className="meta tabular">{LAUNCH_DATE_LABEL}</span>
+                </div>
+                <div className="p-5 md:p-7">
+                  <WaitlistForm source="landing" />
+                </div>
               </div>
-              <div className="p-5 md:p-7">
-                <DemoScanForm />
+            </Reveal>
+          </Chapter>
+        ) : (
+          <Chapter n="005" id="try" title="Run one now." lede="Real engine. 25 accounts. No account.">
+            <Reveal from="up">
+              <div className="border border-border-1 bg-bg-elev">
+                <div className="px-4 md:px-5 py-3 border-b border-border-1 bg-bg flex items-center justify-between flex-wrap gap-2">
+                  <span className="meta meta-hi">
+                    Free X scan
+                  </span>
+                  <span className="meta">
+                    Compile · select · analyze
+                  </span>
+                </div>
+                <div className="p-5 md:p-7">
+                  <DemoScanForm />
+                </div>
               </div>
-            </div>
-          </Reveal>
-        </Chapter>
+            </Reveal>
+          </Chapter>
+        )}
 
         {/* ══ 006 · The discipline ═══════════════════════════════════════════ */}
         <Chapter

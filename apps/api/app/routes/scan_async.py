@@ -1424,6 +1424,20 @@ def _demo_classify_x_post(url: str) -> str:
     return tweet_id
 
 
+def _refuse_demo_while_locked(settings: Settings) -> None:
+    """The demo is OFF during pre-launch lockdown.
+
+    It is unauthenticated, so it never reaches ``require_user`` and needs its own refusal. And it is
+    the single most expensive anonymous surface in the product: a demo runs the REAL engine and a
+    REAL model call, so at campaign traffic it is a live bill with no way to convert anyone until
+    launch. Turning it off is what makes "the site is not open yet" true rather than decorative.
+    """
+    from app.core import lockdown
+
+    if lockdown.is_locked(settings):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=lockdown.LOCKED_DETAIL)
+
+
 @router.post("/demo/commenters", response_model=CommenterListOut)
 def scan_demo_commenters(
     payload: dict,
@@ -1433,6 +1447,7 @@ def scan_demo_commenters(
     """FREE anonymous COMPILE step — the same first move as the signed-in workspace, X-only and capped at
     25 repliers. Lists (and caches) a post's repliers so the visitor can pick who to analyze. No auth, no
     credits. An IP that has already spent both free scans is turned away here too."""
+    _refuse_demo_while_locked(settings)
     url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
     content_id = _demo_classify_x_post(url)
     ip_hash = _demo_ip_hash(request)
@@ -1558,6 +1573,7 @@ def scan_demo_score(
     """FREE anonymous ANALYZE step — runs the REAL engine (histories + detection + the OpenRouter analyst)
     on the visitor's SELECTED repliers, exactly like the signed-in scan, but synchronously and capped at
     25. Consumes the IP's one free scan on success; a failed attempt does not."""
+    _refuse_demo_while_locked(settings)
     url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
     content_id = _demo_classify_x_post(url)
 

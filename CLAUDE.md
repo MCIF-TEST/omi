@@ -1389,6 +1389,67 @@ subscriber's 20 monthly credits buy ~1000 accounts, so a whole month of heavy le
 
 Pinned by `tests/test_upstream_budget.py` (23 tests).
 
+### Pre-launch lockdown: only admins can use the product
+
+Live from 2026-08-20 for the Kickstarter campaign. `OMI_LOCKDOWN=true` means every signed-in user
+who is not an admin is refused on product routes and sent to `/coming-soon`; the anonymous demo scan
+is off; marketing pages, sign-up, sign-in and public `/r/<token>` reports stay open.
+
+**The gate is on the API, and that is the whole point.** A redirect in `app/(app)/layout.tsx` stops
+somebody browsing to the product. It does nothing about a signed-in non-admin calling
+`POST /v1/scan/link/score` directly with the cookie their browser already holds, which is exactly the
+person this exists to stop: the money is spent by the API, so the refusal lives there.
+`app/core/lockdown.py` is enforced inside `require_user`, which every product route depends on.
+
+- **`OPEN_PREFIXES` is an allowlist, not a blocklist**, so a route added later is refused by default.
+  `/v1/auth` has to stay open or the web app cannot ask who you are in order to redirect you;
+  `/v1/waitlist` is the only thing a visitor can do.
+- **Anything unauthenticated never reaches `require_user`**, so shared reports keep working by
+  construction. Deliberate: they cost nothing to serve and are the best proof the product works.
+- **The demo needs its own refusal** (`_refuse_demo_while_locked`) precisely because it is
+  unauthenticated. It is also the most expensive anonymous surface there is, running the real engine
+  AND a real model call, so at campaign traffic it is a live bill with nobody able to convert.
+- **The web learns the mode from the API**, on the user object (`UserOut.lockdown`), not from its own
+  env var. One switch, so the two can never disagree about a signed-in visitor.
+- **The landing page is the one exception** and mirrors it as `NEXT_PUBLIC_LOCKDOWN`, because
+  `app/page.tsx` deliberately makes no API call (putting FastAPI in the critical path of the page
+  traffic is bought for capped its throughput at the API's). Both values are committed side by side
+  in `render.yaml` and `test_the_lockdown_switch_agrees_across_both_services` fails on drift.
+
+**The code default is `False`.** A stale lockdown outliving its launch date is its own outage, and
+whoever had to fix it would be hunting a bug rather than a leftover env var. `render.yaml` commits
+`'true'` explicitly, and `app/main.py` logs the mode at WARNING on every boot so it is never a guess.
+
+#### The waitlist, and the one email it sends
+
+`WaitlistEntry` + `POST /v1/waitlist` (public, rate-limited) + `/v1/admin/waitlist` (list, CSV,
+notify). Signup joins it too, on **both** the Clerk and legacy paths: somebody who goes straight to
+sign-up during lockdown has, in effect, asked to be told when they can use the product, and without
+that they would be silently left off the launch email.
+
+- **The email is unique and normalised before insert**, so `Foo@Bar.com` and `foo@bar.com` are one
+  person. Without it the launch blast mails them twice, which is the most obvious possible way to
+  look amateur on the one day everybody is looking.
+- **A duplicate join is a SUCCESS, not an error**, and the response is byte-identical either way, so
+  the endpoint cannot be used to check whether a particular person signed up.
+- **`notified_at` is stamped per address INSIDE the send loop**, not after the batch. A run that dies
+  half way resumes instead of restarting, so re-running is always safe. The operator will re-run it.
+- **No SMTP means nothing is sent AND nobody is marked notified.** The trap that avoids: marking the
+  list done on a run that sent nothing, so the real blast later skips everybody.
+
+**SMTP is not configured on this deployment.** `OMI_SMTP_HOST` and friends have to be set before the
+blast will send anything; until then `/v1/admin/waitlist/notify` says so and the CSV export is the
+fallback.
+
+#### Opening the site
+
+1. `OMI_LOCKDOWN` -> `false` (API) **and** `NEXT_PUBLIC_LOCKDOWN` -> `false` (web) in `render.yaml`.
+2. Redeploy **both** services. The API's boot log confirms the mode.
+3. `POST /v1/admin/waitlist/notify` as an admin, repeatedly until `remaining` is 0.
+
+Nothing else has to change: the demo comes back, the landing page swaps the waitlist for the scan
+form, and `/coming-soon` simply stops being reachable by redirect.
+
 ### Three plans, and the ceiling that makes them possible
 
 Product decision (2026-08-20). `app/core/plans.py` is the catalog and the single place any question

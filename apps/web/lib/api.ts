@@ -449,6 +449,8 @@ export interface User {
   is_admin: boolean;
   referral_code: string | null;
   referral_credits_earned: number;
+  /** Pre-launch lockdown: when true, only admins may use the product. Decided by the API. */
+  lockdown?: boolean;
 }
 
 export interface EngineStatus {

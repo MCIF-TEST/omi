@@ -185,3 +185,26 @@ def test_every_tier_can_actually_spend_its_credits():
             f"accounts, {need} scan calls) but caps lookups at {tier.monthly_call_ceiling}. "
             f"The customer could not spend what they bought."
         )
+
+
+# --------------------------------------------------------------------------------------------- #
+# The pre-launch lockdown switch
+# --------------------------------------------------------------------------------------------- #
+def test_the_lockdown_switch_agrees_across_both_services():
+    """A half-lifted gate is worse than either state.
+
+    The API decides who may use the product; the landing page reads its own mirror because it
+    deliberately makes no API call. If the two disagree the failure is confusing in both directions:
+    the site offers a free demo the API then refuses, or it hides the product from people who are
+    allowed in on the day you open.
+
+    Both are committed side by side in render.yaml precisely so this test can hold them together.
+    """
+    api = _env_value("OMI_LOCKDOWN").lower()
+    web = _env_value("NEXT_PUBLIC_LOCKDOWN").lower()
+    assert api in {"true", "false"}, f"OMI_LOCKDOWN is {api!r}, expected 'true' or 'false'"
+    assert api == web, (
+        f"the API is locked={api} (OMI_LOCKDOWN, omisphere-api) while the site thinks locked={web} "
+        f"(NEXT_PUBLIC_LOCKDOWN, omisphere-web). Opening the site means changing BOTH and "
+        f"redeploying BOTH."
+    )
