@@ -32,7 +32,8 @@ from app.monitoring import lifespan_monitoring
 from app.routes import (
     accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, coordination,
     feedback, graph, health, improvement, intelligence, investigations, labels, learning, memory,
-    metrics, monitoring, narratives, reasoning, reports, scan, scan_async, shadow, usage,
+    metrics, monitoring, narratives, netdetect, reasoning, reports, scan, scan_async, shadow,
+    usage,
     waitlist, watchlists,
 )
 from app.storage.db import init_db
@@ -427,6 +428,10 @@ def create_app() -> FastAPI:
     app.include_router(channels.router)
     app.include_router(narratives.router)
     app.include_router(coordination.admin_router)
+    # Coordinated-network detection. Admin-only: it reports groups of named real people as
+    # running together on statistical evidence, which is an operator's lead rather than a
+    # customer-facing verdict.
+    app.include_router(netdetect.admin_router)
     app.include_router(campaigns.router)
     app.include_router(campaigns.campaign_public_router)
     app.include_router(content.router)

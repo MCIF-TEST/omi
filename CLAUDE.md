@@ -1389,6 +1389,69 @@ subscriber's 20 monthly credits buy ~1000 accounts, so a whole month of heavy le
 
 Pinned by `tests/test_upstream_budget.py` (23 tests).
 
+### The network detector (`app/netdetect/`): sets, not pairs
+
+Built 2026-08-20 as a ground-up replacement for the pairwise approach, alongside the existing cohort
+detector rather than instead of it. Design and the argument for it: `docs/network-detection.md`.
+
+**It asks a different question.** Not "do accounts a and b share X" but "how improbable is it that
+THESE k accounts share this much, in a corpus shaped like this one?" A set-level statistic is not
+recoverable by fusing pairwise ones, which is why this is a new package rather than a new signal.
+
+```
+features -> corpus -> candidates -> set surprise -> refusals -> shuffled null -> findings
+```
+
+**Five things that must not be undone:**
+
+- **The null is DEGREE-PRESERVING.** `shuffle.shuffle_corpus` uses double-edge swap so every account
+  keeps its feature count and every feature keeps its account count. Only the association changes,
+  and the association is what coordination IS. A shuffle that let degrees drift would make
+  everything real look significant.
+- **The search is corrected against the distribution of the MAXIMUM.** `build_null` re-runs the
+  whole pipeline on K shuffles and keeps each run's best score. That is the answer to "I searched a
+  huge space and took the winner", and it is the thing the old detector has no version of. **The
+  callable passed to `build_null` must be the same `_search` used on real data**: a null built from
+  a cheaper approximation corrects a different search while still looking like a correction.
+- **Refusals run INSIDE `_search`, before the null.** Filtering survivors afterwards would compare
+  them against a threshold built from a more permissive search, quietly weakening the correction.
+- **It never reads an OMI score or tier.** Coordination and botness are orthogonal, and the old
+  70+ filter was blind by construction to the operation worth catching: aged accounts, hand-written
+  posts, each scoring 30 alone. `test_the_score_never_reads_an_accounts_own_suspicion_score` pins it.
+- **In-group replies are excluded from the evidence, and a chatty group is refused outright.** Real
+  communities talk to each other; operations broadcast. Counting in-group replies as coordination
+  inverts the signal on exactly the population most at risk of being wrongly accused, and the fan
+  community control fired until this was fixed.
+
+**Family weights price in what the null cannot see.** The configuration null measures *statistical*
+rarity; it cannot measure *behavioural innocence*. Ten reporters genuinely share a topic, a working
+day and a newsroom tool. So `types.FAMILY_WEIGHT` weights `identity` and `network` at 1.0 (the
+operator's own acts: provisioning a batch, converging on outside targets) and text / timing /
+infrastructure at 0.40-0.55 (things a shared job or interest produces for free).
+
+**A finding with no hard-family evidence is flagged, not published.** `needs_adjudication` carries
+the reason. The professional-beat control lands here: statistically real, innocent, and unresolvable
+by any threshold. Suppressing it would hide genuine operations using aged accounts; publishing it
+would accuse a newsroom. A reader is the only thing that can make that call.
+
+**A blunder worth remembering.** With K shuffles the smallest reportable p-value is 1/(K+1), so a
+run asked for p<=0.05 with K=8 could never report anything whatever the data held, and the output
+was indistinguishable from a clean corpus. `detect` now REFUSES that configuration.
+`test_too_few_shuffles_refuses_instead_of_silently_finding_nothing` pins it.
+
+**Measured dilution curve** (8-account operation planted in 60 organic accounts): caught and
+publishable at discipline 0.0 to 0.5, invisible at 0.75 and above. That curve IS the honest product
+claim. A disciplined operation emits no rare features and no statistics recover a signal that was
+never sent.
+
+Reachable at `POST /v1/admin/netdetect/{slug}`, admin-only, read-only, costs nothing (no provider
+call, no model call, no credit). Nothing is persisted and no share token is minted: a claim about a
+person should be a decision somebody took, never a side effect of a page load.
+
+**Not yet built:** the operation registry (persistent latent entities), the adjudication call, topic
+features (they need real embeddings; production installs `[youtube,postgres]` so `get_embedder`
+falls back to the lexical `HashingEmbedder`), and cross-investigation running over the global graph.
+
 ### Pre-launch lockdown: only admins can use the product
 
 Live from 2026-08-20 for the Kickstarter campaign. `OMI_LOCKDOWN=true` means every signed-in user
