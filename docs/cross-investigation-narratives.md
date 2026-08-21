@@ -159,7 +159,33 @@ One queue, ranked, each row carrying:
 
 ---
 
-## 6. Build order
+## 6. Decisions taken with the owner (2026-08-20)
+
+1. **Embeddings come from an API**, named as a subprocessor. Roughly $0.002 per scan, no
+   infrastructure, best quality. Two consequences that are part of the work rather than afterthoughts:
+   the privacy policy's subprocessor list has to name the provider before this ships, since this is
+   other people's public posts leaving our servers; and the provider stays behind the existing
+   `Embedder` protocol so an unconfigured deployment falls back to `HashingEmbedder` rather than
+   breaking.
+
+2. **Scope is across ALL customers, admin-only.** This is the version where cross-customer
+   independence is the discriminator, and the only version a customer could not build for
+   themselves. `customer_id` is used solely to count DISTINCT customers; no admin view answers "who
+   scanned what", because the value is in the independence and not in the identity.
+
+3. **Admin queue plus a daily digest.** Findings accumulate in a ranked queue; one email a day
+   summarises what is new above threshold. Nothing interrupts, and the queue is where dismissals are
+   recorded. **SMTP is not configured on this deployment**, so the digest is inert until it is, and
+   must say so rather than silently sending nothing (the same rule the waitlist blast already
+   follows).
+
+4. **Retention: 90 days of text, aggregates forever.** Long enough for a seasonal baseline, and the
+   rolling counts that drive detection survive the text being dropped. This bounds how much of other
+   people's content is held, which is the difference between an answerable data-protection question
+   and an awkward one. A finding older than the window keeps its evidence sentences, which were
+   written at detection time, but loses the ability to be re-derived from source.
+
+## 7. Build order
 
 1. Real post timestamps in the narrative ingest. Live defect, unblocks everything temporal.
 2. Embeddings behind the existing `Embedder` protocol. Falls back to `HashingEmbedder` unconfigured.
@@ -173,3 +199,6 @@ One queue, ranked, each row carrying:
 
 Steps 3 to 5 produce numbers an operator can watch before anything is ever reported as a finding.
 That ordering is deliberate: thresholds set before anyone has seen the distribution are guesses.
+
+Two items are NOT code and block shipping rather than building: naming the embedding provider in the
+privacy policy, and configuring SMTP so the digest can send.
