@@ -1,241 +1,299 @@
-# Coordinated network detection: architecture and algorithm
+# Coordinated network detection: a ground-up redesign
 
-**Status: design. Nothing here is built yet.** Written 2026-08-20.
+**Status: design. Supersedes the incremental version.** Written 2026-08-20.
 
-The ask: stop scoring accounts one at a time and start detecting *networks* — moderate, elevated and
-high accounts pushing the same topic in the same window, with anomaly and spike detection on top.
-
----
-
-## 1. What already exists, so we do not rebuild it
-
-| Module | Does | State |
-|---|---|---|
-| `app/campaigns/detector/` | Cohort coordination over one investigation. 7 signals in 5 independent families, fused into a calibrated posterior against a stated prior (0.033). Real timestamps. | **Live**, both passes |
-| `app/campaigns/tracking/` | `CoordinationEdge` accumulation across scans, discounted for context correlation. Operation signatures that survive account rotation. | **Live** |
-| `app/detection/coordination/` | Six per-scan detectors feeding OmiScore. | **Live** |
-| `app/narrative/` | Semantic clustering of comments into narratives, plus a coordination scoring layer with burst and entropy signals. | **Live but compromised** (§2) |
-| `app/campaigns/verdict_coordination.py` | 1,148 lines. Clusters accounts from OMI scores + analyst verdicts alone, with score-band-conditional background subtraction and a permutation test. | **Written, never wired** |
-
-The fusion framework is the important asset. `probability.py` already multiplies likelihood ratios
-across *independent evidence families*, and `types.METHOD_FAMILY` is the independence assumption
-written down. **A topic dimension should become a sixth family inside that framework, not a parallel
-system.** Everything below is designed around that.
+The existing cohort detector is not a network detector that needs extending. It is a *pair scorer*
+with a group-assembly step bolted on, and four of its properties are structurally wrong rather than
+under-tuned. This document argues that case, then designs the replacement.
 
 ---
 
-## 2. Three findings that block the ask as stated
+## 1. Why the current design cannot be fixed by extension
 
-### 2a. Production has no real embedder, so "same topic" currently means "same words"
+### 1a. It never corrects for the size of the search space
 
-`render.yaml` builds with `pip install -e .[youtube,postgres]`. The `[ml]` extra that carries
-`sentence-transformers` is **not installed**. `get_embedder()` therefore falls back to
-`HashingEmbedder`, whose own docstring says it "will NOT catch paraphrases."
+This is the flaw that would embarrass the product if a statistician read the code.
 
-So today's narrative clusters are lexical, not semantic. Two accounts pushing one narrative in
-different words do not cluster, which is exactly the case a network detector exists to catch.
+The detector computes a posterior per pair, assembles groups from pairs that clear 0.95, and reports
+the groups. But with *N* accounts it is implicitly searching an enormous space of candidate groups,
+and it applies **no correction for having searched**. Something improbable is *always* shared by
+*some* subset of a large corpus. Reporting the extreme of a large search as though it were a single
+pre-registered test is how findings get manufactured.
 
-**Fix: an embedding API, not the local model.** Shipping `sentence-transformers` means torch, about
-800 MB, on a Render starter instance. Measured against the alternative: a 100-account scan produces
-~2,000 texts at ~50 tokens each, so ~100k tokens. At commodity embedding pricing (~$0.02/1M) that is
-**$0.002 per scan**. The API is three orders of magnitude cheaper than the RAM.
+Every threshold in the system is stated as "P(coordinated) ≥ 0.95." That number is only meaningful
+for one hypothesis tested once. The honest quantity is the distribution of the *maximum* score found
+over the whole search, and nothing computes it.
 
-### 2b. The narrative store records when we SCANNED, not when they POSTED
+### 1b. Pairwise decomposition never asks the group-level question
 
-`NarrativeService.ingest_batch` writes `observed_at=now` for every row in the batch. Every temporal
-signal computed over that column — `_temporal_burst`, `_timing_entropy_anomaly`, the propagation
-timeline, `amplification_bursts` — is therefore measuring the scanner, not the accounts. Every
-member of one scan is a perfect burst by construction.
+If twelve accounts share a phrase occurring in one account per ten thousand, the current design sees
+66 pairs, takes the strongest edge per family, and requires two independent links to admit a member.
+It never asks the actual question: *how improbable is it that twelve accounts in this corpus share
+something this rare?*
 
-This is a live defect in the existing narrative coordination layer, independent of this design.
-`CommenterScanResult.thread_comments` and `FullVideoScanResult.thread_arrivals` already carry real
-timestamps; the narrative ingest simply does not use them.
+A set-level statistic cannot be recovered by fusing pairwise ones. The group is **assembled** from
+edges rather than **tested** as a group.
 
-**Nothing in this design may key on `observed_at` until it holds the post time.**
+### 1c. The 70+ filter inverts the entire value proposition
 
-### 2c. The verdict miner is written and unwired
+`cohort.SCORE_THRESHOLD = 70.0`. The detector looks for coordination only among accounts already
+flagged as probable bots.
 
-`verdict_coordination.py` is the module that already answers "which of these accounts are running
-together, from the analyst's own output". CLAUDE.md records why it was not adopted: every
-measurement in it is *relative to the batch*, and the cohort detector's 70+ filter removes the batch.
-That objection does not apply to a topic-window cohort, which is not score-filtered. It is the
-natural home for the analyst-derived half of this system.
+So it finds operations you would have caught anyway, and is blind by construction to the operation
+worth catching: aged accounts, hand-written posts, ordinary clients, each scoring 25 to 40 on its
+own. The module's own documentation concedes this ("five of the seven signals go quiet").
+
+**Coordination and botness are orthogonal.** `verdict_coordination.py` states this correctly and the
+live detector contradicts it. A dense, improbable cluster of *low*-scoring accounts is the single
+most valuable thing this product could find, and the filter guarantees it is never looked at.
+
+### 1d. Detection is per-scan; the asset is cross-scan
+
+The unique thing OmiSphere owns is not any detector. It is that every customer's scan feeds one
+shared record, so no single customer sees the whole picture and OmiSphere does. That is the moat.
+
+Today detection runs inside one investigation and *writes* to the accumulated graph afterwards. It
+is backwards. Detection should run **on** the accumulated graph, with a scan as the event that
+updates it.
+
+---
+
+## 2. The reframe
+
+> Not: "score every pair, then cluster the strong ones."
+>
+> Instead: **"find sets of accounts that share improbably many rare behaviours, and prove the set
+> would not appear by chance in a corpus of this shape."**
+
+That is a search problem over a bipartite graph with a multiple-testing correction. It is a
+different algorithm, not a tuned version of the current one.
 
 ---
 
 ## 3. Architecture
 
-Five layers. Each one is independently useful and independently testable.
-
-```
-  scan ──► L1 utterances ──► L2 topic assignment ──► L3 topic-window baseline
-                                     │                        │
-                                     ▼                        ▼
-                            L4 narrative family ────► L5 spike + linkage
-                              (pairwise LR)            (topic-level alert)
-                                     │                        │
-                                     └──► probability.py ◄─────┘
-                                          (existing fusion)
-```
-
-### L1. The utterance
-
-The unit of analysis, and it does not exist yet. One row per
-`(account, parent_post, topic, posted_at)`.
-
-Built from data already collected and currently discarded at this level: `thread_comments` carries
-what an account said **on the scanned post** with a real timestamp, and `recent_activity` carries its
-own timeline. Both are already in `payload_json`.
-
-Storing utterances separately from `NarrativeMembership` is deliberate: memberships are per-comment
-and unbounded; utterances are the deduplicated, timestamped, topic-tagged spine the rest of the
-system queries.
-
-### L2. Topic assignment
-
-Embed each utterance, assign to a topic centroid (the existing `clustering.best_match` is the right
-algorithm, it just needs real vectors). Two additions:
-
-- **Topic from the analyst's quotes, not only raw text.** The protocol forces a verbatim quote into
-  every claim about what an account wrote. Those quotes are pre-selected as the *characteristic*
-  thing the account said, which is a cleaner topic signal than a comment corpus containing "great
-  video".
-- **Intent as a second axis.** `suspected_intent` is already produced per account. Topic ∧ intent is
-  a stronger co-occurrence than topic alone.
-
-### L3. The baseline
-
-Per topic, per time bucket, maintain: utterance volume, distinct accounts, **tier mix** (share at
-moderate or above), and **novelty** (share of accounts never previously seen on this topic).
-
-Tier mix is the load-bearing statistic and the reason this design works. A genuinely viral topic
-recruits a *representative* sample of accounts, so its tier mix stays near the corpus base rate. A
-pushed topic recruits a *biased* sample. Volume alone cannot tell those apart; tier mix can.
-
-### L4. The narrative evidence family
-
-A new pairwise family, `FAMILY_NARRATIVE`, with one method: `narrative_cooccurrence`.
-
-### L5. The spike detector
-
-A topic-level alert, not a pairwise edge. Feeds `/narratives` (already the admin coordination queue)
-and the existing `Alert` table.
-
----
-
-## 4. Algorithm
-
-### 4a. `narrative_cooccurrence` (pairwise, joins the fusion)
-
-Accounts *a* and *b* co-occur when both produced an utterance on topic *T* inside window *W*
-**on different parent posts**.
-
-The different-parent rule is the whole signal. Two accounts commenting on the same post about that
-post's topic is guaranteed and worth nothing; the same topic reached on *different* posts inside a
-short window is the discriminative event. This mirrors `co_target` exactly, and the tracking layer's
-existing "only a distinct post counts" rule.
-
-Likelihood ratio, data-derived per observation exactly as `burst_lockstep` and
-`provisioning_window` already are:
-
-```
-p_null = P(two independently-behaving accounts both touch T in W on different posts)
-       = estimated from the empirical marginal rate of topic T over the trailing baseline,
-         EXCLUDING window W
-LR     = min(CAP, 1 / p_null)
+```mermaid
+flowchart TB
+  A[Scans<br/>every customer, every platform] --> B[Observation store<br/>append-only facts]
+  B --> C[Feature space<br/>account x feature bipartite graph<br/>each feature carries global rarity]
+  C --> D[Candidate generation<br/>rare features only, then community detection<br/>cheap, tuned for recall]
+  D --> E[Significance engine<br/>degree-preserving null<br/>corrected for the search]
+  E --> F[Operation registry<br/>persistent latent entities<br/>survives account rotation]
+  F --> G[Adjudication<br/>one model call per candidate<br/>operation / community / coincidence]
+  G --> H[Alerts, graph, admin queue]
+  E -.calibration.-> I[Shuffle harness<br/>run the pipeline on shuffled data<br/>it must find nothing]
 ```
 
-Three guards, each inherited from a mistake the existing detector already paid for:
+Six components. The important structural change is that **detection is a background process over the
+global graph**, not a step inside a scan.
 
-- **Never count the cluster in its own background.** `stats.local_rate`'s `exclude` argument exists
-  because a burst that inflates the distribution it is tested against hides itself. Same here.
-- **Cap the LR at ~2.0.** The null cannot see an external referral: a news event, a Discord link, a
-  trending push makes real strangers converge on a topic, and that is precisely the deviation this
-  measures. The cap is where the unmodelled confound is priced in.
-- **Platform-neutral, so it may create cross-platform edges** (`PLATFORM_NEUTRAL_FAMILIES`). A
-  narrative crossing platforms is one of the strongest available signals and text/network/timing are
-  already admitted for exactly that reason.
+### 3a. Observation store
 
-### 4b. The spike test (topic-level)
+Append-only. One row per fact: `(account, feature, context, observed_at, platform, investigation)`.
+Immutable, so a recomputation is always reproducible and a threshold change never rewrites history.
 
-For topic *T* and window *W*:
+### 3b. Feature space
 
-```
-n  = distinct accounts with an utterance in (T, W)
-k  = of those, how many scored MODERATE or above
-p̂  = moderate+ rate across the whole scored corpus over a trailing 30 days,
-     EXCLUDING W
-significance = -log10 P(X >= k)  where X ~ Binomial(n, p̂)
-```
+Every behaviour becomes a **feature token**, and every feature carries a rarity measured over the
+whole corpus. The bipartite graph of accounts against features is the substrate everything else
+reads.
 
-Then two multipliers, both required before anything is reported:
-
-- **Novelty** — the share of those *k* accounts never previously seen on *T*. An organically hot
-  topic is discussed by the people who always discuss it; a pushed one recruits new mouths.
-- **Linkage** — the density of existing `CoordinationEdge` posteriors *among those k accounts*,
-  against the corpus-wide edge density.
-
-**Linkage is the condition that makes this a network detector rather than a topic thermometer.**
-Topic co-occurrence alone says "a lot of suspicious accounts are here," which is often true and
-innocent (bots cluster on crypto because humans do). Topic co-occurrence *plus* mechanical linkage
-says "these specific accounts are running together, and here is the topic they are running on."
-
-### 4c. Refusals, stated up front
-
-A topic-window is refused, not reported, when any of these hold:
-
-| Refusal | Why |
+| Feature class | Example tokens |
 |---|---|
-| Fewer than 2 distinct parent posts | A single post is not a network, it is a comment section |
-| Fewer than 2 distinct investigations | One customer scanning three posts on one topic manufactures the concentration |
-| `n` below ~8 | The binomial tail is meaningless on tiny samples |
-| Linkage at or below corpus baseline | Suspicious accounts sharing an interest is not an operation |
-| Topic is a platform artifact | Auto-generated text ("I just earned a badge") clusters perfectly and means nothing |
+| Text | 5-gram shingles, bio shingles, emoji signature, punctuation habits |
+| Timing | posting-minute bucket, inter-post gap class, active-hour histogram bucket |
+| Network | target post, target author, reply parent |
+| Infrastructure | client string, link domain, URL shortener |
+| Identity | creation week, handle skeleton, avatar hash class |
+| Narrative | topic id, topic-window pair, stated intent |
+
+**Rarity is the whole game.** A feature shared by 30% of the corpus carries no information; one
+shared by 0.01% carries almost all of it. Restricting to rare features is simultaneously the
+statistical justification and the performance strategy (§6).
+
+### 3c. Candidate generation, tuned for recall
+
+Cheap and deliberately over-inclusive, because the expensive stage below is what removes false
+positives:
+
+1. Keep only features below a rarity ceiling.
+2. Build the account-account weighted graph over shared rare features. Sparse by construction.
+3. Run community detection (`app/graph/algorithms._louvain` already exists and is already wired for
+   the saved-graph surface).
+
+### 3d. Significance engine
+
+For each candidate community, the question is: **would a group this dense appear in a corpus of this
+shape by chance?**
+
+The null must be **degree-preserving**. Shuffle the account-feature graph while holding each
+account's feature count and each feature's account count fixed. This automatically prices in the two
+confounds that break naive independence: prolific accounts are prolific in the null too, and popular
+features are popular in the null too. It is the principled, general version of the hand-rolled
+background subtraction in `verdict_coordination.py`.
+
+Two quantities per candidate:
+
+```
+observed   = sum over shared rare features of  -log10 P(this many accounts share it)
+                                                under the configuration null
+corrected  = observed compared against the distribution of the MAXIMUM observed
+             across K degree-preserving shuffles of the whole corpus
+```
+
+The correction is the part that does not currently exist anywhere. Comparing against the
+distribution of the maximum is exactly the right answer to "I searched a large space and took the
+best," and it is the same logic as a permutation test applied to the entire pipeline rather than to
+one cluster.
+
+Calibration is amortised: shuffle occasionally to fit a threshold, not per query.
+
+### 3e. Operation registry
+
+An operation is a **latent entity that emits accounts over time**, not a set of accounts.
+
+It holds a *distribution* over the feature space, updated as evidence arrives. A new candidate group
+attaches to an existing operation by likelihood under that distribution rather than by an overlap
+threshold. Account rotation is then handled by construction: the accounts turn over, the emitting
+distribution persists.
+
+This replaces `_match_or_create`'s "member overlap, else signature collision, else create," which
+needs a hand-tuned Jaccard floor and a hand-tuned similarity floor precisely because it has no model
+of what an operation *is*.
+
+### 3f. Adjudication: the model's real job
+
+**Do not use the model to find networks.** It is weak at combinatorics, and per-account calls do not
+scale to a graph.
+
+Use it where it is genuinely better than any algorithm: **one call per candidate group**, reading
+the actual posts, answering the question a graph cannot: *is this an operation, or a community?*
+
+A fan community, a professional beat, a diaspora group and a bot network are close to identical in
+graph structure. They are obvious to a competent reader. That asymmetry is the argument for putting
+the model exactly here and nowhere else, and it costs one call per finding rather than one per
+account.
+
+The analyst's existing output also feeds §3b directly: the protocol forces a verbatim quote into
+every claim about what an account wrote, and those quotes are pre-selected as *characteristic*,
+which makes them better feature material than a raw comment corpus full of "great video".
+
+**The separation still holds.** The engine sends the analyst an evidence bundle and nothing else. All
+of this consumes the analyst's output downstream. Nothing here may reach what the model sees when
+scoring an account, or the anchoring the protocol forbids arrives by the back door.
 
 ---
 
-## 5. What this cannot see, and the bias in it
+## 4. Signals nobody is using, and each is cheap
 
-**The corpus is not a sample of the platform.** We score the accounts customers chose to scan. So
-`p̂` is "the moderate+ rate among accounts our customers look at," not a platform rate. That makes
-the test valid for a *relative* claim — this topic is anomalous against our own corpus — and invalid
-for any absolute statement about the platform. Reports must say so.
+Five ideas that fall out of the reframe and need no new data collection.
 
-**It cannot see a slow network.** Every signal here is co-occurrence inside a window. An operation
-that posts once a week each, on topic, from aged accounts, is invisible to this and to the existing
-detector.
+**Correlated death.** An operation has a budget. Accounts are bought in batches, used, and retired
+together. Correlated *birth* is already measured (`provisioning_window`); correlated **silence** is
+not measured at all, and it is just as improbable. An account going quiet is observable in
+accumulated history for free.
 
-**Topic drift.** A centroid updated as a streaming mean will wander. A topic that starts as "election
-integrity" and drifts into "voting machines" reports as one topic; splitting it needs periodic
-re-clustering, which is deferred.
+**Negative space.** Every current signal looks for shared presence. Absence discriminates: real
+communities *talk to each other*. A cluster with identical topic timing and **zero internal
+conversation** is a broadcast array, and it is more suspicious than one with internal replies, not
+less. Nothing looks at this.
 
-**The analyst's separation must hold.** The engine sends the analyst an evidence bundle and nothing
-else — no engine scores, no tiers, no coordination findings. This design only ever consumes the
-analyst's OUTPUT downstream, which is what the cohort detector's pass 2 already does. Nothing here
-may feed back into what the model sees, or the anchoring the protocol forbids arrives by the back
-door.
+**The impossible schedule, measured across accumulated history.** Humans sleep. `_timing_stats`
+already computes rhythm, but per scan on 20 to 50 posts. The same statistic over *all* of an
+account's observed activity across every scan it has ever appeared in is far stronger, and the data
+is already stored.
+
+**Customer scan choices as a prior.** Customers scan posts they suspect. A topic many customers
+*independently* choose to scan is a topic where manipulation is suspected by people with context.
+Free, crowd-sourced targeting for where to look first. It is a prior on search order only, never
+evidence, because it is exactly the selection bias described in §7.
+
+**Seeded calibration.** `tracking/seeds.py` already ingests documented operations from public
+disclosure archives, but only to *match* against. Those same seeds are the only labelled positives
+that will ever exist, and they should be driving **calibration and recall measurement**, which
+CLAUDE.md currently concedes is not measurable at all.
 
 ---
 
-## 6. Build order
+## 5. How we would know it works
 
-Each step ships something usable and nothing depends on a later step.
+The current suite proves silence on clean scenarios, which is real but is only half the question. It
+concedes recall "is not measurable from this corpus at all."
 
-1. **Fix the timestamp.** `ingest_batch` writes the real post time. Unblocks every temporal signal in
-   the narrative layer, which is currently measuring the scanner.
-2. **Real embeddings** behind the existing `Embedder` protocol, via API. Provider-agnostic, falls
-   back to `HashingEmbedder` when unconfigured so nothing breaks.
-3. **The utterance table** and its backfill from stored `payload_json`. Read-only, no behaviour
-   change, and it makes everything after it queryable.
-4. **L3 baselines** as a scheduled rollup. Still no detection: just the counters, visible to admins.
-   Watch them for a week before trusting a threshold.
-5. **`narrative_cooccurrence`** as the sixth family. Small, testable, and it improves the existing
-   detector on day one.
-6. **The spike detector** and its alerts into `/narratives`.
-7. **Wire `verdict_coordination`** against topic-window cohorts, which is the input it was written
-   for and never got.
+Three tests the redesign makes possible:
 
-**Steps 4 and 6 are where calibration has to be earned rather than reasoned.** Every threshold in the
-existing detector is reasoned rather than fitted, because no labelled corpus exists. The dismissals
-on `campaign_detections` are the only ground truth that will ever accumulate, and this system should
-record its own the same way.
+1. **The shuffle test.** Run the entire pipeline on degree-preserving-shuffled data. **If it reports
+   anything, the pipeline is manufacturing findings.** This is a hard, honest self-check the current
+   design cannot perform, and it should run in CI.
+2. **Seeded recall.** Inject the disclosure-archive operations into a synthetic corpus at varying
+   dilution and measure the detection rate. This turns recall from unmeasurable into a number.
+3. **Dilution curve.** Vary how well-run the injected operation is (aged accounts, hand-written
+   posts, ordinary clients) and find where detection fails. That curve *is* the honest product claim,
+   and it is the answer to "what can this actually catch."
+
+---
+
+## 6. Scale
+
+Rare-feature restriction is what makes this tractable, and it is not a compromise: common features
+carry no signal, so discarding them loses nothing.
+
+At 10^5 to 10^6 accounts, the account-account graph over rare features only is sparse. Louvain is
+near-linear in edges. The expensive part is the shuffle calibration, which is amortised: fit a
+threshold periodically, not per query.
+
+The one real cost is embeddings for the narrative features, and it is small: a 100-account scan is
+roughly 100k tokens, about **$0.002** at commodity embedding pricing. Note production currently
+installs `[youtube,postgres]` and therefore runs the lexical `HashingEmbedder`, whose docstring says
+it will not catch paraphrases. An embedding API is three orders of magnitude cheaper than putting
+torch on the instance.
+
+---
+
+## 7. What it still cannot see, and the bias that does not go away
+
+**The corpus is not a sample of the platform.** We observe accounts customers chose to scan. Every
+rate computed here is conditional on that selection, which makes the tests valid *relative to our own
+corpus* and invalid as any absolute claim about a platform. This does not improve with scale and must
+be stated in every report.
+
+**A slow, disciplined operation stays invisible.** Accounts that post once a week each, on topic, from
+aged accounts, with individually written text, share no rare features. No amount of statistics
+recovers a signal that was never emitted.
+
+**Community and operation are genuinely ambiguous in graph structure.** §3f puts a reader on that
+question because it cannot be resolved statistically, and the failure mode of getting it wrong is
+this product publishing an accusation about a real community.
+
+---
+
+## 8. Build order
+
+Each step is independently useful, and the early ones fix live defects.
+
+| | Step | Why here |
+|---|---|---|
+| 1 | Real post timestamps in the narrative ingest | `ingest_batch` writes `observed_at=now`, so every temporal signal in that layer currently measures the scanner. Live defect. |
+| 2 | Embeddings behind the existing `Embedder` protocol, via API | Unblocks semantic topic. Falls back to `HashingEmbedder` when unconfigured. |
+| 3 | Observation store + feature extraction, backfilled from stored payloads | Read-only. No behaviour change. Makes everything queryable. |
+| 4 | Rarity index + candidate generation | Produces candidates for inspection only. Nothing published. |
+| 5 | **Shuffle harness** | Before any threshold is trusted. It is the test that tells you whether the rest is real. |
+| 6 | Significance engine with the search correction | The detector. |
+| 7 | Operation registry | Replaces overlap-matching with a likelihood model. |
+| 8 | Adjudication + surfaces | One model call per candidate. |
+| 9 | Seeded recall + dilution curve | Turns the product claim into a measured number. |
+
+**Step 5 before step 6 is deliberate.** Building the detector before the test that can falsify it is
+how a system ends up confidently reporting noise, and this product's findings are published claims
+about named real people.
+
+---
+
+## 9. What happens to the current detector
+
+It keeps running. It is precise on the operations it can see, its precision suite is real, and
+turning it off would remove a working feature to replace it with an unproven one.
+
+The redesign runs **beside** it over the global graph. When the shuffle test and the dilution curve
+say the new path is at least as trustworthy, the old one becomes one more feature class inside it:
+its seven signals are good features, they were simply asked the wrong question.
