@@ -17,8 +17,8 @@ them: read "Why a floor happens" below before changing a retry rule. A fourth se
 per-request canonical links); read "The agent surface" below before touching anything that a machine
 rather than a person reads, and note that `OMI_PUBLIC_BASE_URL` is now required to BUILD the web app.
 
-Suite measured at **2142
-passed, 8 skipped, 2 failed** (6m30s, 2026-08-18), both failures pre-existing and listed below. The 8
+Suite measured at **2318
+passed, 8 skipped, 2 failed** (8m40s, 2026-08-25), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -71,7 +71,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2107 passed, 8 skipped, 2 failed** (7m24s, 2026-08-18), both documented below:
+Current measured state: **2318 passed, 8 skipped, 2 failed** (8m40s, 2026-08-25), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
