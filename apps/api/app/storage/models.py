@@ -1374,3 +1374,174 @@ class WaitlistEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     #: When the launch email was accepted for this address. NULL means still owed one.
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Cross-investigation narratives.
+#
+# Every investigation is currently an island. These tables are what lets one question be asked
+# across all of them at once: is a topic being WORKED rather than discussed, and are the accounts on
+# it a formation? See docs/cross-investigation-narratives.md.
+#
+# The value here is structural and is the one thing no customer and no competitor can reproduce: a
+# single customer sees their own handful of scans, while OmiSphere sees every customer's in one
+# database. One customer scanning twelve posts about water is one person's curiosity. Three
+# unrelated customers landing on water in a week is evidence about the world.
+# ---------------------------------------------------------------------------
+
+
+class Utterance(Base):
+    """One comment, extracted from one investigation, addressable across all of them.
+
+    Append-only and derived: every field is already inside some investigation's ``payload_json``.
+    The point of copying it out is that a blob cannot be queried. Every question downstream (which
+    accounts spoke on this topic, how many distinct customers saw it, what the tier mix was) is a
+    query against this table instead of a walk through the heaviest column in the product.
+
+    **``user_id`` is used ONLY to count DISTINCT customers.** It is what makes cross-customer
+    independence measurable, and it must never reach an admin view as "who scanned what": the value
+    is in the independence, not in the identity.
+    """
+
+    __tablename__ = "utterances"
+    __table_args__ = (
+        # Idempotency. The backfill will be re-run, by a scheduler that dies on every deploy and by
+        # an operator who wants to be sure. Without this, a second pass doubles every count that
+        # every score is computed from, and nothing would look wrong.
+        Index("ix_utterance_dedupe", "dedupe_key", unique=True),
+        # The two access patterns: "what happened on this topic in this window" and "what did this
+        # account say", both of which are asked per platform.
+        Index("ix_utterance_topic_posted", "topic_id", "posted_at"),
+        Index("ix_utterance_account", "platform", "account_external_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: Stable hash of (platform, account, comment identity). See `store.dedupe_key`.
+    dedupe_key: Mapped[str] = mapped_column(String(64))
+    investigation_id: Mapped[int] = mapped_column(
+        ForeignKey("investigations.id", ondelete="CASCADE"), index=True
+    )
+    #: The customer whose scan surfaced this. Counted, never displayed. See the class docstring.
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    account_external_id: Mapped[str] = mapped_column(String(128))
+    handle: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    #: The post this was a comment on. Two customers scanning the same post is NOT independence.
+    parent_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    #: NULL once the retention window has passed. The row and every aggregate survive; only the
+    #: text is dropped, which is the difference between an answerable data-protection question and
+    #: an awkward one. A finding keeps the evidence sentences written at detection time.
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: When the comment was POSTED. NULL when the source never told us, and every temporal
+    #: statistic skips such a row rather than substituting the scan time.
+    posted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    #: The account's tier in the investigation that surfaced it. Frozen at extraction: the tier-mix
+    #: test asks what the population looked like AT THE TIME, and re-reading a later score would
+    #: quietly rewrite history every time an account is rescanned.
+    tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: Assigned by the topic pass, not at extraction. NULL means not yet assigned, which is a
+    #: resumable state rather than an error.
+    topic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cross_topics.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: Which vector space the assignment was made in. A model change leaves old assignments intact
+    #: and lets the pass re-run for the new space rather than silently mixing the two.
+    embedding_space: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class CrossNarrativeWatermark(Base):
+    """How far each stage of the cross-investigation pipeline has got.
+
+    The scheduler runs inside the API process and dies on every deploy, so every stage has to be
+    resumable rather than restartable. One row per stage, holding the last id or timestamp it
+    completed. Without it a redeploy either redoes everything (expensive, and it re-embeds) or skips
+    whatever was in flight (a silent gap in the corpus that no score would report).
+    """
+
+    __tablename__ = "cross_narrative_watermarks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stage: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    #: Last processed row id, for stages that walk a table in id order.
+    last_id: Mapped[int] = mapped_column(Integer, default=0)
+    #: Last processed instant, for stages that walk time.
+    last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class CrossTopic(Base):
+    """An emergent topic, discovered by clustering what accounts actually wrote.
+
+    No taxonomy, no keyword file, nothing to maintain: a topic is a centroid, and its label is
+    derived from its own contents after the fact. Nobody ever writes "water" anywhere.
+
+    SEPARATE FROM ``Narrative`` ON PURPOSE, even though both are centroids over comment text. They
+    count different populations and merging them would make both numbers wrong: a ``Narrative``
+    counts memberships written by the per-scan ingest, one row per comment per scan, while a topic
+    here counts DEDUPLICATED utterances across every customer, so the same comment reached through
+    two customers' scans of one post is one utterance and two memberships. They also have different
+    lifecycles: this side has a retention window and has to survive an embedding-model change by
+    letting the two vector spaces coexist.
+    """
+
+    __tablename__ = "cross_topics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: A representative excerpt, derived from the topic's own contents. Never a curated name.
+    label: Mapped[str] = mapped_column(String(280), default="")
+    centroid_json: Mapped[list[float]] = mapped_column(JSON)
+    dimensions: Mapped[int] = mapped_column(Integer, default=0)
+    #: Which vector space this centroid lives in. Assignment only ever compares like with like, so
+    #: a model change starts a new generation of topics rather than corrupting the old ones.
+    embedding_space: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    #: Utterances assigned. Deduplicated, so this is a count of COMMENTS and not of sightings.
+    utterance_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    #: Distinct accounts that have said something on this topic.
+    account_count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+
+
+class CrossTopicDay(Base):
+    """One topic on one day: the numbers every score is computed from.
+
+    Written by a rollup pass rather than derived on read, because the anomaly test compares a window
+    against a TRAILING BASELINE, and recomputing months of history for every question would be the
+    same mistake as reading `payload_json` per row on the archive list.
+
+    ``distinct_customers`` is the field the whole system exists for. One customer scanning twelve
+    posts about a topic is one person's curiosity; three unrelated customers landing there in a week
+    is evidence about the world. It counts customers and never names them.
+    """
+
+    __tablename__ = "cross_topic_days"
+    __table_args__ = (
+        Index("ix_cross_topic_day", "topic_id", "day", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("cross_topics.id", ondelete="CASCADE"), index=True
+    )
+    #: ``YYYY-MM-DD`` in UTC, of the POST time. A day bucketed on scan time would describe our
+    #: crawler's working hours.
+    day: Mapped[str] = mapped_column(String(10), index=True)
+    utterances: Mapped[int] = mapped_column(Integer, default=0)
+    distinct_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    distinct_investigations: Mapped[int] = mapped_column(Integer, default=0)
+    #: The discriminator no customer can compute for themselves. See the class docstring.
+    distinct_customers: Mapped[int] = mapped_column(Integer, default=0)
+    #: Accounts on this topic that day scoring moderate or above, and the denominator for it. Two
+    #: columns rather than a ratio, because the binomial tail needs both and a stored ratio would
+    #: throw away the sample size that decides whether the ratio means anything.
+    elevated_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    scored_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    #: Accounts never previously seen on this topic. A topic that keeps recruiting strangers behaves
+    #: differently from one a stable community keeps discussing.
+    novel_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
