@@ -13,7 +13,7 @@ import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
-export const metadata = { title: 'Previous investigations. OMISPHERE' };
+export const metadata = { title: 'Previous investigations' };
 export const dynamic = 'force-dynamic';
 
 const CHIP = 'font-mono text-2xs tracking-wider uppercase px-2.5 py-1.5 rounded-sm border transition-colors';

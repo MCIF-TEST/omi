@@ -6,7 +6,7 @@ import { type ActivityLogResponse } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Activity log. OMISPHERE' };
+export const metadata = { title: 'Activity log' };
 
 const SCAN_TYPE_LABELS: Record<string, string> = {
   comprehensive: 'Comprehensive',

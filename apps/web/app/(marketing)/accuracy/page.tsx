@@ -1,7 +1,7 @@
 import { PageMasthead } from '@/components/shared/page-masthead';
 
 export const metadata = {
-  title: 'Accuracy and scope. OMISPHERE',
+  title: 'Accuracy and scope',
   description:
     'What an OMISPHERE score is, what it is not, how it can be wrong, and how to have a report reviewed.',
 };

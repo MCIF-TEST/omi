@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { SignIn } from '@clerk/nextjs';
 import { AuthFormGate } from '@/components/shared/auth-form-gate';
 
-export const metadata = { title: 'Sign in. OMISPHERE' };
+export const metadata = { title: 'Sign in' };
 
 // Clerk-hosted sign-in (Google, Apple, X, email/phone. Whatever is enabled in the Clerk dashboard),
 // dropped into the app's centered auth shell. Global theming lives in app/layout.tsx; the heading and

@@ -95,3 +95,107 @@ describe('buildContentSecurityPolicy', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Agent surface: markdown negotiation, the `.md` addresses, and the 404.
+//
+// These drive the real exported middleware, because the negotiation is only correct in the context
+// of the dispatch order around it: a markdown request has to be answered BEFORE the rate limiter
+// (an agent must not be refused by a budget meant for page navigations) and a `.md` address has to
+// be answered before negotiation (it has one representation and negotiating it would be a lie).
+// Testing the predicate alone would prove none of that.
+// ---------------------------------------------------------------------------
+
+async function get(path: string, accept?: string) {
+  const { NextRequest } = await import('next/server');
+  const middleware = (await import('./middleware')).default;
+  const req = new NextRequest(new URL(`https://omisphere.online${path}`), {
+    headers: accept ? { accept } : {},
+  });
+  return middleware(req);
+}
+
+const AGENT = 'text/markdown';
+const HUMAN = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+
+describe('markdown content negotiation', () => {
+  it('serves the page as markdown when an agent asks for it', async () => {
+    const res = await get('/pricing', AGENT);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/markdown; charset=utf-8');
+    expect(await res.text()).toContain('# ');
+  });
+
+  it('names Accept in Vary on the negotiated response', async () => {
+    const res = await get('/pricing', AGENT);
+    expect(res.headers.get('vary')).toContain('Accept');
+  });
+
+  it('leaves a browser navigation alone', async () => {
+    const res = await get('/pricing', HUMAN);
+    expect(res.headers.get('content-type')).not.toBe('text/markdown; charset=utf-8');
+  });
+
+  it('ignores a trailing slash, which agents and humans both send', async () => {
+    const res = await get('/pricing/', AGENT);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/markdown; charset=utf-8');
+  });
+
+  it('carries the security headers, so the agent path is not a hole in them', async () => {
+    const res = await get('/pricing', AGENT);
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  });
+
+  it('does not invent a markdown rendering of a private surface', async () => {
+    // /investigate is behind auth. Answering it here would publish a document the HTML surface
+    // keeps signed in, so it falls through to the ordinary pipeline instead.
+    const res = await get('/investigate', AGENT);
+    expect(res.headers.get('content-type')).not.toBe('text/markdown; charset=utf-8');
+  });
+});
+
+describe('the addressable .md URLs', () => {
+  it('serves the page body at its own address, with no negotiation involved', async () => {
+    const res = await get('/pricing.md', HUMAN);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/markdown; charset=utf-8');
+  });
+
+  it('gives the home page a named address', async () => {
+    const res = await get('/index.md', HUMAN);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('# OmiSphere');
+  });
+
+  it('does not claim to vary on Accept, because it has one representation', async () => {
+    const res = await get('/pricing.md', HUMAN);
+    expect(res.headers.get('vary')).toBe('Accept-Encoding');
+  });
+
+  it('points back at the page it renders, so the two do not compete in an index', async () => {
+    const res = await get('/pricing.md', HUMAN);
+    expect(res.headers.get('link')).toContain('rel="canonical"');
+  });
+});
+
+describe('the agent-recoverable 404', () => {
+  it('answers 404, not 200, so a client can tell the page is missing', async () => {
+    const res = await get('/no-such-page', AGENT);
+    expect(res.status).toBe(404);
+  });
+
+  it('says where to look next, in the format that was asked for', async () => {
+    const res = await get('/no-such-page', AGENT);
+    expect(res.headers.get('content-type')).toBe('text/markdown; charset=utf-8');
+    const body = await res.text();
+    expect(body).toContain('/pricing');
+    expect(body).toContain('/llms.txt');
+    expect(body).toContain('/sitemap.xml');
+  });
+
+  it('is not cached, because the page may exist tomorrow', async () => {
+    const res = await get('/no-such-page', AGENT);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+});

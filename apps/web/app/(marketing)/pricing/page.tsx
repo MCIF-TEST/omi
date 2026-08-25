@@ -12,7 +12,10 @@ import {
   accountsFor,
 } from '@/lib/plan';
 
-export const metadata = { title: 'Pricing. OMISPHERE' };
+// The root layout's title template appends the brand, so naming it here produced
+// "Pricing. OMISPHERE . OMISPHERE". A doubled brand in a title reads as a broken template and
+// wastes the characters a search result actually shows.
+export const metadata = { title: 'Pricing' };
 
 /**
  * Three tiers, in the app's own grammar: left axis, mono labels, hard rules, no gradient cards.

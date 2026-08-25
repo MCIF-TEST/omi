@@ -5,14 +5,19 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-08-20 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
+**Last updated:** 2026-08-25 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
 after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
 coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
 "The cohort coordination detector" below, and read its two rules before touching any threshold.
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2142
+them: read "Why a floor happens" below before changing a retry rule. A fourth session built the
+**agent surface** (markdown negotiation, addressable `.md` pages, llms.txt, structured API errors,
+per-request canonical links); read "The agent surface" below before touching anything that a machine
+rather than a person reads, and note that `OMI_PUBLIC_BASE_URL` is now required to BUILD the web app.
+
+Suite measured at **2142
 passed, 8 skipped, 2 failed** (6m30s, 2026-08-18), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
@@ -51,10 +56,14 @@ python -m pyflakes app/             # catches undefined names — see "Bug class
 
 # web  (from apps/web)
 npx tsc --noEmit && npx next lint
-CLERK_SECRET_KEY= NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS5jb20k npx next build
+CLERK_SECRET_KEY= NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS5jb20k \
+  OMI_PUBLIC_BASE_URL=https://omisphere.online npx next build
+npx vitest run                      # web unit tests
 ```
 
-The build command deliberately runs with **`CLERK_SECRET_KEY` unset** — that must keep working (see
+`OMI_PUBLIC_BASE_URL` is required at BUILD time: it is baked into the canonical links, the
+sitemap, llms.txt and the JSON-LD, and an absent one used to publish `localhost` URLs silently
+(see "The agent surface" below). The build command deliberately runs with **`CLERK_SECRET_KEY` unset** — that must keep working (see
 Clerk below). A malformed publishable key fails prerender with a confusing error, so use the
 well-formed dummy above rather than something like `pk_test_x`.
 
@@ -2557,6 +2566,115 @@ reduced-motion guarded.
 
 Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-max`,
 `emil-design-eng`, `human-crafted-design-auditor`.
+
+---
+
+## The agent surface: what a machine gets instead of the page
+
+Added 2026-08-25 against an external readiness audit that scored the site 65/100 for agent
+readability. Everything here is read only by machines, which is the property that makes it dangerous
+to maintain: a mistake in any of it is invisible in the browser, in TypeScript, in the build, and in
+every log.
+
+**`apps/web/lib/agent-content.ts` is the single source, and that is the whole design.** Five surfaces
+have to agree about which pages are public and what each one says: the sitemap, the negotiated
+markdown, the addressable `.md` files, the llms.txt index and the 404 recovery list. Nothing at
+runtime reconciles them. A page added to one and forgotten in the others fails silently, so they are
+all derived from `AGENT_PAGES` and pinned by `lib/agent-content.test.ts`.
+
+The markdown is **written by hand, not scraped from the JSX**. Deriving it from our own components
+would produce navigation chrome, button labels and accessibility text that mean nothing out of
+context. An agent asking for markdown wants the page's CLAIMS.
+
+### `Vary: Accept` cannot be set on the HTML variant, so the fix is a second address
+
+The audit's specific finding was that a negotiated URL served HTML with no `Accept` in its `Vary`
+header, which lets a shared cache hand the stored HTML to an agent that asked for markdown.
+
+**Half of that is unfixable from inside this repo.** Next 14's app router calls
+`res.setHeader('vary', ...)` during render (`base-server.js: setVaryHeader`), a bare overwrite with
+its own RSC values, and it runs AFTER both middleware headers and `next.config` `headers()` have
+been applied (`router-server.js` writes `resHeaders` before invoking the render). So the markdown
+response, which middleware returns directly and which therefore never reaches that code, carries
+`Vary: Accept, Accept-Encoding` correctly, and the HTML variant carries Next's. The line setting it
+is left in middleware because it is correct and becomes effective the day the framework stops
+clobbering it.
+
+**`markdownPath()` is the answer that does not depend on a header.** Every page also has its own
+address (`/index.md`, `/pricing.md`, ...), served by `markdownDocument()` in middleware before
+negotiation runs. One document, one URL, no variants, so a cache cannot confuse anything. It carries
+`Vary: Accept-Encoding` and NOT `Accept`: naming a header it does not vary on would tell a cache to
+store one copy per distinct Accept string. `<link rel="alternate" type="text/markdown">`, llms.txt
+and the 404 body all point at it, so an agent never has to negotiate to get markdown.
+
+`prefersMarkdown` (`lib/accept-markdown.ts`) is q-value aware and **treats a tie as HTML**. The
+direction of the error is what matters: serving HTML to an agent costs one wasted parse, while
+serving markdown to a browser downloads a text file instead of the site, for every human visitor.
+`*/*` must never win, and browsers put it in every Accept header they send.
+
+### The root layout builds metadata per request, and a page that sets `alternates` undoes it
+
+`generateMetadata()` in `app/layout.tsx` reads `x-pathname` (set by middleware) to produce the
+canonical link and the markdown alternate for the page being rendered. Two traps, both found live:
+
+- **`canonical` was hardcoded to `/`.** Every page that did not set its own therefore told search
+  engines it was a duplicate of the home page, which is the most effective way there is to keep a
+  site out of an index, and it was doing it to the marketing pages a brand query depends on.
+- **A page's own `alternates` REPLACES the layout's whole object.** `/developers` set
+  `alternates: { canonical: '/developers' }` and silently lost its markdown link, on the one page
+  whose entire job is machine discoverability. No page may set `alternates` any more;
+  `lib/page-metadata.test.ts` walks every `page.tsx` and fails on it.
+- **The title template appends the brand**, so a page naming it too rendered
+  `Pricing. OMISPHERE . OMISPHERE`. Same test.
+
+### `OMI_PUBLIC_BASE_URL` now fails the BUILD when absent
+
+It was passed as the value INTO `required()` with a localhost default, so the check never saw an
+empty string. A deploy missing the variable published a sitemap, a set of canonical links, an
+llms.txt and a JSON-LD graph all pointing at `http://localhost:3000`. Nothing failed, nothing
+logged, and the site simply would not be indexed. It is baked in at BUILD time, so the local build
+command needs it:
+
+```bash
+CLERK_SECRET_KEY= NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS5jb20k \
+  OMI_PUBLIC_BASE_URL=https://omisphere.online npx next build
+```
+
+### Content has to be readable with scripting off
+
+`Reveal`'s resting state is `opacity-0` and only an effect clears it, so with JavaScript disabled
+the free scan form, the entire pre-login conversion path, was in the document and invisible. Every
+text-extracting check passed on it, which is exactly why it survived. The hidden state now carries
+`reveal-pending` and the root layout ships a `<noscript>` rule overriding it. Both halves are
+useless alone, so `lib/no-script-content.test.ts` asserts they stay together.
+
+### The API speaks a structured error, beside `detail` and never instead of it
+
+`app/core/errors.py` adds `{"error": {code, message, hint, docs, status, fields?}}` while keeping
+`detail` at the top level unchanged, because the web app reads it in a dozen places. The codes are
+**derived from the status**, not invented per route: a code only some routes set is worse than none,
+because a client cannot rely on it. `CodedHTTPException` is for the cases where the status is
+genuinely ambiguous, 402 covering both "out of credits" and "wrong plan" being the motivating one.
+
+**Both exception classes are registered.** Routes raise FastAPI's `HTTPException`; the ROUTER raises
+Starlette's when nothing matched, and that unmatched-route 404 is the first thing an agent probing
+the API hits. Registering only the FastAPI class leaves it answering a bare `{"detail": "Not
+Found"}`. Pinned by `tests/test_agent_error_envelope.py`.
+
+### `/openapi.json` and `/docs` exist on the web origin now
+
+They were named on `/developers` and linked from llms.txt while 404ing: the discoverability work was
+advertising documents nobody could fetch. `app/openapi.json/route.ts` proxies the spec from the API
+service and rewrites `servers` to the browser-visible origin (FastAPI describes itself relative to
+an internal hostname no client can reach); `/docs` redirects into the API's own reference rather
+than rendering a build-time copy of it. `robots.ts` had to gain explicit `Allow` entries for
+`/api/openapi.json` and `/api/docs`, since `/api/` is disallowed wholesale.
+
+### The JSON-LD offers are derived from the plan catalog
+
+`lib/structured-data.ts` is pure and quotes `PLAN_TIERS` rather than repeating the prices. The prices
+are already declared in two languages with a test reconciling them; a third copy would be the one
+nothing checks, and it is the copy search engines quote back to people.
 
 ---
 

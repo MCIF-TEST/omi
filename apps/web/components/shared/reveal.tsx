@@ -93,7 +93,15 @@ export function Reveal({
       style={{ transitionDelay: shown ? `${delay}ms` : '0ms' }}
       className={cn(
         'transition-all duration-700 ease-omi will-change-transform',
-        shown ? 'opacity-100 translate-x-0 translate-y-0 scale-100' : cn('opacity-0', OFFSCREEN[from]),
+        shown
+          ? 'opacity-100 translate-x-0 translate-y-0 scale-100'
+          // `reveal-pending` is what the <noscript> rule in the root layout overrides. With
+          // scripting off nothing ever sets `shown`, so this element would stay at opacity 0
+          // permanently: the markup is in the document, which is why a text extractor never
+          // noticed, and invisible to anything that actually renders the page, including an
+          // agent driving a headless browser with JavaScript disabled. On this site that is
+          // the free scan form, so the cost is the entire pre-login conversion path.
+          : cn('reveal-pending opacity-0', OFFSCREEN[from]),
         className,
       )}
     >

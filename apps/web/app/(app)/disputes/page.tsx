@@ -5,7 +5,7 @@ import { DisputeQueue } from './dispute-queue';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Disputes · OMISPHERE' };
+export const metadata = { title: 'Disputes' };
 
 /**
  * The dispute queue.

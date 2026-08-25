@@ -21,6 +21,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app import __version__
 from app.core import background
 from app.core.config import get_settings
+from app.core.errors import install_error_handlers
 from app.core.middleware import (
     BodySizeLimitMiddleware,
     GlobalRateLimitMiddleware,
@@ -411,6 +412,12 @@ def create_app() -> FastAPI:
     # 5. Per-request observability
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestIdMiddleware)
+
+    # ---- Structured JSON errors ----
+    # Registered BEFORE the routers so every route inherits the envelope. Agents cannot parse an
+    # English sentence; every failure now carries a stable code, a recovery hint and a docs link,
+    # while `detail` stays exactly where every existing client already reads it.
+    install_error_handlers(app)
 
     # ---- Routers ----
     app.include_router(health.router)

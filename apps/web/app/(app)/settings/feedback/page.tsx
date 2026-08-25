@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { FeedbackQueue } from './feedback-queue';
 
-export const metadata = { title: 'Feedback queue. OMISPHERE' };
+export const metadata = { title: 'Feedback queue' };
 export const dynamic = 'force-dynamic';
 
 // Admin-only: the searchable feedback queue. Non-admins can't see it exists.

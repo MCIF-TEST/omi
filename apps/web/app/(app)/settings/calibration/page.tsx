@@ -9,7 +9,7 @@ import {
   type CalibrationEvaluation,
 } from '@/lib/api';
 
-export const metadata = { title: 'Calibration. OMISPHERE' };
+export const metadata = { title: 'Calibration' };
 export const dynamic = 'force-dynamic';
 
 export default async function CalibrationPage() {

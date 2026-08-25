@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { SearchClient } from './search-client';
 
-export const metadata = { title: 'Account Search. OMISPHERE' };
+export const metadata = { title: 'Account Search' };
 
 export default function SearchPage({
   searchParams,

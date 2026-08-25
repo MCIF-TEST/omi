@@ -1,6 +1,6 @@
 import { PageMasthead } from '@/components/shared/page-masthead';
 
-export const metadata = { title: 'Terms. OMISPHERE' };
+export const metadata = { title: 'Terms' };
 
 export default function TermsPage() {
   return (

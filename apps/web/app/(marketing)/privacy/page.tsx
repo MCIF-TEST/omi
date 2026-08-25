@@ -1,6 +1,6 @@
 import { PageMasthead } from '@/components/shared/page-masthead';
 
-export const metadata = { title: 'Privacy. OMISPHERE' };
+export const metadata = { title: 'Privacy' };
 
 export default function PrivacyPage() {
   return (

@@ -1,6 +1,6 @@
 import { PageMasthead, PageSection } from '@/components/shared/page-masthead';
 
-export const metadata = { title: 'About. OMISPHERE' };
+export const metadata = { title: 'About' };
 
 /**
  * Rebuilt to the front page's grammar, and corrected.

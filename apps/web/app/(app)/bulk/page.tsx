@@ -2,7 +2,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { BulkClient } from './bulk-client';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
-export const metadata = { title: 'Bulk scan. OMISPHERE' };
+export const metadata = { title: 'Bulk scan' };
 
 export default async function BulkPage() {
   const user = await getCurrentUser();
