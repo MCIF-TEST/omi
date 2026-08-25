@@ -513,6 +513,12 @@ def scan_video_full(
                 platform=platform,
                 account_external_id=item["author_external_id"],
                 parent_id=video_id,
+                # The real post time. Without it every temporal statistic over narrative
+                # membership measures the scanner instead of the accounts, and one scan looks
+                # like a perfect burst. `_coerce_dt` returns None for a timestamp we cannot
+                # place, which is the honest value: the column is nullable and the statistics
+                # skip it.
+                posted_at=_coerce_dt(item.get("created_at")),
             )
             for item in all_comments_under_video
             if item.get("text")

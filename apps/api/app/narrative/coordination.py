@@ -79,7 +79,14 @@ class MembershipRecord:
     account_external_id: str
     platform: str
     parent_id: str | None
-    observed_at: datetime
+    #: When the comment was POSTED, never when we scanned it.
+    #:
+    #: This field used to be fed the ingest time, which meant every statistic below (the hourly
+    #: buckets, the burst window, the first-seen lag) was measuring our own scanner: every member
+    #: of a single scan shares one timestamp, so any scan looked like a perfect burst. None is a
+    #: real state, for a source that gave us no timestamp, and every use site skips it rather than
+    #: substituting a time we do not know.
+    posted_at: datetime | None
     text_hash: int          # cheap fingerprint for repost detection
     tier: str | None        # internal tier, or None if account never scanned
 
@@ -300,9 +307,9 @@ def _temporal_burst(qualifying: list[MembershipRecord]) -> float:
         return 0.0
     buckets: Counter = Counter()
     for m in qualifying:
-        if m.observed_at is None:
+        if m.posted_at is None:
             continue
-        bucket = m.observed_at.replace(minute=0, second=0, microsecond=0)
+        bucket = m.posted_at.replace(minute=0, second=0, microsecond=0)
         buckets[bucket] += 1
     if not buckets:
         return 0.0
@@ -328,9 +335,9 @@ def _timing_entropy_anomaly(qualifying: list[MembershipRecord]) -> float:
     hours: Counter = Counter()
     total = 0
     for m in qualifying:
-        if m.observed_at is None:
+        if m.posted_at is None:
             continue
-        hours[m.observed_at.hour] += 1
+        hours[m.posted_at.hour] += 1
         total += 1
     if total < 5 or not hours:
         return 0.0
@@ -475,7 +482,7 @@ def propagation_timeline(
     """
     if not members:
         return []
-    times = sorted(m.observed_at for m in members if m.observed_at is not None)
+    times = sorted(m.posted_at for m in members if m.posted_at is not None)
     if not times:
         return []
     start = times[0].replace(minute=0, second=0, microsecond=0)
@@ -487,9 +494,9 @@ def propagation_timeline(
 
     points: dict[datetime, list[int]] = {}   # bucket_start -> [total, suspicious]
     for m in members:
-        if m.observed_at is None:
+        if m.posted_at is None:
             continue
-        offset_hours = int((m.observed_at - start).total_seconds() // 3600)
+        offset_hours = int((m.posted_at - start).total_seconds() // 3600)
         bucket_idx = offset_hours // bucket_hours
         bucket_start = start + timedelta(hours=bucket_idx * bucket_hours)
         if bucket_start not in points:
@@ -546,22 +553,22 @@ def origin_window(members: list[MembershipRecord]) -> dict | None:
     """
     if not members:
         return None
-    times = sorted([m for m in members if m.observed_at is not None], key=lambda m: m.observed_at)
+    times = sorted([m for m in members if m.posted_at is not None], key=lambda m: m.posted_at)
     if not times:
         return None
     first = times[0]
     suspicious = [m for m in times if is_qualifying_tier(m.tier)]
     if not suspicious:
         return {
-            "first_seen": first.observed_at.isoformat(),
+            "first_seen": first.posted_at.isoformat(),
             "suspicious_first_seen": None,
             "lag_hours": None,
         }
     susp_first = suspicious[0]
-    lag = (susp_first.observed_at - first.observed_at).total_seconds() / 3600.0
+    lag = (susp_first.posted_at - first.posted_at).total_seconds() / 3600.0
     return {
-        "first_seen": first.observed_at.isoformat(),
-        "suspicious_first_seen": susp_first.observed_at.isoformat(),
+        "first_seen": first.posted_at.isoformat(),
+        "suspicious_first_seen": susp_first.posted_at.isoformat(),
         "lag_hours": round(lag, 2),
     }
 

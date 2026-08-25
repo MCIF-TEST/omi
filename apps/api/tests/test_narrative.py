@@ -31,6 +31,7 @@ class _TopicEmbedder:
     """Tiny synthetic embedder. Keywords steer the vector toward a topic axis."""
 
     dimensions = 4
+    space = "topic-test:4"
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         return [self.embed_one(t) for t in texts]
@@ -190,3 +191,180 @@ def test_get_embedder_returns_something_in_local_dev():
     e = get_embedder()
     assert isinstance(e.dimensions, int)
     assert e.dimensions > 0
+
+
+# ---------------------------------------------------------------------------
+# Post time, not scan time.
+#
+# Every temporal statistic over narrative membership used to read the INGEST time, so each member
+# of one scan shared a single timestamp and any scan was a perfect burst by construction. The
+# detector was measuring our own scanner. These pin the distinction, including the case that makes
+# a fallback tempting and wrong: a source that gave us no timestamp.
+# ---------------------------------------------------------------------------
+
+
+def test_the_stored_time_is_when_the_comment_was_posted() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.storage.models import NarrativeMembership
+
+    set_embedder_for_tests(_TopicEmbedder())
+    base = datetime(2026, 3, 1, 9, 0, tzinfo=timezone.utc)
+    posted = [base, base + timedelta(days=1), base + timedelta(days=2)]
+
+    with get_session() as session:
+        svc = NarrativeService(session)
+        svc.ingest_batch([
+            IngestItem(
+                text=f"the water treatment plant story number {i}",
+                platform="x",
+                account_external_id=f"a{i}",
+                posted_at=t,
+            )
+            for i, t in enumerate(posted)
+        ])
+        session.commit()
+
+    with get_session() as session:
+        stored = sorted(
+            m.posted_at for m in session.query(NarrativeMembership).all()
+        )
+    assert len(stored) == 3
+    # Three distinct days, exactly as posted. Ingest time would have collapsed these into one
+    # instant and reported a burst.
+    assert len({t.date() for t in stored}) == 3
+
+
+def test_a_comment_with_no_post_time_is_stored_as_unknown_not_as_now() -> None:
+    from app.storage.models import NarrativeMembership
+
+    set_embedder_for_tests(_TopicEmbedder())
+    with get_session() as session:
+        NarrativeService(session).ingest_batch([
+            IngestItem(
+                text="the water treatment plant story, no timestamp available",
+                platform="x",
+                account_external_id="a1",
+            )
+        ])
+        session.commit()
+
+    with get_session() as session:
+        row = session.query(NarrativeMembership).one()
+    # NULL, never the ingest time. Substituting `now` is what made a scan look like a burst, and it
+    # is indistinguishable afterwards from a comment genuinely posted at that moment.
+    assert row.posted_at is None
+    # The ingest time is still recorded, in the column that means it.
+    assert row.observed_at is not None
+
+
+def test_a_row_with_no_post_time_is_skipped_by_the_temporal_statistics() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.narrative.coordination import MembershipRecord, propagation_timeline
+
+    at = datetime(2026, 3, 1, 14, 0, tzinfo=timezone.utc)
+    members = [
+        MembershipRecord("a1", "x", "p", at, 1, None),
+        MembershipRecord("a2", "x", "p", at + timedelta(minutes=10), 2, None),
+        MembershipRecord("a3", "x", "p", None, 3, None),
+    ]
+    timeline = propagation_timeline(members)
+    # Two placed comments, not three. The third has no known post time, and a statistic that
+    # substituted the scan time for it would report an arrival that never happened.
+    assert sum(p.count for p in timeline) == 2
+
+
+# ---------------------------------------------------------------------------
+# The vector space guard.
+#
+# Switching embedders does not raise: `cosine` answers 0.0 on a width mismatch, so every utterance
+# misses every stored topic and spawns a duplicate. The run reports success and the topic space
+# forks in half. These pin the two halves of the guard.
+# ---------------------------------------------------------------------------
+
+
+class _WideEmbedder:
+    """A different model in a different space, same shape of interface."""
+
+    dimensions = 6
+    space = "api:other-model:6"
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_one(t) for t in texts]
+
+    def embed_one(self, text: str) -> list[float]:
+        vec = [0.0] * 6
+        vec[len(text) % 6] = 1.0
+        return vec
+
+
+def test_a_topic_records_the_space_its_centroid_was_built_in() -> None:
+    from app.storage.models import Narrative
+
+    set_embedder_for_tests(_TopicEmbedder())
+    with get_session() as session:
+        NarrativeService(session).ingest_batch([
+            IngestItem(text="the water treatment plant story", platform="x",
+                       account_external_id="a1")
+        ])
+        session.commit()
+
+    with get_session() as session:
+        assert session.query(Narrative).one().embedding_space == _TopicEmbedder.space
+
+
+def test_a_different_embedder_does_not_match_against_the_old_centroids() -> None:
+    from app.storage.models import Narrative
+
+    set_embedder_for_tests(_TopicEmbedder())
+    with get_session() as session:
+        NarrativeService(session).ingest_batch([
+            IngestItem(text="the water treatment plant story", platform="x",
+                       account_external_id="a1")
+        ])
+        session.commit()
+
+    # Same text, new model. It must start a topic in the new space rather than silently join,
+    # or be compared against, a centroid that means nothing to it.
+    set_embedder_for_tests(_WideEmbedder())
+    with get_session() as session:
+        NarrativeService(session).ingest_batch([
+            IngestItem(text="the water treatment plant story", platform="x",
+                       account_external_id="a2")
+        ])
+        session.commit()
+
+    with get_session() as session:
+        spaces = {n.embedding_space for n in session.query(Narrative).all()}
+    # Two topics, one per space. Not one topic holding vectors from both.
+    assert spaces == {_TopicEmbedder.space, _WideEmbedder.space}
+
+
+def test_an_unavailable_embedder_skips_the_batch_instead_of_degrading() -> None:
+    from app.narrative.embeddings import EmbeddingUnavailable
+    from app.storage.models import Narrative
+
+    class _Down:
+        dimensions = 4
+        space = "api:down:4"
+
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            raise EmbeddingUnavailable("provider unreachable")
+
+        def embed_one(self, text: str) -> list[float]:
+            raise EmbeddingUnavailable("provider unreachable")
+
+    set_embedder_for_tests(_Down())
+    with get_session() as session:
+        assigned = NarrativeService(session).ingest_batch([
+            IngestItem(text="the water treatment plant story", platform="x",
+                       account_external_id="a1")
+        ])
+        session.commit()
+
+    # Nothing assigned and nothing written. The text is still on the investigation, so this is
+    # recoverable; a topic spawned in the wrong space would not have been.
+    assert assigned == 0
+    with get_session() as session:
+        assert session.query(Narrative).count() == 0

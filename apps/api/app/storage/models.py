@@ -302,6 +302,16 @@ class Narrative(Base):
     label: Mapped[str] = mapped_column(String(280), default="")
     centroid_json: Mapped[list[float]] = mapped_column(JSON)
     dimensions: Mapped[int] = mapped_column(Integer, default=384)
+    #: Which vector space this centroid lives in, e.g. ``api:text-embedding-3-small:1536``.
+    #:
+    #: A centroid is only meaningful to the embedder that built it. Switch models and every stored
+    #: centroid becomes coordinates in a language the new vectors do not speak; `cosine` returns 0.0
+    #: on a width mismatch and something arbitrary on a matching width, so nothing raises and every
+    #: utterance simply spawns a duplicate of a topic that already exists. Assignment filters
+    #: candidates on this column, so the two generations coexist instead of corrupting each other.
+    #: NULL means a row written before the column existed; those are matched on width alone, which
+    #: is what the code did before and is no worse than it was.
+    embedding_space: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     member_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
     # Number of distinct accounts contributing — high = wide spread.
     distinct_authors: Mapped[int] = mapped_column(Integer, default=0)
@@ -732,7 +742,20 @@ class NarrativeMembership(Base):
     account_external_id: Mapped[str] = mapped_column(String(128), index=True)
     parent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     comment_text: Mapped[str] = mapped_column(Text)
+    #: When WE ingested the row. Not when the comment was written.
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    #: When the comment was actually POSTED, from the platform.
+    #:
+    #: Every temporal statistic in `app/narrative/coordination.py` (hour-of-day profiles, burst
+    #: windows, first-seen lag) used to read `observed_at`, which is the SCAN time. That made every
+    #: member of one scan a perfect burst by construction: the detector was measuring our own
+    #: scanner, not the accounts. A separate column rather than a redefinition of `observed_at`,
+    #: because rows written before this existed genuinely hold scan times, and silently
+    #: reinterpreting them as post times would poison exactly the statistics this fixes. NULL means
+    #: "we do not know when this was posted", and every temporal statistic SKIPS such a row.
+    posted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
 
 # ---------------------------------------------------------------------------
