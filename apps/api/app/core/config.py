@@ -537,6 +537,17 @@ class Settings(BaseSettings):
     # -----------------------------------------------------------------------
     enable_monitoring: bool = False
     monitoring_interval_seconds: int = 300
+    # --- Cross-investigation narratives -----------------------------------------------------------
+    #
+    # OFF by default, and that is the right default rather than caution: with no embedding provider
+    # configured the pass would cluster on the lexical fallback, so "same topic" means "same words",
+    # and a corpus assembled that way is worse than none because it looks like it worked. Turn this
+    # on together with the embedding variables.
+    #
+    # Each pass is bounded (see app/narrative/cross/run.py), so the interval controls throughput
+    # rather than load: a shorter one catches up faster and does the same amount of work per tick.
+    enable_cross_narratives: bool = False
+    cross_narrative_interval_seconds: int = 900
     watchlist_recheck_hours: int = 6
     watchlist_max_per_tick: int = 5
     narrative_spike_min_recent: int = 5

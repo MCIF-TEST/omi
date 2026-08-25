@@ -344,6 +344,17 @@ services:
         sync: false
       - key: OMI_NARRATIVE_EMBEDDING_API_KEY
         sync: false
+      # The cross-investigation pass (docs/cross-investigation-narratives.md). OFF, and that is the
+      # right default rather than caution: with no embedding provider configured it would cluster
+      # on the lexical fallback, so "same topic" means "same words", and a corpus assembled that
+      # way is worse than none because it looks like it worked. Turn this on together with the four
+      # variables above, and only after the privacy policy names the vendor.
+      #
+      # Each pass is bounded, so the interval controls throughput rather than load.
+      - key: OMI_ENABLE_CROSS_NARRATIVES
+        value: 'false'
+      - key: OMI_CROSS_NARRATIVE_INTERVAL_SECONDS
+        value: '900'
       # UNSET ON PURPOSE (2026-08-19). The model is now chosen ON the preset in the
       # OpenRouter dashboard, so the dashboard is the single source and this must stay
       # empty. THIS VARIABLE OVERRIDES THE PRESET: while it held 'openai/gpt-5-mini'

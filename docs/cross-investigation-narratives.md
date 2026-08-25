@@ -1,6 +1,15 @@
 # Narratives across investigations: emergent topics, cross-customer clusters
 
-**Status: design. Nothing built.** Written 2026-08-20.
+**Status: BUILT, off by default.** Designed 2026-08-20, implemented 2026-08-25.
+
+Steps 1 to 9 of the build order below are done and live in `apps/api/app/narrative/cross/`, behind
+`OMI_ENABLE_CROSS_NARRATIVES` (false). Two things are deliberately NOT done and are called out at
+the end: the daily digest, because SMTP is unconfigured on this deployment and an inert feature is
+worse than none, and a web page, because `/v1/admin/cross-narratives` is enough to watch the corpus
+fill up and step 5 says to do that for a week before trusting a threshold.
+
+Working notes, including the traps a future session would otherwise re-break, are in CLAUDE.md
+under "Cross-investigation narratives".
 
 The ask: stop treating each investigation as an island. Recognise what accounts are TALKING ABOUT
 without a hardcoded topic list, notice when the same narrative shows up across investigations run by
@@ -199,6 +208,29 @@ One queue, ranked, each row carrying:
 
 Steps 3 to 5 produce numbers an operator can watch before anything is ever reported as a finding.
 That ordering is deliberate: thresholds set before anyone has seen the distribution are guesses.
+
+**All nine are built.** Where the implementation departed from this document, it is because building
+it surfaced something the design could not see:
+
+- **`CrossTopic` is a separate table from `Narrative`**, rather than reusing the existing centroid
+  store. They count different populations: a `Narrative` counts per-scan memberships, one row per
+  comment per scan, while a topic counts deduplicated utterances across every customer. Merging them
+  would make both numbers wrong.
+- **`Embedder.space` and the `embedding_space` columns** are new and were not in the design. Without
+  them, changing the embedding model does not raise anything: `cosine` answers 0.0 on a width
+  mismatch, so every utterance misses every stored topic, spawns a duplicate, and the run reports
+  success. The topic space forks in half silently.
+- **Window-level distinct counts are queried directly** rather than summed from the daily rollup.
+  Summing per-day distincts counts an account active on three days three times, and two customers
+  who scanned on different days would report as one, understating the one component nothing else can
+  compute.
+- **A work threshold gates score two.** Running netdetect over every topic every pass would burn the
+  loop on subjects nothing has flagged, so a cohort is assembled once score one clears
+  `COHORT_TRIGGER`. That is a scheduling decision, not a publication threshold.
+
+The two items that are not code are still open: the privacy policy has to name the embedding vendor
+before the four `OMI_NARRATIVE_EMBEDDING_*` variables are filled in, and SMTP has to be configured
+before a digest can send.
 
 Two items are NOT code and block shipping rather than building: naming the embedding provider in the
 privacy policy, and configuring SMTP so the digest can send.

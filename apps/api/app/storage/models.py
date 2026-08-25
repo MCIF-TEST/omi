@@ -1545,3 +1545,61 @@ class CrossTopicDay(Base):
     #: differently from one a stable community keeps discussing.
     novel_accounts: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class CrossFinding(Base):
+    """One topic, one window, both scores, and whatever an admin decided about it.
+
+    THE DISMISSALS ARE THE ONLY GROUND TRUTH THIS SYSTEM WILL EVER ACCUMULATE. Every threshold in
+    the cross-investigation pipeline is reasoned rather than fitted, because no labelled corpus of
+    worked topics exists and none can be bought. An operator marking a row "this was a news story"
+    is the only signal that will ever be available to fit against, which is why the row survives
+    dismissal instead of being deleted.
+
+    Uniqueness is on ``(topic_id, window_end)``: a pass re-run for the same window UPDATES its row
+    rather than stacking duplicates, and the scheduler re-runs constantly by design.
+    """
+
+    __tablename__ = "cross_findings"
+    __table_args__ = (
+        Index("ix_cross_finding_window", "topic_id", "window_end", unique=True),
+        Index("ix_cross_finding_status", "status", "anomaly_score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("cross_topics.id", ondelete="CASCADE"), index=True
+    )
+    #: Copied rather than joined, because a label is derived from a centroid that keeps moving and
+    #: a finding has to keep saying what it said when it was made.
+    label: Mapped[str] = mapped_column(String(280), default="")
+    window_start: Mapped[str] = mapped_column(String(10))
+    window_end: Mapped[str] = mapped_column(String(10))
+
+    #: Score one and its three components, stored apart so a reader can see which one carried it.
+    anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
+    volume: Mapped[float] = mapped_column(Float, default=0.0)
+    tier_mix: Mapped[float] = mapped_column(Float, default=0.0)
+    independence: Mapped[float] = mapped_column(Float, default=0.0)
+    #: Every number behind the components, so the arithmetic can be checked rather than trusted.
+    anomaly_detail_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    #: Score two. NEVER combined with score one: they answer different questions, and a product
+    #: would hide both a spiking topic full of strangers and a patient formation on a quiet one.
+    cohort_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    cohort_findings: Mapped[int] = mapped_column(Integer, default=0)
+    cohort_best_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: Why a human has to look before this reaches anyone, or NULL when the evidence settles it.
+    needs_adjudication: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Set when the cohort could not be tested at all, which is a different statement from finding
+    #: nothing and has to survive to the reader as one.
+    cohort_refused: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cohort_detail_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dismissal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

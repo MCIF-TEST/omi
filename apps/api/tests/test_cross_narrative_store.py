@@ -225,3 +225,40 @@ def test_nothing_inside_the_window_is_touched() -> None:
     with get_session() as session:
         assert store.purge_expired_text(session) == 0
         assert session.query(Utterance).one().text is not None
+
+
+def test_the_post_is_taken_from_the_investigation_not_from_the_reply_chain() -> None:
+    # A thread comment carries `parent_comment_id`, the comment it replied to, which is a different
+    # thing from the post. The post is what distinguishes "two customers scanned the same thing"
+    # from "two customers arrived independently", and it is what the cohort excludes from its
+    # evidence, so reading the reply chain here would quietly break both.
+    payload = _payload([{
+        "external_id": "a1", "platform": "x", "tier": "low",
+        "thread_comments": [{
+            "text": LONG, "created_at": "2026-03-01T09:00:00Z",
+            "parent_comment_id": "some_other_comment",
+        }],
+    }])
+    with get_session() as session:
+        inv = _investigation(session, payload=payload)
+        inv.target_id = "the_real_post"
+        store.ingest_investigation(session, inv)
+        session.commit()
+
+    with get_session() as session:
+        assert session.query(Utterance).one().parent_id == "the_real_post"
+
+
+def test_the_post_falls_back_to_the_payloads_own_video_id() -> None:
+    # Rows written before `target_id` was reliably set still have it inside the payload.
+    payload = {"video": {"video_id": "vid_from_payload", "commenters": [
+        _commenter("a1", [_comment(LONG, "2026-03-01T09:00:00Z")]),
+    ]}}
+    with get_session() as session:
+        inv = _investigation(session, payload=payload)
+        inv.target_id = None
+        store.ingest_investigation(session, inv)
+        session.commit()
+
+    with get_session() as session:
+        assert session.query(Utterance).one().parent_id == "vid_from_payload"

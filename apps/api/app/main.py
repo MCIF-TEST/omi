@@ -32,6 +32,7 @@ from app.core.middleware import (
 from app.monitoring import lifespan_monitoring
 from app.routes import (
     accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, coordination,
+    cross_narratives,
     feedback, graph, health, improvement, intelligence, investigations, labels, learning, memory,
     metrics, monitoring, narratives, netdetect, reasoning, reports, scan, scan_async, shadow,
     usage,
@@ -59,7 +60,8 @@ async def lifespan(app: FastAPI):
     # customer complains. Never blocks boot, never fails it, no-ops without a credential.
     from app.reasoning.boot_preflight import schedule_boot_preflight
     schedule_boot_preflight()
-    async with lifespan_monitoring(app):
+    from app.narrative.cross.run import lifespan_cross_narratives
+    async with lifespan_monitoring(app), lifespan_cross_narratives(app):
         try:
             yield
         finally:
@@ -434,6 +436,9 @@ def create_app() -> FastAPI:
     app.include_router(accounts.router)
     app.include_router(channels.router)
     app.include_router(narratives.router)
+    # The cross-investigation queue. Admin-only for the same reason as the rest of this block: a
+    # finding here is assembled from many customers' scans and belongs to none of them.
+    app.include_router(cross_narratives.router)
     app.include_router(coordination.admin_router)
     # Coordinated-network detection. Admin-only: it reports groups of named real people as
     # running together on statistical evidence, which is an operator's lead rather than a

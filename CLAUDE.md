@@ -2569,6 +2569,156 @@ Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-m
 
 ---
 
+## Cross-investigation narratives: one question asked across every customer's scans
+
+Built 2026-08-25 from `docs/cross-investigation-narratives.md`. Read §1 of that document before
+touching anything in `app/narrative/cross/`, because the whole system is built to measure ONE
+difference and measuring it wrong is an expensive way to rediscover what a single user was curious
+about.
+
+**The signal is cross-customer independence, and it is the one thing no customer and no competitor
+can reproduce.** Each customer sees their own handful of investigations; OmiSphere sees every
+customer's in one database. One customer scanning twelve posts about a subject is one person's
+curiosity. Three unrelated customers landing there in a week is evidence about the world.
+
+```
+extract -> assign topics -> roll up per day -> score one (topic) + score two (cohort)
+```
+
+Admin-only, at `/v1/admin/cross-narratives`, gated for the same reason `/campaigns` and
+`/narratives` are: a finding is assembled from many customers' scans and belongs to none of them.
+Pinned in `tests/test_coordination_admin_gate.py`, which signs up a REAL non-admin, because every
+other test in this repo runs in local mode where `require_user` returns `is_admin=True`.
+
+**OFF by default** (`OMI_ENABLE_CROSS_NARRATIVES`), and that is correctness rather than caution: see
+the embedder note below.
+
+### The two live defects it was blocked on, both now fixed
+
+- **`ingest_batch` wrote the SCAN time**, so every temporal statistic over narrative membership was
+  measuring our own scanner and every member of one scan was a perfect burst by construction.
+  `posted_at` is a NEW column rather than a redefinition, because existing rows genuinely hold scan
+  times. NULL means "we do not know" and every statistic SKIPS such a row.
+- **Production fell back to `HashingEmbedder`**, whose own docstring says it will not catch
+  paraphrases, so "same topic" meant "same words" and two accounts pushing one narrative in
+  different phrasing never clustered. That is precisely the case the feature exists to catch.
+
+### Switching embedders forks the topic space, silently
+
+`cosine` returns 0.0 on a width mismatch rather than raising, and clustering compares new vectors
+against stored centroids. So a batch embedded by a different embedder matches nothing, spawns a
+duplicate of every topic it touches, and **reports success**. Three things prevent it:
+
+- **`ApiEmbedder` raises `EmbeddingUnavailable` and never degrades.** Every caller SKIPS the batch.
+  That is recoverable, because the text is still in the utterance store; a forked space is not.
+- **`Embedder.space` names the space** (`api:<model>:<dims>`), not just the width. Two different
+  1536-dimension models are different languages.
+- **`CrossTopic.embedding_space` / `Narrative.embedding_space`** record which space a centroid was
+  built in, and assignment only ever compares like with like, so a model change starts a new
+  generation of topics instead of corrupting the old one. **Changing the model is therefore not
+  free**: old topics stop accumulating. Pick one and leave it.
+
+**The vendor NAME is required before the embedder will build at all** (`OMI_NARRATIVE_EMBEDDING_
+PROVIDER`). That is the name the privacy policy has to disclose, because this sends other people's
+public posts off our servers and those people are not our users. Enforcing the order in code makes
+it a configuration error rather than a disclosure gap nobody notices.
+
+### The utterance store
+
+One append-only row per comment, extracted from `payload_json` which already holds all of it. A blob
+cannot be queried and it is the heaviest column in the product; the archive list already paid for
+reading it per row.
+
+- **`user_id` is used ONLY to count DISTINCT customers.** It never reaches an admin view as "who
+  scanned what": the value is in the independence, not the identity, and a test asserts the serialised
+  queue response contains no user id at all.
+- **Idempotency is a unique index on a content-derived `dedupe_key`, not an `if`.** The backfill is
+  driven by a loop that dies on every deploy and by an operator who will run it twice. The key
+  deliberately EXCLUDES the investigation, so the same comment reached through two customers' scans
+  of one post is one comment rather than two.
+- **`tier` is frozen at extraction.** The tier-mix test asks what the population looked like AT THE
+  TIME; reading a later score would rewrite history on every rescan.
+- **Retention drops the TEXT at 90 days and keeps the row**, so the rolling counts that drive
+  detection survive while what we hold of other people's content stays bounded.
+
+### Score one: is the topic anomalous?
+
+Three components, **multiplied, each required**: volume against the topic's OWN trailing baseline,
+tier mix against the corpus base rate, and cross-customer independence.
+
+**The tier-mix test is the one that carries the argument, and it is why the score is a product.**
+Customers scan what they suspect, so a news story that makes a subject topical spikes volume AND
+pulls several customers to it with nothing manufactured. That confound is real and does not improve
+with scale. A story everyone is discussing recruits a REPRESENTATIVE sample of accounts; a subject
+being pushed recruits a BIASED one. Averaging would let a volume spike carry a topic whose accounts
+look completely ordinary, which is every viral news story.
+`test_a_viral_news_story_does_not_score_because_its_accounts_are_ordinary` is the load-bearing test.
+
+Two arithmetic rules that are easy to get wrong:
+
+- **The binomial baseline excludes the topic under test and is measured outside the window under
+  test.** A cluster counted in its own background inflates the distribution it is compared against
+  and hides itself. This codebase has now paid for that in three separate coordinates.
+- **Distinct counts are computed over the WHOLE WINDOW, never summed from the daily rows.** Summing
+  per-day distincts counts an account active on three days three times, and two customers who
+  scanned on different days would report as one, understating the only component nothing else can
+  compute.
+
+**Untestable topics are returned carrying their refusals, not filtered out.** Silently dropping one
+is indistinguishable from finding nothing, which is how the netdetect shuffle budget managed to be
+broken invisibly.
+
+### Score two: is the cohort a formation?
+
+Every account on the topic in the window, across all investigations, through `app/netdetect`. An
+operation spread thinly over eight posts scanned by three customers is invisible in each of those
+scans and obvious in the union.
+
+- **The posts the topic was found on are excluded from the evidence.** Every member engaged them by
+  construction; without the exclusion the cohort shares a perfect feature and reports as one
+  enormous operation. Worse here than in a single scan, because it would manufacture a link between
+  every pair of posts.
+- **An account seen in several investigations contributes its MOST COMPLETE block, not its newest.**
+  Those blocks differ mainly in how much history each scan fetched, and the thinner copy yields
+  fewer features, which reads as innocence the account has not earned.
+- **Nothing here reads a suspicion score**, proved behaviourally: the same cohort scored all-low and
+  all-high produces identical findings.
+
+**THE TWO SCORES ARE NEVER MULTIPLIED.** Collapsing them hides the two most interesting cases: a
+topic that is anomalous but whose accounts are unrelated (organic outrage), and a tight formation on
+a topic that is not spiking at all, which is what a patient operation looks like.
+
+### The pass, and the dismissals
+
+`run.run_one_pass` walks all four stages, each bounded and each **resumable rather than
+restartable**: the loop dies on every deploy, assignment EMBEDS so redoing work is spend, and
+skipping it is a silent gap no score would report. A Postgres advisory lock (a different key from
+the monitoring loop's) keeps N instances from running N passes, which here would be N times the
+embedding bill.
+
+`CrossFinding` is one row per `(topic, window_end)`, so a re-run updates rather than stacks. **A
+dismissed row is updated with new numbers but keeps its dismissal**: an operator who has already
+said "this is a news story" must not be asked again every fifteen minutes.
+
+**The dismissals are the only ground truth this system will ever accumulate**, which is why the
+reason is required and why a dismissed row is never deleted. Every threshold here is reasoned, not
+fitted; no labelled corpus of worked topics exists and none can be bought.
+
+### What it cannot claim
+
+**"Anomalous relative to our own corpus", never "anomalous on the platform."** The corpus is what
+customers chose to scan, which is not a sample of anything. `_SCOPE_NOTE` says so on the queue
+response itself rather than leaving it in a docstring.
+
+### Not yet done
+
+The daily digest (decision 3) is not built: **SMTP is not configured on this deployment**, so it
+would be an inert feature, and the queue is the surface that matters. When it is built it must say
+SMTP is unconfigured rather than silently sending nothing, the same rule the waitlist blast follows.
+There is no web page yet either; `/v1/admin/cross-narratives` is the whole surface.
+
+---
+
 ## The agent surface: what a machine gets instead of the page
 
 Added 2026-08-25 against an external readiness audit that scored the site 65/100 for agent

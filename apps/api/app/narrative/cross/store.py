@@ -96,18 +96,25 @@ def dedupe_key(
     return hashlib.blake2b(raw.encode("utf-8"), digest_size=32).hexdigest()
 
 
-def extract(payload: dict) -> list[ExtractedUtterance]:
+def extract(payload: dict, *, post_id: str | None = None) -> list[ExtractedUtterance]:
     """Pull every comment out of one investigation payload.
 
     Reads the per-account ``thread_comments`` blocks, which are the account's comments UNDER THE
     SCANNED POST with their real timestamps. `recent_activity` is deliberately NOT read: that is the
     account's own timeline, which says what an account talks about generally and not what it said
     here, and mixing the two would let one prolific account's unrelated history dominate a topic.
+
+    ``post_id`` is THE SCANNED POST, and it is passed in rather than read off the comment because a
+    thread comment carries ``parent_comment_id`` (the comment it replied to), which is a different
+    thing entirely. The post is what makes "two customers scanned the same thing" distinguishable
+    from "two customers arrived independently", and it is what the cohort excludes from its
+    evidence, so getting it from the reply chain would quietly break both.
     """
     if not isinstance(payload, dict):
         return []
     video = payload.get("video")
     rows = list((video or {}).get("commenters") or []) if isinstance(video, dict) else []
+    parent = post_id or (str((video or {}).get("video_id") or "") if isinstance(video, dict) else "")
 
     out: list[ExtractedUtterance] = []
     for row in rows:
@@ -129,8 +136,7 @@ def extract(payload: dict) -> list[ExtractedUtterance]:
                 account_external_id=external_id,
                 handle=str(handle) if handle else None,
                 platform=platform,
-                parent_id=(str(comment.get("parent_id")) if comment.get("parent_id")
-                           else str(row.get("parent_id") or "") or None),
+                parent_id=parent or None,
                 text=text[:MAX_TEXT_LEN],
                 posted_at=_coerce_dt(comment.get("created_at")),
                 tier=str(tier) if tier else None,
@@ -148,7 +154,7 @@ def ingest_investigation(session: Session, investigation: Investigation) -> int:
     if not isinstance(payload, dict):
         return 0
 
-    extracted = extract(payload)
+    extracted = extract(payload, post_id=investigation.target_id)
     if not extracted:
         return 0
 
