@@ -1148,6 +1148,38 @@ decimals, which is true and tells a reader nothing. That is a prompt change and 
 every mirror, the pins and a preset re-paste, which is not worth spending on one line while the
 checker fix removes the actual harm.
 
+#### A second cause: the banned-phrase lint fired on its own opposite
+
+`BANNED_PHRASES` was matched as a bare substring, so a NEGATED phrase counted as an assertion of the
+thing it denies. **"There is no proof that the account is automated"** tripped `proof that`, and
+**"this is not obviously a bot"** tripped `obviously a bot`. Both are hedges, and both were withheld
+as certainty claims.
+
+That is not a rare shape either. Most accounts are ordinary people, `A CLEAN ACCOUNT IS A FINDING`
+requires them written as positive facts, and the alternative-explanation test requires the innocent
+reading to be STATED in every verdict at 50 or above. Sentences that deny automation are what the
+protocol asks for constantly.
+
+`check_phrasing` now skips a phrase with a negator immediately before it. The window is 16
+characters on purpose: only an immediate negation excuses it, so **"it is not a coincidence that
+this account was hired"** keeps its violation and the rule cannot be talked out of the accusations
+it exists to catch.
+
+**Two bans are deliberately NOT excused, and checking that was the point of the pass rather than an
+afterthought:**
+
+- **`no doubt` is itself the certainty phrase**, not a negated one. The negator is part of the
+  banned string, so the look-behind never sees it. Nothing needed special-casing.
+- **`this person` stays banned in every context, including exculpatory ones.** Asserting the account
+  is a person is an identity claim the evidence cannot support. The compiled protocol says **"a real
+  person" (a category) nine times and "this person" not once**, and carries `NEVER ASSERT IDENTITY`,
+  so the ban is coherent with the prompt rather than fighting it. It looked like the biggest false
+  positive in the probe and it is not one.
+
+**Only `check_phrasing` changed. The shared `BANNED_PHRASES` tuple did not**, so the Governor's S9
+lint over investigation-level prose behaves exactly as before, and the `canonical_validate` mirror
+does not drift.
+
 **The remaining withhold rate is still NOT fully diagnosed.** About 36 of 400 verdicts
 came back withheld, and in one investigation it is ~28 of ~130 (**21%**). That clustering says a
 checker over-firing on a phrasing habit, not 28 hallucinations. Diagnosing it needs the withheld text

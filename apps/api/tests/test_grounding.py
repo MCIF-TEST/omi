@@ -226,6 +226,53 @@ def test_precision_is_read_from_the_number_as_written_not_from_its_value():
     assert [v.code for v in check_figures("A ratio of 0.0100.", acct)] == ["figure_mismatch"]
 
 
+def test_a_negated_banned_phrase_is_a_hedge_and_not_the_claim_the_ban_stops():
+    """THE RULE FIRED ON ITS OWN OPPOSITE, and it did so on the commonest kind of sentence.
+
+    `BANNED_PHRASES` was matched as a bare substring, so "there is no proof that the account is
+    automated" tripped "proof that" and "this is not obviously a bot" tripped "obviously a bot".
+    Both are HEDGES. On a corpus where most accounts are ordinary people, and where the constitution
+    requires the innocent explanation to be stated in every verdict at 50 or above, those sentences
+    are not rare.
+    """
+    from app.reasoning.grounding import check_phrasing
+
+    assert check_phrasing("There is no proof that the account is automated.") == []
+    assert check_phrasing("A shared tool is not proof that two accounts are run together.") == []
+    assert check_phrasing("This is not obviously a bot; the rhythm has overnight gaps.") == []
+    assert check_phrasing("It is not clearly a bot, and the posting gaps argue against it.") == []
+
+
+def test_the_negation_window_is_tight_enough_to_keep_the_real_accusations():
+    """A negator somewhere in the sentence is not a negation of the phrase. Only an immediate one
+    excuses it, or the rule could be talked out of every violation it exists to catch."""
+    from app.reasoning.grounding import check_phrasing
+
+    assert [v.code for v in check_phrasing(
+        "It is not a coincidence that this account was hired to post."
+    )] == ["banned_phrase"]
+    assert [v.code for v in check_phrasing("The handle proves that it was paid to post.")]
+
+
+def test_two_bans_are_deliberately_not_negation_excused():
+    """Both would be wrong to relax, and the reasons are different.
+
+    "no doubt" IS the certainty phrase rather than a negated one: the negator is part of the banned
+    string, so the look-behind never sees it and nothing needs special-casing.
+
+    "this person" stays banned in every context, including exculpatory ones. Asserting the account
+    is a person is an identity claim the evidence cannot support, and it is one the constitution
+    rules out by name: the compiled protocol says "a real person" (a category) nine times and "this
+    person" not once.
+    """
+    from app.reasoning.grounding import check_phrasing
+
+    assert [v.code for v in check_phrasing("There is no doubt about the arithmetic.")] == ["banned_phrase"]
+    assert [v.code for v in check_phrasing(
+        "The posts read like this person reacting to local news."
+    )] == ["banned_phrase"]
+
+
 def test_counting_accounts_is_not_a_claim_about_who_it_follows():
     """A bare "N accounts" was compared against the following count and withheld true paragraphs."""
     acct = _account(following_count=300)

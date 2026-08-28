@@ -450,17 +450,50 @@ def _check_ratio(text: str, actual: float) -> list[Violation]:
 # --------------------------------------------------------------------------------------------- #
 # Phrasing, boilerplate, readability
 # --------------------------------------------------------------------------------------------- #
+#: Words that flip a banned phrase into the opposite claim. See `_is_negated`.
+_NEGATORS = ("no", "not", "never", "nothing", "cannot", "without", "nor", "n't")
+#: How far back to look for one. Deliberately tight: only an IMMEDIATE negation excuses the phrase.
+#: "there is no proof that" is a hedge; "it is not a coincidence that this account was hired" is an
+#: accusation with a negator elsewhere in the sentence, and it stays banned.
+_NEGATION_WINDOW = 16
+
+
+def _is_negated(low: str, start: int) -> bool:
+    """Does a negator sit immediately before the banned phrase?"""
+    window = low[max(0, start - _NEGATION_WINDOW):start]
+    return any(re.search(rf"(?:^|\W){re.escape(n)}\W*$", window) for n in _NEGATORS)
+
+
 def check_phrasing(assessment: str) -> list[Violation]:
     """The banned-phrase lint, finally reaching the text it was written for.
 
     The difference between "is a bot" and "behaves consistently with automation" is the difference
     between an accusation and a finding, and this prose is what gets quoted.
+
+    A NEGATED PHRASE IS NOT THE CLAIM THE BAN EXISTS TO STOP, and matching the bare substring made
+    the rule fire on its own opposite. "There is no proof that the account is automated" and "this
+    is not obviously a bot" are HEDGES, and both were withheld as assertions of certainty. On a
+    corpus where most accounts are ordinary people, and where the constitution requires the innocent
+    explanation to be stated in every verdict, those sentences are common.
+
+    The window is tight on purpose. Only an immediate negation excuses the phrase, so "it is not a
+    coincidence that this account was hired" keeps its violation.
+
+    Note what is deliberately NOT excused. "no doubt" is itself a certainty phrase rather than a
+    negated one: the negator is part of the banned string, so the look-behind never sees it. And
+    "this person" stays banned in every context, because asserting the account is a person is an
+    identity claim the evidence cannot support; the protocol says "a real person" (a category) nine
+    times and "this person" never.
     """
     low = (assessment or "").lower()
-    return [
-        Violation("banned_phrase", HARD, f'asserts identity or certainty: "{p}"')
-        for p in BANNED_PHRASES if p in low
-    ]
+    out: list[Violation] = []
+    for p in BANNED_PHRASES:
+        for m in re.finditer(re.escape(p), low):
+            if _is_negated(low, m.start()):
+                continue
+            out.append(Violation("banned_phrase", HARD, f'asserts identity or certainty: "{p}"'))
+            break
+    return out
 
 
 def _shingles(text: str, k: int = 5) -> frozenset:
