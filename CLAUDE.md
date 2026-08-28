@@ -24,8 +24,8 @@ iterating in hash order set the null threshold), reposts and topics were reachin
 detector was read-only so nothing accumulated and nothing could be dismissed. Read "The network
 detector" below before touching a threshold or a set iteration there.
 
-Suite measured at **2462
-passed, 8 skipped, 2 failed** (18m37s, 2026-08-28), both failures pre-existing and listed below. The 8
+Suite measured at **2468
+passed, 8 skipped, 2 failed** (18m39s, 2026-08-28), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -78,7 +78,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2462 passed, 8 skipped, 2 failed** (18m37s, 2026-08-28), both documented below:
+Current measured state: **2468 passed, 8 skipped, 2 failed** (18m39s, 2026-08-28), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1179,6 +1179,28 @@ afterthought:**
 **Only `check_phrasing` changed. The shared `BANNED_PHRASES` tuple did not**, so the Governor's S9
 lint over investigation-level prose behaves exactly as before, and the `canonical_validate` mirror
 does not drift.
+
+#### A third candidate, measured and deliberately NOT changed
+
+`check_alias_in_prose` is HARD and matches `[AC]\d{1,3}`, so real-world tokens spelled that way are
+withheld when the model narrates them outside a quotation: **C4** the broadcaster, the **A1** road,
+**A2** milk, the **A7** camera body, the **C1** variant, flat **C3**. Six such sentences were
+measured firing.
+
+**This is a documented deliberate trade, not an undiagnosed bug**, and the reason is empirical:
+aliases opened essentially every verdict in a live export, so the leak was pervasive rather than
+occasional, and a withheld paragraph still shows its score, its tier and an honest notice. Quoted
+spans are already stripped, which covers the common case because the protocol pushes quoting over
+paraphrase.
+
+**The obvious refinement does not work, and that is worth recording so nobody spends the effort
+twice.** Matching only the aliases actually assigned in the batch sounds strictly more precise, but a
+25-account batch assigns A1 through A25, so "the A1 road" and "the A7 camera" are inside the legend
+and still fire. Real-world tokens use low numbers for exactly the same reason aliases do.
+
+Pinned as a CHARACTERIZATION test rather than approved, so changing it is a deliberate act with the
+reasoning in front of whoever changes it. If it is revisited, the thing to measure first is how
+often the model narrates such a token outside a quotation, which nobody has counted.
 
 **The remaining withhold rate is still NOT fully diagnosed.** About 36 of 400 verdicts
 came back withheld, and in one investigation it is ~28 of ~130 (**21%**). That clustering says a

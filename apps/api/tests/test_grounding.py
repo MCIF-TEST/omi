@@ -273,6 +273,42 @@ def test_two_bans_are_deliberately_not_negation_excused():
     )] == ["banned_phrase"]
 
 
+def test_the_alias_check_also_refuses_real_world_tokens_and_that_trade_is_deliberate():
+    """A CHARACTERIZATION TEST, not an approval. This pins a KNOWN false positive so that changing
+    it is a deliberate act rather than a discovery.
+
+    `_ALIAS_RE` is `[AC]\\d{1,3}`, and plenty of real things are spelled that way: C4 the
+    broadcaster, the A1 road, A2 milk, the A7 camera body, the C1 variant, flat C3. Narration
+    mentioning any of them is withheld as an internal label leaking to a reader.
+
+    The trade was made deliberately and the reason is empirical: aliases opened essentially every
+    verdict in a live export, so the leak was pervasive rather than occasional, and a withheld
+    paragraph still shows its score, its tier and an honest notice. Quoted spans are already
+    stripped, which covers the common case, because the protocol pushes the model to quote rather
+    than paraphrase.
+
+    THE OBVIOUS REFINEMENT DOES NOT WORK, and it is worth recording why so nobody spends the effort
+    twice. Matching only aliases actually assigned in the batch sounds strictly more precise, but a
+    25-account batch assigns A1 through A25, so "the A1 road" and "the A7 camera" are inside the
+    legend and still fire. Real-world tokens use low numbers for the same reason aliases do.
+
+    If this is ever revisited, the thing to measure first is how often the model narrates such a
+    token OUTSIDE a quotation, which nobody has counted.
+    """
+    from app.reasoning.grounding import check_alias_in_prose
+
+    for sentence in (
+        "It posts mostly about C4 documentaries and daytime television.",
+        "Several posts complain about roadworks on the A1 near the depot.",
+        "It reviews the A7 camera body in three separate posts.",
+    ):
+        assert [v.code for v in check_alias_in_prose(sentence)] == ["alias_in_prose"], sentence
+
+    # The case the trade was made FOR is still caught, and a quoted span is still exempt.
+    assert [v.code for v in check_alias_in_prose("A17 is a 2009 account.")] == ["alias_in_prose"]
+    assert check_alias_in_prose('It wrote "A1 is the best road in the country".') == []
+
+
 def test_counting_accounts_is_not_a_claim_about_who_it_follows():
     """A bare "N accounts" was compared against the following count and withheld true paragraphs."""
     acct = _account(following_count=300)
