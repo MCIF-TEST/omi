@@ -32,13 +32,26 @@ from app.netdetect.attachment import (
 SHUFFLES = 20
 
 
+#: Detection is the expensive part (seconds per corpus) and several tests below walk the same grid.
+#: Cached per module so the grid is detected once rather than once per test, which took this file
+#: from about three and a half minutes to under two.
+#:
+#: Safe only because the detector is deterministic, which is itself pinned
+#: (`test_the_answer_does_not_depend_on_the_interpreters_hash_seed`). A cache in front of a
+#: nondeterministic function would hide exactly the bug that test exists to catch.
+_CACHE: dict[tuple[int, int], tuple] = {}
+
+
 def _planted(organic: int, seed: int):
-    rows = C.organic_population(organic, seed=seed) + C.planted_operation(
-        8, seed=seed + 1, discipline=0.0)
-    result = detect_from_commenters(rows, shuffles=SHUFFLES)
-    hits = [c for c in result.findings if sum(1 for m in c.members if m.startswith("op")) >= 4]
-    assert hits, f"the operation was not found at organic={organic} seed={seed}"
-    return result, hits[0]
+    key = (organic, seed)
+    if key not in _CACHE:
+        rows = C.organic_population(organic, seed=seed) + C.planted_operation(
+            8, seed=seed + 1, discipline=0.0)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        hits = [c for c in result.findings if sum(1 for m in c.members if m.startswith("op")) >= 4]
+        assert hits, f"the operation was not found at organic={organic} seed={seed}"
+        _CACHE[key] = (result, hits[0])
+    return _CACHE[key]
 
 
 # ==================================================================================================
