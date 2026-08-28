@@ -68,6 +68,21 @@ def test_a_run_records_its_findings_and_accumulates_their_pairs():
         assert row.context_id == "ctx-record"
 
 
+def test_the_run_states_what_the_member_list_does_not_claim():
+    """Candidate generation is community detection, so a finding can name an account that borders
+    the group without belonging to it. Measured at roughly 7% of named members. That belongs beside
+    the numbers, not in a docstring, for the same reason `/narratives` states what it cannot see."""
+    _seed("nd_note", _catchable(seed=53), target="ctx-note")
+    body = _client().post("/v1/admin/netdetect/nd_note?shuffles=20").json()
+    note = body["membership_note"].lower()
+    assert "community detection" in note
+    assert "check each name" in note
+    # And it must not offer a per-member confidence, because the available one ranks some
+    # bystanders above genuine members.
+    assert "no per-member confidence" in note
+    assert body["findings"] and "confidence" not in body["findings"][0]
+
+
 def test_a_run_publishes_nothing():
     """Persisting an internal finding is not publishing one. The rule that a claim about a person is
     a decision somebody took, never a side effect of a page load, is about PUBLICATION."""

@@ -557,3 +557,114 @@ def test_narrative_evidence_cannot_carry_a_finding_on_its_own():
     assert FAMILY_WEIGHT["narrative"] < FAMILY_WEIGHT["network"]
     assert FAMILY_WEIGHT["narrative"] < FAMILY_WEIGHT["identity"]
     assert "narrative" not in HARD_FAMILIES
+
+
+# =============================================================================================== #
+# 6. Contamination: who ELSE ends up named
+# =============================================================================================== #
+#
+# The recall tests above ask whether the planted operation was found. They pass at `>= 4 of 8`, and
+# no test anywhere asked the other question: WHO ELSE is in the finding. That matters more here than
+# recall does, because a finding names real people. An innocent account swept into one is the exact
+# harm this package's refusals, family weights and adjudication flag all exist to avoid, and it was
+# going unmeasured.
+#
+# It became worth pinning when findings started being RECORDED. A swept-in account used to evaporate
+# when the page closed; it now lands in an operator's queue as a member of an operation and its
+# pairs are folded into the accumulating graph. The consequence changed even though the numbers did
+# not (measured identical against the pre-persistence tree).
+#
+# MEASURED 2026-08-28 across the full grid below: recall 8/8 on every one of the twelve
+# configurations, and 7 innocent accounts across 103 named members, so about 6.8%. Seven of the
+# twelve findings are clean and the worst single one is 3 innocents among 11 members.
+#
+# THE GRID IS SYSTEMATIC, every background size against every seed, and it has to stay that way. An
+# earlier draft trimmed it to six configurations and the trim happened to keep most of the
+# contaminated ones, which reported 12.7% and would have baselined every future change against a
+# number produced by the selection rather than by the detector.
+#
+# THIS IS A CEILING, NOT A TARGET. It is here so that a change which makes contamination worse
+# cannot land silently behind a recall test that still passes.
+
+CONTAMINATION_GRID = [(organic, seed) for organic in (30, 40, 50, 60) for seed in (5, 11, 23)]
+
+#: Share of all named members, across the grid, that may be innocent. Measured 6.8%; the headroom
+#: is for seed noise, not for regression.
+MAX_CONTAMINATION_RATE = 0.10
+
+#: No single finding may be more than this much bystander. A finding that is half innocent is not a
+#: slightly noisy finding, it is a different claim about different people.
+MAX_PER_FINDING_SHARE = 0.40
+
+
+def test_a_finding_is_mostly_the_operation_and_the_rate_is_pinned():
+    """Recall was measured and purity was not. Both are claims about named real people."""
+    named = innocent = 0
+    per_finding: list[tuple[int, int]] = []
+
+    for organic, seed in CONTAMINATION_GRID:
+        rows = C.organic_population(organic, seed=seed) + C.planted_operation(
+            8, seed=seed + 1, discipline=0.0)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        hits = [c for c in result.findings if _members_from(c, "op") >= 4]
+        assert hits, f"the operation was not found at organic={organic} seed={seed}"
+
+        for c in hits:
+            org = sum(1 for m in c.members if m.startswith("org"))
+            named += len(c.members)
+            innocent += org
+            per_finding.append((org, len(c.members)))
+
+            assert _members_from(c, "op") == 8, (
+                f"recall dropped at organic={organic} seed={seed}: "
+                f"{_members_from(c, 'op')} of 8"
+            )
+
+    worst = max(org / total for org, total in per_finding)
+    assert worst <= MAX_PER_FINDING_SHARE, (
+        f"one finding is {worst:.0%} bystanders; at that point it is a claim about different people"
+    )
+
+    rate = innocent / named
+    assert rate <= MAX_CONTAMINATION_RATE, (
+        f"{innocent} innocent accounts among {named} named ({rate:.1%}), above the pinned "
+        f"{MAX_CONTAMINATION_RATE:.0%}. A recall test cannot see this, which is why it is here."
+    )
+
+
+def test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did():
+    """A GUARD AGAINST A TEMPTING AND WRONG FEATURE.
+
+    `pair_evidence_from` knows how much of a group's shared evidence each member participates in, so
+    it is very tempting to publish that as a per-member confidence and let a reviewer challenge one
+    name. The cohort detector does exactly that with its admitting posterior, and it is right to.
+
+    Here it does not work. Measured on the corpus below, two swept-in organic accounts out-rank a
+    genuine operation member on attachment, so an operator shown that ranking would clear the wrong
+    accounts and doubt the right ones. Publishing it would be worse than publishing nothing, because
+    a number beside a person's name gets read as a judgement about them.
+
+    If this test ever fails because the weakest member IS the bystander on every corpus, that is the
+    signal the feature has become buildable. It is not a failure to fix by loosening the assertion.
+    """
+    from app.netdetect.persist import pair_evidence_from
+
+    rows = C.organic_population(60, seed=5) + C.planted_operation(8, seed=6, discipline=0.0)
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    hit = next(c for c in result.findings if _members_from(c, "op") >= 4)
+    assert sum(1 for m in hit.members if m.startswith("org")) >= 2, "corpus no longer contaminated"
+
+    attachment = {m: 0.0 for m in hit.members}
+    for (a, b), families in pair_evidence_from(result.corpus, hit).items():
+        total = sum(families.values())
+        attachment[a] += total
+        attachment[b] += total
+
+    ranked = [m for m, _ in sorted(attachment.items(), key=lambda kv: kv[1])]
+    innocent_positions = [i for i, m in enumerate(ranked) if m.startswith("org")]
+    operation_positions = [i for i, m in enumerate(ranked) if m.startswith("op")]
+
+    assert max(innocent_positions) > min(operation_positions), (
+        "attachment weight now ranks every bystander below every operation member. If that holds "
+        "across corpora it is worth publishing; verify before deleting this test."
+    )

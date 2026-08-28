@@ -51,6 +51,25 @@ class EvidenceOut(BaseModel):
     sentence: str
 
 
+#: What a reader has to be told about the member list, on the response rather than in a docstring.
+#:
+#: Candidate generation is community detection, which pulls in boundary accounts. Measured over a
+#: systematic grid of planted operations in organic backgrounds: recall 8/8 everywhere, and about
+#: 7% of all NAMED members were innocent bystanders, with one finding running to 3 of 11.
+#:
+#: There is no per-member confidence to offer alongside it, and that is a measurement rather than
+#: an omission: attachment weight, the obvious candidate, ranks some bystanders ABOVE genuine
+#: members, so publishing it would clear the wrong accounts. Pinned by
+#: `test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did`.
+MEMBERSHIP_NOTE = (
+    "Membership is a set-level claim. Candidate generation is community detection, so a finding "
+    "can include an account that borders the group without belonging to it: measured at roughly 7% "
+    "of named members, and up to 3 of 11 in one case. Check each name against the evidence before "
+    "acting on it, and note that no per-member confidence is offered because the available one "
+    "ranks some bystanders above genuine members."
+)
+
+
 class FindingOut(BaseModel):
     members: list[str]
     handles: list[str]
@@ -79,6 +98,9 @@ class RunOut(BaseModel):
     #: Set when the run could not be performed at all, as distinct from performing it and finding
     #: nothing. Never read an empty findings list as a clean result without checking this.
     refused: str | None
+    #: What the member list does and does not claim. Served with the numbers rather than left in a
+    #: docstring, for the same reason `/narratives` states what its detector cannot see.
+    membership_note: str = MEMBERSHIP_NOTE
     #: Findings written to the store.
     recorded: int = 0
     #: NEW pairs in the accumulating graph. A pair already in it is strengthened rather than

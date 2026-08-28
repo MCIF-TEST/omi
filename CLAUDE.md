@@ -1586,6 +1586,39 @@ them would be a category error.
 
 Pinned by `tests/test_netdetect_calibration.py` (11).
 
+#### A finding names bystanders, at a measured rate, and nothing said so
+
+Found while verifying the persistence work. Every recall test asks whether the planted operation was
+FOUND (`>= 4 of 8`); **nothing anywhere asked who else was in the finding**, which matters more here
+because a finding names real people. Candidate generation is community detection and Louvain pulls
+in boundary accounts.
+
+Measured across a systematic grid (four background sizes x three seeds): recall **8/8 on all twelve**,
+and **7 innocent accounts among 103 named members, about 6.8%**, with the worst finding at 3 of 11.
+**Identical against the pre-persistence tree**, so this is not new. What changed is the consequence:
+a swept-in account used to evaporate when the page closed and now lands in an operator's queue as a
+member of an operation, with its pairs folded into the accumulating graph.
+
+`test_a_finding_is_mostly_the_operation_and_the_rate_is_pinned` pins it as a **ceiling**, so a change
+that makes contamination worse cannot land behind a recall test that still passes. **Keep the grid
+systematic**: an earlier draft trimmed it to six configurations, the trim happened to keep most of
+the contaminated ones, and it reported 12.7%, which would have baselined every future change against
+the selection rather than the detector.
+
+**The obvious fix is measured and does not work.** `pair_evidence_from` knows how much of the shared
+evidence each member participates in, so publishing that as a per-member confidence (as the cohort
+detector rightly does with its admitting posterior) is very tempting. On the measured corpus two
+swept-in organic accounts **out-rank a genuine operation member**, so an operator shown that ranking
+would clear the wrong accounts and doubt the right ones. A number beside a person's name is read as a
+judgement about them, so publishing it would be worse than publishing nothing.
+`test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did` is a
+guard against building it, and states what would have to change for it to become buildable.
+
+Until there is a real fix, `MEMBERSHIP_NOTE` says so **on the response**, beside the numbers, the
+same way `/narratives` states what its detector cannot see. **A real fix is outstanding** and is a
+per-member attachment test rather than a threshold: the question "does this account belong in this
+set" is not the question the set-level statistic answers.
+
 **Not yet built:** the operation registry (persistent latent entities), and the adjudication call.
 
 ### Pre-launch lockdown: only admins can use the product
