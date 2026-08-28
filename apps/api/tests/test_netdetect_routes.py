@@ -390,9 +390,22 @@ def test_a_judgement_cannot_be_recorded_without_a_reason():
     assert "judgeNetdetectFinding" in src
 
 
-def test_the_page_does_not_render_a_per_member_confidence():
-    """The obvious per-member number ranks some bystanders above genuine operation members, so it is
-    measured and refused. A flagged member is highlighted as a pointer for review and carries no
-    score beside their name, because a number there is read as a judgement about a person."""
+def test_no_number_is_rendered_beside_a_member_name():
+    """The obvious per-member number ranks some bystanders ABOVE genuine operation members, so it
+    was measured and refused. A flagged member is highlighted as a pointer for review and carries
+    nothing numeric beside their name, because a number there is read as a judgement about a person.
+
+    Scoped to the members block rather than the whole file: the figures in the header readouts are
+    about the FINDING and are meant to be there, and a blanket search would fail on an innocent
+    comment while saying nothing useful about why.
+    """
     src = (_PAGE_DIR / "finding-queue.tsx").read_text()
-    assert "confidence" not in src.lower().replace("attachment_checked", "")
+    start = src.index(">Members<")
+    end = src.index(">Evidence<", start)
+    members_block = src[start:end]
+    for numeric in (".toFixed(", "surprise", "posterior"):
+        assert numeric not in members_block, (
+            f"the members block renders {numeric!r}. A number beside a person's name reads as a "
+            f"judgement about them, and the only per-member figure available does not separate "
+            f"bystanders from real members."
+        )
