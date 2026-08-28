@@ -1658,7 +1658,19 @@ sold_as_if_it_did` is still true and still passing: that statistic still fails. 
 questions, one of which is answerable. `MEMBERSHIP_NOTE` on the response now describes the flag as a
 pointer for review rather than a score, and says an empty list is not an all-clear.
 
-Pinned by `tests/test_netdetect_attachment.py` (10).
+**The cap is measured, not guessed.** Leave-one-out costs one scoring per member and each scoring
+walks a feature union that grows with the member count, so the curve is steep: on a 220-account
+corpus, n=20 took 0.21s, n=30 1.0s, n=40 2.8s, n=50 7.2s, n=60 15.4s. `MAX_MEMBERS` is 40, because
+this runs inside an admin request that has already spent tens of seconds detecting. A first draft
+set it at 60 by feel and would have added 15 seconds to that request.
+
+**The three new columns are registered in `_INCREMENTAL_COLUMNS`.** `create_all` leaves existing
+tables alone and the boot upgrade pass works from that explicit list rather than from the models, so
+a column added to the model alone never reaches a database that already created the table. Pinned by
+a test that builds such a database rather than asserting on the registry, since a typo in the list
+passes inspection and fails at runtime.
+
+Pinned by `tests/test_netdetect_attachment.py` (12).
 
 **Not yet built:** the operation registry (persistent latent entities), the adjudication call, and
 a per-member attachment test to stop a finding naming bystanders (see the contamination note above:

@@ -22,6 +22,7 @@ from __future__ import annotations
 import tests.netdetect_corpora as C
 from app.netdetect import detect_from_commenters
 from app.netdetect.attachment import (
+    MAX_MEMBERS,
     MIN_MEDIAN_CONTRIBUTION,
     WEAK_FRACTION,
     assess,
@@ -198,6 +199,21 @@ def test_the_constants_are_the_measured_ones():
     """Pinned so a later tweak is a deliberate act with a measurement behind it."""
     assert WEAK_FRACTION == 0.25
     assert MIN_MEDIAN_CONTRIBUTION == 0.5
+    # Cost is steep in the member count: measured on a 220-account corpus at 0.21s for 20 members,
+    # 2.8s for 40 and 15.4s for 60. This runs inside a request that has already spent tens of
+    # seconds detecting, so the cap is where the answer stops being worth the wait.
+    assert MAX_MEMBERS == 40
+
+
+def test_an_oversized_finding_abstains_rather_than_making_the_operator_wait():
+    """And it says which of the two empty-list meanings applies, so nobody reads the silence as
+    'every member belongs'."""
+    result, finding = _planted(60, 5)
+    oversized = sorted(result.corpus.by_id)[:MAX_MEMBERS + 5]
+    attachment = assess(result.corpus, oversized)
+    assert not attachment.answered
+    assert attachment.weak == []
+    assert str(MAX_MEMBERS) in attachment.abstained
 
 
 # ==================================================================================================

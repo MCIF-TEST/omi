@@ -80,10 +80,19 @@ WEAK_FRACTION = 0.25
 #: which is why a blunt gate is enough and a fitted one would be false precision.
 MIN_MEDIAN_CONTRIBUTION = 0.5
 
-#: Leave-one-out costs one extra scoring per member. Findings are small by construction
-#: (`MAX_GROUP_SHARE` bounds them against the corpus), and above this the answer is not worth the
-#: quadratic-ish cost on a page an operator is waiting for.
-MAX_MEMBERS = 60
+#: Above this many members the test abstains rather than running.
+#:
+#: MEASURED, not guessed. Leave-one-out costs one scoring per member and each scoring walks a
+#: feature union that itself grows with the member count, so the curve is steep. On a 220-account
+#: corpus: n=20 took 0.21s, n=30 1.0s, n=40 2.8s, n=50 7.2s, n=60 15.4s. This runs inside an admin
+#: request that has already spent tens of seconds detecting, so 40 is where the answer stops being
+#: worth the wait.
+#:
+#: It agrees with `persist.MAX_MEMBERS_FOR_PAIRS` by coincidence of the same underlying judgement,
+#: that a finding this large is a subject rather than a formation. They are kept separate because
+#: the cost models are different (pairs grow quadratically, this closer to n^3.5), and collapsing
+#: them would tie one bound to the other's measurement.
+MAX_MEMBERS = 40
 
 
 @dataclass(slots=True)
