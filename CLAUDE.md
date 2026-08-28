@@ -24,8 +24,8 @@ iterating in hash order set the null threshold), reposts and topics were reachin
 detector was read-only so nothing accumulated and nothing could be dismissed. Read "The network
 detector" below before touching a threshold or a set iteration there.
 
-Suite measured at **2445
-passed, 8 skipped, 2 failed** (11m26s, 2026-08-28), both failures pre-existing and listed below. The 8
+Suite measured at **2448
+passed, 8 skipped, 2 failed** (13m05s, 2026-08-28), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -78,7 +78,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2445 passed, 8 skipped, 2 failed** (11m26s, 2026-08-28), both documented below:
+Current measured state: **2448 passed, 8 skipped, 2 failed** (13m05s, 2026-08-28), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1619,7 +1619,10 @@ same way `/narratives` states what its detector cannot see. **A real fix is outs
 per-member attachment test rather than a threshold: the question "does this account belong in this
 set" is not the question the set-level statistic answers.
 
-**Not yet built:** the operation registry (persistent latent entities), and the adjudication call.
+**Not yet built:** the operation registry (persistent latent entities), the adjudication call, and
+a per-member attachment test to stop a finding naming bystanders (see the contamination note above:
+the rate is measured and pinned, the cause is understood, and the obvious fix is measured NOT to
+work).
 
 ### Pre-launch lockdown: only admins can use the product
 
@@ -3757,6 +3760,16 @@ next step.
    will ever accumulate, and a later pass can fit against them. Watch specifically for
    `verbatim_echo` firing on platform-templated text (auto-generated "I just earned a badge" posts)
    and for `co_target` on small niches where everyone genuinely engages the same handful of posts.
+
+   **The same is now true of `app/netdetect/`, and it has somewhere to put the answers.** Run
+   `POST /v1/admin/netdetect/{slug}` on real investigations, read
+   `GET /v1/admin/netdetect/findings/all`, and dismiss or confirm each one with a reason.
+   `GET /v1/admin/netdetect/findings/calibration` replays every threshold against those judgements
+   and refuses to recommend anything until there are 30 with 8 of each class, so the first thirty
+   are the whole cost of calibrating it. Watch specifically for a finding that names an account you
+   can tell is an ordinary bystander: that is the measured ~7% contamination and the judgement to
+   record is a dismissal with that reason, since it is the one class no threshold currently
+   separates.
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
    redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
    are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly
