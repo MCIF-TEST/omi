@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from app.netdetect import attachment
 from app.netdetect import candidates as cand
 from app.netdetect.shuffle import DEFAULT_QUANTILE, DEFAULT_SHUFFLES, build_null
 from app.netdetect.significance import (
@@ -192,6 +193,14 @@ def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
                     "(provisioning) or network (outside targets). A shared profession or interest "
                     "produces this pattern innocently."
                 )
+            # Who in this set is not carrying it. A REPORT, never an exclusion: dropping a member
+            # here would change the finding's membership, score and stored identity on the strength
+            # of a heuristic, and would delete a real participant when it got it the other way
+            # round. See `app/netdetect/attachment.py` for why it abstains rather than guessing.
+            attach = attachment.assess(corpus, full.members)
+            full.weakly_attached = list(attach.weak)
+            full.attachment_note = attach.abstained
+            full.attachment_checked = attach.answered
             result.findings.append(full)
         else:
             c.refused = (

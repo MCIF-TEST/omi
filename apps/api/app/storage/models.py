@@ -1591,6 +1591,17 @@ class CrossFinding(Base):
     cohort_best_p: Mapped[float | None] = mapped_column(Float, nullable=True)
     #: Why a human has to look before this reaches anyone, or NULL when the evidence settles it.
     needs_adjudication: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Members that do not carry the finding (`app/netdetect/attachment.py`). A REPORT, not an
+    #: exclusion: they are still members and still in `members_json`. Empty ALSO when the test
+    #: abstained, so `attachment_note` has to be read beside it.
+    weak_members_json: Mapped[list] = mapped_column(JSON, default=list)
+    #: Why no membership verdict was reached, or NULL when one was. Never read an empty
+    #: `weak_members_json` as "every member belongs".
+    attachment_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Whether the membership test ran at all. Explicit, because an empty `weak_members_json` means
+    #: opposite things with and without it. Defaults False so rows written before the test existed
+    #: read as "not checked" rather than as a clean bill of health.
+    attachment_checked: Mapped[bool] = mapped_column(Boolean, default=False)
     #: Set when the cohort could not be tested at all, which is a different statement from finding
     #: nothing and has to survive to the reader as one.
     cohort_refused: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1648,6 +1659,17 @@ class NetdetectFinding(Base):
     by_family_json: Mapped[dict] = mapped_column(JSON, default=dict)
     #: Why a human has to look before this reaches anyone, or NULL when the evidence settles it.
     needs_adjudication: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Members that do not carry the finding (`app/netdetect/attachment.py`). A REPORT, not an
+    #: exclusion: they are still members and still in `members_json`. Empty ALSO when the test
+    #: abstained, so `attachment_note` has to be read beside it.
+    weak_members_json: Mapped[list] = mapped_column(JSON, default=list)
+    #: Why no membership verdict was reached, or NULL when one was. Never read an empty
+    #: `weak_members_json` as "every member belongs".
+    attachment_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Whether the membership test ran at all. Explicit, because an empty `weak_members_json` means
+    #: opposite things with and without it. Defaults False so rows written before the test existed
+    #: read as "not checked" rather than as a clean bill of health.
+    attachment_checked: Mapped[bool] = mapped_column(Boolean, default=False)
     #: The evidence sentences, written HERE at detection time, because the corpus they were derived
     #: from is not kept and the finding has to stay readable without it.
     evidence_json: Mapped[list] = mapped_column(JSON, default=list)

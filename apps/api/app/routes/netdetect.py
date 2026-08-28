@@ -57,16 +57,20 @@ class EvidenceOut(BaseModel):
 #: systematic grid of planted operations in organic backgrounds: recall 8/8 everywhere, and about
 #: 7% of all NAMED members were innocent bystanders, with one finding running to 3 of 11.
 #:
-#: There is no per-member confidence to offer alongside it, and that is a measurement rather than
-#: an omission: attachment weight, the obvious candidate, ranks some bystanders ABOVE genuine
-#: members, so publishing it would clear the wrong accounts. Pinned by
-#: `test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did`.
+#: `weakly_attached` now names them, from `app/netdetect/attachment.py`, and it is a REPORT rather
+#: than an exclusion: a flagged account is still a member and still listed. It is also NOT a
+#: confidence score. The obvious per-member number (how much shared evidence a member participates
+#: in) was measured and ranks some bystanders ABOVE genuine members, which is why this asks the
+#: different question of what each member ADDED, and why it abstains rather than guessing when the
+#: evidence is spread evenly.
 MEMBERSHIP_NOTE = (
     "Membership is a set-level claim. Candidate generation is community detection, so a finding "
     "can include an account that borders the group without belonging to it: measured at roughly 7% "
-    "of named members, and up to 3 of 11 in one case. Check each name against the evidence before "
-    "acting on it, and note that no per-member confidence is offered because the available one "
-    "ranks some bystanders above genuine members."
+    "of named members, and up to 3 of 11 in one case. `weakly_attached` names the members that do "
+    "not carry the finding, and it is a pointer for review rather than a verdict: they remain "
+    "members and are still listed. When `attachment_note` is set no membership verdict was "
+    "reached, which is not the same as every member belonging. Check each name against the "
+    "evidence before acting on it."
 )
 
 
@@ -81,6 +85,15 @@ class FindingOut(BaseModel):
     #: Non-null when the evidence cannot settle whether this is an operation or a community, and a
     #: person has to look. The reason is in the string.
     needs_adjudication: str | None
+    #: Members that do not carry this finding. A pointer for review, never an exclusion, and never
+    #: a confidence score. See MEMBERSHIP_NOTE.
+    weakly_attached: list[str] = []
+    #: Why no membership verdict was reached, or null when one was. An empty `weakly_attached` with
+    #: this set does NOT mean every member belongs.
+    attachment_note: str | None = None
+    #: Whether the membership test ran. An empty `weakly_attached` means "every member carries this
+    #: finding" only when this is true; when it is false the question was not answered.
+    attachment_checked: bool = False
     evidence: list[EvidenceOut]
 
 
@@ -199,6 +212,9 @@ def run_on_investigation(
                 hard_evidence=round(c.hard_evidence, 3),
                 corrected_p=c.corrected_p,
                 needs_adjudication=c.needs_adjudication,
+                weakly_attached=list(c.weakly_attached),
+                attachment_note=c.attachment_note,
+                attachment_checked=c.attachment_checked,
                 evidence=[
                     EvidenceOut(
                         family=e.feature.family, kind=e.feature.kind,
@@ -243,6 +259,9 @@ class StoredFindingOut(BaseModel):
     corrected_p: float | None
     by_family: dict[str, float]
     needs_adjudication: str | None
+    weakly_attached: list[str] = []
+    attachment_note: str | None = None
+    attachment_checked: bool = False
     evidence: list[EvidenceOut]
     corpus_size: int
     null_shuffles: int
@@ -264,6 +283,9 @@ def _stored_out(row: NetdetectFinding) -> StoredFindingOut:
         corrected_p=row.corrected_p,
         by_family=dict(row.by_family_json or {}),
         needs_adjudication=row.needs_adjudication,
+        weakly_attached=list(row.weak_members_json or []),
+        attachment_note=row.attachment_note,
+        attachment_checked=bool(row.attachment_checked),
         evidence=[EvidenceOut(**e) for e in (row.evidence_json or [])],
         corpus_size=row.corpus_size,
         null_shuffles=row.null_shuffles,

@@ -1614,10 +1614,51 @@ judgement about them, so publishing it would be worse than publishing nothing.
 `test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did` is a
 guard against building it, and states what would have to change for it to become buildable.
 
-Until there is a real fix, `MEMBERSHIP_NOTE` says so **on the response**, beside the numbers, the
-same way `/narratives` states what its detector cannot see. **A real fix is outstanding** and is a
-per-member attachment test rather than a threshold: the question "does this account belong in this
-set" is not the question the set-level statistic answers.
+#### The fix: ask what each member ADDED, not how much it shares
+
+`app/netdetect/attachment.py`. The failed statistic asked how much shared evidence a member
+participates in. The one that works asks how much less improbable the set is **without** it: score
+the set, then score the set minus one member, in the finding's own weighted log10 units.
+
+**The sign comes out of the arithmetic rather than a threshold.** Removing a genuine member drops
+the shared count `k` across many rare features, so the Poisson-binomial tail widens and the score
+falls: a large positive delta. Removing a bystander leaves `k` alone on the features carrying the
+finding while shrinking `n`, so the tail gets SMALLER and the score can rise: a delta at or below
+zero. Measured, every bystander landed at or below zero and every operation member well above it.
+
+Result on the systematic grid: **7 of 7 bystanders flagged, 0 of 96 genuine members flagged, 0
+missed**, abstaining on the 4 findings where nobody is weakly attached.
+
+Four rules, and three of them are about restraint:
+
+- **The threshold is RELATIVE to the finding's own median, and that is a measurement.** Globally the
+  populations overlap: the weakest genuine member scored **-0.134** and the strongest bystander
+  **+0.116**, so any fixed cut misclassifies one of them. `WEAK_FRACTION` (0.25) compares a member
+  against the typical member of its own finding, because the scale of a delta is set by how much
+  evidence that particular finding rests on. Pinned by a test that fails if the two ever separate
+  globally, since that would make a simpler rule viable.
+- **It ABSTAINS below `MIN_MEDIAN_CONTRIBUTION` (0.5).** In a homogeneous group every member holds
+  the same features, so removing any one barely moves the score and there is no weak member to
+  find; a rule that went looking anyway would flag whichever account rounded lowest. The
+  professional-beat control lands here and must: a real community IS everybody contributing alike.
+  Measured, such findings ran medians of 0.04 to 0.18 while every contaminated one ran 1.57 to 3.92.
+- **It REPORTS, it never drops a member.** Removing a flagged account would change the finding's
+  membership, score and stored identity on a heuristic, and would silently delete a real
+  participant whenever the heuristic got it the other way round. A flagged account stays in
+  `members`.
+- **`attachment_checked` is explicit, never inferred.** There are THREE states and the middle one is
+  easy to lose: checked with weak members, checked with none (every member carries the finding), and
+  not checked at all. The last two both present an empty list and are opposite statements about the
+  people named. Same distinction as `score: null` against `0` on the analyst's eight signals, and it
+  defaults False so rows written before the test existed read as "not checked" rather than as a
+  clean bill of health.
+
+**The old guard stays.** `test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_
+sold_as_if_it_did` is still true and still passing: that statistic still fails. Two different
+questions, one of which is answerable. `MEMBERSHIP_NOTE` on the response now describes the flag as a
+pointer for review rather than a score, and says an empty list is not an all-clear.
+
+Pinned by `tests/test_netdetect_attachment.py` (10).
 
 **Not yet built:** the operation registry (persistent latent entities), the adjudication call, and
 a per-member attachment test to stop a finding naming bystanders (see the contamination note above:

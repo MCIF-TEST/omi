@@ -77,10 +77,54 @@ def test_the_run_states_what_the_member_list_does_not_claim():
     note = body["membership_note"].lower()
     assert "community detection" in note
     assert "check each name" in note
-    # And it must not offer a per-member confidence, because the available one ranks some
-    # bystanders above genuine members.
-    assert "no per-member confidence" in note
+    # It names the members that do not carry the finding, and says plainly that this is a pointer
+    # for review rather than a per-member confidence score. A number beside a person's name is read
+    # as a judgement about them.
+    assert "weakly_attached" in note
+    assert "verdict" in note
     assert body["findings"] and "confidence" not in body["findings"][0]
+
+
+def test_the_weak_member_flags_survive_into_the_store_and_the_queue():
+    """The flag exists so a reviewer can challenge one name without dismissing the finding, which
+    only works if it reaches the queue they read rather than dying with the run."""
+    _seed("nd_weak", _catchable(seed=59), target="ctx-weak")
+    client = _client()
+    run = client.post("/v1/admin/netdetect/nd_weak?shuffles=20").json()
+    assert run["findings"]
+    first = run["findings"][0]
+    # THREE states, and the flag is what keeps them apart: checked with weak members, checked with
+    # none (every member carries the finding), and not checked at all. An empty list means opposite
+    # things in the second and third.
+    if first["attachment_checked"]:
+        assert first["attachment_note"] is None
+    else:
+        assert first["attachment_note"], "not checked, and no reason given"
+        assert first["weakly_attached"] == []
+    # A flagged account is still a MEMBER. The flag reports, it never excludes.
+    for flagged in first["weakly_attached"]:
+        assert flagged in first["members"]
+
+    stored = [f for f in client.get("/v1/admin/netdetect/findings/all").json()
+              if f["context_id"] == "ctx-weak"][0]
+    assert stored["weakly_attached"] == first["weakly_attached"]
+    assert stored["attachment_note"] == first["attachment_note"]
+    assert stored["attachment_checked"] == first["attachment_checked"]
+    assert stored["member_count"] == len(first["members"]), (
+        "the stored member count changed, so something dropped a flagged account"
+    )
+
+
+def test_the_membership_note_describes_the_flag_without_selling_it_as_a_score():
+    """A number beside a person's name is read as a judgement about them. This one is a pointer for
+    review, and the note has to say so, including that an empty list is not an all-clear."""
+    _seed("nd_note2", _catchable(seed=61), target="ctx-note2")
+    body = _client().post("/v1/admin/netdetect/nd_note2?shuffles=20").json()
+    note = body["membership_note"].lower()
+    assert "weakly_attached" in note
+    assert "pointer for review" in note
+    assert "remain" in note and "members" in note
+    assert "not the same as every member belonging" in note
 
 
 def test_a_run_publishes_nothing():

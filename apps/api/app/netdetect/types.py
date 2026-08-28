@@ -155,6 +155,18 @@ class Candidate:
     #: cannot be resolved statistically, and pretending a threshold resolves it is how this product
     #: would publish an accusation about a real community.
     needs_adjudication: str | None = None
+    #: Members that do not carry this finding, from `app.netdetect.attachment`. A REPORT, never an
+    #: exclusion: these accounts are still members and still named, and a reader decides. Empty
+    #: also when the test abstained, so read `attachment_note` before concluding anything from it.
+    weakly_attached: list[str] = field(default_factory=list)
+    #: Why no verdict was reached on membership, or None when one was. Never read the absence of
+    #: `weakly_attached` entries as "every member belongs".
+    attachment_note: str | None = None
+    #: Whether the membership test actually ran. EXPLICIT on purpose: an empty `weakly_attached`
+    #: means "checked, every member carries the finding" when this is True and "could not check"
+    #: when it is False, and those are opposite statements about the people named. Same distinction
+    #: as `score: null` against `0` on the analyst's signals.
+    attachment_checked: bool = False
 
     @property
     def weighted_score(self) -> float:

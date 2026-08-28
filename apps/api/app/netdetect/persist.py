@@ -124,6 +124,9 @@ def persist_finding(
     row.corrected_p = candidate.corrected_p
     row.by_family_json = {k: round(v, 6) for k, v in (candidate.by_family or {}).items()}
     row.needs_adjudication = candidate.needs_adjudication
+    row.weak_members_json = list(getattr(candidate, "weakly_attached", []) or [])
+    row.attachment_note = getattr(candidate, "attachment_note", None)
+    row.attachment_checked = bool(getattr(candidate, "attachment_checked", False))
     row.evidence_json = [
         {
             "family": e.feature.family,

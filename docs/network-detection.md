@@ -306,6 +306,13 @@ designing it:
   steered by whoever clicks, and this one decides whether named real people are reported as running
   an operation together.
 
+A third thing landed after that: **a per-member attachment test** (`app/netdetect/attachment.py`).
+§3 treats membership as settled once the set is found, and it is not: candidate generation is
+community detection, so a finding names bystanders at a measured ~7%. The test asks what each member
+ADDED to the set's improbability (leave-one-out on the same scoring function) rather than how much it
+shares, which is the version that separates. It reports rather than excluding, and abstains when the
+evidence is spread evenly enough that nobody can be singled out.
+
 Still open: **step 7**, the operation registry (the older cohort detector's
 `app/campaigns/tracking` does this for its own findings; netdetect contributes edges to the same
 graph but has no registry of its own), and **step 8**, the adjudication call. `needs_adjudication`
