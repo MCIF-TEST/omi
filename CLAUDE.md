@@ -1113,7 +1113,42 @@ prose. A year is only read as a claim when it sits next to a creation word or th
 "the 2020 election" and a year inside a quoted post are left alone. One wrong date reports once, not
 twice. Pinned by the contamination section of `tests/test_grounding.py`.
 
-**The withhold rate is the other half of this and is NOT yet diagnosed.** About 36 of 400 verdicts
+#### One cause of the withhold rate, found and fixed: a small ratio was unwritable
+
+Diagnosed 2026-08-28 by probing the checkers with protocol-conformant prose rather than by waiting
+for live data, the same method that found the four checker bugs above.
+
+`_check_ratio` compared against a **purely relative** `RATIO_TOLERANCE` of 15%. For an
+acquired-audience account (many followers, follows almost nobody) the true following-to-followers
+ratio is tiny, and the band around it contains no number the model could reasonably write. Measured
+on 1,249 followers against 8 following: the true ratio is 0.0064, the band is 0.0054 to 0.0074, and
+`a ratio of 0.01` (correct to two decimals, and the obvious way to write it) was withheld as a
+fabricated figure. Three decimals passed and the inverted form passed. **Only the natural form
+failed**, which is the worst possible shape for a rule like this.
+
+**It is not a corner case, and that is what makes it a likely cause of the clustering.** v14 added
+the ACQUIRED-AUDIENCE shape to `PROFILE` as an equally elevated signal, so the protocol actively
+steers the model toward the very accounts whose ratios this rejected. Withholds would arrive
+bunched in investigations containing them, which is what "~28 of ~130 in one investigation" looks
+like. A probe of five protocol-conformant paragraphs withheld one, a 20% rate, on this alone.
+
+The fix is to check a figure **at the precision it was stated**: `0.01` asserts the ratio to two
+decimal places, and 0.0064 rounds to 0.01, so the sentence is true. It stays tight rather than
+becoming an amnesty on small numbers, because `0.0100` is a claim to four places and is still
+refused, as is a contaminated `4.0` or `0.50`. The pair form (`600:505`) states two exact counts
+rather than a rounded quotient, so the precision rule deliberately does not apply to it.
+
+Verified across every figure and quote FORM the protocol asks for: 18 figure cases and 10 quote
+cases, zero false positives and every contamination still caught. Pinned by two tests in the
+false-positive section of `tests/test_grounding.py`.
+
+**Worth doing at the next protocol revision, and deliberately not now:** the model should prefer
+whichever orientation is informative, since a follower-heavy account's ratio rounds to `0.00` at two
+decimals, which is true and tells a reader nothing. That is a prompt change and costs a recompile,
+every mirror, the pins and a preset re-paste, which is not worth spending on one line while the
+checker fix removes the actual harm.
+
+**The remaining withhold rate is still NOT fully diagnosed.** About 36 of 400 verdicts
 came back withheld, and in one investigation it is ~28 of ~130 (**21%**). That clustering says a
 checker over-firing on a phrasing habit, not 28 hallucinations. Diagnosing it needs the withheld text
 and codes from `assessment_unverified` / `grounding` in `payload_json`, which is why the field is

@@ -384,8 +384,36 @@ def _check_created(text: str, account: dict) -> list[Violation]:
     return out
 
 
+def _decimals(raw: str) -> int:
+    """How many decimal places a number was WRITTEN to. `"0.01"` -> 2, `"156"` -> 0."""
+    _, _, frac = raw.partition(".")
+    return len(frac)
+
+
+def _matches_at_stated_precision(raw: str, stated: float, actual: float) -> bool:
+    """Is the written figure the true one, rounded to the precision it was written at?
+
+    A RELATIVE TOLERANCE IS THE WRONG TEST FOR A SMALL RATIO, and it made an entire account shape
+    unwritable. Take 1,249 followers against 8 following: the true following-to-followers ratio is
+    0.0064, and a 15% band around it is 0.0054 to 0.0074. The only two-decimal number in that band
+    does not exist, so "a ratio of 0.01" -- which is 0.0064 correctly rounded, and the most natural
+    way to write it -- was withheld as a fabricated figure. Three decimals passed and the inverted
+    form passed; the obvious form failed.
+
+    That is not a rare corner. v14 added the ACQUIRED-AUDIENCE shape (many followers, follows almost
+    nobody) to PROFILE as an equally elevated signal, so the protocol actively steers the model
+    toward the accounts whose ratios this rejected, and the withholds would arrive in clusters.
+
+    "0.01" is a claim about the ratio TO TWO DECIMAL PLACES, and 0.0064 rounds to 0.01, so the claim
+    is true. Checking at the stated precision is what the sentence actually asserts. It stays tight:
+    a contaminated "4.0" against a true 0.0064 rounds to 0.0 and is still refused.
+    """
+    d = _decimals(raw)
+    return round(actual, d) == round(stated, d)
+
+
 def _check_ratio(text: str, actual: float) -> list[Violation]:
-    """A ratio is accepted in either direction, and as a pair.
+    """A ratio is accepted in either direction, at the precision it was stated, and as a pair.
 
     ``_CHECKABLE_CLAIMS`` asks for following-to-followers, but a model that writes the inverse and
     labels it correctly has stated a TRUE figure about the account. Withholding that paragraph
@@ -397,7 +425,8 @@ def _check_ratio(text: str, actual: float) -> list[Violation]:
         return out
     inverse = 1.0 / actual
     for m in _RATIO_RE.finditer(text):
-        left, right = _f(m.group(1)), _f(m.group(2)) if m.group(2) else None
+        raw_left, raw_right = m.group(1), m.group(2)
+        left, right = _f(raw_left), _f(raw_right) if raw_right else None
         if left is None:
             continue
         stated = left if right is None else (left / right if right else None)
@@ -405,6 +434,11 @@ def _check_ratio(text: str, actual: float) -> list[Violation]:
             continue
         if (not _off_by(stated, actual, RATIO_TOLERANCE)
                 or not _off_by(stated, inverse, RATIO_TOLERANCE)):
+            continue
+        # A pair ("600:505") states two exact counts rather than a rounded quotient, so the
+        # precision rule applies only to the single-number form.
+        if right is None and (_matches_at_stated_precision(raw_left, stated, actual)
+                              or _matches_at_stated_precision(raw_left, stated, inverse)):
             continue
         out.append(Violation(
             "figure_mismatch", HARD,

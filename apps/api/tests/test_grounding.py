@@ -179,6 +179,53 @@ def test_a_ratio_stated_the_other_way_up_is_still_a_true_figure():
     assert [v.code for v in check_figures("A ratio of 39 to 1.", acct)] == ["figure_mismatch"]
 
 
+def test_a_correctly_rounded_ratio_is_a_true_figure_however_small_it_is():
+    """A RELATIVE TOLERANCE MADE AN ENTIRE ACCOUNT SHAPE UNWRITABLE.
+
+    An acquired-audience account (many followers, follows almost nobody) has a tiny
+    following-to-followers ratio. Take 1,249 against 8: the true value is 0.0064, and a 15% band
+    around it is 0.0054 to 0.0074. No two-decimal number lives in that band, so "a ratio of 0.01" --
+    which is 0.0064 correctly rounded, and the most natural way to write it -- was withheld as a
+    fabricated figure. Three decimals passed and the inverted form passed; only the obvious form
+    failed.
+
+    That is not a corner case. v14 added the ACQUIRED-AUDIENCE shape to PROFILE as an equally
+    elevated signal, so the protocol steers the model toward exactly these accounts, and the
+    withholds arrive in clusters rather than scattered. A probe of protocol-conformant paragraphs
+    withheld 1 of 5 on this alone.
+
+    "0.01" claims the ratio to two decimal places, and 0.0064 rounds to 0.01, so the claim is true.
+    """
+    acct = _account(follower_count=1249, following_count=8)      # following/followers = 0.006405
+    assert check_figures("A following-to-followers ratio of 0.01.", acct) == []
+    assert check_figures("A ratio of 0.006 on this account.", acct) == []
+    assert check_figures("A followers-to-following ratio of 156.1.", acct) == []
+    assert check_figures("A followers-to-following ratio of 156.", acct) == []
+
+    tiny = _account(follower_count=348, following_count=2)       # 0.00575
+    assert check_figures("A ratio of 0.01 here.", tiny) == []
+
+    # And it stays tight. Another account's ratio still cannot be published as this one's.
+    assert [v.code for v in check_figures("A ratio of 0.50.", acct)] == ["figure_mismatch"]
+    assert [v.code for v in check_figures("A ratio of 4.0.", acct)] == ["figure_mismatch"]
+
+
+def test_precision_is_read_from_the_number_as_written_not_from_its_value():
+    """The rule is about what the sentence ASSERTS. Rounding to more places is a stronger claim and
+    is held to it, which is what stops the fix from becoming a blanket amnesty on small figures."""
+    from app.reasoning.grounding import _decimals
+
+    assert _decimals("0.01") == 2
+    assert _decimals("156") == 0
+    assert _decimals("1.1884") == 4
+
+    acct = _account(follower_count=1249, following_count=8)      # 0.0064051...
+    # Two decimals: 0.0064 rounds to 0.01. True.
+    assert check_figures("A ratio of 0.01.", acct) == []
+    # Four decimals is a claim to four decimals, and this one is wrong at that precision.
+    assert [v.code for v in check_figures("A ratio of 0.0100.", acct)] == ["figure_mismatch"]
+
+
 def test_counting_accounts_is_not_a_claim_about_who_it_follows():
     """A bare "N accounts" was compared against the following count and withheld true paragraphs."""
     acct = _account(following_count=300)
