@@ -276,6 +276,123 @@ export function resolveDispute(
 }
 
 // ---------------------------------------------------------------------------
+// The network detector's finding queue. Admin only, on every route.
+//
+// A finding here names REAL PEOPLE as running together, on evidence that is statistical rather than
+// certain, so it is an operator's lead and never a customer-facing verdict.
+//
+// The judgements are the reason this queue has an interface at all. Every threshold in
+// `app/netdetect` is reasoned rather than fitted, because no labelled corpus of coordinated accounts
+// exists, and the calibration report refuses to recommend anything until 30 findings have been
+// judged with at least 8 of each class. Nobody produces thirty judgements through curl.
+// ---------------------------------------------------------------------------
+
+export const NETDETECT_STATUSES = ['open', 'dismissed', 'confirmed'] as const;
+export type NetdetectStatus = (typeof NETDETECT_STATUSES)[number];
+
+export interface NetdetectEvidence {
+  family: string;
+  kind: string;
+  shared_by: number;
+  /** How many accounts in the whole corpus exhibit it: the denominator of the rarity claim. */
+  corpus_count: number;
+  surprise: number;
+  sentence: string;
+}
+
+export interface NetdetectFinding {
+  id: number;
+  investigation_id: number | null;
+  context_id: string | null;
+  platform: string;
+  members: string[];
+  member_count: number;
+  score: number;
+  /** Null means "not compared against the shuffled search", which must never be read as passing it. */
+  corrected_p: number | null;
+  by_family: Record<string, number>;
+  needs_adjudication: string | null;
+  /**
+   * Members that do not carry the finding. A pointer for review, NEVER an exclusion (they are still
+   * in `members`) and never a confidence score.
+   */
+  weakly_attached: string[];
+  /** Why no membership verdict was reached, or null when one was. */
+  attachment_note: string | null;
+  /**
+   * Whether the membership test ran. THE LOAD-BEARING FLAG: an empty `weakly_attached` means "every
+   * member carries this finding" when this is true and "we could not tell" when it is false, and
+   * those are opposite statements about the people named.
+   */
+  attachment_checked: boolean;
+  evidence: NetdetectEvidence[];
+  corpus_size: number;
+  null_shuffles: number;
+  null_threshold: number | null;
+  status: NetdetectStatus;
+  dismissal_reason: string | null;
+  confirmed: boolean;
+}
+
+export function listNetdetectFindings(
+  status: NetdetectStatus | 'all' = 'open',
+): Promise<NetdetectFinding[]> {
+  return apiClient<NetdetectFinding[]>(
+    `/v1/admin/netdetect/findings/all?status=${encodeURIComponent(status)}`,
+  );
+}
+
+export function judgeNetdetectFinding(
+  id: number,
+  verdict: 'dismiss' | 'confirm',
+  reason: string,
+): Promise<NetdetectFinding> {
+  return apiClient<NetdetectFinding>(`/v1/admin/netdetect/findings/${id}/${verdict}`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export interface NetdetectSweepRow {
+  value: number;
+  confirmed_kept: number;
+  dismissed_kept: number;
+  dismissed_removed: number;
+}
+
+export interface NetdetectSweep {
+  constant: string;
+  /** The file to edit BY HAND if the recommendation is accepted. Nothing here changes a threshold. */
+  where: string;
+  current: number;
+  stricter_direction: string;
+  rows: NetdetectSweepRow[];
+  proposed: number | null;
+  recommendation: string | null;
+}
+
+export interface NetdetectCalibration {
+  confirmed: number;
+  dismissed: number;
+  open: number;
+  /** False while the reservoir is too thin to fit anything. The sweeps still come back. */
+  sufficient: boolean;
+  insufficient_reason: string;
+  sweeps: NetdetectSweep[];
+  families: {
+    family: string; weight: number; hard: boolean;
+    mean_in_confirmed: number; mean_in_dismissed: number;
+    present_in_confirmed: number; present_in_dismissed: number; separation: number;
+  }[];
+  recommendations: string[];
+  caveats: string[];
+}
+
+export function netdetectCalibration(): Promise<NetdetectCalibration> {
+  return apiClient<NetdetectCalibration>('/v1/admin/netdetect/findings/calibration');
+}
+
+// ---------------------------------------------------------------------------
 // Coordinated-campaign detection. Admin only, on every route.
 //
 // The detector is deterministic: no model call, no network, no provider quota. It clusters the

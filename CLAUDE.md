@@ -1675,6 +1675,32 @@ them would be a category error.
 
 Pinned by `tests/test_netdetect_calibration.py` (11).
 
+#### The queue has an interface now, and that is what makes the reservoir reachable
+
+`/netdetect` (`app/(app)/netdetect/`), labelled **Formations** in both navs. The routes shipped
+before any UI, so the only way to read or judge a finding was curl, and that matters more here than
+it looks: the calibration report refuses to recommend anything below 30 judgements with 8 of each
+class, and **nobody produces thirty judgements through curl**. The ground-truth path was inert
+without this page.
+
+Same shape as `/disputes`, and for the same reasons: **admin-gated on the SERVER**
+(`if (!user?.is_admin) notFound()`) plus `force-dynamic`, because a finding names real people and
+the queue carries other customers' investigation ids, with no owner to scope any of it to. The nav
+`adminOnly` flag is presentation; the page is the access control, and the API re-checks.
+
+Three things the page must keep doing:
+
+- **It branches on `attachment_checked`, never on the list being empty.** "Every member carries this
+  finding" and "membership was not tested" are opposite statements about named people and both show
+  an empty `weakly_attached`.
+- **A flagged member carries no number.** The per-member confidence was measured and refused, so a
+  weak member is highlighted as a pointer for review and nothing beside their name reads as a score.
+- **A judgement needs a reason before the request is made.** The API rejects a blank one; the page
+  must not offer a path that pretends otherwise.
+
+Pinned by six source-level tests at the end of `tests/test_netdetect_routes.py`, because TypeScript
+will not tell anyone if the server gate is dropped.
+
 #### A finding names bystanders, at a measured rate, and nothing said so
 
 Found while verifying the persistence work. Every recall test asks whether the planted operation was

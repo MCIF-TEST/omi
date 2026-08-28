@@ -83,6 +83,7 @@ export const SECTION_INDEX = {
   '/narratives':     '04',
   '/monitoring':     '05',
   '/disputes':       '06',
+  '/netdetect':      '13',
   '/settings':       '07',
   '/search':         '08',
   '/accounts':       '09',

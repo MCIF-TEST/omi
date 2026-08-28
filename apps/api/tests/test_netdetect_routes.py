@@ -328,3 +328,71 @@ def test_an_adjudication_flag_survives_into_the_queue():
     assert stored
     for f, c in zip(stored, run["findings"]):
         assert f["needs_adjudication"] == c["needs_adjudication"]
+
+
+# ==================================================================================================
+# The queue has an interface
+#
+# The routes above shipped before any UI existed, so the only way to read or judge a finding was
+# curl. That is a bigger problem here than it looks: every threshold in `app/netdetect` is reasoned
+# rather than fitted, and `findings/calibration` deliberately refuses to recommend anything until
+# thirty findings have been judged with at least eight of each class. Nobody produces thirty
+# judgements through curl, so the ground-truth path this queue exists to fill was inert.
+#
+# Source-level assertions against apps/web, in the same spirit as the dispute queue's: a page whose
+# only protection is a hidden nav link is not protected, and TypeScript will not tell anyone if the
+# server check is dropped.
+# ==================================================================================================
+from pathlib import Path  # noqa: E402 — kept beside the tests that use it
+
+_WEB = Path(__file__).resolve().parents[3] / "apps" / "web"
+_PAGE_DIR = _WEB / "app" / "(app)" / "netdetect"
+
+
+def test_the_finding_queue_page_exists():
+    assert (_PAGE_DIR / "page.tsx").exists(), "the netdetect finding API has no interface"
+
+
+def test_the_finding_queue_is_gated_on_the_server():
+    """A finding names real people as running an operation together, and the queue carries other
+    customers' investigation ids. There is no owner to scope any of it to, which is why it is gated
+    rather than filtered, exactly as `/campaigns` and `/narratives` are."""
+    src = (_PAGE_DIR / "page.tsx").read_text()
+    assert "is_admin" in src
+    assert "notFound()" in src
+    assert "force-dynamic" in src, "a cached render would serve one user's gate result to another"
+
+
+def test_the_finding_queue_link_is_admin_only_in_both_navs():
+    for nav in ("sidebar.tsx", "mobile-nav.tsx"):
+        src = (_WEB / "components" / "layout" / nav).read_text()
+        line = next((ln for ln in src.splitlines() if "'/netdetect'" in ln), None)
+        assert line is not None, f"{nav} has no link to the finding queue"
+        assert "adminOnly: true" in line, f"{nav} shows the finding queue to customers"
+
+
+def test_the_page_never_lets_an_empty_weak_list_read_as_an_all_clear():
+    """THREE STATES, and the middle one is easy to lose. An empty `weakly_attached` means "every
+    member carries this finding" when `attachment_checked` is true and "we could not tell" when it
+    is false, and those are opposite statements about the people named. The page has to branch on
+    the flag rather than on the list being empty."""
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "attachment_checked" in src, "the page infers membership state from an empty list"
+    assert "Membership was not tested" in src
+    assert "Every member carries this finding" in src
+
+
+def test_a_judgement_cannot_be_recorded_without_a_reason():
+    """The reason is the only thing a later calibration can be fitted against. The API rejects a
+    blank one; the page must not offer a path that pretends otherwise."""
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "reason.trim()" in src
+    assert "judgeNetdetectFinding" in src
+
+
+def test_the_page_does_not_render_a_per_member_confidence():
+    """The obvious per-member number ranks some bystanders above genuine operation members, so it is
+    measured and refused. A flagged member is highlighted as a pointer for review and carries no
+    score beside their name, because a number there is read as a judgement about a person."""
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "confidence" not in src.lower().replace("attachment_checked", "")
