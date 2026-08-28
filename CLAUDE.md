@@ -22,10 +22,17 @@ The same session then built the **cross-investigation coordination system** (`ap
 went back to `app/netdetect/`: it was **not deterministic across processes** (a set of dataclasses
 iterating in hash order set the null threshold), reposts and topics were reaching no feature, and the
 detector was read-only so nothing accumulated and nothing could be dismissed. Read "The network
-detector" below before touching a threshold or a set iteration there.
+detector" below before touching a threshold or a set iteration there. The same session then gave it
+an ONTOLOGY: **formations** (the operation as a persistent entity, surviving account rotation),
+**assignment** (which known formation does this account belong to), and **corroboration** (the
+accumulating `CoordinationEdge` graph, written since the tracking layer shipped and never once read
+back). Read "Formations" and "Corroboration" below. Two rules there were decided by measurement and
+will be re-broken by anyone who reasons about them instead: the OMI score may characterise a
+formation but never detect one, and **total accumulated history does not separate an operation from
+a newsroom**, so only its hard-family half discriminates.
 
-Suite measured at **2474
-passed, 8 skipped, 2 failed** (19m20s, 2026-08-28), both failures pre-existing and listed below. The 8
+Suite measured at **2516
+passed, 8 skipped, 2 failed** (23m31s, 2026-08-28), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -78,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2474 passed, 8 skipped, 2 failed** (19m20s, 2026-08-28), both documented below:
+Current measured state: **2516 passed, 8 skipped, 2 failed** (23m31s, 2026-08-28), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1787,10 +1794,118 @@ passes inspection and fails at runtime.
 
 Pinned by `tests/test_netdetect_attachment.py` (12).
 
-**Not yet built:** the operation registry (persistent latent entities), the adjudication call, and
-a per-member attachment test to stop a finding naming bystanders (see the contamination note above:
-the rate is measured and pinned, the cause is understood, and the obvious fix is measured NOT to
-work).
+#### Formations: the operation is the entity, not the finding
+
+`app/netdetect/formation.py` + `registry.py` + `assign.py`, and `NetdetectFormation`. A finding is
+one post's worth of evidence about a group. A **formation** is the adversary behind it, persisting
+across posts and across account rotation, which is the thing an analyst actually wants to name.
+
+`build_profile` reduces a candidate to what its operator does rather than to who its accounts are:
+up to `MAX_PROFILE_FEATURES` (60) features below `PROFILE_PREVALENCE_CEILING` (0.25) prevalence,
+each carrying its own surprise. **No account id enters a profile.** That is what lets a formation be
+recognised after every account in it has been burned, and it is the same reasoning as
+`tracking/signature.py`, one layer up.
+
+- **`resolve` tries member overlap, then profile similarity, then creates.** Similarity is a
+  weighted Jaccard on surprise, and `FORMATION_MATCH_THRESHOLD` (0.20) is measured rather than
+  guessed: the same operator across two posts scored 0.356 to 0.770, two different operators 0.022
+  to 0.036. The gap is wide, so the threshold sits in it rather than at either end.
+- **`Composition` is where the OMI score is finally allowed in, and only to CHARACTERISE.** The
+  detector stays score-blind (`test_the_score_never_reads_an_accounts_own_suspicion_score` still
+  passes and must). What scores buy is triage, and the useful reading is inverted: a **concealed**
+  formation, statistically coordinated with a median member score near `CONCEALED_MEDIAN_SCORE`
+  (40), is the MORE dangerous finding, because every account in it would pass an individual review.
+  An **overt** one at `OVERT_MEDIAN_SCORE` (70) is a group of accounts anybody could already spot.
+- **`phase_of` reads dormancy as the ABSENCE of an event**, which nothing else in this codebase
+  does. `refresh_phases` therefore has to run on a schedule: a formation that stopped posting emits
+  nothing to notice, so without a sweep it stays `active` forever.
+- **A re-run of one post is not a second sighting.** `contexts_json` is a set, exactly as in the
+  tracking layer, so nobody can strengthen a formation by pressing the button again.
+
+**`assign.py` is the capability the product did not have**: take an account that walked into a new
+comment section and ask which KNOWN formation it belongs to. It is a likelihood ratio against each
+stored profile, not a similarity, so the answer is a posterior a reader can argue with.
+
+- **`best()` returns None for "no known formation", never "uncoordinated".** An account matching
+  nothing may simply belong to an operation nobody has catalogued.
+- **`MIN_HARD_EVIDENCE` (3.0) is what closed the only measured false positive.** A member of the
+  stadium operation cleared the bar against the unrelated clinic operation on text and timing alone.
+  Measured: hard evidence 17.79 against its own formation and **0.000** against the wrong one, so
+  the rule costs nothing real and removes the whole class.
+- **`raw_log_lr` exists purely to ORDER formations, and `log_lr` to score.** Capping at
+  `MAX_LOG10_LR` made two candidate formations both read 4.0, which destroyed the ranking while
+  leaving the posterior correct. Two numbers because they answer two questions.
+- Measured: **40 of 40 accounts assigned correctly, 0 wrong, 0 false positives across 300 organic
+  accounts**, degrading honestly along the discipline dial (0 of 8 at discipline 1.0) and never
+  inventing an assignment on the innocent controls.
+
+`POST /v1/admin/netdetect/formations/assign` is deliberately **two segments**. A single-segment
+`/assign` is shadowed by `POST /{slug}` and answered 404 "No such investigation", which reads as a
+data bug rather than a routing one. `GET /formations` is safe only because `{slug}` is POST-only,
+so the guard test is method-aware.
+
+**A stray-column near miss worth remembering.** A `str.replace()` while adding the attachment
+columns put three of them onto `CrossFinding` as well, and **2474 tests did not catch it**: an
+unused column is invisible, and nothing asserts that a model LACKS a field. It surfaced only when
+the boot pass tried to index a column the real table did not have.
+`test_the_netdetect_columns_did_not_leak_onto_another_model` pins it now.
+
+Pinned by `tests/test_netdetect_formations.py` (26).
+
+#### Corroboration: the accumulating graph was written for years and never read back
+
+`campaigns/tracking/graph.py` has been folding every finding's pairwise evidence into
+`CoordinationEdge` since the tracking layer shipped. **`netdetect.detect` had never once consulted
+it**, so every run scored a set as though the deployment had no memory. `app/netdetect/
+corroboration.py` reads it.
+
+**The obvious version of this is wrong, and it was measured before anything was built.** Seeding
+each group under three unrelated posts:
+
+| group | total log_lr | pairs with history | pairs with HARD history |
+|---|---|---|---|
+| planted operation | 2.000 (cap) | 28 | **28** |
+| professional beat | 2.000 (cap) | 45 | **0** |
+| fan community | 0.000 | 0 | 0 |
+| organic | 0.598 | 1 | 0 |
+
+An operation and a newsroom are **indistinguishable on total accumulated history**, and the
+newsroom carries MORE linked pairs. Reporters on a beat genuinely keep appearing under the same
+posts; that is what a beat is. So a confidence lift driven by history would promote the exact
+control this package exists to refuse, using a number that reads like corroborating evidence.
+
+What separates them is **which families** the prior evidence sits in, which is `MIN_HARD_EVIDENCE`
+extended across time. So the module reports two things and never conflates them: `log_lr` is
+context and does not discriminate, and `hard_pairs` / `hard_families` are the discriminating half.
+
+Four rules:
+
+- **It is a PRIOR, never a seventh family.** The families are measured inside one corpus against a
+  null built from it, and the shuffled search correction is what makes their sum honest. History is
+  measured elsewhere, so adding it as a family would slip evidence past the correction it was never
+  subjected to. `test_history_never_touches_a_candidates_score` pins it.
+- **The current post is excluded**, exactly on `contexts_json`. Without it a formation corroborates
+  itself the moment it is recorded and every re-run strengthens the illusion. An edge seen under
+  this post and two others contributes two thirds of its sum, not all of it.
+- **It never manufactures a finding and never clears one.** History does not promote a candidate
+  that failed the shuffled search, and it does not clear `needs_adjudication`: resolving a human
+  review step from accumulated numbers is the same thing `calibration.py` refuses to do.
+- **`checked` is explicit.** A zero with `checked` false means nobody looked, which is not a
+  statement about the people named. Same distinction as `attachment_checked`.
+
+`annotate` also covers REFUSED candidates, so a set this corpus could not prove whose members were
+already seen doing the operator's own acts becomes a **lead** rather than nothing. **Stated
+honestly: that path has never been observed firing.** The rejected list is empty across every
+synthetic scenario, because a candidate weak enough to fail the null is normally caught earlier by
+a structural refusal. Built and unproven, not a feature.
+
+Stored as `corroboration_json`, a snapshot refreshed on re-run exactly as `score` and `corrected_p`
+are, and registered in `_INCREMENTAL_COLUMNS`. Pinned by
+`tests/test_netdetect_corroboration.py`.
+
+**Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
+finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
+fix is measured NOT to work).
 
 ### Pre-launch lockdown: only admins can use the product
 

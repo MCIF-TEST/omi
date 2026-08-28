@@ -300,6 +300,21 @@ export interface NetdetectEvidence {
   sentence: string;
 }
 
+export interface NetdetectCorroboration {
+  /** CONTEXT ONLY. Does not separate an operation from a newsroom. Never rank on it. */
+  log_lr: number;
+  pairs_with_history: number;
+  /** The half that discriminates: prior evidence of the operator's own acts. */
+  hard_pairs: number;
+  /** Distinct EARLIER posts. The post being scanned is excluded, so a set cannot corroborate itself. */
+  contexts: string[];
+  families: string[];
+  hard_families: string[];
+  /** False means nobody looked, which is not a statement about the people named. */
+  checked: boolean;
+  sentence: string;
+}
+
 export interface NetdetectFinding {
   id: number;
   investigation_id: number | null;
@@ -325,6 +340,15 @@ export interface NetdetectFinding {
    * those are opposite statements about the people named.
    */
   attachment_checked: boolean;
+  /**
+   * What the accumulating graph already held about these members, from OTHER posts, as of the last
+   * run. Null means the lookup did not run, NEVER that they had not been seen together.
+   *
+   * Read `hard_pairs`, not `log_lr`. Measured, a planted operation and the professional-beat
+   * control both saturate the total and the newsroom carried MORE linked pairs, so the total does
+   * not separate them. Only prior evidence in the hard families (identity, network) does.
+   */
+  corroboration: NetdetectCorroboration | null;
   evidence: NetdetectEvidence[];
   corpus_size: number;
   null_shuffles: number;

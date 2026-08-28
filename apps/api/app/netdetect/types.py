@@ -15,6 +15,10 @@ many rare features, tested against a null that holds both degree sequences fixed
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - a runtime import here would be circular
+    from app.netdetect.corroboration import Corroboration
 
 # --------------------------------------------------------------------------------------------- #
 # Families
@@ -167,6 +171,12 @@ class Candidate:
     #: when it is False, and those are opposite statements about the people named. Same distinction
     #: as `score: null` against `0` on the analyst's signals.
     attachment_checked: bool = False
+    #: What the accumulating graph already held about these people, from OTHER posts. A PRIOR set
+    #: beside the corrected result, never folded into `score`: the families are measured inside one
+    #: corpus against a null built from it, and history was never subjected to that correction, so
+    #: adding it as a seventh family would slip evidence past the very thing that makes the sum
+    #: honest. None means the lookup did not run, which must never be read as "strangers".
+    corroboration: "Corroboration | None" = None
 
     @property
     def weighted_score(self) -> float:

@@ -128,6 +128,20 @@ def persist_finding(
     row.weak_members_json = list(getattr(candidate, "weakly_attached", []) or [])
     row.attachment_note = getattr(candidate, "attachment_note", None)
     row.attachment_checked = bool(getattr(candidate, "attachment_checked", False))
+    # What was already known about these people from other posts, as of this run. A snapshot, like
+    # `score` and `corrected_p`, refreshed whenever the detector is re-run on this investigation.
+    # Left as NULL when the lookup did not run, which must never be read as "never seen together".
+    _cor = getattr(candidate, "corroboration", None)
+    row.corroboration_json = None if _cor is None else {
+        "log_lr": round(_cor.log_lr, 6),
+        "pairs_with_history": _cor.pairs_with_history,
+        "hard_pairs": _cor.hard_pairs,
+        "contexts": list(_cor.contexts),
+        "families": list(_cor.families),
+        "hard_families": list(_cor.hard_families),
+        "checked": _cor.checked,
+        "sentence": _cor.sentence(),
+    }
     row.evidence_json = [
         {
             "family": e.feature.family,

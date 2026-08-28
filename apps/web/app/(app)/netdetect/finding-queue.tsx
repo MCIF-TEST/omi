@@ -204,6 +204,26 @@ function FindingCard({
         </p>
       </div>
 
+      {/* PRIOR HISTORY, and the reason only one of its numbers is shown.
+          `log_lr` is measured NOT to separate an operation from a newsroom (both saturate the cap,
+          and the newsroom carried more linked pairs), so putting it beside a finding would read as
+          corroborating evidence while discriminating nothing. `hard_pairs` is prior evidence of the
+          operator's own acts, which is the half that does separate them, so that is what is stated.
+          A finding with no lookup renders nothing rather than "not seen before": those are opposite
+          claims about the people named, the same distinction as `attachment_checked`. */}
+      {row.corroboration && row.corroboration.checked ? (
+        <div
+          className={
+            row.corroboration.hard_pairs > 0
+              ? 'rule-rack border-l-2 border-tier-high pl-2.5'
+              : 'rule-rack border-l-2 border-border-1 pl-2.5'
+          }
+        >
+          <p className="meta mb-1">Seen before</p>
+          <p className="text-xs text-fg-dim">{row.corroboration.sentence}</p>
+        </div>
+      ) : null}
+
       {row.evidence.length > 0 ? (
         <div>
           <p className="meta mb-1.5">Evidence</p>

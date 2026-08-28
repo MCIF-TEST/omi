@@ -1721,6 +1721,16 @@ class NetdetectFinding(Base):
     #: The persistent operation this finding was resolved to, when one was. NULL means the finding
     #: predates the registry or could not be resolved, never that it belongs to no operation.
     formation_key: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    #: What the accumulating graph already held about these members, from OTHER posts, as of the
+    #: last time the detector was run on this investigation. A SNAPSHOT, refreshed on re-run, in the
+    #: same way `score` and `corrected_p` already are.
+    #:
+    #: `hard_pairs` inside it is the half that discriminates. The TOTAL does not: measured, a
+    #: planted operation and the professional-beat control both saturate the cap, and the newsroom
+    #: carried MORE linked pairs. Nothing may key a decision on the total.
+    #:
+    #: NULL means the lookup did not run, never that these accounts were strangers.
+    corroboration_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     #: The evidence sentences, written HERE at detection time, because the corpus they were derived
     #: from is not kept and the finding has to stay readable without it.
     evidence_json: Mapped[list] = mapped_column(JSON, default=list)

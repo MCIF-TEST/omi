@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.core.auth import CurrentUser, require_user
+from app.netdetect import corroboration as corrob
 from app.netdetect import detect_from_commenters
 from app.netdetect.persist import persist_finding
 from app.netdetect.shuffle import DEFAULT_SHUFFLES
@@ -94,7 +95,49 @@ class FindingOut(BaseModel):
     #: Whether the membership test ran. An empty `weakly_attached` means "every member carries this
     #: finding" only when this is true; when it is false the question was not answered.
     attachment_checked: bool = False
+    #: What was already known about these people from OTHER posts. A PRIOR reported beside the
+    #: corrected result, never folded into `score`. Null when the lookup did not run.
+    corroboration: CorroborationOut | None = None
     evidence: list[EvidenceOut]
+
+
+class CorroborationOut(BaseModel):
+    """What the accumulating graph already held about this set, from OTHER posts."""
+
+    #: Total accumulated log10 evidence. CONTEXT ONLY, and this comment is load-bearing: measured,
+    #: a planted operation and the professional-beat control BOTH saturate the cap, so this number
+    #: does not separate them and nothing may key a decision on it.
+    log_lr: float
+    pairs_with_history: int
+    #: Pairs whose prior evidence includes a HARD family (identity, network): the operator's own
+    #: acts. THIS is the half that discriminates: measured 28 of 28 on a planted operation and
+    #: 0 of 45 on the newsroom control.
+    hard_pairs: int
+    #: Distinct EARLIER posts. The post being scanned is excluded, so a set cannot corroborate
+    #: itself and a re-run cannot strengthen it.
+    contexts: list[str]
+    families: list[str]
+    hard_families: list[str]
+    #: Whether the lookup ran. A zero with this false means nobody looked, not that these accounts
+    #: were strangers. Same distinction as `attachment_checked`.
+    checked: bool
+    sentence: str
+
+
+def _corroboration_out(c) -> "CorroborationOut | None":
+    cor = getattr(c, "corroboration", None)
+    if cor is None:
+        return None
+    return CorroborationOut(
+        log_lr=round(cor.log_lr, 3),
+        pairs_with_history=cor.pairs_with_history,
+        hard_pairs=cor.hard_pairs,
+        contexts=list(cor.contexts),
+        families=list(cor.families),
+        hard_families=list(cor.hard_families),
+        checked=cor.checked,
+        sentence=cor.sentence(),
+    )
 
 
 class RunOut(BaseModel):
@@ -120,6 +163,14 @@ class RunOut(BaseModel):
     #: created, so this is "how many of these people had never been linked before" and deliberately
     #: not "how much evidence was folded in". Zero on a re-run of one post is the correct answer.
     accumulated_pairs: int = 0
+    #: Candidates this corpus REFUSED whose members were already seen doing the operator's own acts
+    #: under other posts. Not findings and never promoted to findings: history must not manufacture
+    #: one. They are the near-miss pile worth a second look. See `corroboration.annotate`, which
+    #: states honestly that this path has never been observed firing on the synthetic corpora.
+    leads: int = 0
+    #: False when history could not be read at all, so an all-zero corroboration is not mistaken for
+    #: "none of these people have ever been seen together".
+    history_checked: bool = False
 
 
 @admin_router.post("/{slug}", response_model=RunOut)
@@ -165,6 +216,29 @@ def run_on_investigation(
 
     result = detect_from_commenters(rows, exclude_context=exclude, shuffles=shuffles)
 
+    # What the deployment already knew about these people, from OTHER posts.
+    #
+    # READ BEFORE THIS RUN'S OWN PAIRS ARE WRITTEN, and reported BESIDE the corrected result rather
+    # than folded into it. History is measured outside this corpus and was never subjected to the
+    # shuffled search correction that makes the families' sum honest, so adding it to a score would
+    # slip evidence past the very thing that makes the score defensible. It is also measured NOT to
+    # separate an operation from a newsroom on its own; see `app/netdetect/corroboration.py`.
+    history_checked = False
+    leads = 0
+    try:
+        with get_session() as session:
+            corrob.annotate(
+                session, [*result.findings, *result.rejected],
+                exclude_context=target or None,
+            )
+        history_checked = True
+        leads = sum(
+            1 for c in result.rejected
+            if c.corroboration is not None and c.corroboration.hard_history
+        )
+    except Exception:  # noqa: BLE001 - context on a finding, never a reason to fail the run
+        log.warning("netdetect: could not read history for %s", slug, exc_info=True)
+
     handles = {str(r.get("external_id")): str(r.get("handle") or "") for r in rows}
 
     recorded = 0
@@ -208,6 +282,8 @@ def run_on_investigation(
         refused=result.refused,
         recorded=recorded,
         accumulated_pairs=accumulated,
+        leads=leads,
+        history_checked=history_checked,
         findings=[
             FindingOut(
                 members=c.members,
@@ -221,6 +297,7 @@ def run_on_investigation(
                 weakly_attached=list(c.weakly_attached),
                 attachment_note=c.attachment_note,
                 attachment_checked=c.attachment_checked,
+                corroboration=_corroboration_out(c),
                 evidence=[
                     EvidenceOut(
                         family=e.feature.family, kind=e.feature.kind,
@@ -268,6 +345,10 @@ class StoredFindingOut(BaseModel):
     weakly_attached: list[str] = []
     attachment_note: str | None = None
     attachment_checked: bool = False
+    #: What the graph already held about these members from OTHER posts, as of the last run. Null
+    #: means the lookup did not run, never that they had not been seen together. Read `hard_pairs`
+    #: inside it, not the total: the total does not separate an operation from a newsroom.
+    corroboration: dict | None = None
     evidence: list[EvidenceOut]
     corpus_size: int
     null_shuffles: int
@@ -292,6 +373,7 @@ def _stored_out(row: NetdetectFinding) -> StoredFindingOut:
         weakly_attached=list(row.weak_members_json or []),
         attachment_note=row.attachment_note,
         attachment_checked=bool(row.attachment_checked),
+        corroboration=row.corroboration_json or None,
         evidence=[EvidenceOut(**e) for e in (row.evidence_json or [])],
         corpus_size=row.corpus_size,
         null_shuffles=row.null_shuffles,
