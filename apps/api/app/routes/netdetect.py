@@ -5,9 +5,16 @@ NAMED REAL PEOPLE as running together, on evidence that is statistical rather th
 operator's lead, not a customer-facing verdict, and it stays that way until the dilution curve and
 the adjudication layer say otherwise.
 
-Deliberately read-only and stateless. Nothing here persists a finding or mints a share token,
-because a claim this system makes about a person should be a decision somebody took, never a side
-effect of a page being loaded.
+Findings are now RECORDED, and the distinction that makes that acceptable is worth stating: this
+persists an internal finding, it does not publish one. No share token is minted, no `Campaign` row
+is created, and nothing reaches a customer surface. The original rule, that a claim this system
+makes about a person is a decision somebody took rather than a side effect of a page load, is about
+PUBLICATION and is untouched.
+
+Recording is what the detector was missing twice over. Its findings evaporated when the page
+closed, so the tracking layer that survives account rotation learned only from the older cohort
+detector; and there was nothing to dismiss, so the one reservoir of ground truth this system will
+ever accumulate stayed empty while the better detector ran.
 """
 
 from __future__ import annotations
@@ -15,14 +22,15 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.core.auth import CurrentUser, require_user
 from app.netdetect import detect_from_commenters
+from app.netdetect.persist import persist_finding
 from app.netdetect.shuffle import DEFAULT_SHUFFLES
 from app.storage.db import get_session
-from app.storage.models import Investigation
+from app.storage.models import Investigation, NetdetectFinding
 
 log = logging.getLogger("omi.netdetect.routes")
 
@@ -71,12 +79,16 @@ class RunOut(BaseModel):
     #: Set when the run could not be performed at all, as distinct from performing it and finding
     #: nothing. Never read an empty findings list as a clean result without checking this.
     refused: str | None
+    #: Findings written to the store, and pairwise edges folded into the accumulating graph.
+    recorded: int = 0
+    accumulated_pairs: int = 0
 
 
 @admin_router.post("/{slug}", response_model=RunOut)
 def run_on_investigation(
     slug: str,
     shuffles: int = Query(DEFAULT_SHUFFLES, ge=1, le=200),
+    record: bool = Query(True, description="Store the findings and accumulate their pairs."),
     current: CurrentUser = Depends(require_user),
 ) -> RunOut:
     """Run the detector over one stored investigation.
@@ -98,6 +110,7 @@ def run_on_investigation(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such investigation.")
         payload = inv.payload_json or {}
         target = str(getattr(inv, "target_id", "") or "")
+        investigation_id = inv.id
 
     rows = [c for c in (payload.get("commenters") or []) if isinstance(c, dict)]
     if not rows:
@@ -115,6 +128,32 @@ def run_on_investigation(
     result = detect_from_commenters(rows, exclude_context=exclude, shuffles=shuffles)
 
     handles = {str(r.get("external_id")): str(r.get("handle") or "") for r in rows}
+
+    recorded = 0
+    accumulated = 0
+    if record and result.findings and result.corpus is not None:
+        # Best-effort. A failure here loses accumulated history, which degrades FUTURE findings, and
+        # must never turn a completed run into an error for the operator looking at it now.
+        try:
+            with get_session() as session:
+                before = _edge_count(session)
+                for candidate in result.findings:
+                    persist_finding(
+                        session, candidate, result.corpus,
+                        investigation_id=investigation_id,
+                        context_id=target or None,
+                        platform=candidate.platform,
+                        corpus_size=result.corpus_size,
+                        null_shuffles=result.null_shuffles,
+                        null_threshold=result.null_threshold,
+                    )
+                    recorded += 1
+                session.commit()
+                accumulated = max(0, _edge_count(session) - before)
+        except Exception:  # noqa: BLE001
+            log.warning("netdetect: could not record findings for %s", slug, exc_info=True)
+            recorded = 0
+
     return RunOut(
         slug=slug,
         corpus_size=result.corpus_size,
@@ -123,6 +162,8 @@ def run_on_investigation(
         null_threshold=result.null_threshold,
         rejected=len(result.rejected),
         refused=result.refused,
+        recorded=recorded,
+        accumulated_pairs=accumulated,
         findings=[
             FindingOut(
                 members=c.members,
@@ -145,3 +186,158 @@ def run_on_investigation(
             for c in result.findings
         ],
     )
+
+
+def _edge_count(session) -> int:
+    from sqlalchemy import func
+
+    from app.storage.models import CoordinationEdge
+
+    return int(session.execute(select(func.count(CoordinationEdge.id))).scalar_one() or 0)
+
+
+# ---------------------------------------------------------------------------------------------
+# The queue, and the dismissals.
+#
+# THESE DISMISSALS ARE THE ONLY GROUND TRUTH THIS DETECTOR WILL EVER ACCUMULATE. Every constant in
+# `app/netdetect` is reasoned rather than fitted, because no labelled corpus of coordinated accounts
+# exists and none can be bought. An operator saying "this is a newsroom" or "this one is real" is
+# the only signal a later calibration can be fitted against, which is why the reason is required and
+# why a judged row is never deleted.
+# ---------------------------------------------------------------------------------------------------
+
+
+class StoredFindingOut(BaseModel):
+    id: int
+    investigation_id: int | None
+    context_id: str | None
+    platform: str
+    members: list[str]
+    member_count: int
+    score: float
+    corrected_p: float | None
+    by_family: dict[str, float]
+    needs_adjudication: str | None
+    evidence: list[EvidenceOut]
+    corpus_size: int
+    null_shuffles: int
+    null_threshold: float | None
+    status: str
+    dismissal_reason: str | None
+    confirmed: bool
+
+
+def _stored_out(row: NetdetectFinding) -> StoredFindingOut:
+    return StoredFindingOut(
+        id=row.id,
+        investigation_id=row.investigation_id,
+        context_id=row.context_id,
+        platform=row.platform,
+        members=list(row.members_json or []),
+        member_count=row.member_count,
+        score=row.score,
+        corrected_p=row.corrected_p,
+        by_family=dict(row.by_family_json or {}),
+        needs_adjudication=row.needs_adjudication,
+        evidence=[EvidenceOut(**e) for e in (row.evidence_json or [])],
+        corpus_size=row.corpus_size,
+        null_shuffles=row.null_shuffles,
+        null_threshold=row.null_threshold,
+        status=row.status,
+        dismissal_reason=row.dismissal_reason,
+        confirmed=row.confirmed_at is not None,
+    )
+
+
+@admin_router.get("/findings/all", response_model=list[StoredFindingOut])
+def list_findings(
+    status_filter: str = Query("open", pattern="^(open|dismissed|confirmed|all)$", alias="status"),
+    limit: int = Query(50, ge=1, le=200),
+    current: CurrentUser = Depends(require_user),
+) -> list[StoredFindingOut]:
+    """Everything the detector has recorded, worst first."""
+    _require_admin(current)
+    with get_session() as session:
+        stmt = select(NetdetectFinding)
+        if status_filter != "all":
+            stmt = stmt.where(NetdetectFinding.status == status_filter)
+        rows = list(session.execute(
+            stmt.order_by(NetdetectFinding.score.desc()).limit(limit)
+        ).scalars())
+        return [_stored_out(r) for r in rows]
+
+
+class JudgementRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        """A reason of spaces is an absent reason wearing a length.
+
+        `min_length` alone lets `"   "` through, and it then strips to nothing on the way into the
+        column, so the row records that somebody was unconvinced and nothing about why. That is the
+        one thing this field exists to prevent.
+        """
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("A judgement needs a stated reason; it is the only ground truth here.")
+        return stripped
+
+
+@admin_router.post("/findings/{finding_id}/dismiss", response_model=StoredFindingOut)
+def dismiss_finding(
+    finding_id: int,
+    body: JudgementRequest,
+    current: CurrentUser = Depends(require_user),
+) -> StoredFindingOut:
+    """Record that this finding is wrong, and why.
+
+    The reason is required and is the entire point. A dismissal with no stated reason records that
+    somebody was unconvinced and nothing about what convinced them, which cannot be fitted against.
+    """
+    _require_admin(current)
+    with get_session() as session:
+        row = session.get(NetdetectFinding, finding_id)
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such finding.")
+        row.status = "dismissed"
+        row.dismissed_at = _now()
+        row.dismissed_by = current.id
+        row.dismissal_reason = body.reason
+        row.confirmed_at = None
+        session.commit()
+        session.refresh(row)
+        return _stored_out(row)
+
+
+@admin_router.post("/findings/{finding_id}/confirm", response_model=StoredFindingOut)
+def confirm_finding(
+    finding_id: int,
+    body: JudgementRequest,
+    current: CurrentUser = Depends(require_user),
+) -> StoredFindingOut:
+    """Record that this finding is right, and why.
+
+    Positives are rarer and worth more than negatives. A reservoir holding only rejections can only
+    ever teach the detector to be quieter, which is not the same as teaching it to be correct.
+    """
+    _require_admin(current)
+    with get_session() as session:
+        row = session.get(NetdetectFinding, finding_id)
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such finding.")
+        row.status = "confirmed"
+        row.confirmed_at = _now()
+        row.dismissed_at = None
+        row.dismissed_by = current.id
+        row.dismissal_reason = body.reason
+        session.commit()
+        session.refresh(row)
+        return _stored_out(row)
+
+
+def _now():
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc)

@@ -1603,3 +1603,71 @@ class CrossFinding(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class NetdetectFinding(Base):
+    """One corrected set-level finding from `app/netdetect`, kept so it can be judged later.
+
+    THE DETECTOR WAS READ-ONLY, AND THAT COST IT TWICE. Its findings evaporated when the page
+    closed, so the tracking layer that survives account rotation learned only from the older,
+    weaker cohort detector; and there was nothing for an operator to dismiss, so the one reservoir
+    of ground truth this system will ever accumulate stayed empty while the better detector ran.
+
+    Persisting an internal finding is NOT the same act as publishing one. No share token is minted
+    here, no `Campaign` row is created, and nothing reaches a customer surface. The rule the route's
+    docstring states, that a claim about a person is a decision somebody took rather than a side
+    effect of a page load, is about PUBLICATION and is untouched.
+    """
+
+    __tablename__ = "netdetect_findings"
+    __table_args__ = (
+        # One row per (investigation, member set). Re-running the detector on a post updates the
+        # row rather than stacking duplicates, and an operator re-runs constantly while tuning.
+        Index("ix_netdetect_finding_key", "investigation_id", "members_key", unique=True),
+        Index("ix_netdetect_finding_status", "status", "score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    investigation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("investigations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: The post the finding was made on, when there was one. Used as the accumulation context, so a
+    #: re-scan of the same post cannot compound the same observation.
+    context_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    platform: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+
+    #: Sorted, joined member ids. The identity of the SET, because that is what was tested.
+    members_key: Mapped[str] = mapped_column(String(2048))
+    members_json: Mapped[list] = mapped_column(JSON, default=list)
+    member_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    #: Weighted log10 surprise for the set, and the search-corrected p-value. `corrected_p` NULL
+    #: means "not corrected", which must never be read as "significant".
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    corrected_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+    by_family_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    #: Why a human has to look before this reaches anyone, or NULL when the evidence settles it.
+    needs_adjudication: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The evidence sentences, written HERE at detection time, because the corpus they were derived
+    #: from is not kept and the finding has to stay readable without it.
+    evidence_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    #: The corpus this was found in, so a reader can tell a finding among 30 accounts from one
+    #: among 300 without re-running anything.
+    corpus_size: Mapped[int] = mapped_column(Integer, default=0)
+    null_shuffles: Mapped[int] = mapped_column(Integer, default=0)
+    null_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Required when dismissing. A dismissal with no stated reason records that somebody was
+    #: unconvinced and nothing about why, which cannot be fitted against later.
+    dismissal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Set when an operator affirms a finding rather than dismissing it. Positives are rarer and
+    #: worth more than negatives, and a reservoir holding only rejections can only ever teach the
+    #: detector to be quieter.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

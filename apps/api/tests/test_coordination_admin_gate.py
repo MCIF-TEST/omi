@@ -73,6 +73,14 @@ CROSS_NARRATIVE_ROUTES = [
     ("POST", "/v1/admin/cross-narratives/1/reopen"),
 ]
 
+#: The set-level detector's own surface. It reports groups of NAMED REAL PEOPLE as running
+#: together on statistical evidence, and its queue carries other customers' investigation ids, so it
+#: is gated for the same reason `/campaigns` is: there is no owner to scope a finding to.
+NETDETECT_ROUTES = [
+    ("POST", "/v1/admin/netdetect/inv_anything"),
+    ("GET", "/v1/admin/netdetect/findings/all"),
+]
+
 NARRATIVE_ROUTES = [
     ("GET", "/v1/narratives"),
     ("GET", "/v1/narratives/1"),
@@ -101,6 +109,20 @@ def test_cross_narrative_routes_refuse_a_signed_in_customer(auth_client, method,
 def test_the_cross_narrative_dismiss_route_refuses_a_signed_in_customer(auth_client):
     r = auth_client.post("/v1/admin/cross-narratives/1/dismiss", json={"reason": "x"})
     assert r.status_code == 403
+
+
+@pytest.mark.parametrize("method,path", NETDETECT_ROUTES)
+def test_netdetect_routes_refuse_a_signed_in_customer(auth_client, method, path):
+    r = auth_client.request(method, path)
+    assert r.status_code == 403, f"{method} {path} answered {r.status_code}: {r.text[:200]}"
+
+
+def test_the_netdetect_judgement_routes_refuse_a_signed_in_customer(auth_client):
+    """These dismissals are the reservoir a later calibration is fitted against. A customer able to
+    write into it could steer the detector, which is a stranger attack surface than reading."""
+    for verb in ("dismiss", "confirm"):
+        r = auth_client.post(f"/v1/admin/netdetect/findings/1/{verb}", json={"reason": "x"})
+        assert r.status_code == 403, f"{verb} answered {r.status_code}: {r.text[:200]}"
 
 
 @pytest.mark.parametrize("method,path", NARRATIVE_ROUTES)
@@ -148,6 +170,10 @@ def test_an_admin_gets_through(tmp_path, monkeypatch):
 
     cross = client.get("/v1/admin/cross-narratives")
     assert cross.status_code == 200, cross.text
+
+    findings = client.get("/v1/admin/netdetect/findings/all")
+    assert findings.status_code == 200, findings.text
+    assert findings.json() == []
     assert cross.json()["findings"] == []
 
     get_settings.cache_clear()

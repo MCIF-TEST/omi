@@ -79,6 +79,10 @@ class DetectionResult:
     null_shuffles: int = 0
     #: Set when the whole run was refused rather than merely finding nothing.
     refused: str | None = None
+    #: The corpus the findings were made in. Carried so a caller can decompose a finding back to
+    #: the features each pair actually shares (see `app.netdetect.persist`) without rebuilding it,
+    #: which would risk rebuilding it DIFFERENTLY and attributing evidence that was never scored.
+    corpus: "Corpus | None" = None
 
     @property
     def looked(self) -> bool:
@@ -129,7 +133,7 @@ def _search(corpus: Corpus) -> list[Candidate]:
 def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
            quantile: float = DEFAULT_QUANTILE) -> DetectionResult:
     """Run the detector. Deterministic: the same corpus always produces the same findings."""
-    result = DetectionResult(corpus_size=corpus.size)
+    result = DetectionResult(corpus_size=corpus.size, corpus=corpus)
 
     if corpus.size < MIN_CORPUS:
         result.refused = (

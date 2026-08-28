@@ -1456,13 +1456,96 @@ publishable at discipline 0.0 to 0.5, invisible at 0.75 and above. That curve IS
 claim. A disciplined operation emits no rare features and no statistics recover a signal that was
 never sent.
 
-Reachable at `POST /v1/admin/netdetect/{slug}`, admin-only, read-only, costs nothing (no provider
-call, no model call, no credit). Nothing is persisted and no share token is minted: a claim about a
-person should be a decision somebody took, never a side effect of a page load.
+Reachable at `POST /v1/admin/netdetect/{slug}`, admin-only, costs nothing (no provider call, no
+model call, no credit).
 
-**Not yet built:** the operation registry (persistent latent entities), the adjudication call, topic
-features (they need real embeddings; production installs `[youtube,postgres]` so `get_embedder`
-falls back to the lexical `HashingEmbedder`), and cross-investigation running over the global graph.
+#### It was not deterministic, and the falsification test was the only thing that noticed
+
+The module's docstring promised "the same corpus always produces the same findings" and it was not
+true, for reasons no amount of reading the seeded RNG would reveal. `shuffle_corpus` built its edge
+list by walking `AccountProfile.features`, a **set of frozen dataclasses whose fields are strings**.
+That set iterates in `hash(str)` order, which Python randomises per PROCESS, and the swap loop then
+indexes into the list with a seeded RNG. So one seed produced a different shuffle in every
+interpreter, and since every shuffle in the null is built that way, **the correction threshold was a
+function of the interpreter rather than of the data.**
+
+Measured on one corpus with one seed under three `PYTHONHASHSEED` values: thresholds of **8.505,
+8.02 and 0.0**. A threshold of 0.0 accepts every candidate, which removes the search correction that
+is the entire justification for this package. That is why `test_a_shuffled_corpus_yields_nothing`
+failed roughly one run in five, and it read as ordinary flakiness.
+
+Fixed by sorting on `Feature.token()` at the four places a set of features is walked into an ordered
+structure: the shuffle's edge list, the `Corpus` build (which sets the insertion order of
+`feature_accounts`, which sets the order of the candidate search), `score_candidate`'s union, and
+the Louvain edge list in `candidates.py`. **Sorting a set before iterating it is not cosmetic
+anywhere in this package**, and a `set` of dataclasses is the shape to look for.
+
+`test_the_answer_does_not_depend_on_the_interpreters_hash_seed` runs the same corpus in three
+subprocesses under three hash seeds and compares the findings. An in-process test cannot see this
+class of bug: one process has one hash seed.
+
+#### Two families that were carrying less than they could
+
+- **Reposts are network evidence.** `_map_tweet` had been parsing `repost_of_id` and it reached no
+  feature, so a ring whose entire behaviour is amplifying the same handful of posts emitted nothing
+  in the family that would have caught it. `network_features(..., reposts=())` now emits
+  `repost_of`, and `score_candidate` excludes an in-group repost target for the same reason it
+  excludes an in-group reply: boosting each other is a community, not convergence on an outside
+  target.
+- **`narrative` was declared and never produced.** The family existed in `FAMILY_WEIGHT` with
+  nothing emitting into it, so `MIN_FAMILIES` could never count it. `topic_features(topic_ids, *,
+  exclude)` fills it from the cross-investigation topic assignments, which is the only place a topic
+  id exists. **The topics the cohort was FOUND on are excluded**, exactly as the scanned post is:
+  every member holds them by construction, so without the exclusion the cohort shares a perfect
+  feature and reports as one enormous operation.
+
+#### Findings are RECORDED now, and recording is not publishing
+
+The detector was read-only, and that cost it twice: its findings evaporated when the page closed, so
+the tracking layer that survives account rotation learned only from the older, weaker cohort
+detector; and there was nothing for an operator to dismiss, so the one reservoir of ground truth
+this system will ever accumulate stayed empty while the better detector ran.
+
+`NetdetectFinding` + `app/netdetect/persist.py` + `GET /v1/admin/netdetect/findings/all` with
+`dismiss` / `confirm`. **The original rule is untouched**: no share token is minted, no `Campaign`
+row is written, nothing reaches a customer surface. A claim about a person being a decision somebody
+took rather than a side effect of a page load is about PUBLICATION, and storing an internal lead is
+a different act. `test_a_run_publishes_nothing` pins the difference.
+
+**A SET FINDING IS NOT A PAIR FINDING, and the decomposition is where that could be quietly undone.**
+This package's whole thesis is that a set-level statistic is not recoverable by fusing pairwise ones,
+so `pair_evidence_from` does **not** distribute the set score across the pairs. It reads the
+finding's own evidence list and gives each pair only the surprise of the features THAT PAIR actually
+shares, spread across the pairs sharing each feature so one popular-within-the-group feature cannot
+deposit its full weight onto all forty-five pairs it touches. The consequence is intended: a pair in
+a high-scoring finding that shares one weak feature contributes almost nothing, because the set was
+significant and that pair was not. Distributing the score would put a number in the accumulating
+graph that no test produced, and it would look exactly like measured pairwise significance.
+
+Four more rules:
+
+- **Upsert on `(investigation_id, members_key)`.** An operator re-runs constantly while tuning, and
+  a row per button press turns the queue into a log.
+- **A dismissed row keeps its dismissal when the numbers are refreshed.** Somebody who has already
+  said "this is a newsroom" must not be asked again on the next re-run, and silently reopening it
+  would make the dismissal worthless as the training signal it is the only source of.
+- **The same member set under two investigations is two findings.** Collapsing them would discard
+  exactly the independent second sighting the tracking layer exists for. Accumulation is still keyed
+  on the post, so a re-scan of one post cannot compound.
+- **A judgement needs a non-blank reason.** `min_length=1` alone passes `"   "`, which then strips to
+  nothing on the way into the column and records that somebody was unconvinced and nothing about
+  why. A `field_validator` rejects it.
+
+Accumulation is best-effort and wrapped: losing it degrades FUTURE findings, and must never turn a
+completed run into an error for the operator looking at the results now. `record=false` on the run
+route keeps the answer and skips the store, which is what an operator tuning thresholds wants.
+
+Pinned by `tests/test_netdetect_persistence.py` (12) and `tests/test_netdetect_routes.py` (14).
+`tests/test_coordination_admin_gate.py` covers the new routes against a REAL non-admin, because
+every other test here runs in local mode where `require_user` returns `is_admin=True`.
+
+**Not yet built:** the operation registry (persistent latent entities), the adjudication call, and
+the calibration report that reads the accumulated dismissals back.
 
 ### Pre-launch lockdown: only admins can use the product
 
