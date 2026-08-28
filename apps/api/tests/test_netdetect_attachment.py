@@ -198,3 +198,67 @@ def test_the_constants_are_the_measured_ones():
     """Pinned so a later tweak is a deliberate act with a measurement behind it."""
     assert WEAK_FRACTION == 0.25
     assert MIN_MEDIAN_CONTRIBUTION == 0.5
+
+
+# ==================================================================================================
+# The migration path
+# ==================================================================================================
+def test_the_new_columns_reach_a_database_that_already_had_the_table():
+    """`create_all` LEAVES EXISTING TABLES ALONE, and the boot upgrade pass works from an explicit
+    list rather than from the models. A column added to `NetdetectFinding` without a matching entry
+    in `_INCREMENTAL_COLUMNS` therefore never appears on a database that already created the table,
+    and every insert fails against it. This repo has paid for that shape before.
+
+    The default matters as much as the column: a row written before the membership test existed was
+    never checked, and reading its empty `weak_members_json` as "every member belongs" would turn
+    "we did not look" into a clean bill of health for named people.
+    """
+    import os
+    import sqlite3
+    import tempfile
+
+    from app.core.config import get_settings
+    import app.storage.db as db
+
+    directory = tempfile.mkdtemp()
+    path = os.path.join(directory, "pre_attachment.db")
+    con = sqlite3.connect(path)
+    con.execute(
+        """CREATE TABLE netdetect_findings (
+             id INTEGER PRIMARY KEY, investigation_id INTEGER, context_id VARCHAR(128),
+             platform VARCHAR(32), members_key VARCHAR(2048), members_json JSON,
+             member_count INTEGER, score FLOAT, corrected_p FLOAT, by_family_json JSON,
+             needs_adjudication TEXT, evidence_json JSON, corpus_size INTEGER,
+             null_shuffles INTEGER, null_threshold FLOAT, status VARCHAR(16),
+             dismissed_at TIMESTAMP, dismissed_by INTEGER, dismissal_reason TEXT,
+             confirmed_at TIMESTAMP, created_at TIMESTAMP, updated_at TIMESTAMP)"""
+    )
+    con.execute("INSERT INTO netdetect_findings (id, members_key, status) VALUES (1, 'a|b|c', 'open')")
+    con.commit()
+    con.close()
+
+    previous_url = os.environ.get("OMI_DATABASE_URL")
+    previous_engine, previous_session = db._engine, db._SessionLocal
+    try:
+        os.environ["OMI_DATABASE_URL"] = f"sqlite:///{path}"
+        get_settings.cache_clear()
+        db._engine = None
+        db._SessionLocal = None
+        db.init_db()
+
+        con = sqlite3.connect(path)
+        columns = {r[1] for r in con.execute("PRAGMA table_info(netdetect_findings)")}
+        assert {"weak_members_json", "attachment_note", "attachment_checked"} <= columns
+
+        checked = con.execute(
+            "SELECT attachment_checked FROM netdetect_findings WHERE id = 1"
+        ).fetchone()[0]
+        assert int(checked) == 0, "a row from before the test existed reads as already checked"
+        con.close()
+    finally:
+        if previous_url is None:
+            os.environ.pop("OMI_DATABASE_URL", None)
+        else:
+            os.environ["OMI_DATABASE_URL"] = previous_url
+        get_settings.cache_clear()
+        db._engine, db._SessionLocal = previous_engine, previous_session
