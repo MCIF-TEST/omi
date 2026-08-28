@@ -230,3 +230,86 @@ def test_nothing_here_reads_an_accounts_suspicion_score() -> None:
     assert [round(c.score, 6) for c in as_low.findings] \
         == [round(c.score, 6) for c in as_high.findings]
     assert as_low.accounts == as_high.accounts
+
+
+# ---------------------------------------------------------------------------
+# The narrative family: co-occurrence on OTHER topics.
+#
+# Only computable here. A single investigation has no topic assignment at all, so this is the one
+# place netdetect's narrative family can be filled, and it is the paraphrase axis the embedding
+# work was for.
+# ---------------------------------------------------------------------------
+
+
+def test_the_cohorts_own_topic_is_never_its_own_evidence() -> None:
+    # Every member spoke on it by construction. Counting it would hand a perfect feature to the
+    # whole cohort and report a topic's entire population as one operation.
+    set_embedder_for_tests(_AxisEmbedder())
+    with get_session() as session:
+        for customer, post in ((1, "p1"), (2, "p2"), (3, "p3")):
+            _investigation(session, user_id=customer, post=post, commenters=[
+                _account(f"{post}_a{i}", post, text=f"{WATER} {post} {i}",
+                         at=NOW - timedelta(days=2))
+                for i in range(10)
+            ])
+        topic_id = _build(session)
+        session.commit()
+
+    with get_session() as session:
+        others = cohort._other_topics(session, {"p1_a0", "p2_a0"}, topic_id)
+
+    assert all(topic_id not in ts for ts in others.values())
+
+
+def test_members_who_co_occur_elsewhere_carry_narrative_evidence() -> None:
+    """The claim is not "these accounts talked about water", which is why they were assembled.
+
+    It is "these accounts ALSO co-occur on a second, unrelated subject".
+    """
+    set_embedder_for_tests(_AxisEmbedder())
+    with get_session() as session:
+        # The water cohort, across three customers.
+        for customer, post in ((1, "p1"), (2, "p2"), (3, "p3")):
+            _investigation(session, user_id=customer, post=post, commenters=[
+                _account(f"{post}_a{i}", post, text=f"{WATER} {post} {i}",
+                         at=NOW - timedelta(days=2))
+                for i in range(10)
+            ])
+        # A second, unrelated subject that some of the same accounts also turn up on.
+        _investigation(session, user_id=1, post="p9", commenters=[
+            _account("p1_a0", "p9", text="an entirely separate subject discussed at length here",
+                     at=NOW - timedelta(days=3)),
+            _account("p2_a0", "p9", text="the same separate subject from a different angle again",
+                     at=NOW - timedelta(days=3)),
+        ])
+        topic_id = _build(session)
+        session.commit()
+
+    with get_session() as session:
+        others = cohort._other_topics(session, {"p1_a0", "p2_a0", "p3_a0"}, topic_id)
+
+    # The two that appeared on the second subject carry a topic the third does not.
+    assert others.get("p1_a0")
+    assert others.get("p2_a0")
+    assert others.get("p1_a0") == others.get("p2_a0")
+    assert "p3_a0" not in others
+
+
+def test_the_cohort_result_reports_whether_the_family_had_anything_to_work_with() -> None:
+    # An operator reading a finding needs to know the difference between "the narrative family
+    # found nothing" and "the narrative family had no input", which are not the same statement.
+    set_embedder_for_tests(_AxisEmbedder())
+    with get_session() as session:
+        for customer, post in ((1, "p1"), (2, "p2"), (3, "p3")):
+            _investigation(session, user_id=customer, post=post, commenters=[
+                _account(f"{post}_a{i}", post, text=f"{WATER} {post} {i}",
+                         at=NOW - timedelta(days=2))
+                for i in range(10)
+            ])
+        topic_id = _build(session)
+        session.commit()
+
+    with get_session() as session:
+        result = cohort.score_topic_cohort(session, topic_id, now=NOW)
+
+    assert result.shared_other_topics == 0

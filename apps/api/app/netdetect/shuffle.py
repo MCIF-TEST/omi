@@ -77,8 +77,20 @@ def shuffle_corpus(corpus: Corpus, *, seed: int = 0) -> Corpus:
     # guarantee this function exists to provide.
     edges: list[tuple[str, Feature]] = []
     present: set[tuple[str, Feature]] = set()
-    for a in corpus.accounts:
-        for f in a.features:
+    # SORTED, and this is the load-bearing line in the whole file.
+    #
+    # `features` is a set of dataclasses whose fields are strings, so it iterates in an order that
+    # depends on `hash(str)` and is therefore randomised per PROCESS. The swap loop below indexes
+    # into this list with a seeded RNG, so an edge list in a different order means a different
+    # shuffle from the same seed. Every shuffle in the null is built this way, so the null threshold
+    # itself became a function of the interpreter's hash seed rather than of the data.
+    #
+    # Measured before the fix: one corpus, one seed, thresholds of 8.505 / 8.02 / 0.0 across three
+    # hash seeds. A threshold of 0.0 accepts every candidate, which removes the search correction
+    # that is the entire justification for this module, and it is why the falsification test failed
+    # roughly one run in five and read as flakiness.
+    for a in sorted(corpus.accounts, key=lambda a: a.external_id):
+        for f in sorted(a.features, key=lambda f: f.token()):
             edges.append((a.external_id, f))
             present.add((a.external_id, f))
 

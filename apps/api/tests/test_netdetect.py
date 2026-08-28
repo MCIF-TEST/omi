@@ -64,6 +64,56 @@ def test_a_shuffled_corpus_yields_nothing():
     )
 
 
+def test_the_answer_does_not_depend_on_the_interpreters_hash_seed():
+    """The same corpus must give the same findings in every process. It did not.
+
+    `AccountProfile.features` is a set of dataclasses whose fields are strings, so it iterates in an
+    order that depends on `hash(str)`, which Python randomises per process. `shuffle_corpus` built
+    its edge list by walking that set and then indexed into the list with a seeded RNG, so one seed
+    produced a DIFFERENT shuffle in every process. Every shuffle in the null is built that way, so
+    the correction threshold became a function of the interpreter rather than of the data.
+
+    Measured before the fix, one corpus and one seed across three hash seeds: thresholds of 8.505,
+    8.02 and 0.0. A threshold of 0.0 accepts every candidate, which removes the search correction
+    this module exists for, and it is why the falsification test above failed about one run in five
+    and was read as flakiness.
+
+    Run as subprocesses because PYTHONHASHSEED is fixed at interpreter start and cannot be changed
+    from inside a running one. That makes this the slowest test in the file and the only one that
+    can see the bug at all.
+    """
+    import json
+    import subprocess
+    import sys as _sys
+
+    program = (
+        "import sys; sys.path.insert(0, %r)\n"
+        "import netdetect_corpora as C\n"
+        "from app.netdetect import Corpus, detect\n"
+        "from app.netdetect.features import profile_from_commenter\n"
+        "from app.netdetect.shuffle import shuffle_corpus\n"
+        "rows = C.organic_population(50) + C.planted_operation(8, discipline=0.0)\n"
+        "c = Corpus([profile_from_commenter(r) for r in rows])\n"
+        "r = detect(shuffle_corpus(c, seed=4242), shuffles=24)\n"
+        "import json; print(json.dumps({'n': len(r.findings), 't': round(r.null_threshold or 0, 6)}))\n"
+    ) % str(Path(__file__).resolve().parent)
+
+    seen = []
+    for hash_seed in ("1", "3", "7"):
+        out = subprocess.run(
+            [_sys.executable, "-c", program],
+            capture_output=True, text=True, check=True,
+            env={"PYTHONHASHSEED": hash_seed, "PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+        )
+        seen.append(json.loads(out.stdout.strip().splitlines()[-1]))
+
+    assert seen[0] == seen[1] == seen[2], (
+        f"the detector's answer moved with the interpreter's hash seed: {seen}"
+    )
+    # And the correction is actually doing something, so this cannot pass by everything being zero.
+    assert seen[0]["t"] > 0.0
+
+
 def test_the_shuffle_preserves_both_degree_sequences_exactly():
     """The null is only valid if the shuffle changes nothing except the wiring.
 
@@ -344,3 +394,166 @@ class TestScoring:
         assert _harmonic_sum([6.0] * 10) < 10 * 6.0
         assert _harmonic_sum([6.0] * 10) > _harmonic_sum([6.0] * 3)
         assert _harmonic_sum([6.0]) == pytest.approx(6.0)
+
+
+# =============================================================================================== #
+# Reposts as network evidence.
+#
+# `repost_of_id` has always been collected and has always been read by the cohort detector; this
+# reader took parents and replies only, so an operation whose members amplify the same outside post
+# left NO network evidence. That is the family weighted 1.00 and one of the two whose innocent
+# sharing is implausible, so losing it is the difference between a publishable finding and one that
+# has to go to a human.
+# =============================================================================================== #
+
+
+def test_two_accounts_amplifying_the_same_outside_post_share_network_evidence():
+    from app.netdetect.features import network_features
+
+    a = network_features([], [], exclude=set(), reposts=["outside_1", "outside_2"])
+    b = network_features([], [], exclude=set(), reposts=["outside_1"])
+    shared = a & b
+    assert shared, "amplifying the same post is engagement and has to register as such"
+    assert all(f.family == "network" for f in shared)
+
+
+def test_a_repost_is_kept_distinct_from_a_reply_to_the_same_post():
+    # Two accounts that both REPOSTED X and two that both REPLIED under X are different claims, and
+    # the evidence sentence a reader sees has to be able to say which.
+    from app.netdetect.features import network_features
+
+    reposted = network_features([], [], exclude=set(), reposts=["X"])
+    replied = network_features([], ["X"], exclude=set())
+    assert reposted != replied
+    assert {f.kind for f in reposted} == {"repost_of"}
+    assert {f.kind for f in replied} == {"reply_to"}
+
+
+def test_reposting_the_scanned_post_is_excluded_like_every_other_engagement():
+    # Every commenter engaged the scanned post by construction. Counting a repost of it would hand
+    # a perfect feature to the whole comment section, which is the single most important exclusion
+    # in that file.
+    from app.netdetect.features import network_features
+
+    assert network_features([], [], exclude={"the_post"}, reposts=["the_post"]) == set()
+
+
+def test_a_pure_repost_ring_is_still_refused_for_want_of_a_second_family():
+    """Reposts are evidence, not a licence. One family is never enough, and that must not change.
+
+    Amplification alone is one kind of observation seen many times, and `MIN_FAMILIES` exists
+    precisely to refuse that. Pinned so a future change cannot make the network family a shortcut
+    past convergence.
+    """
+    from app.netdetect.detect import MIN_FAMILIES
+
+    assert MIN_FAMILIES >= 2
+    rows = C.organic_population(50) + C.amplifier_ring(8)
+    for row in rows:
+        # Strip the shared tool, leaving amplification as the only thing these accounts share.
+        row["recent_activity"] = [{**p, "source_client": None} for p in row["recent_activity"]]
+    result = detect(_corpus(rows), shuffles=SHUFFLES)
+    assert not [c for c in result.findings if _members_from(c, "amp") >= 4]
+
+
+def test_an_amplifier_ring_is_now_reachable_where_it_previously_left_no_evidence():
+    """A shared tool plus shared amplification: two families, one of them hard.
+
+    Without the reposts this group shares only a publishing client, which is one soft family and
+    cannot be reported. The amplification is what turns it into a finding.
+    """
+    rows = C.organic_population(50) + C.amplifier_ring(8)
+    result = detect(_corpus(rows), shuffles=SHUFFLES)
+
+    assert result.looked, result.refused
+    caught = [c for c in result.findings if _members_from(c, "amp") >= 4]
+    assert caught, "shared amplification plus a shared tool should be reachable"
+    # And the network family is carrying part of it rather than the tool doing all the work.
+    assert any(c.by_family.get("network", 0) > 0 for c in caught)
+
+
+def test_without_the_amplification_the_same_group_can_only_go_to_a_human():
+    """The counterfactual, and it is more interesting than "it disappears".
+
+    Same accounts, same text, same timing, same publishing client, with only the amplification not
+    recorded. The group is still reachable, because a shared tool is a real statistical observation,
+    but it rests on NO hard family, so it comes back carrying `needs_adjudication` and contaminated
+    with organic accounts that happen to share the pattern.
+
+    That is the whole value of reading reposts: it is the difference between a finding a reader has
+    to arbitrate and one the evidence settles.
+    """
+    rows = C.organic_population(50) + C.amplifier_ring(8, reposts=False)
+    without = detect(_corpus(rows), shuffles=SHUFFLES)
+
+    blind = [c for c in without.findings if _members_from(c, "amp") >= 4]
+    for candidate in blind:
+        assert candidate.needs_adjudication, (
+            "with no hard family this cannot be published on the evidence alone"
+        )
+
+    withheld = detect(_corpus(C.organic_population(50) + C.amplifier_ring(8)), shuffles=SHUFFLES)
+    caught = [c for c in withheld.findings if _members_from(c, "amp") >= 4]
+    assert caught
+    assert any(c.needs_adjudication is None for c in caught), (
+        "amplification is a hard family, so it should settle what the shared tool could not"
+    )
+
+
+# =============================================================================================== #
+# The narrative family, which was declared and empty.
+#
+# `FAMILY_NARRATIVE` has been in the weight map at 0.45 since the module was written, with a note
+# saying "once real embeddings land". Nothing ever produced it, so netdetect had five live families
+# rather than six and the paraphrase axis was missing entirely.
+# =============================================================================================== #
+
+
+def test_topic_ids_produce_narrative_evidence():
+    from app.netdetect.features import topic_features
+
+    feats = topic_features([11, 12], exclude=set())
+    assert {f.family for f in feats} == {"narrative"}
+    assert sorted(f.value for f in feats) == ["11", "12"]
+
+
+def test_the_topic_the_cohort_was_assembled_on_is_excluded():
+    """Whatever you selected the group BY cannot also be evidence about the group.
+
+    Every member spoke on the cohort's topic by construction. Counting it would hand a perfect
+    feature to the whole cohort and report a topic's entire population as one operation, which is
+    the same trap as the scanned post in `network_features`.
+    """
+    from app.netdetect.features import topic_features
+
+    assert topic_features([7], exclude={"7"}) == set()
+    assert {f.value for f in topic_features([7, 9], exclude={"7"})} == {"9"}
+
+
+def test_the_per_scan_path_stays_silent_rather_than_faking_a_topic():
+    """A single investigation has no topic assignment, so the family produces nothing there.
+
+    Deliberate: the honest alternative to "no topic evidence" is no topic evidence, not a lexical
+    proxy, which the text family already covers and which would double-count the same observation
+    under two family weights.
+    """
+    row = {
+        "external_id": "a1", "platform": "x", "handle": "a1",
+        "recent_activity": [{"text": "a post about something", "created_at": "2026-01-01T00:00:00Z"}],
+        "thread_comments": [],
+    }
+    profile = profile_from_commenter(row)
+    assert not [f for f in profile.features if f.family == "narrative"]
+
+
+def test_narrative_evidence_cannot_carry_a_finding_on_its_own():
+    """Soft by design: a shared topic is the most innocently shared thing there is.
+
+    It can add to convergence and must never be the whole case, which is what the weight and the
+    two-family rule together guarantee.
+    """
+    from app.netdetect.types import FAMILY_WEIGHT, HARD_FAMILIES
+
+    assert FAMILY_WEIGHT["narrative"] < FAMILY_WEIGHT["network"]
+    assert FAMILY_WEIGHT["narrative"] < FAMILY_WEIGHT["identity"]
+    assert "narrative" not in HARD_FAMILIES

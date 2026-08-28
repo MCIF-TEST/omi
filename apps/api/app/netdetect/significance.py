@@ -132,7 +132,15 @@ class Corpus:
         self.account_degree: dict[str, int] = {}
         for a in self.accounts:
             self.account_degree[a.external_id] = len(a.features)
-            for f in a.features:
+            # SORTED, and this is not cosmetic. `features` is a set of dataclasses whose fields are
+            # strings, so its iteration order depends on `hash(str)`, which Python randomises per
+            # process. That order set the insertion order of `feature_accounts`, which set the order
+            # of the candidate search, which changed which communities Louvain found, which changed
+            # the null threshold. Measured: the same corpus with the same seeds produced thresholds
+            # of 8.505, 8.02 and 0.0 under three hash seeds, and a threshold of 0 removes the
+            # search correction entirely. That is why the falsification test failed about one run
+            # in five and looked like flakiness.
+            for f in sorted(a.features, key=lambda f: f.token()):
                 self.feature_accounts[f].add(a.external_id)
         self.total_edges = sum(self.account_degree.values())
 
@@ -228,10 +236,11 @@ def score_candidate(
     per_family: dict[str, list[float]] = {fam: [] for fam in ALL_FAMILIES}
     evidence: list[FeatureEvidence] = []
 
-    for f in union:
+    # Sorted for the same reason as the corpus build: a set of Features iterates in hash order.
+    for f in sorted(union, key=lambda f: f.token()):
         if not corpus.is_rare(f):
             continue
-        if f.kind in ("reply_to", "target_post") and f.value in inside:
+        if f.kind in ("reply_to", "target_post", "repost_of") and f.value in inside:
             continue
         k, s = feature_surprise(corpus, members, f)
         if s <= 0.0:

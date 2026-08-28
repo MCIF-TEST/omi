@@ -29,6 +29,7 @@ from typing import Any, Iterable
 from app.netdetect.types import (
     FAMILY_IDENTITY,
     FAMILY_INFRASTRUCTURE,
+    FAMILY_NARRATIVE,
     FAMILY_NETWORK,
     FAMILY_TEXT,
     FAMILY_TIMING,
@@ -216,6 +217,7 @@ def network_features(
     reply_targets: Iterable[str | None],
     *,
     exclude: set[str],
+    reposts: Iterable[str | None] = (),
 ) -> set[Feature]:
     """What the account engaged with.
 
@@ -223,6 +225,22 @@ def network_features(
     counting them would hand a perfect feature to every account in the investigation and report the
     comment section as one enormous operation. This is the same reasoning as the older detector's
     "a distinct post" rule, and it is the single most important exclusion in this file.
+
+    REPOSTS ARE THE THIRD KIND OF ENGAGEMENT, and they were being dropped. The scan has always
+    collected ``repost_of_id`` and the cohort detector has always used it; this reader took only
+    parents and replies, so an operation whose members amplify the same outside post left no
+    network evidence at all. That is the family weighted 1.00 and one of the two whose sharing is
+    implausibly innocent, so losing it is losing the difference between a publishable finding and
+    one that needs a human.
+
+    A repost is if anything the CLEANEST of the three. A reply can be an argument and a parent can
+    be a thread somebody wandered into, but choosing to rebroadcast a specific post is an act of
+    amplification, which is what an operation is for.
+
+    The other half of this rule is in ``significance.score_candidate``, which drops a network
+    feature whose target is itself a member of the group: rebroadcasting each other is a community
+    talking, not a formation converging on an outside target. ``repost_of`` is named there alongside
+    ``reply_to`` and ``target_post`` for exactly that reason.
     """
     out: set[Feature] = set()
     for p in parents:
@@ -231,6 +249,51 @@ def network_features(
     for r in reply_targets:
         if r and r not in exclude:
             out.add(Feature(FAMILY_NETWORK, "reply_to", str(r)))
+    for rp in reposts:
+        # Kept in its OWN kind rather than folded into `target_post`. Two accounts that both
+        # reposted X and two accounts that both replied under X are different claims, and the
+        # evidence sentence a reader sees has to be able to say which.
+        if rp and rp not in exclude:
+            out.add(Feature(FAMILY_NETWORK, "repost_of", str(rp)))
+    return out
+
+
+def topic_features(
+    topic_ids: Iterable[object],
+    *,
+    exclude: set[str],
+) -> set[Feature]:
+    """Which emergent topics the account has spoken on.
+
+    THE FAMILY THIS FILLS WAS DECLARED AND EMPTY. ``FAMILY_NARRATIVE`` has been in the weight map
+    at 0.45 since the module was written, with a comment saying "once real embeddings land". They
+    landed, so this is that.
+
+    Topic ids are PASSED IN, never computed here, and that is deliberate rather than lazy. This
+    package is pure and offline: no model call, no network, no provider quota. An embedder inside
+    the detector would put a paid network call on a path that runs inside a scan and would make the
+    same corpus score differently depending on whether a vendor answered. The cross-investigation
+    pass has already embedded and assigned; it hands the answers over.
+
+    ``exclude`` carries the topic the cohort was assembled ON. Every member spoke on it by
+    construction, so counting it would hand a perfect feature to the whole cohort and report the
+    topic's whole population as one operation. This is the same trap as the scanned post in
+    ``network_features``, and it is worth stating twice because the shape recurs: whatever you
+    selected the group BY cannot also be evidence about the group.
+
+    What survives the exclusion is the interesting part: not "these accounts talked about water",
+    which is why they were assembled, but "these accounts ALSO co-occur on three unrelated
+    subjects". Weighted soft on purpose, because a shared topic is the most innocently shared thing
+    there is, so this can add to convergence and can never carry a finding alone.
+    """
+    out: set[Feature] = set()
+    for tid in topic_ids:
+        if tid is None:
+            continue
+        token = str(tid)
+        if not token or token in exclude:
+            continue
+        out.add(Feature(FAMILY_NARRATIVE, "topic", token))
     return out
 
 
@@ -324,7 +387,13 @@ def _parse_ts(raw: Any) -> datetime | None:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
-def profile_from_commenter(row: dict, *, exclude_context: set[str] | None = None) -> AccountProfile:
+def profile_from_commenter(
+    row: dict,
+    *,
+    exclude_context: set[str] | None = None,
+    topic_ids: Iterable[object] = (),
+    exclude_topics: set[str] | None = None,
+) -> AccountProfile:
     """Build one account's feature bag from a persisted ``CommenterScanResult`` dict.
 
     Reads only fields the scan already stores. Anything absent simply produces fewer features, which
@@ -348,9 +417,14 @@ def profile_from_commenter(row: dict, *, exclude_context: set[str] | None = None
         (i.get("parent_id") for i in activity),
         (i.get("reply_to_id") for i in all_items),
         exclude=exclude,
+        reposts=(i.get("repost_of_id") for i in all_items),
     )
     feats |= infrastructure_features((i.get("source_client") for i in all_items), texts)
     feats |= identity_features(_parse_ts(row.get("account_created_at")), row.get("handle"))
+    # Empty on the per-scan path, which has no topic assignment: the narrative family simply stays
+    # silent there rather than being faked from lexical overlap, which the text family already
+    # covers honestly.
+    feats |= topic_features(topic_ids, exclude=set(exclude_topics or ()))
 
     if len(feats) > MAX_FEATURES_PER_ACCOUNT:
         ordered = sorted(feats, key=lambda f: hashlib.blake2b(

@@ -53,7 +53,10 @@ def pair_weights(corpus: Corpus) -> dict[tuple[str, str], float]:
         return {}
 
     weights: dict[tuple[str, str], float] = defaultdict(float)
-    for f, holders in corpus.feature_accounts.items():
+    # Sorted: the corpus now inserts features deterministically, and stating it here too means a
+    # future change to that construction cannot silently reintroduce hash-order dependence in the
+    # search. The pair weights feed Louvain, whose answer depends on the order edges arrive in.
+    for f, holders in sorted(corpus.feature_accounts.items(), key=lambda kv: kv[0].token()):
         d = len(holders)
         if d < 2 or d > MAX_HOLDERS_FOR_PAIRING or not corpus.is_rare(f):
             continue
@@ -83,7 +86,10 @@ def communities(corpus: Corpus) -> list[list[str]]:
     from app.graph.algorithms import _louvain
 
     nodes = sorted({a for pair in weights for a in pair})
-    edges = [(a, b, w) for (a, b), w in weights.items()]
+    # Sorted too. Louvain is seeded, but a seeded Louvain still depends on the order edges are
+    # inserted into the graph, so an unsorted edge list makes the community structure a function of
+    # dict iteration order rather than of the data.
+    edges = sorted((a, b, w) for (a, b), w in weights.items())
     assignment = _louvain(nodes, edges)
 
     groups: dict[int, list[str]] = defaultdict(list)

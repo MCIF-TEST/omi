@@ -43,14 +43,15 @@ def _sentence(rng: random.Random) -> str:
     return " ".join(words)
 
 
-def _post(text: str, when: datetime, *, client=None, parent=None, reply=None) -> dict:
+def _post(text: str, when: datetime, *, client=None, parent=None, reply=None,
+          repost=None) -> dict:
     return {
         "text": text,
         "created_at": when.isoformat(),
         "parent_id": parent,
         "reply_to_id": reply,
         "source_client": client,
-        "repost_of_id": None,
+        "repost_of_id": repost,
     }
 
 
@@ -199,3 +200,38 @@ def fan_community(n: int = 12, *, seed: int = 33) -> list[dict]:
             handle=f"{rng.choice(['stan', 'luvs', 'daily'])}_{rng.choice(['ari', 'mika', 'zed'])}",
         ))
     return out
+
+
+def amplifier_ring(size: int = 8, *, seed: int = 61, targets: int = 3,
+                   reposts: bool = True) -> list[dict]:
+    """An operation whose tell is WHAT IT REBROADCASTS, plus one shared tool.
+
+    Deliberately clean on every other axis: individually written posts, signup dates spread over
+    years, plain handles, human rhythms. Two things are shared, and the pairing is the point:
+
+    * a publishing client (infrastructure, weight 0.55) - soft, because a shared tool can simply be
+      a shared profession, and on its own it is one family and cannot be reported at all;
+    * the specific outside posts they amplify (network, weight 1.00) - one of the two families whose
+      innocent sharing is implausible.
+
+    ``reposts=False`` builds the identical corpus with the amplification not recorded, which is the
+    counterfactual: same accounts, same text, same timing, same tool, and nothing to find.
+    """
+    rng = random.Random(seed)
+    amplified = [f"outside_post_{i}" for i in range(targets)]
+    rows: list[dict] = []
+    for i in range(size):
+        posts = []
+        for j in range(6):
+            when = BASE - timedelta(hours=rng.randrange(1, 900))
+            target = amplified[j] if (reposts and j < targets) else None
+            posts.append(_post(_sentence(rng), when, client="amplifyhub", repost=target))
+        rows.append(_account(
+            f"amp{i}",
+            posts=posts,
+            bio=_sentence(rng),
+            created=BASE - timedelta(days=rng.randrange(400, 3000)),
+            handle=rng.choice(["quietfern", "marchbird", "oldpier", "stonewell",
+                               "lanterns", "cedarpath", "riverkiln", "duskmoor"]) + str(i),
+        ))
+    return rows
