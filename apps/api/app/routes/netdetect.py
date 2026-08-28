@@ -79,8 +79,11 @@ class RunOut(BaseModel):
     #: Set when the run could not be performed at all, as distinct from performing it and finding
     #: nothing. Never read an empty findings list as a clean result without checking this.
     refused: str | None
-    #: Findings written to the store, and pairwise edges folded into the accumulating graph.
+    #: Findings written to the store.
     recorded: int = 0
+    #: NEW pairs in the accumulating graph. A pair already in it is strengthened rather than
+    #: created, so this is "how many of these people had never been linked before" and deliberately
+    #: not "how much evidence was folded in". Zero on a re-run of one post is the correct answer.
     accumulated_pairs: int = 0
 
 

@@ -18,10 +18,14 @@ per-request canonical links); read "The agent surface" below before touching any
 rather than a person reads, and note that `OMI_PUBLIC_BASE_URL` is now required to BUILD the web app.
 The same session then built the **cross-investigation coordination system** (`app/narrative/cross/`,
 `/v1/admin/cross-narratives`); read "Cross-investigation narratives" below, and its §1 in
-`docs/cross-investigation-narratives.md`, before touching a threshold there.
+`docs/cross-investigation-narratives.md`, before touching a threshold there. A fifth session then
+went back to `app/netdetect/`: it was **not deterministic across processes** (a set of dataclasses
+iterating in hash order set the null threshold), reposts and topics were reaching no feature, and the
+detector was read-only so nothing accumulated and nothing could be dismissed. Read "The network
+detector" below before touching a threshold or a set iteration there.
 
-Suite measured at **2390
-passed, 8 skipped, 2 failed** (9m15s, 2026-08-25), both failures pre-existing and listed below. The 8
+Suite measured at **2445
+passed, 8 skipped, 2 failed** (11m26s, 2026-08-28), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -74,7 +78,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2390 passed, 8 skipped, 2 failed** (9m15s, 2026-08-25), both documented below:
+Current measured state: **2445 passed, 8 skipped, 2 failed** (11m26s, 2026-08-28), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage

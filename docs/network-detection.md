@@ -287,6 +287,30 @@ Each step is independently useful, and the early ones fix live defects.
 how a system ends up confidently reporting noise, and this product's findings are published claims
 about named real people.
 
+### Status as of 2026-08-28
+
+Steps 1 to 6 and 9 are built. Step 3's observation store is `app/narrative/cross`'s utterance store
+plus `app/netdetect/features`, rather than the standalone table sketched above; the difference is
+that features are derived per run instead of materialised, which costs recomputation and buys not
+having a second copy of the corpus to keep consistent.
+
+Two things landed that this document did not anticipate, both from running the detector rather than
+designing it:
+
+* **Findings are recorded and judged.** `NetdetectFinding` plus `dismiss` / `confirm`, and
+  `app/netdetect/persist.py` folds each finding's pairs into `CoordinationEdge`. The decomposition
+  deliberately does NOT distribute the set score across pairs, which would invent pairwise
+  significance nobody measured, and is the one place §2's reframe could be quietly undone.
+* **`app/netdetect/calibration.py` replays each constant against the accumulated judgements.** It
+  reports and it never moves anything: a threshold that retunes itself on operator clicks can be
+  steered by whoever clicks, and this one decides whether named real people are reported as running
+  an operation together.
+
+Still open: **step 7**, the operation registry (the older cohort detector's
+`app/campaigns/tracking` does this for its own findings; netdetect contributes edges to the same
+graph but has no registry of its own), and **step 8**, the adjudication call. `needs_adjudication`
+currently flags the candidates that need one and a person reads them.
+
 ---
 
 ## 9. What happens to the current detector
