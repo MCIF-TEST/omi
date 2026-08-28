@@ -1544,8 +1544,45 @@ Pinned by `tests/test_netdetect_persistence.py` (12) and `tests/test_netdetect_r
 `tests/test_coordination_admin_gate.py` covers the new routes against a REAL non-admin, because
 every other test here runs in local mode where `require_user` returns `is_admin=True`.
 
-**Not yet built:** the operation registry (persistent latent entities), the adjudication call, and
-the calibration report that reads the accumulated dismissals back.
+#### The calibration report reads the reservoir back, and moves nothing
+
+`app/netdetect/calibration.py` + `GET /v1/admin/netdetect/findings/calibration`. It replays each
+tunable constant against every judged finding and answers one question: **if this threshold had been
+set differently, which of the findings a person already judged would have changed?**
+
+- **It reports and it never moves anything.** No constant in `app/netdetect` is read from the
+  database and none may become so. A threshold that retunes itself on operator clicks can be steered
+  by whoever clicks, with no review and no diff, and this one decides whether named real people are
+  reported as running an operation together. A constant in code has a commit, a reviewer and a
+  reason beside it; a constant in a row has a number. `test_the_source_never_reads_a_threshold_out_
+  of_the_database` is a source-level guard on the writes.
+- **It refuses to recommend while the reservoir is thin** (`MIN_JUDGEMENTS` 30, `MIN_PER_CLASS` 8).
+  Four constants fitted against a dozen labels memorises the last dozen posts somebody happened to
+  look at. The sweeps are still returned below the floor, because watching it fill is useful and an
+  empty response would read as a broken endpoint.
+- **A recommendation never trades away a confirmed finding.** The search is only over settings that
+  keep every confirmed one and refuse more of the dismissed. Calling real people coordinated when
+  they are not is the expensive error, and it is the one the reader cannot check.
+- **Among ties, the LEAST strict value wins.** Extra strictness that refuses no additional dismissed
+  finding buys nothing on the evidence in hand and costs recall on the findings nobody judged, which
+  are most of them. Which end is least strict depends on the constant, so `stricter_direction` is
+  carried rather than a sign being assumed.
+- **`corrected_p` NULL is never counted as significant.** Reading "not compared against the shuffled
+  search" as "passed it" would silently restore the search bias the null exists to remove.
+
+The sweep is possible at all because the row carries `by_family_json` rather than only a score: hard
+evidence, the family count and the top family's share all fall out of it, so a threshold can be
+replayed against findings judged months ago **without re-running the detector**, whose corpus is not
+kept and would risk being rebuilt differently.
+
+**A dismissal labels the FINDING, not the accounts.** "These are reporters on one beat" says the
+group is not an operation and says nothing about whether any member is automated. `AccountLabel` is
+the other reservoir and it labels botness, which this package deliberately never reads. Averaging
+them would be a category error.
+
+Pinned by `tests/test_netdetect_calibration.py` (11).
+
+**Not yet built:** the operation registry (persistent latent entities), and the adjudication call.
 
 ### Pre-launch lockdown: only admins can use the product
 

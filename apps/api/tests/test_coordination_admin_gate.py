@@ -79,6 +79,7 @@ CROSS_NARRATIVE_ROUTES = [
 NETDETECT_ROUTES = [
     ("POST", "/v1/admin/netdetect/inv_anything"),
     ("GET", "/v1/admin/netdetect/findings/all"),
+    ("GET", "/v1/admin/netdetect/findings/calibration"),
 ]
 
 NARRATIVE_ROUTES = [

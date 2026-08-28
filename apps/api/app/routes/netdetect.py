@@ -341,3 +341,108 @@ def _now():
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc)
+
+
+# ---------------------------------------------------------------------------------------------------
+# The calibration report.
+#
+# IT REPORTS AND IT NEVER MOVES ANYTHING. Every constant in `app/netdetect` stays in code, with a
+# commit, a reviewer and a reason beside it. A gate that retunes itself on operator clicks can be
+# steered by whoever clicks, and this one decides whether named real people are reported as running
+# an operation together. See the module docstring in `app/netdetect/calibration.py`.
+# ---------------------------------------------------------------------------------------------------
+
+
+class SweepRowOut(BaseModel):
+    value: float
+    confirmed_kept: int
+    dismissed_kept: int
+    dismissed_removed: int
+
+
+class SweepOut(BaseModel):
+    constant: str
+    #: The file to edit by hand if the recommendation is accepted.
+    where: str
+    current: float
+    #: "raise" or "lower". Stated because a reader cannot infer it from the numbers, and reading it
+    #: backwards inverts every recommendation on the page.
+    stricter_direction: str
+    rows: list[SweepRowOut]
+    proposed: float | None
+    recommendation: str | None
+
+
+class FamilySplitOut(BaseModel):
+    family: str
+    weight: float
+    hard: bool
+    mean_in_confirmed: float
+    mean_in_dismissed: float
+    present_in_confirmed: int
+    present_in_dismissed: int
+    separation: float
+
+
+class CalibrationOut(BaseModel):
+    confirmed: int
+    dismissed: int
+    open: int
+    #: False while the reservoir is too thin to fit anything. The sweeps are still returned, because
+    #: watching it fill is useful and an empty response would look like a broken endpoint.
+    sufficient: bool
+    insufficient_reason: str
+    sweeps: list[SweepOut]
+    families: list[FamilySplitOut]
+    recommendations: list[str]
+    caveats: list[str]
+
+
+@admin_router.get("/findings/calibration", response_model=CalibrationOut)
+def calibration_report(current: CurrentUser = Depends(require_user)) -> CalibrationOut:
+    """What the accumulated judgements would move, and whether there are yet enough of them.
+
+    Read-only in the strongest sense: it writes nothing and it changes no threshold. The output is a
+    recommendation with its arithmetic attached, for a person to read and then edit
+    `significance.py` or `detect.py` by hand if they agree.
+    """
+    _require_admin(current)
+    from app.netdetect import calibration as cal
+
+    with get_session() as session:
+        report = cal.build_report(session)
+
+    return CalibrationOut(
+        confirmed=report.confirmed,
+        dismissed=report.dismissed,
+        open=report.open,
+        sufficient=report.sufficient,
+        insufficient_reason=report.insufficient_reason,
+        recommendations=report.recommendations,
+        caveats=report.caveats,
+        sweeps=[
+            SweepOut(
+                constant=s.constant, where=s.where, current=s.current,
+                stricter_direction=s.stricter_direction,
+                proposed=s.proposed, recommendation=s.recommendation,
+                rows=[
+                    SweepRowOut(
+                        value=r.value, confirmed_kept=r.confirmed_kept,
+                        dismissed_kept=r.dismissed_kept, dismissed_removed=r.dismissed_removed,
+                    )
+                    for r in s.rows
+                ],
+            )
+            for s in report.sweeps
+        ],
+        families=[
+            FamilySplitOut(
+                family=f.family, weight=f.weight, hard=f.hard,
+                mean_in_confirmed=f.mean_in_confirmed, mean_in_dismissed=f.mean_in_dismissed,
+                present_in_confirmed=f.present_in_confirmed,
+                present_in_dismissed=f.present_in_dismissed,
+                separation=round(f.separation, 3),
+            )
+            for f in report.families
+        ],
+    )
