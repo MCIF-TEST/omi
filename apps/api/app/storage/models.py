@@ -1591,17 +1591,6 @@ class CrossFinding(Base):
     cohort_best_p: Mapped[float | None] = mapped_column(Float, nullable=True)
     #: Why a human has to look before this reaches anyone, or NULL when the evidence settles it.
     needs_adjudication: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Members that do not carry the finding (`app/netdetect/attachment.py`). A REPORT, not an
-    #: exclusion: they are still members and still in `members_json`. Empty ALSO when the test
-    #: abstained, so `attachment_note` has to be read beside it.
-    weak_members_json: Mapped[list] = mapped_column(JSON, default=list)
-    #: Why no membership verdict was reached, or NULL when one was. Never read an empty
-    #: `weak_members_json` as "every member belongs".
-    attachment_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Whether the membership test ran at all. Explicit, because an empty `weak_members_json` means
-    #: opposite things with and without it. Defaults False so rows written before the test existed
-    #: read as "not checked" rather than as a clean bill of health.
-    attachment_checked: Mapped[bool] = mapped_column(Boolean, default=False)
     #: Set when the cohort could not be tested at all, which is a different statement from finding
     #: nothing and has to survive to the reader as one.
     cohort_refused: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1611,6 +1600,65 @@ class CrossFinding(Base):
     dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     dismissed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     dismissal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class NetdetectFormation(Base):
+    """A persistent operation: the latent operator behind one or more findings.
+
+    A finding is an EVENT. An operation is a thing that persists, rotates its accounts, goes quiet
+    and comes back. Every run of the detector used to start from nothing, so the system could never
+    say "we have seen this operator before", which is the single most useful thing an investigator
+    can be told.
+
+    Identity lives in `profile_json`: the rare behaviours that made the finding improbable, not the
+    member list. A serious operation burns its accounts between campaigns, so a roster identifies
+    the run rather than the operator, and matching on it fails in exactly the case that matters.
+    """
+
+    __tablename__ = "netdetect_formations"
+    __table_args__ = (
+        Index("ix_netdetect_formation_key", "formation_key", unique=True),
+        Index("ix_netdetect_formation_phase", "phase", "last_seen"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: Stable opaque handle. Random, never derived from members, so it cannot leak who was scanned.
+    formation_key: Mapped[str] = mapped_column(String(32))
+    platform: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+    #: Operator-supplied name, once somebody has judged it worth naming.
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    #: The discriminative features: [{family, kind, value, surprise, prevalence}]. THE IDENTITY.
+    profile_json: Mapped[list] = mapped_column(JSON, default=list)
+    #: Families the evidence spans, so a reader can see what it rests on without walking the profile.
+    families_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    #: Every account ever seen in this formation, with when. Accounts are not removed when a
+    #: campaign ends: the roster is history, and rotation is the thing worth seeing.
+    members_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    member_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    #: What the per-account engine thinks of the members. Computed AFTER detection and never fed
+    #: back into it: see `app/netdetect/formation.py` on why reading the score into the search is
+    #: how a detector goes blind to competent operations.
+    composition_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    sighting_count: Mapped[int] = mapped_column(Integer, default=0)
+    #: Distinct posts this formation has been seen under. A re-scan of one post is one sighting.
+    contexts_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    first_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: forming / active / dormant / resurgent. RESURGENT only exists because the entity survived the
+    #: gap, which is the whole argument for persisting operations rather than findings.
+    phase: Mapped[str] = mapped_column(String(16), default="forming", index=True)
+    previous_phase: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    judgement_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
@@ -1670,6 +1718,9 @@ class NetdetectFinding(Base):
     #: opposite things with and without it. Defaults False so rows written before the test existed
     #: read as "not checked" rather than as a clean bill of health.
     attachment_checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: The persistent operation this finding was resolved to, when one was. NULL means the finding
+    #: predates the registry or could not be resolved, never that it belongs to no operation.
+    formation_key: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     #: The evidence sentences, written HERE at detection time, because the corpus they were derived
     #: from is not kept and the finding has to stay readable without it.
     evidence_json: Mapped[list] = mapped_column(JSON, default=list)

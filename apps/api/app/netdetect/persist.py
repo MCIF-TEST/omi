@@ -92,6 +92,7 @@ def persist_finding(
     null_shuffles: int,
     null_threshold: float | None,
     accumulate: bool = True,
+    member_scores: list[float | None] | None = None,
     now: datetime | None = None,
 ) -> NetdetectFinding:
     """Store one finding, and fold its pairs into the global graph.
@@ -147,6 +148,20 @@ def persist_finding(
 
     if accumulate:
         _accumulate(session, candidate, corpus, context_id=context_id, platform=row.platform)
+        # Resolve the finding to the OPERATION behind it, so a second campaign by the same adversary
+        # is recognised even when it shares no accounts with the first. Best-effort for the same
+        # reason accumulation is: losing it degrades future findings and must never turn a completed
+        # run into an error for the operator reading the results now.
+        try:
+            from app.netdetect import registry
+
+            formation, _how = registry.record(
+                session, candidate, corpus,
+                platform=row.platform, context_id=context_id, scores=member_scores,
+            )
+            row.formation_key = formation.formation_key
+        except Exception:  # noqa: BLE001
+            logger.warning("netdetect: could not resolve a finding to a formation", exc_info=True)
     return row
 
 

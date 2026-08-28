@@ -30,7 +30,7 @@ from app.netdetect import detect_from_commenters
 from app.netdetect.persist import persist_finding
 from app.netdetect.shuffle import DEFAULT_SHUFFLES
 from app.storage.db import get_session
-from app.storage.models import Investigation, NetdetectFinding
+from app.storage.models import Investigation, NetdetectFinding, NetdetectFormation
 
 log = logging.getLogger("omi.netdetect.routes")
 
@@ -184,6 +184,12 @@ def run_on_investigation(
                         corpus_size=result.corpus_size,
                         null_shuffles=result.null_shuffles,
                         null_threshold=result.null_threshold,
+                        # The OMI scores of the members, for `Composition`. Read AFTER detection and
+                        # never fed back into it: see app/netdetect/formation.py.
+                        member_scores=[
+                            result.corpus.by_id[m].score
+                            for m in candidate.members if m in result.corpus.by_id
+                        ],
                     )
                     recorded += 1
                 session.commit()
@@ -492,4 +498,211 @@ def calibration_report(current: CurrentUser = Depends(require_user)) -> Calibrat
             )
             for f in report.families
         ],
+    )
+
+
+# ---------------------------------------------------------------------------------------------------
+# The operation registry, and the question it exists to answer.
+#
+# A finding is an EVENT; an operation is a thing that persists, rotates its accounts, goes quiet and
+# comes back. Detection alone starts from nothing every run, so it could never say the most useful
+# thing an investigator can hear: we have seen this operator before, and here is the account that
+# just walked into it.
+# ---------------------------------------------------------------------------------------------------
+
+
+class FormationOut(BaseModel):
+    formation_key: str
+    platform: str
+    label: str | None
+    #: forming / active / dormant / resurgent. RESURGENT exists only because the entity survived the
+    #: quiet period, and it is the phase a per-run detector can never report.
+    phase: str
+    previous_phase: str | None
+    member_count: int
+    sighting_count: int
+    #: Distinct posts. A re-scan of one post is one sighting, never two.
+    context_count: int
+    families: list[str]
+    profile_size: int
+    first_seen: str | None
+    last_seen: str | None
+    status: str
+    #: What the per-account engine makes of the members, computed AFTER detection and never fed back
+    #: into it. `posture: "concealed"` is the finding only this system can produce: individually
+    #: unremarkable accounts that a degree-preserving null says are coordinated anyway.
+    composition: dict
+
+
+def _formation_out(row) -> FormationOut:
+    return FormationOut(
+        formation_key=row.formation_key,
+        platform=row.platform,
+        label=row.label,
+        phase=row.phase,
+        previous_phase=row.previous_phase,
+        member_count=row.member_count,
+        sighting_count=row.sighting_count,
+        context_count=len(row.contexts_json or []),
+        families=list(row.families_json or []),
+        profile_size=len(row.profile_json or []),
+        first_seen=row.first_seen.isoformat() if row.first_seen else None,
+        last_seen=row.last_seen.isoformat() if row.last_seen else None,
+        status=row.status,
+        composition=dict(row.composition_json or {}),
+    )
+
+
+@admin_router.get("/formations", response_model=list[FormationOut])
+def list_formations(
+    phase: str = Query("all", pattern="^(all|forming|active|dormant|resurgent)$"),
+    limit: int = Query(50, ge=1, le=200),
+    current: CurrentUser = Depends(require_user),
+) -> list[FormationOut]:
+    """Known operations, most recently seen first."""
+    _require_admin(current)
+    from sqlalchemy import select as _select
+
+    from app.netdetect import registry
+    from app.storage.models import NetdetectFormation
+
+    with get_session() as session:
+        # Phases go stale by the ABSENCE of an event, so nothing ever writes to notice a formation
+        # went quiet. Refresh before listing, or a year-dead operation reads as active forever.
+        registry.refresh_phases(session)
+        stmt = _select(NetdetectFormation)
+        if phase != "all":
+            stmt = stmt.where(NetdetectFormation.phase == phase)
+        rows = list(session.execute(
+            stmt.order_by(NetdetectFormation.last_seen.desc().nullslast()).limit(limit)
+        ).scalars())
+        out = [_formation_out(r) for r in rows]
+        session.commit()
+        return out
+
+
+class MatchedOut(BaseModel):
+    family: str
+    kind: str
+    value: str
+    surprise: float
+    sentence: str
+
+
+class AssignmentOut(BaseModel):
+    formation_key: str
+    label: str | None = None
+    phase: str | None = None
+    #: Capped log10 likelihood ratio; what the posterior is built from.
+    log_lr: float
+    #: Uncapped, and used only to ORDER formations. The cap is about what may be claimed; applying
+    #: it to the ranking too would collapse every strong match to one value.
+    raw_log_lr: float
+    posterior: float
+    by_family: dict[str, float]
+    #: Evidence in the operator's own acts (how accounts were made, which outside targets they
+    #: converge on). A match on topic and rhythm alone is what any two automated accounts share.
+    hard_evidence: float
+    assigned: bool
+    refused: str | None
+    abstained: str | None
+    matched: list[MatchedOut]
+
+
+class AssignRequest(BaseModel):
+    #: Investigation to take the account's behaviour from.
+    slug: str = Field(min_length=1, max_length=200)
+    #: The account to place. Must be a commenter stored on that investigation.
+    external_id: str = Field(min_length=1, max_length=128)
+
+
+ASSIGNMENT_NOTE = (
+    "An assignment is a lead, not a membership record. It never reads the account's OMI score, for "
+    "the same reason detection does not: a competent operation's accounts each look ordinary, and "
+    "gating on suspicion would refuse exactly the members worth finding. An empty result means no "
+    "KNOWN formation matched, never that the account is uncoordinated, because an operation nobody "
+    "has catalogued yet is precisely what the detector exists to find."
+)
+
+
+class AssignOut(BaseModel):
+    external_id: str
+    handle: str
+    #: Every formation weighed, best first, including the refusals. "We looked at forty and refused
+    #: all of them" is a more trustworthy statement than an empty list.
+    candidates: list[AssignmentOut]
+    best: AssignmentOut | None
+    note: str = ASSIGNMENT_NOTE
+
+
+@admin_router.post("/formations/assign", response_model=AssignOut)
+def assign_account(
+    body: AssignRequest,
+    current: CurrentUser = Depends(require_user),
+) -> AssignOut:
+    """Which known operation does this scanned account belong to?
+
+    NESTED UNDER /formations ON PURPOSE. At `/assign` this was silently shadowed by
+    `POST /{slug}`, which is declared first and matched it with slug="assign", so every call came
+    back 404 "No such investigation" and read as a data problem rather than a routing one. CLAUDE.md
+    records the same trap for `/v1/investigations/claim`, which is safe only because `{slug}` is GET
+    and PATCH there. A two-segment path cannot be shadowed by a one-segment parameter at all, which
+    is a structural fix rather than an ordering one somebody has to remember.
+
+    THE CAPABILITY DETECTION CANNOT PROVIDE. `detect` finds formations inside one corpus and forgets
+    them, so an account scanned today could belong to an operation catalogued weeks ago in a
+    different customer's investigation and nothing would say so. This asks that question directly,
+    as a likelihood ratio against each known formation's discriminative profile.
+
+    Costs nothing: no provider call, no model call, no credit. It reads a payload already stored.
+    """
+    _require_admin(current)
+    from app.netdetect import registry
+    from app.netdetect.assign import rank
+    from app.netdetect.features import profile_from_commenter
+
+    with get_session() as session:
+        inv = session.execute(
+            select(Investigation).where(Investigation.slug == body.slug)
+        ).scalar_one_or_none()
+        if inv is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such investigation.")
+        payload = inv.payload_json or {}
+        target = str(getattr(inv, "target_id", "") or "")
+        rows = [c for c in (payload.get("commenters") or []) if isinstance(c, dict)]
+        row = next((r for r in rows if str(r.get("external_id")) == body.external_id), None)
+        if row is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "That investigation did not scan that account, so there is no behaviour to place.",
+            )
+        profiles = registry.load_profiles(session)
+        labels = {
+            f.formation_key: (f.label, f.phase)
+            for f in session.execute(select(NetdetectFormation)).scalars()
+        }
+
+    account = profile_from_commenter(row, exclude_context={target} if target else set())
+    results = rank(account, profiles)
+
+    def out(a) -> AssignmentOut:
+        label, phase = labels.get(a.formation_key, (None, None))
+        return AssignmentOut(
+            formation_key=a.formation_key, label=label, phase=phase,
+            log_lr=a.log_lr, raw_log_lr=a.raw_log_lr, posterior=a.posterior,
+            by_family={k: round(v, 3) for k, v in sorted(a.by_family.items())},
+            hard_evidence=round(a.hard_evidence, 3),
+            assigned=a.assigned, refused=a.refused, abstained=a.abstained,
+            matched=[MatchedOut(family=m.family, kind=m.kind, value=m.value,
+                                surprise=m.surprise, sentence=m.sentence)
+                     for m in a.matched[:12]],
+        )
+
+    serialised = [out(a) for a in results]
+    winner = next((s for s in serialised if s.assigned), None)
+    return AssignOut(
+        external_id=body.external_id,
+        handle=str(row.get("handle") or ""),
+        candidates=serialised[:20],
+        best=winner,
     )

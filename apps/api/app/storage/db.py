@@ -203,6 +203,8 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     ("netdetect_findings", "weak_members_json", "JSON"),
     ("netdetect_findings", "attachment_note", "TEXT"),
     ("netdetect_findings", "attachment_checked", "INTEGER DEFAULT 0"),
+    #: The formation a finding was resolved to, so a stored finding can name its operation.
+    ("netdetect_findings", "formation_key", "VARCHAR(32)"),
 ]
 
 

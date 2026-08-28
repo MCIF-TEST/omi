@@ -100,8 +100,46 @@ def organic_population(n: int = 60, *, seed: int = 7) -> list[dict]:
     return out
 
 
+#: The behavioural signature of ONE operator: the things a formation keeps doing across runs.
+#:
+#: THE SEED DOES NOT VARY ANY OF THIS, AND THAT MATTERED. Every one of these was hardcoded, so
+#: `planted_operation(seed=6)` and `planted_operation(seed=99)` produced two account sets running
+#: the SAME operation: same script, same publishing tool, same signup week, same campaign targets,
+#: same bio, same handle factory. The seed varied only filler text and jitter.
+#:
+#: Nothing noticed, because every test asked "was the operation found" and none asked "was it told
+#: apart from a different one". That is unaskable without this parameter, and it is exactly the
+#: question `app/netdetect/assign.py` has to answer: an account belongs to THIS formation, not to
+#: some other one that also happens to be automated.
+OPERATORS: dict[str, dict] = {
+    # The original, kept byte-identical so every existing corpus and every pinned measurement in
+    # `test_netdetect.py` stays exactly what it was.
+    "stadium": {
+        "script": "the stadium deal is a terrible use of public money in my honest opinion",
+        "client": "SocialPilot",
+        "bio": "views my own | follow for updates",
+        "handle": lambda i: f"news_watch_{1000 + i * 7}",
+        "signup_days_ago": 40,
+        "target": lambda j: f"campaign_post_{j % 3}",
+        "interval_minutes": 62,
+    },
+    # A genuinely different operator: different script, tool, factory, provisioning window and
+    # targets. Shares only the fact of being automated, which is the whole point.
+    "clinic": {
+        "script": "the new clinic closure leaves this whole district without any urgent care",
+        "client": "BulkPoster Studio",
+        "bio": "health advocate | opinions are mine alone",
+        "handle": lambda i: f"care_voice{4200 + i * 3}",
+        "signup_days_ago": 300,
+        "target": lambda j: f"health_thread_{j % 4}",
+        "interval_minutes": 37,
+    },
+}
+
+
 def planted_operation(
     size: int = 8, *, seed: int = 99, discipline: float = 0.0, prefix: str = "op",
+    operator: str = "stadium",
 ) -> list[dict]:
     """An operation, with a dial for how well run it is.
 
@@ -109,10 +147,15 @@ def planted_operation(
     to 1 (competent: individually written posts, ordinary clients, aged accounts, human handles).
     The dilution curve over this dial IS the honest product claim, so the dial is the point of the
     generator rather than a convenience.
+
+    ``operator`` selects WHICH operation this is. Two calls with different operators are two
+    different adversaries; two calls with the same operator and different seeds are two runs of one
+    adversary, which is what makes rotation and cross-run assignment testable at all.
     """
     rng = random.Random(seed)
-    shared_line = "the stadium deal is a terrible use of public money in my honest opinion"
-    signup = BASE - timedelta(days=40)
+    op = OPERATORS[operator]
+    shared_line = op["script"]
+    signup = BASE - timedelta(days=op["signup_days_ago"])
     out = []
 
     for i in range(size):
@@ -121,22 +164,22 @@ def planted_operation(
         posts = []
         for j in range(rng.randint(14, 22)):
             # A scheduler: near-constant interval, no sleep window.
-            t = t + (timedelta(minutes=62) if sloppy
+            t = t + (timedelta(minutes=op["interval_minutes"]) if sloppy
                      else timedelta(minutes=rng.randint(30, 500)))
             text = shared_line if (sloppy and j % 5 == 0) else _sentence(rng)
             posts.append(_post(
                 text, t,
-                client="SocialPilot" if sloppy else rng.choice(
+                client=op["client"] if sloppy else rng.choice(
                     ["Twitter for iPhone", "Twitter Web App"]),
-                parent=f"campaign_post_{j % 3}" if sloppy else None,
+                parent=op["target"](j) if sloppy else None,
             ))
         out.append(_account(
             f"{prefix}{i:03d}",
             posts=posts,
-            bio="views my own | follow for updates" if sloppy else "just here for the local news",
+            bio=op["bio"] if sloppy else "just here for the local news",
             created=(signup + timedelta(hours=i * 3)) if sloppy
             else BASE - timedelta(days=rng.randint(400, 2500)),
-            handle=(f"news_watch_{1000 + i * 7}" if sloppy
+            handle=(op["handle"](i) if sloppy
                     else f"{rng.choice(['chris', 'dana', 'rob'])}{rng.randint(1, 999)}"),
             score=30.0, tier="moderate",
         ))
