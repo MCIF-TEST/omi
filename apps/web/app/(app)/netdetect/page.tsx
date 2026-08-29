@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { apiServer } from '@/lib/api-server';
 import { type User } from '@/lib/api';
 import { FindingQueue } from './finding-queue';
+import { FormationCatalogue } from './formation-catalogue';
 import { FormationSweep } from './formation-sweep';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
@@ -42,6 +43,8 @@ export default async function NetdetectPage() {
         title="Network findings"
         lede="Sets of accounts that share improbably many rare behaviours, corrected for the size of the search. A finding is a lead, not a verdict: judging one records the only ground truth this detector will ever accumulate, and nothing here reaches a customer."
       />
+
+      <FormationCatalogue />
 
       <FormationSweep />
 

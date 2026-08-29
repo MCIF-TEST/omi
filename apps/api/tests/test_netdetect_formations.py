@@ -657,3 +657,71 @@ def test_the_score_characterises_a_placement_and_never_decides_it():
         "an UNSCORED account was marked concealed. None is not low: it means nobody examined it, "
         "and reading it as concealed manufactures the most alarming label out of missing data"
     )
+
+
+# ==================================================================================================
+# Ageing the catalogue
+# ==================================================================================================
+def test_the_monitoring_pass_ages_the_formation_catalogue():
+    """DORMANCY IS THE ABSENCE OF AN EVENT, which nothing else in this package has to deal with.
+
+    Every other state change here is driven by something happening: a finding is recorded, an
+    operator judges it, an account is placed. A formation that simply STOPPED posting emits nothing
+    to notice, so without a sweep it stays `active` forever and the catalogue slowly fills with
+    operations that ended months ago, all presenting as live.
+
+    `registry.refresh_phases` was written for exactly this and had nothing calling it.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from app.monitoring.scheduler import _refresh_formation_phases
+    from app.netdetect.formation import DORMANT_AFTER_DAYS
+    from app.storage.db import get_session
+    from app.storage.models import NetdetectFormation
+
+    now = datetime.now(timezone.utc)
+    with get_session() as session:
+        for key, last_seen in (
+            ("stale_op", now - timedelta(days=DORMANT_AFTER_DAYS + 30)),
+            ("live_op", now - timedelta(days=1)),
+        ):
+            session.add(NetdetectFormation(
+                formation_key=key, platform="x", phase="active",
+                profile_json={}, families_json=[], members_json=["a", "b"], member_count=2,
+                contexts_json=["p"], sighting_count=1,
+                first_seen=now - timedelta(days=200), last_seen=last_seen,
+            ))
+        session.commit()
+
+    assert _refresh_formation_phases() == 1
+
+    with get_session() as session:
+        phases = {
+            f.formation_key: f.phase
+            for f in session.execute(select(NetdetectFormation)).scalars()
+        }
+    assert phases["stale_op"] == "dormant", "a formation that stopped posting still reads as live"
+    assert phases["live_op"] == "active", "an active formation was aged out"
+
+
+def test_ageing_the_catalogue_never_fails_the_monitoring_pass():
+    """A phase is a label on a lead an operator reads. Failing the pass over one would take the
+    anomaly detection and the watchlist rescans down with it, and those are what customers
+    actually depend on."""
+    from app.monitoring import scheduler
+
+    class Exploding:
+        def __enter__(self):
+            raise RuntimeError("the database went away")
+
+        def __exit__(self, *a):
+            return False
+
+    original = scheduler.get_session
+    scheduler.get_session = lambda: Exploding()
+    try:
+        assert scheduler._refresh_formation_phases() == 0
+    finally:
+        scheduler.get_session = original

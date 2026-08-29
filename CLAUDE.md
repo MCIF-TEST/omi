@@ -31,8 +31,8 @@ will be re-broken by anyone who reasons about them instead: the OMI score may ch
 formation but never detect one, and **total accumulated history does not separate an operation from
 a newsroom**, so only its hard-family half discriminates.
 
-Suite measured at **2531
-passed, 8 skipped, 2 failed** (22m03s, 2026-08-29), both failures pre-existing and listed below. The 8
+Suite measured at **2535
+passed, 8 skipped, 2 failed** (22m07s, 2026-08-29), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -85,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2531 passed, 8 skipped, 2 failed** (22m03s, 2026-08-29), both documented below:
+Current measured state: **2535 passed, 8 skipped, 2 failed** (22m07s, 2026-08-29), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1818,7 +1818,11 @@ recognised after every account in it has been burned, and it is the same reasoni
   An **overt** one at `OVERT_MEDIAN_SCORE` (70) is a group of accounts anybody could already spot.
 - **`phase_of` reads dormancy as the ABSENCE of an event**, which nothing else in this codebase
   does. `refresh_phases` therefore has to run on a schedule: a formation that stopped posting emits
-  nothing to notice, so without a sweep it stays `active` forever.
+  nothing to notice, so without a sweep it stays `active` forever. **`monitoring/scheduler.py`'s
+  pass now calls it**, which is where it belongs because that loop already holds the Postgres
+  advisory lock, so N instances do not each age the catalogue N times. It is best-effort and never
+  raises: a phase is a label on a lead, and failing the pass over one would take the anomaly
+  detection and the watchlist rescans down with it.
 - **A re-run of one post is not a second sighting.** `contexts_json` is a set, exactly as in the
   tracking layer, so nobody can strengthen a formation by pressing the button again.
 
@@ -1891,6 +1895,13 @@ the **identical placement** and only the label changes, which is what keeps the 
 filter's blind spot from being rebuilt here. `None` is not low: an unscored account was never
 examined, and marking it concealed would manufacture the system's most alarming label out of
 missing data. Pinned by `test_the_score_characterises_a_placement_and_never_decides_it`.
+
+**The catalogue itself is now readable**, as a table on the same page: phase, members, distinct
+posts and posture. A catalogue nobody can read is one nobody curates, and these rows are what every
+future sweep is measured against. `phase` is the column to look at, because `dormant` is the only
+state here derived from an event NOT happening and `resurgent` is one a per-run detector can never
+report at all. An empty catalogue says so rather than rendering an empty table, which is
+indistinguishable from one that has not loaded.
 
 **The panel is on `/netdetect`**, hanging off the page whose server gate is the access control
 rather than taking a route of its own. It renders the three outcomes separately, because "nothing

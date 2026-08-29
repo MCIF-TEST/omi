@@ -358,6 +358,36 @@ export interface NetdetectFinding {
   confirmed: boolean;
 }
 
+export interface Formation {
+  formation_key: string;
+  platform: string;
+  label: string | null;
+  /**
+   * forming / active / dormant / resurgent. RESURGENT exists only because the entity survived the
+   * quiet period, and it is the phase a per-run detector can never report.
+   */
+  phase: string;
+  previous_phase: string | null;
+  member_count: number;
+  sighting_count: number;
+  /** Distinct posts. A re-scan of one post is one sighting, never two. */
+  context_count: number;
+  families: string[];
+  profile_size: number;
+  first_seen: string | null;
+  last_seen: string | null;
+  status: string;
+  /**
+   * What the per-account engine makes of the members, computed AFTER detection and never fed back
+   * into it. `posture: "concealed"` is the finding only this system can produce.
+   */
+  composition: { posture?: string; median?: number; note?: string; scored?: number };
+}
+
+export function listFormations(): Promise<Formation[]> {
+  return apiClient<Formation[]>('/v1/admin/netdetect/formations');
+}
+
 export interface FormationPlacement {
   external_id: string;
   handle: string;

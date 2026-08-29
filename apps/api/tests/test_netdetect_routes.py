@@ -434,3 +434,26 @@ def test_the_sweep_panel_is_reached_from_the_gated_page():
     src = (_PAGE_DIR / "page.tsx").read_text()
     assert "FormationSweep" in src
     assert not (_PAGE_DIR / "sweep").exists(), "the sweep grew its own ungated route"
+
+
+def test_the_formation_catalogue_has_an_interface():
+    """The sweep can place an account in a formation, and nothing could show you the formations.
+
+    A catalogue nobody can read is a catalogue nobody curates, and these rows are what every future
+    sweep is measured against.
+    """
+    src = (_PAGE_DIR / "formation-catalogue.tsx").read_text()
+    assert "listFormations" in src
+    assert "phase" in src, "phase is the column to read: dormant and resurgent live only here"
+    assert "concealed" in src, (
+        "the catalogue drops the posture, which is the inverted reading the whole formation layer "
+        "exists to surface"
+    )
+    page = (_PAGE_DIR / "page.tsx").read_text()
+    assert "FormationCatalogue" in page, "the catalogue is not reachable from the gated page"
+
+
+def test_an_empty_catalogue_says_it_is_empty_rather_than_rendering_nothing():
+    """An empty table and a table that has not loaded look identical, and one of them is a claim."""
+    src = (_PAGE_DIR / "formation-catalogue.tsx").read_text()
+    assert "No operation has been catalogued yet" in src

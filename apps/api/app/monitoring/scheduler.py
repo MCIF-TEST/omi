@@ -117,7 +117,7 @@ def _run_one_pass_if_leader() -> dict | None:
 def run_one_pass() -> dict:
     """Run anomaly detection + watchlist auto-rescan once. Returns a small
     diagnostic dict suitable for logging or admin-route inspection."""
-    out: dict = {"anomalies": None, "watchlist_rescans": 0}
+    out: dict = {"anomalies": None, "watchlist_rescans": 0, "formation_phases": 0}
     with get_session() as session:
         svc = MonitoringService(session)
         report = svc.run_anomaly_pass()
@@ -127,7 +127,39 @@ def run_one_pass() -> dict:
         }
     rescans = _auto_rescan_due_watchlists()
     out["watchlist_rescans"] = rescans
+    out["formation_phases"] = _refresh_formation_phases()
     return out
+
+
+def _refresh_formation_phases() -> int:
+    """Age the formation catalogue.
+
+    DORMANCY IS THE ABSENCE OF AN EVENT, which nothing else in this codebase has to deal with.
+    Every other state change in `app/netdetect` is driven by something happening: a finding is
+    recorded, an operator judges it, an account is placed. A formation that simply STOPPED posting
+    emits nothing to notice, so without a sweep it stays `active` forever and the catalogue slowly
+    fills with operations that ended months ago, all presenting as live.
+
+    `registry.refresh_phases` was written for this and had nothing calling it. Running it here
+    rather than on a scheduler of its own is deliberate: this loop already holds a Postgres
+    advisory lock, so N instances do not each age the catalogue N times.
+
+    Best-effort and never raises. A phase is a label on a lead an operator reads; failing the
+    monitoring pass over one would take the anomaly detection and the watchlist rescans down with
+    it, which are the things customers actually depend on.
+    """
+    try:
+        from app.netdetect import registry
+
+        with get_session() as session:
+            changed = registry.refresh_phases(session)
+            session.commit()
+        if changed:
+            logger.info("netdetect: %d formation phases refreshed", changed)
+        return changed
+    except Exception:  # noqa: BLE001
+        logger.warning("netdetect: could not refresh formation phases", exc_info=True)
+        return 0
 
 
 def _auto_rescan_due_watchlists() -> int:
