@@ -717,6 +717,120 @@ class AssignOut(BaseModel):
     note: str = ASSIGNMENT_NOTE
 
 
+def _assignment_out(a, labels: dict) -> "AssignmentOut":
+    """One serialiser for both the single assignment and the sweep.
+
+    Shared rather than copied: the two routes make the same claim about a named person, and a
+    second copy is how one of them quietly stops carrying `refused` or `hard_evidence`. This
+    codebase has already paid for a hardcoded field list once, in
+    `coerce_comprehensive_model_output`.
+    """
+    label, phase = labels.get(a.formation_key, (None, None))
+    return AssignmentOut(
+        formation_key=a.formation_key, label=label, phase=phase,
+        log_lr=a.log_lr, raw_log_lr=a.raw_log_lr, posterior=a.posterior,
+        by_family={k: round(v, 3) for k, v in sorted(a.by_family.items())},
+        hard_evidence=round(a.hard_evidence, 3),
+        assigned=a.assigned, refused=a.refused, abstained=a.abstained,
+        matched=[MatchedOut(family=m.family, kind=m.kind, value=m.value,
+                            surprise=m.surprise, sentence=m.sentence)
+                 for m in a.matched[:12]],
+    )
+
+
+class PlacementOut(BaseModel):
+    external_id: str
+    handle: str
+    assignment: AssignmentOut
+
+
+class FormationSweepOut(BaseModel):
+    """Every scanned account weighed against every known formation.
+
+    Named for the formations rather than plain `SweepOut`, which the calibration report already
+    uses for its threshold sweeps. Two different meanings of "sweep" in one router is the kind of
+    collision that gets noticed by a linter once and by a reader never.
+    """
+
+    slug: str
+    accounts_weighed: int
+    formations_considered: int
+    placed: list[PlacementOut]
+    #: A COUNT, never a list of names. Publishing "these 140 matched nothing" invites reading it as
+    #: a clean bill of health, which is exactly what `not_a_clearance` says it is not.
+    unplaced: int
+    #: True when the account cap was reached, so an empty result is never mistaken for a complete
+    #: one that found nothing.
+    truncated: bool
+    #: Set when there is no catalogue to compare against yet, which is not the same as no match.
+    nothing_catalogued: bool
+    not_a_clearance: str
+
+
+@admin_router.post("/formations/sweep", response_model=FormationSweepOut)
+def sweep_investigation(
+    slug: str = Query(..., description="The investigation whose commenters to weigh."),
+    current: CurrentUser = Depends(require_user),
+) -> FormationSweepOut:
+    """Is anybody in this comment section part of an operation we already know about?
+
+    THE QUESTION AN ANALYST ACTUALLY HAS. `/formations/assign` answers "does THIS account belong to
+    THAT operation", which needs somebody to already suspect both. When a comment section lands
+    nobody suspects anything yet, so the useful direction is the other way round: sweep every
+    scanned account against the whole catalogue and surface the ones that place.
+
+    This is also the only part of the system that can catch an operation ACROSS investigations
+    without re-detecting it. `detect` finds formations inside one corpus; an account scanned today
+    could belong to something catalogued weeks ago in a different customer's scan, and nothing else
+    would say so.
+
+    Costs nothing: no provider call, no model call, no credit, no write. It reads a stored payload
+    and stored profiles.
+    """
+    _require_admin(current)
+    from app.netdetect import registry
+    from app.netdetect.assign import NOT_A_CLEARANCE, sweep
+    from app.netdetect.features import profile_from_commenter
+
+    with get_session() as session:
+        inv = session.execute(
+            select(Investigation).where(Investigation.slug == slug)
+        ).scalar_one_or_none()
+        if inv is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such investigation.")
+        payload = inv.payload_json or {}
+        target = str(getattr(inv, "target_id", "") or "")
+        rows = [c for c in (payload.get("commenters") or []) if isinstance(c, dict)
+                and c.get("external_id")]
+        profiles = registry.load_profiles(session)
+        labels = {
+            f.formation_key: (f.label, f.phase)
+            for f in session.execute(select(NetdetectFormation)).scalars()
+        }
+
+    exclude = {target} if target else set()
+    accounts = [profile_from_commenter(r, exclude_context=exclude) for r in rows]
+    result = sweep(accounts, profiles)
+
+    return FormationSweepOut(
+        slug=slug,
+        accounts_weighed=len(result.placed) + result.unplaced,
+        formations_considered=result.formations_considered,
+        unplaced=result.unplaced,
+        truncated=result.truncated,
+        nothing_catalogued=not result.looked,
+        not_a_clearance=NOT_A_CLEARANCE,
+        placed=[
+            PlacementOut(
+                external_id=p.external_id,
+                handle=p.handle,
+                assignment=_assignment_out(p.assignment, labels),
+            )
+            for p in result.placed
+        ],
+    )
+
+
 @admin_router.post("/formations/assign", response_model=AssignOut)
 def assign_account(
     body: AssignRequest,
@@ -767,20 +881,7 @@ def assign_account(
     account = profile_from_commenter(row, exclude_context={target} if target else set())
     results = rank(account, profiles)
 
-    def out(a) -> AssignmentOut:
-        label, phase = labels.get(a.formation_key, (None, None))
-        return AssignmentOut(
-            formation_key=a.formation_key, label=label, phase=phase,
-            log_lr=a.log_lr, raw_log_lr=a.raw_log_lr, posterior=a.posterior,
-            by_family={k: round(v, 3) for k, v in sorted(a.by_family.items())},
-            hard_evidence=round(a.hard_evidence, 3),
-            assigned=a.assigned, refused=a.refused, abstained=a.abstained,
-            matched=[MatchedOut(family=m.family, kind=m.kind, value=m.value,
-                                surprise=m.surprise, sentence=m.sentence)
-                     for m in a.matched[:12]],
-        )
-
-    serialised = [out(a) for a in results]
+    serialised = [_assignment_out(a, labels) for a in results]
     winner = next((s for s in serialised if s.assigned), None)
     return AssignOut(
         external_id=body.external_id,

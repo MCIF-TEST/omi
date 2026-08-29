@@ -497,3 +497,117 @@ def test_every_netdetect_route_is_reachable():
             f"{path} is one segment deep and shares {sorted(clash)} with /{{slug}}, which is "
             f"declared first and will swallow it. Nest it a segment deeper."
         )
+
+
+# ==================================================================================================
+# The sweep: a whole comment section against the whole catalogue
+# ==================================================================================================
+def test_a_sweep_places_a_rotated_operation_and_leaves_the_bystanders_alone():
+    """THE CAPABILITY THE SINGLE-ACCOUNT ROUTE COULD NOT OFFER.
+
+    `score_against` answers "does THIS account belong to THAT operation", which needs an operator to
+    already suspect both. When a comment section lands nobody suspects anything, so the useful
+    direction is the other way round.
+
+    Measured here: the catalogue holds two unrelated operations, a NEW comment section arrives
+    carrying the stadium operator on accounts that share no id with anything catalogued, and the
+    sweep places 8 of 8 in the right formation, 0 of 60 ordinary accounts anywhere, and none in the
+    wrong operation.
+    """
+    from app.netdetect.assign import sweep
+
+    stadium, _ = learn("stadium", bg=5, op=6)
+    clinic, _ = learn("clinic", bg=17, op=23)
+    assert stadium is not None and clinic is not None, "fixture changed"
+    profiles = {"STADIUM": stadium, "CLINIC": clinic}
+
+    rows = C.organic_population(60, seed=31) + C.planted_operation(
+        8, seed=6, discipline=0.0, operator="stadium", prefix="new")
+    accounts = [profile_from_commenter(r) for r in rows if r.get("external_id")]
+
+    result = sweep(accounts, profiles)
+    placed = {p.external_id: p.assignment.formation_key for p in result.placed}
+
+    operation = {r["external_id"] for r in rows if r["external_id"].startswith("new")}
+    ordinary = {r["external_id"] for r in rows if r["external_id"].startswith("org")}
+
+    assert operation <= set(placed), (
+        f"only {len(operation & set(placed))} of {len(operation)} rotated members were placed"
+    )
+    assert not (ordinary & set(placed)), (
+        f"ordinary accounts were placed in an operation: {sorted(ordinary & set(placed))}"
+    )
+    assert all(key == "STADIUM" for eid, key in placed.items() if eid in operation), (
+        "a member was placed in the unrelated catalogued operation"
+    )
+    assert result.unplaced == len(ordinary)
+    assert not result.truncated
+
+
+def test_an_unplaced_account_is_a_count_and_never_a_clean_bill_of_health():
+    """`unplaced` is a NUMBER, not a list of names, and the response says why.
+
+    Publishing "these 140 accounts matched no known operation" invites reading it as innocence. An
+    account placed in nothing is one this deployment has never catalogued doing this before, and an
+    operation nobody has recorded is exactly what `detect` exists to find.
+    """
+    from app.netdetect.assign import NOT_A_CLEARANCE, Sweep, sweep
+
+    stadium, _ = learn("stadium", bg=5, op=6)
+    rows = C.organic_population(40, seed=13)
+    accounts = [profile_from_commenter(r) for r in rows]
+
+    result = sweep(accounts, {"STADIUM": stadium})
+    assert result.placed == []
+    assert result.unplaced == len(accounts)
+    assert isinstance(result.unplaced, int)
+    assert not hasattr(result, "unplaced_ids")
+
+    assert "not a finding of innocence" in NOT_A_CLEARANCE
+    assert "never as" in NOT_A_CLEARANCE
+
+    # An empty catalogue is a THIRD state: nobody looked, which is not "no match".
+    empty = sweep(accounts, {})
+    assert not empty.looked and empty.skipped == len(accounts)
+    assert empty.unplaced == 0, "no catalogue was read as every account matching nothing"
+    assert isinstance(Sweep(), Sweep)
+
+
+def test_the_sweep_reports_its_own_truncation():
+    """A capped sweep that answered silently would be a claim about the accounts it never weighed."""
+    from app.netdetect.assign import MAX_SWEEP_ACCOUNTS, sweep
+
+    stadium, _ = learn("stadium", bg=5, op=6)
+    rows = C.organic_population(60, seed=13)
+    accounts = [profile_from_commenter(r) for r in rows] * 10
+    assert len(accounts) > MAX_SWEEP_ACCOUNTS
+
+    result = sweep(accounts, {"STADIUM": stadium})
+    assert result.truncated
+    assert result.placed == [] and result.unplaced == MAX_SWEEP_ACCOUNTS
+
+
+def test_the_sweep_route_is_reachable_and_not_shadowed():
+    """`POST /{slug}` is declared first and would match a single-segment `/sweep` with
+    slug="sweep", answering 404 "No such investigation": a routing fault that reads as a data one.
+    Two segments cannot be shadowed by a one-segment parameter."""
+    from app.main import create_app
+
+    paths = create_app().openapi()["paths"]
+    assert "/v1/admin/netdetect/formations/sweep" in paths
+    assert "post" in paths["/v1/admin/netdetect/formations/sweep"]
+
+
+def test_both_assignment_routes_serialise_through_one_function():
+    """A second copy is how one of them quietly stops carrying `refused` or `hard_evidence`, and
+    both make the same claim about a named person. This repo already paid for a hardcoded field
+    list once, in `coerce_comprehensive_model_output`."""
+    import inspect
+
+    from app.routes import netdetect as routes
+
+    source = inspect.getsource(routes)
+    assert source.count("def _assignment_out(") == 1
+    assert source.count("AssignmentOut(\n") == 1, (
+        "AssignmentOut is constructed in more than one place; use _assignment_out"
+    )

@@ -80,6 +80,11 @@ NETDETECT_ROUTES = [
     ("POST", "/v1/admin/netdetect/inv_anything"),
     ("GET", "/v1/admin/netdetect/findings/all"),
     ("GET", "/v1/admin/netdetect/findings/calibration"),
+    # The formation catalogue and the two placement routes. These name real people as members of
+    # an operation, and the sweep does it for a whole comment section at once, so they are the last
+    # routes that should ever answer an ordinary customer.
+    ("GET", "/v1/admin/netdetect/formations"),
+    ("POST", "/v1/admin/netdetect/formations/sweep?slug=inv_anything"),
 ]
 
 NARRATIVE_ROUTES = [

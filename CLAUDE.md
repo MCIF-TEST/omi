@@ -31,7 +31,7 @@ will be re-broken by anyone who reasons about them instead: the OMI score may ch
 formation but never detect one, and **total accumulated history does not separate an operation from
 a newsroom**, so only its hard-family half discriminates.
 
-Suite measured at **2521
+Suite measured at **2528
 passed, 8 skipped, 2 failed** (21m52s, 2026-08-29), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
@@ -85,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2521 passed, 8 skipped, 2 failed** (21m52s, 2026-08-29), both documented below:
+Current measured state: **2528 passed, 8 skipped, 2 failed** (21m52s, 2026-08-29), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1851,6 +1851,40 @@ the boot pass tried to index a column the real table did not have.
 `test_the_netdetect_columns_did_not_leak_onto_another_model` pins it now.
 
 Pinned by `tests/test_netdetect_formations.py` (26).
+
+#### The sweep: a whole comment section against the whole catalogue
+
+`assign.sweep` + `POST /v1/admin/netdetect/formations/sweep?slug=<slug>`.
+
+`score_against` answers "does THIS account belong to THAT operation", which requires an operator to
+suspect both already. When a comment section lands nobody suspects anything, so the useful question
+runs the other way: **is anybody here part of something we have already catalogued?** This is also
+the only thing in the system that catches an operation ACROSS investigations without re-detecting
+it, since `detect` finds formations inside one corpus and an account scanned today may belong to
+something recorded weeks ago in a different customer's scan.
+
+Measured on a catalogue of two unrelated operations, sweeping a NEW comment section carrying the
+stadium operator on accounts that share no id with anything stored: **8 of 8 placed, all in the
+correct formation, 0 of 60 ordinary accounts placed anywhere, 0 placed in the wrong operation,
+0.02s for 400 accounts.** That is rotation survival working at the section level rather than the
+account level.
+
+Three rules:
+
+- **`unplaced` is a COUNT, never a list of names.** Publishing "these 140 matched no known
+  operation" invites reading it as a clean bill of health. `NOT_A_CLEARANCE` ships on the response
+  saying so: an account placed in nothing is one this deployment has never catalogued doing this
+  before, and an operation nobody has recorded is exactly what `detect` exists to find.
+- **An empty catalogue is a THIRD state.** `nothing_catalogued` is distinct from "weighed and
+  matched nothing", the same distinction as `attachment_checked` and `corroboration.checked`.
+- **A capped sweep reports its truncation**, because answering silently about the accounts it never
+  weighed is a claim about them.
+
+`_assignment_out` is shared by both placement routes rather than copied. They make the same claim
+about a named person, and a second copy is how one of them quietly stops carrying `refused` or
+`hard_evidence`; this repo already paid for a hardcoded field list once in
+`coerce_comprehensive_model_output`. Pinned, along with the two-segment path (a single-segment
+`/sweep` is shadowed by `POST /{slug}` and answers 404 "No such investigation").
 
 #### Corroboration: the accumulating graph was written for years and never read back
 

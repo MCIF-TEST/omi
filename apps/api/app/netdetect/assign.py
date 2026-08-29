@@ -46,6 +46,7 @@ WHAT IT REFUSES
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from app.netdetect.formation import FormationProfile, logistic
@@ -235,6 +236,86 @@ def rank(account: AccountProfile,
     # Ordered on the UNCAPPED value: several formations can sit at the cap, and the cap is about
     # what may be claimed rather than about which formation fits best.
     out.sort(key=lambda a: (-a.raw_log_lr, a.formation_key))
+    return out
+
+
+#: Accounts swept in one request. A comment section is bounded by the scan cap, and the work is a
+#: set intersection per (account, formation) pair, but an unbounded product inside an admin request
+#: is how a cheap read becomes a slow one on a page somebody is waiting for.
+MAX_SWEEP_ACCOUNTS = 400
+
+
+@dataclass(slots=True)
+class Placement:
+    """One account, and the known formation it was placed in."""
+
+    external_id: str
+    handle: str
+    assignment: Assignment
+
+
+@dataclass(slots=True)
+class Sweep:
+    """Every account in a comment section, weighed against every known formation.
+
+    THE CAPABILITY THE ROUTE COULD NOT OFFER. `score_against` answers "does THIS account belong to
+    THAT operation", which requires an operator to already suspect both. The question an analyst
+    actually has when a comment section lands is the other way round: is anybody here part of
+    something we have already catalogued?
+    """
+
+    placed: list[Placement] = field(default_factory=list)
+    #: Accounts weighed and placed in nothing. A COUNT, never a list of names: publishing "these
+    #: 140 accounts matched no known operation" invites reading it as a clean bill of health, and
+    #: it is not one. See `NOT_A_CLEARANCE`.
+    unplaced: int = 0
+    #: Accounts that could not be weighed at all (no formation catalogued, nothing to compare).
+    skipped: int = 0
+    formations_considered: int = 0
+    truncated: bool = False
+
+    @property
+    def looked(self) -> bool:
+        return self.formations_considered > 0
+
+
+#: Why an empty sweep is not an all-clear, stated with the result rather than left in a docstring.
+NOT_A_CLEARANCE = (
+    "An account placed in no known formation is an account this deployment has never catalogued "
+    "doing this before. That is not a finding of innocence: an operation nobody has recorded yet is "
+    "exactly what the detector exists to find, and a disciplined one emits nothing to place. Read "
+    "an empty sweep as 'no match in the catalogue', never as 'these accounts are unrelated'."
+)
+
+
+def sweep(accounts: Iterable[AccountProfile],
+          profiles: dict[str, FormationProfile]) -> Sweep:
+    """Weigh a whole comment section against the catalogue.
+
+    Bounded, and it reports its own truncation rather than quietly answering about a subset, which
+    would be a claim about the accounts it never looked at.
+    """
+    out = Sweep(formations_considered=len(profiles))
+    if not profiles:
+        out.skipped = sum(1 for _ in accounts)
+        return out
+
+    for i, account in enumerate(accounts):
+        if i >= MAX_SWEEP_ACCOUNTS:
+            out.truncated = True
+            break
+        placement = best(account, profiles)
+        if placement is None:
+            out.unplaced += 1
+            continue
+        out.placed.append(Placement(
+            external_id=account.external_id,
+            handle=account.handle or account.external_id,
+            assignment=placement,
+        ))
+
+    # Strongest first: an operator reads the top of this list and stops.
+    out.placed.sort(key=lambda p: (-p.assignment.raw_log_lr, p.external_id))
     return out
 
 
