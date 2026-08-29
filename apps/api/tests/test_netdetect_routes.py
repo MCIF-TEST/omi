@@ -409,3 +409,28 @@ def test_no_number_is_rendered_beside_a_member_name():
             f"judgement about them, and the only per-member figure available does not separate "
             f"bystanders from real members."
         )
+
+
+def test_the_sweep_panel_distinguishes_all_three_outcomes():
+    """"Nothing catalogued", "weighed and matched nothing", and "placed" are different statements
+    about named people, and two of them present as an empty list.
+
+    Same distinction the API draws with `nothing_catalogued` and a finding draws with
+    `attachment_checked`. A panel that branched on the list being empty would tell an operator that
+    a section is clean when in fact no operation has ever been catalogued to compare it against.
+    """
+    src = (_PAGE_DIR / "formation-sweep.tsx").read_text()
+    assert "nothing_catalogued" in src, "the sweep panel cannot tell 'nobody looked' from 'no match'"
+    assert "not_a_clearance" in src, (
+        "the panel drops the notice saying an unplaced account is not a clean bill of health, which "
+        "is exactly the result most likely to be read as a verdict it is not"
+    )
+    assert "truncated" in src, "a capped sweep would render as a complete one that found nothing"
+
+
+def test_the_sweep_panel_is_reached_from_the_gated_page():
+    """It has to hang off `page.tsx`, whose server gate is the access control. A route of its own
+    would need its own gate, and this repo's rule is that the nav flag is presentation only."""
+    src = (_PAGE_DIR / "page.tsx").read_text()
+    assert "FormationSweep" in src
+    assert not (_PAGE_DIR / "sweep").exists(), "the sweep grew its own ungated route"

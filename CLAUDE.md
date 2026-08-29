@@ -1880,6 +1880,13 @@ Three rules:
 - **A capped sweep reports its truncation**, because answering silently about the accounts it never
   weighed is a claim about them.
 
+**The panel is on `/netdetect`**, hanging off the page whose server gate is the access control
+rather than taking a route of its own. It renders the three outcomes separately, because "nothing
+catalogued yet", "weighed and matched nothing" and "placed" are different statements about named
+people and two of them present as an empty list; a panel that branched on the list being empty
+would tell an operator a section is clean when no operation has ever been catalogued to compare it
+against.
+
 `_assignment_out` is shared by both placement routes rather than copied. They make the same claim
 about a named person, and a second copy is how one of them quietly stops carrying `refused` or
 `hard_evidence`; this repo already paid for a hardcoded field list once in

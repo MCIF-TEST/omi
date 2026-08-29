@@ -358,6 +358,44 @@ export interface NetdetectFinding {
   confirmed: boolean;
 }
 
+export interface FormationPlacement {
+  external_id: string;
+  handle: string;
+  assignment: {
+    formation_key: string;
+    label: string | null;
+    phase: string | null;
+    posterior: number;
+    hard_evidence: number;
+    by_family: Record<string, number>;
+    assigned: boolean;
+    matched: { family: string; kind: string; value: string; sentence: string }[];
+  };
+}
+
+export interface FormationSweep {
+  slug: string;
+  accounts_weighed: number;
+  formations_considered: number;
+  placed: FormationPlacement[];
+  /**
+   * A COUNT, never a list of names. An account placed in nothing is one this deployment has never
+   * catalogued doing this before, which is not innocence. See `not_a_clearance`.
+   */
+  unplaced: number;
+  truncated: boolean;
+  /** A THIRD state: nobody looked, which is not the same as "weighed and matched nothing". */
+  nothing_catalogued: boolean;
+  not_a_clearance: string;
+}
+
+export function sweepFormations(slug: string): Promise<FormationSweep> {
+  return apiClient<FormationSweep>(
+    `/v1/admin/netdetect/formations/sweep?slug=${encodeURIComponent(slug)}`,
+    { method: 'POST' },
+  );
+}
+
 export function listNetdetectFindings(
   status: NetdetectStatus | 'all' = 'open',
 ): Promise<NetdetectFinding[]> {
