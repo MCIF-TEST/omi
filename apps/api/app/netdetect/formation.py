@@ -103,6 +103,12 @@ class FormationProfile:
     #: Corpus the profile was measured in, so a reader can weigh a finding among 30 accounts against
     #: the same finding among 3,000.
     corpus_size: int = 0
+    #: Which platform this operation was observed on. Carried so `assign` can apply the rule
+    #: `campaigns/tracking/crossplatform.py` already states: a cross-platform claim may rest only
+    #: on evidence that means the same thing on both services. Empty means unknown, which is read
+    #: as "do not restrict" rather than as a mismatch, so profiles stored before this existed keep
+    #: behaving as they did.
+    platform: str = ""
 
     @property
     def hard_families(self) -> set[str]:

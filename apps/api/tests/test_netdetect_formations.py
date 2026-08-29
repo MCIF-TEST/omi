@@ -725,3 +725,101 @@ def test_ageing_the_catalogue_never_fails_the_monitoring_pass():
         assert scheduler._refresh_formation_phases() == 0
     finally:
         scheduler.get_session = original
+
+
+# ==================================================================================================
+# Across platforms, only evidence that means the same thing on both may count
+# ==================================================================================================
+def _profile_on(platform: str):
+    from app.netdetect.formation import FormationProfile
+
+    base, _ = learn("stadium", bg=5, op=6)
+    assert base is not None, "fixture changed"
+    return FormationProfile(features=base.features, families=base.families,
+                            corpus_size=base.corpus_size, platform=platform)
+
+
+def _account_on(platform: str):
+    rows = C.planted_operation(8, seed=6, discipline=0.0, prefix="yt")
+    for r in rows:
+        r["platform"] = platform
+    return profile_from_commenter(rows[0])
+
+
+def test_a_cross_platform_placement_may_not_rest_on_identity_or_infrastructure():
+    """THE RULE `campaigns/tracking/crossplatform.py` ARGUES, WHICH ASSIGNMENT NEVER APPLIED.
+
+    An X account id and a YouTube channel id never match, so a cross-platform claim can only rest on
+    what the accounts DID. A client string is read from an X-only field, and handle conventions
+    differ per platform, so a shared skeleton across two services is evidence about the services'
+    naming rules rather than about the accounts.
+
+    It matters because `identity` is weighted 1.00 and is HARD, so a coincidental cross-platform
+    collision there could clear `MIN_HARD_EVIDENCE` alone. Measured before the restriction: the same
+    operator's accounts relabelled as another platform placed at posterior 0.990 carrying
+    `identity: 9.0` and `infrastructure: 6.0`.
+    """
+    same = score_against(_account_on("x"), _profile_on("x"), formation_key="XOP")
+    cross = score_against(_account_on("youtube"), _profile_on("x"), formation_key="XOP")
+
+    assert same.by_family.get("identity", 0) > 0
+    assert same.by_family.get("infrastructure", 0) > 0
+    assert not cross.by_family.get("identity"), "identity survived a platform change"
+    assert not cross.by_family.get("infrastructure"), "infrastructure survived a platform change"
+    assert cross.hard_evidence < same.hard_evidence
+
+    # STILL PLACED, on evidence that travels. The restriction removes families, not the finding:
+    # refusing every cross-platform placement would be a different and wrong rule.
+    assert cross.assigned, "a genuine cross-platform operation stopped being recognisable at all"
+
+
+def test_a_mention_does_not_travel_but_a_hashtag_does():
+    """`narrative` is the one family that is HALF neutral, and it only became so recently.
+
+    It was wholly neutral when it meant topic ids, which come from the cross-investigation embedding
+    space rather than from any platform. Then mentions and hashtags started filling it. A hashtag is
+    the same campaign tag on any service; a mention is a handle inside a per-platform namespace, so
+    `@someone` on two services is two unrelated accounts and a match between them is a collision.
+
+    Excluded by KIND, because dropping the family would throw away hashtags and topics to remove
+    mentions.
+    """
+    from app.netdetect.types import is_platform_neutral
+
+    assert is_platform_neutral("narrative", "hashtag")
+    assert is_platform_neutral("narrative", "topic")
+    assert not is_platform_neutral("narrative", "mentions")
+    assert not is_platform_neutral("identity", "signup_week")
+    assert is_platform_neutral("text", "shingle")
+
+    cross = score_against(_account_on("youtube"), _profile_on("x"), formation_key="XOP")
+    same = score_against(_account_on("x"), _profile_on("x"), formation_key="XOP")
+    assert 0 < cross.by_family.get("narrative", 0) < same.by_family["narrative"], (
+        "narrative either survived whole (mentions travelled) or was dropped whole (hashtags lost)"
+    )
+    assert not any(m.kind == "mentions" for m in cross.matched)
+
+
+def test_an_unknown_platform_does_not_restrict_anything():
+    """Profiles stored before the platform was carried have none, and reading absence as a mismatch
+    would silently stop assigning against every one of them."""
+    legacy = score_against(_account_on("youtube"), _profile_on(""), formation_key="LEGACY")
+    same = score_against(_account_on("x"), _profile_on("x"), formation_key="XOP")
+    assert legacy.by_family.get("identity", 0) == same.by_family.get("identity", 0)
+    assert legacy.hard_evidence == same.hard_evidence
+
+
+def test_the_neutral_family_rule_agrees_with_the_tracking_layer():
+    """Two copies in two packages, restated rather than imported because the tracking module is
+    built from the OTHER detector's family constants and predates `FAMILY_NARRATIVE`. They must not
+    drift on the families they share."""
+    from app.campaigns.tracking.crossplatform import (
+        PLATFORM_NEUTRAL_FAMILIES as TRACKING,
+    )
+    from app.netdetect.types import PLATFORM_NEUTRAL_FAMILIES as NETDETECT
+
+    shared = {"text", "network", "timing"}
+    assert shared <= TRACKING and shared <= NETDETECT
+    assert not (TRACKING - NETDETECT), (
+        "the tracking layer calls a family neutral that netdetect does not"
+    )

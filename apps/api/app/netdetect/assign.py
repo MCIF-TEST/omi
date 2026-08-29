@@ -55,6 +55,7 @@ from app.netdetect.formation import (
     logistic,
 )
 from app.netdetect.types import (
+    is_platform_neutral,
     ALL_FAMILIES,
     FAMILY_WEIGHT,
     HARD_FAMILIES,
@@ -166,10 +167,34 @@ def score_against(account: AccountProfile, profile: FormationProfile,
     Reads only what the account and the formation SHARE. Features the account holds that the
     formation does not are neither credited nor penalised: they are things this operation has never
     been seen doing, which is not evidence either way about membership.
+
+    ACROSS PLATFORMS ONLY PLATFORM-NEUTRAL EVIDENCE COUNTS, which is the rule
+    `campaigns/tracking/crossplatform.py` already argues and which was never applied here. Text,
+    network and timing mean the same thing wherever they happen: the same script, the same outside
+    target, the same arrival rhythm. Identity and infrastructure do not. A client string is read
+    from an X-only field, and handle conventions differ per platform, so a shared skeleton across
+    two services is evidence about the services' naming rules rather than about the accounts.
+
+    That matters because `identity` is weighted 1.00 and is HARD, so a coincidental cross-platform
+    collision there could clear `MIN_HARD_EVIDENCE` on its own. Measured before the restriction: the
+    same operator's accounts relabelled as another platform placed at posterior 0.990 carrying
+    `identity: 9.0` and `infrastructure: 6.0`. The placement itself was right, and two of the
+    families supporting it could not have been.
+
+    An unknown platform on either side does NOT restrict. Profiles stored before this existed carry
+    no platform, and reading absence as a mismatch would silently stop assigning against all of them.
     """
     out = Assignment(formation_key=formation_key)
 
-    total_available = sum(f.surprise for f in profile.features)
+    cross_platform = bool(
+        account.platform and profile.platform and account.platform != profile.platform
+    )
+
+    usable = [
+        f for f in profile.features
+        if not cross_platform or is_platform_neutral(f.family, f.kind)
+    ]
+    total_available = sum(f.surprise for f in usable)
     if total_available < MIN_PROFILE_EVIDENCE:
         out.abstained = (
             f"this formation carries only {total_available:.1f} of identifying evidence, below the "
@@ -181,7 +206,10 @@ def score_against(account: AccountProfile, profile: FormationProfile,
     held: set[str] = {f"{f.kind}:{f.value}" for f in account.features}
     per_family: dict[str, list[float]] = {fam: [] for fam in ALL_FAMILIES}
 
-    for feature in profile.features:
+    # `usable`, not `profile.features`: across platforms only the neutral families count, and the
+    # denominator above was already computed from the same list. Scoring the full list here would
+    # credit evidence the availability check said was not available.
+    for feature in usable:
         if feature.token() not in held:
             continue
         per_family.setdefault(feature.family, []).append(feature.surprise)

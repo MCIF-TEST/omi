@@ -31,8 +31,8 @@ will be re-broken by anyone who reasons about them instead: the OMI score may ch
 formation but never detect one, and **total accumulated history does not separate an operation from
 a newsroom**, so only its hard-family half discriminates.
 
-Suite measured at **2535
-passed, 8 skipped, 2 failed** (22m07s, 2026-08-29), both failures pre-existing and listed below. The 8
+Suite measured at **2539
+passed, 8 skipped, 2 failed** (22m17s, 2026-08-29), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -85,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2535 passed, 8 skipped, 2 failed** (22m07s, 2026-08-29), both documented below:
+Current measured state: **2539 passed, 8 skipped, 2 failed** (22m17s, 2026-08-29), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1842,6 +1842,28 @@ stored profile, not a similarity, so the answer is a posterior a reader can argu
 - Measured: **40 of 40 accounts assigned correctly, 0 wrong, 0 false positives across 300 organic
   accounts**, degrading honestly along the discipline dial (0 of 8 at discipline 1.0) and never
   inventing an assignment on the innocent controls.
+- **Across platforms only platform-neutral evidence counts**, the rule
+  `campaigns/tracking/crossplatform.py` already argues and which assignment never applied.
+  `assign.py` did not contain the word "platform" and `load_profiles` returns every formation
+  regardless of one, so a YouTube account was scored against an X operation's client strings and
+  handle skeletons. It matters because `identity` is weighted 1.00 and is HARD, so a coincidental
+  cross-platform collision there could clear `MIN_HARD_EVIDENCE` alone. Measured before the fix:
+  the same operator's accounts relabelled as another platform placed at posterior 0.990 carrying
+  `identity: 9.0` and `infrastructure: 6.0`. After: hard 20.00 falls to 11.00, both families gone,
+  and it **still places**, because the restriction removes families rather than the finding. A
+  genuinely different operator placed 0 of 8 either way, so no false positive was reproduced; the
+  change rests on the same argument the tracking layer already accepted.
+- **`narrative` is the one family that is HALF neutral**, and only recently. It was wholly neutral
+  when it meant topic ids, which come from the embedding space rather than any platform. A hashtag
+  is the same campaign tag on any service; **a mention is a handle inside a per-platform
+  namespace**, so `@someone` on two services is two unrelated accounts. Excluded by KIND
+  (`PLATFORM_SPECIFIC_KINDS`, `is_platform_neutral`), because dropping the family would throw away
+  hashtags and topics to remove mentions.
+- **An unknown platform does not restrict.** Profiles stored before the field existed carry none,
+  and reading absence as a mismatch would silently stop assigning against all of them.
+- Worth knowing: `types.py` briefly held **two** `PLATFORM_NEUTRAL_FAMILIES` definitions, the
+  second silently winning. netdetect already had one; it simply was not applied anywhere. A
+  duplicate constant is invisible to every test that reads only the winner.
 
 `POST /v1/admin/netdetect/formations/assign` is deliberately **two segments**. A single-segment
 `/assign` is shadowed by `POST /{slug}` and answered 404 "No such investigation", which reads as a

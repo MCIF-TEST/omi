@@ -68,18 +68,36 @@ FAMILY_WEIGHT: dict[str, float] = {
 #: rather than to a customer. See ``Candidate.needs_adjudication``.
 HARD_FAMILIES: frozenset[str] = frozenset({FAMILY_IDENTITY, FAMILY_NETWORK})
 
-
 def weighted(by_family: dict[str, float]) -> float:
     return sum(v * FAMILY_WEIGHT.get(k, 0.5) for k, v in by_family.items())
 
 
-#: Families whose meaning survives a platform change, so an edge between two platforms may rest on
+#: Families whose meaning survives a platform change, so a claim spanning two platforms may rest on
 #: them. ``infrastructure`` is X-only (a client string) and ``identity`` compares handle conventions
 #: that differ per platform, so a match across two platforms there is evidence about the platforms
-#: rather than about the accounts.
+#: rather than about the accounts. Same rule as `campaigns/tracking/crossplatform.py`, which argues
+#: it at length.
 PLATFORM_NEUTRAL_FAMILIES: frozenset[str] = frozenset({
     FAMILY_TEXT, FAMILY_NETWORK, FAMILY_TIMING, FAMILY_NARRATIVE,
 })
+
+#: Kinds that are NOT platform-neutral even though their family is.
+#:
+#: `narrative` was wholly neutral when it meant topic ids: a topic comes from the
+#: cross-investigation embedding space rather than from any platform, so it travels. Then mentions
+#: and hashtags started filling the same family, and only one of those travels. A hashtag is the
+#: same campaign tag on any service. A MENTION IS A HANDLE INSIDE A PER-PLATFORM NAMESPACE, so
+#: `@someone` on two services is two unrelated accounts and a match between them is a collision
+#: rather than evidence.
+#:
+#: Excluded by KIND rather than by dropping the whole family, which would throw away hashtags and
+#: topics to remove mentions.
+PLATFORM_SPECIFIC_KINDS: frozenset[str] = frozenset({"mentions"})
+
+
+def is_platform_neutral(family: str, kind: str) -> bool:
+    """May this feature support a claim linking accounts on two different platforms?"""
+    return family in PLATFORM_NEUTRAL_FAMILIES and kind not in PLATFORM_SPECIFIC_KINDS
 
 
 @dataclass(frozen=True, slots=True)

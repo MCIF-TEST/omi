@@ -88,6 +88,9 @@ def profile_from_row(row: NetdetectFormation) -> FormationProfile:
         features=features,
         families={f.family for f in features},
         corpus_size=0,
+        # Carried so `assign` can apply the cross-platform rule. Without it every stored profile
+        # looks platform-unknown and the restriction silently never applies.
+        platform=str(row.platform or ""),
     )
 
 
