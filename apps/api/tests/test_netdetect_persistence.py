@@ -28,6 +28,9 @@ from app.netdetect.types import (
     Feature,
     FeatureEvidence,
 )
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.storage.db import get_session
 from app.storage.models import CoordinationEdge, NetdetectFinding
 
@@ -284,3 +287,118 @@ def test_recording_a_finding_publishes_nothing():
         _persist(session, corpus, candidate, investigation_id=4008, context_id="ctx-quiet")
         session.commit()
         assert session.query(Campaign).count() == before
+
+
+# ==================================================================================================
+# The join: which members hold which feature
+#
+# `members` on the finding and `shared_by` on an evidence row are two disconnected projections of
+# one members-by-features incidence structure. Neither can say whether the evidence is about the
+# SAME people throughout or about two sub-groups joined at a seam, which is the question a reviewer
+# actually has about a group of named real people. These pin the join through persist and serve.
+# ==================================================================================================
+def _seam_corpus():
+    """Two sub-groups sharing nothing with each other, plus one account bridging them.
+
+    THE SHAPE THE JOIN EXISTS TO SHOW. Every projection of this finding looks the same as a solid
+    one: six members, two families, both contributing. Only the incidence says the identity
+    evidence and the text evidence are about different people.
+    """
+    ident = Feature(FAMILY_IDENTITY, "creation_week", "2026-W02")
+    text = Feature(FAMILY_TEXT, "shingle", "the same five words in a row")
+    corpus = _corpus({
+        "i1": [ident], "i2": [ident], "bridge": [ident, text], "t1": [text], "t2": [text],
+    })
+    candidate = Candidate(
+        members=["bridge", "i1", "i2", "t1", "t2"], platform="x", score=9.0,
+        by_family={FAMILY_IDENTITY: 5.0, FAMILY_TEXT: 4.0},
+        evidence=[
+            _evidence(ident, shared_by=3, corpus_count=3, surprise=5.0),
+            _evidence(text, shared_by=3, corpus_count=3, surprise=4.0),
+        ],
+    )
+    return corpus, candidate
+
+
+def _store(session, corpus, candidate, context_id):
+    session.query(NetdetectFinding).delete()
+    session.flush()
+    row = persist_finding(
+        session, candidate, corpus, investigation_id=None, context_id=context_id,
+        platform="x", corpus_size=corpus.size, null_shuffles=32, null_threshold=1.0,
+        accumulate=False,
+    )
+    session.commit()
+    return row
+
+
+def test_each_evidence_row_records_which_members_hold_it():
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        row = _store(session, corpus, candidate, "join")
+        stored = list(row.evidence_json or [])
+        members = set(row.members_json or [])
+
+    assert len(stored) == 2
+    by_kind = {e["kind"]: e for e in stored}
+    assert by_kind["creation_week"]["members"] == ["bridge", "i1", "i2"]
+    assert by_kind["shingle"]["members"] == ["bridge", "t1", "t2"]
+
+    for e in stored:
+        held = e["members"]
+        # Only members of THIS finding, or the grid would draw a mark against somebody who is not
+        # named on the page.
+        assert set(held) <= members
+        assert held == sorted(held), "unsorted holders make the stored row non-deterministic"
+
+
+def test_the_join_distinguishes_a_seam_from_a_solid_block():
+    """THE POINT OF THE WHOLE FIELD. Both families contribute and every projection agrees, yet only
+    one account holds evidence in both. Without the incidence a reader cannot tell this finding
+    from one where every member does everything."""
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        row = _store(session, corpus, candidate, "seam")
+        stored = list(row.evidence_json or [])
+
+    support = {e["family"]: set(e["members"]) for e in stored}
+    assert len(support) == 2
+    core = set.intersection(*support.values())
+    assert core == {"bridge"}, "the seam collapsed; the join is not recording what it must"
+
+
+def test_the_holders_survive_the_serve_path():
+    """A join that exists only in the database is a join the reader never sees."""
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        _store(session, corpus, candidate, "join-serve")
+
+    body = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()
+    assert body
+    served = body[0]
+    assert served["evidence"]
+    for e in served["evidence"]:
+        assert e["members"], "the API served an evidence row with no holders"
+        assert set(e["members"]) <= set(served["members"])
+        # The count and the list are two views of one fact. If they disagreed, the band header and
+        # the grid would tell a reader different things about the same feature.
+        assert len(e["members"]) == e["shared_by"]
+
+
+def test_a_row_stored_before_the_join_existed_serves_null_and_never_an_empty_list():
+    """THE THIRD STATE. "We did not record who holds this" and "nobody holds this" are opposite
+    statements about named people, and the second cannot be true of a feature that reached the
+    evidence list at all. The web reads null as "not recorded" and declines to draw a grid; an
+    empty list would render as a finding whose members share nothing."""
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        row = _store(session, corpus, candidate, "legacy")
+        # Exactly the shape a row written before the field existed has.
+        row.evidence_json = [
+            {k: v for k, v in e.items() if k != "members"} for e in (row.evidence_json or [])
+        ]
+        session.commit()
+
+    served = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()[0]
+    assert served["evidence"]
+    assert all(e["members"] is None for e in served["evidence"])

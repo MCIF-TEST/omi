@@ -142,6 +142,19 @@ def persist_finding(
         "checked": _cor.checked,
         "sentence": _cor.sentence(),
     }
+    # WHICH MEMBERS HOLD EACH FEATURE, not just how many.
+    #
+    # `shared_by` is a count, and a count cannot answer the question a reviewer actually has about a
+    # named group: are these the SAME people across the evidence, or two sub-groups joined at a
+    # seam? The finding is a members-by-features incidence structure and everything downstream had
+    # been storing two disconnected projections of it, so the join could only be taken on faith.
+    #
+    # It is also the honest form of the per-member number this package already refused. Publishing
+    # how much shared evidence a member participates in was MEASURED to rank bystanders above
+    # genuine operation members; naming which features each member holds shows the COMPOSITION
+    # instead of the magnitude, which is the same distinction corroboration draws between `log_lr`
+    # (does not discriminate) and `hard_pairs` (does).
+    member_set = set(candidate.members)
     row.evidence_json = [
         {
             "family": e.feature.family,
@@ -152,6 +165,9 @@ def persist_finding(
             "corpus_count": e.corpus_count,
             "surprise": round(e.surprise, 6),
             "sentence": e.sentence,
+            "members": sorted(
+                (corpus.feature_accounts.get(e.feature) or set()) & member_set
+            ),
         }
         for e in (candidate.evidence or [])[:20]
     ]

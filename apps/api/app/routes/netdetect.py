@@ -50,6 +50,17 @@ class EvidenceOut(BaseModel):
     corpus_count: int
     surprise: float
     sentence: str
+    #: WHICH members hold this feature, not just how many.
+    #:
+    #: A finding is a members-by-features incidence structure, and `members` plus `shared_by` are
+    #: two disconnected projections of it: they cannot say whether the evidence is about the SAME
+    #: people throughout or about two sub-groups joined at a seam. This carries the join, so a
+    #: reviewer can read the shape instead of taking it on trust.
+    #:
+    #: None means the holders were not recorded (a row written before this field existed), which is
+    #: NOT the same as "no member holds it" and must never render as an empty grid. Same three-state
+    #: discipline as `attachment_checked`.
+    members: list[str] | None = None
 
 
 #: What a reader has to be told about the member list, on the response rather than in a docstring.
@@ -303,6 +314,7 @@ def run_on_investigation(
                         family=e.feature.family, kind=e.feature.kind,
                         shared_by=e.shared_by, corpus_count=e.corpus_count,
                         surprise=round(e.surprise, 3), sentence=e.sentence,
+                        members=_holders_of(result.corpus, e, c.members),
                     )
                     for e in c.evidence[:25]
                 ],
@@ -310,6 +322,21 @@ def run_on_investigation(
             for c in result.findings
         ],
     )
+
+
+def _holders_of(corpus, item, members: list[str]) -> list[str] | None:
+    """Which of this finding's members hold one evidence feature.
+
+    Returns None rather than an empty list when the corpus is not available to ask, because "we did
+    not record who holds this" and "nobody holds this" are opposite statements about named people
+    and the second one cannot be true of a feature that reached the evidence list at all.
+    """
+    if corpus is None:
+        return None
+    holders = corpus.feature_accounts.get(item.feature)
+    if not holders:
+        return None
+    return sorted(set(holders) & set(members))
 
 
 def _edge_count(session) -> int:

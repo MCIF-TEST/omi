@@ -5,6 +5,8 @@ import { AlertTriangle, Check, Loader2, ShieldQuestion, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { hasHolderData } from '@/lib/evidence-matrix';
+import { EvidenceMatrix } from './evidence-matrix';
 import {
   judgeNetdetectFinding,
   listNetdetectFindings,
@@ -209,6 +211,7 @@ function FindingCard({
   };
 
   const weak = new Set(row.weakly_attached);
+  const matrixed = hasHolderData(row.evidence);
 
   return (
     <Card className="space-y-4">
@@ -255,24 +258,37 @@ function FindingCard({
         </div>
       ) : null}
 
+      {/* ONE member list, not two. When holders were recorded the matrix's row labels ARE the
+          member list, marked the same way; the chip row is the fallback for findings stored before
+          the join existed. The three-state sentence below belongs to both. */}
       <div>
-        <p className="meta mb-1.5">Members</p>
-        <div className="flex flex-wrap gap-1.5">
-          {row.members.map((m) => (
-            <span
-              key={m}
-              className={cn(
-                'font-mono text-2xs px-1.5 py-0.5 rounded-sm border',
-                weak.has(m)
-                  ? 'border-tier-elevated/40 text-tier-elevated'
-                  : 'border-border-1 text-fg-dim',
-              )}
-              title={weak.has(m) ? 'Does not carry this finding. Still a member; check it first.' : undefined}
-            >
-              {m}
-            </span>
-          ))}
-        </div>
+        {matrixed ? (
+          <EvidenceMatrix
+            members={row.members}
+            evidence={row.evidence}
+            weaklyAttached={row.weakly_attached}
+          />
+        ) : (
+          <>
+            <p className="meta mb-1.5">Members</p>
+            <div className="flex flex-wrap gap-1.5">
+              {row.members.map((m) => (
+                <span
+                  key={m}
+                  className={cn(
+                    'font-mono text-2xs px-1.5 py-0.5 rounded-sm border',
+                    weak.has(m)
+                      ? 'border-tier-elevated/40 text-tier-elevated'
+                      : 'border-border-1 text-fg-dim',
+                  )}
+                  title={weak.has(m) ? 'Does not carry this finding. Still a member; check it first.' : undefined}
+                >
+                  {m}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
         <p className="mt-1.5 text-2xs text-fg-mute">
           {/* THREE STATES, and the middle one is easy to lose. An empty list means opposite things
               with and without `attachment_checked`, so the sentence never leaves it to inference. */}
@@ -294,9 +310,12 @@ function FindingCard({
       {row.corroboration && row.corroboration.checked ? (
         <div
           className={
+            // `.rule-rack` is `height: 1px`: a hairline RULE, not a frame. It was collapsing this
+            // block to 1px and spilling its text over the evidence beneath it. The left rule is
+            // the treatment that was actually wanted and it stands on its own.
             row.corroboration.hard_pairs > 0
-              ? 'rule-rack border-l-2 border-tier-high pl-2.5'
-              : 'rule-rack border-l-2 border-border-1 pl-2.5'
+              ? 'border-l-2 border-tier-high pl-2.5'
+              : 'border-l-2 border-border-1 pl-2.5'
           }
         >
           <p className="meta mb-1">Seen before</p>
@@ -304,11 +323,14 @@ function FindingCard({
         </div>
       ) : null}
 
+      {/* The matrix carries the SHAPE; these carry the QUOTE. A grid cannot be screenshotted into
+          a sentence, and "if you cannot quote it, you cannot claim it" applies to a coordination
+          claim as much as to the analyst's prose, so the strongest few stay written out. */}
       {row.evidence.length > 0 ? (
         <div>
-          <p className="meta mb-1.5">Evidence</p>
+          <p className="meta mb-1.5">Strongest evidence</p>
           <ul className="space-y-1">
-            {row.evidence.slice(0, 6).map((e, i) => (
+            {row.evidence.slice(0, 4).map((e, i) => (
               <li key={i} className="text-xs text-fg-dim">
                 <span className="meta mr-1.5">{e.family}</span>
                 {e.sentence}

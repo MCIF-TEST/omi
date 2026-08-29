@@ -1717,6 +1717,85 @@ another, and every test would pass.
 Pinned by six tests in `tests/test_netdetect_calibration.py` and three source-level guards at the
 end of `tests/test_netdetect_routes.py`.
 
+#### The finding is an incidence structure, so draw it as one
+
+`lib/evidence-matrix.ts` + `app/(app)/netdetect/evidence-matrix.tsx`. A finding is a claim about
+WHICH named accounts share WHICH rare behaviours, and the card had been rendering two disconnected
+projections of that: a row of member chips, and a list of evidence sentences carrying only a count.
+Nothing joined them, so the question a reviewer actually has about a group of named real people,
+**are these the same people throughout or two sub-groups joined at a seam**, could only be taken on
+faith.
+
+The matrix is members down the side, the finding's own evidence features across the top, grouped
+into family bands with the hard families first. Rendered against the three corpora that must look
+different, it separates them at a glance:
+
+| corpus | what the grid shows |
+|---|---|
+| planted operation in organic | a solid blue block, and the one swept-in bystander an entirely EMPTY row |
+| professional beat (a newsroom) | a solid block with **no blue at all**: much shared behaviour, none of it the operator's own acts |
+| two sub-groups bridged | the seam: the identity column is held by one sub-group and the text band by the other |
+
+**WHY THIS IS ALLOWED WHERE A PER-MEMBER NUMBER WAS NOT.** `attachment.py` measured the obvious
+score (how much shared evidence a member participates in) and refused to publish it, because it
+ranks some bystanders ABOVE genuine operation members. A matrix shows COMPOSITION rather than
+magnitude: it says which KIND of evidence each member holds, and the kind is what discriminates.
+Same distinction corroboration draws between `log_lr` (does not separate an operation from a
+newsroom) and `hard_pairs` (does). So columns are ordered hard-families-first, and **no row ever
+carries a count or a rank**, which `test_no_number_is_rendered_beside_a_member_name` now checks over
+the matrix rows as well as the chip fallback.
+
+Four more rules:
+
+- **An ABSENT hard family is stated, never merely undrawn.** A band contributing nothing draws
+  nothing, and a reader cannot notice a column that was never rendered. The newsroom control is a
+  solid, alarming-looking block whose whole answer is "zero identity, zero network", so
+  `hardPresence` lists every hard family including the empty ones and the strip prints
+  `IDENTITY NONE · NETWORK NONE`. Same reasoning as `phase_of` treating dormancy as an event.
+- **Three states.** `recorded: false` (no evidence row carried its holders) is not an empty grid.
+  An empty grid would say these accounts share nothing, which cannot be true of a finding that
+  exists. Findings stored before the field serve `members: null` and the component says so.
+- **ONE member list.** The matrix's row labels ARE the member list; the chip row is only the
+  fallback when the join was not recorded. Two lists of the same names is what the first draft had.
+- **A grid cannot be screenshotted into a sentence**, so the strongest few evidence sentences stay
+  written out beneath it. "If you cannot quote it, you cannot claim it" applies to a coordination
+  claim as much as to the analyst's prose.
+
+Not a force-directed account graph, deliberately: this package's thesis is that a set-level
+statistic is not recoverable by fusing pairwise ones, so a node-link diagram would draw edges the
+score was never computed from, confidently. `persist.py` records the holders per evidence row (free:
+the corpus is already in hand) and `EvidenceOut.members` serves them. Pinned by
+`lib/evidence-matrix.test.ts` (20, including two guards that read `app/netdetect/types.py` so the
+family list and the hard-family set cannot drift across the two languages) and four tests in
+`tests/test_netdetect_persistence.py`.
+
+#### Two CSS mistakes found by measuring, one of them shipped
+
+Both were invisible to TypeScript, to the linter, to the build and to every test, and neither would
+have been found by reading the code.
+
+- **`.rule-rack` is `height: 1px`.** It is a hairline RULE, and using it as a container collapses
+  the box: measured at 1px tall with its content overflowing and **overlapping the element below**.
+  Two shipped components were doing it, so the "Seen before" corroboration block on the finding
+  queue and the placement list on the formation sweep have been printing over their neighbours.
+  Fixed to the `border-l-2 ... pl-2.5` they already carried, and guarded by a test that allows
+  `rule-rack` only on an `<hr>`.
+- **An opacity modifier on a palette token generates NOTHING.** Every colour in `tailwind.config.ts`
+  is declared as a bare `var(--x)`, which Tailwind cannot decompose into channels, so it emits no
+  `/n` variant at all. Measured in the served stylesheet: `.bg-accent` exists, `bg-accent/70` and
+  even `bg-accent/10` are **absent**. The class lands in the DOM and the element computes to
+  `rgba(0,0,0,0)`; the first version of the matrix rendered every cell hollow because of it. Same
+  family as the `var(--tier-low)66` drop-shadow bug already recorded above.
+
+  **There are roughly 200 such uses across `apps/web`** (`bg-accent/10` x17, `border-tier-low/40`
+  x14, `bg-tier-high/10` x9, and so on), so every tinted panel background and softened border in
+  the product is currently painting nothing. **Fixing it properly is a palette change, not a
+  component change**: the tokens have to be redeclared as `rgb(var(--x-rgb) / <alpha-value>)` with
+  channel variables beside them, which would switch ~200 surfaces on at once and visibly restyle
+  every page. That is a deliberate decision for the owner, not a side effect of a detector change,
+  so this session used solid tokens in the matrix and recorded the finding here. A source guard
+  keeps the matrix itself clean.
+
 #### The queue has an interface now, and that is what makes the reservoir reachable
 
 `/netdetect` (`app/(app)/netdetect/`), labelled **Formations** in both navs. The routes shipped

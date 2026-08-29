@@ -298,6 +298,18 @@ export interface NetdetectEvidence {
   corpus_count: number;
   surprise: number;
   sentence: string;
+  /**
+   * WHICH of the finding's members hold this feature, not just how many.
+   *
+   * `members` on the finding and `shared_by` here are two disconnected projections of one
+   * incidence structure: neither can say whether the evidence is about the same people throughout
+   * or about two sub-groups joined at a seam. This carries the join.
+   *
+   * Undefined means the holders were not recorded (a finding stored before this field existed).
+   * That is NOT the same as "no member holds it", which cannot be true of a feature that reached
+   * the evidence list at all, so a reader must be told rather than shown an empty grid.
+   */
+  members?: string[] | null;
 }
 
 export interface NetdetectCorroboration {

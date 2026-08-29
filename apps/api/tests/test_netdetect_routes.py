@@ -399,16 +399,24 @@ def test_no_number_is_rendered_beside_a_member_name():
     about the FINDING and are meant to be there, and a blanket search would fail on an innocent
     comment while saying nothing useful about why.
     """
-    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
-    start = src.index(">Members<")
-    end = src.index(">Evidence<", start)
-    members_block = src[start:end]
-    for numeric in (".toFixed(", "surprise", "posterior"):
-        assert numeric not in members_block, (
-            f"the members block renders {numeric!r}. A number beside a person's name reads as a "
-            f"judgement about them, and the only per-member figure available does not separate "
-            f"bystanders from real members."
-        )
+    # Member names now live in the MATRIX rows, with the chip row only as the fallback for
+    # findings stored before the join existed. Both are checked; the rule did not move.
+    matrix = (_PAGE_DIR / "evidence-matrix.tsx").read_text()
+    row_block = matrix[matrix.index("matrix.rows.map("):matrix.index("{/* One row of prose")]
+
+    chips = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    chip_block = chips[chips.index(">Members<"):chips.index("mt-1.5 text-2xs text-fg-mute")]
+
+    for name, block in (("matrix rows", row_block), ("chip fallback", chip_block)):
+        for numeric in (".toFixed(", "surprise", "posterior"):
+            assert numeric not in block, (
+                f"the {name} render {numeric!r}. A number beside a person's name reads as a "
+                f"judgement about them, and the only per-member figure available does not "
+                f"separate bystanders from real members."
+            )
+
+    # The column caption DOES carry figures, and must: they are about a FEATURE, not a person.
+    assert ".toFixed(" in matrix
 
 
 def test_the_sweep_panel_distinguishes_all_three_outcomes():
@@ -496,3 +504,74 @@ def test_only_the_open_queue_is_reordered():
     judgements."""
     src = (_PAGE_DIR / "finding-queue.tsx").read_text()
     assert "filter === 'open' && ranks.size > 0" in src
+
+
+def _code_only(src: str) -> str:
+    """Source with comments stripped.
+
+    A guard that scans raw source fails on the comment explaining the guard, which teaches whoever
+    hits it that the rule is noise. Both guards below are about what the CODE does.
+    """
+    import re
+
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    return "\n".join(re.sub(r"//.*$", "", line) for line in src.splitlines())
+
+
+def test_the_finding_card_draws_the_join_and_not_two_flat_lists():
+    """A finding is a members-by-features incidence structure. The card had been rendering two
+    disconnected projections of it, a row of member chips and a list of evidence sentences, so the
+    reviewer's actual question about a group of named real people, "are these the same people
+    throughout or two sub-groups joined at a seam", could only be taken on faith."""
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "EvidenceMatrix" in src, "the card renders no matrix"
+    matrix = (_PAGE_DIR / "evidence-matrix.tsx").read_text()
+
+    # ONE member list, not two. The matrix's row labels ARE the member list when the join was
+    # recorded; the chip row is only the fallback for findings stored before it existed.
+    assert "hasHolderData" in src
+
+    # The three-state rule. An empty grid would say these accounts share nothing, which cannot be
+    # true of a finding that exists at all.
+    assert "was not recorded" in matrix
+
+    # An absent hard family is STATED. Measured, the professional-beat control is a solid block
+    # with zero identity and zero network features: the solidity is the alarming part and the
+    # absence is the answer, so it cannot be left undrawn.
+    assert "hardPresence" in matrix
+    assert "none" in matrix
+
+
+def test_the_matrix_uses_no_opacity_modifier_on_a_design_token():
+    """MEASURED, NOT STYLE. The palette declares its colours as bare `var(--x)`, so Tailwind emits
+    no `/n` variant for them: `bg-accent/70` lands in the class list and never in the stylesheet.
+    The first version of this grid rendered every cell transparent because of it.
+
+    Scoped to this file rather than the app, because there are ~200 such uses elsewhere and fixing
+    those is a palette change that would restyle every page. See CLAUDE.md.
+    """
+    import re
+
+    src = _code_only((_PAGE_DIR / "evidence-matrix.tsx").read_text())
+    bad = re.findall(
+        r"\b(?:bg|border|text|ring|fill|stroke)-"
+        r"(?:accent|accent-2|fg|fg-dim|fg-mute|border-1|border-2|border-hot|tier-[a-z]+)/\d+",
+        src,
+    )
+    assert not bad, f"opacity modifiers that will not be generated: {sorted(set(bad))}"
+
+
+def test_rule_rack_is_a_hairline_and_is_never_used_as_a_container():
+    """`.rule-rack` is `height: 1px`. Used as a wrapper it collapses the box and spills its content
+    over whatever follows: measured at 1px tall with the text overlapping the next element. Two
+    shipped components were doing it, so this is a regression guard rather than a style rule."""
+    import re
+
+    for name in ("finding-queue.tsx", "evidence-matrix.tsx", "formation-sweep.tsx"):
+        src = _code_only((_PAGE_DIR / name).read_text())
+        for line in src.splitlines():
+            if "rule-rack" not in line:
+                continue
+            assert re.search(r"<hr\b", line), (
+                f"{name} uses rule-rack on something other than an <hr>: {line.strip()[:100]}"
+            )
