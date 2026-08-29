@@ -212,6 +212,40 @@ def _longest_daily_quiet_hours(ts: list[datetime]) -> float | None:
     return float(min(best, 24))
 
 
+#: An @mention, lowercased, without the sigil. Handles are 1-15 alphanumerics/underscore on X and
+#: similar elsewhere; the leading boundary stops an email address being read as a mention.
+_MENTION_RE = re.compile(r"(?:^|[^\w@])@([A-Za-z0-9_]{2,30})\b")
+
+#: A hashtag. Requires a letter somewhere so "#1" and "#2026" are not tags, and allows the digits
+#: real campaign tags carry ("#budget2026").
+_HASHTAG_RE = re.compile(r"(?:^|[^\w#])#([A-Za-z0-9_]*[A-Za-z][A-Za-z0-9_]*)\b")
+
+#: Mentions kept per account, sampled deterministically. An account that @s hundreds of people is
+#: usually a reply-guy rather than an operation, and letting it contribute hundreds of features
+#: would skew the degree sequence the null holds fixed.
+MAX_MENTIONS_PER_ACCOUNT = 40
+
+
+def mentions_in(texts: Iterable[str]) -> set[str]:
+    """Lowercased handles mentioned across these texts."""
+    out: set[str] = set()
+    for t in texts:
+        if not t:
+            continue
+        out.update(m.lower() for m in _MENTION_RE.findall(t))
+    return out
+
+
+def hashtags_in(texts: Iterable[str]) -> set[str]:
+    """Lowercased hashtags across these texts."""
+    out: set[str] = set()
+    for t in texts:
+        if not t:
+            continue
+        out.update(h.lower() for h in _HASHTAG_RE.findall(t))
+    return out
+
+
 def network_features(
     parents: Iterable[str | None],
     reply_targets: Iterable[str | None],
@@ -255,6 +289,65 @@ def network_features(
         # evidence sentence a reader sees has to be able to say which.
         if rp and rp not in exclude:
             out.add(Feature(FAMILY_NETWORK, "repost_of", str(rp)))
+    return out
+
+
+
+def subject_features(texts: Iterable[str], *, exclude: set[str]) -> set[Feature]:
+    """WHO the account talks about and WHAT TAG it posts under. Both narrative, and neither hard.
+
+    ---------------------------------------------------------------------------------------------
+    A MENTION IS NOT A REPOST, AND MEASURING THAT SAVED A FALSE POSITIVE
+    ---------------------------------------------------------------------------------------------
+
+    Mentions were first written into ``network_features`` beside ``reply_to`` / ``target_post`` /
+    ``repost_of``, on the reasoning that converging on an outside target is the operator's own act.
+    `network` is weighted 1.00 and sits in ``HARD_FAMILIES``, so that made a shared @ enough to
+    clear ``MIN_HARD_EVIDENCE``.
+
+    Measured immediately, the professional-beat control went from flagged-for-adjudication to
+    **publishable**: hard evidence 7.50 against a floor of 3.0, on the strength of ten reporters
+    all naming ``@stadiumauthority``. That is the exact accusation about real journalists this
+    package exists to refuse, and no threshold anywhere would have caught it, because the finding
+    was statistically real.
+
+    The modelling error is the interesting part. A repost or a reply target is a STRUCTURAL act the
+    platform recorded: an account chose to rebroadcast a specific post. A mention is a NAME INSIDE
+    A SENTENCE. Reporters on a beat name the officials on that beat, fans name the artist, and
+    critics name the person they are criticising. Naming somebody is about SUBJECT, which is what
+    NARRATIVE means, and narrative is weighted 0.45 and deliberately not hard for exactly this
+    reason.
+
+    ---------------------------------------------------------------------------------------------
+    WHY THIS FAMILY WAS EMPTY UNTIL NOW
+    ---------------------------------------------------------------------------------------------
+
+    ``topic_features`` below is the only other thing that fills ``FAMILY_NARRATIVE``, and only the
+    cross-investigation pass can call it, because only that pass has embedded anything. So an
+    ordinary scan ran with five families while ``MIN_FAMILIES`` counts families, and the weight map
+    has carried ``narrative`` since the module was written.
+
+    Mentions and tags fill it with no model, no network call and no vendor. They are also the only
+    handle this package has on "what are these accounts talking about" that survives paraphrase:
+    two accounts pushing one tag in completely different sentences share no shingle at all.
+
+    Deliberately NOT the text family. Text means "these accounts emitted the same string" and its
+    job is catching copy-paste; folding a tag in there would let one shared tag stand in for the
+    copy-paste evidence that family is weighted for.
+
+    ``exclude`` carries anything the group was SELECTED by, the same rule as the scanned post in
+    ``network_features``: whatever you assembled the group by cannot also be evidence about it.
+    """
+    out: set[Feature] = set()
+    texts = list(texts)
+    for tag in hashtags_in(texts):
+        if tag and tag not in exclude:
+            out.add(Feature(FAMILY_NARRATIVE, "hashtag", tag))
+    # Sampled so a reply-guy who names hundreds of accounts cannot contribute hundreds of features
+    # and skew the degree sequence the null holds fixed.
+    for handle in _stable_sample(sorted(mentions_in(texts)), MAX_MENTIONS_PER_ACCOUNT):
+        if handle and handle not in exclude:
+            out.add(Feature(FAMILY_NARRATIVE, "mentions", handle))
     return out
 
 
@@ -421,9 +514,14 @@ def profile_from_commenter(
     )
     feats |= infrastructure_features((i.get("source_client") for i in all_items), texts)
     feats |= identity_features(_parse_ts(row.get("account_created_at")), row.get("handle"))
-    # Empty on the per-scan path, which has no topic assignment: the narrative family simply stays
-    # silent there rather than being faked from lexical overlap, which the text family already
-    # covers honestly.
+    # The narrative family, on the per-scan path, from what the account NAMES and TAGS rather than
+    # from embeddings. It used to be empty here: `topic_features` needs assignments only the
+    # cross-investigation pass produces, so an ordinary scan ran with five families while
+    # `MIN_FAMILIES` counts families.
+    #
+    # `exclude` is passed as well as `exclude_topics`, because it carries the scanned post's ids and
+    # a mention or tag matching one of them is the same self-referential trap.
+    feats |= subject_features(texts, exclude=set(exclude_topics or ()) | exclude)
     feats |= topic_features(topic_ids, exclude=set(exclude_topics or ()))
 
     if len(feats) > MAX_FEATURES_PER_ACCOUNT:

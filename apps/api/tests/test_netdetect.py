@@ -449,9 +449,25 @@ def test_a_pure_repost_ring_is_still_refused_for_want_of_a_second_family():
 
     assert MIN_FAMILIES >= 2
     rows = C.organic_population(50) + C.amplifier_ring(8)
-    for row in rows:
-        # Strip the shared tool, leaving amplification as the only thing these accounts share.
-        row["recent_activity"] = [{**p, "source_client": None} for p in row["recent_activity"]]
+    for i, row in enumerate(rows):
+        # Strip the shared tool, AND give every account text nobody else could share, leaving
+        # amplification as the only thing the ring has in common.
+        #
+        # THE SECOND HALF WAS MISSING AND THE TEST WAS PASSING ON LUCK. `_sentence` draws from a
+        # pool of eight topics, so unrelated accounts genuinely share five-word shingles at a
+        # measured rate of about 14 in 58, and the ring shared them with the organic background
+        # like everybody else. Louvain then attached organic accounts to the ring, their shingles
+        # supplied a second family, and the candidate cleared `MIN_FAMILIES` without any coherent
+        # group having two kinds of evidence.
+        #
+        # Measured against the tree before this test was fixed, over six organic backgrounds: the
+        # ring was admitted in FIVE. This test passed because the default background happened to
+        # be the sixth. It was asserting a property the detector does not have.
+        row["recent_activity"] = [
+            {**p, "source_client": None, "text": f"account {i} note {j} about nothing in particular"}
+            for j, p in enumerate(row["recent_activity"])
+        ]
+        row["bio"] = f"bio belonging only to account {i}"
     result = detect(_corpus(rows), shuffles=SHUFFLES)
     assert not [c for c in result.findings if _members_from(c, "amp") >= 4]
 
@@ -632,39 +648,134 @@ def test_a_finding_is_mostly_the_operation_and_the_rate_is_pinned():
     )
 
 
-def test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did():
-    """A GUARD AGAINST A TEMPTING AND WRONG FEATURE.
+def test_attachment_weight_is_still_not_publishable_as_a_per_member_confidence():
+    """A GUARD AGAINST A TEMPTING AND WRONG FEATURE, AND A RECORD OF WHY IT IS STILL WRONG.
 
     `pair_evidence_from` knows how much of a group's shared evidence each member participates in, so
     it is very tempting to publish that as a per-member confidence and let a reviewer challenge one
     name. The cohort detector does exactly that with its admitting posterior, and it is right to.
 
-    Here it does not work. Measured on the corpus below, two swept-in organic accounts out-rank a
-    genuine operation member on attachment, so an operator shown that ranking would clear the wrong
-    accounts and doubt the right ones. Publishing it would be worse than publishing nothing, because
-    a number beside a person's name gets read as a judgement about them.
+    THE MEASUREMENT MOVED, AND THIS TEST NO LONGER ASSERTS WHAT IT USED TO. It previously asserted
+    that the naive statistic ranks at least one bystander ABOVE a genuine member, which was true on
+    the corpus it used. After mentions and hashtags were added, genuine members share more evidence
+    with each other, and across every contaminated corpus that could be built here (organic seed 5
+    with operation seed 99, and organic seed 4 with operation seed 11) the naive statistic separated
+    cleanly: every bystander below every member.
 
-    If this test ever fails because the weakest member IS the bystander on every corpus, that is the
-    signal the feature has become buildable. It is not a failure to fix by loosening the assertion.
+    THAT IS NOT ENOUGH TO SHIP IT, and the reason is arithmetic rather than caution. Two corpora
+    holding two bystanders each is not a basis for putting a number beside a named real person,
+    which is what publishing this would do. `attachment.py` exists because a DIFFERENT statistic,
+    leave-one-out set surprise, was measured over a systematic grid at 7 of 7 bystanders flagged
+    and 0 of 96 genuine members, and even that ships as a FLAG rather than a number.
+
+    So this test now guards the thing that matters and can be asserted: no per-member number
+    reaches any response. What would make the feature buildable is a systematic grid like
+    `attachment.py`'s, not a green test on two corpora.
     """
-    from app.netdetect.persist import pair_evidence_from
+    import inspect
 
-    rows = C.organic_population(60, seed=5) + C.planted_operation(8, seed=6, discipline=0.0)
+    from app.netdetect import persist
+    from app.routes import netdetect as netdetect_routes
+
+    # The statistic that DOES work ships as a flag. A response carrying a float per member would be
+    # read as a judgement about a person, which is the whole objection.
+    source = inspect.getsource(netdetect_routes)
+    assert "weakly_attached" in source
+    for forbidden in ("attachment_score", "member_confidence", "attachment_weight"):
+        assert forbidden not in source, (
+            f"{forbidden} reached a response. The working statistic is deliberately published as a "
+            f"flag and the naive one is not published at all; see this test and "
+            f"app/netdetect/attachment.py."
+        )
+
+    # And nothing in the package turns `pair_evidence_from` into a per-member ranking for a reader.
+    assert not [n for n in dir(persist) if "confidence" in n or n.startswith("member_")], (
+        "persist grew a per-member confidence helper"
+    )
+
+
+# ==================================================================================================
+# Mentions and hashtags: the narrative family on the per-scan path
+# ==================================================================================================
+def test_a_mention_is_narrative_and_never_hard_evidence():
+    """THE MEASUREMENT THAT DECIDED WHICH FAMILY A MENTION BELONGS TO.
+
+    Mentions were first written into `network_features` beside `reply_to` / `target_post` /
+    `repost_of`, on the reasoning that converging on an outside target is the operator's own act.
+    `network` is weighted 1.00 and sits in `HARD_FAMILIES`, so a shared @ became enough to clear
+    `MIN_HARD_EVIDENCE`.
+
+    Measured immediately, the professional-beat control went from flagged-for-adjudication to
+    PUBLISHABLE: hard evidence 7.50 against a floor of 3.0, on ten reporters all naming
+    `@stadiumauthority`. That is an accusation about real journalists, and no threshold would have
+    caught it because the finding was statistically real.
+
+    A repost is a structural act the platform recorded. A mention is a name inside a sentence, and
+    naming somebody is about SUBJECT. So it is narrative, weighted 0.45 and deliberately not hard.
+    """
+    from app.netdetect.features import subject_features
+    from app.netdetect.types import FAMILY_NARRATIVE, HARD_FAMILIES
+
+    feats = subject_features(["angry at @stadiumboss about #stopthestadium"], exclude=set())
+    kinds = {f.kind for f in feats}
+    assert kinds == {"mentions", "hashtag"}
+    assert all(f.family == FAMILY_NARRATIVE for f in feats)
+    assert FAMILY_NARRATIVE not in HARD_FAMILIES, (
+        "narrative became a hard family, which would make a shared @ or tag enough to publish a "
+        "finding about a newsroom covering one beat"
+    )
+
+
+def test_the_newsroom_control_is_still_flagged_for_review_when_it_names_the_same_officials():
+    """The control that decides whether mention and tag features can ship at all.
+
+    Reporters on one beat converge on the same officials and the same hashtag, innocently. The
+    finding is statistically real and must reach a person rather than a customer.
+    """
+    rows = C.organic_population(60, seed=7) + C.professional_beat(10, seed=21)
     result = detect_from_commenters(rows, shuffles=SHUFFLES)
-    hit = next(c for c in result.findings if _members_from(c, "op") >= 4)
-    assert sum(1 for m in hit.members if m.startswith("org")) >= 2, "corpus no longer contaminated"
+    for finding in result.findings:
+        if sum(1 for m in finding.members if m.startswith("press")) < 4:
+            continue
+        assert finding.needs_adjudication, (
+            "the newsroom control became publishable without review; a shared mention or tag is "
+            "being counted as the operator's own act"
+        )
 
-    attachment = {m: 0.0 for m in hit.members}
-    for (a, b), families in pair_evidence_from(result.corpus, hit).items():
-        total = sum(families.values())
-        attachment[a] += total
-        attachment[b] += total
 
-    ranked = [m for m, _ in sorted(attachment.items(), key=lambda kv: kv[1])]
-    innocent_positions = [i for i, m in enumerate(ranked) if m.startswith("org")]
-    operation_positions = [i for i, m in enumerate(ranked) if m.startswith("op")]
+def test_a_mention_of_another_member_is_not_convergence_on_an_outside_target():
+    """A mention names a HANDLE, not an external id, so the member set does not exclude it.
 
-    assert max(innocent_positions) > min(operation_positions), (
-        "attachment weight now ranks every bystander below every operation member. If that holds "
-        "across corpora it is worth publishing; verify before deleting this test."
+    Adding "mentions" to the in-group tuple in `score_candidate` would silently exclude nothing,
+    and a group that @s each other by handle would read as convergence on an outside target: the
+    exact inversion the in-group rule exists to prevent, on a real community.
+    """
+    import inspect
+
+    from app.netdetect import significance
+
+    source = inspect.getsource(significance.score_candidate)
+    assert "inside_handles" in source, "the by-handle exclusion for mentions is gone"
+    assert 'f.kind == "mentions" and f.value in inside_handles' in source
+
+
+def test_an_email_address_is_not_a_mention_and_a_bare_number_is_not_a_tag():
+    from app.netdetect.features import hashtags_in, mentions_in
+
+    assert mentions_in(["write to foo@bar.com about it"]) == set()
+    assert mentions_in(["hey @alice and @Bob_2"]) == {"alice", "bob_2"}
+    assert hashtags_in(["#1 #2026 costs"]) == set(), "a digits-only tag is a number, not a subject"
+    assert hashtags_in(["#budget2026 #StopIt"]) == {"budget2026", "stopit"}
+
+
+def test_the_narrative_family_is_no_longer_empty_on_an_ordinary_scan():
+    """`topic_features` needs assignments only the cross-investigation pass produces, so before
+    mentions and tags an ordinary scan ran with five families while `MIN_FAMILIES` counts them."""
+    from app.netdetect.features import profile_from_commenter
+    from app.netdetect.types import FAMILY_NARRATIVE
+
+    rows = C.planted_operation(8, discipline=0.0, seed=99)
+    profiles = [profile_from_commenter(r) for r in rows]
+    assert any(f.family == FAMILY_NARRATIVE for p in profiles for f in p.features), (
+        "the narrative family is empty on the per-scan path again"
     )

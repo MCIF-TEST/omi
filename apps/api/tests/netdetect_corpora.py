@@ -72,12 +72,66 @@ def _account(
     }
 
 
-def organic_population(n: int = 60, *, seed: int = 7) -> list[dict]:
+#: Mentions and hashtags a REAL population produces. The innocent generators below use them too: a
+#: fixture where only the operation tags anybody would make any mention feature look perfectly
+#: discriminating, which is a rigged measurement rather than a working detector.
+#:
+#: THE SHAPE MATTERS AS MUCH AS THE PRESENCE, and getting it wrong produced a real false positive.
+#: A first version gave 60 organic accounts a pool of FIVE handles, so a third of the corpus named
+#: `@citycouncil` and organic accounts genuinely converged on each other. That manufactured a
+#: second family out of nothing and let the pure-repost ring, which exists to be REFUSED for having
+#: only one, clear `MIN_FAMILIES` by absorbing bystanders.
+#:
+#: Real populations are a short head and a very long tail: a few prominent accounts everybody might
+#: name, and then thousands of different ones. Both halves are needed. Only a head makes ordinary
+#: people look coordinated; only a tail makes any shared mention look decisive.
+_PROMINENT_MENTIONS = ["@citycouncil", "@localnews", "@transitdept", "@mayorsoffice"]
+_PROMINENT_TAGS = ["#localnews", "#traffic", "#weather", "#budget2026"]
+
+
+def _long_tail_mention(rng: random.Random) -> str:
+    return "@" + rng.choice(["nina", "omar", "pete", "rosa", "theo", "vik", "wren", "zara",
+                             "hal", "iris", "jude", "kai"]) + str(rng.randrange(100, 9999))
+
+
+def _long_tail_tag(rng: random.Random) -> str:
+    return "#" + rng.choice(["ourtown", "commute", "schools", "parks", "recycling", "potholes",
+                             "smallbiz", "gardening", "cycling", "dogsofx"]) + str(
+        rng.randrange(1, 40))
+
+
+def organic_population(n: int = 60, *, seed: int = 7,
+                       subject_noise: bool = True) -> list[dict]:
     """Ordinary people. Different phrasing, different rhythms, different signup dates.
 
     This is the background every control needs and the corpus the falsification test shuffles.
+
+    ``subject_noise=False`` omits the mentions and hashtags, giving the sparse background this
+    generator produced before they existed.
+
+    THAT SWITCH IS NOT A CONVENIENCE, IT IS A MEASURED CAVEAT. The bystander-contamination rate is
+    a property of the CORPUS, not only of the detector. Adding mentions and tags gives ordinary
+    accounts many idiosyncratic features, Louvain then draws tighter communities, and the measured
+    contamination over the systematic grid falls from 7 of 103 named to 0 of 96 with recall
+    unchanged at 8/8. Measured with the narrative feature DISABLED it is also 0 of 96, so the fall
+    is the background becoming featureful and NOT the detector improving; claiming it as an
+    improvement would be claiming credit for a fixture edit.
+
+    The consequence for the tests: `app/netdetect/attachment.py` exists to flag members a finding
+    swept in, and it can only be exercised on a corpus that produces some. Those tests pass
+    `subject_noise=False` to get one.
     """
     rng = random.Random(seed)
+    # A SEPARATE STREAM FOR THE MENTIONS AND TAGS, and this is not fastidiousness.
+    #
+    # Drawing them from `rng` consumes calls and shifts every later draw, so adding them silently
+    # regenerated every sentence, gap and handle in this corpus. That is invisible and it broke a
+    # real test: `test_a_pure_repost_ring_is_still_refused_for_want_of_a_second_family` started
+    # failing because the reshuffled organic accounts happened to share word-shingles with the ring,
+    # handing it a second family out of pure coincidence. Nothing about mentions was involved.
+    #
+    # Any generator here that gains a new random draw needs its own stream for the same reason.
+    tag_rng = random.Random(seed * 7919 + 1)
     out = []
     for i in range(n):
         # A human rhythm: irregular gaps, a real sleep window, an individual signup date.
@@ -88,7 +142,19 @@ def organic_population(n: int = 60, *, seed: int = 7) -> list[dict]:
             t = t + timedelta(minutes=rng.randint(20, 600))
             if t.hour < wake or t.hour > wake + 13:      # sleep
                 t = t.replace(hour=wake) + timedelta(days=1)
-            posts.append(_post(_sentence(rng), t, client=rng.choice(
+            # Real people tag and mention things too, and that is the whole point of putting
+            # them here: an ordinary corpus with no mentions in it would make any mention
+            # feature look perfectly discriminating.
+            body = _sentence(rng)
+            # Short head, long tail. Most naming is idiosyncratic; occasionally somebody names one
+            # of the handful of accounts everybody in a city knows.
+            if subject_noise and tag_rng.random() < 0.25:
+                body += " " + (tag_rng.choice(_PROMINENT_MENTIONS) if tag_rng.random() < 0.3
+                               else _long_tail_mention(tag_rng))
+            if subject_noise and tag_rng.random() < 0.20:
+                body += " " + (tag_rng.choice(_PROMINENT_TAGS) if tag_rng.random() < 0.3
+                               else _long_tail_tag(tag_rng))
+            posts.append(_post(body, t, client=rng.choice(
                 ["Twitter for iPhone", "Twitter Web App", "Twitter for Android"])))
         out.append(_account(
             f"org{i:03d}",
@@ -121,6 +187,11 @@ OPERATORS: dict[str, dict] = {
         "handle": lambda i: f"news_watch_{1000 + i * 7}",
         "signup_days_ago": 40,
         "target": lambda j: f"campaign_post_{j % 3}",
+        # Who the operation brigades, and the tag it pushes under. Gated on `sloppy` exactly like
+        # `target` and `client`, so the discipline dial keeps meaning what it meant: a feature that
+        # survived discipline would be the fixture flattering the detector.
+        "mention": "@stadiumboss",
+        "hashtag": "#stopthestadium",
         "interval_minutes": 62,
     },
     # A genuinely different operator: different script, tool, factory, provisioning window and
@@ -132,6 +203,8 @@ OPERATORS: dict[str, dict] = {
         "handle": lambda i: f"care_voice{4200 + i * 3}",
         "signup_days_ago": 300,
         "target": lambda j: f"health_thread_{j % 4}",
+        "mention": "@healthminister",
+        "hashtag": "#saveourclinic",
         "interval_minutes": 37,
     },
 }
@@ -139,7 +212,7 @@ OPERATORS: dict[str, dict] = {
 
 def planted_operation(
     size: int = 8, *, seed: int = 99, discipline: float = 0.0, prefix: str = "op",
-    operator: str = "stadium",
+    operator: str = "stadium", subject_noise: bool = True,
 ) -> list[dict]:
     """An operation, with a dial for how well run it is.
 
@@ -167,6 +240,16 @@ def planted_operation(
             t = t + (timedelta(minutes=op["interval_minutes"]) if sloppy
                      else timedelta(minutes=rng.randint(30, 500)))
             text = shared_line if (sloppy and j % 5 == 0) else _sentence(rng)
+            if sloppy and subject_noise:
+                # Differently worded posts converging on one target and one tag. This is the case
+                # word-shingles cannot see: the sentences around the mention do not match.
+                #
+                # `subject_noise=False` restores this generator's pre-mention output byte for byte.
+                # It is what `test_netdetect_attachment.py` uses, because appending a shared tag to
+                # every sloppy post ALSO binds the operation more tightly through the text family,
+                # and on the featureful corpora the finding comes back as exactly the eight members
+                # with no bystanders at all. A membership test needs a swept-in member to find.
+                text += " " + op["mention"] + " " + op["hashtag"]
             posts.append(_post(
                 text, t,
                 client=op["client"] if sloppy else rng.choice(
@@ -196,6 +279,7 @@ def professional_beat(n: int = 10, *, seed: int = 21) -> list[dict]:
     The shape that once scored unrelated journalists at 1.0 in this codebase's own history.
     """
     rng = random.Random(seed)
+    tag_rng = random.Random(seed * 7919 + 1)   # see organic_population: do not perturb `rng`
     out = []
     for i in range(n):
         t = BASE - timedelta(days=14) + timedelta(hours=9)
@@ -204,8 +288,13 @@ def professional_beat(n: int = 10, *, seed: int = 21) -> list[dict]:
             t = t + timedelta(minutes=rng.randint(25, 180))
             if t.hour > 19:
                 t = t.replace(hour=9) + timedelta(days=1)
-            posts.append(_post(
-                "the stadium deal " + _sentence(rng), t, client="TweetDeck"))
+            # REPORTERS ON ONE BEAT CONVERGE ON THE SAME OFFICIALS AND THE SAME HASHTAG, and
+            # they do it innocently. This is the control that decides whether mention and tag
+            # features can ship: if they let a newsroom clear the bar, they are wrong.
+            body = "the stadium deal " + _sentence(rng)
+            body += " " + tag_rng.choice(["@mayorsoffice", "@citycouncil", "@stadiumauthority"])
+            body += " " + tag_rng.choice(["#stadiumdeal", "#citybudget"])
+            posts.append(_post(body, t, client="TweetDeck"))
         out.append(_account(
             f"press{i:03d}", posts=posts,
             bio="city hall reporter at the local paper",
@@ -230,8 +319,14 @@ def fan_community(n: int = 12, *, seed: int = 33) -> list[dict]:
         posts = []
         for _ in range(rng.randint(15, 30)):
             t = t + timedelta(minutes=rng.randint(15, 400))
+            # A FANDOM ALL TAGS THE SAME ARTIST AND USES THE SAME HASHTAG. Together with the
+            # in-group replies this is the sharpest test of a mention feature: convergence on an
+            # outside target is exactly what the network family calls evidence, and here it is a
+            # community being a community.
+            body = f"the new season is {rng.choice(['incredible', 'so good', 'unreal'])} "
+            body += _sentence(rng) + " @thestudio #newseason"
             posts.append(_post(
-                f"the new season is {rng.choice(['incredible', 'so good', 'unreal'])} " + _sentence(rng),
+                body,
                 t,
                 client=rng.choice(["Twitter for iPhone", "Twitter for Android"]),
                 reply=rng.choice([x for x in ids if x != ids[i]]),

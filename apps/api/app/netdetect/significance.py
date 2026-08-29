@@ -233,6 +233,17 @@ def score_candidate(
     # post, which every commenter engages by construction.
     inside = set(members)
 
+    # A MENTION NAMES A HANDLE, NOT AN EXTERNAL ID, so the member set above does not exclude it and
+    # adding "mentions" to the tuple below would silently exclude nothing. A group that @s each
+    # other by handle would then read as convergence on an outside target, which is the exact
+    # inversion the in-group rule exists to prevent, on the population most at risk of being
+    # wrongly accused: a real community.
+    inside_handles = {
+        (corpus.by_id[m].handle or "").lower().lstrip("@")
+        for m in members if m in corpus.by_id
+    }
+    inside_handles.discard("")
+
     per_family: dict[str, list[float]] = {fam: [] for fam in ALL_FAMILIES}
     evidence: list[FeatureEvidence] = []
 
@@ -241,6 +252,8 @@ def score_candidate(
         if not corpus.is_rare(f):
             continue
         if f.kind in ("reply_to", "target_post", "repost_of") and f.value in inside:
+            continue
+        if f.kind == "mentions" and f.value in inside_handles:
             continue
         k, s = feature_surprise(corpus, members, f)
         if s <= 0.0:
@@ -294,6 +307,8 @@ def _sentence(f: Feature, shared_by: int, corpus_count: int, corpus_size: int) -
         "quiet_hours": "share the same daily quiet period",
         "target_post": "engaged the same post",
         "reply_to": "replied to the same account",
+        "mentions": "named the same account",
+        "hashtag": "posted under the same tag",
         "client": "publish with the same tool",
         "link_domain": "link to the same domain",
         "creation_week": "were created in the same week",

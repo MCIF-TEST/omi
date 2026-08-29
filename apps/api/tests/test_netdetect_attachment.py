@@ -43,10 +43,21 @@ _CACHE: dict[tuple[int, int], tuple] = {}
 
 
 def _planted(organic: int, seed: int):
+    """A grid corpus that ACTUALLY CONTAINS BYSTANDERS, which this whole file needs.
+
+    `subject_noise=False` gives the sparse background this generator produced before mentions and
+    hashtags existed. With the featureful background the measured contamination over this same grid
+    is 0 of 96 named, so every test here would pass by having nothing to find, which is the failure
+    mode `attachment.py` was written to avoid in the first place: a check that never looked reads
+    exactly like a check that found nothing.
+
+    The 0 of 96 is a property of the corpus and not an improvement in the detector: measured with
+    the narrative feature disabled it is also 0 of 96. See `netdetect_corpora.organic_population`.
+    """
     key = (organic, seed)
     if key not in _CACHE:
-        rows = C.organic_population(organic, seed=seed) + C.planted_operation(
-            8, seed=seed + 1, discipline=0.0)
+        rows = C.organic_population(organic, seed=seed, subject_noise=False) + C.planted_operation(
+            8, seed=seed + 1, discipline=0.0, subject_noise=False)
         result = detect_from_commenters(rows, shuffles=SHUFFLES)
         hits = [c for c in result.findings if sum(1 for m in c.members if m.startswith("op")) >= 4]
         assert hits, f"the operation was not found at organic={organic} seed={seed}"
@@ -116,17 +127,27 @@ def test_a_homogeneous_group_gets_no_verdict_rather_than_an_arbitrary_one():
 def test_a_real_community_is_not_given_a_weakest_member():
     """The professional-beat control. A newsroom on one beat IS everybody contributing alike, so
     singling one reporter out would be inventing a distinction the evidence does not carry."""
-    rows = C.organic_population(40, seed=9) + C.professional_beat(10, seed=21)
+    rows = C.organic_population(40, seed=9, subject_noise=False) + C.professional_beat(
+        10, seed=21)
     result = detect_from_commenters(rows, shuffles=SHUFFLES)
     if not result.findings:
         import pytest
         pytest.skip("the beat control produced no finding on this build")
     for finding in result.findings:
         attachment = assess(result.corpus, finding.members)
-        assert not attachment.answered, (
+        # THE INVARIANT IS THAT NOBODY IS SINGLED OUT, not which route gets there. Two outcomes
+        # satisfy it and both are correct answers about a newsroom: abstain because the group is
+        # too homogeneous to have a weakest member, or answer that every member carries the
+        # finding. The wrong outcome is a name.
+        #
+        # It used to abstain, and the pinned reason was a measured median contribution of 0.04 to
+        # 0.18 against `MIN_MEDIAN_CONTRIBUTION` of 0.5. Once reporters on a beat share the beat's
+        # hashtag and the officials they name, removing one costs more and the median measures
+        # 0.5217, just over the floor, so it answers instead. The relative threshold still refuses
+        # to pick anybody, which is the property that protects the people named.
+        assert attachment.weak == [], (
             f"a member of a genuine community was singled out: {attachment.weak}"
         )
-        assert attachment.weak == []
 
 
 def test_a_finding_too_small_to_have_a_typical_member_abstains():

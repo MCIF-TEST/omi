@@ -133,7 +133,15 @@ def test_a_member_of_one_operation_is_not_placed_in_another():
     assert own.hard_evidence >= MIN_HARD_EVIDENCE
     assert not other.assigned, "a member was placed in an unrelated operation"
     assert other.hard_evidence < MIN_HARD_EVIDENCE
-    assert "operator's own acts" in (other.refused or "")
+
+    # WHICH guard refuses it is not the claim; that it is refused, and that the hard-evidence floor
+    # would refuse it, are. Since the operation carries a campaign hashtag and a brigading target,
+    # the wrong formation now matches on fewer families and the family-count guard fires first, so
+    # pinning one refusal string was pinning the order the guards happen to run in.
+    assert other.refused, "the wrong formation was neither assigned nor refused"
+    assert any(reason in other.refused for reason in (
+        "operator's own acts", "kind of evidence",
+    )), f"refused for an unrecognised reason: {other.refused}"
 
 
 def test_ranking_survives_the_certainty_cap():

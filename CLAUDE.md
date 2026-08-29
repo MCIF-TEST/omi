@@ -31,8 +31,8 @@ will be re-broken by anyone who reasons about them instead: the OMI score may ch
 formation but never detect one, and **total accumulated history does not separate an operation from
 a newsroom**, so only its hard-family half discriminates.
 
-Suite measured at **2516
-passed, 8 skipped, 2 failed** (23m31s, 2026-08-28), both failures pre-existing and listed below. The 8
+Suite measured at **2521
+passed, 8 skipped, 2 failed** (21m52s, 2026-08-29), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -85,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2516 passed, 8 skipped, 2 failed** (23m31s, 2026-08-28), both documented below:
+Current measured state: **2521 passed, 8 skipped, 2 failed** (21m52s, 2026-08-29), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1903,7 +1903,79 @@ Stored as `corroboration_json`, a snapshot refreshed on re-run exactly as `score
 are, and registered in `_INCREMENTAL_COLUMNS`. Pinned by
 `tests/test_netdetect_corroboration.py`.
 
-**Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
+#### Mentions and hashtags: two things nobody extracted, and the family that was empty
+
+An `@mention` reached NO feature. `network_features` reads only structured ids (`parent_id`,
+`reply_to_id`, `repost_of_id`), and `text_features` sees a mention only as one word inside a
+five-word shingle, so two accounts brigading the same person in differently worded posts shared
+nothing. A `#hashtag` reached no feature either, which left `FAMILY_NARRATIVE` **empty on every
+ordinary scan**: `topic_features` needs assignments only the cross-investigation pass produces, so
+the per-scan path ran with five families while `MIN_FAMILIES` counts them. `subject_features`
+fills both, with no model, no network call and no vendor.
+
+**A MENTION IS NOT A REPOST, AND MEASURING THAT SAVED A FALSE POSITIVE.** Mentions were first put
+in `network_features` beside the three structured ids, on the reasoning that converging on an
+outside target is the operator's own act. `network` is weighted 1.00 and is a HARD family, so a
+shared @ became enough to clear `MIN_HARD_EVIDENCE`. Measured immediately, the **professional-beat
+control went from flagged-for-adjudication to publishable**: hard evidence 7.50 against a floor of
+3.0, on ten reporters all naming `@stadiumauthority`. No threshold would have caught it, because
+the finding was statistically real. A repost is a structural act the platform recorded; a mention
+is a name inside a sentence, and naming somebody is about SUBJECT. Moved to `narrative` (0.45, not
+hard), and the control went back to hard 1.50 and `needs_adjudication`.
+
+**The in-group exclusion had to be written separately, and adding `"mentions"` to the existing
+tuple would have excluded nothing.** `inside` holds external ids and a mention value is a HANDLE.
+`score_candidate` builds `inside_handles` for it. Without that, a group that @s each other reads as
+convergence on an outside target, which is the inversion the in-group rule exists to prevent, on a
+real community.
+
+**Three fixture lessons, all of which produced wrong measurements first:**
+
+- **The controls have to tag and mention things too.** A fixture where only the operation names
+  anybody makes any mention feature look perfectly discriminating. The newsroom now names the same
+  officials and the fandom tags the same artist, which is what made the false positive above visible.
+- **The SHAPE of the vocabulary matters as much as its presence.** A first version gave 60 organic
+  accounts a pool of FIVE handles, so a third of the corpus named `@citycouncil` and ordinary
+  people genuinely converged. Real populations are a short head and a very long tail (now 215
+  distinct mentions across 60 accounts).
+- **A new random draw must use its own stream.** Drawing mentions from `rng` shifted every later
+  draw and silently regenerated every sentence, gap and handle. That alone broke a real test.
+
+**Two claims I nearly made and the measurements that stopped them:**
+
+- **Contamination fell from 7 of 103 named to 0 of 96 over the systematic grid, and it is NOT an
+  improvement in the detector.** Measured with `subject_features` DISABLED on the same corpora it
+  is also 0 of 96. The featureful background is what tightens the communities, so the old ~6.8%
+  was partly a property of a corpus whose organic accounts carried too few distinguishing
+  features. `organic_population(subject_noise=False)` and
+  `planted_operation(subject_noise=False)` restore the old corpora byte for byte, and
+  `test_netdetect_attachment.py` uses them, because a membership test needs a swept-in member to
+  find and would otherwise pass by having nothing to look at.
+- **A `MIN_FAMILIES` shared-core refusal was built, measured to be a complete no-op on every
+  case, and REMOVED.** The idea is sound (two kinds of evidence must be about the same people) and
+  identical output with it on and off is not a basis for two new constants that could suppress a
+  real finding in an unmeasured corpus.
+
+#### The pure-repost-ring test was passing on one lucky corpus
+
+`test_a_pure_repost_ring_is_still_refused_for_want_of_a_second_family` strips the ring's shared
+tool so amplification is the only thing it shares, and asserts it is refused. **Measured across six
+organic backgrounds on the tree before this change, the ring was admitted in FIVE.** The test used
+the default background, which happened to be the sixth.
+
+The cause is not the ring. `_sentence` draws from a pool of eight topics, so unrelated accounts
+genuinely share five-word shingles at a measured ~14 in 58, the ring shared them like everybody
+else, Louvain attached organic accounts to it, and their shingles supplied the second family. The
+test's own premise was false: the ring shared text as well as reposts.
+
+Fixed by making the premise true (every account gets text nobody else could share), and it now
+holds **0 of 8 backgrounds**. Worth knowing generally: `MIN_FAMILIES` is checked on the WHOLE
+candidate, and a candidate is a community rather than a chosen set, so two disjoint sub-groups can
+in principle supply one family each. That remains unfixed and is now the most interesting known
+weakness in the refusals.
+
+**Not yet built:** the adjudication call, a sub-group-aware `MIN_FAMILIES` (above), and a
+per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).
 
