@@ -101,6 +101,18 @@ MIN_PROFILE_EVIDENCE = 4.0
 #: for less.
 MIN_HARD_EVIDENCE = 3.0
 
+#: DISTINCT hard-family features the match must rest on, not just their summed weight.
+#:
+#: The sum alone can be carried by ONE coincidence. `creation_week` is a single identity feature and
+#: a rare week scores about 5.8 by itself, which clears the 3.0 floor unaided; all the account then
+#: needs is any second family to satisfy `MIN_FAMILIES`, and a shared quiet-hours bucket will do.
+#:
+#: Measured on the fan-community control against a catalogued operation: the one false assignment
+#: rested on exactly ONE hard feature at 5.78, while every genuine member rested on FIVE at 19.27.
+#: The populations do not overlap, so this costs nothing real and removes the class where a single
+#: calendar coincidence names somebody as part of an operation.
+MIN_HARD_FEATURES = 2
+
 #: Ceiling on the accumulated log10 LR. Several estimates multiplied do not make a fact, and
 #: `detector/probability.MAX_LOG10_LR` prices the same restraint for the cohort detector.
 MAX_LOG10_LR = 4.0
@@ -231,12 +243,26 @@ def score_against(account: AccountProfile, profile: FormationProfile,
     out.posterior = round(logistic(math.log10(prior_odds) + out.log_lr), 6)
     out.matched.sort(key=lambda m: -m.surprise)
 
+    # Distinct hard-family features, not their summed weight. See MIN_HARD_FEATURES.
+    hard_features = len({
+        (m.kind, m.value) for m in out.matched if m.family in HARD_FAMILIES
+    })
+
     if not out.matched:
         out.refused = "shares none of the behaviours that identify this formation"
     elif out.families < MIN_FAMILIES:
         out.refused = (
             f"shares only {out.families} kind of evidence with this formation; membership needs "
             f"{MIN_FAMILIES} independent kinds, and one family firing repeatedly is one observation"
+        )
+    elif hard_features < MIN_HARD_FEATURES:
+        # One coincidence is not a pattern. See MIN_HARD_FEATURES: a single rare creation week
+        # clears the weight floor on its own, and a person should not be named as part of an
+        # operation because they signed up the same week as it did.
+        out.refused = (
+            f"the match rests on {hard_features} feature in the operator's own acts; "
+            f"{MIN_HARD_FEATURES} are needed. A single coincidence of how or when an account was "
+            f"made is not a pattern, however rare that one coincidence is"
         )
     elif out.hard_evidence < MIN_HARD_EVIDENCE:
         # The match rests on what any two automated accounts share. See MIN_HARD_EVIDENCE: this is

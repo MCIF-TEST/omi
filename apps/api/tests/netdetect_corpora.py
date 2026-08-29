@@ -55,9 +55,34 @@ def _post(text: str, when: datetime, *, client=None, parent=None, reply=None,
     }
 
 
+#: When the post being scanned was published. Arrivals are measured relative to this.
+POST_TIME = BASE - timedelta(days=1)
+
+
+def _arrival(rng: random.Random, *, spread_seconds: float, centre_offset: float = 0.0) -> datetime:
+    """One comment on the SCANNED post.
+
+    `spread_seconds` is how widely this population arrives. An ordinary comment section trickles in
+    over hours; a coordinated push lands inside minutes; a fandom lands inside minutes too, which is
+    the whole reason the fandom is a control here rather than a decoration.
+    """
+    return POST_TIME + timedelta(seconds=centre_offset + rng.random() * spread_seconds)
+
+
+def _thread(rng: random.Random, *, spread_seconds: float, centre_offset: float = 0.0,
+            count: int = 1) -> list[dict]:
+    """The account's comments under the scanned post, in the shape the scan stores them."""
+    return [
+        {"text": "commenting on this post", "created_at":
+            _arrival(rng, spread_seconds=spread_seconds, centre_offset=centre_offset).isoformat()}
+        for _ in range(count)
+    ]
+
+
 def _account(
     ext: str, *, posts: list[dict], bio: str = "", created: datetime | None = None,
     handle: str | None = None, score: float = 20.0, tier: str = "low",
+    thread: list[dict] | None = None,
 ) -> dict:
     return {
         "external_id": ext,
@@ -66,7 +91,9 @@ def _account(
         "bio": bio,
         "account_created_at": (created or BASE - timedelta(days=900)).isoformat(),
         "recent_activity": posts,
-        "thread_comments": [],
+        # The account's comments on the SCANNED post. Stored apart from `recent_activity` because
+        # co-timing is only evidence when both accounts were commenting on the same thing.
+        "thread_comments": thread or [],
         "omi_score": score,
         "tier": tier,
     }
@@ -100,8 +127,20 @@ def _long_tail_tag(rng: random.Random) -> str:
         rng.randrange(1, 40))
 
 
+#: How long an ordinary comment section takes to arrive. Real threads trickle: a burst early and a
+#: long tail. Eight hours is the spread the co-arrival controls are measured against.
+ORGANIC_ARRIVAL_SPREAD = 8 * 3600
+
+#: A viral post: the same number of people arriving inside four minutes. THE control for the
+#: co-arrival feature, because on a post like this any small group shares a window and a naive
+#: co-arrival test reports the whole section as one operation.
+VIRAL_ARRIVAL_SPREAD = 240
+
+
 def organic_population(n: int = 60, *, seed: int = 7,
-                       subject_noise: bool = True) -> list[dict]:
+                       subject_noise: bool = True,
+                       arrivals: bool = True,
+                       viral: bool = False) -> list[dict]:
     """Ordinary people. Different phrasing, different rhythms, different signup dates.
 
     This is the background every control needs and the corpus the falsification test shuffles.
@@ -120,6 +159,10 @@ def organic_population(n: int = 60, *, seed: int = 7,
     The consequence for the tests: `app/netdetect/attachment.py` exists to flag members a finding
     swept in, and it can only be exercised on a corpus that produces some. Those tests pass
     `subject_noise=False` to get one.
+
+    ``arrivals=False`` is the same idea one feature later: it omits the `thread_comments` that feed
+    co-arrival. Two switches rather than one overloaded flag, because each names exactly the feature
+    it withholds and a future reader should not have to guess which are folded into which.
     """
     rng = random.Random(seed)
     # A SEPARATE STREAM FOR THE MENTIONS AND TAGS, and this is not fastidiousness.
@@ -132,6 +175,10 @@ def organic_population(n: int = 60, *, seed: int = 7,
     #
     # Any generator here that gains a new random draw needs its own stream for the same reason.
     tag_rng = random.Random(seed * 7919 + 1)
+    # Its own stream again, for the reason above: a new draw taken from `rng` would silently
+    # regenerate every sentence, gap and handle in this corpus.
+    arrive_rng = random.Random(seed * 104729 + 3)
+    spread = VIRAL_ARRIVAL_SPREAD if viral else ORGANIC_ARRIVAL_SPREAD
     out = []
     for i in range(n):
         # A human rhythm: irregular gaps, a real sleep window, an individual signup date.
@@ -158,6 +205,7 @@ def organic_population(n: int = 60, *, seed: int = 7,
                 ["Twitter for iPhone", "Twitter Web App", "Twitter for Android"])))
         out.append(_account(
             f"org{i:03d}",
+            thread=_thread(arrive_rng, spread_seconds=spread) if arrivals else [],
             posts=posts,
             bio=f"{rng.choice(['dad', 'nurse', 'teacher', 'engineer', 'retired'])} in the city",
             created=BASE - timedelta(days=rng.randint(200, 3000)),
@@ -212,7 +260,7 @@ OPERATORS: dict[str, dict] = {
 
 def planted_operation(
     size: int = 8, *, seed: int = 99, discipline: float = 0.0, prefix: str = "op",
-    operator: str = "stadium", subject_noise: bool = True,
+    operator: str = "stadium", subject_noise: bool = True, arrivals: bool = True,
 ) -> list[dict]:
     """An operation, with a dial for how well run it is.
 
@@ -226,6 +274,7 @@ def planted_operation(
     adversary, which is what makes rotation and cross-run assignment testable at all.
     """
     rng = random.Random(seed)
+    arrive_rng = random.Random(seed * 104729 + 3)   # own stream; see organic_population
     op = OPERATORS[operator]
     shared_line = op["script"]
     signup = BASE - timedelta(days=op["signup_days_ago"])
@@ -258,6 +307,14 @@ def planted_operation(
             ))
         out.append(_account(
             f"{prefix}{i:03d}",
+            # A coordinated push lands together. Gated on `sloppy` exactly like the script and the
+            # scheduler, so the discipline dial keeps meaning what it meant: a disciplined operation
+            # arrives spread out like anybody else and this feature correctly says nothing.
+            thread=_thread(
+                arrive_rng,
+                spread_seconds=180 if sloppy else ORGANIC_ARRIVAL_SPREAD,
+                centre_offset=1800 if sloppy else 0.0,
+            ) if arrivals else [],
             posts=posts,
             bio=op["bio"] if sloppy else "just here for the local news",
             created=(signup + timedelta(hours=i * 3)) if sloppy
@@ -280,6 +337,7 @@ def professional_beat(n: int = 10, *, seed: int = 21) -> list[dict]:
     """
     rng = random.Random(seed)
     tag_rng = random.Random(seed * 7919 + 1)   # see organic_population: do not perturb `rng`
+    arrive_rng = random.Random(seed * 104729 + 3)
     out = []
     for i in range(n):
         t = BASE - timedelta(days=14) + timedelta(hours=9)
@@ -297,6 +355,9 @@ def professional_beat(n: int = 10, *, seed: int = 21) -> list[dict]:
             posts.append(_post(body, t, client="TweetDeck"))
         out.append(_account(
             f"press{i:03d}", posts=posts,
+            # Reporters on one beat file within the same working stretch after a story breaks. A
+            # semi-tight innocent cluster, narrower than the section and wider than a push.
+            thread=_thread(arrive_rng, spread_seconds=2 * 3600),
             bio="city hall reporter at the local paper",
             created=BASE - timedelta(days=rng.randint(1500, 4000)),
             handle=f"{rng.choice(['j', 'm', 'r'])}{rng.choice(['smith', 'lopez', 'chen'])}",
@@ -311,6 +372,7 @@ def fan_community(n: int = 12, *, seed: int = 33) -> list[dict]:
     a broadcast array.
     """
     rng = random.Random(seed)
+    arrive_rng = random.Random(seed * 104729 + 3)
     launch = BASE - timedelta(days=60)
     out = []
     ids = [f"fan{i:03d}" for i in range(n)]
@@ -333,6 +395,10 @@ def fan_community(n: int = 12, *, seed: int = 33) -> list[dict]:
             ))
         out.append(_account(
             f"fan{i:03d}", posts=posts,
+            # THE CO-ARRIVAL CONTROL. A fandom watching for a drop arrives together, inside minutes,
+            # for entirely innocent reasons. If the co-arrival feature cannot tolerate this it is
+            # wrong, and no threshold elsewhere would catch it because the co-arrival is real.
+            thread=_thread(arrive_rng, spread_seconds=240, centre_offset=600),
             bio="she/her | fan account | dms open",
             created=launch + timedelta(days=rng.randint(0, 20)),
             handle=f"{rng.choice(['stan', 'luvs', 'daily'])}_{rng.choice(['ari', 'mika', 'zed'])}",

@@ -120,6 +120,21 @@ class FormationProfile:
         return {f.token(): f for f in self.features}
 
 
+#: Feature kinds that identify a MOMENT rather than a behaviour, and so can never be part of an
+#: operation's durable identity.
+#:
+#: `arrival` is a wall-clock bucket under one specific post. Two accounts under that post can
+#: meaningfully share it; an account seen six weeks later on a different post cannot, and any match
+#: it produces is a coincidence of the calendar. A formation profile is supposed to survive account
+#: rotation precisely BECAUSE it holds only what the operator keeps doing, so a timestamp in it is a
+#: category error.
+#:
+#: Measured before this exclusion: a member of the fan-community control was assigned to a
+#: catalogued operation, which is the most serious error this system can make because assignment
+#: names a real person as part of one.
+CONTEXTUAL_KINDS: frozenset[str] = frozenset({"arrival"})
+
+
 def build_profile(candidate: Candidate, corpus: Corpus) -> FormationProfile:
     """Distil a finding into the operation's identity.
 
@@ -129,6 +144,9 @@ def build_profile(candidate: Candidate, corpus: Corpus) -> FormationProfile:
     size = max(1, corpus.size)
     picked: list[ProfileFeature] = []
     for item in candidate.evidence or []:
+        if item.feature.kind in CONTEXTUAL_KINDS:
+            # A moment, not a behaviour. See CONTEXTUAL_KINDS.
+            continue
         prevalence = item.corpus_count / size
         if prevalence > PROFILE_PREVALENCE_CEILING:
             # It was not identifying even where it was measured. Carrying it would make the

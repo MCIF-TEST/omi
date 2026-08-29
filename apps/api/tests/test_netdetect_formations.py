@@ -823,3 +823,54 @@ def test_the_neutral_family_rule_agrees_with_the_tracking_layer():
     assert not (TRACKING - NETDETECT), (
         "the tracking layer calls a family neutral that netdetect does not"
     )
+
+
+def test_one_coincidence_is_not_enough_to_place_somebody_in_an_operation():
+    """`MIN_HARD_EVIDENCE` weighs the SUM, and one feature can carry it alone.
+
+    `creation_week` is a single identity feature, and a rare week scores about 5.8 by itself, which
+    clears the 3.0 floor unaided. All the account then needs is any second family to satisfy
+    `MIN_FAMILIES`, and a shared quiet-hours bucket will do. A person should not be named as part of
+    an operation because they signed up the same week it did.
+
+    Measured on the fan-community control: the one false assignment rested on exactly ONE hard
+    feature at 5.78, while every genuine member rested on FIVE at 19.27. The populations do not
+    overlap, which is what makes the floor free.
+    """
+    from app.netdetect.assign import MIN_HARD_FEATURES, score_against
+    from app.netdetect.types import HARD_FAMILIES
+
+    stadium, _ = learn("stadium", bg=5, op=6)
+    assert stadium is not None, "fixture changed"
+
+    def hard_features(assignment):
+        return len({(m.kind, m.value) for m in assignment.matched
+                    if m.family in HARD_FAMILIES})
+
+    members = [score_against(profile_from_commenter(r), stadium, formation_key="OP")
+               for r in C.planted_operation(8, seed=6, discipline=0.0)]
+    assert all(a.assigned for a in members), "the floor cost a genuine member its assignment"
+    assert all(hard_features(a) >= MIN_HARD_FEATURES for a in members)
+
+    # Nobody in an innocent population is placed, and any that come close do so on one coincidence.
+    for row in C.fan_community(12, seed=33):
+        out = score_against(profile_from_commenter(row), stadium, formation_key="OP")
+        assert not out.assigned, f"{row['external_id']} was placed in an operation"
+
+
+def test_an_arrival_bucket_is_never_part_of_a_formations_identity():
+    """A formation profile has to survive account rotation, which it can only do by holding what the
+    operator KEEPS DOING. An arrival bucket is a wall-clock moment under one specific post.
+
+    Two accounts under that post can meaningfully share it; an account seen six weeks later cannot,
+    and any match it produces is a coincidence of the calendar. Measured before the exclusion: a
+    member of the fan-community control was assigned to a catalogued operation.
+    """
+    from app.netdetect.formation import CONTEXTUAL_KINDS
+
+    stadium, _ = learn("stadium", bg=5, op=6)
+    assert stadium is not None
+    assert "arrival" in CONTEXTUAL_KINDS
+    assert not [f for f in stadium.features if f.kind in CONTEXTUAL_KINDS], (
+        "a timestamp bucket became part of an operation's durable identity"
+    )

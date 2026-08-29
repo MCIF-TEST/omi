@@ -779,3 +779,190 @@ def test_the_narrative_family_is_no_longer_empty_on_an_ordinary_scan():
     assert any(f.family == FAMILY_NARRATIVE for p in profiles for f in p.features), (
         "the narrative family is empty on the per-scan path again"
     )
+
+
+# ==================================================================================================
+# Co-arrival under the scanned post
+# ==================================================================================================
+def test_co_arrival_strengthens_a_push_that_lands_together():
+    """`thread_comments` timestamps were POOLED into the account's own rhythm and never compared
+    between accounts, so nothing here could say "these eight arrived inside the same three minutes".
+
+    That is a different claim from `timing_features`' rhythm: two accounts posting at 14:03 on
+    unrelated days is nothing; two accounts arriving at 14:03 under the SAME post is the evidence.
+    """
+    rows = C.organic_population(60, seed=7) + C.planted_operation(8, seed=99, discipline=0.0)
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    hit = next(c for c in result.findings if _members_from(c, "op") >= 4)
+
+    arrivals = [e for e in hit.evidence if e.feature.kind == "arrival"]
+    assert arrivals, "the co-arrival feature contributed nothing to a push that landed together"
+    assert any(e.shared_by >= 4 for e in arrivals)
+    assert all(e.feature.family == "timing" for e in arrivals)
+
+
+def test_a_viral_post_produces_nothing():
+    """THE FAILURE MODE CO-ARRIVAL IS BUILT AROUND, and it took two attempts to get right.
+
+    On a post drawing sixty comments in four minutes, ANY small group shares a window. Measured
+    naively this is the worst false-positive generator available.
+
+    The first design leaned on rarity alone: a window is a feature, and features held by most of
+    the corpus are dropped before scoring. That fixed the dense middle of a burst and NOT its
+    sparse tails, which still produced windows holding three or four accounts. Measured: a viral
+    background went from 0 findings to 1.
+
+    The second design scaled the windows to the post's own median gap. That fixed the tails and
+    created a subtler failure, because constant occupancy cuts both ways: if a window holds about
+    four accounts on any post, "shared a window" is equally unsurprising everywhere and rarity can
+    no longer tell a push from a slice of a burst. Worse, the candidate generator groups accounts BY
+    the window and the scorer then scores them ON it. Measured: one viral background in eight
+    produced a fourteen-account finding carrying `timing: 11.13`, entirely arrival-driven.
+
+    What works is the ratio: an arrival emits nothing unless its neighbourhood is denser than the
+    thread's own average by `ARRIVAL_BURST_RATIO`. Measured 0 false positives across eight
+    backgrounds, with recall 8 of 8 on the sloppy operation.
+    """
+    rows = C.organic_population(60, seed=7, viral=True)
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    assert result.findings == [], (
+        "a viral post reported a finding; co-arrival is firing on density rather than coordination"
+    )
+
+
+def test_strangers_forced_into_one_window_are_never_published():
+    """The most adversarial co-arrival available: eight unrelated accounts forced inside a
+    twenty-second window on an already-busy post, tighter than the planted operation's own push.
+
+    THE STANDARD HERE IS "NEVER PUBLISHED", NOT "NEVER FOUND", and that is the same standard the
+    professional-beat control is held to rather than a softer one invented for this feature. A group
+    of strangers who genuinely did arrive together is a real statistical fact; what makes it not an
+    operation is that they share none of the operator's own acts, so `MIN_HARD_EVIDENCE` sends it to
+    a person instead of to a customer.
+
+    Measured across eight backgrounds: 0 publishable, 1 flagged for review. Forcing the burst also
+    perturbs the density estimate the burst test uses, which is why the one finding that appears is
+    not even mostly the forced accounts (2 of 8).
+    """
+    import random
+
+    published = []
+    for seed in (7, 3, 4, 5, 6, 8):
+        rows = C.organic_population(60, seed=seed, viral=True)
+        rng = random.Random(4242)
+        for row in rows[:8]:
+            row["thread_comments"] = C._thread(rng, spread_seconds=20, centre_offset=100)
+
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        published += [f for f in result.findings if not f.needs_adjudication]
+
+    assert published == [], (
+        "a burst of strangers became publishable without review; co-arrival is being treated as "
+        "the operator's own act rather than as the soft timing evidence it is"
+    )
+
+
+def test_a_fandom_arriving_on_a_drop_is_not_a_finding():
+    """A fandom watching for a drop arrives inside minutes for entirely innocent reasons, and no
+    threshold elsewhere would catch it because the co-arrival is real."""
+    rows = C.organic_population(60, seed=7) + C.fan_community(12, seed=33)
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    assert not [c for c in result.findings if _members_from(c, "fan") >= 4]
+
+
+def test_co_arrival_goes_quiet_rather_than_loud_when_it_cannot_discriminate():
+    """An operation arriving INSIDE a viral burst is still found, and NOT by co-arrival.
+
+    This is the property that makes the feature safe: where every account shares the windows the
+    arrival evidence is not rare, so it drops out entirely and the finding rests on the operation's
+    other families. A feature that fired here would be reporting the post's popularity.
+    """
+    import random
+
+    rng = random.Random(4242)
+    operation = C.planted_operation(8, seed=99, discipline=0.0)
+    for row in operation:
+        row["thread_comments"] = C._thread(rng, spread_seconds=180, centre_offset=30)
+
+    rows = C.organic_population(60, seed=7, viral=True) + operation
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    hit = next((c for c in result.findings if _members_from(c, "op") >= 4), None)
+    assert hit is not None, "the operation became invisible on a busy post"
+    assert not [e for e in hit.evidence if e.feature.kind == "arrival"], (
+        "co-arrival contributed on a post where every account shares the windows"
+    )
+
+
+def test_the_half_offset_grid_catches_a_burst_across_a_bucket_boundary():
+    """Fixed buckets lose a burst that straddles an edge, and which side it falls on is an accident
+    of where the epoch happens to sit rather than a fact about the accounts."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.netdetect.features import arrival_features
+
+    # A thread that clusters around noon and then trickles, so the burst test admits these.
+    noon = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+    everyone = ([noon + timedelta(seconds=x) for x in (-4, -2, -1, 0, 1, 2, 4)]
+                + [noon + timedelta(hours=h) for h in range(1, 12)])
+    scales = (60, 300)
+
+    before = arrival_features([noon - timedelta(seconds=2)],
+                              scales=scales, all_arrivals=everyone)
+    after = arrival_features([noon + timedelta(seconds=3)],
+                             scales=scales, all_arrivals=everyone)
+    assert before, "the burst test rejected an arrival in the middle of a burst"
+    assert before & after, "five seconds apart across a boundary shared no window at all"
+
+    far = arrival_features([noon + timedelta(hours=6)], scales=scales, all_arrivals=everyone)
+    assert not (before & far), "six hours apart shared a window"
+
+
+def test_co_arrival_is_not_emitted_when_too_few_accounts_carry_arrivals():
+    """THE DEGENERATE CASE. If five accounts have thread comments and three share a minute, the
+    window reads as rare against the whole corpus while the only background that could judge it is
+    those five arrivals. That is measuring nothing and reporting a finding."""
+    from app.netdetect.features import MIN_ACCOUNTS_FOR_CO_ARRIVAL, profile_from_commenter
+
+    rows = C.organic_population(60, seed=7)
+    for row in rows[MIN_ACCOUNTS_FOR_CO_ARRIVAL - 1:]:
+        row["thread_comments"] = []
+
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    assert result.corpus is not None
+    assert not [
+        f for p in result.corpus.by_id.values() for f in p.features if f.kind == "arrival"
+    ], "co-arrival was emitted with too small an arrival population to judge it against"
+
+    # And the per-account builder defaults to OFF, so a caller that forgets cannot turn it on by
+    # accident on a corpus that cannot support it.
+    assert not [f for f in profile_from_commenter(rows[0]).features if f.kind == "arrival"]
+
+
+def test_co_arrival_reads_the_thread_and_never_the_accounts_own_timeline():
+    """Co-timing is only evidence when both accounts were commenting on the same thing, which is
+    the reason `thread_comments` is stored apart from `recent_activity` in the first place."""
+    from app.netdetect.features import profile_from_commenter
+
+    row = C.organic_population(1, seed=3)[0]
+    row["thread_comments"] = []
+    built = profile_from_commenter(row, arrival_windows=(60, 300), all_arrivals=[])
+    assert not [f for f in built.features if f.kind == "arrival"], (
+        "arrival features were produced from the account's own timeline with no thread comments"
+    )
+
+
+def test_co_arrival_shares_the_timing_family_so_it_cannot_inflate_the_family_count():
+    """A scheduler produces both a machine rhythm and a tight arrival. Those are one kind of
+    evidence seen twice, and `MIN_FAMILIES` counts families."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.netdetect.features import arrival_features
+    from app.netdetect.types import ALL_FAMILIES, FAMILY_TIMING
+
+    noon = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+    everyone = ([noon + timedelta(seconds=x) for x in (-2, -1, 0, 1, 2)]
+                + [noon + timedelta(hours=h) for h in range(1, 10)])
+    feats = arrival_features([noon], scales=(60,), all_arrivals=everyone)
+    assert feats
+    assert {f.family for f in feats} == {FAMILY_TIMING}
+    assert "arrival" not in ALL_FAMILIES, "co-arrival became a family of its own"

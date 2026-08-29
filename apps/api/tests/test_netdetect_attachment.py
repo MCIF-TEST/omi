@@ -56,8 +56,10 @@ def _planted(organic: int, seed: int):
     """
     key = (organic, seed)
     if key not in _CACHE:
-        rows = C.organic_population(organic, seed=seed, subject_noise=False) + C.planted_operation(
-            8, seed=seed + 1, discipline=0.0, subject_noise=False)
+        rows = C.organic_population(
+            organic, seed=seed, subject_noise=False, arrivals=False,
+        ) + C.planted_operation(
+            8, seed=seed + 1, discipline=0.0, subject_noise=False, arrivals=False)
         result = detect_from_commenters(rows, shuffles=SHUFFLES)
         hits = [c for c in result.findings if sum(1 for m in c.members if m.startswith("op")) >= 4]
         assert hits, f"the operation was not found at organic={organic} seed={seed}"
@@ -127,8 +129,9 @@ def test_a_homogeneous_group_gets_no_verdict_rather_than_an_arbitrary_one():
 def test_a_real_community_is_not_given_a_weakest_member():
     """The professional-beat control. A newsroom on one beat IS everybody contributing alike, so
     singling one reporter out would be inventing a distinction the evidence does not carry."""
-    rows = C.organic_population(40, seed=9, subject_noise=False) + C.professional_beat(
-        10, seed=21)
+    rows = C.organic_population(
+        40, seed=9, subject_noise=False, arrivals=False,
+    ) + C.professional_beat(10, seed=21)
     result = detect_from_commenters(rows, shuffles=SHUFFLES)
     if not result.findings:
         import pytest

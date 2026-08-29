@@ -190,6 +190,184 @@ def timing_features(timestamps: list[datetime]) -> set[Feature]:
     return out
 
 
+#: Window scales as MULTIPLES OF THE POST'S OWN MEDIAN INTER-ARRIVAL GAP, not as wall-clock times.
+#:
+#: THIS IS THE FIX FOR A MEASURED FALSE POSITIVE, and the reasoning is the whole design. Fixed
+#: seconds cannot express the actual signal, which is "these accounts arrived closer together than
+#: the local rate explains". At 60/300/900s on a post drawing a comment every four seconds, the
+#: dense middle of the burst is correctly dropped as un-rare, but the sparse TAILS of the same
+#: distribution still produce windows holding three or four accounts, and those look rare. Measured:
+#: a viral post with nothing planted went from 0 findings to 1, on 2.19 of timing added to an
+#: otherwise marginal group of strangers.
+#:
+#: Scaling to the median gap makes "shared a window" mean the same thing on any post: arrived within
+#: a few typical gaps of each other. Correlated by construction (a group inside 4g is also inside
+#: 100g), which is what the timing family's harmonic within-family discount is for. They are NOT
+#: independent evidence and must never be counted as such.
+#:
+#: ONE SCALE, AND IT IS THE BURST-DETECTION WINDOW ITSELF. Multi-scale was the first design and was
+#: measured off: three scales at 4x, 20x and 100x the median gap put contamination at 11 innocent
+#: accounts among 107 named, above the pinned 10% ceiling, because 100x the median gap is six hours
+#: on a quiet thread and two accounts six hours apart are not co-arriving by any reading. Measured
+#: over the same systematic grid:
+#:
+#:     multiples        contamination    recall
+#:     (4, 20, 100)     11/107 = 10.3%    8 of 8
+#:     (4, 20)           4/100 =  4.0%    8 of 8
+#:     (4,)              1/ 97 =  1.0%    8 of 8
+#:
+#: Recall is identical at every setting, so the wider windows buy nothing measurable and cost named
+#: bystanders. With a single scale the feature also says exactly one thing, which is worth more than
+#: the flexibility: you were in the same detected burst as these accounts. The half-offset grid
+#: matters MORE here, not less, because there is no second scale to catch a boundary straddle.
+ARRIVAL_GAP_MULTIPLES: tuple[int, ...] = (4,)
+
+#: Bounds on the derived scales. A degenerate corpus (every arrival identical, or two arrivals days
+#: apart) would otherwise produce a scale of zero or of a week, neither of which buckets anything
+#: usefully.
+MIN_ARRIVAL_SCALE = 5
+MAX_ARRIVAL_SCALE = 6 * 3600
+
+#: How much denser than the post's own average an arrival's neighbourhood must be before that
+#: arrival counts as part of a BURST at all.
+#:
+#: THIS IS THE NULL, AND IT IS NEEDED. Making the window scales adaptive fixed one false positive
+#: and created a subtler one, because constant occupancy cuts both ways: if a window holds about
+#: four accounts on any post, then "shared a window" is equally unsurprising everywhere and rarity
+#: can no longer tell a coordinated push from a slice of a viral burst. Worse, the candidate
+#: generator groups accounts BY the shared window and the scorer then scores them ON it, so the
+#: evidence and the grouping are the same fact. Measured: one viral background in eight produced a
+#: fourteen-account finding carrying `timing: 11.13`, entirely arrival-driven.
+#:
+#: What actually separates the two is tightness RELATIVE TO THE LOCAL RATE. A push lands in three
+#: minutes on a thread arriving once every eight; a viral slice lands in eighty seconds on a thread
+#: arriving every four. The ratio is the signal, which is the same thing the older cohort detector's
+#: `burst_lockstep` measures against the post's own arrival rate.
+#:
+#: So an arrival emits nothing unless its neighbourhood is this many times denser than the thread
+#: average. On a uniformly busy post nothing is anomalous and the feature stays silent, which is the
+#: honest answer: when everybody arrives together, arriving together says nothing.
+ARRIVAL_BURST_RATIO = 3.0
+
+#: A burst needs at least this many arrivals. Two accounts landing close together is a coincidence
+#: that happens constantly in any thread.
+MIN_BURST_ARRIVALS = 3
+
+
+def arrival_scales(all_stamps: list[datetime]) -> tuple[int, ...]:
+    """Window sizes for THIS post, derived from how fast it actually drew comments.
+
+    Computed once over the whole corpus rather than per account, because the question a window
+    answers is about the population: how close is close, here?
+    """
+    ts = sorted(t for t in all_stamps if t is not None)
+    if len(ts) < 3:
+        return ()
+    gaps = [(b - a).total_seconds() for a, b in zip(ts, ts[1:])]
+    gaps = [g for g in gaps if g > 0]
+    if not gaps:
+        return ()
+    median_gap = sorted(gaps)[len(gaps) // 2]
+    out = []
+    for multiple in ARRIVAL_GAP_MULTIPLES:
+        scale = int(min(MAX_ARRIVAL_SCALE, max(MIN_ARRIVAL_SCALE, median_gap * multiple)))
+        if scale not in out:
+            out.append(scale)
+    return tuple(out)
+
+#: Accounts that must carry arrival data before co-arrival is tested at ALL.
+#:
+#: This is the degenerate case and it is worth stating precisely. If only five accounts in a corpus
+#: have thread comments and three of them share a window, the window looks rare against the whole
+#: corpus while the only background that could judge it is those five arrivals. Rarity would price
+#: it as improbable when in truth nothing was measured. The floor is a corpus-level decision, so
+#: `detect_from_commenters` counts first and only then enables the feature.
+MIN_ACCOUNTS_FOR_CO_ARRIVAL = 20
+
+
+def _in_burst(stamp: datetime, all_epochs: list[float], window: float,
+              expected_per_window: float) -> bool:
+    """Is this arrival inside a neighbourhood denser than the thread's own average?"""
+    import bisect
+
+    epoch = stamp.timestamp()
+    lo = bisect.bisect_left(all_epochs, epoch - window / 2)
+    hi = bisect.bisect_right(all_epochs, epoch + window / 2)
+    local = hi - lo
+    return local >= MIN_BURST_ARRIVALS and local >= expected_per_window * ARRIVAL_BURST_RATIO
+
+
+def arrival_features(thread_stamps: list[datetime], *,
+                     scales: tuple[int, ...] = (),
+                     all_arrivals: list[datetime] | None = None) -> set[Feature]:
+    """WHEN the account turned up under the post being scanned, as a shared coincidence.
+
+    THE DISTINCTION THIS RESTS ON. `timing_features` above reads the account's OWN timeline: its
+    rhythm, its waking hours, its sleep. This reads something different in kind, which is the moment
+    it arrived at the SAME THING as everybody else in the corpus. Co-timing is only evidence when
+    both accounts were commenting on the same post, which is the reason `thread_comments` is stored
+    separately from `recent_activity` in the first place.
+
+    Those timestamps were being POOLED into the account's own rhythm and never compared between
+    accounts, so nothing in this package could say "these eight arrived inside the same four
+    minutes". That is the strongest unused signal in evidence the product already pays to collect.
+
+    ---------------------------------------------------------------------------------------------
+    THE VIRAL POST IS THE FAILURE MODE, AND THE RARITY MACHINERY IS THE NULL
+    ---------------------------------------------------------------------------------------------
+
+    Co-arrival is the single worst false-positive generator available if measured naively: on a post
+    drawing two hundred comments a minute, ANY four accounts share a minute. The older cohort
+    detector solves this with an explicit p-value against the post's own arrival rate.
+
+    Here it needs no separate null, because a window is just a feature and this package already
+    prices features by how many accounts hold them. On a busy post every window bucket is held by
+    most of the corpus, so `Corpus.is_rare` drops it before it is ever scored. On a quiet post a
+    bucket holding eight accounts out of seventy is genuinely improbable and the Chung-Lu null says
+    so. The density normalisation falls out of the existing machinery rather than being bolted on.
+
+    TWO BUCKETS PER SCALE, OFFSET BY HALF A WINDOW. Fixed buckets lose a burst that straddles a
+    boundary: three accounts at 11:59:58 and five at 12:00:03 share nothing at all with a 60s grid,
+    which is a coincidence of where the epoch falls rather than a fact about the accounts. Emitting
+    the half-offset grid as well guarantees that anything inside half a window shares at least one
+    bucket.
+
+    Family is TIMING, not one of its own. Making it a new family would let it count toward
+    `MIN_FAMILIES`, and a scheduler produces both a machine rhythm and a tight arrival: those are
+    one kind of evidence seen twice, which is precisely what families exist to stop being
+    double-counted.
+    """
+    ts = sorted(t for t in thread_stamps if t is not None)
+    if not ts or not scales:
+        return set()
+
+    # The burst test needs the whole thread's arrivals to know what "dense" means here.
+    everyone = sorted(t.timestamp() for t in (all_arrivals or []) if t is not None)
+    if len(everyone) < MIN_BURST_ARRIVALS:
+        return set()
+    span = max(1.0, everyone[-1] - everyone[0])
+    finest = float(scales[0])
+    expected = len(everyone) * (finest / span)
+
+    out: set[Feature] = set()
+    for stamp in ts:
+        # NOTHING IS EMITTED FOR AN ORDINARY ARRIVAL. On a uniformly busy post no neighbourhood is
+        # anomalous, so the feature stays silent rather than handing every account a window token
+        # that the candidate generator will then group them by.
+        if not _in_burst(stamp, everyone, finest, expected):
+            continue
+        for scale in scales:
+            epoch = stamp.timestamp()
+            out.add(Feature(FAMILY_TIMING, "arrival", f"{scale}:{int(epoch // scale)}"))
+            # The half-offset grid. See the docstring: without it a burst either side of a bucket
+            # boundary is invisible, and which side it falls on is an accident of the epoch.
+            out.add(Feature(
+                FAMILY_TIMING, "arrival",
+                f"{scale}h:{int((epoch + scale / 2) // scale)}",
+            ))
+    return out
+
+
 def _log_bucket(seconds: float) -> float:
     import math
 
@@ -486,6 +664,8 @@ def profile_from_commenter(
     exclude_context: set[str] | None = None,
     topic_ids: Iterable[object] = (),
     exclude_topics: set[str] | None = None,
+    arrival_windows: tuple[int, ...] = (),
+    all_arrivals: list[datetime] | None = None,
 ) -> AccountProfile:
     """Build one account's feature bag from a persisted ``CommenterScanResult`` dict.
 
@@ -506,6 +686,16 @@ def profile_from_commenter(
     feats |= text_features(texts)
     feats |= bio_features(row.get("bio"))
     feats |= timing_features(stamps)
+    if arrival_windows:
+        # ONLY the thread timestamps. `stamps` above pools them with the account's own timeline,
+        # which is the right input for a rhythm and the wrong one for a coincidence: two accounts
+        # posting at 14:03 on unrelated days is nothing, and two accounts arriving at 14:03 under
+        # the same post is the claim.
+        feats |= arrival_features(
+            [t for t in (_parse_ts(c.get("created_at")) for c in thread) if t is not None],
+            scales=arrival_windows,
+            all_arrivals=all_arrivals,
+        )
     feats |= network_features(
         (i.get("parent_id") for i in activity),
         (i.get("reply_to_id") for i in all_items),

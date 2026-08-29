@@ -31,8 +31,8 @@ will be re-broken by anyone who reasons about them instead: the OMI score may ch
 formation but never detect one, and **total accumulated history does not separate an operation from
 a newsroom**, so only its hard-family half discriminates.
 
-Suite measured at **2539
-passed, 8 skipped, 2 failed** (22m17s, 2026-08-29), both failures pre-existing and listed below. The 8
+Suite measured at **2550
+passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -85,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2539 passed, 8 skipped, 2 failed** (22m17s, 2026-08-29), both documented below:
+Current measured state: **2550 passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1877,6 +1877,68 @@ the boot pass tried to index a column the real table did not have.
 `test_the_netdetect_columns_did_not_leak_onto_another_model` pins it now.
 
 Pinned by `tests/test_netdetect_formations.py` (26).
+
+#### Co-arrival: the strongest unused signal, and the two designs that were wrong
+
+`thread_comments` carries each account's comments on the SCANNED post with real timestamps, and
+`profile_from_commenter` was POOLING them into `stamps` alongside the account's own timeline. So
+they fed `timing_features`' rhythm and were never compared BETWEEN accounts: nothing in the package
+could say "these eight arrived inside the same three minutes". `arrival_features` reads them.
+
+The distinction is the whole point. Two accounts posting at 14:03 on unrelated days is nothing; two
+accounts arriving at 14:03 **under the same post** is the claim. That is why `thread_comments` is
+stored apart from `recent_activity` in the first place.
+
+**A VIRAL POST IS THE FAILURE MODE, AND IT TOOK THREE DESIGNS.** On a post drawing sixty comments in
+four minutes, ANY small group shares a window.
+
+1. **Rarity alone.** A window is just a feature, and features held by most of the corpus are dropped
+   before scoring, so the dense middle of a burst self-corrects. It does not fix the sparse TAILS,
+   which still produce windows holding three or four accounts. Measured: a viral background went
+   from 0 findings to 1.
+2. **Scales derived from the post's median gap.** Fixes the tails and breaks something subtler:
+   constant occupancy means "shared a window" is equally unsurprising everywhere, so rarity can no
+   longer tell a push from a slice of a burst, and the candidate generator groups accounts BY the
+   window that the scorer then scores them ON. Measured: one viral background in eight produced a
+   fourteen-account finding carrying `timing: 11.13`, entirely arrival-driven.
+3. **The ratio.** An arrival emits nothing unless its neighbourhood is `ARRIVAL_BURST_RATIO` (3.0)
+   times denser than the thread's own average. On a uniformly busy post nothing is anomalous and the
+   feature stays silent, which is the honest answer: when everybody arrives together, arriving
+   together says nothing. This is the same thing the cohort detector's `burst_lockstep` measures.
+
+**ONE SCALE, and multi-scale was measured off.** Three scales at 4x/20x/100x the median gap put
+contamination at 11 innocent accounts among 107 named, over the pinned 10% ceiling, because 100x is
+six hours on a quiet thread. Over the systematic grid: `(4,20,100)` 10.3%, `(4,20)` 4.0%, `(4,)`
+1.0%, **recall 8 of 8 at every setting**. The wider windows buy nothing measurable and cost named
+bystanders. The half-offset grid matters MORE with one scale, not less: without it a burst either
+side of a bucket edge shares nothing, and which side it falls on is an accident of the epoch.
+
+**Family is TIMING, never its own.** A scheduler produces both a machine rhythm and a tight arrival;
+those are one kind of evidence seen twice, and `MIN_FAMILIES` counts families.
+
+Final measured state: viral false positives **0 of 8** backgrounds, recall **8 of 8**, contamination
+**1 of 97 named (1.0%)**, and the fandom, newsroom and organic controls unchanged. A forced burst of
+strangers is **0 publishable, 1 flagged for review** across eight backgrounds, which is the same
+standard the professional-beat control is held to.
+
+**Two rules the fixtures now carry.** `arrivals=False` restores the pre-co-arrival corpora byte for
+byte, beside `subject_noise=False`: two switches rather than one overloaded flag, because each names
+the feature it withholds. And adding thread comments changes `timing_features` for every account,
+since `stamps` pools activity and thread; that cascade is how the assignment bug below surfaced.
+
+#### Two bugs co-arrival exposed, both older than it
+
+- **An arrival bucket must never enter a formation profile.** A profile survives account rotation
+  precisely because it holds what the operator KEEPS DOING, and an arrival token is a wall-clock
+  moment under one post. `CONTEXTUAL_KINDS` excludes it. Measured before the exclusion: a member of
+  the fan-community control was assigned to a catalogued operation, which is the most serious error
+  this system can make, because assignment names a real person as part of one.
+- **`MIN_HARD_EVIDENCE` weighs a SUM, and one feature can carry it alone.** `creation_week` is a
+  single identity feature and a rare week scores about 5.8 by itself, clearing the 3.0 floor
+  unaided; the account then needs only any second family, and a shared quiet-hours bucket will do.
+  `MIN_HARD_FEATURES` (2) requires the match to rest on two DISTINCT hard features. Measured: the
+  one false assignment rested on 1 hard feature at 5.78, every genuine member on 5 at 19.27. The
+  populations do not overlap, so the floor is free, and the 40-of-40 assignment recall is unchanged.
 
 #### The sweep: a whole comment section against the whole catalogue
 

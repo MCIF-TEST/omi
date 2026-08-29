@@ -224,8 +224,42 @@ def detect_from_commenters(rows: list[dict], *, exclude_context: set[str] | None
     construction, so without the exclusion the whole comment section shares a perfect feature and
     reports as one enormous operation.
     """
-    from app.netdetect.features import profile_from_commenter
+    from app.netdetect.features import (
+        MIN_ACCOUNTS_FOR_CO_ARRIVAL,
+        _parse_ts,
+        arrival_scales,
+        profile_from_commenter,
+    )
 
-    profiles = [profile_from_commenter(r, exclude_context=exclude_context)
-                for r in rows if isinstance(r, dict) and r.get("external_id")]
+    usable = [r for r in rows if isinstance(r, dict) and r.get("external_id")]
+
+    # CO-ARRIVAL IS DECIDED FOR THE WHOLE CORPUS, NOT PER ACCOUNT, and it has to be.
+    #
+    # A shared arrival window is priced by how many accounts hold it, so it needs a population of
+    # arrivals to be rare AGAINST. If only five rows carry thread comments, three of them sharing a
+    # minute reads as improbable against the whole corpus while the only background that could
+    # judge it is those five. That is measuring nothing and reporting a finding, so below the floor
+    # the feature is not emitted at all rather than emitted and hoped about.
+    with_arrivals = sum(
+        1 for r in usable
+        if any(isinstance(c, dict) and c.get("created_at")
+               for c in (r.get("thread_comments") or []))
+    )
+    windows: tuple[int, ...] = ()
+    all_arrivals: list = []
+    if with_arrivals >= MIN_ACCOUNTS_FOR_CO_ARRIVAL:
+        # Scales come from the POST'S OWN arrival rate, so "shared a window" means the same thing on
+        # a thread drawing a comment an hour and one drawing sixty a minute. Computed here because
+        # it is a question about the population, not about any one account.
+        all_arrivals = [
+            t for r in usable
+            for t in (_parse_ts(c.get("created_at"))
+                      for c in (r.get("thread_comments") or []) if isinstance(c, dict))
+            if t is not None
+        ]
+        windows = arrival_scales(all_arrivals)
+
+    profiles = [profile_from_commenter(r, exclude_context=exclude_context,
+                                       arrival_windows=windows, all_arrivals=all_arrivals)
+                for r in usable]
     return detect(Corpus(profiles), shuffles=shuffles)
