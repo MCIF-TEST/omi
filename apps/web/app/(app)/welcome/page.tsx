@@ -1,6 +1,6 @@
 import { ClaimHandoff } from './claim-handoff';
 
-export const metadata = { title: 'Setting up. OMISPHERE' };
+export const metadata = { title: 'Setting up' };
 export const dynamic = 'force-dynamic';
 
 /**

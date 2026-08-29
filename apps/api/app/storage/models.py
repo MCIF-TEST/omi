@@ -302,6 +302,16 @@ class Narrative(Base):
     label: Mapped[str] = mapped_column(String(280), default="")
     centroid_json: Mapped[list[float]] = mapped_column(JSON)
     dimensions: Mapped[int] = mapped_column(Integer, default=384)
+    #: Which vector space this centroid lives in, e.g. ``api:text-embedding-3-small:1536``.
+    #:
+    #: A centroid is only meaningful to the embedder that built it. Switch models and every stored
+    #: centroid becomes coordinates in a language the new vectors do not speak; `cosine` returns 0.0
+    #: on a width mismatch and something arbitrary on a matching width, so nothing raises and every
+    #: utterance simply spawns a duplicate of a topic that already exists. Assignment filters
+    #: candidates on this column, so the two generations coexist instead of corrupting each other.
+    #: NULL means a row written before the column existed; those are matched on width alone, which
+    #: is what the code did before and is no worse than it was.
+    embedding_space: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     member_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
     # Number of distinct accounts contributing — high = wide spread.
     distinct_authors: Mapped[int] = mapped_column(Integer, default=0)
@@ -732,7 +742,20 @@ class NarrativeMembership(Base):
     account_external_id: Mapped[str] = mapped_column(String(128), index=True)
     parent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     comment_text: Mapped[str] = mapped_column(Text)
+    #: When WE ingested the row. Not when the comment was written.
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    #: When the comment was actually POSTED, from the platform.
+    #:
+    #: Every temporal statistic in `app/narrative/coordination.py` (hour-of-day profiles, burst
+    #: windows, first-seen lag) used to read `observed_at`, which is the SCAN time. That made every
+    #: member of one scan a perfect burst by construction: the detector was measuring our own
+    #: scanner, not the accounts. A separate column rather than a redefinition of `observed_at`,
+    #: because rows written before this existed genuinely hold scan times, and silently
+    #: reinterpreting them as post times would poison exactly the statistics this fixes. NULL means
+    #: "we do not know when this was posted", and every temporal statistic SKIPS such a row.
+    posted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1351,3 +1374,383 @@ class WaitlistEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     #: When the launch email was accepted for this address. NULL means still owed one.
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Cross-investigation narratives.
+#
+# Every investigation is currently an island. These tables are what lets one question be asked
+# across all of them at once: is a topic being WORKED rather than discussed, and are the accounts on
+# it a formation? See docs/cross-investigation-narratives.md.
+#
+# The value here is structural and is the one thing no customer and no competitor can reproduce: a
+# single customer sees their own handful of scans, while OmiSphere sees every customer's in one
+# database. One customer scanning twelve posts about water is one person's curiosity. Three
+# unrelated customers landing on water in a week is evidence about the world.
+# ---------------------------------------------------------------------------
+
+
+class Utterance(Base):
+    """One comment, extracted from one investigation, addressable across all of them.
+
+    Append-only and derived: every field is already inside some investigation's ``payload_json``.
+    The point of copying it out is that a blob cannot be queried. Every question downstream (which
+    accounts spoke on this topic, how many distinct customers saw it, what the tier mix was) is a
+    query against this table instead of a walk through the heaviest column in the product.
+
+    **``user_id`` is used ONLY to count DISTINCT customers.** It is what makes cross-customer
+    independence measurable, and it must never reach an admin view as "who scanned what": the value
+    is in the independence, not in the identity.
+    """
+
+    __tablename__ = "utterances"
+    __table_args__ = (
+        # Idempotency. The backfill will be re-run, by a scheduler that dies on every deploy and by
+        # an operator who wants to be sure. Without this, a second pass doubles every count that
+        # every score is computed from, and nothing would look wrong.
+        Index("ix_utterance_dedupe", "dedupe_key", unique=True),
+        # The two access patterns: "what happened on this topic in this window" and "what did this
+        # account say", both of which are asked per platform.
+        Index("ix_utterance_topic_posted", "topic_id", "posted_at"),
+        Index("ix_utterance_account", "platform", "account_external_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: Stable hash of (platform, account, comment identity). See `store.dedupe_key`.
+    dedupe_key: Mapped[str] = mapped_column(String(64))
+    investigation_id: Mapped[int] = mapped_column(
+        ForeignKey("investigations.id", ondelete="CASCADE"), index=True
+    )
+    #: The customer whose scan surfaced this. Counted, never displayed. See the class docstring.
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    platform: Mapped[str] = mapped_column(String(32), index=True)
+    account_external_id: Mapped[str] = mapped_column(String(128))
+    handle: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    #: The post this was a comment on. Two customers scanning the same post is NOT independence.
+    parent_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    #: NULL once the retention window has passed. The row and every aggregate survive; only the
+    #: text is dropped, which is the difference between an answerable data-protection question and
+    #: an awkward one. A finding keeps the evidence sentences written at detection time.
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: When the comment was POSTED. NULL when the source never told us, and every temporal
+    #: statistic skips such a row rather than substituting the scan time.
+    posted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    #: The account's tier in the investigation that surfaced it. Frozen at extraction: the tier-mix
+    #: test asks what the population looked like AT THE TIME, and re-reading a later score would
+    #: quietly rewrite history every time an account is rescanned.
+    tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: Assigned by the topic pass, not at extraction. NULL means not yet assigned, which is a
+    #: resumable state rather than an error.
+    topic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cross_topics.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: Which vector space the assignment was made in. A model change leaves old assignments intact
+    #: and lets the pass re-run for the new space rather than silently mixing the two.
+    embedding_space: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class CrossNarrativeWatermark(Base):
+    """How far each stage of the cross-investigation pipeline has got.
+
+    The scheduler runs inside the API process and dies on every deploy, so every stage has to be
+    resumable rather than restartable. One row per stage, holding the last id or timestamp it
+    completed. Without it a redeploy either redoes everything (expensive, and it re-embeds) or skips
+    whatever was in flight (a silent gap in the corpus that no score would report).
+    """
+
+    __tablename__ = "cross_narrative_watermarks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stage: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    #: Last processed row id, for stages that walk a table in id order.
+    last_id: Mapped[int] = mapped_column(Integer, default=0)
+    #: Last processed instant, for stages that walk time.
+    last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class CrossTopic(Base):
+    """An emergent topic, discovered by clustering what accounts actually wrote.
+
+    No taxonomy, no keyword file, nothing to maintain: a topic is a centroid, and its label is
+    derived from its own contents after the fact. Nobody ever writes "water" anywhere.
+
+    SEPARATE FROM ``Narrative`` ON PURPOSE, even though both are centroids over comment text. They
+    count different populations and merging them would make both numbers wrong: a ``Narrative``
+    counts memberships written by the per-scan ingest, one row per comment per scan, while a topic
+    here counts DEDUPLICATED utterances across every customer, so the same comment reached through
+    two customers' scans of one post is one utterance and two memberships. They also have different
+    lifecycles: this side has a retention window and has to survive an embedding-model change by
+    letting the two vector spaces coexist.
+    """
+
+    __tablename__ = "cross_topics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: A representative excerpt, derived from the topic's own contents. Never a curated name.
+    label: Mapped[str] = mapped_column(String(280), default="")
+    centroid_json: Mapped[list[float]] = mapped_column(JSON)
+    dimensions: Mapped[int] = mapped_column(Integer, default=0)
+    #: Which vector space this centroid lives in. Assignment only ever compares like with like, so
+    #: a model change starts a new generation of topics rather than corrupting the old ones.
+    embedding_space: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    #: Utterances assigned. Deduplicated, so this is a count of COMMENTS and not of sightings.
+    utterance_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    #: Distinct accounts that have said something on this topic.
+    account_count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+
+
+class CrossTopicDay(Base):
+    """One topic on one day: the numbers every score is computed from.
+
+    Written by a rollup pass rather than derived on read, because the anomaly test compares a window
+    against a TRAILING BASELINE, and recomputing months of history for every question would be the
+    same mistake as reading `payload_json` per row on the archive list.
+
+    ``distinct_customers`` is the field the whole system exists for. One customer scanning twelve
+    posts about a topic is one person's curiosity; three unrelated customers landing there in a week
+    is evidence about the world. It counts customers and never names them.
+    """
+
+    __tablename__ = "cross_topic_days"
+    __table_args__ = (
+        Index("ix_cross_topic_day", "topic_id", "day", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("cross_topics.id", ondelete="CASCADE"), index=True
+    )
+    #: ``YYYY-MM-DD`` in UTC, of the POST time. A day bucketed on scan time would describe our
+    #: crawler's working hours.
+    day: Mapped[str] = mapped_column(String(10), index=True)
+    utterances: Mapped[int] = mapped_column(Integer, default=0)
+    distinct_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    distinct_investigations: Mapped[int] = mapped_column(Integer, default=0)
+    #: The discriminator no customer can compute for themselves. See the class docstring.
+    distinct_customers: Mapped[int] = mapped_column(Integer, default=0)
+    #: Accounts on this topic that day scoring moderate or above, and the denominator for it. Two
+    #: columns rather than a ratio, because the binomial tail needs both and a stored ratio would
+    #: throw away the sample size that decides whether the ratio means anything.
+    elevated_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    scored_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    #: Accounts never previously seen on this topic. A topic that keeps recruiting strangers behaves
+    #: differently from one a stable community keeps discussing.
+    novel_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class CrossFinding(Base):
+    """One topic, one window, both scores, and whatever an admin decided about it.
+
+    THE DISMISSALS ARE THE ONLY GROUND TRUTH THIS SYSTEM WILL EVER ACCUMULATE. Every threshold in
+    the cross-investigation pipeline is reasoned rather than fitted, because no labelled corpus of
+    worked topics exists and none can be bought. An operator marking a row "this was a news story"
+    is the only signal that will ever be available to fit against, which is why the row survives
+    dismissal instead of being deleted.
+
+    Uniqueness is on ``(topic_id, window_end)``: a pass re-run for the same window UPDATES its row
+    rather than stacking duplicates, and the scheduler re-runs constantly by design.
+    """
+
+    __tablename__ = "cross_findings"
+    __table_args__ = (
+        Index("ix_cross_finding_window", "topic_id", "window_end", unique=True),
+        Index("ix_cross_finding_status", "status", "anomaly_score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("cross_topics.id", ondelete="CASCADE"), index=True
+    )
+    #: Copied rather than joined, because a label is derived from a centroid that keeps moving and
+    #: a finding has to keep saying what it said when it was made.
+    label: Mapped[str] = mapped_column(String(280), default="")
+    window_start: Mapped[str] = mapped_column(String(10))
+    window_end: Mapped[str] = mapped_column(String(10))
+
+    #: Score one and its three components, stored apart so a reader can see which one carried it.
+    anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
+    volume: Mapped[float] = mapped_column(Float, default=0.0)
+    tier_mix: Mapped[float] = mapped_column(Float, default=0.0)
+    independence: Mapped[float] = mapped_column(Float, default=0.0)
+    #: Every number behind the components, so the arithmetic can be checked rather than trusted.
+    anomaly_detail_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    #: Score two. NEVER combined with score one: they answer different questions, and a product
+    #: would hide both a spiking topic full of strangers and a patient formation on a quiet one.
+    cohort_accounts: Mapped[int] = mapped_column(Integer, default=0)
+    cohort_findings: Mapped[int] = mapped_column(Integer, default=0)
+    cohort_best_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: Why a human has to look before this reaches anyone, or NULL when the evidence settles it.
+    needs_adjudication: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Set when the cohort could not be tested at all, which is a different statement from finding
+    #: nothing and has to survive to the reader as one.
+    cohort_refused: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cohort_detail_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dismissal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class NetdetectFormation(Base):
+    """A persistent operation: the latent operator behind one or more findings.
+
+    A finding is an EVENT. An operation is a thing that persists, rotates its accounts, goes quiet
+    and comes back. Every run of the detector used to start from nothing, so the system could never
+    say "we have seen this operator before", which is the single most useful thing an investigator
+    can be told.
+
+    Identity lives in `profile_json`: the rare behaviours that made the finding improbable, not the
+    member list. A serious operation burns its accounts between campaigns, so a roster identifies
+    the run rather than the operator, and matching on it fails in exactly the case that matters.
+    """
+
+    __tablename__ = "netdetect_formations"
+    __table_args__ = (
+        Index("ix_netdetect_formation_key", "formation_key", unique=True),
+        Index("ix_netdetect_formation_phase", "phase", "last_seen"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: Stable opaque handle. Random, never derived from members, so it cannot leak who was scanned.
+    formation_key: Mapped[str] = mapped_column(String(32))
+    platform: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+    #: Operator-supplied name, once somebody has judged it worth naming.
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    #: The discriminative features: [{family, kind, value, surprise, prevalence}]. THE IDENTITY.
+    profile_json: Mapped[list] = mapped_column(JSON, default=list)
+    #: Families the evidence spans, so a reader can see what it rests on without walking the profile.
+    families_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    #: Every account ever seen in this formation, with when. Accounts are not removed when a
+    #: campaign ends: the roster is history, and rotation is the thing worth seeing.
+    members_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    member_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    #: What the per-account engine thinks of the members. Computed AFTER detection and never fed
+    #: back into it: see `app/netdetect/formation.py` on why reading the score into the search is
+    #: how a detector goes blind to competent operations.
+    composition_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    sighting_count: Mapped[int] = mapped_column(Integer, default=0)
+    #: Distinct posts this formation has been seen under. A re-scan of one post is one sighting.
+    contexts_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    first_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: forming / active / dormant / resurgent. RESURGENT only exists because the entity survived the
+    #: gap, which is the whole argument for persisting operations rather than findings.
+    phase: Mapped[str] = mapped_column(String(16), default="forming", index=True)
+    previous_phase: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    judgement_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class NetdetectFinding(Base):
+    """One corrected set-level finding from `app/netdetect`, kept so it can be judged later.
+
+    THE DETECTOR WAS READ-ONLY, AND THAT COST IT TWICE. Its findings evaporated when the page
+    closed, so the tracking layer that survives account rotation learned only from the older,
+    weaker cohort detector; and there was nothing for an operator to dismiss, so the one reservoir
+    of ground truth this system will ever accumulate stayed empty while the better detector ran.
+
+    Persisting an internal finding is NOT the same act as publishing one. No share token is minted
+    here, no `Campaign` row is created, and nothing reaches a customer surface. The rule the route's
+    docstring states, that a claim about a person is a decision somebody took rather than a side
+    effect of a page load, is about PUBLICATION and is untouched.
+    """
+
+    __tablename__ = "netdetect_findings"
+    __table_args__ = (
+        # One row per (investigation, member set). Re-running the detector on a post updates the
+        # row rather than stacking duplicates, and an operator re-runs constantly while tuning.
+        Index("ix_netdetect_finding_key", "investigation_id", "members_key", unique=True),
+        Index("ix_netdetect_finding_status", "status", "score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    investigation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("investigations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: The post the finding was made on, when there was one. Used as the accumulation context, so a
+    #: re-scan of the same post cannot compound the same observation.
+    context_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    platform: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+
+    #: Sorted, joined member ids. The identity of the SET, because that is what was tested.
+    members_key: Mapped[str] = mapped_column(String(2048))
+    members_json: Mapped[list] = mapped_column(JSON, default=list)
+    member_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    #: Weighted log10 surprise for the set, and the search-corrected p-value. `corrected_p` NULL
+    #: means "not corrected", which must never be read as "significant".
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    corrected_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+    by_family_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    #: Why a human has to look before this reaches anyone, or NULL when the evidence settles it.
+    needs_adjudication: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Members that do not carry the finding (`app/netdetect/attachment.py`). A REPORT, not an
+    #: exclusion: they are still members and still in `members_json`. Empty ALSO when the test
+    #: abstained, so `attachment_note` has to be read beside it.
+    weak_members_json: Mapped[list] = mapped_column(JSON, default=list)
+    #: Why no membership verdict was reached, or NULL when one was. Never read an empty
+    #: `weak_members_json` as "every member belongs".
+    attachment_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Whether the membership test ran at all. Explicit, because an empty `weak_members_json` means
+    #: opposite things with and without it. Defaults False so rows written before the test existed
+    #: read as "not checked" rather than as a clean bill of health.
+    attachment_checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: The persistent operation this finding was resolved to, when one was. NULL means the finding
+    #: predates the registry or could not be resolved, never that it belongs to no operation.
+    formation_key: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    #: What the accumulating graph already held about these members, from OTHER posts, as of the
+    #: last time the detector was run on this investigation. A SNAPSHOT, refreshed on re-run, in the
+    #: same way `score` and `corrected_p` already are.
+    #:
+    #: `hard_pairs` inside it is the half that discriminates. The TOTAL does not: measured, a
+    #: planted operation and the professional-beat control both saturate the cap, and the newsroom
+    #: carried MORE linked pairs. Nothing may key a decision on the total.
+    #:
+    #: NULL means the lookup did not run, never that these accounts were strangers.
+    corroboration_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    #: The evidence sentences, written HERE at detection time, because the corpus they were derived
+    #: from is not kept and the finding has to stay readable without it.
+    evidence_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    #: The corpus this was found in, so a reader can tell a finding among 30 accounts from one
+    #: among 300 without re-running anything.
+    corpus_size: Mapped[int] = mapped_column(Integer, default=0)
+    null_shuffles: Mapped[int] = mapped_column(Integer, default=0)
+    null_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Required when dismissing. A dismissal with no stated reason records that somebody was
+    #: unconvinced and nothing about why, which cannot be fitted against later.
+    dismissal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Set when an operator affirms a finding rather than dismissing it. Positives are rarer and
+    #: worth more than negatives, and a reservoir holding only rejections can only ever teach the
+    #: detector to be quieter.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

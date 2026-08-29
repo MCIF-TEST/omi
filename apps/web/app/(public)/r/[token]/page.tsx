@@ -24,11 +24,14 @@ export async function generateMetadata({ params }: { params: { token: string } }
   try {
     const body = await apiServer<PublicReportResponse>(`/r/${encodeURIComponent(params.token)}`);
     return {
-      title: `${body.view.meta.label}. OMISPHERE Report`,
+      // The root layout's template appends the brand, so naming it here read
+      // "<post>. OMISPHERE Report . OMISPHERE" in the tab and in every link preview of a
+      // shared report, which is the most-screenshotted surface this product has.
+      title: body.view.meta.label,
       description: body.view.verdict.summary?.slice(0, 200),
     };
   } catch {
-    return { title: 'OMISPHERE Report' };
+    return { title: 'Shared report' };
   }
 }
 

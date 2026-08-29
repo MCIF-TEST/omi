@@ -13,7 +13,7 @@ import { ReferralBlock } from './referral-block';
 import { DeleteAccountButton } from './delete-account-button';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
-export const metadata = { title: 'Settings. OMISPHERE' };
+export const metadata = { title: 'Settings' };
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();

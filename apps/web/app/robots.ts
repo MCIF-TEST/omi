@@ -15,7 +15,11 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
+        // The two developer documents live on the API service, which this origin fronts at /api.
+        // /api/ is disallowed wholesale below, so without these the only machine-readable
+        // description of the API would be blocked by our own crawl rules while being advertised on
+        // /developers and in llms.txt. A more specific Allow wins over a broader Disallow.
+        allow: ['/', '/api/openapi.json', '/api/docs'],
         disallow: [
           '/api/',
           '/r/',        // shared investigation reports (unlisted by token)

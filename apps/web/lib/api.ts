@@ -276,6 +276,251 @@ export function resolveDispute(
 }
 
 // ---------------------------------------------------------------------------
+// The network detector's finding queue. Admin only, on every route.
+//
+// A finding here names REAL PEOPLE as running together, on evidence that is statistical rather than
+// certain, so it is an operator's lead and never a customer-facing verdict.
+//
+// The judgements are the reason this queue has an interface at all. Every threshold in
+// `app/netdetect` is reasoned rather than fitted, because no labelled corpus of coordinated accounts
+// exists, and the calibration report refuses to recommend anything until 30 findings have been
+// judged with at least 8 of each class. Nobody produces thirty judgements through curl.
+// ---------------------------------------------------------------------------
+
+export const NETDETECT_STATUSES = ['open', 'dismissed', 'confirmed'] as const;
+export type NetdetectStatus = (typeof NETDETECT_STATUSES)[number];
+
+export interface NetdetectEvidence {
+  family: string;
+  kind: string;
+  shared_by: number;
+  /** How many accounts in the whole corpus exhibit it: the denominator of the rarity claim. */
+  corpus_count: number;
+  surprise: number;
+  sentence: string;
+}
+
+export interface NetdetectCorroboration {
+  /** CONTEXT ONLY. Does not separate an operation from a newsroom. Never rank on it. */
+  log_lr: number;
+  pairs_with_history: number;
+  /** The half that discriminates: prior evidence of the operator's own acts. */
+  hard_pairs: number;
+  /** Distinct EARLIER posts. The post being scanned is excluded, so a set cannot corroborate itself. */
+  contexts: string[];
+  families: string[];
+  hard_families: string[];
+  /** False means nobody looked, which is not a statement about the people named. */
+  checked: boolean;
+  sentence: string;
+}
+
+export interface NetdetectFinding {
+  id: number;
+  investigation_id: number | null;
+  context_id: string | null;
+  platform: string;
+  members: string[];
+  member_count: number;
+  score: number;
+  /** Null means "not compared against the shuffled search", which must never be read as passing it. */
+  corrected_p: number | null;
+  by_family: Record<string, number>;
+  needs_adjudication: string | null;
+  /**
+   * Members that do not carry the finding. A pointer for review, NEVER an exclusion (they are still
+   * in `members`) and never a confidence score.
+   */
+  weakly_attached: string[];
+  /** Why no membership verdict was reached, or null when one was. */
+  attachment_note: string | null;
+  /**
+   * Whether the membership test ran. THE LOAD-BEARING FLAG: an empty `weakly_attached` means "every
+   * member carries this finding" when this is true and "we could not tell" when it is false, and
+   * those are opposite statements about the people named.
+   */
+  attachment_checked: boolean;
+  /**
+   * What the accumulating graph already held about these members, from OTHER posts, as of the last
+   * run. Null means the lookup did not run, NEVER that they had not been seen together.
+   *
+   * Read `hard_pairs`, not `log_lr`. Measured, a planted operation and the professional-beat
+   * control both saturate the total and the newsroom carried MORE linked pairs, so the total does
+   * not separate them. Only prior evidence in the hard families (identity, network) does.
+   */
+  corroboration: NetdetectCorroboration | null;
+  evidence: NetdetectEvidence[];
+  corpus_size: number;
+  null_shuffles: number;
+  null_threshold: number | null;
+  status: NetdetectStatus;
+  dismissal_reason: string | null;
+  confirmed: boolean;
+}
+
+export interface Formation {
+  formation_key: string;
+  platform: string;
+  label: string | null;
+  /**
+   * forming / active / dormant / resurgent. RESURGENT exists only because the entity survived the
+   * quiet period, and it is the phase a per-run detector can never report.
+   */
+  phase: string;
+  previous_phase: string | null;
+  member_count: number;
+  sighting_count: number;
+  /** Distinct posts. A re-scan of one post is one sighting, never two. */
+  context_count: number;
+  families: string[];
+  profile_size: number;
+  first_seen: string | null;
+  last_seen: string | null;
+  status: string;
+  /**
+   * What the per-account engine makes of the members, computed AFTER detection and never fed back
+   * into it. `posture: "concealed"` is the finding only this system can produce.
+   */
+  composition: { posture?: string; median?: number; note?: string; scored?: number };
+}
+
+export function listFormations(): Promise<Formation[]> {
+  return apiClient<Formation[]>('/v1/admin/netdetect/formations');
+}
+
+export interface FormationPlacement {
+  external_id: string;
+  handle: string;
+  /** Characterisation only: placement reads behaviour, never this. Null means never scored. */
+  omi_score: number | null;
+  /**
+   * Placed in a known operation while reading as an ordinary account on its own. THE ROW TO READ
+   * FIRST: an account the per-account engine already flags is one an analyst could have found
+   * without this; one that would pass an individual review is not.
+   */
+  concealed: boolean;
+  assignment: {
+    formation_key: string;
+    label: string | null;
+    phase: string | null;
+    posterior: number;
+    hard_evidence: number;
+    by_family: Record<string, number>;
+    assigned: boolean;
+    matched: { family: string; kind: string; value: string; sentence: string }[];
+  };
+}
+
+export interface FormationSweep {
+  slug: string;
+  accounts_weighed: number;
+  formations_considered: number;
+  placed: FormationPlacement[];
+  /**
+   * A COUNT, never a list of names. An account placed in nothing is one this deployment has never
+   * catalogued doing this before, which is not innocence. See `not_a_clearance`.
+   */
+  unplaced: number;
+  truncated: boolean;
+  /** A THIRD state: nobody looked, which is not the same as "weighed and matched nothing". */
+  nothing_catalogued: boolean;
+  /** How many placed accounts would have passed an individual review. */
+  concealed: number;
+  not_a_clearance: string;
+}
+
+export function sweepFormations(slug: string): Promise<FormationSweep> {
+  return apiClient<FormationSweep>(
+    `/v1/admin/netdetect/formations/sweep?slug=${encodeURIComponent(slug)}`,
+    { method: 'POST' },
+  );
+}
+
+export function listNetdetectFindings(
+  status: NetdetectStatus | 'all' = 'open',
+): Promise<NetdetectFinding[]> {
+  return apiClient<NetdetectFinding[]>(
+    `/v1/admin/netdetect/findings/all?status=${encodeURIComponent(status)}`,
+  );
+}
+
+export function judgeNetdetectFinding(
+  id: number,
+  verdict: 'dismiss' | 'confirm',
+  reason: string,
+): Promise<NetdetectFinding> {
+  return apiClient<NetdetectFinding>(`/v1/admin/netdetect/findings/${id}/${verdict}`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export interface NetdetectSweepRow {
+  value: number;
+  confirmed_kept: number;
+  dismissed_kept: number;
+  dismissed_removed: number;
+}
+
+export interface NetdetectSweep {
+  constant: string;
+  /** The file to edit BY HAND if the recommendation is accepted. Nothing here changes a threshold. */
+  where: string;
+  current: number;
+  stricter_direction: string;
+  rows: NetdetectSweepRow[];
+  proposed: number | null;
+  recommendation: string | null;
+}
+
+/**
+ * One open finding whose verdict would move a fit.
+ *
+ * NOT A SUSPICION RANKING, and the ordering is close to the opposite of one. `flips_constants`
+ * counts how many tunable constants would classify this finding differently at some candidate
+ * setting; a finding reported whatever the thresholds are set to flips none and teaches nothing,
+ * and that is exactly the most obviously coordinated group in the queue.
+ */
+export interface NetdetectNextToJudge {
+  finding_id: number;
+  context_id: string | null;
+  member_count: number;
+  nearest_constant: string;
+  distance: number;
+  value: number;
+  current: number;
+  flips_constants: number;
+  why: string;
+}
+
+export interface NetdetectCalibration {
+  confirmed: number;
+  dismissed: number;
+  open: number;
+  /** False while the reservoir is too thin to fit anything. The sweeps still come back. */
+  sufficient: boolean;
+  insufficient_reason: string;
+  sweeps: NetdetectSweep[];
+  families: {
+    family: string; weight: number; hard: boolean;
+    mean_in_confirmed: number; mean_in_dismissed: number;
+    present_in_confirmed: number; present_in_dismissed: number; separation: number;
+  }[];
+  recommendations: string[];
+  /** Open findings worth judging first, because their verdict would move a fit. Read the caveat on
+   *  the type: this is an information ordering, never a suspicion ordering. */
+  next_to_judge: NetdetectNextToJudge[];
+  /** How many more judgements, and of which class, before anything can be recommended. Empty once
+   *  the reservoir is deep enough. */
+  still_needed: string;
+  caveats: string[];
+}
+
+export function netdetectCalibration(): Promise<NetdetectCalibration> {
+  return apiClient<NetdetectCalibration>('/v1/admin/netdetect/findings/calibration');
+}
+
+// ---------------------------------------------------------------------------
 // Coordinated-campaign detection. Admin only, on every route.
 //
 // The detector is deterministic: no model call, no network, no provider quota. It clusters the

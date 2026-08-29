@@ -12,6 +12,8 @@ Two surfaces are covered:
 * ``/v1/narratives/*``, which was ``require_user`` only while serving deployment-global narrative
   clusters built from every customer's scans. The page had always gated on ``is_admin``
   server-side; its API had not.
+* ``/v1/admin/cross-narratives/*``, the cross-investigation queue. A finding there is assembled
+  from many customers' scans and belongs to none of them, so it is gated for the same reason.
 """
 
 from __future__ import annotations
@@ -64,6 +66,27 @@ COORDINATION_ROUTES = [
     ("POST", "/v1/admin/coordination/inv_anything/reopen"),
 ]
 
+CROSS_NARRATIVE_ROUTES = [
+    ("GET", "/v1/admin/cross-narratives"),
+    ("GET", "/v1/admin/cross-narratives/topics"),
+    ("POST", "/v1/admin/cross-narratives/run"),
+    ("POST", "/v1/admin/cross-narratives/1/reopen"),
+]
+
+#: The set-level detector's own surface. It reports groups of NAMED REAL PEOPLE as running
+#: together on statistical evidence, and its queue carries other customers' investigation ids, so it
+#: is gated for the same reason `/campaigns` is: there is no owner to scope a finding to.
+NETDETECT_ROUTES = [
+    ("POST", "/v1/admin/netdetect/inv_anything"),
+    ("GET", "/v1/admin/netdetect/findings/all"),
+    ("GET", "/v1/admin/netdetect/findings/calibration"),
+    # The formation catalogue and the two placement routes. These name real people as members of
+    # an operation, and the sweep does it for a whole comment section at once, so they are the last
+    # routes that should ever answer an ordinary customer.
+    ("GET", "/v1/admin/netdetect/formations"),
+    ("POST", "/v1/admin/netdetect/formations/sweep?slug=inv_anything"),
+]
+
 NARRATIVE_ROUTES = [
     ("GET", "/v1/narratives"),
     ("GET", "/v1/narratives/1"),
@@ -80,6 +103,32 @@ def test_coordination_routes_refuse_a_signed_in_customer(auth_client, method, pa
 def test_the_dismiss_route_refuses_a_signed_in_customer(auth_client):
     r = auth_client.post("/v1/admin/coordination/inv_anything/dismiss", json={"note": "x"})
     assert r.status_code == 403
+
+
+@pytest.mark.parametrize("method,path", CROSS_NARRATIVE_ROUTES)
+def test_cross_narrative_routes_refuse_a_signed_in_customer(auth_client, method, path):
+    """These findings span every customer's scans, so there is no owner to scope them to."""
+    r = auth_client.request(method, path)
+    assert r.status_code == 403, f"{method} {path} answered {r.status_code}: {r.text[:200]}"
+
+
+def test_the_cross_narrative_dismiss_route_refuses_a_signed_in_customer(auth_client):
+    r = auth_client.post("/v1/admin/cross-narratives/1/dismiss", json={"reason": "x"})
+    assert r.status_code == 403
+
+
+@pytest.mark.parametrize("method,path", NETDETECT_ROUTES)
+def test_netdetect_routes_refuse_a_signed_in_customer(auth_client, method, path):
+    r = auth_client.request(method, path)
+    assert r.status_code == 403, f"{method} {path} answered {r.status_code}: {r.text[:200]}"
+
+
+def test_the_netdetect_judgement_routes_refuse_a_signed_in_customer(auth_client):
+    """These dismissals are the reservoir a later calibration is fitted against. A customer able to
+    write into it could steer the detector, which is a stranger attack surface than reading."""
+    for verb in ("dismiss", "confirm"):
+        r = auth_client.post(f"/v1/admin/netdetect/findings/1/{verb}", json={"reason": "x"})
+        assert r.status_code == 403, f"{verb} answered {r.status_code}: {r.text[:200]}"
 
 
 @pytest.mark.parametrize("method,path", NARRATIVE_ROUTES)
@@ -124,6 +173,14 @@ def test_an_admin_gets_through(tmp_path, monkeypatch):
     body = listing.json()
     assert body["detections"] == []
     assert body["total"] == 0
+
+    cross = client.get("/v1/admin/cross-narratives")
+    assert cross.status_code == 200, cross.text
+
+    findings = client.get("/v1/admin/netdetect/findings/all")
+    assert findings.status_code == 200, findings.text
+    assert findings.json() == []
+    assert cross.json()["findings"] == []
 
     get_settings.cache_clear()
     db._engine = None

@@ -20,6 +20,30 @@ class Settings(BaseSettings):
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
+    # --- Narrative embeddings (topic clustering across investigations) ----------------------------
+    #
+    # Emergent topics are only as good as the embedding behind them. Unconfigured, `get_embedder()`
+    # falls back to `HashingEmbedder`, whose own docstring says it will not catch paraphrases: "same
+    # topic" degrades to "same words", so two accounts pushing one narrative in different phrasing
+    # never cluster, which is exactly the case the feature exists to catch.
+    #
+    # Deliberately provider-agnostic: any OpenAI-compatible `/v1/embeddings` endpoint works, so the
+    # vendor is a deployment decision rather than a code one. Whichever is chosen must be named in
+    # the privacy policy's subprocessor list BEFORE this is switched on: it sends other people's
+    # public posts off our servers, and those people are not our users and never agreed to anything.
+    # `narrative_embedding_provider` is that name, and the admin surface refuses to report the
+    # embedder as configured without it.
+    narrative_embedding_base_url: str | None = None
+    narrative_embedding_model: str | None = None
+    narrative_embedding_api_key: str | None = None
+    #: Human-readable vendor name for the subprocessor disclosure, e.g. "OpenAI".
+    narrative_embedding_provider: str | None = None
+    #: Optional output width, for providers that support shortening (OpenAI's `dimensions`).
+    narrative_embedding_dimensions: int | None = None
+    narrative_embedding_timeout_seconds: float = 30.0
+    #: Texts per request. Providers cap both count and total tokens; 96 is under every common limit.
+    narrative_embedding_batch_size: int = 96
+
     # Detector weights. Tuned by hand for Phase 0; will be calibrated against a
     # labeled fixture set in Phase 1.
     weight_temporal: float = Field(default=1.0)
@@ -513,6 +537,17 @@ class Settings(BaseSettings):
     # -----------------------------------------------------------------------
     enable_monitoring: bool = False
     monitoring_interval_seconds: int = 300
+    # --- Cross-investigation narratives -----------------------------------------------------------
+    #
+    # OFF by default, and that is the right default rather than caution: with no embedding provider
+    # configured the pass would cluster on the lexical fallback, so "same topic" means "same words",
+    # and a corpus assembled that way is worse than none because it looks like it worked. Turn this
+    # on together with the embedding variables.
+    #
+    # Each pass is bounded (see app/narrative/cross/run.py), so the interval controls throughput
+    # rather than load: a shorter one catches up faster and does the same amount of work per tick.
+    enable_cross_narratives: bool = False
+    cross_narrative_interval_seconds: int = 900
     watchlist_recheck_hours: int = 6
     watchlist_max_per_tick: int = 5
     narrative_spike_min_recent: int = 5

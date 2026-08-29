@@ -179,6 +179,136 @@ def test_a_ratio_stated_the_other_way_up_is_still_a_true_figure():
     assert [v.code for v in check_figures("A ratio of 39 to 1.", acct)] == ["figure_mismatch"]
 
 
+def test_a_correctly_rounded_ratio_is_a_true_figure_however_small_it_is():
+    """A RELATIVE TOLERANCE MADE AN ENTIRE ACCOUNT SHAPE UNWRITABLE.
+
+    An acquired-audience account (many followers, follows almost nobody) has a tiny
+    following-to-followers ratio. Take 1,249 against 8: the true value is 0.0064, and a 15% band
+    around it is 0.0054 to 0.0074. No two-decimal number lives in that band, so "a ratio of 0.01" --
+    which is 0.0064 correctly rounded, and the most natural way to write it -- was withheld as a
+    fabricated figure. Three decimals passed and the inverted form passed; only the obvious form
+    failed.
+
+    That is not a corner case. v14 added the ACQUIRED-AUDIENCE shape to PROFILE as an equally
+    elevated signal, so the protocol steers the model toward exactly these accounts, and the
+    withholds arrive in clusters rather than scattered. A probe of protocol-conformant paragraphs
+    withheld 1 of 5 on this alone.
+
+    "0.01" claims the ratio to two decimal places, and 0.0064 rounds to 0.01, so the claim is true.
+    """
+    acct = _account(follower_count=1249, following_count=8)      # following/followers = 0.006405
+    assert check_figures("A following-to-followers ratio of 0.01.", acct) == []
+    assert check_figures("A ratio of 0.006 on this account.", acct) == []
+    assert check_figures("A followers-to-following ratio of 156.1.", acct) == []
+    assert check_figures("A followers-to-following ratio of 156.", acct) == []
+
+    tiny = _account(follower_count=348, following_count=2)       # 0.00575
+    assert check_figures("A ratio of 0.01 here.", tiny) == []
+
+    # And it stays tight. Another account's ratio still cannot be published as this one's.
+    assert [v.code for v in check_figures("A ratio of 0.50.", acct)] == ["figure_mismatch"]
+    assert [v.code for v in check_figures("A ratio of 4.0.", acct)] == ["figure_mismatch"]
+
+
+def test_precision_is_read_from_the_number_as_written_not_from_its_value():
+    """The rule is about what the sentence ASSERTS. Rounding to more places is a stronger claim and
+    is held to it, which is what stops the fix from becoming a blanket amnesty on small figures."""
+    from app.reasoning.grounding import _decimals
+
+    assert _decimals("0.01") == 2
+    assert _decimals("156") == 0
+    assert _decimals("1.1884") == 4
+
+    acct = _account(follower_count=1249, following_count=8)      # 0.0064051...
+    # Two decimals: 0.0064 rounds to 0.01. True.
+    assert check_figures("A ratio of 0.01.", acct) == []
+    # Four decimals is a claim to four decimals, and this one is wrong at that precision.
+    assert [v.code for v in check_figures("A ratio of 0.0100.", acct)] == ["figure_mismatch"]
+
+
+def test_a_negated_banned_phrase_is_a_hedge_and_not_the_claim_the_ban_stops():
+    """THE RULE FIRED ON ITS OWN OPPOSITE, and it did so on the commonest kind of sentence.
+
+    `BANNED_PHRASES` was matched as a bare substring, so "there is no proof that the account is
+    automated" tripped "proof that" and "this is not obviously a bot" tripped "obviously a bot".
+    Both are HEDGES. On a corpus where most accounts are ordinary people, and where the constitution
+    requires the innocent explanation to be stated in every verdict at 50 or above, those sentences
+    are not rare.
+    """
+    from app.reasoning.grounding import check_phrasing
+
+    assert check_phrasing("There is no proof that the account is automated.") == []
+    assert check_phrasing("A shared tool is not proof that two accounts are run together.") == []
+    assert check_phrasing("This is not obviously a bot; the rhythm has overnight gaps.") == []
+    assert check_phrasing("It is not clearly a bot, and the posting gaps argue against it.") == []
+
+
+def test_the_negation_window_is_tight_enough_to_keep_the_real_accusations():
+    """A negator somewhere in the sentence is not a negation of the phrase. Only an immediate one
+    excuses it, or the rule could be talked out of every violation it exists to catch."""
+    from app.reasoning.grounding import check_phrasing
+
+    assert [v.code for v in check_phrasing(
+        "It is not a coincidence that this account was hired to post."
+    )] == ["banned_phrase"]
+    assert [v.code for v in check_phrasing("The handle proves that it was paid to post.")]
+
+
+def test_two_bans_are_deliberately_not_negation_excused():
+    """Both would be wrong to relax, and the reasons are different.
+
+    "no doubt" IS the certainty phrase rather than a negated one: the negator is part of the banned
+    string, so the look-behind never sees it and nothing needs special-casing.
+
+    "this person" stays banned in every context, including exculpatory ones. Asserting the account
+    is a person is an identity claim the evidence cannot support, and it is one the constitution
+    rules out by name: the compiled protocol says "a real person" (a category) nine times and "this
+    person" not once.
+    """
+    from app.reasoning.grounding import check_phrasing
+
+    assert [v.code for v in check_phrasing("There is no doubt about the arithmetic.")] == ["banned_phrase"]
+    assert [v.code for v in check_phrasing(
+        "The posts read like this person reacting to local news."
+    )] == ["banned_phrase"]
+
+
+def test_the_alias_check_also_refuses_real_world_tokens_and_that_trade_is_deliberate():
+    """A CHARACTERIZATION TEST, not an approval. This pins a KNOWN false positive so that changing
+    it is a deliberate act rather than a discovery.
+
+    `_ALIAS_RE` is `[AC]\\d{1,3}`, and plenty of real things are spelled that way: C4 the
+    broadcaster, the A1 road, A2 milk, the A7 camera body, the C1 variant, flat C3. Narration
+    mentioning any of them is withheld as an internal label leaking to a reader.
+
+    The trade was made deliberately and the reason is empirical: aliases opened essentially every
+    verdict in a live export, so the leak was pervasive rather than occasional, and a withheld
+    paragraph still shows its score, its tier and an honest notice. Quoted spans are already
+    stripped, which covers the common case, because the protocol pushes the model to quote rather
+    than paraphrase.
+
+    THE OBVIOUS REFINEMENT DOES NOT WORK, and it is worth recording why so nobody spends the effort
+    twice. Matching only aliases actually assigned in the batch sounds strictly more precise, but a
+    25-account batch assigns A1 through A25, so "the A1 road" and "the A7 camera" are inside the
+    legend and still fire. Real-world tokens use low numbers for the same reason aliases do.
+
+    If this is ever revisited, the thing to measure first is how often the model narrates such a
+    token OUTSIDE a quotation, which nobody has counted.
+    """
+    from app.reasoning.grounding import check_alias_in_prose
+
+    for sentence in (
+        "It posts mostly about C4 documentaries and daytime television.",
+        "Several posts complain about roadworks on the A1 near the depot.",
+        "It reviews the A7 camera body in three separate posts.",
+    ):
+        assert [v.code for v in check_alias_in_prose(sentence)] == ["alias_in_prose"], sentence
+
+    # The case the trade was made FOR is still caught, and a quoted span is still exempt.
+    assert [v.code for v in check_alias_in_prose("A17 is a 2009 account.")] == ["alias_in_prose"]
+    assert check_alias_in_prose('It wrote "A1 is the best road in the country".') == []
+
+
 def test_counting_accounts_is_not_a_claim_about_who_it_follows():
     """A bare "N accounts" was compared against the following count and withheld true paragraphs."""
     acct = _account(following_count=300)

@@ -1,4 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
+
+import {
+  AGENT_PAGES,
+  AGENT_PAGE_BY_PATH,
+  AGENT_PAGE_BY_MARKDOWN_PATH,
+  markdownPath,
+} from './lib/agent-content';
+import { MARKDOWN_TYPE, VARY, prefersMarkdown } from './lib/accept-markdown';
 import { clerkOriginsFor } from './lib/clerk-origin';
 
 /**
@@ -144,7 +152,124 @@ function hasSessionCookie(req: NextRequest): boolean {
   );
 }
 
+/**
+ * The addressable markdown rendering of a page, at its own `.md` URL.
+ *
+ * Answered BEFORE negotiation, because this URL has exactly one representation and negotiating it
+ * would be a lie. It exists because the negotiated pair cannot be made cache-safe from inside this
+ * app: Next 14 overwrites `Vary` on every app-router HTML response during render, so the HTML half
+ * cannot name `Accept`. A single-representation address needs no cache to honour anything.
+ */
+function markdownDocument(req: NextRequest): NextResponse | null {
+  const path = req.nextUrl.pathname.replace(/\/+$/, '') || '/';
+  const page = AGENT_PAGE_BY_MARKDOWN_PATH[path];
+  if (!page) return null;
+
+  // No `Accept` in Vary here, deliberately: this URL has ONE representation. Naming a request
+  // header it does not vary on would tell a cache to store one copy per distinct Accept string,
+  // which is a fragmentation of the cache in exchange for nothing.
+  return new NextResponse(page.markdown, {
+    status: 200,
+    headers: {
+      'Content-Type': MARKDOWN_TYPE,
+      Vary: 'Accept-Encoding',
+      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+      Link: `<${page.path}>; rel="canonical"`,
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
+/**
+ * acceptmarkdown.com content negotiation.
+ *
+ * Handled in middleware rather than in each page because it has to cover EVERY public path with one
+ * rule, including the 404. Doing it per-route would mean seven places to forget, on a behaviour
+ * only machines exercise, so the omission would never be noticed from a browser.
+ *
+ * Returning the response from here is also what makes `Vary` correct on it: middleware responses
+ * are finished before the renderer runs, so nothing overwrites the header the way it does on the
+ * HTML variant.
+ */
+function negotiateMarkdown(req: NextRequest): NextResponse | null {
+  const accept = req.headers.get('accept');
+  if (!prefersMarkdown(accept)) return null;
+
+  const path = req.nextUrl.pathname.replace(/\/+$/, '') || '/';
+  const page = AGENT_PAGE_BY_PATH[path];
+
+  if (page) {
+    return new NextResponse(page.markdown, {
+      status: 200,
+      headers: {
+        'Content-Type': MARKDOWN_TYPE,
+        Vary: VARY,
+        'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+
+  // A path with no markdown representation. Anything under the private app or a tokenised report
+  // falls through to the normal HTML pipeline: those are not public documents and inventing a
+  // markdown rendering of them would be publishing something the HTML surface keeps behind auth.
+  if (!isPublicPath(path)) return null;
+
+  // A public-shaped path we do not have. This is the agent-recoverable 404: a real 404 status with
+  // a body naming where to look next, in the format the client asked for.
+  return new NextResponse(notFoundMarkdown(), {
+    status: 404,
+    headers: {
+      'Content-Type': MARKDOWN_TYPE,
+      Vary: VARY,
+      'Cache-Control': 'no-store',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
+/** Whether a path belongs to the public documentary surface, as opposed to the app or a report. */
+function isPublicPath(path: string): boolean {
+  const PRIVATE = [
+    '/api', '/r/', '/rc/', '/investigate', '/investigations', '/settings', '/graph',
+    '/monitoring', '/search', '/bulk', '/accounts', '/channels', '/content', '/disputes',
+    '/narratives', '/welcome', '/sign-in', '/sign-up', '/_next',
+  ];
+  return !PRIVATE.some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(p));
+}
+
+function notFoundMarkdown(): string {
+  const pages = AGENT_PAGES
+    .map((p) => `- [${p.path}](${p.path}): ${p.summary} Markdown: ${markdownPath(p.path)}`)
+    .join('\n');
+  return `# 404 Not Found
+
+That address does not exist on OmiSphere.
+
+## Pages
+
+${pages}
+
+## Machine-readable
+
+- [/llms.txt](/llms.txt): What this site is, and where to look.
+- [/sitemap.xml](/sitemap.xml): Every indexable page.
+- [/openapi.json](/openapi.json): The OmiSphere HTTP API specification.
+- [/developers](/developers): API reference, error format, rate limits.
+`;
+}
+
 export default function middleware(req: NextRequest) {
+  // Before anything else, including the rate limiter: a markdown request is cheap, cacheable, and
+  // must not be refused by a budget meant for page navigations.
+  // An explicit `.md` address is one document with no variants, so it is answered first and is
+  // never subject to negotiation.
+  const document = markdownDocument(req);
+  if (document) return document;
+
+  const markdown = negotiateMarkdown(req);
+  if (markdown) return markdown;
+
   // Rate limit page navigations (not every static asset. Matcher already narrows).
   const { ok, retryAfter } = rateLimit(clientIp(req));
   if (!ok) {
@@ -175,6 +300,10 @@ export default function middleware(req: NextRequest) {
 
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-nonce', nonce);
+  // The root layout needs the path to emit `<link rel="alternate" type="text/markdown">` for the
+  // page being rendered. A Server Component cannot read the pathname any other way, and the layout
+  // is already dynamic for the nonce, so this costs nothing new.
+  requestHeaders.set('x-pathname', req.nextUrl.pathname);
 
   const res = NextResponse.next({
     request: { headers: requestHeaders },
@@ -185,6 +314,14 @@ export default function middleware(req: NextRequest) {
     res.headers.set(k, v);
   }
   res.headers.set('Content-Security-Policy', csp);
+  // The HTML response is a VARIANT of a negotiated URL, so it should say so. It is set here and
+  // Next 14 OVERWRITES it during render (`base-server.js: setVaryHeader` does a bare setHeader with
+  // its own RSC values on every app-router response), so the header that reaches the client is
+  // Next's. Nothing in this repo can win that, which is why `markdownPath()` exists: the `.md`
+  // address is a single-representation URL, so an agent never depends on a cache honouring Vary.
+  // Left in place because it IS correct, and because it becomes effective the day the framework
+  // stops clobbering it.
+  res.headers.set('Vary', VARY);
   // Expose nonce to Server Components via request header (read with headers() in layout).
   res.headers.set('x-nonce', nonce);
 

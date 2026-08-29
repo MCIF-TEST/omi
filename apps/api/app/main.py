@@ -21,6 +21,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app import __version__
 from app.core import background
 from app.core.config import get_settings
+from app.core.errors import install_error_handlers
 from app.core.middleware import (
     BodySizeLimitMiddleware,
     GlobalRateLimitMiddleware,
@@ -31,8 +32,10 @@ from app.core.middleware import (
 from app.monitoring import lifespan_monitoring
 from app.routes import (
     accounts, activity, analyze, auth, billing, bulk, campaigns, channels, content, coordination,
+    cross_narratives,
     feedback, graph, health, improvement, intelligence, investigations, labels, learning, memory,
-    metrics, monitoring, narratives, reasoning, reports, scan, scan_async, shadow, usage,
+    metrics, monitoring, narratives, netdetect, reasoning, reports, scan, scan_async, shadow,
+    usage,
     waitlist, watchlists,
 )
 from app.storage.db import init_db
@@ -57,7 +60,8 @@ async def lifespan(app: FastAPI):
     # customer complains. Never blocks boot, never fails it, no-ops without a credential.
     from app.reasoning.boot_preflight import schedule_boot_preflight
     schedule_boot_preflight()
-    async with lifespan_monitoring(app):
+    from app.narrative.cross.run import lifespan_cross_narratives
+    async with lifespan_monitoring(app), lifespan_cross_narratives(app):
         try:
             yield
         finally:
@@ -411,6 +415,12 @@ def create_app() -> FastAPI:
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestIdMiddleware)
 
+    # ---- Structured JSON errors ----
+    # Registered BEFORE the routers so every route inherits the envelope. Agents cannot parse an
+    # English sentence; every failure now carries a stable code, a recovery hint and a docs link,
+    # while `detail` stays exactly where every existing client already reads it.
+    install_error_handlers(app)
+
     # ---- Routers ----
     app.include_router(health.router)
     # Public and admin halves of the waitlist. The public one must stay reachable while the
@@ -426,7 +436,14 @@ def create_app() -> FastAPI:
     app.include_router(accounts.router)
     app.include_router(channels.router)
     app.include_router(narratives.router)
+    # The cross-investigation queue. Admin-only for the same reason as the rest of this block: a
+    # finding here is assembled from many customers' scans and belongs to none of them.
+    app.include_router(cross_narratives.router)
     app.include_router(coordination.admin_router)
+    # Coordinated-network detection. Admin-only: it reports groups of named real people as
+    # running together on statistical evidence, which is an operator's lead rather than a
+    # customer-facing verdict.
+    app.include_router(netdetect.admin_router)
     app.include_router(campaigns.router)
     app.include_router(campaigns.campaign_public_router)
     app.include_router(content.router)

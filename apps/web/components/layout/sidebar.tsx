@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Search, Network, MessageSquareText,
+  Search, Network, Waypoints, MessageSquareText,
   Activity, Settings, History, Scale, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -42,6 +42,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/monitoring',     label: 'Monitoring',    icon: Activity },
       { href: '/disputes',       label: 'Disputes',      icon: Scale, adminOnly: true },
+      { href: '/netdetect',      label: 'Formations',    icon: Waypoints, adminOnly: true },
       { href: '/settings',       label: 'Settings',      icon: Settings },
     ],
   },

@@ -315,6 +315,46 @@ services:
       # Secret — set the value in the Render dashboard, never in this file.
       - key: OPENROUTER_API_KEY
         sync: false
+      # --- Narrative embeddings (cross-investigation topic clustering) ------------------
+      #
+      # ALL FOUR are unset, so the deployment runs on the lexical HashingEmbedder and "same topic"
+      # means "same words". That is a real limitation (it does not catch a paraphrase) and it is
+      # also the safe default: nothing is sent anywhere until these are filled in.
+      #
+      # BEFORE SETTING THESE, name the vendor in the privacy policy's subprocessor list. This sends
+      # other people's public posts off our servers, and those people are not our users and never
+      # agreed to anything. The code enforces the ORDER, not the disclosure: an embedder with no
+      # OMI_NARRATIVE_EMBEDDING_PROVIDER name refuses to build, so a deployment that cannot say who
+      # is processing the posts does not send them.
+      #
+      # Any OpenAI-compatible /v1/embeddings endpoint works, e.g.
+      #   OMI_NARRATIVE_EMBEDDING_BASE_URL  https://api.openai.com/v1/embeddings
+      #   OMI_NARRATIVE_EMBEDDING_MODEL     text-embedding-3-small
+      #   OMI_NARRATIVE_EMBEDDING_PROVIDER  OpenAI
+      #   OMI_NARRATIVE_EMBEDDING_API_KEY   (dashboard only, never committed)
+      #
+      # CHANGING THE MODEL LATER IS NOT FREE. Every stored centroid lives in the old model's vector
+      # space; topics from the two spaces coexist rather than merging, so the old ones simply stop
+      # accumulating. Pick one and leave it.
+      - key: OMI_NARRATIVE_EMBEDDING_BASE_URL
+        sync: false
+      - key: OMI_NARRATIVE_EMBEDDING_MODEL
+        sync: false
+      - key: OMI_NARRATIVE_EMBEDDING_PROVIDER
+        sync: false
+      - key: OMI_NARRATIVE_EMBEDDING_API_KEY
+        sync: false
+      # The cross-investigation pass (docs/cross-investigation-narratives.md). OFF, and that is the
+      # right default rather than caution: with no embedding provider configured it would cluster
+      # on the lexical fallback, so "same topic" means "same words", and a corpus assembled that
+      # way is worse than none because it looks like it worked. Turn this on together with the four
+      # variables above, and only after the privacy policy names the vendor.
+      #
+      # Each pass is bounded, so the interval controls throughput rather than load.
+      - key: OMI_ENABLE_CROSS_NARRATIVES
+        value: 'false'
+      - key: OMI_CROSS_NARRATIVE_INTERVAL_SECONDS
+        value: '900'
       # UNSET ON PURPOSE (2026-08-19). The model is now chosen ON the preset in the
       # OpenRouter dashboard, so the dashboard is the single source and this must stay
       # empty. THIS VARIABLE OVERRIDES THE PRESET: while it held 'openai/gpt-5-mini'

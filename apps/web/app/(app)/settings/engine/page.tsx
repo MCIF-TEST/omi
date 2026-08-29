@@ -16,7 +16,7 @@ import {
   type MlScorerStatus,
 } from '@/lib/api';
 
-export const metadata = { title: 'Engine Intelligence. OMISPHERE' };
+export const metadata = { title: 'Engine Intelligence' };
 export const dynamic = 'force-dynamic';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;

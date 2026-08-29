@@ -24,7 +24,7 @@ def _t(hours: float) -> datetime:
 
 
 def _score(members):
-    times = [m.observed_at for m in members]
+    times = [m.posted_at for m in members]
     return score_narrative(members=members, first_seen_at=min(times), last_seen_at=max(times))
 
 
@@ -36,7 +36,7 @@ def test_case1_high_account_suspicion_weak_narrative_not_suspicious():
             account_external_id=f"sus_{i}",      # 10 DISTINCT moderate+ accounts
             platform="youtube",
             parent_id="video_single",            # one shared parent → no cross-target
-            observed_at=_t(i * 3),               # diffuse over 30h → no burst/entropy
+            posted_at=_t(i * 3),               # diffuse over 30h → no burst/entropy
             text_hash=text_fingerprint(f"unique organic reply number {i}"),  # no reposts
             tier="moderate",
         )
@@ -59,7 +59,7 @@ def test_case2_corroborated_narrative_still_labeled_suspicious():
         for p in ("video_a", "video_b"):              # each on 2 parents → cross-target fires
             members.append(MembershipRecord(
                 account_external_id=f"acct_{i}", platform="youtube",
-                parent_id=p, observed_at=_t(i * 0.05),
+                parent_id=p, posted_at=_t(i * 0.05),
                 text_hash=shared,                      # identical text → repost fires
                 tier="moderate",
             ))
@@ -76,7 +76,7 @@ def test_case3_reply_artifacts_alone_cannot_be_suspicious():
     members = [
         MembershipRecord(
             account_external_id=f"viewer_{i}", platform="youtube",
-            parent_id="video_thread", observed_at=_t(i * 0.1),
+            parent_id="video_thread", posted_at=_t(i * 0.1),
             text_hash=boiler,                          # identical reply boilerplate
             tier="low",                                # ordinary organic accounts
         )
@@ -97,7 +97,7 @@ def test_case4_genuine_coordination_detection_intact():
         for p in ("v1", "v2", "v3"):                   # cross-target spread
             members.append(MembershipRecord(
                 account_external_id=f"cell_{i}", platform="x",
-                parent_id=p, observed_at=_t(i * 0.02),
+                parent_id=p, posted_at=_t(i * 0.02),
                 text_hash=shared,                      # identical messaging
                 tier="elevated",
             ))
@@ -114,7 +114,7 @@ def test_inauthenticity_excluded_from_corroboration():
     members = [
         MembershipRecord(
             account_external_id=f"a_{i}", platform="youtube",
-            parent_id="p", observed_at=_t(i * 4),
+            parent_id="p", posted_at=_t(i * 4),
             text_hash=text_fingerprint(f"distinct text {i}"), tier="high",
         )
         for i in range(8)

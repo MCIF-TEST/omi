@@ -6,7 +6,7 @@ import { apiServer } from '@/lib/api-server';
 import { getCurrentUser } from '@/lib/auth';
 import { type UpstreamUsageSnapshot } from '@/lib/api';
 
-export const metadata = { title: 'Upstream spend. OMISPHERE' };
+export const metadata = { title: 'Upstream spend' };
 export const dynamic = 'force-dynamic';
 
 /**

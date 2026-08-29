@@ -6,7 +6,7 @@ import { CoordinationQueue } from './coordination-queue';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Coordination · OMISPHERE' };
+export const metadata = { title: 'Coordination' };
 
 /**
  * The coordinated-campaign queue.

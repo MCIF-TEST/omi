@@ -24,7 +24,7 @@ export async function generateMetadata({
 }: {
   params: { platform: string; id: string };
 }) {
-  return { title: `Channel Intelligence. OMISPHERE` };
+  return { title: 'Channel Intelligence' };
 }
 
 const TIER_CONFIG: Record<string, { label: string; cls: string; barCls: string }> = {

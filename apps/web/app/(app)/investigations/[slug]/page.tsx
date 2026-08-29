@@ -13,7 +13,7 @@ import { env } from '@/lib/env';
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
-  return { title: `Investigation ${params.slug}. OMISPHERE` };
+  return { title: `Investigation ` };
 }
 
 export default async function InvestigationPage({ params }: { params: { slug: string } }) {

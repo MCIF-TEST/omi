@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import {
-  Search, Network, MessageSquareText, Bell, Menu,
+  Search, Network, Waypoints, MessageSquareText, Bell, Menu,
   History, Settings, LogOut, Scale, X,
   type LucideIcon,
 } from 'lucide-react';
@@ -41,6 +41,7 @@ const MORE_LINKS: {
   { href: '/narratives', label: 'Coordination', icon: MessageSquareText, desc: 'Coordinated campaigns detected across scans', adminOnly: true },
   { href: '/search',     label: 'Search',     icon: Search,            desc: 'Find any account or channel' },
   { href: '/disputes',   label: 'Disputes',   icon: Scale,             desc: 'Review and take down published reports', adminOnly: true },
+  { href: '/netdetect',  label: 'Formations', icon: Waypoints,         desc: 'Sets of accounts sharing improbably many rare behaviours', adminOnly: true },
   { href: '/settings',   label: 'Settings',   icon: Settings,          desc: 'Account, billing & alerts' },
 ];
 

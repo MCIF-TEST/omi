@@ -52,7 +52,7 @@ def test_organic_cluster_scores_low_and_labels_organic():
             account_external_id=f"user_{i}",
             platform="youtube",
             parent_id=f"video_{i % 3}",
-            observed_at=_t(i * 3),
+            posted_at=_t(i * 3),
             text_hash=text_fingerprint(f"organic comment {i}"),
             tier="low",
         )
@@ -79,7 +79,7 @@ def test_coordinated_cluster_with_bursty_reposts_scores_high():
             account_external_id=f"susp_{i}",
             platform="youtube",
             parent_id="video_target",
-            observed_at=_t(i * 0.2),   # all within 2 hours
+            posted_at=_t(i * 0.2),   # all within 2 hours
             text_hash=text_fingerprint("Wake up sheeple this is rigged"),
             tier="elevated",
         ))
@@ -89,7 +89,7 @@ def test_coordinated_cluster_with_bursty_reposts_scores_high():
             account_external_id=f"organic_{i}",
             platform="youtube",
             parent_id="video_target",
-            observed_at=_t(40 + i * 20),
+            posted_at=_t(40 + i * 20),
             text_hash=text_fingerprint(f"interesting point organic {i}"),
             tier="low",
         ))
@@ -119,7 +119,7 @@ def test_cross_target_spread_signal_fires_when_authors_active_on_many_videos():
                 account_external_id=f"campaign_{author_i}",
                 platform="youtube",
                 parent_id=f"video_{vid_i}",
-                observed_at=_t(author_i * 0.5 + vid_i * 5),
+                posted_at=_t(author_i * 0.5 + vid_i * 5),
                 text_hash=text_fingerprint(f"talking point variation {author_i}_{vid_i}"),
                 tier="elevated",
             ))

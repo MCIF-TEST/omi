@@ -28,7 +28,7 @@ export async function generateMetadata({
 }: {
   params: { platform: string; id: string };
 }) {
-  return { title: `Author ${params.id}. OMISPHERE` };
+  return { title: `Author ` };
 }
 
 const RISK_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {

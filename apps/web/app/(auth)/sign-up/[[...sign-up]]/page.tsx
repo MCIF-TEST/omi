@@ -4,7 +4,7 @@ import { TRIAL_CREDITS_LABEL } from '@/lib/plan';
 import { AuthFormGate } from '@/components/shared/auth-form-gate';
 import { RememberClaim } from './remember-claim';
 
-export const metadata = { title: 'Create account. OMISPHERE' };
+export const metadata = { title: 'Create account' };
 
 // Clerk-hosted sign-up (Google, Apple, X, email/phone. Whatever is enabled in the Clerk dashboard),
 // dropped into the app's centered auth shell. Loop guard runs CLIENT-side via AuthFormGate (useAuth),

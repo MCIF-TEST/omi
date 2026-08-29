@@ -14,12 +14,13 @@ in the displayed cluster — see ``coordination.is_qualifying_tier``.
 
 from __future__ import annotations
 
+import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.narrative.clustering import best_match
@@ -35,7 +36,7 @@ from app.narrative.coordination import (
     score_narrative,
     text_fingerprint,
 )
-from app.narrative.embeddings import Embedder, get_embedder
+from app.narrative.embeddings import EmbeddingUnavailable, Embedder, get_embedder
 from app.storage.models import (
     Account,
     CoordinationEdge,
@@ -44,6 +45,8 @@ from app.storage.models import (
     Scan,
 )
 
+_log = logging.getLogger("omi.narrative")
+
 
 @dataclass
 class IngestItem:
@@ -51,6 +54,9 @@ class IngestItem:
     platform: str
     account_external_id: str
     parent_id: str | None = None
+    #: When the comment was POSTED. None when the source did not tell us, which is a real state and
+    #: not a reason to substitute the scan time: see `NarrativeMembership.posted_at`.
+    posted_at: datetime | None = None
 
 
 @dataclass
@@ -187,14 +193,35 @@ class NarrativeService:
         if not items:
             return 0
 
-        vecs = self.embedder.embed([i.text for i in items])
+        # A hosted embedder raises rather than degrading, and this is where that matters: falling
+        # back to a different embedder for one batch would embed it in a space the stored centroids
+        # do not share, so every utterance in it would match nothing, spawn a duplicate topic, and
+        # report success. Skipping the batch loses nothing permanently, because the text is still on
+        # the investigation and assignment can be re-driven; a forked topic space cannot be undone.
+        try:
+            vecs = self.embedder.embed([i.text for i in items])
+        except EmbeddingUnavailable:
+            _log.warning("narrative ingest skipped: embedder unavailable")
+            return 0
         if not vecs:
             return 0
 
-        stmt = select(Narrative.id, Narrative.centroid_json, Narrative.member_count)
+        space = getattr(self.embedder, "space", None)
+        stmt = select(
+            Narrative.id, Narrative.centroid_json, Narrative.member_count,
+        ).where(
+            # Only topics from THIS vector space are candidates. A row predating the column
+            # (`embedding_space IS NULL`) stays eligible: it is matched on width, exactly as before.
+            or_(Narrative.embedding_space == space, Narrative.embedding_space.is_(None))
+        )
+        width = len(vecs[0])
         existing = list(self.session.execute(stmt).all())
         candidates: list[tuple[int, list[float], int]] = [
-            (nid, list(centroid or []), mc) for (nid, centroid, mc) in existing
+            (nid, list(centroid or []), mc)
+            for (nid, centroid, mc) in existing
+            # A centroid of a different width cannot be compared at all: `cosine` answers 0.0, so
+            # keeping it would make every comparison against it a guaranteed miss.
+            if len(centroid or []) == width
         ]
 
         assigned = 0
@@ -208,6 +235,7 @@ class NarrativeService:
                     label=_clip_label(item.text),
                     centroid_json=decision.new_centroid,
                     dimensions=len(vec),
+                    embedding_space=space,
                     member_count=1,
                     distinct_authors=1,
                     first_seen_at=now,
@@ -222,6 +250,7 @@ class NarrativeService:
                     parent_id=item.parent_id,
                     comment_text=item.text[:600],
                     observed_at=now,
+                    posted_at=item.posted_at,
                 ))
                 batch_author_pairs.add((narrative.id, item.account_external_id))
                 candidates.append((narrative.id, decision.new_centroid, 1))
@@ -251,6 +280,7 @@ class NarrativeService:
                     parent_id=item.parent_id,
                     comment_text=item.text[:600],
                     observed_at=now,
+                    posted_at=item.posted_at,
                 ))
                 for idx, (nid, _c, mc) in enumerate(candidates):
                     if nid == narrative.id:
@@ -284,6 +314,9 @@ class NarrativeService:
                 NarrativeMembership.narrative_id,
                 func.count(NarrativeMembership.id).label("recent_n"),
             )
+            # Ingest time here, deliberately, and it is the one place that is right: this picks
+            # WHICH narratives to score, not when anything happened. Post time would drop every
+            # row written before that column existed and empty the queue.
             .where(NarrativeMembership.observed_at >= cutoff)
             .group_by(NarrativeMembership.narrative_id)
             .order_by(desc("recent_n"))
@@ -400,7 +433,11 @@ class NarrativeService:
         cutoff_30 = datetime.now(timezone.utc) - timedelta(days=30)
         day_counts: Counter = Counter()
         for m in memberships:
-            obs = _to_utc(m.observed_at)
+            # POST time, not scan time. Plotting the scan time drew one spike on the day the
+            # investigation ran and called it the narrative's activity.
+            if m.posted_at is None:
+                continue
+            obs = _to_utc(m.posted_at)
             if obs < cutoff_30:
                 continue
             day_counts[obs.date().isoformat()] += 1
@@ -436,7 +473,7 @@ class NarrativeService:
                 account_external_id=m.account_external_id,
                 platform=m.platform,
                 parent_id=m.parent_id,
-                observed_at=_to_utc(m.observed_at),
+                posted_at=_to_utc(m.posted_at) if m.posted_at is not None else None,
                 text_hash=text_fingerprint(m.comment_text),
                 tier=worst_tier_by_ext.get(m.account_external_id),
             )
@@ -607,7 +644,7 @@ def _score_panels(
             NarrativeMembership.account_external_id,
             NarrativeMembership.platform,
             NarrativeMembership.parent_id,
-            NarrativeMembership.observed_at,
+            NarrativeMembership.posted_at,
             NarrativeMembership.comment_text,
         )
         .where(NarrativeMembership.narrative_id.in_(narrative_ids))
@@ -640,7 +677,7 @@ def _score_panels(
                 account_external_id=r[1],
                 platform=r[2],
                 parent_id=r[3],
-                observed_at=_to_utc(r[4]),
+                posted_at=_to_utc(r[4]) if r[4] is not None else None,
                 text_hash=text_fingerprint(r[5]),
                 tier=worst_tier_by_ext.get(r[1]),
             )

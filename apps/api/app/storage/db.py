@@ -195,6 +195,17 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     # every node by it, which is an invented figure. NULL on rows added before this existed, which
     # correctly means "not captured" rather than zero.
     ("user_graph_members", "omi_score", "INTEGER"),
+    # Per-member attachment on a netdetect finding. The table itself is new, so `create_all` builds
+    # it complete on a fresh database; these entries exist for one that already created it before
+    # the membership test landed. `attachment_checked` DEFAULTS TO 0 on purpose: a row written
+    # before the test existed was never checked, and reading its empty `weak_members_json` as "every
+    # member belongs" would turn "we did not look" into a clean bill of health for named people.
+    ("netdetect_findings", "weak_members_json", "JSON"),
+    ("netdetect_findings", "attachment_note", "TEXT"),
+    ("netdetect_findings", "attachment_checked", "INTEGER DEFAULT 0"),
+    #: The formation a finding was resolved to, so a stored finding can name its operation.
+    ("netdetect_findings", "formation_key", "VARCHAR(32)"),
+    ("netdetect_findings", "corroboration_json", "JSON"),
 ]
 
 

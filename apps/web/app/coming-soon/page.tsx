@@ -3,7 +3,7 @@ import { WaitlistForm } from '@/components/shared/waitlist-form';
 import { LAUNCH_DATE_LABEL } from '@/lib/launch';
 
 export const metadata = {
-  title: 'OmiSphere. Coming soon',
+  title: 'Coming soon',
   description: 'Social media intelligence. Welcome to the transparency layer of the internet.',
 };
 

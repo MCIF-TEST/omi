@@ -5,15 +5,34 @@ new Claude Code session reads, and the only place that explains *why* several no
 the way they are. If you change behaviour and don't update this file, the next session will
 re-introduce a bug this one already paid for.
 
-**Last updated:** 2026-08-20 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
+**Last updated:** 2026-08-25 · branch `claude/omisphere-social-integrity-ch9b9s`, built on `main`
 after PR [#184](https://github.com/MCIF-TEST/omi/pull/184) merged. This session added the **cohort
 coordination detector** (`app/campaigns/detector/`, `/narratives`, `/v1/admin/coordination`) — see
 "The cohort coordination detector" below, and read its two rules before touching any threshold.
 A second session then rebuilt scoring as a calibrated probability and added the planet-scale
 tracking layer; read "The probability model" and "The planet-scale layer" below before touching a
 likelihood ratio. A third session made the analyst explain its own failures and stop losing work to
-them: read "Why a floor happens" below before changing a retry rule. Suite measured at **2142
-passed, 8 skipped, 2 failed** (6m30s, 2026-08-18), both failures pre-existing and listed below. The 8
+them: read "Why a floor happens" below before changing a retry rule. A fourth session built the
+**agent surface** (markdown negotiation, addressable `.md` pages, llms.txt, structured API errors,
+per-request canonical links); read "The agent surface" below before touching anything that a machine
+rather than a person reads, and note that `OMI_PUBLIC_BASE_URL` is now required to BUILD the web app.
+The same session then built the **cross-investigation coordination system** (`app/narrative/cross/`,
+`/v1/admin/cross-narratives`); read "Cross-investigation narratives" below, and its §1 in
+`docs/cross-investigation-narratives.md`, before touching a threshold there. A fifth session then
+went back to `app/netdetect/`: it was **not deterministic across processes** (a set of dataclasses
+iterating in hash order set the null threshold), reposts and topics were reaching no feature, and the
+detector was read-only so nothing accumulated and nothing could be dismissed. Read "The network
+detector" below before touching a threshold or a set iteration there. The same session then gave it
+an ONTOLOGY: **formations** (the operation as a persistent entity, surviving account rotation),
+**assignment** (which known formation does this account belong to), and **corroboration** (the
+accumulating `CoordinationEdge` graph, written since the tracking layer shipped and never once read
+back). Read "Formations" and "Corroboration" below. Two rules there were decided by measurement and
+will be re-broken by anyone who reasons about them instead: the OMI score may characterise a
+formation but never detect one, and **total accumulated history does not separate an operation from
+a newsroom**, so only its hard-family half discriminates.
+
+Suite measured at **2550
+passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -51,10 +70,14 @@ python -m pyflakes app/             # catches undefined names — see "Bug class
 
 # web  (from apps/web)
 npx tsc --noEmit && npx next lint
-CLERK_SECRET_KEY= NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS5jb20k npx next build
+CLERK_SECRET_KEY= NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS5jb20k \
+  OMI_PUBLIC_BASE_URL=https://omisphere.online npx next build
+npx vitest run                      # web unit tests
 ```
 
-The build command deliberately runs with **`CLERK_SECRET_KEY` unset** — that must keep working (see
+`OMI_PUBLIC_BASE_URL` is required at BUILD time: it is baked into the canonical links, the
+sitemap, llms.txt and the JSON-LD, and an absent one used to publish `localhost` URLs silently
+(see "The agent surface" below). The build command deliberately runs with **`CLERK_SECRET_KEY` unset** — that must keep working (see
 Clerk below). A malformed publishable key fails prerender with a confusing error, so use the
 well-formed dummy above rather than something like `pk_test_x`.
 
@@ -62,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2107 passed, 8 skipped, 2 failed** (7m24s, 2026-08-18), both documented below:
+Current measured state: **2550 passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1097,7 +1120,96 @@ prose. A year is only read as a claim when it sits next to a creation word or th
 "the 2020 election" and a year inside a quoted post are left alone. One wrong date reports once, not
 twice. Pinned by the contamination section of `tests/test_grounding.py`.
 
-**The withhold rate is the other half of this and is NOT yet diagnosed.** About 36 of 400 verdicts
+#### One cause of the withhold rate, found and fixed: a small ratio was unwritable
+
+Diagnosed 2026-08-28 by probing the checkers with protocol-conformant prose rather than by waiting
+for live data, the same method that found the four checker bugs above.
+
+`_check_ratio` compared against a **purely relative** `RATIO_TOLERANCE` of 15%. For an
+acquired-audience account (many followers, follows almost nobody) the true following-to-followers
+ratio is tiny, and the band around it contains no number the model could reasonably write. Measured
+on 1,249 followers against 8 following: the true ratio is 0.0064, the band is 0.0054 to 0.0074, and
+`a ratio of 0.01` (correct to two decimals, and the obvious way to write it) was withheld as a
+fabricated figure. Three decimals passed and the inverted form passed. **Only the natural form
+failed**, which is the worst possible shape for a rule like this.
+
+**It is not a corner case, and that is what makes it a likely cause of the clustering.** v14 added
+the ACQUIRED-AUDIENCE shape to `PROFILE` as an equally elevated signal, so the protocol actively
+steers the model toward the very accounts whose ratios this rejected. Withholds would arrive
+bunched in investigations containing them, which is what "~28 of ~130 in one investigation" looks
+like. A probe of five protocol-conformant paragraphs withheld one, a 20% rate, on this alone.
+
+The fix is to check a figure **at the precision it was stated**: `0.01` asserts the ratio to two
+decimal places, and 0.0064 rounds to 0.01, so the sentence is true. It stays tight rather than
+becoming an amnesty on small numbers, because `0.0100` is a claim to four places and is still
+refused, as is a contaminated `4.0` or `0.50`. The pair form (`600:505`) states two exact counts
+rather than a rounded quotient, so the precision rule deliberately does not apply to it.
+
+Verified across every figure and quote FORM the protocol asks for: 18 figure cases and 10 quote
+cases, zero false positives and every contamination still caught. Pinned by two tests in the
+false-positive section of `tests/test_grounding.py`.
+
+**Worth doing at the next protocol revision, and deliberately not now:** the model should prefer
+whichever orientation is informative, since a follower-heavy account's ratio rounds to `0.00` at two
+decimals, which is true and tells a reader nothing. That is a prompt change and costs a recompile,
+every mirror, the pins and a preset re-paste, which is not worth spending on one line while the
+checker fix removes the actual harm.
+
+#### A second cause: the banned-phrase lint fired on its own opposite
+
+`BANNED_PHRASES` was matched as a bare substring, so a NEGATED phrase counted as an assertion of the
+thing it denies. **"There is no proof that the account is automated"** tripped `proof that`, and
+**"this is not obviously a bot"** tripped `obviously a bot`. Both are hedges, and both were withheld
+as certainty claims.
+
+That is not a rare shape either. Most accounts are ordinary people, `A CLEAN ACCOUNT IS A FINDING`
+requires them written as positive facts, and the alternative-explanation test requires the innocent
+reading to be STATED in every verdict at 50 or above. Sentences that deny automation are what the
+protocol asks for constantly.
+
+`check_phrasing` now skips a phrase with a negator immediately before it. The window is 16
+characters on purpose: only an immediate negation excuses it, so **"it is not a coincidence that
+this account was hired"** keeps its violation and the rule cannot be talked out of the accusations
+it exists to catch.
+
+**Two bans are deliberately NOT excused, and checking that was the point of the pass rather than an
+afterthought:**
+
+- **`no doubt` is itself the certainty phrase**, not a negated one. The negator is part of the
+  banned string, so the look-behind never sees it. Nothing needed special-casing.
+- **`this person` stays banned in every context, including exculpatory ones.** Asserting the account
+  is a person is an identity claim the evidence cannot support. The compiled protocol says **"a real
+  person" (a category) nine times and "this person" not once**, and carries `NEVER ASSERT IDENTITY`,
+  so the ban is coherent with the prompt rather than fighting it. It looked like the biggest false
+  positive in the probe and it is not one.
+
+**Only `check_phrasing` changed. The shared `BANNED_PHRASES` tuple did not**, so the Governor's S9
+lint over investigation-level prose behaves exactly as before, and the `canonical_validate` mirror
+does not drift.
+
+#### A third candidate, measured and deliberately NOT changed
+
+`check_alias_in_prose` is HARD and matches `[AC]\d{1,3}`, so real-world tokens spelled that way are
+withheld when the model narrates them outside a quotation: **C4** the broadcaster, the **A1** road,
+**A2** milk, the **A7** camera body, the **C1** variant, flat **C3**. Six such sentences were
+measured firing.
+
+**This is a documented deliberate trade, not an undiagnosed bug**, and the reason is empirical:
+aliases opened essentially every verdict in a live export, so the leak was pervasive rather than
+occasional, and a withheld paragraph still shows its score, its tier and an honest notice. Quoted
+spans are already stripped, which covers the common case because the protocol pushes quoting over
+paraphrase.
+
+**The obvious refinement does not work, and that is worth recording so nobody spends the effort
+twice.** Matching only the aliases actually assigned in the batch sounds strictly more precise, but a
+25-account batch assigns A1 through A25, so "the A1 road" and "the A7 camera" are inside the legend
+and still fire. Real-world tokens use low numbers for exactly the same reason aliases do.
+
+Pinned as a CHARACTERIZATION test rather than approved, so changing it is a deliberate act with the
+reasoning in front of whoever changes it. If it is revisited, the thing to measure first is how
+often the model narrates such a token outside a quotation, which nobody has counted.
+
+**The remaining withhold rate is still NOT fully diagnosed.** About 36 of 400 verdicts
 came back withheld, and in one investigation it is ~28 of ~130 (**21%**). That clustering says a
 checker over-firing on a phrasing habit, not 28 hallucinations. Diagnosing it needs the withheld text
 and codes from `assessment_unverified` / `grounding` in `payload_json`, which is why the field is
@@ -1388,6 +1500,709 @@ subscriber's 20 monthly credits buy ~1000 accounts, so a whole month of heavy le
 ~2000-3000 calls. 1500 in one day caps a runaway at about $7.50 rather than $216.
 
 Pinned by `tests/test_upstream_budget.py` (23 tests).
+
+### The network detector (`app/netdetect/`): sets, not pairs
+
+Built 2026-08-20 as a ground-up replacement for the pairwise approach, alongside the existing cohort
+detector rather than instead of it. Design and the argument for it: `docs/network-detection.md`.
+
+**It asks a different question.** Not "do accounts a and b share X" but "how improbable is it that
+THESE k accounts share this much, in a corpus shaped like this one?" A set-level statistic is not
+recoverable by fusing pairwise ones, which is why this is a new package rather than a new signal.
+
+```
+features -> corpus -> candidates -> set surprise -> refusals -> shuffled null -> findings
+```
+
+**Five things that must not be undone:**
+
+- **The null is DEGREE-PRESERVING.** `shuffle.shuffle_corpus` uses double-edge swap so every account
+  keeps its feature count and every feature keeps its account count. Only the association changes,
+  and the association is what coordination IS. A shuffle that let degrees drift would make
+  everything real look significant.
+- **The search is corrected against the distribution of the MAXIMUM.** `build_null` re-runs the
+  whole pipeline on K shuffles and keeps each run's best score. That is the answer to "I searched a
+  huge space and took the winner", and it is the thing the old detector has no version of. **The
+  callable passed to `build_null` must be the same `_search` used on real data**: a null built from
+  a cheaper approximation corrects a different search while still looking like a correction.
+- **Refusals run INSIDE `_search`, before the null.** Filtering survivors afterwards would compare
+  them against a threshold built from a more permissive search, quietly weakening the correction.
+- **It never reads an OMI score or tier.** Coordination and botness are orthogonal, and the old
+  70+ filter was blind by construction to the operation worth catching: aged accounts, hand-written
+  posts, each scoring 30 alone. `test_the_score_never_reads_an_accounts_own_suspicion_score` pins it.
+- **In-group replies are excluded from the evidence, and a chatty group is refused outright.** Real
+  communities talk to each other; operations broadcast. Counting in-group replies as coordination
+  inverts the signal on exactly the population most at risk of being wrongly accused, and the fan
+  community control fired until this was fixed.
+
+**Family weights price in what the null cannot see.** The configuration null measures *statistical*
+rarity; it cannot measure *behavioural innocence*. Ten reporters genuinely share a topic, a working
+day and a newsroom tool. So `types.FAMILY_WEIGHT` weights `identity` and `network` at 1.0 (the
+operator's own acts: provisioning a batch, converging on outside targets) and text / timing /
+infrastructure at 0.40-0.55 (things a shared job or interest produces for free).
+
+**A finding with no hard-family evidence is flagged, not published.** `needs_adjudication` carries
+the reason. The professional-beat control lands here: statistically real, innocent, and unresolvable
+by any threshold. Suppressing it would hide genuine operations using aged accounts; publishing it
+would accuse a newsroom. A reader is the only thing that can make that call.
+
+**A blunder worth remembering.** With K shuffles the smallest reportable p-value is 1/(K+1), so a
+run asked for p<=0.05 with K=8 could never report anything whatever the data held, and the output
+was indistinguishable from a clean corpus. `detect` now REFUSES that configuration.
+`test_too_few_shuffles_refuses_instead_of_silently_finding_nothing` pins it.
+
+**Measured dilution curve** (8-account operation planted in 60 organic accounts): caught and
+publishable at discipline 0.0 to 0.5, invisible at 0.75 and above. That curve IS the honest product
+claim. A disciplined operation emits no rare features and no statistics recover a signal that was
+never sent.
+
+Reachable at `POST /v1/admin/netdetect/{slug}`, admin-only, costs nothing (no provider call, no
+model call, no credit).
+
+#### It was not deterministic, and the falsification test was the only thing that noticed
+
+The module's docstring promised "the same corpus always produces the same findings" and it was not
+true, for reasons no amount of reading the seeded RNG would reveal. `shuffle_corpus` built its edge
+list by walking `AccountProfile.features`, a **set of frozen dataclasses whose fields are strings**.
+That set iterates in `hash(str)` order, which Python randomises per PROCESS, and the swap loop then
+indexes into the list with a seeded RNG. So one seed produced a different shuffle in every
+interpreter, and since every shuffle in the null is built that way, **the correction threshold was a
+function of the interpreter rather than of the data.**
+
+Measured on one corpus with one seed under three `PYTHONHASHSEED` values: thresholds of **8.505,
+8.02 and 0.0**. A threshold of 0.0 accepts every candidate, which removes the search correction that
+is the entire justification for this package. That is why `test_a_shuffled_corpus_yields_nothing`
+failed roughly one run in five, and it read as ordinary flakiness.
+
+Fixed by sorting on `Feature.token()` at the four places a set of features is walked into an ordered
+structure: the shuffle's edge list, the `Corpus` build (which sets the insertion order of
+`feature_accounts`, which sets the order of the candidate search), `score_candidate`'s union, and
+the Louvain edge list in `candidates.py`. **Sorting a set before iterating it is not cosmetic
+anywhere in this package**, and a `set` of dataclasses is the shape to look for.
+
+`test_the_answer_does_not_depend_on_the_interpreters_hash_seed` runs the same corpus in three
+subprocesses under three hash seeds and compares the findings. An in-process test cannot see this
+class of bug: one process has one hash seed.
+
+#### Two families that were carrying less than they could
+
+- **Reposts are network evidence.** `_map_tweet` had been parsing `repost_of_id` and it reached no
+  feature, so a ring whose entire behaviour is amplifying the same handful of posts emitted nothing
+  in the family that would have caught it. `network_features(..., reposts=())` now emits
+  `repost_of`, and `score_candidate` excludes an in-group repost target for the same reason it
+  excludes an in-group reply: boosting each other is a community, not convergence on an outside
+  target.
+- **`narrative` was declared and never produced.** The family existed in `FAMILY_WEIGHT` with
+  nothing emitting into it, so `MIN_FAMILIES` could never count it. `topic_features(topic_ids, *,
+  exclude)` fills it from the cross-investigation topic assignments, which is the only place a topic
+  id exists. **The topics the cohort was FOUND on are excluded**, exactly as the scanned post is:
+  every member holds them by construction, so without the exclusion the cohort shares a perfect
+  feature and reports as one enormous operation.
+
+#### Findings are RECORDED now, and recording is not publishing
+
+The detector was read-only, and that cost it twice: its findings evaporated when the page closed, so
+the tracking layer that survives account rotation learned only from the older, weaker cohort
+detector; and there was nothing for an operator to dismiss, so the one reservoir of ground truth
+this system will ever accumulate stayed empty while the better detector ran.
+
+`NetdetectFinding` + `app/netdetect/persist.py` + `GET /v1/admin/netdetect/findings/all` with
+`dismiss` / `confirm`. **The original rule is untouched**: no share token is minted, no `Campaign`
+row is written, nothing reaches a customer surface. A claim about a person being a decision somebody
+took rather than a side effect of a page load is about PUBLICATION, and storing an internal lead is
+a different act. `test_a_run_publishes_nothing` pins the difference.
+
+**A SET FINDING IS NOT A PAIR FINDING, and the decomposition is where that could be quietly undone.**
+This package's whole thesis is that a set-level statistic is not recoverable by fusing pairwise ones,
+so `pair_evidence_from` does **not** distribute the set score across the pairs. It reads the
+finding's own evidence list and gives each pair only the surprise of the features THAT PAIR actually
+shares, spread across the pairs sharing each feature so one popular-within-the-group feature cannot
+deposit its full weight onto all forty-five pairs it touches. The consequence is intended: a pair in
+a high-scoring finding that shares one weak feature contributes almost nothing, because the set was
+significant and that pair was not. Distributing the score would put a number in the accumulating
+graph that no test produced, and it would look exactly like measured pairwise significance.
+
+Four more rules:
+
+- **Upsert on `(investigation_id, members_key)`.** An operator re-runs constantly while tuning, and
+  a row per button press turns the queue into a log.
+- **A dismissed row keeps its dismissal when the numbers are refreshed.** Somebody who has already
+  said "this is a newsroom" must not be asked again on the next re-run, and silently reopening it
+  would make the dismissal worthless as the training signal it is the only source of.
+- **The same member set under two investigations is two findings.** Collapsing them would discard
+  exactly the independent second sighting the tracking layer exists for. Accumulation is still keyed
+  on the post, so a re-scan of one post cannot compound.
+- **A judgement needs a non-blank reason.** `min_length=1` alone passes `"   "`, which then strips to
+  nothing on the way into the column and records that somebody was unconvinced and nothing about
+  why. A `field_validator` rejects it.
+
+Accumulation is best-effort and wrapped: losing it degrades FUTURE findings, and must never turn a
+completed run into an error for the operator looking at the results now. `record=false` on the run
+route keeps the answer and skips the store, which is what an operator tuning thresholds wants.
+
+Pinned by `tests/test_netdetect_persistence.py` (12) and `tests/test_netdetect_routes.py` (14).
+`tests/test_coordination_admin_gate.py` covers the new routes against a REAL non-admin, because
+every other test here runs in local mode where `require_user` returns `is_admin=True`.
+
+#### The calibration report reads the reservoir back, and moves nothing
+
+`app/netdetect/calibration.py` + `GET /v1/admin/netdetect/findings/calibration`. It replays each
+tunable constant against every judged finding and answers one question: **if this threshold had been
+set differently, which of the findings a person already judged would have changed?**
+
+- **It reports and it never moves anything.** No constant in `app/netdetect` is read from the
+  database and none may become so. A threshold that retunes itself on operator clicks can be steered
+  by whoever clicks, with no review and no diff, and this one decides whether named real people are
+  reported as running an operation together. A constant in code has a commit, a reviewer and a
+  reason beside it; a constant in a row has a number. `test_the_source_never_reads_a_threshold_out_
+  of_the_database` is a source-level guard on the writes.
+- **It refuses to recommend while the reservoir is thin** (`MIN_JUDGEMENTS` 30, `MIN_PER_CLASS` 8).
+  Four constants fitted against a dozen labels memorises the last dozen posts somebody happened to
+  look at. The sweeps are still returned below the floor, because watching it fill is useful and an
+  empty response would read as a broken endpoint.
+- **A recommendation never trades away a confirmed finding.** The search is only over settings that
+  keep every confirmed one and refuse more of the dismissed. Calling real people coordinated when
+  they are not is the expensive error, and it is the one the reader cannot check.
+- **Among ties, the LEAST strict value wins.** Extra strictness that refuses no additional dismissed
+  finding buys nothing on the evidence in hand and costs recall on the findings nobody judged, which
+  are most of them. Which end is least strict depends on the constant, so `stricter_direction` is
+  carried rather than a sign being assumed.
+- **`corrected_p` NULL is never counted as significant.** Reading "not compared against the shuffled
+  search" as "passed it" would silently restore the search bias the null exists to remove.
+
+The sweep is possible at all because the row carries `by_family_json` rather than only a score: hard
+evidence, the family count and the top family's share all fall out of it, so a threshold can be
+replayed against findings judged months ago **without re-running the detector**, whose corpus is not
+kept and would risk being rebuilt differently.
+
+**A dismissal labels the FINDING, not the accounts.** "These are reporters on one beat" says the
+group is not an operation and says nothing about whether any member is automated. `AccountLabel` is
+the other reservoir and it labels botness, which this package deliberately never reads. Averaging
+them would be a category error.
+
+Pinned by `tests/test_netdetect_calibration.py` (17).
+
+#### Which finding to judge next, and why the obvious reading of that list is backwards
+
+The reservoir needs 30 judgements with 8 of each class before a single threshold is fitted, nothing
+in this system produces them automatically, and nothing ever will: they arrive one operator click at
+a time. So the only lever available is making the thirty count. `_next_to_judge` ranks the OPEN
+findings by how much a verdict on each would teach, and `still_needed` states the shortfall as work
+("29 more judgements, 7 more confirmed, 8 more dismissed") rather than leaving it as the refusal
+`insufficient_reason` already explains.
+
+**THE MEASURE IS HOW MANY SETTINGS WOULD FLIP THE FINDING, not how near a number it is**, and the
+first version got this wrong. Distance to a boundary degenerates on the integer constants:
+`MIN_FAMILIES` is 2 and most findings contribute exactly two families, so they all sit at distance
+zero and the ranking says nothing at all. Asking instead whether a finding is kept at some candidate
+settings and refused at others answers the question directly, and behaves the same on a continuous
+axis as on a discrete one. Distance survives only as the tiebreak.
+
+**The ordering is INFORMATION, and it is close to the OPPOSITE of a suspicion ordering.** A finding
+reported whatever the thresholds are set to flips nothing and teaches nothing, and that is exactly
+the most obviously coordinated group in the queue: nobody needed a label to know how it would come
+out. An operator reading a `#1` beside an account set as a strength rank would work the borderline
+cases believing them to be the most damning, which is backwards, so the marker on the card says
+`#1 moves 4 thresholds` rather than a bare number and the panel above the queue says in words that
+this is not a strength order. `test_a_finding_reported_at_every_setting_is_never_offered_however_
+coordinated_it_looks` is the guard: its fixture's highest-scoring finding, by a factor of ten, is
+the one thing that must NOT be named.
+
+**`_axes()` declares the four constants ONCE and both halves read it** — the sweep that replays a
+setting against judged findings, and the ranking that asks which unjudged finding sits nearest it.
+Two copies of those predicates is precisely the drift this file has warned about repeatedly, and it
+would be invisible here: the sweep would fit one rule while an operator judged findings selected by
+another, and every test would pass.
+
+Pinned by six tests in `tests/test_netdetect_calibration.py` and three source-level guards at the
+end of `tests/test_netdetect_routes.py`.
+
+#### The queue has an interface now, and that is what makes the reservoir reachable
+
+`/netdetect` (`app/(app)/netdetect/`), labelled **Formations** in both navs. The routes shipped
+before any UI, so the only way to read or judge a finding was curl, and that matters more here than
+it looks: the calibration report refuses to recommend anything below 30 judgements with 8 of each
+class, and **nobody produces thirty judgements through curl**. The ground-truth path was inert
+without this page.
+
+Same shape as `/disputes`, and for the same reasons: **admin-gated on the SERVER**
+(`if (!user?.is_admin) notFound()`) plus `force-dynamic`, because a finding names real people and
+the queue carries other customers' investigation ids, with no owner to scope any of it to. The nav
+`adminOnly` flag is presentation; the page is the access control, and the API re-checks.
+
+Three things the page must keep doing:
+
+- **It branches on `attachment_checked`, never on the list being empty.** "Every member carries this
+  finding" and "membership was not tested" are opposite statements about named people and both show
+  an empty `weakly_attached`.
+- **A flagged member carries no number.** The per-member confidence was measured and refused, so a
+  weak member is highlighted as a pointer for review and nothing beside their name reads as a score.
+- **A judgement needs a reason before the request is made.** The API rejects a blank one; the page
+  must not offer a path that pretends otherwise.
+- **The judging order carries its own warning, and only the OPEN filter is reordered.** The ranking
+  from `_next_to_judge` is where a thirty-judgement reservoir actually gets filled, so it belongs
+  here rather than on an endpoint nobody reads, and the sentence saying it is not a strength order
+  has to travel with it. Confirmed and dismissed are a record rather than a work queue: reordering
+  a record by how much each row would teach is meaningless and moves rows under somebody rereading
+  their own past judgements. A failed calibration call drops the ranking and leaves every finding
+  rendering unmarked, because a convenience over the work must never take the work down with it.
+
+Pinned by nine source-level tests at the end of `tests/test_netdetect_routes.py`, because TypeScript
+will not tell anyone if the server gate is dropped.
+
+#### A finding names bystanders, at a measured rate, and nothing said so
+
+Found while verifying the persistence work. Every recall test asks whether the planted operation was
+FOUND (`>= 4 of 8`); **nothing anywhere asked who else was in the finding**, which matters more here
+because a finding names real people. Candidate generation is community detection and Louvain pulls
+in boundary accounts.
+
+Measured across a systematic grid (four background sizes x three seeds): recall **8/8 on all twelve**,
+and **7 innocent accounts among 103 named members, about 6.8%**, with the worst finding at 3 of 11.
+**Identical against the pre-persistence tree**, so this is not new. What changed is the consequence:
+a swept-in account used to evaporate when the page closed and now lands in an operator's queue as a
+member of an operation, with its pairs folded into the accumulating graph.
+
+`test_a_finding_is_mostly_the_operation_and_the_rate_is_pinned` pins it as a **ceiling**, so a change
+that makes contamination worse cannot land behind a recall test that still passes. **Keep the grid
+systematic**: an earlier draft trimmed it to six configurations, the trim happened to keep most of
+the contaminated ones, and it reported 12.7%, which would have baselined every future change against
+the selection rather than the detector.
+
+**The obvious fix is measured and does not work.** `pair_evidence_from` knows how much of the shared
+evidence each member participates in, so publishing that as a per-member confidence (as the cohort
+detector rightly does with its admitting posterior) is very tempting. On the measured corpus two
+swept-in organic accounts **out-rank a genuine operation member**, so an operator shown that ranking
+would clear the wrong accounts and doubt the right ones. A number beside a person's name is read as a
+judgement about them, so publishing it would be worse than publishing nothing.
+`test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did` is a
+guard against building it, and states what would have to change for it to become buildable.
+
+#### The fix: ask what each member ADDED, not how much it shares
+
+`app/netdetect/attachment.py`. The failed statistic asked how much shared evidence a member
+participates in. The one that works asks how much less improbable the set is **without** it: score
+the set, then score the set minus one member, in the finding's own weighted log10 units.
+
+**The sign comes out of the arithmetic rather than a threshold.** Removing a genuine member drops
+the shared count `k` across many rare features, so the Poisson-binomial tail widens and the score
+falls: a large positive delta. Removing a bystander leaves `k` alone on the features carrying the
+finding while shrinking `n`, so the tail gets SMALLER and the score can rise: a delta at or below
+zero. Measured, every bystander landed at or below zero and every operation member well above it.
+
+Result on the systematic grid: **7 of 7 bystanders flagged, 0 of 96 genuine members flagged, 0
+missed**, abstaining on the 4 findings where nobody is weakly attached.
+
+Four rules, and three of them are about restraint:
+
+- **The threshold is RELATIVE to the finding's own median, and that is a measurement.** Globally the
+  populations overlap: the weakest genuine member scored **-0.134** and the strongest bystander
+  **+0.116**, so any fixed cut misclassifies one of them. `WEAK_FRACTION` (0.25) compares a member
+  against the typical member of its own finding, because the scale of a delta is set by how much
+  evidence that particular finding rests on. Pinned by a test that fails if the two ever separate
+  globally, since that would make a simpler rule viable.
+- **It ABSTAINS below `MIN_MEDIAN_CONTRIBUTION` (0.5).** In a homogeneous group every member holds
+  the same features, so removing any one barely moves the score and there is no weak member to
+  find; a rule that went looking anyway would flag whichever account rounded lowest. The
+  professional-beat control lands here and must: a real community IS everybody contributing alike.
+  Measured, such findings ran medians of 0.04 to 0.18 while every contaminated one ran 1.57 to 3.92.
+- **It REPORTS, it never drops a member.** Removing a flagged account would change the finding's
+  membership, score and stored identity on a heuristic, and would silently delete a real
+  participant whenever the heuristic got it the other way round. A flagged account stays in
+  `members`.
+- **`attachment_checked` is explicit, never inferred.** There are THREE states and the middle one is
+  easy to lose: checked with weak members, checked with none (every member carries the finding), and
+  not checked at all. The last two both present an empty list and are opposite statements about the
+  people named. Same distinction as `score: null` against `0` on the analyst's eight signals, and it
+  defaults False so rows written before the test existed read as "not checked" rather than as a
+  clean bill of health.
+
+**The old guard stays.** `test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_
+sold_as_if_it_did` is still true and still passing: that statistic still fails. Two different
+questions, one of which is answerable. `MEMBERSHIP_NOTE` on the response now describes the flag as a
+pointer for review rather than a score, and says an empty list is not an all-clear.
+
+**The cap is measured, not guessed.** Leave-one-out costs one scoring per member and each scoring
+walks a feature union that grows with the member count, so the curve is steep: on a 220-account
+corpus, n=20 took 0.21s, n=30 1.0s, n=40 2.8s, n=50 7.2s, n=60 15.4s. `MAX_MEMBERS` is 40, because
+this runs inside an admin request that has already spent tens of seconds detecting. A first draft
+set it at 60 by feel and would have added 15 seconds to that request.
+
+**The three new columns are registered in `_INCREMENTAL_COLUMNS`.** `create_all` leaves existing
+tables alone and the boot upgrade pass works from that explicit list rather than from the models, so
+a column added to the model alone never reaches a database that already created the table. Pinned by
+a test that builds such a database rather than asserting on the registry, since a typo in the list
+passes inspection and fails at runtime.
+
+Pinned by `tests/test_netdetect_attachment.py` (12).
+
+#### Formations: the operation is the entity, not the finding
+
+`app/netdetect/formation.py` + `registry.py` + `assign.py`, and `NetdetectFormation`. A finding is
+one post's worth of evidence about a group. A **formation** is the adversary behind it, persisting
+across posts and across account rotation, which is the thing an analyst actually wants to name.
+
+`build_profile` reduces a candidate to what its operator does rather than to who its accounts are:
+up to `MAX_PROFILE_FEATURES` (60) features below `PROFILE_PREVALENCE_CEILING` (0.25) prevalence,
+each carrying its own surprise. **No account id enters a profile.** That is what lets a formation be
+recognised after every account in it has been burned, and it is the same reasoning as
+`tracking/signature.py`, one layer up.
+
+- **`resolve` tries member overlap, then profile similarity, then creates.** Similarity is a
+  weighted Jaccard on surprise, and `FORMATION_MATCH_THRESHOLD` (0.20) is measured rather than
+  guessed: the same operator across two posts scored 0.356 to 0.770, two different operators 0.022
+  to 0.036. The gap is wide, so the threshold sits in it rather than at either end.
+- **`Composition` is where the OMI score is finally allowed in, and only to CHARACTERISE.** The
+  detector stays score-blind (`test_the_score_never_reads_an_accounts_own_suspicion_score` still
+  passes and must). What scores buy is triage, and the useful reading is inverted: a **concealed**
+  formation, statistically coordinated with a median member score near `CONCEALED_MEDIAN_SCORE`
+  (40), is the MORE dangerous finding, because every account in it would pass an individual review.
+  An **overt** one at `OVERT_MEDIAN_SCORE` (70) is a group of accounts anybody could already spot.
+- **`phase_of` reads dormancy as the ABSENCE of an event**, which nothing else in this codebase
+  does. `refresh_phases` therefore has to run on a schedule: a formation that stopped posting emits
+  nothing to notice, so without a sweep it stays `active` forever. **`monitoring/scheduler.py`'s
+  pass now calls it**, which is where it belongs because that loop already holds the Postgres
+  advisory lock, so N instances do not each age the catalogue N times. It is best-effort and never
+  raises: a phase is a label on a lead, and failing the pass over one would take the anomaly
+  detection and the watchlist rescans down with it.
+- **A re-run of one post is not a second sighting.** `contexts_json` is a set, exactly as in the
+  tracking layer, so nobody can strengthen a formation by pressing the button again.
+
+**`assign.py` is the capability the product did not have**: take an account that walked into a new
+comment section and ask which KNOWN formation it belongs to. It is a likelihood ratio against each
+stored profile, not a similarity, so the answer is a posterior a reader can argue with.
+
+- **`best()` returns None for "no known formation", never "uncoordinated".** An account matching
+  nothing may simply belong to an operation nobody has catalogued.
+- **`MIN_HARD_EVIDENCE` (3.0) is what closed the only measured false positive.** A member of the
+  stadium operation cleared the bar against the unrelated clinic operation on text and timing alone.
+  Measured: hard evidence 17.79 against its own formation and **0.000** against the wrong one, so
+  the rule costs nothing real and removes the whole class.
+- **`raw_log_lr` exists purely to ORDER formations, and `log_lr` to score.** Capping at
+  `MAX_LOG10_LR` made two candidate formations both read 4.0, which destroyed the ranking while
+  leaving the posterior correct. Two numbers because they answer two questions.
+- Measured: **40 of 40 accounts assigned correctly, 0 wrong, 0 false positives across 300 organic
+  accounts**, degrading honestly along the discipline dial (0 of 8 at discipline 1.0) and never
+  inventing an assignment on the innocent controls.
+- **Across platforms only platform-neutral evidence counts**, the rule
+  `campaigns/tracking/crossplatform.py` already argues and which assignment never applied.
+  `assign.py` did not contain the word "platform" and `load_profiles` returns every formation
+  regardless of one, so a YouTube account was scored against an X operation's client strings and
+  handle skeletons. It matters because `identity` is weighted 1.00 and is HARD, so a coincidental
+  cross-platform collision there could clear `MIN_HARD_EVIDENCE` alone. Measured before the fix:
+  the same operator's accounts relabelled as another platform placed at posterior 0.990 carrying
+  `identity: 9.0` and `infrastructure: 6.0`. After: hard 20.00 falls to 11.00, both families gone,
+  and it **still places**, because the restriction removes families rather than the finding. A
+  genuinely different operator placed 0 of 8 either way, so no false positive was reproduced; the
+  change rests on the same argument the tracking layer already accepted.
+- **`narrative` is the one family that is HALF neutral**, and only recently. It was wholly neutral
+  when it meant topic ids, which come from the embedding space rather than any platform. A hashtag
+  is the same campaign tag on any service; **a mention is a handle inside a per-platform
+  namespace**, so `@someone` on two services is two unrelated accounts. Excluded by KIND
+  (`PLATFORM_SPECIFIC_KINDS`, `is_platform_neutral`), because dropping the family would throw away
+  hashtags and topics to remove mentions.
+- **An unknown platform does not restrict.** Profiles stored before the field existed carry none,
+  and reading absence as a mismatch would silently stop assigning against all of them.
+- Worth knowing: `types.py` briefly held **two** `PLATFORM_NEUTRAL_FAMILIES` definitions, the
+  second silently winning. netdetect already had one; it simply was not applied anywhere. A
+  duplicate constant is invisible to every test that reads only the winner.
+
+`POST /v1/admin/netdetect/formations/assign` is deliberately **two segments**. A single-segment
+`/assign` is shadowed by `POST /{slug}` and answered 404 "No such investigation", which reads as a
+data bug rather than a routing one. `GET /formations` is safe only because `{slug}` is POST-only,
+so the guard test is method-aware.
+
+**A stray-column near miss worth remembering.** A `str.replace()` while adding the attachment
+columns put three of them onto `CrossFinding` as well, and **2474 tests did not catch it**: an
+unused column is invisible, and nothing asserts that a model LACKS a field. It surfaced only when
+the boot pass tried to index a column the real table did not have.
+`test_the_netdetect_columns_did_not_leak_onto_another_model` pins it now.
+
+Pinned by `tests/test_netdetect_formations.py` (26).
+
+#### Co-arrival: the strongest unused signal, and the two designs that were wrong
+
+`thread_comments` carries each account's comments on the SCANNED post with real timestamps, and
+`profile_from_commenter` was POOLING them into `stamps` alongside the account's own timeline. So
+they fed `timing_features`' rhythm and were never compared BETWEEN accounts: nothing in the package
+could say "these eight arrived inside the same three minutes". `arrival_features` reads them.
+
+The distinction is the whole point. Two accounts posting at 14:03 on unrelated days is nothing; two
+accounts arriving at 14:03 **under the same post** is the claim. That is why `thread_comments` is
+stored apart from `recent_activity` in the first place.
+
+**A VIRAL POST IS THE FAILURE MODE, AND IT TOOK THREE DESIGNS.** On a post drawing sixty comments in
+four minutes, ANY small group shares a window.
+
+1. **Rarity alone.** A window is just a feature, and features held by most of the corpus are dropped
+   before scoring, so the dense middle of a burst self-corrects. It does not fix the sparse TAILS,
+   which still produce windows holding three or four accounts. Measured: a viral background went
+   from 0 findings to 1.
+2. **Scales derived from the post's median gap.** Fixes the tails and breaks something subtler:
+   constant occupancy means "shared a window" is equally unsurprising everywhere, so rarity can no
+   longer tell a push from a slice of a burst, and the candidate generator groups accounts BY the
+   window that the scorer then scores them ON. Measured: one viral background in eight produced a
+   fourteen-account finding carrying `timing: 11.13`, entirely arrival-driven.
+3. **The ratio.** An arrival emits nothing unless its neighbourhood is `ARRIVAL_BURST_RATIO` (3.0)
+   times denser than the thread's own average. On a uniformly busy post nothing is anomalous and the
+   feature stays silent, which is the honest answer: when everybody arrives together, arriving
+   together says nothing. This is the same thing the cohort detector's `burst_lockstep` measures.
+
+**ONE SCALE, and multi-scale was measured off.** Three scales at 4x/20x/100x the median gap put
+contamination at 11 innocent accounts among 107 named, over the pinned 10% ceiling, because 100x is
+six hours on a quiet thread. Over the systematic grid: `(4,20,100)` 10.3%, `(4,20)` 4.0%, `(4,)`
+1.0%, **recall 8 of 8 at every setting**. The wider windows buy nothing measurable and cost named
+bystanders. The half-offset grid matters MORE with one scale, not less: without it a burst either
+side of a bucket edge shares nothing, and which side it falls on is an accident of the epoch.
+
+**Family is TIMING, never its own.** A scheduler produces both a machine rhythm and a tight arrival;
+those are one kind of evidence seen twice, and `MIN_FAMILIES` counts families.
+
+Final measured state: viral false positives **0 of 8** backgrounds, recall **8 of 8**, contamination
+**1 of 97 named (1.0%)**, and the fandom, newsroom and organic controls unchanged. A forced burst of
+strangers is **0 publishable, 1 flagged for review** across eight backgrounds, which is the same
+standard the professional-beat control is held to.
+
+**Two rules the fixtures now carry.** `arrivals=False` restores the pre-co-arrival corpora byte for
+byte, beside `subject_noise=False`: two switches rather than one overloaded flag, because each names
+the feature it withholds. And adding thread comments changes `timing_features` for every account,
+since `stamps` pools activity and thread; that cascade is how the assignment bug below surfaced.
+
+#### Two bugs co-arrival exposed, both older than it
+
+- **An arrival bucket must never enter a formation profile.** A profile survives account rotation
+  precisely because it holds what the operator KEEPS DOING, and an arrival token is a wall-clock
+  moment under one post. `CONTEXTUAL_KINDS` excludes it. Measured before the exclusion: a member of
+  the fan-community control was assigned to a catalogued operation, which is the most serious error
+  this system can make, because assignment names a real person as part of one.
+- **`MIN_HARD_EVIDENCE` weighs a SUM, and one feature can carry it alone.** `creation_week` is a
+  single identity feature and a rare week scores about 5.8 by itself, clearing the 3.0 floor
+  unaided; the account then needs only any second family, and a shared quiet-hours bucket will do.
+  `MIN_HARD_FEATURES` (2) requires the match to rest on two DISTINCT hard features. Measured: the
+  one false assignment rested on 1 hard feature at 5.78, every genuine member on 5 at 19.27. The
+  populations do not overlap, so the floor is free, and the 40-of-40 assignment recall is unchanged.
+
+#### The sweep: a whole comment section against the whole catalogue
+
+`assign.sweep` + `POST /v1/admin/netdetect/formations/sweep?slug=<slug>`.
+
+`score_against` answers "does THIS account belong to THAT operation", which requires an operator to
+suspect both already. When a comment section lands nobody suspects anything, so the useful question
+runs the other way: **is anybody here part of something we have already catalogued?** This is also
+the only thing in the system that catches an operation ACROSS investigations without re-detecting
+it, since `detect` finds formations inside one corpus and an account scanned today may belong to
+something recorded weeks ago in a different customer's scan.
+
+Measured on a catalogue of two unrelated operations, sweeping a NEW comment section carrying the
+stadium operator on accounts that share no id with anything stored: **8 of 8 placed, all in the
+correct formation, 0 of 60 ordinary accounts placed anywhere, 0 placed in the wrong operation,
+0.02s for 400 accounts.** That is rotation survival working at the section level rather than the
+account level.
+
+Three rules:
+
+- **`unplaced` is a COUNT, never a list of names.** Publishing "these 140 matched no known
+  operation" invites reading it as a clean bill of health. `NOT_A_CLEARANCE` ships on the response
+  saying so: an account placed in nothing is one this deployment has never catalogued doing this
+  before, and an operation nobody has recorded is exactly what `detect` exists to find.
+- **An empty catalogue is a THIRD state.** `nothing_catalogued` is distinct from "weighed and
+  matched nothing", the same distinction as `attachment_checked` and `corroboration.checked`.
+- **A capped sweep reports its truncation**, because answering silently about the accounts it never
+  weighed is a claim about them.
+
+**A placement carries the account's OMI score, and the useful reading is inverted.**
+`Placement.concealed` marks an account placed in a known operation that would nonetheless pass an
+individual review, and that is the row to read first: an account the per-account engine already
+flags is one an analyst could have found without this. It is the `Composition` insight at the
+account level rather than the formation level.
+
+CHARACTERISATION, never a decision. Measured, the same accounts scored 30, 85 and unscored produce
+the **identical placement** and only the label changes, which is what keeps the old 70+ cohort
+filter's blind spot from being rebuilt here. `None` is not low: an unscored account was never
+examined, and marking it concealed would manufacture the system's most alarming label out of
+missing data. Pinned by `test_the_score_characterises_a_placement_and_never_decides_it`.
+
+**The catalogue itself is now readable**, as a table on the same page: phase, members, distinct
+posts and posture. A catalogue nobody can read is one nobody curates, and these rows are what every
+future sweep is measured against. `phase` is the column to look at, because `dormant` is the only
+state here derived from an event NOT happening and `resurgent` is one a per-run detector can never
+report at all. An empty catalogue says so rather than rendering an empty table, which is
+indistinguishable from one that has not loaded.
+
+**The panel is on `/netdetect`**, hanging off the page whose server gate is the access control
+rather than taking a route of its own. It renders the three outcomes separately, because "nothing
+catalogued yet", "weighed and matched nothing" and "placed" are different statements about named
+people and two of them present as an empty list; a panel that branched on the list being empty
+would tell an operator a section is clean when no operation has ever been catalogued to compare it
+against.
+
+`_assignment_out` is shared by both placement routes rather than copied. They make the same claim
+about a named person, and a second copy is how one of them quietly stops carrying `refused` or
+`hard_evidence`; this repo already paid for a hardcoded field list once in
+`coerce_comprehensive_model_output`. Pinned, along with the two-segment path (a single-segment
+`/sweep` is shadowed by `POST /{slug}` and answers 404 "No such investigation").
+
+#### Corroboration: the accumulating graph was written for years and never read back
+
+`campaigns/tracking/graph.py` has been folding every finding's pairwise evidence into
+`CoordinationEdge` since the tracking layer shipped. **`netdetect.detect` had never once consulted
+it**, so every run scored a set as though the deployment had no memory. `app/netdetect/
+corroboration.py` reads it.
+
+**The obvious version of this is wrong, and it was measured before anything was built.** Seeding
+each group under three unrelated posts:
+
+| group | total log_lr | pairs with history | pairs with HARD history |
+|---|---|---|---|
+| planted operation | 2.000 (cap) | 28 | **28** |
+| professional beat | 2.000 (cap) | 45 | **0** |
+| fan community | 0.000 | 0 | 0 |
+| organic | 0.598 | 1 | 0 |
+
+An operation and a newsroom are **indistinguishable on total accumulated history**, and the
+newsroom carries MORE linked pairs. Reporters on a beat genuinely keep appearing under the same
+posts; that is what a beat is. So a confidence lift driven by history would promote the exact
+control this package exists to refuse, using a number that reads like corroborating evidence.
+
+What separates them is **which families** the prior evidence sits in, which is `MIN_HARD_EVIDENCE`
+extended across time. So the module reports two things and never conflates them: `log_lr` is
+context and does not discriminate, and `hard_pairs` / `hard_families` are the discriminating half.
+
+Four rules:
+
+- **It is a PRIOR, never a seventh family.** The families are measured inside one corpus against a
+  null built from it, and the shuffled search correction is what makes their sum honest. History is
+  measured elsewhere, so adding it as a family would slip evidence past the correction it was never
+  subjected to. `test_history_never_touches_a_candidates_score` pins it.
+- **The current post is excluded**, exactly on `contexts_json`. Without it a formation corroborates
+  itself the moment it is recorded and every re-run strengthens the illusion. An edge seen under
+  this post and two others contributes two thirds of its sum, not all of it.
+- **It never manufactures a finding and never clears one.** History does not promote a candidate
+  that failed the shuffled search, and it does not clear `needs_adjudication`: resolving a human
+  review step from accumulated numbers is the same thing `calibration.py` refuses to do.
+- **`checked` is explicit.** A zero with `checked` false means nobody looked, which is not a
+  statement about the people named. Same distinction as `attachment_checked`.
+
+`annotate` also covers REFUSED candidates, so a set this corpus could not prove whose members were
+already seen doing the operator's own acts becomes a **lead** rather than nothing. **Stated
+honestly: that path has never been observed firing.** The rejected list is empty across every
+synthetic scenario, because a candidate weak enough to fail the null is normally caught earlier by
+a structural refusal. Built and unproven, not a feature.
+
+Stored as `corroboration_json`, a snapshot refreshed on re-run exactly as `score` and `corrected_p`
+are, and registered in `_INCREMENTAL_COLUMNS`. Pinned by
+`tests/test_netdetect_corroboration.py`.
+
+#### Mentions and hashtags: two things nobody extracted, and the family that was empty
+
+An `@mention` reached NO feature. `network_features` reads only structured ids (`parent_id`,
+`reply_to_id`, `repost_of_id`), and `text_features` sees a mention only as one word inside a
+five-word shingle, so two accounts brigading the same person in differently worded posts shared
+nothing. A `#hashtag` reached no feature either, which left `FAMILY_NARRATIVE` **empty on every
+ordinary scan**: `topic_features` needs assignments only the cross-investigation pass produces, so
+the per-scan path ran with five families while `MIN_FAMILIES` counts them. `subject_features`
+fills both, with no model, no network call and no vendor.
+
+**A MENTION IS NOT A REPOST, AND MEASURING THAT SAVED A FALSE POSITIVE.** Mentions were first put
+in `network_features` beside the three structured ids, on the reasoning that converging on an
+outside target is the operator's own act. `network` is weighted 1.00 and is a HARD family, so a
+shared @ became enough to clear `MIN_HARD_EVIDENCE`. Measured immediately, the **professional-beat
+control went from flagged-for-adjudication to publishable**: hard evidence 7.50 against a floor of
+3.0, on ten reporters all naming `@stadiumauthority`. No threshold would have caught it, because
+the finding was statistically real. A repost is a structural act the platform recorded; a mention
+is a name inside a sentence, and naming somebody is about SUBJECT. Moved to `narrative` (0.45, not
+hard), and the control went back to hard 1.50 and `needs_adjudication`.
+
+**The in-group exclusion had to be written separately, and adding `"mentions"` to the existing
+tuple would have excluded nothing.** `inside` holds external ids and a mention value is a HANDLE.
+`score_candidate` builds `inside_handles` for it. Without that, a group that @s each other reads as
+convergence on an outside target, which is the inversion the in-group rule exists to prevent, on a
+real community.
+
+**Three fixture lessons, all of which produced wrong measurements first:**
+
+- **The controls have to tag and mention things too.** A fixture where only the operation names
+  anybody makes any mention feature look perfectly discriminating. The newsroom now names the same
+  officials and the fandom tags the same artist, which is what made the false positive above visible.
+- **The SHAPE of the vocabulary matters as much as its presence.** A first version gave 60 organic
+  accounts a pool of FIVE handles, so a third of the corpus named `@citycouncil` and ordinary
+  people genuinely converged. Real populations are a short head and a very long tail (now 215
+  distinct mentions across 60 accounts).
+- **A new random draw must use its own stream.** Drawing mentions from `rng` shifted every later
+  draw and silently regenerated every sentence, gap and handle. That alone broke a real test.
+
+**Two claims I nearly made and the measurements that stopped them:**
+
+- **Contamination fell from 7 of 103 named to 0 of 96 over the systematic grid, and it is NOT an
+  improvement in the detector.** Measured with `subject_features` DISABLED on the same corpora it
+  is also 0 of 96. The featureful background is what tightens the communities, so the old ~6.8%
+  was partly a property of a corpus whose organic accounts carried too few distinguishing
+  features. `organic_population(subject_noise=False)` and
+  `planted_operation(subject_noise=False)` restore the old corpora byte for byte, and
+  `test_netdetect_attachment.py` uses them, because a membership test needs a swept-in member to
+  find and would otherwise pass by having nothing to look at.
+- **A `MIN_FAMILIES` shared-core refusal was built, measured to be a complete no-op on every
+  case, and REMOVED.** The idea is sound (two kinds of evidence must be about the same people) and
+  identical output with it on and off is not a basis for two new constants that could suppress a
+  real finding in an unmeasured corpus.
+
+#### The pure-repost-ring test was passing on one lucky corpus
+
+`test_a_pure_repost_ring_is_still_refused_for_want_of_a_second_family` strips the ring's shared
+tool so amplification is the only thing it shares, and asserts it is refused. **Measured across six
+organic backgrounds on the tree before this change, the ring was admitted in FIVE.** The test used
+the default background, which happened to be the sixth.
+
+The cause is not the ring. `_sentence` draws from a pool of eight topics, so unrelated accounts
+genuinely share five-word shingles at a measured ~14 in 58, the ring shared them like everybody
+else, Louvain attached organic accounts to it, and their shingles supplied the second family. The
+test's own premise was false: the ring shared text as well as reposts.
+
+Fixed by making the premise true (every account gets text nobody else could share), and it now
+holds **0 of 8 backgrounds**.
+
+#### The sub-group hole in `MIN_FAMILIES` is measured now, and it does not open
+
+`MIN_FAMILIES` is checked on the WHOLE candidate, and a candidate is a Louvain community rather
+than a chosen set, so on paper two DISJOINT sub-groups can supply one family each and clear a gate
+meant to need two kinds of evidence about the same people. That stood as the most interesting known
+weakness in the refusals, and a shared-core refusal built against it in an earlier session was
+measured to be a complete no-op and removed with no explanation of WHY it never fired. The shape
+was built deliberately this time, and there are two reasons:
+
+- **With nothing bridging them the two sub-groups are never merged into one candidate.** The
+  candidate graph's edges ARE shared rare features, so groups with nothing in common have no edge
+  between them and Louvain has nothing to merge on. The pathological candidate is not refused late,
+  it is never proposed. Measured on a 76-account corpus (8 text-only, 8 identity-only, 60 organic):
+  the identity group splits across two communities, its family never reaches
+  `MIN_FAMILY_CONTRIBUTION`, and the run reports nothing.
+- **Merging them requires accounts that share with both, and those accounts ARE the shared core.**
+  Adding three bridging accounts does produce the merged 15-member candidate, and it is not the
+  pathological case: some members hold evidence in every carried family.
+
+**The set statistic also prices the dilution, which is the part worth carrying forward.** A feature
+held by k of n members is measured against n, so a sub-group's family is automatically discounted
+for sitting inside a larger candidate: measured at identity **2.33** against text 19.59, barely over
+the 2.0 floor. `MIN_HARD_EVIDENCE` then flagged it for adjudication rather than publishing it, which
+is the right answer for a group whose only hard evidence is three accounts' signup week.
+
+So the no-op was not a bad refusal, it was a refusal with nothing to refuse. Both mechanisms are now
+pinned as tests at the end of `tests/test_netdetect.py`, so the claim is checked rather than
+asserted and a change to either has somewhere to fail. **Do not build the sub-group-aware
+`MIN_FAMILIES`** without first making one of those two tests fail.
+
+**A related measurement that kills a different piece of planned work.** `attachment.MAX_MEMBERS` is
+40 and the leave-one-out cost curve is steep (n=50 4.2s, n=60 9.3s, n=80 37.0s), so raising it looks
+like it needs an exact-equivalent rewrite of the Poisson-binomial tail via prefix/suffix
+convolution. **It does not, because the abstention has never fired.** Finding sizes measured across
+the systematic grid (four background sizes x three seeds): min 8, median 8, **max 12**, zero above
+40. Optimising the leave-one-out would be optimising a case no corpus has ever produced. If a real
+scan ever yields a finding above 40 members the page already says membership was not tested, and
+THAT is the signal to do the work.
+
+**Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
+finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
+fix is measured NOT to work).
 
 ### Pre-launch lockdown: only admins can use the product
 
@@ -2497,6 +3312,265 @@ Copy goes through `stop-slop`. The relevant skills are `stop-slop`, `ui-ux-pro-m
 
 ---
 
+## Cross-investigation narratives: one question asked across every customer's scans
+
+Built 2026-08-25 from `docs/cross-investigation-narratives.md`. Read §1 of that document before
+touching anything in `app/narrative/cross/`, because the whole system is built to measure ONE
+difference and measuring it wrong is an expensive way to rediscover what a single user was curious
+about.
+
+**The signal is cross-customer independence, and it is the one thing no customer and no competitor
+can reproduce.** Each customer sees their own handful of investigations; OmiSphere sees every
+customer's in one database. One customer scanning twelve posts about a subject is one person's
+curiosity. Three unrelated customers landing there in a week is evidence about the world.
+
+```
+extract -> assign topics -> roll up per day -> score one (topic) + score two (cohort)
+```
+
+Admin-only, at `/v1/admin/cross-narratives`, gated for the same reason `/campaigns` and
+`/narratives` are: a finding is assembled from many customers' scans and belongs to none of them.
+Pinned in `tests/test_coordination_admin_gate.py`, which signs up a REAL non-admin, because every
+other test in this repo runs in local mode where `require_user` returns `is_admin=True`.
+
+**OFF by default** (`OMI_ENABLE_CROSS_NARRATIVES`), and that is correctness rather than caution: see
+the embedder note below.
+
+### The two live defects it was blocked on, both now fixed
+
+- **`ingest_batch` wrote the SCAN time**, so every temporal statistic over narrative membership was
+  measuring our own scanner and every member of one scan was a perfect burst by construction.
+  `posted_at` is a NEW column rather than a redefinition, because existing rows genuinely hold scan
+  times. NULL means "we do not know" and every statistic SKIPS such a row.
+- **Production fell back to `HashingEmbedder`**, whose own docstring says it will not catch
+  paraphrases, so "same topic" meant "same words" and two accounts pushing one narrative in
+  different phrasing never clustered. That is precisely the case the feature exists to catch.
+
+### Switching embedders forks the topic space, silently
+
+`cosine` returns 0.0 on a width mismatch rather than raising, and clustering compares new vectors
+against stored centroids. So a batch embedded by a different embedder matches nothing, spawns a
+duplicate of every topic it touches, and **reports success**. Three things prevent it:
+
+- **`ApiEmbedder` raises `EmbeddingUnavailable` and never degrades.** Every caller SKIPS the batch.
+  That is recoverable, because the text is still in the utterance store; a forked space is not.
+- **`Embedder.space` names the space** (`api:<model>:<dims>`), not just the width. Two different
+  1536-dimension models are different languages.
+- **`CrossTopic.embedding_space` / `Narrative.embedding_space`** record which space a centroid was
+  built in, and assignment only ever compares like with like, so a model change starts a new
+  generation of topics instead of corrupting the old one. **Changing the model is therefore not
+  free**: old topics stop accumulating. Pick one and leave it.
+
+**The vendor NAME is required before the embedder will build at all** (`OMI_NARRATIVE_EMBEDDING_
+PROVIDER`). That is the name the privacy policy has to disclose, because this sends other people's
+public posts off our servers and those people are not our users. Enforcing the order in code makes
+it a configuration error rather than a disclosure gap nobody notices.
+
+### The utterance store
+
+One append-only row per comment, extracted from `payload_json` which already holds all of it. A blob
+cannot be queried and it is the heaviest column in the product; the archive list already paid for
+reading it per row.
+
+- **`user_id` is used ONLY to count DISTINCT customers.** It never reaches an admin view as "who
+  scanned what": the value is in the independence, not the identity, and a test asserts the serialised
+  queue response contains no user id at all.
+- **Idempotency is a unique index on a content-derived `dedupe_key`, not an `if`.** The backfill is
+  driven by a loop that dies on every deploy and by an operator who will run it twice. The key
+  deliberately EXCLUDES the investigation, so the same comment reached through two customers' scans
+  of one post is one comment rather than two.
+- **`tier` is frozen at extraction.** The tier-mix test asks what the population looked like AT THE
+  TIME; reading a later score would rewrite history on every rescan.
+- **Retention drops the TEXT at 90 days and keeps the row**, so the rolling counts that drive
+  detection survive while what we hold of other people's content stays bounded.
+
+### Score one: is the topic anomalous?
+
+Three components, **multiplied, each required**: volume against the topic's OWN trailing baseline,
+tier mix against the corpus base rate, and cross-customer independence.
+
+**The tier-mix test is the one that carries the argument, and it is why the score is a product.**
+Customers scan what they suspect, so a news story that makes a subject topical spikes volume AND
+pulls several customers to it with nothing manufactured. That confound is real and does not improve
+with scale. A story everyone is discussing recruits a REPRESENTATIVE sample of accounts; a subject
+being pushed recruits a BIASED one. Averaging would let a volume spike carry a topic whose accounts
+look completely ordinary, which is every viral news story.
+`test_a_viral_news_story_does_not_score_because_its_accounts_are_ordinary` is the load-bearing test.
+
+Two arithmetic rules that are easy to get wrong:
+
+- **The binomial baseline excludes the topic under test and is measured outside the window under
+  test.** A cluster counted in its own background inflates the distribution it is compared against
+  and hides itself. This codebase has now paid for that in three separate coordinates.
+- **Distinct counts are computed over the WHOLE WINDOW, never summed from the daily rows.** Summing
+  per-day distincts counts an account active on three days three times, and two customers who
+  scanned on different days would report as one, understating the only component nothing else can
+  compute.
+
+**Untestable topics are returned carrying their refusals, not filtered out.** Silently dropping one
+is indistinguishable from finding nothing, which is how the netdetect shuffle budget managed to be
+broken invisibly.
+
+### Score two: is the cohort a formation?
+
+Every account on the topic in the window, across all investigations, through `app/netdetect`. An
+operation spread thinly over eight posts scanned by three customers is invisible in each of those
+scans and obvious in the union.
+
+- **The posts the topic was found on are excluded from the evidence.** Every member engaged them by
+  construction; without the exclusion the cohort shares a perfect feature and reports as one
+  enormous operation. Worse here than in a single scan, because it would manufacture a link between
+  every pair of posts.
+- **An account seen in several investigations contributes its MOST COMPLETE block, not its newest.**
+  Those blocks differ mainly in how much history each scan fetched, and the thinner copy yields
+  fewer features, which reads as innocence the account has not earned.
+- **Nothing here reads a suspicion score**, proved behaviourally: the same cohort scored all-low and
+  all-high produces identical findings.
+
+**THE TWO SCORES ARE NEVER MULTIPLIED.** Collapsing them hides the two most interesting cases: a
+topic that is anomalous but whose accounts are unrelated (organic outrage), and a tight formation on
+a topic that is not spiking at all, which is what a patient operation looks like.
+
+### The pass, and the dismissals
+
+`run.run_one_pass` walks all four stages, each bounded and each **resumable rather than
+restartable**: the loop dies on every deploy, assignment EMBEDS so redoing work is spend, and
+skipping it is a silent gap no score would report. A Postgres advisory lock (a different key from
+the monitoring loop's) keeps N instances from running N passes, which here would be N times the
+embedding bill.
+
+`CrossFinding` is one row per `(topic, window_end)`, so a re-run updates rather than stacks. **A
+dismissed row is updated with new numbers but keeps its dismissal**: an operator who has already
+said "this is a news story" must not be asked again every fifteen minutes.
+
+**The dismissals are the only ground truth this system will ever accumulate**, which is why the
+reason is required and why a dismissed row is never deleted. Every threshold here is reasoned, not
+fitted; no labelled corpus of worked topics exists and none can be bought.
+
+### What it cannot claim
+
+**"Anomalous relative to our own corpus", never "anomalous on the platform."** The corpus is what
+customers chose to scan, which is not a sample of anything. `_SCOPE_NOTE` says so on the queue
+response itself rather than leaving it in a docstring.
+
+### Not yet done
+
+The daily digest (decision 3) is not built: **SMTP is not configured on this deployment**, so it
+would be an inert feature, and the queue is the surface that matters. When it is built it must say
+SMTP is unconfigured rather than silently sending nothing, the same rule the waitlist blast follows.
+There is no web page yet either; `/v1/admin/cross-narratives` is the whole surface.
+
+---
+
+## The agent surface: what a machine gets instead of the page
+
+Added 2026-08-25 against an external readiness audit that scored the site 65/100 for agent
+readability. Everything here is read only by machines, which is the property that makes it dangerous
+to maintain: a mistake in any of it is invisible in the browser, in TypeScript, in the build, and in
+every log.
+
+**`apps/web/lib/agent-content.ts` is the single source, and that is the whole design.** Five surfaces
+have to agree about which pages are public and what each one says: the sitemap, the negotiated
+markdown, the addressable `.md` files, the llms.txt index and the 404 recovery list. Nothing at
+runtime reconciles them. A page added to one and forgotten in the others fails silently, so they are
+all derived from `AGENT_PAGES` and pinned by `lib/agent-content.test.ts`.
+
+The markdown is **written by hand, not scraped from the JSX**. Deriving it from our own components
+would produce navigation chrome, button labels and accessibility text that mean nothing out of
+context. An agent asking for markdown wants the page's CLAIMS.
+
+### `Vary: Accept` cannot be set on the HTML variant, so the fix is a second address
+
+The audit's specific finding was that a negotiated URL served HTML with no `Accept` in its `Vary`
+header, which lets a shared cache hand the stored HTML to an agent that asked for markdown.
+
+**Half of that is unfixable from inside this repo.** Next 14's app router calls
+`res.setHeader('vary', ...)` during render (`base-server.js: setVaryHeader`), a bare overwrite with
+its own RSC values, and it runs AFTER both middleware headers and `next.config` `headers()` have
+been applied (`router-server.js` writes `resHeaders` before invoking the render). So the markdown
+response, which middleware returns directly and which therefore never reaches that code, carries
+`Vary: Accept, Accept-Encoding` correctly, and the HTML variant carries Next's. The line setting it
+is left in middleware because it is correct and becomes effective the day the framework stops
+clobbering it.
+
+**`markdownPath()` is the answer that does not depend on a header.** Every page also has its own
+address (`/index.md`, `/pricing.md`, ...), served by `markdownDocument()` in middleware before
+negotiation runs. One document, one URL, no variants, so a cache cannot confuse anything. It carries
+`Vary: Accept-Encoding` and NOT `Accept`: naming a header it does not vary on would tell a cache to
+store one copy per distinct Accept string. `<link rel="alternate" type="text/markdown">`, llms.txt
+and the 404 body all point at it, so an agent never has to negotiate to get markdown.
+
+`prefersMarkdown` (`lib/accept-markdown.ts`) is q-value aware and **treats a tie as HTML**. The
+direction of the error is what matters: serving HTML to an agent costs one wasted parse, while
+serving markdown to a browser downloads a text file instead of the site, for every human visitor.
+`*/*` must never win, and browsers put it in every Accept header they send.
+
+### The root layout builds metadata per request, and a page that sets `alternates` undoes it
+
+`generateMetadata()` in `app/layout.tsx` reads `x-pathname` (set by middleware) to produce the
+canonical link and the markdown alternate for the page being rendered. Two traps, both found live:
+
+- **`canonical` was hardcoded to `/`.** Every page that did not set its own therefore told search
+  engines it was a duplicate of the home page, which is the most effective way there is to keep a
+  site out of an index, and it was doing it to the marketing pages a brand query depends on.
+- **A page's own `alternates` REPLACES the layout's whole object.** `/developers` set
+  `alternates: { canonical: '/developers' }` and silently lost its markdown link, on the one page
+  whose entire job is machine discoverability. No page may set `alternates` any more;
+  `lib/page-metadata.test.ts` walks every `page.tsx` and fails on it.
+- **The title template appends the brand**, so a page naming it too rendered
+  `Pricing. OMISPHERE . OMISPHERE`. Same test.
+
+### `OMI_PUBLIC_BASE_URL` now fails the BUILD when absent
+
+It was passed as the value INTO `required()` with a localhost default, so the check never saw an
+empty string. A deploy missing the variable published a sitemap, a set of canonical links, an
+llms.txt and a JSON-LD graph all pointing at `http://localhost:3000`. Nothing failed, nothing
+logged, and the site simply would not be indexed. It is baked in at BUILD time, so the local build
+command needs it:
+
+```bash
+CLERK_SECRET_KEY= NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS5jb20k \
+  OMI_PUBLIC_BASE_URL=https://omisphere.online npx next build
+```
+
+### Content has to be readable with scripting off
+
+`Reveal`'s resting state is `opacity-0` and only an effect clears it, so with JavaScript disabled
+the free scan form, the entire pre-login conversion path, was in the document and invisible. Every
+text-extracting check passed on it, which is exactly why it survived. The hidden state now carries
+`reveal-pending` and the root layout ships a `<noscript>` rule overriding it. Both halves are
+useless alone, so `lib/no-script-content.test.ts` asserts they stay together.
+
+### The API speaks a structured error, beside `detail` and never instead of it
+
+`app/core/errors.py` adds `{"error": {code, message, hint, docs, status, fields?}}` while keeping
+`detail` at the top level unchanged, because the web app reads it in a dozen places. The codes are
+**derived from the status**, not invented per route: a code only some routes set is worse than none,
+because a client cannot rely on it. `CodedHTTPException` is for the cases where the status is
+genuinely ambiguous, 402 covering both "out of credits" and "wrong plan" being the motivating one.
+
+**Both exception classes are registered.** Routes raise FastAPI's `HTTPException`; the ROUTER raises
+Starlette's when nothing matched, and that unmatched-route 404 is the first thing an agent probing
+the API hits. Registering only the FastAPI class leaves it answering a bare `{"detail": "Not
+Found"}`. Pinned by `tests/test_agent_error_envelope.py`.
+
+### `/openapi.json` and `/docs` exist on the web origin now
+
+They were named on `/developers` and linked from llms.txt while 404ing: the discoverability work was
+advertising documents nobody could fetch. `app/openapi.json/route.ts` proxies the spec from the API
+service and rewrites `servers` to the browser-visible origin (FastAPI describes itself relative to
+an internal hostname no client can reach); `/docs` redirects into the API's own reference rather
+than rendering a build-time copy of it. `robots.ts` had to gain explicit `Allow` entries for
+`/api/openapi.json` and `/api/docs`, since `/api/` is disallowed wholesale.
+
+### The JSON-LD offers are derived from the plan catalog
+
+`lib/structured-data.ts` is pure and quotes `PLAN_TIERS` rather than repeating the prices. The prices
+are already declared in two languages with a test reconciling them; a third copy would be the one
+nothing checks, and it is the copy search engines quote back to people.
+
+---
+
 ## Operator blindness: the two things nobody could see
 
 ### Error tracking is one env var away, and the SDK is already installed
@@ -3266,6 +4340,16 @@ next step.
    will ever accumulate, and a later pass can fit against them. Watch specifically for
    `verbatim_echo` firing on platform-templated text (auto-generated "I just earned a badge" posts)
    and for `co_target` on small niches where everyone genuinely engages the same handful of posts.
+
+   **The same is now true of `app/netdetect/`, and it has somewhere to put the answers.** Run
+   `POST /v1/admin/netdetect/{slug}` on real investigations, read
+   `GET /v1/admin/netdetect/findings/all`, and dismiss or confirm each one with a reason.
+   `GET /v1/admin/netdetect/findings/calibration` replays every threshold against those judgements
+   and refuses to recommend anything until there are 30 with 8 of each class, so the first thirty
+   are the whole cost of calibrating it. Watch specifically for a finding that names an account you
+   can tell is an ordinary bystander: that is the measured ~7% contamination and the judgement to
+   record is a dismissal with that reason, since it is the one class no threshold currently
+   separates.
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
    redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
    are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly
