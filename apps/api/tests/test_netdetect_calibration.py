@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.netdetect import calibration as cal
 from app.netdetect.detect import MIN_HARD_EVIDENCE
-from app.netdetect.types import FAMILY_IDENTITY, FAMILY_TEXT, FAMILY_TIMING
+from app.netdetect.types import FAMILY_IDENTITY, FAMILY_NETWORK, FAMILY_TEXT, FAMILY_TIMING
 from app.storage.db import get_session
 from app.storage.models import NetdetectFinding
 
@@ -262,3 +262,156 @@ def test_the_route_is_reachable_beside_the_findings_list_and_not_shadowed_by_a_s
     client = TestClient(app)
     assert client.get("/v1/admin/netdetect/findings/calibration").status_code == 200
     assert client.get("/v1/admin/netdetect/findings/all").status_code == 200
+
+
+# ==================================================================================================
+# Which finding to judge next
+#
+# The reservoir needs thirty judgements with eight of each class, and it fills one operator click at
+# a time. Nothing in this system produces those judgements automatically and nothing ever will, so
+# the only lever available is making the thirty count: a finding classified the same way at every
+# candidate setting cannot change a fit whichever verdict it gets, and judging it is a click spent.
+#
+# THE ORDER IS INFORMATION, NOT SUSPICION, and the two are close to opposite. That is what the
+# second test here is for, and it is the one worth breaking the build over.
+# ==================================================================================================
+def _unambiguous(session, tag="obvious"):
+    """Enormous, hard-family, tightly corrected, spread across four families.
+
+    Reported at every candidate setting of every constant, so a verdict on it teaches nothing. Also
+    by far the highest-scoring finding in each of these fixtures, which is the point.
+    """
+    return _finding(
+        session, status="open", tag=tag, corrected_p=0.0001,
+        by_family={FAMILY_IDENTITY: 20.0, FAMILY_NETWORK: 20.0,
+                   FAMILY_TEXT: 20.0, FAMILY_TIMING: 20.0},
+    )
+
+
+def _borderline(session, tag="border"):
+    """Sits on all four boundaries: hard evidence at the bar, two families, a top-family share and a
+    corrected p that each fall inside their sweep range."""
+    return _finding(
+        session, status="open", tag=tag, corrected_p=0.02,
+        by_family={FAMILY_IDENTITY: 3.0, FAMILY_TEXT: 3.0},
+    )
+
+
+def test_the_ranking_leads_with_the_finding_that_would_move_the_most_constants():
+    with get_session() as session:
+        _wipe(session)
+        _unambiguous(session)
+        middling = _finding(session, status="open", tag="mid", corrected_p=0.0001,
+                            by_family={FAMILY_IDENTITY: 20.0, FAMILY_TEXT: 20.0})
+        border = _borderline(session)
+        session.commit()
+        border_id, middling_id = border.id, middling.id
+
+    with get_session() as session:
+        report = cal.build_report(session)
+
+    named = [n.finding_id for n in report.next_to_judge]
+    assert named[0] == border_id, "the finding sitting on four boundaries was not offered first"
+    assert middling_id in named
+    ranked = {n.finding_id: n for n in report.next_to_judge}
+    assert ranked[border_id].flips_constants > ranked[middling_id].flips_constants
+    assert ranked[border_id].nearest_constant
+    assert "candidate settings" in ranked[border_id].why
+
+
+def test_a_finding_reported_at_every_setting_is_never_offered_however_coordinated_it_looks():
+    """THE ANTI-SUSPICION GUARD. The unambiguous finding has the highest score in the fixture by a
+    factor of ten, and it is the one thing here that must NOT be named: it is reported whatever the
+    thresholds are set to, so a label on it cannot move a fit.
+
+    An operator who read this list as strongest-first would work the borderline cases believing them
+    to be the most damning, which is exactly backwards, so the caveat travels with the numbers."""
+    with get_session() as session:
+        _wipe(session)
+        obvious = _unambiguous(session)
+        _borderline(session)
+        session.commit()
+        obvious_id, obvious_score = obvious.id, obvious.score
+
+    with get_session() as session:
+        report = cal.build_report(session)
+
+    named = [n.finding_id for n in report.next_to_judge]
+    assert named, "nothing was offered at all"
+    assert obvious_id not in named, "the highest-scoring finding was offered as informative"
+    assert obvious_score > 60.0, "the fixture stopped being the obviously-coordinated one"
+
+    joined = " ".join(report.caveats).lower()
+    assert "not a suspicion ranking" in joined
+    assert "backwards" in joined
+
+
+def test_a_judged_finding_is_never_offered_for_judging_again():
+    """Somebody who has already ruled on a finding must not be asked twice; the list exists to spend
+    the next click well, and re-offering a settled one spends it on nothing."""
+    with get_session() as session:
+        _wipe(session)
+        settled = _finding(session, status="dismissed", tag="done", corrected_p=0.02,
+                           by_family={FAMILY_IDENTITY: 3.0, FAMILY_TEXT: 3.0})
+        _borderline(session)
+        session.commit()
+        settled_id = settled.id
+
+    with get_session() as session:
+        report = cal.build_report(session)
+
+    assert settled_id not in [n.finding_id for n in report.next_to_judge]
+
+
+def test_the_list_is_capped_because_a_queue_nobody_can_finish_is_a_queue_nobody_starts():
+    with get_session() as session:
+        _wipe(session)
+        for i in range(cal.MAX_NEXT_TO_JUDGE + 6):
+            _borderline(session, tag=f"many{i}")
+        session.commit()
+
+    with get_session() as session:
+        report = cal.build_report(session)
+
+    assert len(report.next_to_judge) == cal.MAX_NEXT_TO_JUDGE
+
+
+def test_the_shortfall_is_stated_as_work_and_goes_quiet_once_the_reservoir_is_deep():
+    """`insufficient_reason` explains the refusal; this says how far off it is. An operator deciding
+    whether to spend an afternoon judging findings needs the number, not the argument."""
+    with get_session() as session:
+        _wipe(session)
+        _finding(session, status="confirmed", tag="lonely",
+                 by_family={FAMILY_IDENTITY: 6.0, FAMILY_TEXT: 4.0})
+        session.commit()
+
+    with get_session() as session:
+        thin = cal.build_report(session)
+    assert "29 more judgements" in thin.still_needed
+    assert "7 more confirmed" in thin.still_needed
+    assert "8 more dismissed" in thin.still_needed
+
+    with get_session() as session:
+        _separable(session)
+        session.commit()
+
+    with get_session() as session:
+        full = cal.build_report(session)
+    assert full.sufficient is True
+    assert full.still_needed == "", "the shortfall kept being reported after it was closed"
+
+
+def test_the_route_serves_the_ranking_and_the_shortfall():
+    with get_session() as session:
+        _wipe(session)
+        _borderline(session)
+        session.commit()
+
+    body = TestClient(app).get("/v1/admin/netdetect/findings/calibration").json()
+    assert body["next_to_judge"], "the ranking was computed and not served"
+    first = body["next_to_judge"][0]
+    assert first["flips_constants"] >= 1
+    assert first["nearest_constant"]
+    assert first["why"]
+    assert body["still_needed"]
+    assert "not a suspicion ranking" in " ".join(body["caveats"]).lower()

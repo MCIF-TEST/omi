@@ -146,7 +146,172 @@ class CalibrationReport:
     sweeps: list[Sweep] = field(default_factory=list)
     families: list[FamilySplit] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
+    #: Open findings whose judgement would teach the most, nearest boundary first.
+    next_to_judge: list["NextToJudge"] = field(default_factory=list)
+    #: How many more judgements, and of which class, before anything can be recommended.
+    still_needed: str = ""
     caveats: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class Axis:
+    """One tunable constant: where it lives, what it is now, and what would flip a finding.
+
+    DECLARED ONCE AND USED TWICE, by the sweep that replays it against judged findings and by the
+    ranking that asks which unjudged finding sits nearest it. Two copies of these predicates is
+    exactly the drift this file would not notice: the sweep would fit one rule while the ranking
+    sent an operator to judge findings selected by another.
+    """
+
+    constant: str
+    where: str
+    current: float
+    values: tuple[float, ...]
+    stricter_direction: str
+    #: (judged, value) -> would this finding still have been reported at that setting.
+    keeps: object
+    #: (judged) -> the finding's own position on this axis, or None when it has none.
+    position: object
+
+
+#: How many open findings to name as worth judging next. A queue nobody can finish is a queue
+#: nobody starts, and the point of this list is that thirty judgements should feel reachable.
+MAX_NEXT_TO_JUDGE = 10
+
+
+@dataclass(slots=True)
+class NextToJudge:
+    """One open finding, and why judging IT would teach more than judging another.
+
+    NOT A SUSPICION RANKING, AND THE DISTINCTION IS THE WHOLE POINT. `distance` says this finding
+    sits near a threshold boundary, so a verdict on it would change what the sweeps recommend. It
+    says nothing whatever about how likely the group is to be an operation, and the two orderings
+    are close to unrelated: a finding far above every threshold is the most obviously coordinated
+    and the least informative, because nobody needed a label to know how it would be classified.
+
+    An operator who read this as "most suspicious first" would work through the borderline cases
+    believing them to be the strongest, which is exactly backwards.
+    """
+
+    finding_id: int
+    context_id: str | None
+    member_count: int
+    #: The constant this finding sits nearest to.
+    nearest_constant: str
+    #: Distance to that boundary as a fraction of the constant's own sweep range, so the four are
+    #: comparable. Zero means the finding sits exactly on the line.
+    distance: float
+    #: The finding's value on that axis, and the setting in force.
+    value: float
+    current: float
+    #: How many of the fitted constants this finding would flip. The primary ordering: a finding
+    #: sitting on two boundaries teaches about both.
+    flips_constants: int
+    why: str
+
+
+def _axes() -> list[Axis]:
+    """The four constants this module fits, and the only place their rules are written."""
+    alpha = round(1.0 - DEFAULT_QUANTILE, 4)
+    return [
+        Axis(
+            constant="MIN_HARD_EVIDENCE", where="app/netdetect/detect.py",
+            current=MIN_HARD_EVIDENCE,
+            values=(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0),
+            stricter_direction="raise",
+            keeps=lambda j, v: j.hard_evidence >= v,
+            position=lambda j: j.hard_evidence,
+        ),
+        Axis(
+            constant="MIN_FAMILIES", where="app/netdetect/detect.py",
+            current=float(MIN_FAMILIES),
+            values=(1.0, 2.0, 3.0, 4.0),
+            stricter_direction="raise",
+            keeps=lambda j, v: j.families_contributing >= v,
+            position=lambda j: float(j.families_contributing),
+        ),
+        Axis(
+            constant="MAX_SINGLE_FAMILY_SHARE", where="app/netdetect/significance.py",
+            current=MAX_SINGLE_FAMILY_SHARE,
+            values=(0.50, 0.60, 0.70, 0.80, 0.90, 1.0),
+            stricter_direction="lower",
+            keeps=lambda j, v: j.top_family_share <= v,
+            position=lambda j: j.top_family_share,
+        ),
+        Axis(
+            constant="alpha (1 - DEFAULT_QUANTILE)", where="app/netdetect/shuffle.py",
+            current=alpha,
+            values=(0.005, 0.01, 0.02, 0.05, 0.10),
+            stricter_direction="lower",
+            # A finding with no corrected p was never compared against the shuffled search, and
+            # "not corrected" must never be read as "significant".
+            keeps=lambda j, v: j.corrected_p is not None and j.corrected_p <= v,
+            position=lambda j: j.corrected_p,
+        ),
+    ]
+
+
+def _next_to_judge(session, axes: list[Axis]) -> list[NextToJudge]:
+    """Which unjudged findings sit closest to a threshold that is being fitted.
+
+    The reservoir needs thirty judgements with eight of each class before anything is recommended,
+    and it fills one operator click at a time. Judging thirty well-chosen findings is worth more
+    than judging several hundred arbitrary ones, because a finding far from every boundary cannot
+    change a recommendation whichever way it goes.
+
+    THE MEASURE IS HOW MANY SETTINGS WOULD FLIP IT, not how near a number it is. Distance alone
+    degenerates on the integer constants: `MIN_FAMILIES` is 2 and most findings contribute exactly
+    two families, so they all sit at distance zero and the ranking says nothing. Asking instead
+    whether a finding is kept at some candidate settings and refused at others answers the question
+    directly, and works the same on a continuous axis as on a discrete one.
+    """
+    rows = list(session.execute(
+        select(NetdetectFinding).where(NetdetectFinding.status == "open")
+    ).scalars())
+    if not rows or not axes:
+        return []
+
+    out: list[NextToJudge] = []
+    for row in rows:
+        judged = _reduce(row)
+        flips: list[tuple[str, float, float, float]] = []
+        for axis in axes:
+            verdicts = {bool(axis.keeps(judged, v)) for v in axis.values}
+            if len(verdicts) < 2:
+                # Kept at every candidate setting, or refused at every one. A label here cannot
+                # move this constant, however close the raw number happens to look.
+                continue
+            position = axis.position(judged)
+            if position is None:
+                continue
+            spread = max(axis.values) - min(axis.values)
+            distance = abs(float(position) - axis.current) / spread if spread > 0 else 0.0
+            flips.append((axis.constant, distance, float(position), axis.current))
+
+        if not flips:
+            continue
+        flips.sort(key=lambda f: f[1])
+        constant, distance, value, current = flips[0]
+        out.append(NextToJudge(
+            finding_id=row.id,
+            context_id=row.context_id,
+            member_count=int(row.member_count or 0),
+            nearest_constant=constant,
+            distance=round(distance, 4),
+            value=round(value, 4),
+            current=round(current, 4),
+            flips_constants=len(flips),
+            why=(
+                f"kept at some candidate settings of {constant} and refused at others, sitting at "
+                f"{value:.2f} against the current {current:.2f}. A verdict here moves that fit; a "
+                f"finding classified the same way at every setting cannot."
+            ),
+        ))
+
+    # Most constants moved first, then nearest the line. A finding sitting on two boundaries teaches
+    # about both.
+    out.sort(key=lambda n: (-n.flips_constants, n.distance, n.finding_id))
+    return out[:MAX_NEXT_TO_JUDGE]
 
 
 def _reduce(row: NetdetectFinding) -> Judged:
@@ -276,40 +441,30 @@ def build_report(session) -> CalibrationReport:
         sufficient=False, insufficient_reason="",
     )
 
-    alpha = round(1.0 - DEFAULT_QUANTILE, 4)
+    axes = _axes()
     report.sweeps = [
-        _sweep(
-            judged, constant="MIN_HARD_EVIDENCE", where="app/netdetect/detect.py",
-            current=MIN_HARD_EVIDENCE,
-            values=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0],
-            keeps=lambda j, v: j.hard_evidence >= v,
-            stricter_direction="raise",
-        ),
-        _sweep(
-            judged, constant="MIN_FAMILIES", where="app/netdetect/detect.py",
-            current=float(MIN_FAMILIES),
-            values=[1.0, 2.0, 3.0, 4.0],
-            keeps=lambda j, v: j.families_contributing >= v,
-            stricter_direction="raise",
-        ),
-        _sweep(
-            judged, constant="MAX_SINGLE_FAMILY_SHARE", where="app/netdetect/significance.py",
-            current=MAX_SINGLE_FAMILY_SHARE,
-            values=[0.50, 0.60, 0.70, 0.80, 0.90, 1.0],
-            keeps=lambda j, v: j.top_family_share <= v,
-            stricter_direction="lower",
-        ),
-        _sweep(
-            judged, constant="alpha (1 - DEFAULT_QUANTILE)", where="app/netdetect/shuffle.py",
-            current=alpha,
-            values=[0.005, 0.01, 0.02, 0.05, 0.10],
-            # A finding with no corrected p was never compared against the shuffled search, and
-            # "not corrected" must never be read as "significant".
-            keeps=lambda j, v: j.corrected_p is not None and j.corrected_p <= v,
-            stricter_direction="lower",
-        ),
+        _sweep(judged, constant=a.constant, where=a.where, current=a.current,
+               values=list(a.values), keeps=a.keeps, stricter_direction=a.stricter_direction)
+        for a in axes
     ]
     report.families = _families(judged, judged_rows)
+    report.next_to_judge = _next_to_judge(session, axes)
+
+    # What the reservoir still needs, stated as work rather than as a refusal. The floor is the
+    # thing standing between this deployment and a fitted threshold, so an operator should be able
+    # to see how far off it is without doing the arithmetic.
+    missing_total = max(0, MIN_JUDGEMENTS - len(judged))
+    missing_confirmed = max(0, MIN_PER_CLASS - confirmed)
+    missing_dismissed = max(0, MIN_PER_CLASS - dismissed)
+    if missing_total or missing_confirmed or missing_dismissed:
+        parts = []
+        if missing_total:
+            parts.append(f"{missing_total} more judgement{'s' if missing_total != 1 else ''}")
+        if missing_confirmed:
+            parts.append(f"{missing_confirmed} more confirmed")
+        if missing_dismissed:
+            parts.append(f"{missing_dismissed} more dismissed")
+        report.still_needed = ", ".join(parts)
 
     if len(judged) < MIN_JUDGEMENTS:
         report.insufficient_reason = (
@@ -340,6 +495,12 @@ def build_report(session) -> CalibrationReport:
         "Precision computed here is precision on that selection, not on the deployment.",
         "A dismissal labels the FINDING, not the accounts. It says this group is not an operation, "
         "not that any member is or is not automated.",
+        "`next_to_judge` is NOT a suspicion ranking. It names the findings whose verdict would "
+        "change what a threshold is fitted to, which is close to the opposite of the findings most "
+        "likely to be operations: a group far above every threshold is the most obviously "
+        "coordinated and teaches the least, because nobody needed a label to know how it would be "
+        "classified. Judging that list in order is efficient; reading it as strongest-first is "
+        "backwards.",
         "A recommendation never trades away a confirmed finding. Calling real people coordinated "
         "when they are not is the expensive error, so the search is only over settings that keep "
         "every confirmed finding and refuse more of the dismissed ones.",

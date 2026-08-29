@@ -966,3 +966,135 @@ def test_co_arrival_shares_the_timing_family_so_it_cannot_inflate_the_family_cou
     assert feats
     assert {f.family for f in feats} == {FAMILY_TIMING}
     assert "arrival" not in ALL_FAMILIES, "co-arrival became a family of its own"
+
+
+# =============================================================================================== #
+# The sub-group hole in MIN_FAMILIES, measured rather than assumed
+#
+# `MIN_FAMILIES` is checked on the WHOLE candidate, and a candidate is a Louvain community rather
+# than a chosen set. On paper that lets two DISJOINT sub-groups supply one family each and clear a
+# gate meant to require two independent kinds of evidence ABOUT THE SAME PEOPLE. It has stood as
+# the most interesting known weakness in the refusals, and a shared-core refusal built against it
+# in an earlier session was measured to be a complete no-op and removed with no explanation of why.
+#
+# These build the shape deliberately and say why it does not arrive. The point is not that the
+# corpus below is clean: it is that the two mechanisms named in the tests are what keep it clean,
+# so a change to either has somewhere to fail.
+# =============================================================================================== #
+_CULVERT = "the drainage culvert on maple street has been open since february"
+
+
+def _one_family_group(prefix: str, n: int, seed: int, *, text: bool = False, ident: bool = False):
+    """Accounts sharing exactly ONE thing: a repeated line, or a signup week plus a handle template.
+
+    Everything else is drawn per account, so a group built with `text=True` has no identity evidence
+    at all and vice versa. That is what makes the two sub-groups disjoint in family support.
+    """
+    import random
+    from datetime import timedelta
+
+    rng = random.Random(seed)
+    signup = C.BASE - timedelta(days=210)
+    out = []
+    for i in range(n):
+        t = C.BASE - timedelta(days=rng.randint(1, 20))
+        posts = []
+        for j in range(16):
+            t = t + timedelta(minutes=rng.randint(30, 500))
+            posts.append(C._post(_CULVERT if (text and j % 3 == 0) else C._sentence(rng), t))
+        out.append(C._account(
+            f"{prefix}{i:03d}", posts=posts,
+            created=(signup + timedelta(hours=i * 4)) if ident
+            else C.BASE - timedelta(days=rng.randint(400, 2500)),
+            handle=(f"riverwatch_{2200 + i * 7}" if ident
+                    else f"{rng.choice(['mel', 'sam', 'ivy'])}{rng.randint(1000, 9999)}"),
+        ))
+    return out
+
+
+def _family_support(corpus, candidate) -> dict[str, set[str]]:
+    """family -> the members actually holding a feature that counted toward it."""
+    members = set(candidate.members)
+    out: dict[str, set[str]] = {}
+    for ev in candidate.evidence:
+        holders = corpus.feature_accounts.get(ev.feature, set())
+        out.setdefault(ev.feature.family, set()).update(members & holders)
+    return out
+
+
+def test_two_sub_groups_with_nothing_in_common_are_never_merged_into_one_candidate():
+    """THE FIRST MECHANISM, and the one that makes the hole hard to reach at all.
+
+    Candidate generation builds its graph from SHARED rare features, so two groups with nothing in
+    common have no edge between them and Louvain has nothing to merge them on. The pathological
+    candidate is not refused later; it is never proposed.
+
+    Measured: eight text-only accounts and eight identity-only accounts in one 76-account corpus
+    land in different communities, the identity group is split across them so its family never
+    reaches `MIN_FAMILY_CONTRIBUTION`, and the run reports nothing.
+    """
+    from app.netdetect.significance import MIN_FAMILY_CONTRIBUTION
+
+    rows = (C.organic_population(60, seed=17)
+            + _one_family_group("tx", 8, 301, text=True)
+            + _one_family_group("id", 8, 401, ident=True))
+    corpus = _corpus(rows)
+
+    for members in communities(corpus):
+        if not any(m.startswith(("tx", "id")) for m in members):
+            continue
+        c = score_candidate(corpus, members)
+        carried = [f for f, v in c.by_family.items() if v >= MIN_FAMILY_CONTRIBUTION]
+        support = _family_support(corpus, c)
+        for fam in carried:
+            for other in carried:
+                if fam == other:
+                    continue
+                assert support.get(fam, set()) & support.get(other, set()), (
+                    f"{fam} and {other} both carried this candidate and no member holds both; "
+                    f"the sub-group hole in MIN_FAMILIES is reachable and must now be closed"
+                )
+
+    assert detect(corpus, shuffles=SHUFFLES).findings == []
+
+
+def test_bridging_the_two_sub_groups_gives_the_candidate_a_real_shared_core():
+    """THE SECOND MECHANISM. Merging them requires accounts that share with both, and those accounts
+    ARE the shared core the gate is asking for, so the merged candidate is not the pathological
+    case: some members genuinely hold evidence in both families.
+
+    The set statistic also prices the dilution. A feature held by k of n members is measured against
+    n, so the smaller sub-group's family is discounted for sitting inside a larger candidate:
+    measured here at identity 2.33 against text 19.59, barely over the floor. `MIN_HARD_EVIDENCE`
+    then flags the finding for adjudication rather than publishing it, which is the correct outcome
+    for a group whose only hard evidence is three accounts' signup week.
+    """
+    from app.netdetect.significance import MIN_FAMILY_CONTRIBUTION
+
+    rows = (C.organic_population(60, seed=17)
+            + _one_family_group("tx", 8, 301, text=True)
+            + _one_family_group("id", 8, 401, ident=True)
+            + _one_family_group("hb", 3, 501, text=True, ident=True))
+    corpus = _corpus(rows)
+    result = detect(corpus, shuffles=SHUFFLES)
+
+    merged = [c for c in result.findings if _members_from(c, "tx") and _members_from(c, "id")]
+    assert merged, "the bridged corpus stopped producing the merged candidate this test is about"
+    for c in merged:
+        support = _family_support(corpus, c)
+        carried = [f for f, v in c.by_family.items() if v >= MIN_FAMILY_CONTRIBUTION]
+        assert len(carried) >= 2
+        core = set.intersection(*(support.get(f, set()) for f in carried))
+        assert core, "the merged candidate has no member holding evidence in every carried family"
+        assert any(m.startswith("hb") for m in core), (
+            "the bridging accounts, which are the reason these two groups were merged at all, "
+            "are not among the members holding evidence in every carried family"
+        )
+        # The core is WIDER than the three bridges, and that is the topic pool rather than a bug:
+        # `_sentence` draws from eight topics, so unrelated accounts genuinely share five-word
+        # shingles at a measured rate (the same effect the repost-ring test above pays for). The
+        # identity-only accounts therefore pick up incidental text support. Asserting the core is
+        # EXACTLY the bridges would be asserting a property of the fixture's vocabulary.
+        assert c.needs_adjudication, (
+            "a group whose only hard evidence is three accounts' signup week was published"
+        )

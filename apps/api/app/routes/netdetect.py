@@ -519,6 +519,26 @@ class FamilySplitOut(BaseModel):
     separation: float
 
 
+class NextToJudgeOut(BaseModel):
+    """One open finding whose verdict would teach the most.
+
+    NOT A SUSPICION RANKING. `flips_constants` counts how many fitted constants would classify this
+    finding differently at some candidate setting, which is close to the OPPOSITE of how likely the
+    group is to be an operation: a finding far above every threshold is the most obviously
+    coordinated and teaches the least, because nobody needed a label to know how it would come out.
+    """
+
+    finding_id: int
+    context_id: str | None
+    member_count: int
+    nearest_constant: str
+    distance: float
+    value: float
+    current: float
+    flips_constants: int
+    why: str
+
+
 class CalibrationOut(BaseModel):
     confirmed: int
     dismissed: int
@@ -530,6 +550,12 @@ class CalibrationOut(BaseModel):
     sweeps: list[SweepOut]
     families: list[FamilySplitOut]
     recommendations: list[str]
+    #: Open findings worth judging first, because their verdict would move a fit. Read the caveat:
+    #: this is an information ordering, never a suspicion ordering.
+    next_to_judge: list[NextToJudgeOut]
+    #: How many more judgements, and of which class, before anything can be recommended. Empty once
+    #: the reservoir is deep enough.
+    still_needed: str
     caveats: list[str]
 
 
@@ -580,6 +606,16 @@ def calibration_report(current: CurrentUser = Depends(require_user)) -> Calibrat
             )
             for f in report.families
         ],
+        next_to_judge=[
+            NextToJudgeOut(
+                finding_id=n.finding_id, context_id=n.context_id,
+                member_count=n.member_count, nearest_constant=n.nearest_constant,
+                distance=n.distance, value=n.value, current=n.current,
+                flips_constants=n.flips_constants, why=n.why,
+            )
+            for n in report.next_to_judge
+        ],
+        still_needed=report.still_needed,
     )
 
 

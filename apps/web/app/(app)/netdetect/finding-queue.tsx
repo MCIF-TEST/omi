@@ -8,7 +8,9 @@ import { cn } from '@/lib/cn';
 import {
   judgeNetdetectFinding,
   listNetdetectFindings,
+  netdetectCalibration,
   type NetdetectFinding,
+  type NetdetectNextToJudge,
   type NetdetectStatus,
 } from '@/lib/api';
 
@@ -21,8 +23,11 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
 ];
 
-/** Open is work outstanding; confirmed is the rarer and more valuable label. Plain mono spans
- *  rather than pills, since components/ui/badge.tsx is deleted. */
+type RankedFinding = NetdetectNextToJudge & { rank: number };
+
+type Ranking = { order: NetdetectNextToJudge[]; stillNeeded: string };
+
+/** Open is work outstanding; confirmed is the rarer and more valuable label. */
 const STATUS_TONE: Record<NetdetectStatus, string> = {
   open: 'text-tier-elevated',
   confirmed: 'text-tier-high',
@@ -33,6 +38,7 @@ export function FindingQueue() {
   const [filter, setFilter] = useState<Filter>('open');
   const [rows, setRows] = useState<NetdetectFinding[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ranking, setRanking] = useState<Ranking | null>(null);
 
   const load = useCallback(async (f: Filter) => {
     setError(null);
@@ -48,6 +54,35 @@ export function FindingQueue() {
     setRows(null);
     void load(filter);
   }, [filter, load]);
+
+  // The ranking is a convenience over the queue and must never be able to hide it: a failure here
+  // leaves `ranking` null and every finding renders in the order the API returned, unmarked.
+  useEffect(() => {
+    let live = true;
+    netdetectCalibration()
+      .then((c) => {
+        if (live) setRanking({ order: c.next_to_judge, stillNeeded: c.still_needed });
+      })
+      .catch(() => {
+        if (live) setRanking(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Ranked first, in rank order, then everything else in the order the API gave. Only on the open
+  // filter: confirmed and dismissed are a record rather than a work queue, and reordering a record
+  // by how much it would teach makes no sense.
+  const ranks = new Map((ranking?.order ?? []).map((n, i) => [n.finding_id, { ...n, rank: i + 1 }]));
+  const ordered =
+    rows && filter === 'open' && ranks.size > 0
+      ? [...rows].sort(
+          (a, b) =>
+            (ranks.get(a.id)?.rank ?? Number.MAX_SAFE_INTEGER) -
+            (ranks.get(b.id)?.rank ?? Number.MAX_SAFE_INTEGER),
+        )
+      : rows;
 
   const onJudged = (updated: NetdetectFinding) => {
     setRows((prev) => {
@@ -88,6 +123,8 @@ export function FindingQueue() {
         </Card>
       ) : null}
 
+      {filter === 'open' && ranking && ranks.size > 0 ? <JudgeFirstNote ranking={ranking} /> : null}
+
       {rows === null ? (
         <div className="flex items-center gap-2 text-fg-mute text-sm">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -102,18 +139,50 @@ export function FindingQueue() {
           </p>
         </Card>
       ) : (
-        rows.map((row) => <FindingCard key={row.id} row={row} onJudged={onJudged} />)
+        (ordered ?? rows).map((row) => (
+          <FindingCard key={row.id} row={row} onJudged={onJudged} next={ranks.get(row.id) ?? null} />
+        ))
       )}
     </div>
+  );
+}
+
+/** The ranking, plus what the reservoir still needs, as one small statement above the queue. */
+function JudgeFirstNote({ ranking }: { ranking: Ranking }) {
+  return (
+    <Card className="border-accent/25 space-y-1.5">
+      <p className="meta meta-hi">Judge these first</p>
+      <p className="text-xs text-fg-dim">
+        {/* THE ORDER IS INFORMATION, NOT SUSPICION, and an operator who reads it the other way works
+            the borderline cases believing them to be the most damning. The sentence says so in the
+            one place the ordering is actually visible, because the caveat on the API response is not
+            somewhere anyone reads. */}
+        The top {ranking.order.length} finding{ranking.order.length === 1 ? '' : 's'} below{' '}
+        {ranking.order.length === 1 ? 'sits' : 'sit'} nearest a threshold that is being fitted, so a
+        verdict on {ranking.order.length === 1 ? 'it' : 'them'} changes what the calibration report
+        can recommend. This is not a strength order and it is close to the opposite of one: a group
+        reported whatever the thresholds are set to teaches nothing, because nobody needed a label to
+        know how it would come out. Every other finding here is equally worth judging on its merits.
+      </p>
+      {ranking.stillNeeded ? (
+        <p className="font-mono text-2xs text-fg-mute">Still needed: {ranking.stillNeeded}</p>
+      ) : (
+        <p className="font-mono text-2xs text-fg-mute">
+          The reservoir is deep enough to fit against. The calibration report recommends from here.
+        </p>
+      )}
+    </Card>
   );
 }
 
 function FindingCard({
   row,
   onJudged,
+  next,
 }: {
   row: NetdetectFinding;
   onJudged: (r: NetdetectFinding) => void;
+  next: RankedFinding | null;
 }) {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<'dismiss' | 'confirm' | null>(null);
@@ -151,6 +220,17 @@ function FindingCard({
               {row.status}
             </span>
             <span className="meta">{row.platform}</span>
+            {next ? (
+              // Deliberately says what it means rather than a bare number: "#1" beside an account
+              // set reads as a strength rank, which is the one thing this ordering is not.
+              <span
+                className="font-mono text-2xs uppercase tracking-wider text-accent"
+                title={next.why}
+              >
+                #{next.rank} moves {next.flips_constants} threshold
+                {next.flips_constants === 1 ? '' : 's'}
+              </span>
+            ) : null}
           </div>
           <p className="mt-1 font-mono text-xs text-fg-mute break-all">
             {row.context_id ? `post ${row.context_id}` : 'no post recorded'}

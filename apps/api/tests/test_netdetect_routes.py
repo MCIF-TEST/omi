@@ -457,3 +457,42 @@ def test_an_empty_catalogue_says_it_is_empty_rather_than_rendering_nothing():
     """An empty table and a table that has not loaded look identical, and one of them is a claim."""
     src = (_PAGE_DIR / "formation-catalogue.tsx").read_text()
     assert "No operation has been catalogued yet" in src
+
+
+def test_the_judging_order_is_labelled_as_information_and_not_as_strength():
+    """The ranking is the one thing on this page whose obvious reading is wrong.
+
+    It orders open findings by how many thresholds their verdict would move, which is close to the
+    OPPOSITE of how likely each group is to be an operation: a finding reported at every candidate
+    setting flips nothing and teaches nothing, and that is the most obviously coordinated group in
+    the queue. An operator reading a "#1" beside an account set as a strength rank would work the
+    borderline cases believing them to be the most damning.
+
+    The caveat exists on the API response and nobody reads an API response. It has to be in the one
+    place the ordering is visible, so this asserts on the page rather than on the endpoint.
+    """
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "next_to_judge" in src or "netdetectCalibration" in src, "the ranking is not fetched"
+    assert "not a strength order" in src
+    assert "moves {next.flips_constants} threshold" in src, (
+        "the marker renders a bare rank, which reads as a strength ordering"
+    )
+    assert "still_needed" in src or "stillNeeded" in src, (
+        "the shortfall to the fitting floor is not shown where the judging happens"
+    )
+
+
+def test_the_ranking_can_never_hide_the_queue():
+    """A convenience over the work must not be able to take the work down with it. If the
+    calibration call fails the ranking is dropped and every finding still renders, unmarked."""
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "setRanking(null)" in src, "a failed ranking fetch does not degrade to an unranked queue"
+    assert "(ordered ?? rows)" in src
+
+
+def test_only_the_open_queue_is_reordered():
+    """Confirmed and dismissed are a record, not a work queue. Reordering a record by how much each
+    row would teach is meaningless, and it would move rows under somebody rereading their own past
+    judgements."""
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "filter === 'open' && ranks.size > 0" in src

@@ -473,6 +473,26 @@ export interface NetdetectSweep {
   recommendation: string | null;
 }
 
+/**
+ * One open finding whose verdict would move a fit.
+ *
+ * NOT A SUSPICION RANKING, and the ordering is close to the opposite of one. `flips_constants`
+ * counts how many tunable constants would classify this finding differently at some candidate
+ * setting; a finding reported whatever the thresholds are set to flips none and teaches nothing,
+ * and that is exactly the most obviously coordinated group in the queue.
+ */
+export interface NetdetectNextToJudge {
+  finding_id: number;
+  context_id: string | null;
+  member_count: number;
+  nearest_constant: string;
+  distance: number;
+  value: number;
+  current: number;
+  flips_constants: number;
+  why: string;
+}
+
 export interface NetdetectCalibration {
   confirmed: number;
   dismissed: number;
@@ -487,6 +507,12 @@ export interface NetdetectCalibration {
     present_in_confirmed: number; present_in_dismissed: number; separation: number;
   }[];
   recommendations: string[];
+  /** Open findings worth judging first, because their verdict would move a fit. Read the caveat on
+   *  the type: this is an information ordering, never a suspicion ordering. */
+  next_to_judge: NetdetectNextToJudge[];
+  /** How many more judgements, and of which class, before anything can be recommended. Empty once
+   *  the reservoir is deep enough. */
+  still_needed: string;
   caveats: string[];
 }
 

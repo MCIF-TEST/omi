@@ -1680,7 +1680,42 @@ group is not an operation and says nothing about whether any member is automated
 the other reservoir and it labels botness, which this package deliberately never reads. Averaging
 them would be a category error.
 
-Pinned by `tests/test_netdetect_calibration.py` (11).
+Pinned by `tests/test_netdetect_calibration.py` (17).
+
+#### Which finding to judge next, and why the obvious reading of that list is backwards
+
+The reservoir needs 30 judgements with 8 of each class before a single threshold is fitted, nothing
+in this system produces them automatically, and nothing ever will: they arrive one operator click at
+a time. So the only lever available is making the thirty count. `_next_to_judge` ranks the OPEN
+findings by how much a verdict on each would teach, and `still_needed` states the shortfall as work
+("29 more judgements, 7 more confirmed, 8 more dismissed") rather than leaving it as the refusal
+`insufficient_reason` already explains.
+
+**THE MEASURE IS HOW MANY SETTINGS WOULD FLIP THE FINDING, not how near a number it is**, and the
+first version got this wrong. Distance to a boundary degenerates on the integer constants:
+`MIN_FAMILIES` is 2 and most findings contribute exactly two families, so they all sit at distance
+zero and the ranking says nothing at all. Asking instead whether a finding is kept at some candidate
+settings and refused at others answers the question directly, and behaves the same on a continuous
+axis as on a discrete one. Distance survives only as the tiebreak.
+
+**The ordering is INFORMATION, and it is close to the OPPOSITE of a suspicion ordering.** A finding
+reported whatever the thresholds are set to flips nothing and teaches nothing, and that is exactly
+the most obviously coordinated group in the queue: nobody needed a label to know how it would come
+out. An operator reading a `#1` beside an account set as a strength rank would work the borderline
+cases believing them to be the most damning, which is backwards, so the marker on the card says
+`#1 moves 4 thresholds` rather than a bare number and the panel above the queue says in words that
+this is not a strength order. `test_a_finding_reported_at_every_setting_is_never_offered_however_
+coordinated_it_looks` is the guard: its fixture's highest-scoring finding, by a factor of ten, is
+the one thing that must NOT be named.
+
+**`_axes()` declares the four constants ONCE and both halves read it** — the sweep that replays a
+setting against judged findings, and the ranking that asks which unjudged finding sits nearest it.
+Two copies of those predicates is precisely the drift this file has warned about repeatedly, and it
+would be invisible here: the sweep would fit one rule while an operator judged findings selected by
+another, and every test would pass.
+
+Pinned by six tests in `tests/test_netdetect_calibration.py` and three source-level guards at the
+end of `tests/test_netdetect_routes.py`.
 
 #### The queue has an interface now, and that is what makes the reservoir reachable
 
@@ -1704,8 +1739,15 @@ Three things the page must keep doing:
   weak member is highlighted as a pointer for review and nothing beside their name reads as a score.
 - **A judgement needs a reason before the request is made.** The API rejects a blank one; the page
   must not offer a path that pretends otherwise.
+- **The judging order carries its own warning, and only the OPEN filter is reordered.** The ranking
+  from `_next_to_judge` is where a thirty-judgement reservoir actually gets filled, so it belongs
+  here rather than on an endpoint nobody reads, and the sentence saying it is not a strength order
+  has to travel with it. Confirmed and dismissed are a record rather than a work queue: reordering
+  a record by how much each row would teach is meaningless and moves rows under somebody rereading
+  their own past judgements. A failed calibration call drops the ranking and leaves every finding
+  rendering unmarked, because a convenience over the work must never take the work down with it.
 
-Pinned by six source-level tests at the end of `tests/test_netdetect_routes.py`, because TypeScript
+Pinned by nine source-level tests at the end of `tests/test_netdetect_routes.py`, because TypeScript
 will not tell anyone if the server gate is dropped.
 
 #### A finding names bystanders, at a measured rate, and nothing said so
@@ -2117,13 +2159,48 @@ else, Louvain attached organic accounts to it, and their shingles supplied the s
 test's own premise was false: the ring shared text as well as reposts.
 
 Fixed by making the premise true (every account gets text nobody else could share), and it now
-holds **0 of 8 backgrounds**. Worth knowing generally: `MIN_FAMILIES` is checked on the WHOLE
-candidate, and a candidate is a community rather than a chosen set, so two disjoint sub-groups can
-in principle supply one family each. That remains unfixed and is now the most interesting known
-weakness in the refusals.
+holds **0 of 8 backgrounds**.
 
-**Not yet built:** the adjudication call, a sub-group-aware `MIN_FAMILIES` (above), and a
-per-member attachment test on assignment (the
+#### The sub-group hole in `MIN_FAMILIES` is measured now, and it does not open
+
+`MIN_FAMILIES` is checked on the WHOLE candidate, and a candidate is a Louvain community rather
+than a chosen set, so on paper two DISJOINT sub-groups can supply one family each and clear a gate
+meant to need two kinds of evidence about the same people. That stood as the most interesting known
+weakness in the refusals, and a shared-core refusal built against it in an earlier session was
+measured to be a complete no-op and removed with no explanation of WHY it never fired. The shape
+was built deliberately this time, and there are two reasons:
+
+- **With nothing bridging them the two sub-groups are never merged into one candidate.** The
+  candidate graph's edges ARE shared rare features, so groups with nothing in common have no edge
+  between them and Louvain has nothing to merge on. The pathological candidate is not refused late,
+  it is never proposed. Measured on a 76-account corpus (8 text-only, 8 identity-only, 60 organic):
+  the identity group splits across two communities, its family never reaches
+  `MIN_FAMILY_CONTRIBUTION`, and the run reports nothing.
+- **Merging them requires accounts that share with both, and those accounts ARE the shared core.**
+  Adding three bridging accounts does produce the merged 15-member candidate, and it is not the
+  pathological case: some members hold evidence in every carried family.
+
+**The set statistic also prices the dilution, which is the part worth carrying forward.** A feature
+held by k of n members is measured against n, so a sub-group's family is automatically discounted
+for sitting inside a larger candidate: measured at identity **2.33** against text 19.59, barely over
+the 2.0 floor. `MIN_HARD_EVIDENCE` then flagged it for adjudication rather than publishing it, which
+is the right answer for a group whose only hard evidence is three accounts' signup week.
+
+So the no-op was not a bad refusal, it was a refusal with nothing to refuse. Both mechanisms are now
+pinned as tests at the end of `tests/test_netdetect.py`, so the claim is checked rather than
+asserted and a change to either has somewhere to fail. **Do not build the sub-group-aware
+`MIN_FAMILIES`** without first making one of those two tests fail.
+
+**A related measurement that kills a different piece of planned work.** `attachment.MAX_MEMBERS` is
+40 and the leave-one-out cost curve is steep (n=50 4.2s, n=60 9.3s, n=80 37.0s), so raising it looks
+like it needs an exact-equivalent rewrite of the Poisson-binomial tail via prefix/suffix
+convolution. **It does not, because the abstention has never fired.** Finding sizes measured across
+the systematic grid (four background sizes x three seeds): min 8, median 8, **max 12**, zero above
+40. Optimising the leave-one-out would be optimising a case no corpus has ever produced. If a real
+scan ever yields a finding above 40 members the page already says membership was not tested, and
+THAT is the signal to do the work.
+
+**Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).
 
