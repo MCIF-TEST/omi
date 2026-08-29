@@ -361,6 +361,14 @@ export interface NetdetectFinding {
 export interface FormationPlacement {
   external_id: string;
   handle: string;
+  /** Characterisation only: placement reads behaviour, never this. Null means never scored. */
+  omi_score: number | null;
+  /**
+   * Placed in a known operation while reading as an ordinary account on its own. THE ROW TO READ
+   * FIRST: an account the per-account engine already flags is one an analyst could have found
+   * without this; one that would pass an individual review is not.
+   */
+  concealed: boolean;
   assignment: {
     formation_key: string;
     label: string | null;
@@ -386,6 +394,8 @@ export interface FormationSweep {
   truncated: boolean;
   /** A THIRD state: nobody looked, which is not the same as "weighed and matched nothing". */
   nothing_catalogued: boolean;
+  /** How many placed accounts would have passed an individual review. */
+  concealed: number;
   not_a_clearance: string;
 }
 

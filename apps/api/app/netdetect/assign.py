@@ -49,7 +49,11 @@ import math
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from app.netdetect.formation import FormationProfile, logistic
+from app.netdetect.formation import (
+    CONCEALED_MEDIAN_SCORE,
+    FormationProfile,
+    logistic,
+)
 from app.netdetect.types import (
     ALL_FAMILIES,
     FAMILY_WEIGHT,
@@ -252,6 +256,26 @@ class Placement:
     external_id: str
     handle: str
     assignment: Assignment
+    #: The account's own OMI score, carried for CHARACTERISATION and never fed into the placement.
+    #: `score_against` reads behaviour only, which
+    #: `test_the_score_never_reads_an_accounts_own_suspicion_score` pins for the detector and which
+    #: holds here for the same reason: an operation of accounts that each look ordinary is exactly
+    #: what the old 70+ cohort filter was blind to by construction.
+    omi_score: float | None = None
+
+    @property
+    def concealed(self) -> bool:
+        """Placed in a known operation while reading as an ordinary account on its own.
+
+        THE MOST VALUABLE ROW IN A SWEEP, and the reading is inverted from the obvious one. An
+        account the per-account engine already flags is one an analyst could have found without
+        this. An account that would pass an individual review and nonetheless matches an operation's
+        recorded behaviour is the finding nothing else in the product can produce.
+
+        None is not low: an unscored account has not been examined, and reading that as concealed
+        would manufacture the system's most alarming label out of missing data.
+        """
+        return self.omi_score is not None and self.omi_score <= CONCEALED_MEDIAN_SCORE
 
 
 @dataclass(slots=True)
@@ -312,6 +336,7 @@ def sweep(accounts: Iterable[AccountProfile],
             external_id=account.external_id,
             handle=account.handle or account.external_id,
             assignment=placement,
+            omi_score=account.score,
         ))
 
     # Strongest first: an operator reads the top of this list and stops.

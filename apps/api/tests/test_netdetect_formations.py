@@ -611,3 +611,49 @@ def test_both_assignment_routes_serialise_through_one_function():
     assert source.count("AssignmentOut(\n") == 1, (
         "AssignmentOut is constructed in more than one place; use _assignment_out"
     )
+
+
+def test_the_score_characterises_a_placement_and_never_decides_it():
+    """THE INVERTED READING, AND THE RULE THAT KEEPS IT SAFE.
+
+    `Placement.concealed` marks an account placed in a known operation that would nonetheless pass
+    an individual review. That is the most valuable row in a sweep: an account the per-account
+    engine already flags is one an analyst could have found without this.
+
+    It is CHARACTERISATION. `score_against` reads behaviour only, which is what kept the old 70+
+    cohort filter's blind spot from being rebuilt here. Measured: the same accounts scored 30, 85
+    and unscored produce the IDENTICAL placement, and only the label changes.
+    """
+    from app.netdetect.assign import sweep
+
+    stadium, _ = learn("stadium", bg=5, op=6)
+    rows = C.organic_population(60, seed=31) + C.planted_operation(
+        8, seed=6, discipline=0.0, operator="stadium", prefix="new")
+
+    def placed_with(score):
+        for r in rows:
+            if r["external_id"].startswith("new"):
+                r["omi_score"] = score
+                r["overall_probability"] = score
+        result = sweep([profile_from_commenter(r) for r in rows], {"STADIUM": stadium})
+        return result, {p.external_id for p in result.placed}
+
+    low, low_ids = placed_with(30.0)
+    high, high_ids = placed_with(85.0)
+    none, none_ids = placed_with(None)
+
+    assert low_ids == high_ids == none_ids, (
+        "the OMI score changed WHICH accounts were placed; placement must read behaviour only"
+    )
+    assert low_ids, "the operation was not placed at all; fixture changed"
+
+    assert all(p.concealed for p in low.placed if p.external_id.startswith("new")), (
+        "members that would pass an individual review were not marked concealed"
+    )
+    assert not any(p.concealed for p in high.placed), (
+        "an account the engine already flags was marked concealed, which inverts the reading"
+    )
+    assert not any(p.concealed for p in none.placed), (
+        "an UNSCORED account was marked concealed. None is not low: it means nobody examined it, "
+        "and reading it as concealed manufactures the most alarming label out of missing data"
+    )

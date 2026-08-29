@@ -98,6 +98,16 @@ export function FormationSweep() {
                     <span className="meta">No match</span>
                     <span className="stat-value">{result.unplaced}</span>
                   </span>
+                  {/* THE FIGURE TO READ FIRST. An account the per-account engine already flags is
+                      one an analyst could have found without this; an account that would pass an
+                      individual review and still matches a known operation is the finding nothing
+                      else in the product can produce. */}
+                  {result.concealed > 0 ? (
+                    <span className="readout">
+                      <span className="meta meta-on">Would pass review</span>
+                      <span className="stat-value text-tier-high">{result.concealed}</span>
+                    </span>
+                  ) : null}
                 </div>
 
                 {result.truncated ? (
@@ -121,7 +131,9 @@ export function FormationSweep() {
                           ) : null}
                         </div>
                         <p className="mt-0.5 text-2xs text-fg-mute">
-                          {Math.round(p.assignment.posterior * 100)}% ·{' '}
+                          {Math.round(p.assignment.posterior * 100)}%
+                          {p.omi_score !== null ? ` · OMI ${Math.round(p.omi_score)}` : ''}
+                          {p.concealed ? ' · would pass an individual review' : ''} ·{' '}
                           {p.assignment.matched
                             .slice(0, 2)
                             .map((m) => m.sentence)

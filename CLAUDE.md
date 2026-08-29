@@ -31,8 +31,8 @@ will be re-broken by anyone who reasons about them instead: the OMI score may ch
 formation but never detect one, and **total accumulated history does not separate an operation from
 a newsroom**, so only its hard-family half discriminates.
 
-Suite measured at **2528
-passed, 8 skipped, 2 failed** (21m52s, 2026-08-29), both failures pre-existing and listed below. The 8
+Suite measured at **2531
+passed, 8 skipped, 2 failed** (22m03s, 2026-08-29), both failures pre-existing and listed below. The 8
 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
@@ -85,7 +85,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2528 passed, 8 skipped, 2 failed** (21m52s, 2026-08-29), both documented below:
+Current measured state: **2531 passed, 8 skipped, 2 failed** (22m03s, 2026-08-29), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1879,6 +1879,18 @@ Three rules:
   matched nothing", the same distinction as `attachment_checked` and `corroboration.checked`.
 - **A capped sweep reports its truncation**, because answering silently about the accounts it never
   weighed is a claim about them.
+
+**A placement carries the account's OMI score, and the useful reading is inverted.**
+`Placement.concealed` marks an account placed in a known operation that would nonetheless pass an
+individual review, and that is the row to read first: an account the per-account engine already
+flags is one an analyst could have found without this. It is the `Composition` insight at the
+account level rather than the formation level.
+
+CHARACTERISATION, never a decision. Measured, the same accounts scored 30, 85 and unscored produce
+the **identical placement** and only the label changes, which is what keeps the old 70+ cohort
+filter's blind spot from being rebuilt here. `None` is not low: an unscored account was never
+examined, and marking it concealed would manufacture the system's most alarming label out of
+missing data. Pinned by `test_the_score_characterises_a_placement_and_never_decides_it`.
 
 **The panel is on `/netdetect`**, hanging off the page whose server gate is the access control
 rather than taking a route of its own. It renders the three outcomes separately, because "nothing

@@ -742,6 +742,13 @@ class PlacementOut(BaseModel):
     external_id: str
     handle: str
     assignment: AssignmentOut
+    #: The account's own OMI score. CHARACTERISATION ONLY: placement reads behaviour, never this.
+    #: Null means the account was never scored, which is not the same as scoring low.
+    omi_score: float | None = None
+    #: Placed in a known operation while reading as an ordinary account on its own. THE MOST
+    #: VALUABLE ROW IN A SWEEP: an account the per-account engine already flags is one an analyst
+    #: could have found without this, and one that would pass an individual review is not.
+    concealed: bool = False
 
 
 class FormationSweepOut(BaseModel):
@@ -764,6 +771,9 @@ class FormationSweepOut(BaseModel):
     truncated: bool
     #: Set when there is no catalogue to compare against yet, which is not the same as no match.
     nothing_catalogued: bool
+    #: How many placed accounts would have passed an individual review. The number an analyst
+    #: should read first: it is the part of the section no per-account score would have caught.
+    concealed: int
     not_a_clearance: str
 
 
@@ -819,12 +829,15 @@ def sweep_investigation(
         unplaced=result.unplaced,
         truncated=result.truncated,
         nothing_catalogued=not result.looked,
+        concealed=sum(1 for p in result.placed if p.concealed),
         not_a_clearance=NOT_A_CLEARANCE,
         placed=[
             PlacementOut(
                 external_id=p.external_id,
                 handle=p.handle,
                 assignment=_assignment_out(p.assignment, labels),
+                omi_score=p.omi_score,
+                concealed=p.concealed,
             )
             for p in result.placed
         ],
