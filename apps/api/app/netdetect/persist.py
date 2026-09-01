@@ -195,6 +195,63 @@ def persist_finding(
     return row
 
 
+def persist_section(
+    session,
+    domination,
+    *,
+    investigation_id: int | None,
+    context_id: str | None,
+    platform: str,
+    corpus_size: int,
+    now: datetime | None = None,
+):
+    """Record, or clear, "this section could not be resolved".
+
+    Returns the row when one is held open, and None when the section is resolvable and any earlier
+    warning has been withdrawn.
+
+    THE WITHDRAWAL IS THE HALF THAT IS EASY TO FORGET AND WORST TO GET WRONG. These rows are written
+    on a re-run, and a section stops being unresolvable as soon as enough ordinary accounts comment
+    under the post to give the group a background again. A warning left standing after that is a
+    claim about a comment section that is no longer true, sitting in a queue an operator is meant to
+    trust. So a resolvable section deletes its row rather than leaving it.
+
+    A row an operator has already REVIEWED is kept, for the same reason a dismissed finding is kept:
+    somebody's verdict is the only ground truth this system accumulates, and silently deleting it
+    would make reviewing worthless.
+    """
+    from app.storage.models import NetdetectSection
+
+    at = now or datetime.now(timezone.utc)
+    existing = session.execute(
+        select(NetdetectSection).where(
+            NetdetectSection.investigation_id == investigation_id,
+            NetdetectSection.context_id == context_id,
+        )
+    ).scalar_one_or_none()
+
+    if domination is None or not domination.unresolvable:
+        if existing is not None and existing.status == "open":
+            session.delete(existing)
+        return None
+
+    row = existing
+    if row is None:
+        row = NetdetectSection(
+            investigation_id=investigation_id, context_id=context_id, created_at=at,
+        )
+        session.add(row)
+    row.platform = platform or "unknown"
+    row.corpus_size = corpus_size
+    row.suppressed = domination.suppressed
+    row.group_size = domination.group_size
+    row.top_prevalence = round(domination.top_prevalence, 6)
+    row.families_json = list(domination.families)
+    row.sentence = domination.sentence()
+    row.updated_at = at
+    return row
+
+
 def _accumulate(session, candidate: Candidate, corpus: Corpus, *, context_id, platform) -> int:
     """Fold the finding's pairs into `CoordinationEdge`. Never raises into the caller."""
     try:

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { apiServer } from '@/lib/api-server';
 import { type User } from '@/lib/api';
 import { FindingQueue } from './finding-queue';
+import { UnresolvedSections } from './unresolved-sections';
 import { FormationCatalogue } from './formation-catalogue';
 import { FormationSweep } from './formation-sweep';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
@@ -43,6 +44,11 @@ export default async function NetdetectPage() {
         title="Network findings"
         lede="Sets of accounts that share improbably many rare behaviours, corrected for the size of the search. A finding is a lead, not a verdict: judging one records the only ground truth this detector will ever accumulate, and nothing here reaches a customer."
       />
+
+      {/* ABOVE the queue, because it is a warning about what the queue could not cover. A finding
+          queue can only show what the detector named, and a section one group is large enough to
+          dominate produces no findings at all. */}
+      <UnresolvedSections />
 
       <FormationCatalogue />
 

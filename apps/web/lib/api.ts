@@ -528,6 +528,56 @@ export interface NetdetectCalibration {
   caveats: string[];
 }
 
+/**
+ * A comment section this deployment looked at and could not resolve.
+ *
+ * NOT a finding, and the distinction is the whole reason it exists. An operation owning more than
+ * about a quarter of a section pushes its own provisioning and targeting evidence past the rarity
+ * ceiling, where it is dropped as ordinary before any statistics run, so the scan returns nothing
+ * and reads exactly like a clean section. Measured, recall falls from 8/8 to 0 between 24% and 32%
+ * share.
+ *
+ * It names no accounts, deliberately: the group failed the significance test, and the same shape is
+ * produced by a community that simply turned up together.
+ */
+export interface NetdetectSection {
+  id: number;
+  investigation_id: number | null;
+  context_id: string | null;
+  platform: string;
+  corpus_size: number;
+  /** Hard-family behaviours the group shares that the rarity ceiling discarded as ordinary. */
+  suppressed: number;
+  group_size: number;
+  /** The largest share of the section any suppressed behaviour reached. */
+  top_prevalence: number;
+  families: string[];
+  sentence: string;
+  status: string;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NetdetectSectionList {
+  sections: NetdetectSection[];
+  /** Served with the list, or a queue of these reads as a queue of operations. */
+  note: string;
+}
+
+export function netdetectSections(status = 'open'): Promise<NetdetectSectionList> {
+  return apiClient<NetdetectSectionList>(
+    `/v1/admin/netdetect/sections?status=${encodeURIComponent(status)}`,
+  );
+}
+
+export function reviewNetdetectSection(id: number, note: string): Promise<NetdetectSection> {
+  return apiClient<NetdetectSection>(`/v1/admin/netdetect/sections/${id}/reviewed`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
 export function netdetectCalibration(): Promise<NetdetectCalibration> {
   return apiClient<NetdetectCalibration>('/v1/admin/netdetect/findings/calibration');
 }

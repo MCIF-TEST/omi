@@ -191,3 +191,155 @@ def test_the_run_route_serves_the_third_state():
     assert "refused" in fields, "the two states must stay separate fields"
     # None rather than an empty string, so a caller cannot read "" as a resolved section.
     assert fields["unresolvable"].default is None
+
+
+# ==================================================================================================
+# The record
+#
+# A dominated section produces NO findings, so nothing reaches the queue and the verdict dies with
+# the request. That is the same failure `NetdetectFinding` was created to fix ("its findings
+# evaporated when the page closed"), and worse here, because there is no finding whose absence an
+# operator could notice.
+# ==================================================================================================
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.main import app as fastapi_app  # noqa: E402
+from app.netdetect.persist import persist_section  # noqa: E402
+from app.storage.db import get_session  # noqa: E402
+from app.storage.models import NetdetectSection  # noqa: E402
+
+
+def _wipe(session):
+    session.query(NetdetectSection).delete()
+    session.flush()
+
+
+def _unresolvable() -> dom.Domination:
+    return dom.assess(*_communities(
+        C.organic_population(25, seed=17) + C.planted_operation(12, seed=9)))
+
+
+def _communities(rows):
+    corpus = _corpus(rows)
+    return corpus, list(cand.communities(corpus))
+
+
+def _store(session, domination, context="post-1"):
+    return persist_section(
+        session, domination, investigation_id=None, context_id=context,
+        platform="x", corpus_size=37,
+    )
+
+
+def test_an_unresolvable_section_is_written_down():
+    d = _unresolvable()
+    assert d.unresolvable
+    with get_session() as session:
+        _wipe(session)
+        row = _store(session, d)
+        session.commit()
+        assert row is not None
+        assert row.suppressed == d.suppressed
+        assert row.group_size == d.group_size
+        assert row.families_json == d.families
+        assert row.sentence == d.sentence()
+        assert row.status == "open"
+
+
+def test_a_resolvable_section_withdraws_an_earlier_warning():
+    """THE HALF THAT IS EASY TO FORGET. A section stops being unresolvable as soon as enough
+    ordinary accounts comment under the post. A warning left standing after that is a claim about a
+    comment section that is no longer true, sitting in a queue an operator is meant to trust."""
+    with get_session() as session:
+        _wipe(session)
+        _store(session, _unresolvable())
+        session.commit()
+        assert session.query(NetdetectSection).count() == 1
+
+        # The same post, re-run, now resolvable.
+        assert _store(session, dom.Domination(checked=True)) is None
+        session.commit()
+        assert session.query(NetdetectSection).count() == 0
+
+
+def test_a_reviewed_section_is_never_withdrawn_by_a_re_run():
+    """Somebody's verdict is the only ground truth this system accumulates. Deleting it on a re-run
+    would make reviewing worthless, the same rule a dismissed finding follows."""
+    with get_session() as session:
+        _wipe(session)
+        row = _store(session, _unresolvable())
+        row.status = "reviewed"
+        row.review_note = "checked by hand: a fan community, not an operation"
+        session.commit()
+
+        assert _store(session, dom.Domination(checked=True)) is None
+        session.commit()
+        kept = session.query(NetdetectSection).one()
+        assert kept.status == "reviewed"
+        assert "fan community" in kept.review_note
+
+
+def test_re_running_updates_the_row_rather_than_stacking_duplicates():
+    with get_session() as session:
+        _wipe(session)
+        _store(session, _unresolvable())
+        session.commit()
+        _store(session, _unresolvable())
+        session.commit()
+        assert session.query(NetdetectSection).count() == 1
+
+
+def test_the_route_serves_the_queue_with_the_note_that_it_is_not_a_queue_of_operations():
+    with get_session() as session:
+        _wipe(session)
+        _store(session, _unresolvable())
+        session.commit()
+
+    body = TestClient(fastapi_app).get("/v1/admin/netdetect/sections").json()
+    assert body["sections"], "the record was written and never served"
+    said = body["note"].lower()
+    assert "not sections where an operation was found" in said
+    assert "community" in said, "the innocent reading is not offered"
+    assert "sweep" in said
+
+    row = body["sections"][0]
+    assert row["suppressed"] >= dom.MIN_SUPPRESSED_HARD
+    assert row["sentence"]
+    # No account is ever named: the group failed the significance test.
+    assert "members" not in row
+    assert not any(isinstance(v, list) and any(str(x).startswith("op") for x in v)
+                   for v in row.values())
+
+
+def test_reviewing_needs_a_reason_that_is_not_blank():
+    with get_session() as session:
+        _wipe(session)
+        row = _store(session, _unresolvable())
+        session.commit()
+        section_id = row.id
+
+    client = TestClient(fastapi_app)
+    assert client.post(f"/v1/admin/netdetect/sections/{section_id}/reviewed",
+                       json={"note": "   "}).status_code == 422
+    ok = client.post(f"/v1/admin/netdetect/sections/{section_id}/reviewed",
+                     json={"note": "a fan community, checked by hand"})
+    assert ok.status_code == 200
+    assert ok.json()["status"] == "reviewed"
+    assert client.get("/v1/admin/netdetect/sections?status=open").json()["sections"] == []
+
+
+def test_the_page_warns_about_what_the_queue_could_not_cover():
+    """A finding queue can only show what the detector NAMED. A dominated section produces no
+    findings, so an empty queue and a clean queue look identical unless something says otherwise.
+    Source-level, because TypeScript will not notice if the panel is dropped."""
+    web = Path(__file__).resolve().parents[3] / "apps" / "web" / "app" / "(app)" / "netdetect"
+    page = (web / "page.tsx").read_text()
+    assert "UnresolvedSections" in page, "the page renders no warning about unresolved sections"
+
+    panel = (web / "unresolved-sections.tsx").read_text()
+    # It must never name accounts: the group failed the significance test.
+    assert "members" not in panel, "the panel reaches for a member list that must not exist"
+    # A verdict needs a reason, the same rule the finding queue follows.
+    assert "note.trim()" in panel
+    # And it must not take the page down with it.
+    assert "setRows([])" in panel, "a failed load does not degrade to an empty panel"

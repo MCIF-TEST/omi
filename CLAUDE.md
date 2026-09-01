@@ -2295,8 +2295,32 @@ depends on accumulated data, so what ships here is the honest refusal. **Do not 
 by raising `RARITY_CEILING`**: the ceiling is also what keeps generic shared behaviour out of every
 other finding, and nothing has measured what raising it costs the controls.
 
-Pinned by `tests/test_netdetect_domination.py` (11), which pins the mechanism, the diagnostic, the
-newsroom silence, the fandom firing as CORRECT, and the three-state rule.
+**A dominated section is WRITTEN DOWN, because it produces no findings to notice.** The first draft
+computed the verdict and returned it in `RunOut` only, which is the same defect this file has
+recorded twice: information computed and discarded at the serialiser. Worse here than usual, since
+`NetdetectFinding` exists precisely because findings "evaporated when the page closed", and a
+dominated section has no finding whose absence an operator could spot. `NetdetectSection` +
+`persist_section` + `GET /v1/admin/netdetect/sections` + the `UnresolvedSections` panel close it.
+
+Four rules on that record:
+
+- **It runs OUTSIDE the findings block.** That block is gated on `result.findings`, which is exactly
+  the case a dominated section fails, so folding it in would mean the one state that cannot speak
+  for itself is the one state never written down.
+- **A resolvable re-run WITHDRAWS the warning.** A section stops being unresolvable as soon as
+  enough ordinary accounts comment under the post, and a stale "cannot resolve" sitting in the queue
+  is a claim about a section that has stopped being true.
+- **A REVIEWED row is never withdrawn.** Somebody's verdict is the only ground truth this system
+  accumulates, the same rule a dismissed finding follows.
+- **It names NO accounts, and the panel is guarded against reaching for them.** The group failed the
+  significance test, and the statistic cannot separate an operation from a community, so the record
+  carries the shape (how many accounts, how much of the section, which families) and the next step.
+
+Pinned by `tests/test_netdetect_domination.py` (18), which pins the mechanism, the diagnostic, the
+newsroom silence, the fandom firing as CORRECT, the three-state rule, the withdrawal, and the page
+warning. The two new routes are covered against a REAL non-admin in
+`tests/test_coordination_admin_gate.py`, because every other test here runs in local mode where
+`require_user` returns `is_admin=True`.
 
 #### The sub-group hole in `MIN_FAMILIES` is measured now, and it does not open
 

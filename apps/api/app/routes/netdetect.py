@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import logging
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
@@ -28,7 +30,7 @@ from sqlalchemy import select
 from app.core.auth import CurrentUser, require_user
 from app.netdetect import corroboration as corrob
 from app.netdetect import detect_from_commenters
-from app.netdetect.persist import persist_finding
+from app.netdetect.persist import persist_finding, persist_section
 from app.netdetect.shuffle import DEFAULT_SHUFFLES
 from app.storage.db import get_session
 from app.storage.models import Investigation, NetdetectFinding, NetdetectFormation
@@ -182,6 +184,10 @@ class RunOut(BaseModel):
     membership_note: str = MEMBERSHIP_NOTE
     #: Findings written to the store.
     recorded: int = 0
+    #: Whether a "could not resolve this section" record is being held open for this investigation.
+    #: False also means an earlier one was WITHDRAWN because the section became resolvable, which is
+    #: why the run reports it rather than leaving the caller to infer it from `unresolvable`.
+    section_recorded: bool = False
     #: NEW pairs in the accumulating graph. A pair already in it is strengthened rather than
     #: created, so this is "how many of these people had never been linked before" and deliberately
     #: not "how much evidence was folded in". Zero on a re-run of one post is the correct answer.
@@ -295,6 +301,32 @@ def run_on_investigation(
             log.warning("netdetect: could not record findings for %s", slug, exc_info=True)
             recorded = 0
 
+    # THE SECTION VERDICT IS RECORDED SEPARATELY, AND THAT IS THE WHOLE POINT.
+    #
+    # The block above is gated on `result.findings`, which is exactly the case a dominated section
+    # fails: it produces no findings at all. Folding this in there would mean the one state that
+    # cannot speak for itself is the one state never written down.
+    #
+    # It also runs when the section IS resolvable, because `persist_section` withdraws a warning
+    # that no longer holds. A stale "cannot resolve" sitting in the queue after enough ordinary
+    # accounts have commented is a claim about a section that has stopped being true.
+    section_open = False
+    if record:
+        try:
+            with get_session() as session:
+                row = persist_section(
+                    session, result.domination,
+                    investigation_id=investigation_id,
+                    context_id=target or None,
+                    platform=(result.findings[0].platform if result.findings else "unknown"),
+                    corpus_size=result.corpus_size,
+                )
+                section_open = row is not None
+                session.commit()
+        except Exception:  # noqa: BLE001 - same rule as accumulation: never fail a completed run
+            log.warning("netdetect: could not record the section verdict for %s", slug,
+                        exc_info=True)
+
     return RunOut(
         slug=slug,
         corpus_size=result.corpus_size,
@@ -309,6 +341,7 @@ def run_on_investigation(
             else None
         ),
         recorded=recorded,
+        section_recorded=section_open,
         accumulated_pairs=accumulated,
         leads=leads,
         history_checked=history_checked,
@@ -426,6 +459,138 @@ def _stored_out(row: NetdetectFinding) -> StoredFindingOut:
         dismissal_reason=row.dismissal_reason,
         confirmed=row.confirmed_at is not None,
     )
+
+
+class SectionOut(BaseModel):
+    """A comment section this deployment looked at and could not resolve.
+
+    Deliberately names NO accounts. The group failed the significance test, and the statistic that
+    flagged the section cannot separate an operation from a community that simply turned up
+    together, so naming anyone would publish a claim the evidence could not support. What is served
+    is the shape and the next step.
+    """
+
+    id: int
+    investigation_id: int | None
+    context_id: str | None
+    platform: str
+    corpus_size: int
+    #: Hard-family behaviours the group shares that the rarity ceiling discarded as ordinary.
+    suppressed: int
+    group_size: int
+    #: The largest share of the section any suppressed behaviour reached.
+    top_prevalence: float
+    families: list[str]
+    sentence: str
+    status: str
+    review_note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+#: Served with the list, because a queue of these could otherwise be read as a queue of operations.
+SECTION_NOTE = (
+    "These are sections this scan could not resolve, NOT sections where an operation was found. A "
+    "group large enough to shape the background it is measured against cannot be priced by that "
+    "background in either direction: the same shape is produced by an operation and by a community "
+    "that turned up together. Sweep the investigation against the formation catalogue, which weighs "
+    "its accounts against other investigations rather than against this one, or read it by hand."
+)
+
+
+class SectionListOut(BaseModel):
+    sections: list[SectionOut]
+    note: str = SECTION_NOTE
+
+
+def _section_out(row) -> SectionOut:
+    return SectionOut(
+        id=row.id,
+        investigation_id=row.investigation_id,
+        context_id=row.context_id,
+        platform=row.platform,
+        corpus_size=row.corpus_size,
+        suppressed=row.suppressed,
+        group_size=row.group_size,
+        top_prevalence=row.top_prevalence,
+        families=list(row.families_json or []),
+        sentence=row.sentence or "",
+        status=row.status,
+        review_note=row.review_note,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@admin_router.get("/sections", response_model=SectionListOut)
+def list_sections(
+    status_filter: str = Query("open", pattern="^(open|reviewed|all)$", alias="status"),
+    limit: int = Query(50, ge=1, le=200),
+    current: CurrentUser = Depends(require_user),
+) -> SectionListOut:
+    """Sections that could not be resolved, worst first.
+
+    Worst is the most SUPPRESSED evidence, not the biggest group: how much the ceiling had to throw
+    away is the measure of how blind the scan was, and a small group in a small section can blind it
+    more completely than a large one in a large section.
+    """
+    _require_admin(current)
+    from app.storage.models import NetdetectSection
+
+    with get_session() as session:
+        q = select(NetdetectSection)
+        if status_filter != "all":
+            q = q.where(NetdetectSection.status == status_filter)
+        rows = list(
+            session.execute(
+                q.order_by(NetdetectSection.suppressed.desc(), NetdetectSection.id.desc())
+                .limit(limit)
+            ).scalars()
+        )
+        return SectionListOut(sections=[_section_out(r) for r in rows])
+
+
+class ReviewRequest(BaseModel):
+    note: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("note")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        # `min_length` alone admits "   ", which strips to nothing on the way into the column and
+        # records that somebody looked and nothing about what they concluded.
+        out = v.strip()
+        if not out:
+            raise ValueError("Say what this section turned out to be.")
+        return out
+
+
+@admin_router.post("/sections/{section_id}/reviewed", response_model=SectionOut)
+def review_section(
+    section_id: int,
+    body: ReviewRequest,
+    current: CurrentUser = Depends(require_user),
+) -> SectionOut:
+    """Record that a person read this section and what they concluded.
+
+    NOT a dismissal of a finding, because there is no finding: the scan could not resolve the
+    section, and this records what a human resolved it to. The row is kept rather than deleted, and
+    a later re-run will not withdraw it, for the same reason a dismissed finding is kept: somebody's
+    verdict is ground truth and this system accumulates very little of it.
+    """
+    _require_admin(current)
+    from app.storage.models import NetdetectSection
+
+    with get_session() as session:
+        row = session.get(NetdetectSection, section_id)
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such section.")
+        row.status = "reviewed"
+        row.reviewed_at = datetime.now(timezone.utc)
+        row.reviewed_by = getattr(current, "id", None)
+        row.review_note = body.note
+        row.updated_at = row.reviewed_at
+        session.commit()
+        return _section_out(row)
 
 
 @admin_router.get("/findings/all", response_model=list[StoredFindingOut])

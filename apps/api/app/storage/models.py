@@ -1664,6 +1664,67 @@ class NetdetectFormation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class NetdetectSection(Base):
+    """A comment section this deployment looked at and could not resolve.
+
+    THE THIRD STATE, AND THE REASON IT NEEDS A ROW OF ITS OWN. A finding is a group the detector
+    named. This is the opposite: a section where one group is large enough that the null this
+    section provides cannot price what the group shares, so the run produced NO findings and reads
+    exactly like a clean scan. See `app/netdetect/domination.py` for the measurement.
+
+    Without a row nothing survives the request. `NetdetectFinding` exists because read-only findings
+    "evaporated when the page closed"; this evaporates the same way and is worse, because there is
+    no finding for an operator to notice its absence against. A dominated section produces silence,
+    and silence is what this record exists to break.
+
+    NO ACCOUNTS ARE NAMED HERE, deliberately. The group failed the significance test: naming it
+    would publish a claim the evidence could not support, and the statistic cannot separate an
+    operation from a community that simply turned up together. What the row carries is the SHAPE
+    (how many accounts, how much of the section they occupy, which families were suppressed) and
+    the instruction to sweep the investigation against the formation catalogue, which weighs
+    accounts against OTHER investigations and so does not depend on this corpus at all.
+    """
+
+    __tablename__ = "netdetect_sections"
+    __table_args__ = (
+        # One row per (investigation, post). A re-run updates it rather than stacking, exactly as
+        # findings do, because an operator re-runs constantly while tuning.
+        Index("ix_netdetect_section_key", "investigation_id", "context_id", unique=True),
+        Index("ix_netdetect_section_status", "status", "suppressed"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    investigation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("investigations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    context_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    platform: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+
+    #: How big the section was, and the shape of the group that could not be priced in it.
+    corpus_size: Mapped[int] = mapped_column(Integer, default=0)
+    suppressed: Mapped[int] = mapped_column(Integer, default=0)
+    group_size: Mapped[int] = mapped_column(Integer, default=0)
+    #: The largest share of the section any suppressed feature reached. Above `RARITY_CEILING` by
+    #: construction: that is what "suppressed" means.
+    top_prevalence: Mapped[float] = mapped_column(Float, default=0.0)
+    families_json: Mapped[list] = mapped_column(JSON, default=list)
+    #: The operator-facing sentence, written at detection time so the row stays readable without
+    #: the corpus, exactly as a finding's evidence sentences are.
+    sentence: Mapped[str] = mapped_column(Text, default="")
+
+    #: "open" until somebody looks. Reviewing is not dismissing a finding: there is no finding.
+    #: It records that a person read the section and decided what it was.
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Required when reviewing, for the same reason a dismissal reason is: a verdict with no stated
+    #: reason records that somebody looked and nothing about what they concluded.
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class NetdetectFinding(Base):
     """One corrected set-level finding from `app/netdetect`, kept so it can be judged later.
 
