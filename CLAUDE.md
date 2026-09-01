@@ -2240,6 +2240,64 @@ test's own premise was false: the ring shared text as well as reposts.
 Fixed by making the premise true (every account gets text nobody else could share), and it now
 holds **0 of 8 backgrounds**.
 
+#### The section an operation is big enough to hide in
+
+**The most serious blind spot found so far, and it is inverted from intuition: the more of a comment
+section an operation owns, the safer it is.**
+
+`RARITY_CEILING` (0.25) drops any feature held by more than a quarter of the corpus, on the
+reasoning that a common feature carries no information. That holds while the corpus is a fair
+background and is false when it is a comment section, which is exactly what an operation can flood.
+An operation of k accounts shares its hard-family tells (one signup week, one set of outside
+targets) across ALL k members by construction, so those features sit at prevalence k/n and are
+discarded FIRST, because per-account text shingles vary between members and stay rare.
+
+Measured, holding the operation at 8 accounts and shrinking the background:
+
+| op share | hard-family features surviving as rare | recall |
+|---|---|---|
+| 12% | 5 | 8/8 |
+| 24% | 5 | 8/8 |
+| **32%** | **0** | **0** |
+| 39% | 0 | 0 |
+| 50% | 0 | 0 |
+
+**The candidate generator still finds the group.** At 32% the operation comes out as an essentially
+pure community; at 39% the largest community is 11 of 11 operation accounts. What kills it is the
+structural refusal: `hard_evidence` has fallen to **0.00** and only text and timing carry weight, so
+it is refused for "only 1 family carried real weight". `detect` then returns no findings, which is
+indistinguishable from a clean scan. At 67% the detector inverts entirely and names 10 ORGANIC
+accounts, the organic minority now being the rare one.
+
+**`app/netdetect/domination.py` converts that silence into a stated refusal to resolve.** It counts
+hard-family features shared by at least half a candidate community that the ceiling threw away, and
+`DetectionResult.domination` carries the verdict. `RunOut.unresolvable` serves it, as a THIRD state
+beside `refused` (could not run) and an empty findings list (ran and found nothing).
+
+**It never claims an operation is present, and that restraint is measured rather than cautious.**
+The same statistic fires on a fan community filling 44% of a small section, because fans converging
+on one artist's posts is real network evidence: a null built from a section one group dominates
+cannot resolve that group in EITHER direction. The notice says so, offers the innocent reading, and
+names `assign.sweep`, which weighs accounts against formations catalogued from OTHER investigations
+and so does not depend on rarity within this corpus at all.
+
+**Restricting it to the HARD families is what keeps it honest.** The professional-beat control fills
+40% of a 25-account section and scores **zero**, because a newsroom shares text, timing and a
+publishing tool rather than provisioning and targets. Organic corpora at 25 and 60, and a viral
+thread, all score zero. Every dominated corpus scores 5 or more, so `MIN_SUPPRESSED_HARD` (3) sits
+in an empty gap rather than being fitted to either side.
+
+**The real fix is not this, and it is worth stating.** Rarity should be judged against a background
+of ordinary accounts rather than against the section under test, and this deployment has one: the
+accumulating `CoordinationEdge` graph and the formation catalogue. A signup week that is common in
+this section but rare across the deployment is still rare. That is a larger piece of work and it
+depends on accumulated data, so what ships here is the honest refusal. **Do not "fix" the blind spot
+by raising `RARITY_CEILING`**: the ceiling is also what keeps generic shared behaviour out of every
+other finding, and nothing has measured what raising it costs the controls.
+
+Pinned by `tests/test_netdetect_domination.py` (11), which pins the mechanism, the diagnostic, the
+newsroom silence, the fandom firing as CORRECT, and the three-state rule.
+
 #### The sub-group hole in `MIN_FAMILIES` is measured now, and it does not open
 
 `MIN_FAMILIES` is checked on the WHOLE candidate, and a candidate is a Louvain community rather

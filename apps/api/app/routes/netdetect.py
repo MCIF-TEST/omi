@@ -165,6 +165,18 @@ class RunOut(BaseModel):
     #: Set when the run could not be performed at all, as distinct from performing it and finding
     #: nothing. Never read an empty findings list as a clean result without checking this.
     refused: str | None
+    #: Set when one group is large enough HERE to poison the null this section provides, so an
+    #: empty findings list means "cannot tell" rather than "clean".
+    #:
+    #: An operation owning more than a quarter of a comment section pushes its own provisioning and
+    #: targeting evidence past the rarity ceiling, where it is dropped as ordinary before any
+    #: arithmetic runs. Measured: recall falls from 8/8 to 0 between 24% and 32% share, and the run
+    #: reports nothing, which reads exactly like a clean scan. This is the third state.
+    #:
+    #: It never claims an operation is present, because the same statistic fires on a fan community
+    #: filling a small section: a null built from a section one group dominates cannot resolve that
+    #: group in either direction. See `app/netdetect/domination.py`.
+    unresolvable: str | None = None
     #: What the member list does and does not claim. Served with the numbers rather than left in a
     #: docstring, for the same reason `/narratives` states what its detector cannot see.
     membership_note: str = MEMBERSHIP_NOTE
@@ -291,6 +303,11 @@ def run_on_investigation(
         null_threshold=result.null_threshold,
         rejected=len(result.rejected),
         refused=result.refused,
+        unresolvable=(
+            result.domination.sentence()
+            if result.domination is not None and result.domination.unresolvable
+            else None
+        ),
         recorded=recorded,
         accumulated_pairs=accumulated,
         leads=leads,

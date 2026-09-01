@@ -23,6 +23,8 @@ on the output so a finding can be described, and they never touch detection.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import logging
 from dataclasses import dataclass, field
 
@@ -67,6 +69,10 @@ MIN_HARD_EVIDENCE = 3.0
 MIN_CORPUS = 25
 
 
+if TYPE_CHECKING:
+    from app.netdetect.domination import Domination
+
+
 @dataclass(slots=True)
 class DetectionResult:
     findings: list[Candidate] = field(default_factory=list)
@@ -80,6 +86,13 @@ class DetectionResult:
     null_shuffles: int = 0
     #: Set when the whole run was refused rather than merely finding nothing.
     refused: str | None = None
+    #: Whether one group is large enough here to poison the null this section provides.
+    #:
+    #: THE DIFFERENCE BETWEEN "NOTHING FOUND" AND "CANNOT TELL". An operation that owns more than a
+    #: quarter of a comment section pushes its own hard-family tells past `RARITY_CEILING`, so they
+    #: are dropped as ordinary and the group is refused for want of a second family. Without this
+    #: the run returns no findings and reads exactly like a clean section. See `domination.py`.
+    domination: "Domination | None" = None
     #: The corpus the findings were made in. Carried so a caller can decompose a finding back to
     #: the features each pair actually shares (see `app.netdetect.persist`) without rebuilding it,
     #: which would risk rebuilding it DIFFERENTLY and attributing evidence that was never scored.
@@ -165,6 +178,13 @@ def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
             f"quantile. Nothing was tested."
         )
         return result
+
+    # Assessed on the CANDIDATE COMMUNITIES, which is where a dominant group is still intact: the
+    # generator finds it and only the significance test loses it. Computed before the early return
+    # below, or the one case that most needs saying would be the one case that never says it.
+    from app.netdetect import domination as dom
+
+    result.domination = dom.assess(corpus, list(cand.communities(corpus)))
 
     found = _search(corpus)
     if not found:
