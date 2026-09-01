@@ -2316,11 +2316,73 @@ Four rules on that record:
   significance test, and the statistic cannot separate an operation from a community, so the record
   carries the shape (how many accounts, how much of the section, which families) and the next step.
 
-Pinned by `tests/test_netdetect_domination.py` (18), which pins the mechanism, the diagnostic, the
-newsroom silence, the fandom firing as CORRECT, the three-state rule, the withdrawal, and the page
-warning. The two new routes are covered against a REAL non-admin in
-`tests/test_coordination_admin_gate.py`, because every other test here runs in local mode where
+Pinned by `tests/test_netdetect_domination.py` (22), which pins the mechanism, the diagnostic, the
+newsroom silence, the fandom firing as CORRECT, the three-state rule, the withdrawal, the page
+warning, and the catalogue fallback below. The two new routes are covered against a REAL non-admin
+in `tests/test_coordination_admin_gate.py`, because every other test here runs in local mode where
 `require_user` returns `is_admin=True`.
+
+##### The catalogue resolves what the section cannot, and that claim is measured now
+
+`domination.py` closed by telling the operator to go and sweep the section by hand against the
+formation catalogue, on the reasoning that a formation profile carries the surprise each feature had
+in the corpus it was LEARNED in, so it does not read this corpus's rarity at all. That reasoning was
+sound and it was **asserted, never measured**, which is the thing this file keeps warning about.
+
+It is measured now, and it holds. Catalogue the stadium operator from a section where it holds 8 of
+68, then rotate it onto accounts sharing no id with anything stored and vary its share of the NEW
+section:
+
+| op share | detect finds it | suppressed here | sweep places | organic placed |
+|---|---|---|---|---|
+| 12% | yes | 0 | 8 / 8 | 0 / 56 |
+| 24% | yes | 0 | 8 / 8 | 0 / 25 |
+| 32% | **no** | 5 | **8 / 8** | 0 / 17 |
+| 40% | **no** | 5 | **8 / 8** | 0 / 12 |
+| 50% | **no** | 5 | **8 / 8** | 0 / 8 |
+
+**Recall through the catalogue is FLAT across the whole range where recall through the section
+collapses.** The two are blind to different things, so the fallback is worth running exactly where
+the primary path fails.
+
+**The safety half matters more, because the statistic that sends us here fires on innocent groups
+too** and a fallback that answered those with names would turn a careful refusal into an accusation.
+Against a catalogue of two unrelated operations it places **nobody** on a fan community at 44% and at
+60% (which trips the statistic HARDER than the operation does, at 12 suppressed against 5), a
+newsroom at 40%, an uncatalogued amplifier ring at 32%, and plain organic.
+
+So the run now **does it automatically** rather than telling somebody to. Five rules:
+
+- **Only on a section that could not resolve itself.** On a section the detector CAN price, its own
+  findings are the better answer, and a second number beside them invites reading the two as
+  agreeing or disagreeing when they measure different things.
+- **COUNTS, never names, on both the response and the row.** A placement is a claim about a person
+  and it already has a home: `POST /formations/sweep` renders it through `_assignment_out` with the
+  evidence a reader needs to argue with it. A second serialiser on a second path is exactly how one
+  of them quietly stops carrying `refused` or `hard_evidence`, which this repo paid for once in
+  `coerce_comprehensive_model_output`.
+- **Three states, two of which report zero.** `catalogue_checked` false means never consulted;
+  true with `catalogue_empty` means nothing has been catalogued to compare against; true without it
+  means it looked. The panel branches on `catalogue_checked`, never on the count, and a source-level
+  test enforces that: branching on the count would tell an operator a section is clean when nothing
+  has ever been catalogued.
+- **`NOT_A_CLEARANCE` rides along, reused verbatim** from the sweep route rather than reworded. The
+  uncatalogued row above is the honest limit: the catalogue only recognises operations somebody has
+  already recorded.
+- **Refreshed on every re-run**, because the catalogue GROWS between runs and a section that placed
+  nobody last week can place somebody today. A stale zero is the same defect as a stale warning.
+
+Verified end to end against a real API and a real catalogue, not only in unit tests: a seeded 32%
+section reports no findings, records `unresolvable`, and the panel renders "the formation catalogue
+places 8 accounts here in an operation recorded in another investigation, 8 of which would have
+passed an individual review", naming nobody.
+
+**One thing this does NOT do is fix the blind spot.** The detector still cannot resolve such a
+section, and an operation nobody has catalogued is still invisible there (measured: 0 placed on the
+uncatalogued ring). The real fix is judging rarity against an outside background, which is a larger
+piece of work depending on accumulated data. **Do not "fix" it by raising `RARITY_CEILING`**: the
+ceiling is also what keeps generic shared behaviour out of every other finding, and nothing has
+measured what raising it costs the controls.
 
 #### The sub-group hole in `MIN_FAMILIES` is measured now, and it does not open
 

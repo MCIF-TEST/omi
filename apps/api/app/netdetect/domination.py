@@ -41,9 +41,46 @@ at 32% and above, and it fires harder (12 against 5) on a fan community filling 
 section, because fans converging on one artist's posts is real network evidence too.
 
 Both are the same true statement: this section is too small, relative to that group, to price what
-the group shares. So the finding is a REFUSAL TO RESOLVE, worded as one, and it names the tool that
-still works. `assign.sweep` weighs accounts against formations catalogued from OTHER investigations,
-so it does not depend on rarity within this corpus at all.
+the group shares. So the finding is a REFUSAL TO RESOLVE, worded as one.
+
+---------------------------------------------------------------------------------------------------
+THE CATALOGUE RESOLVES WHAT THE SECTION CANNOT, AND THAT IS MEASURED RATHER THAN ASSERTED
+---------------------------------------------------------------------------------------------------
+
+`assign.sweep` weighs an account against formations catalogued from OTHER investigations, using the
+surprise each feature carried in the corpus where it was learned. So it does not read this corpus's
+rarity at all, and a group large enough to poison its own background here cannot poison a profile
+built somewhere it was a minority.
+
+That was stated in this docstring for a while as reasoning. It is now a measurement. Catalogue the
+stadium operator from a section where it holds 8 of 68, then rotate it onto accounts sharing no id
+with anything stored and vary how much of the NEW section it owns:
+
+    op share   detect finds it   suppressed here   sweep places   organic placed
+      12%            yes               0              8 / 8          0 / 56
+      24%            yes               0              8 / 8          0 / 25
+      32%            NO                5              8 / 8          0 / 17
+      40%            NO                5              8 / 8          0 / 12
+      50%            NO                5              8 / 8          0 /  8
+
+Recall through the catalogue is FLAT across the whole range where recall through this section
+collapses. That is the point: the two are blind to different things, so the fallback is worth
+running exactly where the primary path fails.
+
+IT IS ALSO SAFE, WHICH MATTERS MORE, because the statistic that sends us here fires on innocent
+groups too and a fallback that answered them with names would turn a refusal into an accusation:
+
+    corpus                              suppressed   sweep places
+    fan community, 12 of 27 (44%)           12            0
+    fan community, 12 of 20 (60%)           12            0
+    professional beat, 10 of 25 (40%)        0            0
+    UNCATALOGUED ring, 8 of 25 (32%)         3            0
+    organic only, 25                         0            0
+
+The uncatalogued row is the honest limit and must be stated wherever this is surfaced: the catalogue
+can only recognise an operation somebody has already recorded, so an empty fallback means "no match
+in the catalogue", never "nobody here is coordinated". `assign.NOT_A_CLEARANCE` carries that wording
+already and this path reuses it rather than writing a second one.
 
 Restricting the statistic to the HARD families is what keeps it honest, and it is measured: the
 professional-beat control fills 40% of a 25-account section and scores ZERO here, because a newsroom
@@ -102,9 +139,10 @@ class Domination:
             f"{self.top_prevalence:.0%} of everyone who commented, so it was dropped as ordinary "
             f"before any statistics ran. That is what a group large enough to shape its own "
             f"background looks like, and it reads the same whether the group is an operation or a "
-            f"community that simply turned up together. This scan cannot tell them apart. Sweep "
-            f"these accounts against the formation catalogue, which weighs them against other "
-            f"investigations rather than against this one, or read them by hand."
+            f"community that simply turned up together. This scan cannot tell them apart. What "
+            f"still works is the formation catalogue, which weighs these accounts against other "
+            f"investigations rather than against this one: the run does that automatically and "
+            f"reports how many placed."
         )
 
 

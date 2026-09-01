@@ -553,6 +553,23 @@ export interface NetdetectSection {
   top_prevalence: number;
   families: string[];
   sentence: string;
+  /**
+   * What the formation catalogue said about this section, and the reason a row here is worth
+   * opening. A formation profile carries the surprise each feature had in the corpus it was
+   * LEARNED in, so it does not read this section's rarity and a group big enough to poison its own
+   * background here cannot poison a profile built where it was a minority.
+   *
+   * THREE STATES, and two of them report zero placements. `catalogue_checked` false means the
+   * catalogue was never consulted; true with `catalogue_empty` means nothing has been catalogued
+   * yet; true without it means it looked and this is a real answer. They are different statements
+   * about the people who commented here, so the panel must branch on them rather than on the count.
+   */
+  catalogue_checked: boolean;
+  catalogue_empty: boolean;
+  /** A count, never names. Placements are rendered by the sweep panel, with their evidence. */
+  catalogue_placed: number;
+  /** Of those, how many would have passed an individual review. The number to read first. */
+  catalogue_concealed: number;
   status: string;
   review_note: string | null;
   created_at: string;

@@ -203,6 +203,7 @@ def persist_section(
     context_id: str | None,
     platform: str,
     corpus_size: int,
+    catalogue=None,
     now: datetime | None = None,
 ):
     """Record, or clear, "this section could not be resolved".
@@ -219,6 +220,13 @@ def persist_section(
     A row an operator has already REVIEWED is kept, for the same reason a dismissed finding is kept:
     somebody's verdict is the only ground truth this system accumulates, and silently deleting it
     would make reviewing worthless.
+
+    ``catalogue`` is what the formation catalogue said about this section, and it is the reason the
+    row is worth opening at all: the section could not resolve itself, but a profile learned in a
+    DIFFERENT investigation does not depend on this section's rarity, so it can still place these
+    accounts. Counts only, never names, exactly as the rest of this row: a placement is a claim
+    about a person and belongs in the sweep panel that renders its evidence. Optional, because a
+    caller that could not run the fallback must still be able to write the warning.
     """
     from app.storage.models import NetdetectSection
 
@@ -248,6 +256,14 @@ def persist_section(
     row.top_prevalence = round(domination.top_prevalence, 6)
     row.families_json = list(domination.families)
     row.sentence = domination.sentence()
+    # Refreshed on every re-run, exactly as the numbers above are. The catalogue GROWS between
+    # runs, so a section that placed nobody last week can place somebody today, and carrying a
+    # stale zero forward would be the same defect as a stale warning left standing.
+    if catalogue is not None:
+        row.catalogue_checked = bool(catalogue.checked)
+        row.catalogue_empty = bool(catalogue.empty)
+        row.catalogue_placed = int(catalogue.placed)
+        row.catalogue_concealed = int(catalogue.concealed)
     row.updated_at = at
     return row
 

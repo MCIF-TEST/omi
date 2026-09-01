@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -188,6 +189,34 @@ class RunOut(BaseModel):
     #: False also means an earlier one was WITHDRAWN because the section became resolvable, which is
     #: why the run reports it rather than leaving the caller to infer it from `unresolvable`.
     section_recorded: bool = False
+    #: THE FALLBACK, run only when this section could not resolve itself. A formation profile
+    #: carries the surprise each feature had in the corpus it was LEARNED in, so the catalogue does
+    #: not read this corpus's rarity at all and a group big enough to poison its own background
+    #: here cannot poison a profile built where it was a minority.
+    #:
+    #: Measured, rotating one catalogued operator onto fresh accounts: through this section recall
+    #: falls 8/8 to 0 between 24% and 32% share, while through the catalogue it stays 8/8 at 32%,
+    #: 40% and 50%, with zero organic accounts placed. On the innocent controls that also trip the
+    #: statistic (a fan community at 44% and 60%, a newsroom at 40%, an uncatalogued ring at 32%)
+    #: it places nobody, so the fallback cannot turn a refusal into an accusation. See
+    #: `app/netdetect/domination.py` for both tables.
+    #:
+    #: THREE STATES, and two of them show zero. False means the section resolved itself so there
+    #: was nothing to fall back to; true with `catalogue_empty` means nothing has ever been
+    #: catalogued to compare against; true without it means the catalogue was consulted.
+    catalogue_checked: bool = False
+    catalogue_empty: bool = False
+    #: A COUNT, never names. The names have a home already: `POST /formations/sweep` renders them
+    #: with the placement discipline built for exactly that, and a second serialiser on a second
+    #: path is how one of them quietly stops carrying `refused` or `hard_evidence`. This number is
+    #: the pointer to that panel, not a replacement for it.
+    catalogue_placed: int = 0
+    #: Of those, how many would have passed an individual review. The row to read first: an account
+    #: the per-account engine already flags is one an analyst could have found without any of this.
+    catalogue_concealed: int = 0
+    #: Why an empty fallback is not an all-clear. Reused verbatim from the sweep route rather than
+    #: reworded here, because the claim is identical and two wordings drift.
+    catalogue_note: str | None = None
     #: NEW pairs in the accumulating graph. A pair already in it is strengthened rather than
     #: created, so this is "how many of these people had never been linked before" and deliberately
     #: not "how much evidence was folded in". Zero on a re-run of one post is the correct answer.
@@ -301,6 +330,21 @@ def run_on_investigation(
             log.warning("netdetect: could not record findings for %s", slug, exc_info=True)
             recorded = 0
 
+    # THE FALLBACK. Only on a section that could not resolve itself, because that is the one state
+    # where this system otherwise has nothing further to offer: the detector reports nothing and the
+    # nothing is indistinguishable from a clean scan. The catalogue is blind to a different thing
+    # (it reads the surprise a feature carried where it was LEARNED, not here), so it is worth
+    # consulting exactly where the primary path fails and nowhere else.
+    unresolvable = (
+        result.domination.sentence()
+        if result.domination is not None and result.domination.unresolvable
+        else None
+    )
+    fallback = (
+        _catalogue_fallback(rows, exclude_context=target or "")
+        if unresolvable else _CatalogueFallback()
+    )
+
     # THE SECTION VERDICT IS RECORDED SEPARATELY, AND THAT IS THE WHOLE POINT.
     #
     # The block above is gated on `result.findings`, which is exactly the case a dominated section
@@ -320,6 +364,7 @@ def run_on_investigation(
                     context_id=target or None,
                     platform=(result.findings[0].platform if result.findings else "unknown"),
                     corpus_size=result.corpus_size,
+                    catalogue=fallback,
                 )
                 section_open = row is not None
                 session.commit()
@@ -335,11 +380,14 @@ def run_on_investigation(
         null_threshold=result.null_threshold,
         rejected=len(result.rejected),
         refused=result.refused,
-        unresolvable=(
-            result.domination.sentence()
-            if result.domination is not None and result.domination.unresolvable
-            else None
-        ),
+        unresolvable=unresolvable,
+        catalogue_checked=fallback.checked,
+        catalogue_empty=fallback.empty,
+        catalogue_placed=fallback.placed,
+        catalogue_concealed=fallback.concealed,
+        # Carried only when the fallback actually looked. Attaching it to a run that never
+        # consulted the catalogue would state a caveat about a question nobody asked.
+        catalogue_note=fallback.note,
         recorded=recorded,
         section_recorded=section_open,
         accumulated_pairs=accumulated,
@@ -372,6 +420,69 @@ def run_on_investigation(
             for c in result.findings
         ],
     )
+
+
+@dataclass(slots=True)
+class _CatalogueFallback:
+    """What the formation catalogue could say about a section that could not resolve itself.
+
+    Counts only. The names have a home already at `POST /formations/sweep`, which serialises a
+    placement through `_assignment_out` with every field a reader needs to argue with it. A second
+    rendering on a second path is precisely how one of them quietly stops carrying `refused` or
+    `hard_evidence`, and this repo has paid for a hardcoded per-item field list once already in
+    `coerce_comprehensive_model_output`.
+    """
+
+    checked: bool = False
+    empty: bool = False
+    placed: int = 0
+    concealed: int = 0
+
+    @property
+    def note(self) -> str | None:
+        """Why an empty fallback is not an all-clear, or None when it never looked.
+
+        Reused verbatim from the sweep route's constant rather than reworded: the claim is
+        identical, and two wordings of one caveat drift until they disagree about what the product
+        is willing to say.
+        """
+        from app.netdetect.assign import NOT_A_CLEARANCE
+        return NOT_A_CLEARANCE if self.checked and not self.empty else None
+
+
+def _catalogue_fallback(rows: list[dict], *, exclude_context: str) -> _CatalogueFallback:
+    """Weigh an unresolvable section against formations catalogued in OTHER investigations.
+
+    ONLY CALLED WHEN THIS SECTION COULD NOT RESOLVE ITSELF, and that restraint is deliberate rather
+    than a cost saving: on a section the detector CAN price, its own findings are the better answer
+    and a second number beside them would invite reading the two as agreeing or disagreeing when
+    they measure different things.
+
+    Never raises. It is a fallback on a path that has already refused to answer, so failing it would
+    turn a completed run into an error for an operator who is looking at a real result.
+    """
+    from app.netdetect import registry
+    from app.netdetect.assign import sweep
+    from app.netdetect.features import profile_from_commenter
+
+    out = _CatalogueFallback(checked=True)
+    try:
+        with get_session() as session:
+            profiles = registry.load_profiles(session)
+        if not profiles:
+            out.empty = True
+            return out
+        accounts = [
+            profile_from_commenter(r, exclude_context={exclude_context} if exclude_context else set())
+            for r in rows if r.get("external_id")
+        ]
+        result = sweep(accounts, profiles)
+        out.placed = len(result.placed)
+        out.concealed = sum(1 for p in result.placed if p.concealed)
+    except Exception:  # noqa: BLE001 - same rule as accumulation: never fail a completed run
+        log.warning("netdetect: the catalogue fallback failed", exc_info=True)
+        return _CatalogueFallback(checked=False)
+    return out
 
 
 def _holders_of(corpus, item, members: list[str]) -> list[str] | None:
@@ -482,6 +593,25 @@ class SectionOut(BaseModel):
     top_prevalence: float
     families: list[str]
     sentence: str
+    #: WHAT THE CATALOGUE SAID, and the reason a row in this queue is worth opening. The section
+    #: could not price its own dominant group, but a formation profile carries the surprise each
+    #: feature had where it was LEARNED, so it does not read this section's rarity at all.
+    #: Measured: through the section recall falls 8/8 to 0 between 24% and 32% share, while through
+    #: the catalogue it stays 8/8 at 32%, 40% and 50%, placing nobody on the innocent controls that
+    #: also trip this statistic.
+    #:
+    #: THREE STATES. `catalogue_checked` false means it was never consulted (an older row, or a run
+    #: whose fallback failed); true with `catalogue_empty` means nothing has been catalogued yet;
+    #: true without it means it looked. Two of the three show zero placements and they are not the
+    #: same statement about the people who commented here.
+    catalogue_checked: bool
+    catalogue_empty: bool
+    #: Counts, never names. A placement is a claim about a person and belongs in the sweep panel,
+    #: which renders the evidence a reader needs to argue with it.
+    catalogue_placed: int
+    #: Of those, how many would have passed an individual review: the part of the section no
+    #: per-account score would have caught, and the row to read first.
+    catalogue_concealed: int
     status: str
     review_note: str | None
     created_at: datetime
@@ -493,8 +623,10 @@ SECTION_NOTE = (
     "These are sections this scan could not resolve, NOT sections where an operation was found. A "
     "group large enough to shape the background it is measured against cannot be priced by that "
     "background in either direction: the same shape is produced by an operation and by a community "
-    "that turned up together. Sweep the investigation against the formation catalogue, which weighs "
-    "its accounts against other investigations rather than against this one, or read it by hand."
+    "that turned up together. What the run CAN still do is weigh these accounts against the "
+    "formation catalogue, which measures them against other investigations rather than against "
+    "this one, and each row carries the result. A row that placed nobody is not a clean section: "
+    "the catalogue only recognises operations somebody has already recorded."
 )
 
 
@@ -515,6 +647,12 @@ def _section_out(row) -> SectionOut:
         top_prevalence=row.top_prevalence,
         families=list(row.families_json or []),
         sentence=row.sentence or "",
+        # `or 0` / `or False` rather than the raw column: a row written before these existed reads
+        # them as NULL, and NULL through a non-optional int field is a 500 on the whole queue.
+        catalogue_checked=bool(row.catalogue_checked),
+        catalogue_empty=bool(row.catalogue_empty),
+        catalogue_placed=int(row.catalogue_placed or 0),
+        catalogue_concealed=int(row.catalogue_concealed or 0),
         status=row.status,
         review_note=row.review_note,
         created_at=row.created_at,

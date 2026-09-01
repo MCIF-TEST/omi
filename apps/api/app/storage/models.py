@@ -1712,6 +1712,28 @@ class NetdetectSection(Base):
     #: the corpus, exactly as a finding's evidence sentences are.
     sentence: Mapped[str] = mapped_column(Text, default="")
 
+    #: WHAT THE FORMATION CATALOGUE SAID ABOUT THIS SECTION, which is the one thing that still
+    #: works here. A profile carries the surprise each feature had in the corpus it was LEARNED in,
+    #: so it does not read this section's rarity and a group big enough to poison its own
+    #: background here cannot poison a profile built where it was a minority. Measured: recall
+    #: through this section falls 8/8 to 0 between 24% and 32% share while recall through the
+    #: catalogue stays 8/8 at 32%, 40% and 50%, and it places nobody on the innocent controls that
+    #: also trip this statistic. See `app/netdetect/domination.py`.
+    #:
+    #: STILL A COUNT, and the no-accounts rule above is why. A placement names a person and belongs
+    #: in the sweep panel, which renders it with the evidence a reader needs to argue with it. What
+    #: this row carries is enough to tell an operator whether the section is worth opening.
+    catalogue_placed: Mapped[int] = mapped_column(Integer, default=0)
+    #: Of those, how many would have passed an individual review: the part of the section no
+    #: per-account score would have caught.
+    catalogue_concealed: Mapped[int] = mapped_column(Integer, default=0)
+    #: THREE STATES, and two of them store zero. False means the catalogue was never consulted;
+    #: true with an empty catalogue means there was nothing to compare against; true otherwise
+    #: means it looked. Reading a zero without this as "the catalogue cleared them" is exactly the
+    #: mistake `attachment_checked` and `corroboration.checked` exist to prevent.
+    catalogue_checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    catalogue_empty: Mapped[bool] = mapped_column(Boolean, default=False)
+
     #: "open" until somebody looks. Reviewing is not dismissing a finding: there is no finding.
     #: It records that a person read the section and decided what it was.
     status: Mapped[str] = mapped_column(String(16), default="open", index=True)

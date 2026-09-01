@@ -110,6 +110,8 @@ function SectionRow({ row, onReviewed }: { row: NetdetectSection; onReviewed: ()
       </p>
       <p className="text-xs text-fg-dim">{row.sentence}</p>
 
+      <CatalogueVerdict row={row} />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           value={note}
@@ -123,5 +125,60 @@ function SectionRow({ row, onReviewed }: { row: NetdetectSection; onReviewed: ()
       </div>
       {failed ? <p className="text-xs text-tier-high">{failed}</p> : null}
     </div>
+  );
+}
+
+/**
+ * What the formation catalogue could say about a section that could not resolve itself.
+ *
+ * THIS IS THE LEAD, and it is the difference between a queue of dead ends and a queue of work.
+ * "Could not resolve" leaves an operator with nothing to do; "could not resolve, and the catalogue
+ * places 8 of these accounts in a known operation" is somewhere to start.
+ *
+ * IT BRANCHES ON `catalogue_checked`, NEVER ON THE COUNT. Three states report zero placements and
+ * they are opposite statements about named people: never consulted, nothing catalogued to compare
+ * against, and consulted with no match. Same discipline as `attachment_checked` on a finding.
+ *
+ * NO NAMES. A placement is a claim about a person and belongs in the sweep panel below, which
+ * renders the evidence a reader needs to argue with it. This is a count and a pointer.
+ */
+function CatalogueVerdict({ row }: { row: NetdetectSection }) {
+  if (!row.catalogue_checked) {
+    return (
+      <p className="text-xs text-fg-mute">
+        The formation catalogue was not consulted for this section.
+      </p>
+    );
+  }
+  if (row.catalogue_empty) {
+    return (
+      <p className="text-xs text-fg-mute">
+        Nothing has been catalogued yet, so there was nothing to weigh these accounts against. That
+        is not the same as finding no match.
+      </p>
+    );
+  }
+  if (row.catalogue_placed === 0) {
+    return (
+      <p className="text-xs text-fg-mute">
+        No account here matched a known operation. The catalogue only recognises operations somebody
+        has already recorded, so this is not a clean section.
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs text-tier-elevated">
+      The formation catalogue places{' '}
+      <span className="font-mono">{row.catalogue_placed}</span>{' '}
+      {row.catalogue_placed === 1 ? 'account' : 'accounts'} here in an operation recorded in another
+      investigation
+      {row.catalogue_concealed > 0 ? (
+        <>
+          , <span className="font-mono">{row.catalogue_concealed}</span> of which would have passed
+          an individual review
+        </>
+      ) : null}
+      . Sweep this investigation to see which.
+    </p>
   );
 }

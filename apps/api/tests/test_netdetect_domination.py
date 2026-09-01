@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import netdetect_corpora as C  # noqa: E402
 
-from app.netdetect import detect  # noqa: E402
+from app.netdetect import detect, detect_from_commenters  # noqa: E402
 from app.netdetect import candidates as cand  # noqa: E402
 from app.netdetect import domination as dom  # noqa: E402
 from app.netdetect.features import profile_from_commenter  # noqa: E402
@@ -151,7 +151,12 @@ def test_the_notice_never_claims_an_operation_and_names_the_tool_that_still_work
         assert word not in said, f"the notice claims {word!r} on evidence it could not price"
     assert "cannot tell them apart" in said
     assert "community" in said, "the innocent reading is not offered"
-    assert "sweep" in said, "the tool that does not depend on this corpus is not named"
+    # The tool that does not depend on THIS corpus has to be named. It used to say "sweep these
+    # accounts against the catalogue", i.e. go and do it yourself; the run now does it and reports
+    # the count, so the sentence names the catalogue and says so. Asserted on the CLAIM rather than
+    # on the old verb, or a wording change looks like a regression.
+    assert "formation catalogue" in said, "the tool that does not depend on this corpus is not named"
+    assert "other investigations" in said, "the sentence does not say why the catalogue still works"
 
 
 def test_the_check_is_explicit_and_a_zero_is_never_read_as_resolvable():
@@ -300,7 +305,10 @@ def test_the_route_serves_the_queue_with_the_note_that_it_is_not_a_queue_of_oper
     said = body["note"].lower()
     assert "not sections where an operation was found" in said
     assert "community" in said, "the innocent reading is not offered"
-    assert "sweep" in said
+    assert "formation catalogue" in said, "the tool that still works is not named"
+    # The honest limit has to travel with the queue: the catalogue only recognises operations
+    # somebody has already recorded, so a row that placed nobody is not a clean section.
+    assert "not a clean section" in said
 
     row = body["sections"][0]
     assert row["suppressed"] >= dom.MIN_SUPPRESSED_HARD
@@ -343,3 +351,194 @@ def test_the_page_warns_about_what_the_queue_could_not_cover():
     assert "note.trim()" in panel
     # And it must not take the page down with it.
     assert "setRows([])" in panel, "a failed load does not degrade to an empty panel"
+
+    # THE CATALOGUE VERDICT IS THE LEAD, and it must branch on whether the catalogue was CONSULTED,
+    # never on the placement count. Three states report zero and they are opposite statements about
+    # named people: never consulted, nothing catalogued, and consulted with no match. A panel that
+    # branched on the count would tell an operator a section is clean when nothing has ever been
+    # catalogued to compare it against.
+    assert "catalogue_checked" in panel, "the panel does not distinguish 'we did not look'"
+    assert "catalogue_empty" in panel, "an empty catalogue reads as a clean section"
+    assert "not a clean section" in panel, "the honest limit of the catalogue is not stated"
+    # Still no names here: the sweep panel renders placements with their evidence.
+    assert "external_id" not in panel, "the panel reaches for account identities"
+
+
+# ==================================================================================================
+# The catalogue resolves what the section cannot, and that is a measurement rather than an argument
+# ==================================================================================================
+#
+# These are slow: each one detects on several corpora to LEARN a formation before it can sweep with
+# it, which is the only honest way to build the fixture. `SHUFFLES` is deliberately the same small
+# number the rest of this file uses.
+def _catalogue(operator: str, bg: int, op: int):
+    """Learn a formation the way the pipeline learns one: detect, then profile the finding.
+
+    The catalogue corpus holds the operation at 8 of 68, a share where the rarity ceiling has not
+    swallowed anything, which is the whole premise: the profile records what these features were
+    worth WHERE THEY WERE RARE.
+    """
+    from app.netdetect.formation import build_profile
+
+    rows = C.organic_population(60, seed=bg) + C.planted_operation(
+        8, seed=op, discipline=0.0, operator=operator)
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    hits = [c for c in result.findings
+            if sum(1 for m in c.members if m.startswith("op")) >= 4]
+    assert hits, f"the {operator} catalogue corpus produced no finding; fixture changed"
+    return build_profile(hits[0], result.corpus)
+
+
+def _sweep_section(rows, profiles):
+    from app.netdetect.assign import sweep
+
+    accounts = [profile_from_commenter(r) for r in rows if r.get("external_id")]
+    return sweep(accounts, profiles)
+
+
+def test_the_catalogue_places_an_operation_this_section_is_too_small_to_price():
+    """THE CLAIM THIS MODULE'S DOCSTRING USED TO MAKE WITHOUT MEASURING IT.
+
+    A formation profile carries the surprise each feature had in the corpus it was LEARNED in. So a
+    group large enough to poison the background HERE cannot poison a profile built where it was a
+    minority, and the catalogue should keep working across exactly the range where this section
+    stops working.
+
+    Measured, rotating the stadium operator onto accounts sharing no id with anything catalogued:
+
+        op share   detect finds it   suppressed   sweep places   organic placed
+          24%            yes             0           8 / 8           0 / 25
+          32%            NO              5           8 / 8           0 / 17
+          40%            NO              5           8 / 8           0 / 12
+
+    The 32% row is the one that matters: the primary path reports nothing, which is
+    indistinguishable from a clean scan, and the fallback still names the whole operation.
+    """
+    profiles = {"STADIUM": _catalogue("stadium", 5, 6)}
+
+    for bg, section_resolves in ((25, True), (17, False), (12, False)):
+        rows = C.organic_population(bg, seed=31) + C.planted_operation(
+            8, seed=6, discipline=0.0, operator="stadium", prefix="new")
+        corpus, groups = _communities(rows)
+        d = dom.assess(corpus, groups)
+        assert d.unresolvable is not section_resolves, (
+            f"at {8 / (bg + 8):.0%} share the section's own resolvability changed; fixture moved"
+        )
+
+        placed = {p.external_id for p in _sweep_section(rows, profiles).placed}
+        operation = {r["external_id"] for r in rows if r["external_id"].startswith("new")}
+        ordinary = {r["external_id"] for r in rows if r["external_id"].startswith("org")}
+
+        assert operation <= placed, (
+            f"at {8 / (bg + 8):.0%} share the catalogue placed only "
+            f"{len(operation & placed)} of {len(operation)} operation accounts. The fallback is "
+            f"supposed to be blind to THIS corpus's rarity."
+        )
+        assert not (ordinary & placed), (
+            f"the fallback placed ordinary accounts: {sorted(ordinary & placed)}"
+        )
+
+
+def test_the_fallback_places_nobody_on_the_innocent_groups_that_also_trip_the_statistic():
+    """THE SAFETY PROPERTY, AND IT MATTERS MORE THAN THE RECALL ONE.
+
+    `assess` cannot separate an operation from a community that simply turned up together: it fires
+    HARDER on a fan community filling 44% of a section than on a planted operation at 32%. So the
+    fallback runs on innocent sections by construction, and a fallback that answered those with
+    names would convert a careful refusal into an accusation about real people.
+
+    Measured, against a catalogue of two unrelated operations:
+
+        corpus                              suppressed   sweep places
+        fan community, 12 of 27 (44%)           12            0
+        professional beat, 10 of 25 (40%)        0            0
+        UNCATALOGUED ring, 8 of 25 (32%)         3            0
+        organic only, 25                         0            0
+
+    The uncatalogued row is the honest limit and is why `NOT_A_CLEARANCE` rides along: the catalogue
+    only recognises operations somebody has already recorded.
+    """
+    profiles = {"STADIUM": _catalogue("stadium", 5, 6), "CLINIC": _catalogue("clinic", 17, 23)}
+
+    innocent = {
+        "fan community at 44%": C.organic_population(15, seed=41) + C.fan_community(12),
+        "professional beat at 40%": C.organic_population(15, seed=41) + C.professional_beat(10),
+        "uncatalogued ring at 32%": C.organic_population(17, seed=31) + C.amplifier_ring(8, seed=61),
+        "organic only": C.organic_population(25, seed=31),
+    }
+    for label, rows in innocent.items():
+        result = _sweep_section(rows, profiles)
+        assert not result.placed, (
+            f"{label}: the fallback placed {[p.external_id for p in result.placed]}. A section "
+            f"flagged as unresolvable is one this scan REFUSED to resolve, and the fallback must "
+            f"not turn that refusal into a claim about named people."
+        )
+
+
+def test_the_fallback_has_three_states_and_two_of_them_report_zero():
+    """`catalogue_placed == 0` is three different statements and only one is about the accounts.
+
+    Not checked (the section resolved itself, or an older row), checked against an empty catalogue,
+    and checked against a real one that matched nobody. Same distinction as `attachment_checked`
+    and `corroboration.checked`, and the same reason: reading "we did not look" as "we looked and
+    they are fine" is the mistake this package keeps paying for.
+    """
+    from app.routes.netdetect import _CatalogueFallback
+
+    never = _CatalogueFallback()
+    assert never.checked is False and never.placed == 0
+    assert never.note is None, "a caveat about a question nobody asked"
+
+    empty = _CatalogueFallback(checked=True, empty=True)
+    assert empty.placed == 0
+    assert empty.note is None, (
+        "an empty catalogue matched nobody because there was nothing to match against, so "
+        "'this is not a clearance' is not the statement to make about it"
+    )
+
+    looked = _CatalogueFallback(checked=True, placed=0)
+    assert looked.note, "a real sweep that matched nobody MUST carry the not-a-clearance wording"
+
+
+def test_the_section_record_carries_what_the_catalogue_said_and_still_names_nobody():
+    """The row is what makes the queue actionable: "could not resolve" is a dead end, while "could
+    not resolve, and the catalogue places 8 of these accounts" is a lead.
+
+    It stays COUNTS. A placement is a claim about a person and belongs in the sweep panel, which
+    renders the evidence a reader needs to argue with it.
+    """
+    from app.routes.netdetect import _CatalogueFallback
+
+    d = _unresolvable()
+    with get_session() as session:
+        _wipe(session)
+        row = _store(session, d)
+        assert row is not None
+        # No fallback passed: the row must not claim the catalogue cleared anything.
+        assert bool(row.catalogue_checked) is False
+
+        row2 = persist_section(
+            session, d, investigation_id=None, context_id="post-2", platform="x", corpus_size=37,
+            catalogue=_CatalogueFallback(checked=True, placed=8, concealed=5),
+        )
+        session.commit()
+        assert row2.catalogue_checked is True
+        assert row2.catalogue_placed == 8
+        assert row2.catalogue_concealed == 5
+
+        # A re-run REFRESHES it, because the catalogue grows between runs and a section that placed
+        # nobody last week can place somebody today. A stale zero is the same defect as a stale
+        # warning left standing.
+        persist_section(
+            session, d, investigation_id=None, context_id="post-2", platform="x", corpus_size=37,
+            catalogue=_CatalogueFallback(checked=True, placed=11, concealed=6),
+        )
+        session.commit()
+        refreshed = session.query(NetdetectSection).filter_by(context_id="post-2").one()
+        assert refreshed.catalogue_placed == 11
+
+    # And the serialised row names nobody, which is the rule the whole record is built on.
+    from app.routes.netdetect import _section_out
+    served = _section_out(refreshed).model_dump()
+    assert "members" not in served and "placed_accounts" not in served
+    assert served["catalogue_placed"] == 11
