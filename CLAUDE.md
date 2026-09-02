@@ -29,11 +29,17 @@ accumulating `CoordinationEdge` graph, written since the tracking layer shipped 
 back). Read "Formations" and "Corroboration" below. Two rules there were decided by measurement and
 will be re-broken by anyone who reasons about them instead: the OMI score may characterise a
 formation but never detect one, and **total accumulated history does not separate an operation from
-a newsroom**, so only its hard-family half discriminates.
+a newsroom**, so only its hard-family half discriminates. A sixth session made the netdetect finding
+READABLE (the members-by-features evidence matrix) and then found the blind spot it had been hiding:
+an operation owning more than about a quarter of a comment section pushes its own hard evidence past
+`RARITY_CEILING`, so the run reports nothing and reads exactly like a clean scan. Read "The section
+an operation is big enough to hide in" before touching that ceiling, and note the rule that came out
+of it: **the catalogue resolves what the section cannot**, measured rather than argued, and it is a
+fallback rather than a fix.
 
-Suite measured at **2550
-passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both failures pre-existing and listed below. The 8
-skips are the corpus-backed tests — see "The dataset corpus is not in git".
+Suite measured at **2592
+passed, 8 skipped, 2 failed** (20m54s, 2026-09-01, head `bab0c94`), both failures pre-existing and
+listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
