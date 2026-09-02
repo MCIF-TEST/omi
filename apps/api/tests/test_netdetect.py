@@ -1098,3 +1098,70 @@ def test_bridging_the_two_sub_groups_gives_the_candidate_a_real_shared_core():
         assert c.needs_adjudication, (
             "a group whose only hard evidence is three accounts' signup week was published"
         )
+
+
+# ==================================================================================================
+# The amplifier ring publishes with more bystanders than members, and nobody had measured it
+# ==================================================================================================
+#: Kept small on purpose: the full grid this was measured on is nine configurations and minutes of
+#: detection. These three carry the finding, and the number below is a CEILING on a known defect
+#: rather than a target.
+RING_CONTAMINATION_GRID = [(40, 63), (60, 61), (80, 63)]
+
+#: MEASURED, NOT CHOSEN. Across the full nine-configuration grid (backgrounds 40/60/80 x ring seeds
+#: 61/62/63) the published ring findings named 81 organic accounts among 153, i.e. 52.9%, and
+#: `attachment.assess` flagged only 18 of those 81. This bound sits just above the worst of the
+#: three configurations kept here so the defect cannot silently get worse; it is emphatically not a
+#: statement that this rate is acceptable.
+RING_CONTAMINATION_CEILING = 0.75
+
+
+def test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_a_defect():
+    """A CHARACTERISATION OF SOMETHING WRONG, pinned so it cannot worsen unnoticed.
+
+    `test_a_finding_is_mostly_the_operation_and_the_rate_is_pinned` measures purity on the PLANTED
+    OPERATION and pins it at 10%. Nobody ever measured it on the amplifier ring, which is a
+    different shape: the ring shares a publishing tool and a set of amplification targets, and
+    organic accounts in the background genuinely repost some of the same posts. So Louvain attaches
+    them and the significance test does not remove them.
+
+    Measured across the full grid: 81 organic accounts among 153 named, 52.9%, in findings that are
+    PUBLISHED rather than flagged for adjudication. That is the most serious category this package
+    has: `needs_adjudication` is None, so nothing asks a human before these names are shown as
+    members of a coordinated ring.
+
+    THE MEMBERSHIP TEST DOES NOT COVER IT. `attachment.assess` flagged 18 of the 81, and on four of
+    the nine configurations it flagged ZERO of 9, 15, 12 and 17 bystanders. It reports rather than
+    drops by design, so an unflagged bystander is published as an equal member.
+
+    WHY THIS IS NOT FIXED HERE. The obvious lever is `RARITY_CEILING`, and raising it to 0.60 was
+    measured to cut this from 15 bystanders to 1 on the worst configuration WHILE also restoring the
+    domination blind spot's recall, with no control publishing anything it did not already publish.
+    That is a change to the core constant of this package on synthetic corpora, so it is written up
+    with its evidence and left to a deliberate decision rather than taken as a side effect of a
+    measurement. See CLAUDE.md.
+    """
+    named = innocent = 0
+    for organic, seed in RING_CONTAMINATION_GRID:
+        rows = C.organic_population(organic, seed=31) + C.amplifier_ring(8, seed=seed)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        hits = [c for c in result.findings if _members_from(c, "amp") >= 4]
+        assert hits, f"the ring was not found at organic={organic} seed={seed}"
+        for c in hits:
+            named += len(c.members)
+            innocent += sum(1 for m in c.members if m.startswith("org"))
+
+    assert named, "no ring finding was produced anywhere on the grid"
+    rate = innocent / named
+    assert rate <= RING_CONTAMINATION_CEILING, (
+        f"{innocent} innocent accounts among {named} named ({rate:.1%}) in PUBLISHED ring findings, "
+        f"worse than the pinned {RING_CONTAMINATION_CEILING:.0%}. This bound characterises a known "
+        f"defect; going above it means it has degraded further."
+    )
+    # The defect is real: if this ever fails because the rate has FALLEN to the planted-operation
+    # level, that is a fix worth noticing and the ceiling above should be tightened to lock it in.
+    assert rate > MAX_CONTAMINATION_RATE, (
+        f"ring contamination is now {rate:.1%}, at or below the {MAX_CONTAMINATION_RATE:.0%} pinned "
+        f"for the planted operation. Something improved: tighten RING_CONTAMINATION_CEILING and "
+        f"update the note in CLAUDE.md rather than leaving a bound nothing constrains."
+    )

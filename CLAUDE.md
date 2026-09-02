@@ -1860,6 +1860,72 @@ detector rightly does with its admitting posterior) is very tempting. On the mea
 swept-in organic accounts **out-rank a genuine operation member**, so an operator shown that ranking
 would clear the wrong accounts and doubt the right ones. A number beside a person's name is read as a
 judgement about them, so publishing it would be worse than publishing nothing.
+
+##### THE SAME NUMBER ON THE AMPLIFIER RING IS 52.9%, AND IT WAS NEVER MEASURED
+
+Both figures above (6.8%, later 1.0%) are the **planted operation**. Nobody had measured purity on
+the amplifier ring, which is a different shape: the ring shares a publishing tool and a set of
+amplification targets, and organic accounts in the background genuinely repost some of the same
+posts, so Louvain attaches them and the significance test does not remove them.
+
+Measured across a systematic grid (backgrounds 40/60/80 x ring seeds 61/62/63), at the production
+`RARITY_CEILING` of 0.25:
+
+| | |
+|---|---|
+| ring recall | 8/8 on all nine |
+| named accounts | 153 |
+| organic among them | **81, i.e. 52.9%** |
+| state | **PUBLISHED**, not flagged for adjudication |
+| flagged by `attachment.assess` | **18 of 81** |
+
+**More than half the named accounts are bystanders, and the finding is published rather than sent to
+a human.** `needs_adjudication` is None on every one of them, so nothing asks anybody before these
+names are shown as members of a coordinated ring. The membership test does not cover the gap: on
+four of the nine configurations it flagged **zero** of 9, 15, 12 and 17 bystanders, and it reports
+rather than drops by design, so an unflagged bystander is published as an equal member.
+
+The ring is a genuine positive and publishing it is correct: `test_an_amplifier_ring_is_now_
+reachable_where_it_previously_left_no_evidence` asserts exactly that. The defect is the membership,
+not the finding.
+
+Pinned by `test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_a_defect`,
+which is a CHARACTERISATION rather than an approval: it bounds the rate above so the defect cannot
+silently worsen, and it also fails if the rate ever falls to the planted-operation level, so an
+accidental fix gets noticed and locked in instead of leaving a bound nothing constrains.
+
+##### What raising `RARITY_CEILING` actually costs, now that it has been measured
+
+This file has twice said the ceiling must not simply be raised, on the stated grounds that nothing
+had measured what raising it costs the controls. That measurement now exists, and it does not say
+what the warning assumed. Published / flagged / largest membership, per control:
+
+| control | 0.25 (production) | 0.60 | 1.00 |
+|---|---|---|---|
+| organic, 60 | 0/0/0 | 0/0/0 | 0/0/0 |
+| organic, 40 | 0/0/0 | 0/0/0 | 0/0/0 |
+| newsroom in organic | 0/1/10 | 0/1/10 | 0/2/**28** |
+| newsroom at 40% of 25 | 0/1/10 | 0/2/10 | 0/2/10 |
+| fan community in organic | 0/0/0 | 0/0/0 | 0/0/0 |
+| fan community at 44% | 0/0/0 | 0/0/0 | 0/0/0 |
+| amplifier ring | **1**/0/**23** | **1**/0/**9** | 1/0/9 |
+
+**No control that is silent at 0.25 publishes anything at 0.60 or at 1.00.** The false accusation the
+warning existed to prevent does not appear. What the ceiling changes is WHO GETS NAMED, and it moves
+in both directions: a full lift bloats the newsroom finding from its true 10 reporters to 28, while
+on the amplifier ring the production setting is the one naming 15 bystanders and 0.60 cuts that to 1.
+
+Put beside the domination band, **0.60 is not a trade on anything measured here**: it restores the
+blind spot's recall (0 of 16 to 16 of 16 at 32% share) AND removes most of the ring's false naming,
+while leaving every other control exactly where it was.
+
+**It is still NOT changed, and that is deliberate.** These are synthetic corpora, `RARITY_CEILING` is
+the core constant of this package, and a threshold that decides whether named real people are
+reported as running an operation together should move by a decision with a commit and a reviewer
+behind it, not as a side effect of a session that went looking for something else. The prohibition
+above stands, but its stated REASON is now gone: this is a recommendation with numbers attached,
+waiting on the owner, and the first thing to do before acting on it is to reproduce the ring row on
+real scanned data rather than on `netdetect_corpora`.
 `test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did` is a
 guard against building it, and states what would have to change for it to become buildable.
 
