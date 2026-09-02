@@ -43,9 +43,16 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2595
-passed, 8 skipped, 2 failed** (29m42s, 2026-09-02, head `b00b871`), both failures pre-existing and
+Suite measured at **2598
+passed, 8 skipped, 2 failed** (26m13s, 2026-09-02, head `b842b70`), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
+
+That figure was measured in **six sequential chunks rather than one process**, because this sandbox
+reclaimed the container twice while a single 30-minute run was in flight and the run is lost with it.
+Chunking is not free: collection order is what item 2 below turns on, so a chunked total can differ
+from a single-process one, and a single `python -m pytest -q` remains the reference method when the
+container survives long enough to finish it. Both pre-existing failures reproduced in the chunked
+run, so the two methods agree on this tree.
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -97,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2550 passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both documented below:
+Current measured state: **2598 passed, 8 skipped, 2 failed** (26m13s, 2026-09-02), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
