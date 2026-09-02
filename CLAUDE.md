@@ -37,8 +37,8 @@ an operation is big enough to hide in" before touching that ceiling, and note th
 of it: **the catalogue resolves what the section cannot**, measured rather than argued, and it is a
 fallback rather than a fix.
 
-Suite measured at **2592
-passed, 8 skipped, 2 failed** (20m54s, 2026-09-01, head `bab0c94`), both failures pre-existing and
+Suite measured at **2595
+passed, 8 skipped, 2 failed** (29m42s, 2026-09-02, head `b00b871`), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check

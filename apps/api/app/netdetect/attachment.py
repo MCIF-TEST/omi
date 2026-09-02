@@ -139,8 +139,15 @@ class Attachment:
     median: float = 0.0
     #: Non-null when no verdict was reached. Never read this as "nobody is weakly attached".
     #: The widest step between two neighbouring contributions: the boundary this test looks for.
-    #: Reported whether or not it cleared `MIN_CONTRIBUTION_GAP`, so an abstention shows its own
-    #: evidence rather than only its conclusion.
+    #: Set whether or not it cleared `MIN_CONTRIBUTION_GAP`, so a caller holding the Attachment can
+    #: see WHY it abstained and not merely that it did.
+    #:
+    #: IN-PROCESS ONLY, and deliberately so for now. `attachment_note` carries the abstention itself
+    #: through `Candidate` to the stored row and out to a reader, so the CONDITION is not lost at
+    #: the serialiser; this number is the supporting detail behind it. Surfacing it would mean a
+    #: Candidate field, a column, an `_INCREMENTAL_COLUMNS` entry and a route field, which is real
+    #: plumbing for a diagnostic. Worth doing if an operator ever has to argue with an abstention,
+    #: and worth NOT claiming until then.
     gap: float = 0.0
     abstained: str | None = None
 
