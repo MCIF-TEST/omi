@@ -381,6 +381,20 @@ def test_the_page_never_lets_an_empty_weak_list_read_as_an_all_clear():
     assert "Membership was not tested" in src
     assert "Every member carries this finding" in src
 
+    # FOUR STATES NOW, and the fourth only became reachable when the membership test was repaired.
+    # It used to key on the median contribution and abstained on exactly the findings that are
+    # mostly bystanders, so a majority flag could not occur; flagging went from 18 of 81 bystanders
+    # to 81 of 81. "N highlighted members ... check those names first" is no prioritisation when N
+    # is most of the list, and it frames a finding that is mostly bystanders as an operation with a
+    # few weak members. Those are different claims about named real people.
+    assert "which is most of it" in src, (
+        "the page gives the same sentence whether 2 of 20 members were flagged or 17 of 25; the "
+        "second is a finding whose composition is in doubt, not a few names to check first"
+    )
+    assert "weakly_attached.length * 2 > row.members.length" in src, (
+        "the majority case is not computed from the two lists, so it cannot be distinguished"
+    )
+
 
 def test_a_judgement_cannot_be_recorded_without_a_reason():
     """The reason is the only thing a later calibration can be fitted against. The API rejects a

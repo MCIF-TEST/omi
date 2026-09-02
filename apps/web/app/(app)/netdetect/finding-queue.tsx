@@ -294,9 +294,20 @@ function FindingCard({
               with and without `attachment_checked`, so the sentence never leaves it to inference. */}
           {!row.attachment_checked
             ? `Membership was not tested${row.attachment_note ? `: ${row.attachment_note}` : '.'}`
-            : row.weakly_attached.length > 0
-              ? `${row.weakly_attached.length} highlighted member${row.weakly_attached.length === 1 ? '' : 's'} did not carry this finding. They are still members; check those names against the evidence first.`
-              : 'Every member carries this finding.'}
+            : row.weakly_attached.length === 0
+              ? 'Every member carries this finding.'
+              : row.weakly_attached.length * 2 > row.members.length
+                // FOUR STATES, and this one only started happening when the membership test was
+                // repaired. It used to key on the median contribution and abstained on exactly the
+                // findings that are mostly bystanders, so a majority flag could not occur; the
+                // measured rate went from 18 of 81 bystanders flagged to 81 of 81. A finding where
+                // MOST members did not carry it is not "a few names to check first", it is a
+                // finding whose composition is in doubt, and saying "check those first" about 68%
+                // of a list is no prioritisation at all. The distinction matters because these are
+                // named real people: the honest reading is that the group is mostly bystanders,
+                // not that the group is an operation with some weak members.
+                ? `${row.weakly_attached.length} of ${row.members.length} members did not carry this finding, which is most of it. Read the membership itself as in question rather than the group as an operation with weak members, and judge it on the highlighted rows before the unhighlighted ones.`
+                : `${row.weakly_attached.length} highlighted member${row.weakly_attached.length === 1 ? '' : 's'} did not carry this finding. They are still members; check those names against the evidence first.`}
         </p>
       </div>
 

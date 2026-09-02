@@ -1963,7 +1963,18 @@ either the ceiling decision above or a change to candidate generation.
 
 `WEAK_FRACTION` and `MIN_MEDIAN_CONTRIBUTION` are retained with their original measurements and
 marked as no longer the rule. They read correctly on findings where bystanders are a MINORITY, which
-is exactly what made the error hard to see. Pinned by
+is exactly what made the error hard to see.
+
+**FIXING IT MADE A FOURTH UI STATE REACHABLE, and the queue had to grow one.** The old rule could
+not produce a majority flag: it abstained on exactly the findings that are mostly bystanders, so the
+page only ever saw a handful highlighted. Now a 25-member finding highlights 17. The existing
+sentence, *"N highlighted members did not carry this finding. They are still members; check those
+names against the evidence first"*, is wrong twice at that scale: telling somebody to check 68% of a
+list first is no prioritisation, and "an operation with some weak members" is not what a mostly
+bystander finding is. So above half, the queue says the membership itself is in question rather than
+the group being an operation with weak members. Same discipline as the three states it joins:
+`attachment_checked` false, empty, non-empty, and now non-empty-and-most-of-them are four different
+statements about named real people, and the page must not collapse any pair of them. Pinned by
 `test_a_finding_more_than_half_bystanders_still_gets_a_verdict`, which asserts the fixture really
 does have a bystander majority before asserting anything else, so it cannot quietly stop testing the
 condition the old rule could not survive.
