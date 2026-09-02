@@ -35,7 +35,13 @@ an operation owning more than about a quarter of a comment section pushes its ow
 `RARITY_CEILING`, so the run reports nothing and reads exactly like a clean scan. Read "The section
 an operation is big enough to hide in" before touching that ceiling, and note the rule that came out
 of it: **the catalogue resolves what the section cannot**, measured rather than argued, and it is a
-fallback rather than a fix.
+fallback rather than a fix. The same session then went looking for claims this file makes that
+nobody had actually measured, and three were wrong. The membership test's abstention keyed on a
+level rather than a boundary, so it switched itself off exactly as contamination worsened; the
+amplifier ring publishes more bystanders than members and no measurement had ever been run against
+that population; and the corroboration lead path, written off in three places as "built and
+unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
+`app/netdetect/`**, and note that all three of these had passed review and shipped.
 
 Suite measured at **2595
 passed, 8 skipped, 2 failed** (29m42s, 2026-09-02, head `b00b871`), both failures pre-existing and
@@ -1955,6 +1961,24 @@ bystanders, up from 18 of 81, with no genuine member flagged in any configuratio
 improved in the other direction: a clean 8-member finding that previously had 2 GENUINE members
 wrongly flagged now flags nobody.
 
+**It abstains on SOME contaminated findings, and that is the rule working rather than a miss.** The
+grid above builds its ring corpora over organic seed 31. Build them over the ring's own seed instead
+and the two populations stop separating, so it names nobody:
+
+| corpus | genuine members span | bystanders | verdict |
+|---|---|---|---|
+| ring 40/61 (1 bystander) | -0.218 to 0.746 | 0.712 | abstains |
+| ring 80/63 (5 bystanders) | 0.692 to 1.630 | -0.316 to 0.947 | abstains |
+
+In the first, the single bystander out-contributes **six of the eight genuine members**; in the
+second the top bystander out-contributes the weakest genuine one. Any rule forced to produce a
+verdict on those would flag real operation members and clear the bystander, which is exactly the
+failure the discarded MAX rule had, reached from the other direction. So do not read "flagged 0 of
+5" on such a corpus as a regression: `attachment_checked` is False and the surface says no
+membership verdict was reached, which is the honest third state. Pinned by
+`test_it_abstains_on_a_contaminated_finding_whose_populations_do_not_separate`, which asserts the
+overlap BEFORE asserting the abstention so it cannot pass on a premise that stopped being true.
+
 **What this does NOT change is who gets NAMED.** The finding still carries 52.9% bystanders, because
 `attachment` reports and never drops, which is a deliberate rule and not an oversight. What changed
 is that a reader now sees every one of them marked as not carrying the finding, instead of roughly
@@ -2304,6 +2328,22 @@ What separates them is **which families** the prior evidence sits in, which is `
 extended across time. So the module reports two things and never conflates them: `log_lr` is
 context and does not discriminate, and `hard_pairs` / `hard_families` are the discriminating half.
 
+**That split also turns out to CONTAIN the amplifier ring's contamination, which is the second
+reason not to collapse it.** A published finding's pairs are folded into the graph permanently, and
+the ring names 52.9% bystanders, so the obvious worry is that one over-broad finding poisons the
+deployment's memory rather than just one page. Measured over the nine-configuration ring grid:
+**652 pairs recorded, 400 of them touching an innocent account, 54.6% of the accumulated weight,
+and ZERO of those 400 carrying a hard family.** The soft half is contaminated at roughly the rate
+the finding is; the discriminating half is not contaminated at all.
+
+That is structural rather than lucky. `pair_evidence_from` records a pair only where BOTH accounts
+hold the same evidence feature, and a hard family is by definition the operator's own act, which a
+swept-in bystander does not perform. The same property showed up independently in the lead path
+below, where hard history never reached a bystander in any of twelve configurations. **So a
+contaminated finding inflates the number that was already documented as meaning nothing on its own,
+and contributes nothing to the number decisions are keyed on.** Anything that starts reading
+`log_lr` as evidence gives that containment away.
+
 Four rules:
 
 - **It is a PRIOR, never a seventh family.** The families are measured inside one corpus against a
@@ -2319,11 +2359,38 @@ Four rules:
 - **`checked` is explicit.** A zero with `checked` false means nobody looked, which is not a
   statement about the people named. Same distinction as `attachment_checked`.
 
+#### The lead path fires, and this file said it did not
+
 `annotate` also covers REFUSED candidates, so a set this corpus could not prove whose members were
-already seen doing the operator's own acts becomes a **lead** rather than nothing. **Stated
-honestly: that path has never been observed firing.** The rejected list is empty across every
-synthetic scenario, because a candidate weak enough to fail the null is normally caught earlier by
-a structural refusal. Built and unproven, not a feature.
+already seen doing the operator's own acts becomes a **lead** rather than nothing. This section used
+to say that path had never been observed firing, because the rejected list was empty across every
+synthetic scenario, a candidate weak enough to fail the null being caught earlier by a structural
+refusal. **Measured 2026-09-02, both halves of that are false**, and the same sentence was in three
+places (here, the `annotate` docstring, and a comment in `routes/netdetect.py`), which is the drift
+this file keeps warning about.
+
+**The near-miss pile is never empty.** Eleven corpora (the planted operation at eight discipline
+settings, plus the newsroom, fan community and amplifier ring) each produced **one to three** rejected
+candidates, measured at 40 shuffles against a production default of 24, so the result is conservative
+rather than an artefact of a loose null. Nor are they close calls: their scores ran **48% to 82% of
+the null threshold**, the newsroom's being the nearest. A candidate reaches the null having already
+passed all four refusals in `_structural_refusal`, which is exactly why it is not filtered upstream.
+
+**The lead itself fires.** Seed the graph from an operation caught under two unrelated posts, then
+scan the same operator where this corpus can prove nothing: **one or two leads on all twelve
+configurations**, including discipline **0.85 and 1.0 where `detect` returns no findings at all**.
+That is the case the path was built for, and it makes history a third recall route beside the
+detector and the formation sweep.
+
+Two measurements keep it from becoming an accusation, and both must survive any work here:
+
+- **A lead candidate is mostly NOT the operation.** Overlaps measured at 2 of 17, 4 of 23, 5 of 16.
+  It is a Louvain community holding a few known accounts among many ordinary ones, so `RunOut.leads`
+  is a **count** and naming those accounts would repeat the amplifier-ring defect on weaker evidence.
+- **Hard history did not spread to the bystanders, in any of the twelve.** `hard_pairs` came to
+  exactly the pairs the known members account for between themselves, so no pair involving a
+  swept-in account carried hard-family history. That follows from what the hard families ARE (the
+  operator's own acts, which a bystander does not perform) rather than from luck.
 
 Stored as `corroboration_json`, a snapshot refreshed on re-run exactly as `score` and `corrected_p`
 are, and registered in `_INCREMENTAL_COLUMNS`. Pinned by
@@ -2474,7 +2541,17 @@ accumulating `CoordinationEdge` graph and the formation catalogue. A signup week
 this section but rare across the deployment is still rare. That is a larger piece of work and it
 depends on accumulated data, so what ships here is the honest refusal. **Do not "fix" the blind spot
 by raising `RARITY_CEILING`**: the ceiling is also what keeps generic shared behaviour out of every
-other finding, and nothing has measured what raising it costs the controls.
+other finding.
+
+That warning used to end "and nothing has measured what raising it costs the controls", which stopped
+being true when the cost WAS measured (see the ceiling-cost table above). The prohibition stands and
+the reason for it has changed, which matters because the two call for different next steps. It is no
+longer "we do not know": on the corpora available, 0.60 was measured **strictly better on every
+control**, restoring this blind spot's recall (0 of 16 to 16 of 16 at 32% share) and cutting the
+amplifier ring's named bystanders from 15 to 1, with no control publishing anything it did not
+already publish. It stays unchanged because those corpora are synthetic, this is the core constant
+of the package, and the honest first step is reproducing the ring row on real scanned data. **It is
+the owner's decision with the evidence in front of them, not a measurement nobody has taken.**
 
 **A dominated section is WRITTEN DOWN, because it produces no findings to notice.** The first draft
 computed the verdict and returned it in `RunOut` only, which is the same defect this file has
@@ -2569,8 +2646,10 @@ passed an individual review", naming nobody.
 section, and an operation nobody has catalogued is still invisible there (measured: 0 placed on the
 uncatalogued ring). The real fix is judging rarity against an outside background, which is a larger
 piece of work depending on accumulated data. **Do not "fix" it by raising `RARITY_CEILING`**: the
-ceiling is also what keeps generic shared behaviour out of every other finding, and nothing has
-measured what raising it costs the controls.
+ceiling is also what keeps generic shared behaviour out of every other finding. That cost HAS since
+been measured (see "What raising `RARITY_CEILING` actually costs" above, and the note beside the
+constant in `significance.py`), and the prohibition stands on a different footing now: not that
+nobody has looked, but that the corpora are synthetic and this is the owner's decision.
 
 #### The sub-group hole in `MIN_FAMILIES` is measured now, and it does not open
 

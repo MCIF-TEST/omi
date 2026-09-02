@@ -223,8 +223,11 @@ class RunOut(BaseModel):
     accumulated_pairs: int = 0
     #: Candidates this corpus REFUSED whose members were already seen doing the operator's own acts
     #: under other posts. Not findings and never promoted to findings: history must not manufacture
-    #: one. They are the near-miss pile worth a second look. See `corroboration.annotate`, which
-    #: states honestly that this path has never been observed firing on the synthetic corpora.
+    #: one. They are the near-miss pile worth a second look, and it is measurably reachable: every
+    #: one of eleven synthetic corpora produced rejected candidates, and seeding the graph from an
+    #: operation caught under other posts produced leads on all twelve settings tried, including
+    #: those where `detect` finds nothing at all. See `corroboration.annotate` for the numbers.
+    #: A COUNT, never names: a lead candidate is mostly ordinary accounts Louvain swept in.
     leads: int = 0
     #: False when history could not be read at all, so an all-zero corroboration is not mistaken for
     #: "none of these people have ever been seen together".

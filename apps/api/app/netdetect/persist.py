@@ -54,6 +54,17 @@ def pair_evidence_from(corpus: Corpus, candidate: Candidate) -> dict[tuple[str, 
     Reads the candidate's own evidence rather than recomputing, so what lands in the graph is
     exactly what a reader was shown. A feature held by only one member of a pair contributes
     nothing to that pair, which is the point.
+
+    THAT LAST RULE IS WHAT CONTAINS A CONTAMINATED FINDING, and it was measured rather than assumed.
+    A finding's pairs go into the graph permanently, and the amplifier ring publishes 52.9%
+    bystanders, so an over-broad finding could poison the deployment's memory rather than one page.
+    Over the nine-configuration ring grid: 652 pairs recorded, 400 touching an innocent account and
+    54.6% of the accumulated weight, and ZERO of those 400 carrying a HARD family.
+
+    So contamination lands entirely in `log_lr`, which `corroboration.py` already documents as
+    non-discriminating (a newsroom saturates it too), and not at all in `hard_pairs`, which is what
+    decisions are keyed on. It holds because both accounts must share the SAME feature and a hard
+    family is by definition the operator's own act, which a swept-in bystander does not perform.
     """
     members = sorted(candidate.members)
     if len(members) < 2 or len(members) > MAX_MEMBERS_FOR_PAIRS:

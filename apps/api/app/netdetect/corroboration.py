@@ -235,11 +235,34 @@ def annotate(session, candidates, *, platform: str | None = None,
     thing in the near-miss pile. It stays refused, because history must never manufacture a finding,
     and it becomes a lead a person can act on.
 
-    **Stated honestly: that path has not been observed firing.** Across every synthetic scenario in
-    `tests/netdetect_corpora.py` the rejected list is empty, because a candidate weak enough to fail
-    the shuffled search is normally caught earlier by a structural refusal and never reaches it.
-    Whether real corpora produce a near-miss pile at all is unmeasured, so treat the lead path as
-    built and unproven rather than as a feature.
+    MEASURED 2026-09-02, AND IT CORRECTS WHAT THIS DOCSTRING USED TO SAY. It claimed the path had
+    never been observed firing, on the reasoning that the rejected list is empty across every
+    synthetic scenario because a candidate weak enough to fail the shuffled search is caught earlier
+    by a structural refusal. Both halves are false.
+
+    The near-miss pile is never empty. Across eleven corpora (the planted operation at eight
+    discipline settings, the newsroom, the fan community and the amplifier ring), every one produced
+    one to three rejected candidates, at 40 shuffles against a production default of 24, so the
+    result is if anything conservative. They are not close calls either: their scores ran 48% to 82%
+    of the null threshold, the newsroom's being the nearest. A candidate reaches this point having
+    already passed all four structural refusals in `_structural_refusal`, which is why they arrive
+    here rather than being filtered upstream.
+
+    The lead path fires too. Seeding the graph from an operation caught under two unrelated posts,
+    then scanning the same operator at discipline settings where this corpus can prove nothing, gave
+    one or two leads on all twelve configurations tested, INCLUDING at discipline 0.85 and 1.0 where
+    `detect` returns no findings whatever. That is exactly the case the path was built for: the
+    corpus is silent and the deployment's memory is not.
+
+    TWO THINGS TO KEEP IN VIEW, because they are what stop this becoming an accusation:
+
+    * **A lead candidate is mostly NOT the operation.** The measured overlaps were 2 of 17, 4 of 23,
+      5 of 16 and so on: it is a Louvain community holding a few known accounts among many ordinary
+      ones. `RunOut.leads` is a COUNT for that reason and must stay one.
+    * **Hard history did not spread to those bystanders, in any configuration.** In all twelve,
+      `hard_pairs` came to exactly the number of pairs the known members can account for on their
+      own, so no pair involving a swept-in account carried hard-family history. That follows from
+      what the hard families are (the operator's own acts) rather than from luck, and it is pinned.
 
     Must run BEFORE this run's own pairs are folded into the graph. The context exclusion makes it
     correct either way, but reading first keeps the two acts in the order a reader would assume.

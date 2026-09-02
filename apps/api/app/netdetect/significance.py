@@ -62,6 +62,23 @@ MAX_FEATURE_SURPRISE = 6.0
 #: Features held by more than this share of the corpus carry no information and are skipped before
 #: any arithmetic. Both a statistical statement and the performance strategy: rare features are few
 #: and their co-occurrence lists are short.
+#:
+#: THE CORE CONSTANT OF THIS PACKAGE, AND CHANGING IT IS A DECISION SOMEBODY TAKES, not a tuning
+#: step. Everything known about it was measured and lives in CLAUDE.md; the summary is here because
+#: this is the line a future session would edit and it should not have to go looking.
+#:
+#: * It is what makes `app/netdetect/domination.py` necessary. An operation owning more than about a
+#:   third of a comment section pushes its own hard-family tells past this ceiling, so they are
+#:   discarded FIRST and the run reports nothing, which reads exactly like a clean scan.
+#: * Raising it to 0.60 was measured **strictly better on every control available**: it restores
+#:   that blind spot's recall (0 of 16 to 16 of 16 at 32% share) and cuts the amplifier ring's named
+#:   bystanders from 15 to 1 on the worst configuration, with no control publishing anything it did
+#:   not already publish. Lifting it entirely does NOT: at 1.00 the newsroom finding bloats from 10
+#:   named to 28.
+#: * It is nonetheless UNCHANGED at 0.25, and the reason is not that the cost is unknown. The
+#:   corpora are synthetic, this ceiling is also what keeps generic shared behaviour out of every
+#:   other finding, and the honest first step is reproducing the amplifier-ring result on real
+#:   scanned data. That is the owner's call with the evidence in front of them.
 RARITY_CEILING = 0.25
 
 #: A feature must be shared by at least this many of the group. Two accounts sharing something is

@@ -127,6 +127,61 @@ def test_a_homogeneous_group_gets_no_verdict_rather_than_an_arbitrary_one():
     assert seen, "no homogeneous finding in the fixture; the abstention path went untested"
 
 
+def test_it_abstains_on_a_contaminated_finding_whose_populations_do_not_separate():
+    """Abstaining on a finding that HAS bystanders is correct when they are not distinguishable.
+
+    The bimodality rule was measured on ring corpora built over organic seed 31, where it flags
+    every bystander and no genuine member. On ring corpora whose background carries the ring's own
+    seed the two populations overlap instead, and it names nobody. That looks like a miss and is the
+    opposite of one.
+
+    THE COUNTER-EXAMPLE IS WHAT MAKES THE POINT: here a bystander out-contributes genuine members of
+    the ring, so any rule forced to produce a verdict would flag real operation members and clear the
+    bystander. That is the failure the discarded MAX rule had, reached from the other direction. This
+    asserts the overlap FIRST, so if a corpus change ever separates these populations the test says
+    so instead of quietly passing on a premise that stopped being true.
+    """
+    ring = C.amplifier_ring(8, seed=61)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(40, seed=61) + ring
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    findings = [f for f in result.findings if len(set(f.members) & ring_ids) >= 4]
+    assert findings, "the ring was not found, so this test has nothing to assess"
+
+    checked = 0
+    for finding in findings:
+        members = set(finding.members)
+        bystanders = members - ring_ids
+        if not bystanders:
+            continue
+        attachment = assess(result.corpus, finding.members)
+        contribution = attachment.contribution
+        if not contribution:
+            continue
+        genuine = [v for m, v in contribution.items() if m in ring_ids]
+        outside = [v for m, v in contribution.items() if m not in ring_ids]
+        if not genuine or not outside:
+            continue
+
+        # THE PREMISE. If this ever fails the populations have separated and the abstention below is
+        # no longer the right answer for this corpus.
+        assert max(outside) > min(genuine), (
+            "premise: on this corpus a bystander must out-contribute at least one genuine member, "
+            "or there is a boundary to find and abstaining would be a miss rather than restraint"
+        )
+
+        checked += 1
+        assert not attachment.answered, (
+            "a verdict was reached on a finding whose populations overlap, so whoever it names was "
+            "chosen by rounding rather than by evidence"
+        )
+        assert attachment.weak == [], "an abstention must name nobody"
+        assert "equally" in (attachment.abstained or "")
+
+    assert checked, "no contaminated finding was examined; the case went untested"
+
+
 def test_a_real_community_is_not_given_a_weakest_member():
     """The professional-beat control. A newsroom on one beat IS everybody contributing alike, so
     singling one reporter out would be inventing a distinction the evidence does not carry."""

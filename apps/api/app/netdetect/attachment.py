@@ -110,6 +110,21 @@ MIN_MEDIAN_CONTRIBUTION = 0.5
 #: fitted to either side, and in all three contaminated cases the split lands on EXACTLY the
 #: bystander count. The RATIO of step to spread was measured too and does not work: homogeneous runs
 #: 0.390 to 0.587 against a contaminated 0.379 to 0.579, which overlap completely.
+#:
+#: IT ALSO ABSTAINS ON SOME CONTAMINATED FINDINGS, AND THAT IS CORRECT RATHER THAN A MISS. The
+#: numbers above come from ring corpora built on organic seed 31. Measured on ring corpora whose
+#: organic background carries the ring's own seed, the two populations do not separate at all and
+#: this abstains, naming nobody:
+#:
+#:     ring 40/61  8 ring, 1 bystander   ring spans -0.218..0.746, the bystander sits at 0.712
+#:     ring 80/63  8 ring, 5 bystanders  ring spans  0.692..1.630, bystanders reach 0.947
+#:
+#: In the first the single bystander out-contributes SIX of the eight genuine members; in the second
+#: the top bystander out-contributes the weakest genuine one. A rule that insisted on producing a
+#: verdict there would have flagged real operation members and cleared the bystander, which is the
+#: same failure the discarded MAX rule had, arriving from the other direction. So "flagged 0 of 5"
+#: on such a corpus is this working: `abstained` is set, `answered` is False, and the surface says
+#: no membership verdict was reached rather than showing a clean bill of health.
 MIN_CONTRIBUTION_GAP = 0.8
 
 #: Above this many members the test abstains rather than running.

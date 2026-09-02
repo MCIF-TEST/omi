@@ -1130,9 +1130,16 @@ def test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_
     has: `needs_adjudication` is None, so nothing asks a human before these names are shown as
     members of a coordinated ring.
 
-    THE MEMBERSHIP TEST DOES NOT COVER IT. `attachment.assess` flagged 18 of the 81, and on four of
-    the nine configurations it flagged ZERO of 9, 15, 12 and 17 bystanders. It reports rather than
-    drops by design, so an unflagged bystander is published as an equal member.
+    THE MEMBERSHIP TEST NOW NAMES THEM ALL, AND THE RATE ABOVE IS STILL 52.9%. When this test was
+    written `attachment.assess` flagged only 18 of the 81, missing every bystander on four of the
+    nine configurations, because its abstention keyed on the MEDIAN contribution and a finding more
+    than half bystanders has a median inside the bystander cluster. The bimodality rule that
+    replaced it flags 81 of 81 with 0 genuine members caught.
+
+    That fixed the guard and does not fix this, which is the distinction worth keeping straight:
+    `attachment` REPORTS and never drops, by design, so a flagged bystander is still a member and
+    still published. The rate this test pins is unchanged by the repair, and only a change to what
+    gets INTO a finding can move it.
 
     WHY THIS IS NOT FIXED HERE. The obvious lever is `RARITY_CEILING`, and raising it to 0.60 was
     measured to cut this from 15 bystanders to 1 on the worst configuration WHILE also restoring the
