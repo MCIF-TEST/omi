@@ -111,6 +111,17 @@ Current measured state: **2550 passed, 8 skipped, 2 failed** (14m47s, 2026-08-29
 
 **A second failure is yours.** If you see mass failures instead, see the next section first.
 
+**Do not EDIT a source file while a suite is running: the source-level guards will fail spuriously.**
+This repo has many tests that read source with `inspect.getsource` or by opening a file
+(`test_signals_are_admin_only`, the netdetect route guards, `lib/analyst-identity.test.ts`, the
+mention exclusion guard in `test_netdetect.py`, and others). `inspect.getsource` resolves the
+function's line numbers as they were AT IMPORT and then slices the file AS IT IS ON DISK, so
+inserting lines above a guarded function mid-run makes the guard read shifted text and assert
+against the wrong lines. Observed 2026-09-02: a comment block added above `RARITY_CEILING` while a
+run was in flight failed `test_a_mention_of_another_member_is_not_convergence_on_an_outside_target`,
+which passed immediately on a re-run with the file stable, and nothing about the failure pointed at
+the real cause. Start the run after the edits, or expect to re-run.
+
 **Count depends on collection order.** A run during the launch-readiness work reported *13* failures;
 11 of those were order-dependent analyst tests that adding new test files shifted into a different
 order, not regressions. Item 2 above is the same effect. If you see extra failures, re-run the
