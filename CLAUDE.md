@@ -1894,6 +1894,80 @@ which is a CHARACTERISATION rather than an approval: it bounds the rate above so
 silently worsen, and it also fails if the rate ever falls to the planted-operation level, so an
 accidental fix gets noticed and locked in instead of leaving a bound nothing constrains.
 
+###### Why the membership test misses them: the abstention switches itself off when it is needed
+
+Diagnosed rather than guessed. `attachment.assess` flagged 18 of the 81 and flagged ZERO on four
+configurations, and zero-of-many is the signature of an ABSTENTION rather than a bad threshold.
+
+`MIN_MEDIAN_CONTRIBUTION` (0.5) exists for the genuinely homogeneous group: every member holds the
+same features, removing any one barely moves the score, and singling anybody out would be picking a
+rounding error. Its docstring states the reasoning exactly: *"in a homogeneous operation ... the
+median contribution sits near zero."* That is true. **The code relies on the converse, and the
+converse is false.** A finding that is more than half bystanders ALSO has a near-zero median,
+because the median falls inside the bystander cluster rather than between the clusters.
+
+Measured on the ring grid, per member leave-one-out deltas:
+
+| corpus | bystanders | verdict | median | ring members | organic members |
+|---|---|---|---|---|---|
+| 40/61 | 6 of 14 | checked | 1.570 | +1.48 to +2.53 | -1.08 to -0.43 |
+| 40/63 | 9 of 17 | **ABSTAIN** | 0.017 | +1.42 to +2.05 | -1.14 to +0.02 |
+| 60/61 | 15 of 23 | **ABSTAIN** | -0.001 | +1.19 to +2.05 | -0.74 to +0.13 |
+| 60/62 | 8 of 16 | checked | 1.158 | +1.79 to +3.05 | -0.87 to +0.52 |
+| 80/63 | 17 of 25 | **ABSTAIN** | -0.162 | +1.49 to +1.98 | -0.57 to +0.01 |
+
+The two populations separate completely in EVERY row: no ring member below +1.19, no bystander
+above +0.52. The bystanders are perfectly identifiable, and the test reports that none of them can
+be singled out. **It abstains in exactly the three rows where bystanders reach half or more**, which
+is to say the guard turns itself off as contamination gets worse.
+
+**THE OBVIOUS FIX IS MEASURED AND DOES NOT WORK, so do not reach for it.** Testing the MAX instead
+of the median classifies all five ring rows perfectly (`0.25 x max` lands in the empty band every
+time) and keeps both newsroom controls abstaining at 0.485 and 0.463 against the 0.5 floor. It then
+breaks the case the abstention exists for: a PURE 8-member operation with zero bystanders measures
+median 0.184 with a max of **0.834**, so a max rule checks it, sets a threshold of 0.209 just above
+its median, and flags about half a clean group. All three homogeneous fixtures behave that way
+(maxes 0.834, 0.602, 0.668), so `test_a_homogeneous_group_gets_no_verdict_rather_than_an_arbitrary_
+one` would stop exercising the abstention path at all rather than merely failing.
+
+What actually separates the two is **bimodality**: a contaminated finding is two populations with an
+empty band between them, a homogeneous one is a single continuous spread. Level cannot see that and
+neither can the maximum.
+
+**FIXED, and the rule is now the widest step.** `assess` sorts the contributions, takes the largest
+gap between neighbours, and abstains below `MIN_CONTRIBUTION_GAP` (0.8) instead of below a median
+level. Measured largest step, which is what puts the constant where it is:
+
+| non-contaminated | step | contaminated | step | splits |
+|---|---|---|---|---|
+| homogeneous op 50/5 | 0.568 | ring 40/63 | 1.406 | 9 of 9 |
+| homogeneous op 50/23 | 0.282 | ring 60/61 | 1.057 | 15 of 15 |
+| homogeneous op 60/23 | 0.287 | ring 80/63 | 1.482 | 17 of 17 |
+| newsroom control | 0.235 | | | |
+
+The band between 0.568 and 1.057 is empty, so 0.8 sits in the middle of it rather than being fitted
+to either side, and every contaminated split lands on EXACTLY the bystander count. The step-to-spread
+RATIO was measured too and does not work: homogeneous 0.390 to 0.587 against contaminated 0.379 to
+0.579, which overlap completely.
+
+Re-measured over the full nine-configuration ring grid: **the membership test now flags 81 of 81
+bystanders, up from 18 of 81, with no genuine member flagged in any configuration.** One row also
+improved in the other direction: a clean 8-member finding that previously had 2 GENUINE members
+wrongly flagged now flags nobody.
+
+**What this does NOT change is who gets NAMED.** The finding still carries 52.9% bystanders, because
+`attachment` reports and never drops, which is a deliberate rule and not an oversight. What changed
+is that a reader now sees every one of them marked as not carrying the finding, instead of roughly
+four in five being presented as equal members of an operation. Reducing the naming itself needs
+either the ceiling decision above or a change to candidate generation.
+
+`WEAK_FRACTION` and `MIN_MEDIAN_CONTRIBUTION` are retained with their original measurements and
+marked as no longer the rule. They read correctly on findings where bystanders are a MINORITY, which
+is exactly what made the error hard to see. Pinned by
+`test_a_finding_more_than_half_bystanders_still_gets_a_verdict`, which asserts the fixture really
+does have a bystander majority before asserting anything else, so it cannot quietly stop testing the
+condition the old rule could not survive.
+
 ##### What raising `RARITY_CEILING` actually costs, now that it has been measured
 
 This file has twice said the ceiling must not simply be raised, on the stated grounds that nothing

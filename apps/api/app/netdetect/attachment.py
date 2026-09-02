@@ -67,18 +67,50 @@ from dataclasses import dataclass, field
 from app.netdetect.significance import Corpus, score_candidate
 
 #: A member contributing less than this share of what the typical member contributes is not carrying
-#: the finding. Measured separation on the contaminated corpora is wide: the tightest case put the
-#: bystander at 0.07 of the median against a weakest genuine member at 0.78, so this sits between
-#: them with room on both sides rather than being fitted to either.
+#: the finding. RETAINED FOR REFERENCE AND NO LONGER THE RULE: the weak set is now the group below
+#: the widest step (see `MIN_CONTRIBUTION_GAP`), which needs no reference point and so cannot be
+#: dragged off by the very members it is trying to identify. The original measurement still reads
+#: correctly on findings where bystanders are a minority: the tightest case put the bystander at
+#: 0.07 of the median against a weakest genuine member at 0.78.
 WEAK_FRACTION = 0.25
 
-#: Below this median contribution the question is not answerable and the answer is no answer.
-#:
-#: A homogeneous group (every member holding the same features) gives every member a delta near zero,
-#: because the evidence survives whoever you remove. Measured: such findings ran medians of 0.04 to
-#: 0.18 while every finding with a real bystander ran 1.57 to 3.92. The gap is an order of magnitude,
-#: which is why a blunt gate is enough and a fitted one would be false precision.
+#: Below this median contribution the question WAS treated as unanswerable. RETAINED FOR REFERENCE
+#: AND NO LONGER THE RULE: see `MIN_CONTRIBUTION_GAP` below for why it was wrong and what replaced
+#: it. The original measurement stands on its own terms, which is what made the error hard to see:
+#: homogeneous findings ran medians of 0.04 to 0.18 while findings with a real bystander ran 1.57 to
+#: 3.92.
 MIN_MEDIAN_CONTRIBUTION = 0.5
+
+#: The smallest step between two neighbouring contributions that counts as a REAL BOUNDARY rather
+#: than the ordinary spread inside one group.
+#:
+#: WHY LEVEL CANNOT ANSWER THIS, WHICH IS THE BUG THIS CONSTANT REPLACES. The old rule abstained
+#: when the MEDIAN contribution was low, on the reasoning that a homogeneous group gives every
+#: member a delta near zero. That reasoning is sound and its converse is false: a finding that is
+#: more than half bystanders ALSO has a near-zero median, because the median then falls inside the
+#: bystander cluster instead of between the clusters. So the guard switched itself off exactly as
+#: contamination got worse. Measured on the amplifier-ring grid, it abstained on every finding where
+#: bystanders reached half or more (9 of 17, 15 of 23, 17 of 25) while the two populations were
+#: cleanly separated in every one of them: no genuine member below +1.19, no bystander above +0.52.
+#:
+#: THE MAXIMUM CANNOT ANSWER IT EITHER, and that was measured before it was discarded. Keying on the
+#: max classifies every ring finding correctly and then ruins the case the abstention exists for: a
+#: PURE 8-member operation with no bystanders measures a max of 0.834, so a max rule checks it and
+#: flags about half a clean group. All three homogeneous fixtures behave that way.
+#:
+#: What separates the two is BIMODALITY. A contaminated finding is two populations with an empty
+#: band between them; a homogeneous one is a single continuous spread. Measured largest step:
+#:
+#:     homogeneous op 50/5    0.568        contaminated ring 40/63    1.406  (splits 9 of 9)
+#:     homogeneous op 50/23   0.282        contaminated ring 60/61    1.057  (splits 15 of 15)
+#:     homogeneous op 60/23   0.287        contaminated ring 80/63    1.482  (splits 17 of 17)
+#:     newsroom control       0.235
+#:
+#: The band between 0.568 and 1.057 is empty, so this sits in the middle of it rather than being
+#: fitted to either side, and in all three contaminated cases the split lands on EXACTLY the
+#: bystander count. The RATIO of step to spread was measured too and does not work: homogeneous runs
+#: 0.390 to 0.587 against a contaminated 0.379 to 0.579, which overlap completely.
+MIN_CONTRIBUTION_GAP = 0.8
 
 #: Above this many members the test abstains rather than running.
 #:
@@ -106,6 +138,10 @@ class Attachment:
     #: Median contribution, the scale the threshold is relative to.
     median: float = 0.0
     #: Non-null when no verdict was reached. Never read this as "nobody is weakly attached".
+    #: The widest step between two neighbouring contributions: the boundary this test looks for.
+    #: Reported whether or not it cleared `MIN_CONTRIBUTION_GAP`, so an abstention shows its own
+    #: evidence rather than only its conclusion.
+    gap: float = 0.0
     abstained: str | None = None
 
     @property
@@ -148,16 +184,31 @@ def assess(corpus: Corpus, members: list[str]) -> Attachment:
     result = Attachment(contribution={k: round(v, 4) for k, v in contribution.items()},
                         median=round(median, 4))
 
-    if median < MIN_MEDIAN_CONTRIBUTION:
-        # NOT "nobody is weakly attached". The evidence is spread evenly enough that removing any one
-        # member barely moves the score, which is what a real community looks like as well as what a
-        # tight operation looks like. Singling anybody out here would be picking a rounding error.
+    # THE QUESTION IS WHETHER THERE ARE TWO POPULATIONS HERE, NOT WHETHER THE NUMBERS ARE SMALL.
+    #
+    # Sort the contributions and look for the widest step between neighbours. A finding carrying
+    # bystanders is bimodal: everyone who holds the evidence sits well above everyone who does not,
+    # with an empty band between. A homogeneous group is one continuous spread with no such band,
+    # whether its members contribute a lot or a little.
+    #
+    # This replaced a rule that keyed on the median LEVEL and therefore abstained precisely when
+    # contamination was worst, because a finding more than half bystanders has its median inside the
+    # bystander cluster. See `MIN_CONTRIBUTION_GAP` for that measurement and for why keying on the
+    # maximum instead is also wrong.
+    ranked = sorted(contribution.items(), key=lambda kv: (kv[1], kv[0]))
+    steps = [(ranked[i + 1][1] - ranked[i][1], i) for i in range(len(ranked) - 1)]
+    gap, below = max(steps) if steps else (0.0, -1)
+    result.gap = round(gap, 4)
+
+    if gap < MIN_CONTRIBUTION_GAP:
+        # NOT "nobody is weakly attached". There is no boundary in this finding to draw, which is
+        # what a real community looks like as well as what a tight operation looks like. Singling
+        # anybody out here would be picking a rounding error.
         result.abstained = (
             "every member contributes about equally to this finding, so none can be singled out "
             "as weakly attached"
         )
         return result
 
-    threshold = WEAK_FRACTION * median
-    result.weak = sorted(m for m, v in contribution.items() if v < threshold)
+    result.weak = sorted(name for name, _ in ranked[:below + 1])
     return result

@@ -23,6 +23,7 @@ import tests.netdetect_corpora as C
 from app.netdetect import detect_from_commenters
 from app.netdetect.attachment import (
     MAX_MEMBERS,
+    MIN_CONTRIBUTION_GAP,
     MIN_MEDIAN_CONTRIBUTION,
     WEAK_FRACTION,
     assess,
@@ -315,3 +316,56 @@ def test_the_new_columns_reach_a_database_that_already_had_the_table():
             os.environ["OMI_DATABASE_URL"] = previous_url
         get_settings.cache_clear()
         db._engine, db._SessionLocal = previous_engine, previous_session
+
+
+# ==================================================================================================
+# The abstention used to switch itself off exactly when it was needed
+# ==================================================================================================
+def test_a_finding_more_than_half_bystanders_still_gets_a_verdict():
+    """THE BUG THIS FILE'S RULE WAS REWRITTEN FOR, and it is a converse error rather than a
+    mis-set threshold.
+
+    The old rule abstained when the MEDIAN contribution was low. Its stated reasoning was sound: a
+    homogeneous group gives every member a delta near zero. The code relied on the converse, which
+    is false. A finding that is more than half bystanders ALSO has a near-zero median, because the
+    median then falls INSIDE the bystander cluster instead of between the clusters. So the guard
+    against naming innocent people went quiet as contamination got worse.
+
+    Measured on the amplifier-ring grid before the change, it abstained on every finding where
+    bystanders reached half or more (9 of 17, 15 of 23, 17 of 25) while the two populations were
+    cleanly separated in each: no genuine member below +1.19, no bystander above +0.52. Flagging
+    across the grid was 18 of 81. After keying on the widest step instead it is every bystander in
+    each of the eight configurations measured, with no genuine member flagged.
+
+    This pins the shape rather than the exact counts: a finding whose bystanders OUTNUMBER its
+    genuine members must still get an answer, and that answer must not name a genuine member.
+    """
+    rows = C.organic_population(60, seed=31) + C.amplifier_ring(8, seed=61)
+    ring = {r["external_id"] for r in rows if not str(r["external_id"]).startswith("org")}
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+    hits = [c for c in result.findings if len(set(c.members) & ring) >= 4]
+    assert hits, "the ring was not found; fixture changed"
+
+    finding = hits[0]
+    bystanders = {m for m in finding.members if m not in ring}
+    genuine = {m for m in finding.members if m in ring}
+    assert len(bystanders) > len(genuine), (
+        f"this fixture no longer has a bystander MAJORITY ({len(bystanders)} of "
+        f"{len(finding.members)}), which is the condition the old median rule could not survive. "
+        f"Find another corpus that does, or this test has stopped testing anything."
+    )
+
+    attachment = assess(result.corpus, finding.members)
+    assert attachment.answered, (
+        f"abstained on a finding that is {len(bystanders)} bystanders to {len(genuine)} members. "
+        f"That is the regression: the abstention must not fire because the median sank into the "
+        f"bystander cluster. Reported gap {attachment.gap} against {MIN_CONTRIBUTION_GAP}."
+    )
+    assert not (set(attachment.weak) & genuine), (
+        f"genuine operation members were flagged as weakly attached: "
+        f"{sorted(set(attachment.weak) & genuine)}"
+    )
+    assert set(attachment.weak) == bystanders, (
+        f"flagged {len(attachment.weak)} of {len(bystanders)} bystanders; the boundary is supposed "
+        f"to land on the empty band between the two populations"
+    )
