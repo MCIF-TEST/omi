@@ -5,8 +5,15 @@ corpus is a fair background and false when it is a comment section, which is exa
 operation can flood: an operation of k accounts shares its hard-family tells across ALL k members,
 so those tells sit at prevalence k/n and are discarded first, before any arithmetic.
 
-The result is inverted from intuition and from what a customer would assume. The more of the section
-an operation owns, the safer it is, and the run comes back looking exactly like a clean scan.
+The result is inverted from intuition and from what a customer would assume: crowding the section
+can HIDE the group doing the crowding, and the run comes back looking exactly like a clean scan.
+
+It is a BAND rather than a slope, and the shape only shows up when the corpus size is held fixed.
+Measured at n = 50: 6/6 found at 12%, 12/12 at 24%, then 0 of 16 at 32%, recovering to 16 of 20 at
+40% and 18 of 25 at 50%. The worst point is near a third. An earlier measurement raised the share by
+SHRINKING the background, which drove the corpus under `detect.MIN_CORPUS` and produced zeroes that
+were stated refusals rather than silence; see the module docstring for the three distinct mechanisms
+and why only one of them is the blind spot.
 
 These tests pin the blind spot, pin the diagnostic that names it, and pin what the diagnostic must
 refuse to say.
@@ -542,3 +549,68 @@ def test_the_section_record_carries_what_the_catalogue_said_and_still_names_nobo
     served = _section_out(refreshed).model_dump()
     assert "members" not in served and "placed_accounts" not in served
     assert served["catalogue_placed"] == 11
+
+
+# ==================================================================================================
+# The band, and the thing the first measurement got wrong
+# ==================================================================================================
+def test_the_worst_point_is_not_a_corpus_size_artifact_and_the_ceiling_is_the_whole_mechanism():
+    """TWO CLAIMS THAT WERE PUBLISHED BEFORE THEY WERE SEPARATED, and one of them was wrong.
+
+    The first sweep raised the operation's share by SHRINKING the background, so at the top of the
+    range the corpus fell under `detect.MIN_CORPUS` and the run was refused for SIZE. That is a
+    stated refusal on `RunOut.refused`, not the silent suppression this module exists for, and
+    reporting those zeroes as blind-spot recall overstated the problem into a monotone slope.
+
+    Held at n = 50 the real shape is a band whose worst point is near a third:
+
+        12% -> 6/6      24% -> 12/12      32% -> 0/16      40% -> 16/20      50% -> 18/25
+
+    This pins the worst point, which is the only row a fix has to beat, and it pins the two facts
+    that make it interesting:
+
+    * the corpus is comfortably ABOVE the floor, so nothing was refused for size and the emptiness
+      really is silent;
+    * lifting the rarity ceiling ALONE restores full recall, so the Chung-Lu null underneath is not
+      also poisoned. That is what makes an outside-background fix viable: the arithmetic is sound
+      and only the local prevalence estimate is wrong. It is equally the reason not to just raise
+      the ceiling, since the same lift is what lets generic shared behaviour into every finding.
+    """
+    from app.netdetect import significance as sig
+    from app.netdetect.detect import MIN_CORPUS
+
+    rows = C.organic_population(34, seed=31) + C.planted_operation(
+        16, seed=6, discipline=0.0, operator="stadium", prefix="new")
+
+    def found(result) -> int:
+        return max((sum(1 for m in f.members if m.startswith("new")) for f in result.findings),
+                   default=0)
+
+    blind = detect_from_commenters(rows, shuffles=SHUFFLES)
+    assert blind.corpus_size > MIN_CORPUS, (
+        f"corpus of {blind.corpus_size} is not above the {MIN_CORPUS} floor, so this fixture would "
+        f"be measuring the size refusal rather than the ceiling. That confusion is what produced "
+        f"the overstated first table."
+    )
+    assert blind.refused is None, f"refused for {blind.refused!r}, so nothing here is silent"
+    assert found(blind) == 0, (
+        f"the worst point of the band recovered {found(blind)} members; the blind spot this module "
+        f"reports has moved and its threshold should be re-measured"
+    )
+
+    # The diagnostic must speak for the silence, since there is no finding whose absence to notice.
+    corpus, groups = _communities(rows)
+    assert dom.assess(corpus, groups).unresolvable
+
+    old = sig.RARITY_CEILING
+    sig.RARITY_CEILING = 1.0
+    try:
+        lifted = detect_from_commenters(rows, shuffles=SHUFFLES)
+    finally:
+        sig.RARITY_CEILING = old
+
+    assert found(lifted) == 16, (
+        f"lifting the ceiling recovered {found(lifted)} of 16, not all of them. The claim that the "
+        f"ceiling is the WHOLE mechanism here is what makes an outside-background fix viable, so if "
+        f"this fails the null is poisoned too and that plan needs rethinking."
+    )

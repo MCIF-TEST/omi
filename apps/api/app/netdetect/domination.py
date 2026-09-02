@@ -1,6 +1,7 @@
 """When the section is small enough for one group to poison its own null.
 
-THE BLIND SPOT THIS EXISTS FOR, AND IT IS INVERTED FROM INTUITION.
+THE BLIND SPOT THIS EXISTS FOR, AND IT IS INVERTED FROM INTUITION: a section can be too CROWDED
+by one group for this scan to price what that group shares, and the run then reports nothing at all.
 
 `RARITY_CEILING` drops any feature held by more than a quarter of the corpus, on the reasoning that
 a common feature carries no information. That reasoning holds only while the corpus is a fair
@@ -11,25 +12,42 @@ targets) across ALL k members by construction, so those features sit at prevalen
 k/n passes the ceiling they are discarded before any arithmetic runs, and they are discarded FIRST,
 because per-account features like text shingles vary between members and stay rare.
 
-Measured on a planted operation in an organic background, holding the operation at 8 accounts and
-shrinking the background:
+IT IS A BAND, NOT A SLOPE, AND MEASURING IT PROPERLY REQUIRES HOLDING THE CORPUS SIZE FIXED.
 
-    op share   hard-family features surviving as rare   recall
-      12%                    5                           8/8
-      24%                    5                           8/8
-      32%                    0                           0
-      39%                    0                           0
-      50%                    0                           0
+The first measurement here raised the operation's share by SHRINKING the background, which drove the
+corpus under `detect.MIN_CORPUS` (25) at the top of the range. Those runs were refused for corpus
+size, which is a STATED refusal on `RunOut.refused` and a different thing entirely from being
+silenced by the ceiling. Three mechanisms can empty a dominated section and only one is silent:
 
-The candidate generator still finds the group perfectly: at 39% the largest community is 11 of 11
-operation accounts. It is the significance test that then throws it away, because `hard_evidence`
-has fallen to 0.00 and only text and timing carry weight, so the structural refusal fires with
-"only 1 family carried real weight". `detect` returns no findings, which is indistinguishable from
-a clean comment section.
+    RARITY_CEILING suppression   silent, reads exactly like a clean scan.  THIS MODULE'S SUBJECT.
+    MIN_CORPUS (25)              a stated refusal. The caller is told.
+    MAX_GROUP_SHARE (0.40)       the generator caps a community at 40% of the corpus.
 
-That is the failure this package calls the worst kind, and the most dangerous place to have it: a
-heavily brigaded post is the single most likely thing a customer scans, and the more of it an
-operation owns, the safer the operation is.
+Measured with the corpus held at n = 50, so share is isolated from size and the floor never fires:
+
+    op share   suppressed hard features   recall        recall with the ceiling lifted
+      12%               0                  6 / 6                 6 / 6
+      24%               0                12 / 12               12 / 12
+      32%               5                 0 / 16               16 / 16
+      40%               4                16 / 20               20 / 20
+      50%               5                18 / 25               20 / 25
+
+**The worst point is near a third, and recall partially RETURNS above it.** At 32% the loss is
+total and silent: the corpus is well above the floor, the candidate generator still produces a
+19-account community under a cap of 20, and the significance test throws the whole thing away
+because `hard_evidence` has fallen to 0.00 and only text and timing carry weight. Above that the
+operation is large enough that even its diluted evidence carries some members, and by 50% the
+binding constraint is `MAX_GROUP_SHARE` rather than the ceiling (20 of 25 is the cap, not a loss).
+
+So the honest claim is a BAND centred near a third of the section, not "the more of a post an
+operation owns the safer it is". That earlier wording was a real overstatement and it was produced
+by the shrinking-background construction rather than by the data.
+
+**Lifting the ceiling restores full recall everywhere the group cap allows**, which is what proves
+the ceiling is the whole mechanism here and that the Chung-Lu null is NOT also poisoned. That
+matters for the eventual fix: judging rarity against an outside background would work, because the
+null underneath it is still sound. It is also why the ceiling must not simply be raised, since the
+same lift is what lets generic shared behaviour into every other finding.
 
 ---------------------------------------------------------------------------------------------------
 WHAT THIS MODULE CLAIMS, AND WHAT IT REFUSES TO CLAIM
@@ -60,11 +78,17 @@ with anything stored and vary how much of the NEW section it owns:
       12%            yes               0              8 / 8          0 / 56
       24%            yes               0              8 / 8          0 / 25
       32%            NO                5              8 / 8          0 / 17
-      40%            NO                5              8 / 8          0 / 12
-      50%            NO                5              8 / 8          0 /  8
+      40%            no*               5              8 / 8          0 / 12
+      50%            no*               5              8 / 8          0 /  8
 
-Recall through the catalogue is FLAT across the whole range where recall through this section
-collapses. That is the point: the two are blind to different things, so the fallback is worth
+* This construction shrinks the background, so at 40% and 50% the corpus is 20 and 16 accounts,
+  under MIN_CORPUS: those runs were refused for SIZE rather than silenced by the ceiling. The
+  section-side claim rests on the 32% row and on the n = 50 band above. What the two starred rows
+  still show is worth having on its own: the catalogue places a rotated operation even in a section
+  too small for the detector to run on at all.
+
+Recall through the catalogue is FLAT across the whole range, including where recall through this
+section collapses. That is the point: the two are blind to different things, so the fallback is worth
 running exactly where the primary path fails.
 
 IT IS ALSO SAFE, WHICH MATTERS MORE, because the statistic that sends us here fires on innocent

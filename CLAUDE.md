@@ -2248,8 +2248,8 @@ holds **0 of 8 backgrounds**.
 
 #### The section an operation is big enough to hide in
 
-**The most serious blind spot found so far, and it is inverted from intuition: the more of a comment
-section an operation owns, the safer it is.**
+**The most serious blind spot found so far, and it is inverted from intuition: crowding a comment
+section can HIDE the group doing the crowding, and the run then reports nothing at all.**
 
 `RARITY_CEILING` (0.25) drops any feature held by more than a quarter of the corpus, on the
 reasoning that a common feature carries no information. That holds while the corpus is a fair
@@ -2258,22 +2258,46 @@ An operation of k accounts shares its hard-family tells (one signup week, one se
 targets) across ALL k members by construction, so those features sit at prevalence k/n and are
 discarded FIRST, because per-account text shingles vary between members and stay rare.
 
-Measured, holding the operation at 8 accounts and shrinking the background:
+**It is a BAND, not a slope, and the first measurement here got that wrong.** That sweep raised the
+share by SHRINKING the background, which drove the corpus under `detect.MIN_CORPUS` (25) at the top
+of the range, so those runs were refused for SIZE. A size refusal is stated on `RunOut.refused` and
+is not silent, which is the entire property that makes the ceiling case dangerous. Three mechanisms
+can empty a dominated section and only one of them says nothing:
 
-| op share | hard-family features surviving as rare | recall |
-|---|---|---|
-| 12% | 5 | 8/8 |
-| 24% | 5 | 8/8 |
-| **32%** | **0** | **0** |
-| 39% | 0 | 0 |
-| 50% | 0 | 0 |
+| mechanism | is it silent? |
+|---|---|
+| `RARITY_CEILING` suppression | **yes**, reads exactly like a clean scan |
+| `MIN_CORPUS` (25) | no, a stated refusal |
+| `candidates.MAX_GROUP_SHARE` (0.40) | no, the generator caps the community |
 
-**The candidate generator still finds the group.** At 32% the operation comes out as an essentially
-pure community; at 39% the largest community is 11 of 11 operation accounts. What kills it is the
-structural refusal: `hard_evidence` has fallen to **0.00** and only text and timing carry weight, so
-it is refused for "only 1 family carried real weight". `detect` then returns no findings, which is
-indistinguishable from a clean scan. At 67% the detector inverts entirely and names 10 ORGANIC
-accounts, the organic minority now being the rare one.
+Re-measured with the corpus held at **n = 50**, so share is isolated from size:
+
+| op share | suppressed hard features | recall | recall with the ceiling lifted |
+|---|---|---|---|
+| 12% | 0 | 6/6 | 6/6 |
+| 24% | 0 | 12/12 | 12/12 |
+| **32%** | **5** | **0/16** | 16/16 |
+| 40% | 4 | 16/20 | 20/20 |
+| 50% | 5 | 18/25 | 20/25 |
+
+**The worst point is near a third, and recall partially RETURNS above it.** At 32% the loss is total
+and silent: the corpus is well clear of the floor, the generator still produces a 19-account
+community under a cap of 20, and the significance test throws it away because `hard_evidence` has
+fallen to **0.00** and only text and timing carry weight, so it is refused for "only 1 family
+carried real weight". Above that the operation is big enough that its diluted evidence still carries
+some members, and by 50% the binding constraint is `MAX_GROUP_SHARE` rather than the ceiling (20 of
+25 IS the cap, not a loss). At 67% the detector inverts entirely and names 10 ORGANIC accounts, the
+organic minority now being the rare one.
+
+**Lifting the ceiling alone restores full recall everywhere the group cap allows**, and that is the
+load-bearing fact for any future fix: the Chung-Lu null underneath is NOT also poisoned, only the
+local prevalence estimate is wrong. So judging rarity against an outside background is viable
+arithmetic rather than a rewrite. It is equally the reason not to just raise the ceiling, since the
+same lift is what lets generic shared behaviour into every other finding.
+
+Pinned by `test_the_worst_point_is_not_a_corpus_size_artifact_and_the_ceiling_is_the_whole_mechanism`,
+which asserts the corpus is above the floor and that `refused` is None, so the two confusions that
+produced the overstated table cannot come back.
 
 **`app/netdetect/domination.py` converts that silence into a stated refusal to resolve.** It counts
 hard-family features shared by at least half a candidate community that the ceiling threw away, and
@@ -2344,12 +2368,19 @@ section:
 | 12% | yes | 0 | 8 / 8 | 0 / 56 |
 | 24% | yes | 0 | 8 / 8 | 0 / 25 |
 | 32% | **no** | 5 | **8 / 8** | 0 / 17 |
-| 40% | **no** | 5 | **8 / 8** | 0 / 12 |
-| 50% | **no** | 5 | **8 / 8** | 0 / 8 |
+| 40% | no (see below) | 5 | **8 / 8** | 0 / 12 |
+| 50% | no (see below) | 5 | **8 / 8** | 0 / 8 |
 
-**Recall through the catalogue is FLAT across the whole range where recall through the section
-collapses.** The two are blind to different things, so the fallback is worth running exactly where
-the primary path fails.
+**Read the last two rows carefully, because this construction shrinks the background.** At 40% and
+50% the corpus is 20 and 16 accounts, under `detect.MIN_CORPUS`, so those runs were refused for SIZE
+rather than silenced by the ceiling. The section-side claim rests on the **32%** row, where the
+corpus is exactly at the floor and the emptiness really is silent, and on the n = 50 band measured
+in the section above. What the last two rows do show is still worth having: the catalogue places a
+rotated operation even in a section too small for the detector to run on at all.
+
+**Recall through the catalogue is FLAT across the whole range**, including where recall through the
+section collapses. The two are blind to different things, so the fallback is worth running exactly
+where the primary path fails.
 
 **The safety half matters more, because the statistic that sends us here fires on innocent groups
 too** and a fallback that answered those with names would turn a careful refusal into an accusation.
