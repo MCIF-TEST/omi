@@ -2594,11 +2594,27 @@ asserted and a change to either has somewhere to fail. **Do not build the sub-gr
 **A related measurement that kills a different piece of planned work.** `attachment.MAX_MEMBERS` is
 40 and the leave-one-out cost curve is steep (n=50 4.2s, n=60 9.3s, n=80 37.0s), so raising it looks
 like it needs an exact-equivalent rewrite of the Poisson-binomial tail via prefix/suffix
-convolution. **It does not, because the abstention has never fired.** Finding sizes measured across
-the systematic grid (four background sizes x three seeds): min 8, median 8, **max 12**, zero above
-40. Optimising the leave-one-out would be optimising a case no corpus has ever produced. If a real
-scan ever yields a finding above 40 members the page already says membership was not tested, and
-THAT is the signal to do the work.
+convolution. **It does not, because the abstention has never fired**, and optimising it would be
+optimising a case no corpus has produced.
+
+**The margin is much thinner than that first measurement suggested, though, and the first
+measurement was of the wrong population.** "min 8, median 8, max 12" was the PLANTED OPERATION grid.
+The amplifier ring produces far bigger findings, because its bystanders are members: measured across
+backgrounds 40/60/80 x ring seeds 61/62/63, sizes run 8, 13, 14, 16, 17, 17, 20, 23 and **25**. The
+largest is more than double the old figure and sits at 62% of the cap.
+
+**WATCH THIS, BECAUSE THE CAP'S ABSTENTION HAS THE SAME SHAPE AS THE BUG DIRECTLY ABOVE.**
+Contamination is what grows a finding; a grown finding is likelier to reach `MAX_MEMBERS`; reaching
+it makes `assess` abstain. So the membership guard would switch itself off on the LARGEST findings,
+which are the most contaminated ones. The 25-member finding above carries 17 bystanders. That is
+exactly the failure the median rule had, arriving by a different route, and it is not hypothetical
+in the way "max 12" made it sound.
+
+It has not fired and nothing here is broken today. The point is that the headroom is 15 members
+rather than 28, on a population nobody had measured, so a corpus that produces slightly larger
+findings would reach it. If it ever does, the honest response is the leave-one-out rewrite, NOT a
+quiet raise of the cap: a cap raised without the cost work turns an admin request that has already
+spent tens of seconds detecting into one that spends tens more.
 
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious

@@ -1141,7 +1141,7 @@ def test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_
     with its evidence and left to a deliberate decision rather than taken as a side effect of a
     measurement. See CLAUDE.md.
     """
-    named = innocent = 0
+    named = innocent = widest = 0
     for organic, seed in RING_CONTAMINATION_GRID:
         rows = C.organic_population(organic, seed=31) + C.amplifier_ring(8, seed=seed)
         result = detect_from_commenters(rows, shuffles=SHUFFLES)
@@ -1149,9 +1149,29 @@ def test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_
         assert hits, f"the ring was not found at organic={organic} seed={seed}"
         for c in hits:
             named += len(c.members)
+            widest = max(widest, len(c.members))
             innocent += sum(1 for m in c.members if m.startswith("org"))
 
     assert named, "no ring finding was produced anywhere on the grid"
+
+    # THE MEMBERSHIP GUARD ABSTAINS ABOVE `attachment.MAX_MEMBERS`, AND CONTAMINATION IS WHAT GROWS
+    # A FINDING. So a finding large enough to reach that cap would have its membership test switched
+    # off precisely because it is the most contaminated, which is the same shape as the median bug
+    # `test_a_finding_more_than_half_bystanders_still_gets_a_verdict` exists for, arriving by a
+    # different route.
+    #
+    # Measured over the full grid the ring reaches 25 members against a cap of 40, so the headroom is
+    # 15 and not the 28 that the old planted-operation figure ("max 12") implied. This pins that
+    # headroom: if a corpus starts producing findings that reach the cap, the answer is the
+    # leave-one-out cost work, never a quiet raise.
+    from app.netdetect.attachment import MAX_MEMBERS
+
+    assert widest <= MAX_MEMBERS, (
+        f"a ring finding reached {widest} members against MAX_MEMBERS={MAX_MEMBERS}; at the cap "
+        f"attachment.assess abstains and the membership guard is silently off on the most "
+        f"contaminated findings there are"
+    )
+
     rate = innocent / named
     assert rate <= RING_CONTAMINATION_CEILING, (
         f"{innocent} innocent accounts among {named} named ({rate:.1%}) in PUBLISHED ring findings, "
