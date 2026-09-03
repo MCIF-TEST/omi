@@ -44,7 +44,7 @@ unproven", fires on every corpus tried. **Prefer a measurement to a plausible se
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
 Suite measured at **2610
-passed, 8 skipped, 2 failed** (2026-09-03, head `3f9e429` plus the cohort mixed-case test below), both failures pre-existing and
+passed, 8 skipped, 2 failed** (2026-09-03, head `828cef9`), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -2917,7 +2917,17 @@ human is asked" to "nothing asks anybody". A 168-account comment section is ordi
 product, so this was reachable in production and not a fixture artefact.
 
 `detect` now sends a finding to a reader when the membership test could not RUN, and
-`Attachment.unchecked_for_size` is the explicit marker rather than a string match. **Only the size
+`Attachment.unchecked_for_size` is the explicit marker rather than a string match.
+
+**Its wording had to be cut back immediately, because the first version reintroduced the
+duplication that had just been fixed one branch over.** The card prints "Membership was not tested:
+<note>" under the member list, and the review reason opened with the same clause and the same
+count, so an over-cap finding stated one fact twice. The reason now leads with the judgement
+("treat the membership as unverified") rather than the state. It still names the size, because it is
+the STORED reason and is served without the member list to the review queue and the API, so it has
+to stand alone. A guard in `test_netdetect_routes.py` reads `detect`'s source and fails if the
+clause comes back, since the two strings live in different languages and neither file can see the
+other. **Only the size
 abstention counts.** "Every member contributes about equally" is a real answer about a real group,
 and is what a genuine community looks like, so acting on it would send everything to review and make
 review meaningless. It adds review and changes no membership, which is what keeps it separate from

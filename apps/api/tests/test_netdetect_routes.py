@@ -402,6 +402,19 @@ def test_the_page_never_lets_an_empty_weak_list_read_as_an_all_clear():
         "cut it to what only its position can say"
     )
 
+    # THE SAME TRAP ON THE ADJACENT BRANCH. The card prints "Membership was not tested: <note>"
+    # from `attachment_note`, and `detect`'s size-abstention review reason opened with the same
+    # clause when it was first written, so an over-cap finding said one fact twice. Guarded here
+    # because the two strings live in different languages and neither file can see the other.
+    import inspect
+
+    from app.netdetect import detect as _detect_mod
+    _detect_src = inspect.getsource(_detect_mod)
+    assert "membership was not tested:" not in _detect_src, (
+        "detect's review reason opens with the clause the card already prints under the member "
+        "list; lead with the judgement instead so the card does not state one fact twice"
+    )
+
     assert "weakly_attached.length * 2 > row.members.length" in src, (
         "the majority case is not computed from the two lists, so it cannot be distinguished"
     )

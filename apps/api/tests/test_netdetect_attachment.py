@@ -602,7 +602,21 @@ def test_a_finding_too_large_to_test_goes_to_a_reader_rather_than_publishing_unc
             f"a {len(members)}-member finding was published with its membership untested and "
             f"nothing asking a human; that is the guard switching off where it is needed most"
         )
-        assert "not tested" in finding.needs_adjudication
+        # ASSERT THE PROPERTY, NOT THE PHRASING. The first version of this checked for the literal
+        # "not tested", which was the wording at the time and is exactly the clause the card already
+        # prints under the member list; removing that duplication broke this test, which is the test
+        # being brittle rather than the change being wrong. What has to hold is that the reason
+        # stands alone for a reader who sees it WITHOUT the member list (the review queue, the API):
+        # it must name the size and say the membership is unverified.
+        reason = finding.needs_adjudication
+        assert str(len(members)) in reason, (
+            "the stored reason does not say how large the finding is, so a reader seeing it without "
+            "the member list cannot tell why the check did not run"
+        )
+        assert "unverified" in reason, (
+            "the stored reason does not say the membership is unverified, which is the only thing "
+            "this review flag exists to communicate"
+        )
 
     assert checked, (
         "no finding exceeded MAX_MEMBERS on this corpus, so the size route went untested. If the "

@@ -252,11 +252,18 @@ def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
             # explicit marker rather than a string match, because two copies of one predicate is
             # the drift this package keeps paying for.
             if attach.unchecked_for_size:
+                # LEADS WITH THE JUDGEMENT, NOT THE STATE, and that is not a stylistic choice.
+                # The queue prints "Membership was not tested: <note>" under the member list from
+                # `attachment_note`, so opening this with the same clause made the card say one
+                # fact twice, which is the defect the majority-case sentence was just cut back for.
+                # This is the stored reason and is served without the member list (the review queue,
+                # the API), so it still has to stand alone: it names the size, and then says the
+                # thing only a review judgement can say.
                 reason = (
-                    f"membership was not tested: {len(full.members)} named accounts is more than "
-                    f"this check runs for, so nobody has established which of them carry the "
-                    f"finding. Findings this large are the ones most likely to have been drawn too "
-                    f"wide, so treat the membership as unverified rather than as agreed."
+                    f"Treat the membership as unverified rather than as agreed: this finding is "
+                    f"larger than the {len(full.members)}-account membership check runs for, so "
+                    f"which of these accounts carry it has never been established. Findings this "
+                    f"large are the ones most likely to have been drawn too wide."
                 )
                 full.needs_adjudication = (
                     f"{full.needs_adjudication} ALSO: {reason}"
