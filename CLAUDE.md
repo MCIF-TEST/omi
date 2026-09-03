@@ -5110,6 +5110,39 @@ Three things not to undo:
 fails when a new reason arrives without one, so a failure can never render as a bare error with no
 next step.
 
+### The "written and nothing calls it" audit
+
+`registry.refresh_phases` was written for a real job and had nothing calling it, and the fix for
+that repeated the same gap one level up (the caller was added, and only the helper was tested). Two
+instances is a pattern, so it was checked mechanically rather than one function at a time: for every
+public function in `app/netdetect` and `app/campaigns`, count references anywhere in `app/` except
+the `def` line itself.
+
+**The first version of that check was wrong and would have reported four false alarms.** It excluded
+the whole defining file, so `detector/persist.py`'s `record_campaigns`, `record_global_evidence`,
+`upsert_index_row` and `write_payload_block` looked dead when `save()` calls all four at lines
+298-301. Count the home file, skip only the definition.
+
+Eight functions have no call site in `app/`. Two carried misleading docstrings and are now corrected:
+
+- **`tracking/operations.py::sweep_dormant`** claimed to be "called opportunistically from the
+  detection path" (no call site exists) and justified having no schedule by saying this deployment
+  has no scheduler (there is one, and it is where `refresh_phases` was wired). **Deliberately still
+  not wired**, and the contrast with `refresh_phases` is the reason: there, the phase column is what
+  an operator reads and nothing else derived it, so an unswept catalogue showed dead operations as
+  live. Here `mark_seen` derives dormancy inline from `last_seen_at`, resurgence works without the
+  sweep, and no route serves `dormant_since`. Scheduling a write for a column nothing reads is
+  speculative. Wire it the day something consumes the column, and delete the derived half then.
+- **`tracking/crossplatform.py::filter_cross_platform`** looked like a second copy of the
+  cross-platform rule. It is not: it and the live `detector/run.py::_drop_illegal_cross_platform`
+  both call the SAME `may_link` predicate, so the rule does live in one place and this is a spelling
+  of it. Worth recording precisely, because "two implementations of one rule" is this repo's classic
+  drift and this is not an instance of it.
+
+The rest are small helpers reachable from tests, plus `verdict_coordination.py`, which is documented
+as deliberately unwired. **Nothing was deleted**: the campaigns note above forbids tidying unimported
+code, because it is the foundation the future algorithm builds on.
+
 ## Outstanding — needs the user, not code
 
 0. **Measure the coordination detector on real scans.** Every threshold in
