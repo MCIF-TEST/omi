@@ -2039,6 +2039,33 @@ of the two open changes, not an automatic one. Pinned by
 `test_the_finding_survives_without_the_members_this_test_flags` and
 `test_a_trim_would_take_nothing_from_the_community_controls`.
 
+##### And the third option is measured DEAD, which is what makes the choice a pair
+
+The two routes this file used to offer were the ceiling and "a change to candidate generation". The
+second was the more attractive: an exclusion at generation time is a MISS rather than a false
+accusation, which is the safer error for a product that names real people. **It is not available.**
+
+The generator sees the pair-weight graph and nothing else, and on that graph the populations do not
+separate at all. Internal edge weight inside the finding:
+
+| corpus | ring min | ring median | bystander max | bystander median | separates |
+|---|---|---|---|---|---|
+| ring 40/63 | 37.45 | 48.36 | **63.27** | 39.83 | no |
+| ring 60/61 | 39.91 | 60.71 | **77.97** | 52.31 | no |
+| ring 80/63 | 49.70 | 66.57 | **98.59** | 58.35 | no |
+
+The strongest bystander carries far MORE internal weight than the weakest genuine member, every
+time. That is structural: a bystander is swept in **precisely because** it shares many rare features
+with the group, so shared weight is the very quantity that makes it look like a member. What
+separates them is whether removing an account makes the set more or less surprising, and that is a
+property of the set statistic, which does not exist yet at generation time. Same shape as the
+discarded per-member attachment-weight statistic, reached from the other end.
+
+`test_bystanders_do_not_separate_on_anything_generation_can_see` asserts the overlap, so a future
+session cannot spend the effort twice, and the note sits in `candidates.py` beside where the
+refinement would go. **So the real choice is now two options rather than three**, and the trim is
+the safer of the two.
+
 `WEAK_FRACTION` and `MIN_MEDIAN_CONTRIBUTION` are retained with their original measurements and
 marked as no longer the rule. They read correctly on findings where bystanders are a MINORITY, which
 is exactly what made the error hard to see.

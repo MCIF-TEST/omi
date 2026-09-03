@@ -16,6 +16,36 @@ THE SHAPE OF THE SEARCH
 Step 3 uses the Louvain implementation already in ``app/graph/algorithms``, which is wired for the
 saved-graph surface. Reusing it means one community algorithm in the codebase rather than two that
 can disagree about the same accounts.
+
+WHAT THIS STAGE IS NOT RESPONSIBLE FOR, AND THE GAP THAT LEAVES
+--------------------------------------------------------------
+The division of labour above is real for CANDIDATES and does not extend to MEMBERS. The significance
+test asks whether a SET is surprising, and a set of eight operatives plus seventeen bystanders is
+still surprising because the eight carry it. So nothing downstream removes a wrongly included
+member, and measured on the amplifier ring a published finding names 52.9% innocent accounts.
+``app/netdetect/attachment.py`` identifies them afterwards and deliberately reports rather than
+drops.
+
+TIGHTENING GENERATION IS THE OBVIOUS FIX AND IT IS MEASURED NOT TO WORK. If a bystander could be
+recognised here it would never be proposed, and an exclusion at this stage is a MISS rather than a
+false accusation, which is the safer error for this product. It is not available: the two
+populations do not separate on anything this stage can see. Internal edge weight inside the finding,
+ring members against swept-in bystanders:
+
+    corpus     ring min  ring median  bystander max  bystander median  separates
+    ring 40/63    37.45        48.36          63.27             39.83         no
+    ring 60/61    39.91        60.71          77.97             52.31         no
+    ring 80/63    49.70        66.57          98.59             58.35         no
+
+The strongest bystander carries far MORE internal weight than the weakest genuine member, every
+time. That is structural rather than unlucky: a bystander is attached precisely BECAUSE it shares
+many rare features, so shared weight is the very quantity that makes it look like a member. What
+separates the two is whether removing an account makes the set more or less surprising, and that is
+a property of the set statistic, which does not exist yet at this stage. Same shape as the discarded
+per-member "attachment weight" statistic, reached from the other end.
+
+So do not build a weight-based refinement here without first making
+``test_bystanders_do_not_separate_on_anything_generation_can_see`` fail.
 """
 
 from __future__ import annotations

@@ -272,6 +272,57 @@ def test_a_trim_would_take_nothing_from_the_community_controls():
             )
 
 
+def test_bystanders_do_not_separate_on_anything_generation_can_see():
+    """CLOSES the other option for reducing the false naming, so nobody builds it twice.
+
+    CLAUDE.md offered two routes: the `RARITY_CEILING` decision, or tightening candidate generation
+    so bystanders are never proposed. The second is the more attractive of the two, because an
+    exclusion at generation time is a MISS rather than a false accusation, which is the safer error
+    for a product that names real people.
+
+    It is not available. The generator sees the pair-weight graph and nothing else, and on that
+    graph the two populations do not separate: the strongest bystander carries far MORE internal
+    weight than the weakest genuine member, in every configuration measured.
+
+    That is structural rather than unlucky. A bystander is swept in precisely BECAUSE it shares many
+    rare features with the group, so shared weight is the very quantity that makes it look like a
+    member. What separates the two is whether removing an account makes the set more or less
+    surprising, which is a property of the set statistic and does not exist yet at generation time.
+
+    So this asserts the OVERLAP, deliberately. If it ever fails, a weight-based refinement in
+    `candidates.py` has become viable and is worth building; until then it is measured dead.
+    """
+    from app.netdetect.candidates import pair_weights
+
+    checked = 0
+    for organic, seed in ((40, 63), (60, 61)):
+        rows = C.organic_population(organic, seed=31) + C.amplifier_ring(8, seed=seed)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        weights = pair_weights(result.corpus)
+        for finding in result.findings:
+            members = list(finding.members)
+            ring = [m for m in members if not m.startswith("org")]
+            bystanders = [m for m in members if m.startswith("org")]
+            if len(ring) < 4 or not bystanders:
+                continue
+
+            inside = set(members)
+            strength = {m: 0.0 for m in members}
+            for (a, b), w in weights.items():
+                if a in inside and b in inside:
+                    strength[a] += w
+                    strength[b] += w
+
+            checked += 1
+            assert max(strength[m] for m in bystanders) > min(strength[m] for m in ring), (
+                "the populations now SEPARATE on internal edge weight, so a refinement in "
+                "candidates.py could exclude bystanders before they are ever named. That is the "
+                "better fix and it is worth building; see the note in candidates.py."
+            )
+
+    assert checked, "no contaminated ring finding was examined; this test asserted nothing"
+
+
 def test_a_real_community_is_not_given_a_weakest_member():
     """The professional-beat control. A newsroom on one beat IS everybody contributing alike, so
     singling one reporter out would be inventing a distinction the evidence does not carry."""
