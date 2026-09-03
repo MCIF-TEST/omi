@@ -236,7 +236,33 @@ def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
             # separate from the two open decisions (trimming the flagged members, and the
             # `RARITY_CEILING` value), both of which change who is NAMED and are deliberately not
             # taken here. See CLAUDE.md.
-            if attach.answered and len(attach.weak) * 2 > len(full.members):
+            # THE SAME DOUBT REACHED BY THE SIZE ROUTE, and it was measured live rather than
+            # feared. `attachment` abstains above `MAX_MEMBERS`, and contamination is what GROWS a
+            # finding, so the largest findings are the most contaminated ones and were the only
+            # ones nobody looked at. Measured on the amplifier ring as the background grows:
+            # 12 of 20, 17 of 25, 25 of 33, 30 of 38 and 32 of 40 bystanders are all tested and
+            # sent to a reader, and then a 49-member finding carrying 41 bystanders (84%) crossed
+            # the cap and was PUBLISHED with nothing asking anybody. A 168-account comment section
+            # is ordinary for this product, so this is reachable in production rather than only in
+            # a fixture.
+            #
+            # ONLY THE SIZE ABSTENTION. "Every member contributes about equally" is a real answer
+            # about a real group and is what a genuine community looks like; flagging that would
+            # send everything to review and make review meaningless. `unchecked_for_size` is the
+            # explicit marker rather than a string match, because two copies of one predicate is
+            # the drift this package keeps paying for.
+            if attach.unchecked_for_size:
+                reason = (
+                    f"membership was not tested: {len(full.members)} named accounts is more than "
+                    f"this check runs for, so nobody has established which of them carry the "
+                    f"finding. Findings this large are the ones most likely to have been drawn too "
+                    f"wide, so treat the membership as unverified rather than as agreed."
+                )
+                full.needs_adjudication = (
+                    f"{full.needs_adjudication} ALSO: {reason}"
+                    if full.needs_adjudication else reason
+                )
+            elif attach.answered and len(attach.weak) * 2 > len(full.members):
                 reason = (
                     f"{len(attach.weak)} of {len(full.members)} named accounts do not carry this "
                     f"finding, which is most of them. The set is significant and its membership is "

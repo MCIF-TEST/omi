@@ -196,6 +196,20 @@ class Attachment:
     #: and worth NOT claiming until then.
     gap: float = 0.0
     abstained: str | None = None
+    #: True when the abstention is a CAPABILITY LIMIT rather than an answer about the data.
+    #:
+    #: The two are opposite and a caller must be able to tell them apart without matching on the
+    #: string. "Every member contributes about equally" is a real finding about a real group, and it
+    #: is what a genuine community looks like, so acting on it would make review meaningless. "This
+    #: finding is larger than the test runs for" says nothing about the group at all: nobody looked.
+    #:
+    #: MEASURED, and this is not a hypothetical distinction. The ring's findings grow with the
+    #: background, and the bystander share grows with them: 12 of 20, 17 of 25, 25 of 33, 30 of 38,
+    #: 32 of 40 are all tested and sent to a reader, and then a 49-member finding carrying 41
+    #: bystanders (84%) crosses the cap, is not tested, and was PUBLISHED with nothing asking
+    #: anybody. That is the same shape as the median bug this module already paid for, reached by
+    #: the size route instead: the guard switched itself off exactly where it was needed most.
+    unchecked_for_size: bool = False
 
     @property
     def answered(self) -> bool:
@@ -225,8 +239,10 @@ def assess(corpus: Corpus, members: list[str]) -> Attachment:
     if len(ordered) < 3:
         return Attachment(abstained="a finding this small has no typical member to compare against")
     if len(ordered) > MAX_MEMBERS:
+        # Flagged as a capability limit, not as an answer. See `unchecked_for_size`.
         return Attachment(
-            abstained=f"{len(ordered)} members is above the {MAX_MEMBERS} this test is run for"
+            abstained=f"{len(ordered)} members is above the {MAX_MEMBERS} this test is run for",
+            unchecked_for_size=True,
         )
 
     contribution = leave_one_out(corpus, ordered)

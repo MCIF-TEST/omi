@@ -565,3 +565,75 @@ def test_a_finding_more_than_half_bystanders_still_gets_a_verdict():
         f"flagged {len(attachment.weak)} of {len(bystanders)} bystanders; the boundary is supposed "
         f"to land on the empty band between the two populations"
     )
+
+
+def test_a_finding_too_large_to_test_goes_to_a_reader_rather_than_publishing_unchecked():
+    """THE SAME BUG AS THE MEDIAN RULE, REACHED BY THE SIZE ROUTE, and measured rather than feared.
+
+    `assess` abstains above `MAX_MEMBERS`, and contamination is what GROWS a finding, so the largest
+    findings are the most contaminated ones and were the only ones nobody looked at. Measured on the
+    amplifier ring as the background grows, bystanders of members:
+
+        20 -> 12    25 -> 17    33 -> 25    38 -> 30    40 -> 32     all tested, all sent to review
+        49 -> 41    44 -> 36                             OVER CAP, untested, and PUBLISHED
+
+    So at exactly the point contamination is worst (84%), crossing the cap flipped a finding from
+    "a human is asked" to "nothing asks anybody". A 168-account comment section is ordinary for this
+    product, so this is production-reachable and not a fixture artefact.
+
+    THE FIX ADDS REVIEW AND CHANGES NO MEMBERSHIP. Nobody is dropped, no score moves. That is what
+    keeps it separate from the two open decisions, which change who is NAMED.
+    """
+    ring = C.amplifier_ring(8, seed=62)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(160, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    checked = 0
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) < 4:
+            continue
+        if len(members) <= MAX_MEMBERS:
+            continue
+        checked += 1
+        assert not finding.attachment_checked, "premise: this finding must be over the cap"
+        assert finding.needs_adjudication, (
+            f"a {len(members)}-member finding was published with its membership untested and "
+            f"nothing asking a human; that is the guard switching off where it is needed most"
+        )
+        assert "not tested" in finding.needs_adjudication
+
+    assert checked, (
+        "no finding exceeded MAX_MEMBERS on this corpus, so the size route went untested. If the "
+        "corpora changed, find one that does rather than deleting this."
+    )
+
+
+def test_the_ordinary_abstention_does_not_drag_a_clean_group_into_review():
+    """The other half, and the reason only the SIZE abstention is acted on.
+
+    "Every member contributes about equally" is a real answer about a real group: it is what a
+    homogeneous operation and a genuine community both look like. Acting on it would send everything
+    to a reader, and a review queue that flags everything is the same as no review queue.
+    """
+    rows = (
+        C.organic_population(40, seed=9, subject_noise=False, arrivals=False)
+        + C.planted_operation(8, discipline=0.0, seed=23, subject_noise=False, arrivals=False)
+    )
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    seen = 0
+    for finding in result.findings:
+        attachment = assess(result.corpus, finding.members)
+        if attachment.answered or attachment.unchecked_for_size:
+            continue
+        seen += 1
+        assert "equally" in (attachment.abstained or "")
+        assert not attachment.unchecked_for_size, (
+            "a gap abstention was marked as a capability limit, which would send every clean "
+            "homogeneous group to a reader"
+        )
+    if not seen:
+        import pytest
+        pytest.skip("no gap-abstaining finding on this build")

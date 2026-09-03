@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2607
-passed, 8 skipped, 2 failed** (2026-09-03, head `cd146e1` plus the two formations tests below), both failures pre-existing and
+Suite measured at **2609
+passed, 8 skipped, 2 failed** (2026-09-03, head `ab3a0fa` plus the two attachment tests below), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2607 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
+Current measured state: **2609 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2874,6 +2874,28 @@ measurement was of the wrong population.** "min 8, median 8, max 12" was the PLA
 The amplifier ring produces far bigger findings, because its bystanders are members: measured across
 backgrounds 40/60/80 x ring seeds 61/62/63, sizes run 8, 13, 14, 16, 17, 17, 20, 23 and **25**. The
 largest is more than double the old figure and sits at 62% of the cap.
+
+**IT FIRED, AND IT IS FIXED.** The warning below was written when the largest measured finding was
+25 against a cap of 40, which read as headroom. Grow the background and the finding grows with it,
+and so does the bystander share:
+
+| corpus | members | bystanders | membership tested | outcome before |
+|---|---|---|---|---|
+| ring 130/62 | 38 | 30 (79%) | yes | review |
+| ring 130/63 | 40 | 32 (80%) | yes | review |
+| **ring 160/63** | **44** | **36 (82%)** | **no, over cap** | **PUBLISHED** |
+| **ring 160/62** | **49** | **41 (84%)** | **no, over cap** | **PUBLISHED** |
+
+So at exactly the point contamination is worst, crossing `MAX_MEMBERS` flipped a finding from "a
+human is asked" to "nothing asks anybody". A 168-account comment section is ordinary for this
+product, so this was reachable in production and not a fixture artefact.
+
+`detect` now sends a finding to a reader when the membership test could not RUN, and
+`Attachment.unchecked_for_size` is the explicit marker rather than a string match. **Only the size
+abstention counts.** "Every member contributes about equally" is a real answer about a real group,
+and is what a genuine community looks like, so acting on it would send everything to review and make
+review meaningless. It adds review and changes no membership, which is what keeps it separate from
+the two decisions that change who is named.
 
 **WATCH THIS, BECAUSE THE CAP'S ABSTENTION HAS THE SAME SHAPE AS THE BUG DIRECTLY ABOVE.**
 Contamination is what grows a finding; a grown finding is likelier to reach `MAX_MEMBERS`; reaching
