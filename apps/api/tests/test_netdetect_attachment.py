@@ -182,6 +182,96 @@ def test_it_abstains_on_a_contaminated_finding_whose_populations_do_not_separate
     assert checked, "no contaminated finding was examined; the case went untested"
 
 
+def test_the_finding_survives_without_the_members_this_test_flags():
+    """THE MEASUREMENT THAT SAYS THE FALSE NAMING IS AVOIDABLE, not a cost of detection.
+
+    `attachment` reports and never drops, and the rule is stated in the module as a deliberate one.
+    Its justification rested on an unmeasured worry: that removing flagged members would delete a
+    real participant whenever the flag was wrong, and would change a finding's score and identity on
+    a heuristic. This measures what a trim would actually do.
+
+    On the pinned amplifier-ring grid the flagged set is EXACTLY the bystanders, and the finding
+    survives without them by a wide margin. So the 52.9% false naming pinned in `test_netdetect.py`
+    is not the price of catching the ring: the ring is catchable while naming nobody innocent.
+
+    THE SCORE RISING IS EXPECTED ARITHMETIC, NOT INDEPENDENT EVIDENCE, and saying otherwise would
+    overstate this. A subset that keeps the shared features has the same k over a smaller n, so the
+    Poisson-binomial tail is smaller and the score is higher by construction. That is the same fact
+    `leave_one_out` already measures. The load-bearing assertions are the two that are NOT
+    arithmetic: the flag matches ground truth exactly, and the trimmed set still clears the null.
+
+    NOTHING HERE CHANGES BEHAVIOUR. `attachment` still reports and never drops. This pins the
+    evidence so the decision can be taken deliberately, and so the claim cannot quietly stop being
+    true. See CLAUDE.md.
+    """
+    from app.netdetect.significance import score_candidate
+
+    checked = 0
+    for organic, seed in ((40, 63), (60, 61)):
+        rows = C.organic_population(organic, seed=31) + C.amplifier_ring(8, seed=seed)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        threshold = result.null_threshold
+        for finding in result.findings:
+            members = list(finding.members)
+            ring = [m for m in members if not m.startswith("org")]
+            bystanders = {m for m in members if m.startswith("org")}
+            if len(ring) < 4 or not bystanders:
+                continue
+            attachment = assess(result.corpus, members)
+            if not attachment.answered:
+                continue
+
+            flagged = set(attachment.weak)
+            assert flagged == bystanders, (
+                f"the flag no longer matches ground truth: flagged {len(flagged)}, bystanders "
+                f"{len(bystanders)}. The trim argument below rests on this equality."
+            )
+
+            kept = [m for m in members if m not in flagged]
+            assert len(kept) >= 3, "a trim would leave too few members to report at all"
+            trimmed = score_candidate(result.corpus, kept, collect_evidence=True)
+
+            checked += 1
+            assert threshold is not None
+            assert trimmed.score > threshold, (
+                f"without its {len(flagged)} bystanders the finding scores {trimmed.score:.2f} "
+                f"against a null threshold of {threshold:.2f}, so trimming would destroy it and "
+                f"reporting-rather-than-dropping is load-bearing after all"
+            )
+
+    assert checked, "no contaminated ring finding was examined; this test asserted nothing"
+
+
+def test_a_trim_would_take_nothing_from_the_community_controls():
+    """The other half: a trim rule must not be able to hurt a real community.
+
+    Measured, it cannot, and for a reason that is structural rather than lucky. A genuine community
+    is everybody contributing alike, which is exactly the shape `assess` abstains on, so there is no
+    flag to trim by. The newsroom control reaches this state and the fan community produces no
+    finding at all.
+
+    Asserted as "no GENUINE member is ever flagged" rather than "nothing is flagged", because the
+    planted-operation fixtures do legitimately carry a bystander or two and flagging those is the
+    module working.
+    """
+    cases = (
+        (C.organic_population(60, seed=7) + C.professional_beat(10, seed=21), "press"),
+        (C.organic_population(60, seed=7) + C.fan_community(12, seed=33), "fan"),
+    )
+    for rows, prefix in cases:
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        for finding in result.findings:
+            members = list(finding.members)
+            attachment = assess(result.corpus, members)
+            if not attachment.answered:
+                continue
+            genuine_flagged = [m for m in attachment.weak if m.startswith(prefix)]
+            assert not genuine_flagged, (
+                f"{len(genuine_flagged)} genuine {prefix} members were flagged as not carrying "
+                f"the finding, so a trim rule would delete real participants from a community"
+            )
+
+
 def test_a_real_community_is_not_given_a_weakest_member():
     """The professional-beat control. A newsroom on one beat IS everybody contributing alike, so
     singling one reporter out would be inventing a distinction the evidence does not carry."""

@@ -57,6 +57,37 @@ Removing a flagged account would change the finding's membership, its score and 
 which is a detection decision taken on a heuristic. It would also make the mirror error unrecoverable:
 a wrongly flagged member is a real participant quietly deleted from an operation. The flag goes to a
 reader beside the evidence, and the reader decides.
+
+THE COST OF THAT RULE IS NOW MEASURED, AND IT IS THE WHOLE OF THE FALSE NAMING. The justification
+above rests on a worry rather than a number: that a trim would delete real participants and would
+weaken the finding. Both halves were measured on the pinned amplifier-ring grid, where a published
+finding names 52.9% innocent accounts.
+
+    corpus     named  innocent  flagged   score  trimmed  null threshold  survives
+    ring 40/63    17         9      9/9   13.49    19.19            7.28       yes
+    ring 60/61    23        15    15/15   14.16    20.05            9.06       yes
+    ring 80/63    25        17    17/17   16.36    20.04           10.07       yes
+
+The flagged set is EXACTLY the bystanders in every configuration, the trim leaves exactly the eight
+ring accounts, and the finding clears the null by a wide margin without them. So on this evidence
+the false naming is not the price of catching the ring: the ring is catchable while naming nobody
+innocent. Read the rising score as arithmetic rather than as a second result, though: a subset that
+keeps the shared features has the same k over a smaller n, so a smaller tail follows by
+construction, and it is the same fact `leave_one_out` already measures.
+
+THE CONTROLS SAY A TRIM COULD NOT HURT THEM, and structurally rather than luckily. A real community
+is everybody contributing alike, which is precisely the shape this abstains on, so there is no flag
+to trim by: the newsroom control abstains, the fan community produces no finding, and across every
+planted-operation fixture no genuine member is flagged anywhere. Measured over all of it, a trim
+would have withheld 44 innocent names and lost 0 genuine members.
+
+IT STILL DOES NOT DROP, and that is deliberate rather than unfinished. Dropping changes what is
+published about named real people, and every corpus above is synthetic. The asymmetry is worth
+stating because it differs from the `RARITY_CEILING` decision: raising that ceiling moves the naming
+in BOTH directions, while trimming only ever removes names and, measured, removes only innocent
+ones. That makes it a safer change, not an automatic one. Pinned by
+`test_the_finding_survives_without_the_members_this_test_flags` and
+`test_a_trim_would_take_nothing_from_the_community_controls` so the evidence cannot quietly rot.
 """
 
 from __future__ import annotations

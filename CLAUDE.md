@@ -2000,8 +2000,44 @@ overlap BEFORE asserting the abstention so it cannot pass on a premise that stop
 **What this does NOT change is who gets NAMED.** The finding still carries 52.9% bystanders, because
 `attachment` reports and never drops, which is a deliberate rule and not an oversight. What changed
 is that a reader now sees every one of them marked as not carrying the finding, instead of roughly
-four in five being presented as equal members of an operation. Reducing the naming itself needs
-either the ceiling decision above or a change to candidate generation.
+four in five being presented as equal members of an operation.
+
+##### The false naming is avoidable, and that is measured rather than argued
+
+This section used to end "reducing the naming itself needs either the ceiling decision above or a
+change to candidate generation". There is a third option and it now has numbers. The
+report-never-drop rule rests on a worry rather than a measurement: that trimming would delete real
+participants and would weaken the finding. Both halves were tested.
+
+| corpus | named | innocent | flagged | score | trimmed | null threshold | survives |
+|---|---|---|---|---|---|---|---|
+| ring 40/63 | 17 | 9 | 9 of 9 | 13.49 | 19.19 | 7.28 | yes |
+| ring 60/61 | 23 | 15 | 15 of 15 | 14.16 | 20.05 | 9.06 | yes |
+| ring 80/63 | 25 | 17 | 17 of 17 | 16.36 | 20.04 | 10.07 | yes |
+
+**The flagged set is exactly the bystanders, the trim leaves exactly the eight ring accounts, and
+the finding clears the null without them by a wide margin.** So the 52.9% is not the price of
+catching the ring. The ring is catchable while naming nobody innocent.
+
+**The rising score is arithmetic, not a second result.** A subset keeping the shared features has
+the same k over a smaller n, so a smaller Poisson-binomial tail follows by construction, and it is
+the same fact the leave-one-out delta already measures. The two claims that are NOT arithmetic are
+the ones to hold on to: the flag matches ground truth exactly, and the trimmed set still clears the
+null.
+
+**A trim could not hurt the controls, structurally rather than luckily.** A real community is
+everybody contributing alike, which is exactly the shape `assess` abstains on, so there is no flag
+to trim by: the newsroom abstains, the fan community produces no finding, and no genuine member is
+flagged in any planted-operation fixture. Over everything measured a trim would have withheld **44
+innocent names and lost 0 genuine members**.
+
+**It is still not done, and the asymmetry against the ceiling decision is the point.** Dropping
+changes what is published about named real people and every corpus here is synthetic. But raising
+`RARITY_CEILING` moves the naming in BOTH directions (the newsroom bloats 10 to 28), whereas
+trimming only ever removes names and, measured, removes only innocent ones. That makes it the safer
+of the two open changes, not an automatic one. Pinned by
+`test_the_finding_survives_without_the_members_this_test_flags` and
+`test_a_trim_would_take_nothing_from_the_community_controls`.
 
 `WEAK_FRACTION` and `MIN_MEDIAN_CONTRIBUTION` are retained with their original measurements and
 marked as no longer the rule. They read correctly on findings where bystanders are a MINORITY, which
