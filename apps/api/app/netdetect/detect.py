@@ -221,6 +221,34 @@ def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
             full.weakly_attached = list(attach.weak)
             full.attachment_note = attach.abstained
             full.attachment_checked = attach.answered
+            # A finding whose own membership test says MOST of its members are not carrying it is
+            # unresolved in exactly the sense the hard-evidence check above is unresolved, and it
+            # goes to a reader for the same reason.
+            #
+            # This is the amplifier ring: measured, it publishes 153 named accounts of which 81 are
+            # innocent (52.9%), with `needs_adjudication` None, so nothing asked a human before
+            # those names were shown as members of a coordinated ring. The set is genuinely
+            # significant and the group is genuinely there, so suppressing it would hide a real
+            # operation; what cannot be settled from the statistics is WHO of the named is in it.
+            #
+            # IT ADDS REVIEW AND NEVER REMOVES ANYONE. No member is dropped, no score changes, and
+            # nothing that was already flagged for adjudication is unflagged. That keeps this
+            # separate from the two open decisions (trimming the flagged members, and the
+            # `RARITY_CEILING` value), both of which change who is NAMED and are deliberately not
+            # taken here. See CLAUDE.md.
+            if attach.answered and len(attach.weak) * 2 > len(full.members):
+                reason = (
+                    f"{len(attach.weak)} of {len(full.members)} named accounts do not carry this "
+                    f"finding, which is most of them. The set is significant and its membership is "
+                    f"not: read this as a group that has been drawn too wide rather than as an "
+                    f"operation with weak members, and confirm each name against the evidence."
+                )
+                # Never overwrite an existing reason: the hard-evidence one names a different and
+                # equally load-bearing doubt, and a reader needs both.
+                full.needs_adjudication = (
+                    f"{full.needs_adjudication} ALSO: {reason}"
+                    if full.needs_adjudication else reason
+                )
             result.findings.append(full)
         else:
             c.refused = (

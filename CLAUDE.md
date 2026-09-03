@@ -2066,6 +2066,47 @@ session cannot spend the effort twice, and the note sits in `candidates.py` besi
 refinement would go. **So the real choice is now two options rather than three**, and the trim is
 the safer of the two.
 
+##### What WAS done: a mostly-bystander finding goes to a reader
+
+Both remaining options change who is NAMED, on synthetic corpora, so neither was taken. There is a
+third move that changes nobody's membership and no score, and it addresses the part of this that
+was worst: the ring findings were **PUBLISHED**, `needs_adjudication` None, so nothing asked a human
+before 81 innocent accounts were shown as members of a coordinated ring.
+
+`detect` now sets `needs_adjudication` when the membership test says MOST of the named accounts are
+not carrying the finding. That is the same move the hard-evidence check already makes for a
+newsroom, for the same reason: the set is genuinely significant, and what cannot be settled from the
+statistics is WHO of the named is in it. Measured:
+
+| corpus | members | genuine | weak | outcome |
+|---|---|---|---|---|
+| ring 40/63 | 17 | 8 | 9 | **review (membership)** |
+| ring 60/61 | 23 | 8 | 15 | **review (membership)** |
+| ring 80/63 | 25 | 8 | 17 | **review (membership)** |
+| planted op 50/5 | 11 | 8 | 3 | published, unchanged |
+| planted op 50/23, 60/23 | 8 | 8 | 0 | published, unchanged |
+| newsroom | 10 | 10 | abstains | review (hard evidence), reason preserved |
+
+Four rules on it:
+
+- **It ADDS review and never removes anyone.** No member is dropped, no score moves, and a finding
+  already flagged keeps its existing reason with the new one appended rather than replacing it. The
+  hard-evidence doubt and the membership doubt are different things and a reader needs both.
+- **A MINORITY of weak members is not this.** `planted op 50/5` carries 3 bystanders of 11 and stays
+  publishable, because that is an operation with weak members rather than a group drawn too wide.
+  The boundary is the same `weak * 2 > members` the queue uses for its fourth UI state, so the two
+  cannot disagree about the same finding.
+- **It keys on `attach.answered`.** An abstention is not a majority: where the populations do not
+  separate there is no verdict to act on, and reading "flagged nobody" as "nobody is weak" is the
+  three-state error this package keeps paying for.
+- **The rate it fires on is unchanged.** The same accounts are still named. What changed is that a
+  human is asked first, which is the only one of the three moves that cannot make a false accusation
+  worse.
+
+Pinned by `test_a_finding_that_is_mostly_bystanders_goes_to_a_reader`, whose second half asserts a
+clean operation is NOT dragged into review, because a rule that sends everything to a reader makes
+review meaningless.
+
 `WEAK_FRACTION` and `MIN_MEDIAN_CONTRIBUTION` are retained with their original measurements and
 marked as no longer the rule. They read correctly on findings where bystanders are a MINORITY, which
 is exactly what made the error hard to see.

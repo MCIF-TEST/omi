@@ -1116,6 +1116,56 @@ RING_CONTAMINATION_GRID = [(40, 63), (60, 61), (80, 63)]
 RING_CONTAMINATION_CEILING = 0.75
 
 
+def test_a_finding_that_is_mostly_bystanders_goes_to_a_reader():
+    """The one change taken here, and it is the conservative one of the three available.
+
+    The amplifier ring names 52.9% innocent accounts and used to be PUBLISHED, so nothing asked a
+    human before those names appeared as members of a coordinated ring. Two ways to reduce the
+    naming itself were measured (trimming the flagged members, and the `RARITY_CEILING` value) and
+    both are left to a deliberate decision, because both change who is NAMED on synthetic evidence.
+
+    This changes nobody's membership and no score. It routes a finding whose own membership test
+    says most of its members are not carrying it to the same place the hard-evidence check already
+    routes a newsroom: a reader. Adding review is the one move here that cannot make a false
+    accusation worse.
+
+    THE SEPARATION IS WHAT MAKES IT SAFE, and it is measured: all three ring configurations are
+    sent to review, and every clean planted operation stays publishable, including the one that
+    legitimately carries three bystanders out of eleven (a minority, so the finding is an operation
+    with weak members rather than a group drawn too wide).
+    """
+    reviewed = published = 0
+    for organic, seed in RING_CONTAMINATION_GRID:
+        rows = C.organic_population(organic, seed=31) + C.amplifier_ring(8, seed=seed)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        for finding in [c for c in result.findings if _members_from(c, "amp") >= 4]:
+            innocent = sum(1 for m in finding.members if m.startswith("org"))
+            if innocent * 2 <= len(finding.members):
+                continue
+            reviewed += 1
+            assert finding.needs_adjudication, (
+                f"a finding naming {innocent} innocent accounts of {len(finding.members)} is still "
+                f"published with nothing asking a human first"
+            )
+            assert "do not carry this finding" in finding.needs_adjudication
+
+    assert reviewed, "no majority-bystander finding was produced; this test asserted nothing"
+
+    # The other half. A clean operation must not be dragged into review by this.
+    for organic, seed in ((50, 23), (60, 23)):
+        rows = C.organic_population(
+            organic, seed=seed, subject_noise=False, arrivals=False,
+        ) + C.planted_operation(8, discipline=0.0, seed=99, subject_noise=False, arrivals=False)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        for finding in [c for c in result.findings if _members_from(c, "op") >= 6]:
+            published += 1
+            assert finding.needs_adjudication is None, (
+                "a clean operation was sent to review by the membership rule, which would make "
+                "every finding need a human and so make review meaningless"
+            )
+    assert published, "no clean operation was examined; the safety half asserted nothing"
+
+
 def test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_a_defect():
     """A CHARACTERISATION OF SOMETHING WRONG, pinned so it cannot worsen unnoticed.
 
@@ -1125,10 +1175,16 @@ def test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_
     organic accounts in the background genuinely repost some of the same posts. So Louvain attaches
     them and the significance test does not remove them.
 
-    Measured across the full grid: 81 organic accounts among 153 named, 52.9%, in findings that are
-    PUBLISHED rather than flagged for adjudication. That is the most serious category this package
-    has: `needs_adjudication` is None, so nothing asks a human before these names are shown as
-    members of a coordinated ring.
+    Measured across the full grid: 81 organic accounts among 153 named, 52.9%. When this test was
+    written those findings were PUBLISHED rather than flagged, with `needs_adjudication` None, so
+    nothing asked a human before these names were shown as members of a coordinated ring. That was
+    the most serious category this package has.
+
+    THEY NOW GO TO A READER. `detect` sets `needs_adjudication` when the membership test says most
+    of the named accounts are not carrying the finding, which is exactly these three and none of the
+    clean fixtures. The rate this test pins is UNCHANGED by that: the same accounts are still named,
+    and what changed is that a human is asked first. Pinned by
+    `test_a_finding_that_is_mostly_bystanders_goes_to_a_reader`.
 
     THE MEMBERSHIP TEST NOW NAMES THEM ALL, AND THE RATE ABOVE IS STILL 52.9%. When this test was
     written `attachment.assess` flagged only 18 of the 81, missing every bystander on four of the
