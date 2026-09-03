@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2604
-passed, 8 skipped, 2 failed** (2026-09-03, head `3ef1470` plus the two round-trip tests below), both failures pre-existing and
+Suite measured at **2605
+passed, 8 skipped, 2 failed** (2026-09-03, head `2777dad` plus the profile-pollution test below), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2604 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
+Current measured state: **2605 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2001,6 +2001,33 @@ overlap BEFORE asserting the abstention so it cannot pass on a premise that stop
 `attachment` reports and never drops, which is a deliberate rule and not an oversight. What changed
 is that a reader now sees every one of them marked as not carrying the finding, instead of roughly
 four in five being presented as equal members of an operation.
+
+##### Where the contamination goes: all three downstream paths are now measured
+
+A published ring finding names 52.9% innocent accounts, and that finding feeds three things. Each
+was measured separately, and they agree:
+
+| path | contamination | hard-family share | does it name anyone |
+|---|---|---|---|
+| the finding itself | 81 of 153 named (52.9%) | n/a | **yes**, this is the defect |
+| the accumulating `CoordinationEdge` graph | 400 of 652 pairs, 54.6% of weight | **0 pairs** | no |
+| the formation profile | 48 of 120 features (40.0%) | **0 features** | no: **0 of 139** organic placed |
+
+**The formation profile is the one that mattered most and had never been looked at**, because
+`assign` places an INDIVIDUAL against a profile, which is the sharpest naming act in the system.
+`build_profile` reads the candidate's evidence rather than members' feature bags, so a feature
+reaches a profile only when two or more members share it. Bystanders are members, so two of them
+sharing something enters the operation's permanent identity. Measured, that happens at 40%.
+
+**And it stops exactly where it would name somebody.** None of the polluted features is a hard
+family, and `MIN_HARD_EVIDENCE` plus `MIN_HARD_FEATURES` mean soft evidence alone can never place an
+account, so no ordinary account in the section places against the polluted profile. This is the same
+structural fact three times over: a hard family is the operator's own act, which a swept-in
+bystander does not perform.
+
+**What it does cost is recall, not safety.** Forty per cent of the profile is noise a genuine future
+member will not match, which can only make assignment harder. That is a third, independent argument
+for the trim below, arriving from the opposite direction to the other two.
 
 ##### The false naming is avoidable, and that is measured rather than argued
 

@@ -874,3 +874,77 @@ def test_an_arrival_bucket_is_never_part_of_a_formations_identity():
     assert not [f for f in stadium.features if f.kind in CONTEXTUAL_KINDS], (
         "a timestamp bucket became part of an operation's durable identity"
     )
+
+
+def test_a_contaminated_finding_pollutes_the_profile_and_still_places_nobody():
+    """THE THIRD DOWNSTREAM PATH, and the one that matters most because assignment names an
+    INDIVIDUAL rather than describing a set.
+
+    A published amplifier-ring finding names 52.9% innocent accounts, and that finding is what a
+    formation profile is distilled from. `build_profile` reads the candidate's EVIDENCE rather than
+    the members' feature bags, so a feature reaches the profile only when two or more members share
+    it. Bystanders are members, so two of them sharing something puts it into the operation's
+    permanent identity, and every later sweep is measured against that identity.
+
+    MEASURED, AND IT IS THE SAME SHAPE AS THE GRAPH LEAK. Across the pinned ring grid the profile is
+    40% bystander-only (48 features of 120), so the pollution is real and substantial. NONE of it is
+    a hard family, and no ordinary account in the section places against the polluted profile
+    (0 of 31, 0 of 45, 0 of 63).
+
+    That holds for the reason the whole package rests on rather than by luck: a hard family is the
+    operator's own act, which a swept-in bystander does not perform, and `MIN_HARD_EVIDENCE` plus
+    `MIN_HARD_FEATURES` mean soft features alone can never place anybody. So contamination reaches
+    the profile and stops at the point where it would name someone.
+
+    WHAT IT DOES COST is discriminative power rather than safety: 40% of the profile is noise that
+    a genuine future member does not match, which can only make assignment harder. That is a recall
+    risk, and it is the argument for trimming stated from a third direction.
+    """
+    from app.netdetect.types import HARD_FAMILIES
+
+    ring = C.amplifier_ring(8, seed=63)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(40, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    checked = 0
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) < 4 or not (members - ring_ids):
+            continue
+        profile = build_profile(finding, result.corpus)
+        assert profile.features, "the finding produced no profile at all"
+
+        bystander_only = []
+        for pf in profile.features:
+            holders: set[str] = set()
+            for feature, hs in result.corpus.feature_accounts.items():
+                if (feature.family, feature.kind, feature.value) == (pf.family, pf.kind, pf.value):
+                    holders = set(hs) & members
+                    break
+            if holders and not (holders & ring_ids):
+                bystander_only.append(pf)
+
+        checked += 1
+        # The premise: if this stops being true the measurement below is about a different thing.
+        assert bystander_only, (
+            "no bystander-only feature reached the profile, so this test is no longer exercising "
+            "the pollution path it was written for"
+        )
+        assert not [pf for pf in bystander_only if pf.family in HARD_FAMILIES], (
+            "a HARD family feature held only by bystanders entered the operation's durable "
+            "identity; soft pollution is contained by MIN_HARD_EVIDENCE and this would not be"
+        )
+
+        # THE HARM TEST. Ordinary accounts from this very section are the population nearest the
+        # finding and so the likeliest to match a polluted profile.
+        for account in result.corpus.accounts:
+            if account.external_id in members:
+                continue
+            outcome = score_against(account, profile, formation_key="ring")
+            assert not outcome.assigned, (
+                f"{account.external_id} was placed in the operation on a profile built from a "
+                f"finding that was mostly bystanders"
+            )
+
+    assert checked, "no contaminated ring finding was produced; the test asserted nothing"
