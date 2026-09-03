@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2611
-passed, 8 skipped, 2 failed** (2026-09-03, head `1141802` plus the blind-spot test below), both failures pre-existing and
+Suite measured at **2612
+passed, 8 skipped, 2 failed** (2026-09-03, head `d2655cc`), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2611 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
+Current measured state: **2612 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2352,6 +2352,14 @@ recognised after every account in it has been burned, and it is the same reasoni
   advisory lock, so N instances do not each age the catalogue N times. It is best-effort and never
   raises: a phase is a label on a lead, and failing the pass over one would take the anomaly
   detection and the watchlist rescans down with it.
+
+  **The WIRING is guarded now, not just the helper, and the difference is the whole point.** The
+  original test called `_refresh_formation_phases` directly, so deleting the call from
+  `run_one_pass` would have left it green while the catalogue silently stopped ageing and every
+  dormant operation went on presenting as live. Nothing covered `monitoring.scheduler.run_one_pass`
+  at all. That is the same "written and nothing calls it" gap that created this helper, repeated one
+  level up. The new guard drives the real entry point, and was **verified to FAIL with the call
+  stubbed out** rather than assumed to: a guard nobody has seen fail is a guard nobody knows works.
 - **A re-run of one post is not a second sighting.** `contexts_json` is a set, exactly as in the
   tracking layer, so nobody can strengthen a formation by pressing the button again.
 
