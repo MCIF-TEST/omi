@@ -1019,3 +1019,49 @@ def test_a_bystander_can_hold_hard_evidence_and_one_coincidence_still_places_nob
         "this test records has stopped being demonstrated; re-measure before restoring any claim "
         "that it cannot happen"
     )
+
+
+def test_the_monitoring_pass_itself_ages_the_catalogue_not_just_its_helper():
+    """THE WIRING, WHICH THE TEST ABOVE DOES NOT COVER.
+
+    `test_the_monitoring_pass_ages_the_formation_catalogue` calls `_refresh_formation_phases`
+    directly. That proves the helper works and says nothing about whether anything calls it: delete
+    the line from `run_one_pass` and that test still passes, while the catalogue silently stops
+    ageing and every dormant operation goes on presenting as live.
+
+    This is the gap this repo keeps paying for one level up. `registry.refresh_phases` was itself
+    written and left with nothing calling it, which is why the helper exists at all; the fix added a
+    caller and a test for the helper, and left the caller unguarded.
+
+    So this drives the real entry point and asserts the catalogue actually moved.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.monitoring.scheduler import run_one_pass
+    from app.netdetect.formation import DORMANT_AFTER_DAYS
+    from app.storage.db import get_session
+    from app.storage.models import NetdetectFormation
+
+    now = datetime.now(timezone.utc)
+    with get_session() as session:
+        session.add(NetdetectFormation(
+            formation_key="wiring_stale", platform="x", phase="active",
+            profile_json={}, families_json=[], members_json=["a", "b"], member_count=2,
+            contexts_json=["p"], sighting_count=1,
+            first_seen=now - timedelta(days=200),
+            last_seen=now - timedelta(days=DORMANT_AFTER_DAYS + 30),
+        ))
+        session.commit()
+
+    out = run_one_pass()
+
+    assert out.get("formation_phases") == 1, (
+        "the monitoring pass did not report ageing any formation. If the call was removed from "
+        "run_one_pass the catalogue stops ageing silently and every dormant operation keeps "
+        "presenting as live."
+    )
+    with get_session() as session:
+        row = session.query(NetdetectFormation).filter_by(formation_key="wiring_stale").one()
+        assert row.phase != "active", (
+            "run_one_pass reported a phase change that did not reach the row"
+        )
