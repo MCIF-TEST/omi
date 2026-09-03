@@ -5160,9 +5160,40 @@ code, because it is the foundation the future algorithm builds on.
    `GET /v1/admin/netdetect/findings/calibration` replays every threshold against those judgements
    and refuses to recommend anything until there are 30 with 8 of each class, so the first thirty
    are the whole cost of calibrating it. Watch specifically for a finding that names an account you
-   can tell is an ordinary bystander: that is the measured ~7% contamination and the judgement to
-   record is a dismissal with that reason, since it is the one class no threshold currently
-   separates.
+   can tell is an ordinary bystander, and record a dismissal with that reason, since it is the one
+   class no threshold currently separates.
+
+   **Expect that to be common, not rare.** The "~7%" this item used to quote is the PLANTED
+   OPERATION. On amplifier-ring-shaped findings the measured rate is **52.9%**, i.e. most of the
+   named accounts, so a finding whose members are mostly ordinary is the expected case rather than
+   a surprise. Findings above half now say so themselves and go to review.
+
+0a. **DECIDE: trim the members the membership test flags.** This is the one that matters, and it
+   gates the next item. netdetect names 52.9% innocent accounts on ring-shaped findings, and four
+   independent measurements say trimming costs nothing: the flag is exactly the bystander set, the
+   trimmed finding still clears the null by a wide margin, across every control a trim would have
+   withheld **44 innocent names and lost 0 genuine members**, and the 40% of a formation profile
+   that is bystander noise can only make future assignment harder. The alternative route
+   (tightening candidate generation) is **measured dead**, and the cohort detector in this same repo
+   already gates membership per account and is measured perfectly precise. Not taken here because it
+   changes what is published about named real people and every corpus is synthetic. **Reproduce the
+   ring row on real scanned data first**, then decide. Evidence is beside the code in
+   `app/netdetect/attachment.py`.
+
+0b. **DECIDE (after 0a): whether netdetect runs automatically.** The cohort detector runs on every
+   scan and its 70+ cut is measured **blind** to a disciplined operation: at score 65 the cohort
+   comes back with ZERO accounts, so both automatic passes produce nothing and nothing records that
+   anything was skipped. netdetect finds that operation at every score, costs nothing to run (no
+   provider call, no model call, no credit) and is deterministic, so wiring it into the scan path
+   looks free. **It is not, while 0a is open**: running it automatically would name those 52.9%
+   automatically, on every scan, without an operator ever choosing to look. Fix who gets named
+   first.
+
+0c. **DECIDE: `RARITY_CEILING` 0.25 -> 0.60.** Measured strictly better on every synthetic control
+   (blind-spot recall 0/16 to 16/16 at 32% share, ring bystanders 15 to 1, no control publishing
+   anything it did not already publish). Independent of 0a and smaller in effect, but it moves
+   naming in BOTH directions where trimming only ever removes names, so it is the less safe of the
+   two. Evidence sits beside the constant in `app/netdetect/significance.py`.
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
    redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
    are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly
