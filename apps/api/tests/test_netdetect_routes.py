@@ -391,6 +391,17 @@ def test_the_page_never_lets_an_empty_weak_list_read_as_an_all_clear():
         "the page gives the same sentence whether 2 of 20 members were flagged or 17 of 25; the "
         "second is a finding whose composition is in doubt, not a few names to check first"
     )
+    # AND IT MUST NOT RESTATE THE REVIEW BANNER. `detect` sets `needs_adjudication` on exactly this
+    # condition and the card renders that reason a few lines above, so for a while the page said the
+    # same thing twice in almost the same words: both carried the count AND both said "rather than
+    # as an operation with weak members". That is the shape this repo already fixed once on the
+    # analyst progress panel, where one fact had six vocabularies. The banner judges the FINDING;
+    # this sentence sits under the member list and says how to read the LIST.
+    assert "rather than the group as an operation with weak members" not in src, (
+        "the membership sentence has gone back to restating the review banner's interpretation; "
+        "cut it to what only its position can say"
+    )
+
     assert "weakly_attached.length * 2 > row.members.length" in src, (
         "the majority case is not computed from the two lists, so it cannot be distinguished"
     )

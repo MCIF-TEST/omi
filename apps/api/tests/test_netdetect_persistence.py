@@ -385,6 +385,60 @@ def test_the_holders_survive_the_serve_path():
         assert len(e["members"]) == e["shared_by"]
 
 
+def test_the_review_reason_survives_the_serve_path():
+    """A doubt that only exists in the database is a doubt nobody acts on.
+
+    `detect` sets `needs_adjudication` when a finding rests on no hard family, and now also when its
+    own membership test says most of the named accounts are not carrying it. Every existing test for
+    that reads `detect`'s in-memory result. Nothing checked that the string reaches a reader, and the
+    entire value of the flag is that a person sees it before those names are treated as members of an
+    operation.
+
+    This repo has twice paid for the gap between "computed" and "served": the domination verdict was
+    returned in `RunOut` and never written down, and `/r/<token>/json` dumped a payload past a gate a
+    source-level guard could not see. Two links here are untested by anything else, so this walks
+    persist -> serve.
+    """
+    corpus, candidate = _seam_corpus()
+    candidate.needs_adjudication = (
+        "no evidence of the operator's own acts ALSO: 9 of 17 named accounts do not carry this "
+        "finding, which is most of them."
+    )
+    with get_session() as session:
+        _store(session, corpus, candidate, "review-serve")
+
+    body = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()
+    assert body, "the finding did not come back at all"
+    served = body[0]["needs_adjudication"]
+    assert served, "a finding flagged for review was served with no reason, so nothing asks anybody"
+
+    # BOTH doubts have to survive, not just the first. They name different things (what the evidence
+    # rests on, and who the finding is about), and `detect` appends rather than overwrites precisely
+    # so a reader gets both; a column or serialiser that truncated would silently drop the second.
+    assert "operator's own acts" in served
+    assert "do not carry this finding" in served
+
+
+def test_a_finding_nobody_needs_to_review_serves_null_and_not_an_empty_string():
+    """The other half of the three-state discipline this package keeps.
+
+    An empty string is falsy in Python and in TypeScript alike, so it would render the same as null
+    today and the bug would be invisible. It is still wrong: null means the detector reached no
+    doubt, and "" would mean it reached a doubt it could not describe. The queue branches on this
+    value to decide whether to show a review block at all.
+    """
+    corpus, candidate = _seam_corpus()
+    candidate.needs_adjudication = None
+    with get_session() as session:
+        _store(session, corpus, candidate, "review-none")
+
+    body = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()
+    assert body
+    assert body[0]["needs_adjudication"] is None, (
+        "a finding with no doubt must serve null, never an empty string"
+    )
+
+
 def test_a_row_stored_before_the_join_existed_serves_null_and_never_an_empty_list():
     """THE THIRD STATE. "We did not record who holds this" and "nobody holds this" are opposite
     statements about named people, and the second cannot be true of a feature that reached the

@@ -306,7 +306,16 @@ function FindingCard({
                 // of a list is no prioritisation at all. The distinction matters because these are
                 // named real people: the honest reading is that the group is mostly bystanders,
                 // not that the group is an operation with some weak members.
-                ? `${row.weakly_attached.length} of ${row.members.length} members did not carry this finding, which is most of it. Read the membership itself as in question rather than the group as an operation with weak members, and judge it on the highlighted rows before the unhighlighted ones.`
+                //
+                // IT SAYS WHAT ONLY THIS POSITION CAN SAY. `detect` now sets `needs_adjudication`
+                // on exactly this condition, and the review banner above renders that reason, so
+                // both were stating the same interpretation in almost the same words. This repo
+                // has fixed that shape once already, on the analyst progress panel: the fix is to
+                // cut each statement back to what only it can say, not to delete one of them. The
+                // banner judges the FINDING; this sentence sits under the member list and says how
+                // to read the LIST. It stays self-sufficient on the count, because a finding
+                // recorded before that change carries no banner at all.
+                ? `${row.weakly_attached.length} of ${row.members.length} members did not carry this finding, which is most of it. Judge it on the highlighted rows before the unhighlighted ones.`
                 : `${row.weakly_attached.length} highlighted member${row.weakly_attached.length === 1 ? '' : 's'} did not carry this finding. They are still members; check those names against the evidence first.`}
         </p>
       </div>

@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2602
-passed, 8 skipped, 2 failed** (17m54s, 2026-09-03, head `acadfd3`), both failures pre-existing and
+Suite measured at **2604
+passed, 8 skipped, 2 failed** (2026-09-03, head `3ef1470` plus the two round-trip tests below), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2602 passed, 8 skipped, 2 failed** (17m54s, 2026-09-03), both documented below:
+Current measured state: **2604 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2106,6 +2106,31 @@ Four rules on it:
 Pinned by `test_a_finding_that_is_mostly_bystanders_goes_to_a_reader`, whose second half asserts a
 clean operation is NOT dragged into review, because a rule that sends everything to a reader makes
 review meaningless.
+
+##### The review reason has to reach a reader, and the card was saying it twice
+
+Two follow-ups to sending mostly-bystander findings to review, both found by walking the change to
+its end rather than stopping at `detect`.
+
+**Nothing tested that the reason survives persistence.** Every test for `needs_adjudication` reads
+`detect`'s in-memory result, and the whole value of the flag is that a person sees it before those
+names are treated as members of an operation. This repo has twice paid for the gap between computed
+and served: the domination verdict was returned in `RunOut` and never written down, and
+`/r/<token>/json` dumped a payload past a gate the source-level guard could not see.
+`test_the_review_reason_survives_the_serve_path` walks persist to serve and asserts BOTH doubts
+survive, because `detect` appends with `ALSO:` rather than overwriting and a truncation would drop
+the second silently. Its partner pins that a finding with no doubt serves **null and not an empty
+string**: both are falsy in Python and TypeScript alike, so that bug would render identically and be
+invisible.
+
+**The card stated one fact twice.** `detect` sets the reason on exactly the condition the queue's
+fourth membership state branches on, so a mostly-bystander finding carried the count and the phrase
+"rather than as an operation with weak members" in the review banner AND in the sentence under the
+member list. That is the analyst-panel defect in miniature, and the fix is the one that worked
+there: cut each statement back to what only it can say. The banner judges the FINDING; the sentence
+sits under the list and says how to read the LIST, so it keeps the count and the prioritisation and
+drops the interpretation. It stays self-sufficient on the count because a finding recorded before
+this change carries no banner at all. A source guard fails if the interpretation returns.
 
 `WEAK_FRACTION` and `MIN_MEDIAN_CONTRIBUTION` are retained with their original measurements and
 marked as no longer the rule. They read correctly on findings where bystanders are a MINORITY, which
