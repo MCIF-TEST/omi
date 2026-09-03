@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2609
-passed, 8 skipped, 2 failed** (2026-09-03, head `ab3a0fa` plus the two attachment tests below), both failures pre-existing and
+Suite measured at **2610
+passed, 8 skipped, 2 failed** (2026-09-03, head `3f9e429` plus the cohort mixed-case test below), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2609 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
+Current measured state: **2610 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2029,6 +2029,32 @@ pairs) rather than absent, so the guard rather than the absence is what carries 
 **What it does cost is recall, not safety.** Forty per cent of the profile is noise a genuine future
 member will not match, which can only make assignment harder. That is a third, independent argument
 for the trim below, arriving from the opposite direction to the other two.
+
+##### The other detector in this repo already solves this, and that is the strongest argument yet
+
+The cohort detector (`app/campaigns/detector/`) runs AUTOMATICALLY on every scan, while netdetect is
+admin-only and manual. Its membership precision had never been measured: every test in its precision
+suite is either all-innocent (the controls) or all-operation, so the realistic shape, an operation
+sharing a 70+ cohort with ordinary accounts that merely score high, was untested.
+
+Measured, adding 0, 2, 4 and 8 ordinary high scorers to a four-account operation: it names **4 of 4
+operatives and 0 innocents every time**, against netdetect's 52.9% on the amplifier ring.
+
+**The difference is an admission gate, not the kind of statistic.** The cohort detector admits
+members one at a time: an account joins only when its OWN posterior link to the group clears 0.95.
+netdetect takes Louvain communities wholesale and has no per-account admission test at all. So false
+naming is not intrinsic to detecting sets, and it is not the price of the set-level thesis; it is
+what happens without a gate, and this codebase already contains a working one.
+
+That matters for the trim decision below because it is not a synthetic-corpus argument. It is a
+precedent: the house already gates membership per account elsewhere, on the detector that runs by
+itself, and it is measured perfectly precise where the manual one is more than half wrong. Pinned by
+`test_an_operation_sharing_a_cohort_with_ordinary_high_scorers_names_only_the_operation`.
+
+**What netdetect would use is already built and already measured.** `attachment`'s leave-one-out
+delta is a SET-level per-member statistic, so it does not reintroduce the pairwise reasoning the
+package exists to avoid, and it identifies the bystanders exactly. The only thing missing is the
+decision to act on it.
 
 ##### The false naming is avoidable, and that is measured rather than argued
 

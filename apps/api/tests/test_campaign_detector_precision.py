@@ -244,3 +244,68 @@ def test_a_batch_that_is_entirely_one_operation_is_still_caught():
     c = build(specs, thread_times=quiet + burst,
               client_counts={"MassTweet": 5}, scanned_total=5, thread_author_count=5)
     assert len(campaigns(c)) == 1
+
+
+def test_an_operation_sharing_a_cohort_with_ordinary_high_scorers_names_only_the_operation():
+    """THE MIXED CASE, which is the realistic one and was untested.
+
+    Every other test in this file is either all-innocent (the controls) or all-operation. The cohort
+    is whatever scored 70 or above, so in practice an operation shares it with ordinary accounts
+    that merely look suspicious one at a time: old, chatty, high-volume, unremarkable.
+
+    THIS IS THE QUESTION THAT FOUND THE BIGGEST DEFECT IN THE OTHER DETECTOR. `app/netdetect` takes
+    Louvain communities wholesale and has no per-account admission test, and its amplifier-ring
+    findings name 52.9% innocent accounts. This detector gates membership per account: one joins
+    only when its OWN posterior link to the group clears the bar. Measured with 0, 2, 4 and 8
+    ordinary high scorers added to a four-account operation, it names 4 of 4 operatives and 0
+    innocents every time.
+
+    So false naming is not intrinsic to detecting sets. It is what happens without an admission
+    gate, and this codebase already contains a working one.
+    """
+    script = "this project is the most undervalued opportunity in the space right now, do not sleep"
+    chatter = [
+        "honestly not sure what to make of this one but the chart looks interesting today",
+        "been following since the start and the team has delivered every single time so far",
+        "people keep saying it is over and yet here we are again another green candle",
+        "i sold too early last cycle and i am not making that mistake twice this time",
+        "the fundamentals have not changed at all regardless of what the price is doing",
+        "watching this closely, might add more if it dips under the previous support level",
+        "everyone in my timeline is talking about this today which is usually a bad sign",
+        "no financial advice obviously but this looks like accumulation to me right now",
+    ]
+    burst = [T0 + timedelta(seconds=s) for s in (0, 7, 15, 22)]
+
+    for innocents in (2, 4, 8):
+        specs = [
+            {"text": script, "at": burst[i], "handle": f"gains_daily_{i}",
+             "client": "AutoPoster Pro", "post_count": 8,
+             "created": T0 - timedelta(days=30, seconds=60 * i)}
+            for i in range(4)
+        ]
+        # Ordinary people who merely SCORE high: their own words, their own clients, arriving
+        # minutes apart rather than seconds, and years older than the operation's accounts.
+        for j in range(innocents):
+            specs.append({
+                "text": chatter[j % len(chatter)],
+                "at": T0 + timedelta(minutes=7 * (j + 1)),
+                "handle": f"realperson{j}",
+                "client": f"Client{j}",
+                "post_count": 40,
+                "created": T0 - timedelta(days=900 + 40 * j),
+            })
+
+        quiet = [T0 + timedelta(hours=k) for k in range(-10, 10)]
+        cohort = build(specs, thread_times=quiet + burst,
+                       client_counts={"AutoPoster Pro": 4}, scanned_total=60)
+        found = campaigns(cohort)
+
+        assert len(found) == 1, (
+            f"with {innocents} ordinary high scorers the detector reported {len(found)} campaigns; "
+            f"the operation is still one group and the innocents are not a second"
+        )
+        named = sorted(found[0].members)
+        assert named == ["u0", "u1", "u2", "u3"], (
+            f"with {innocents} ordinary high scorers the campaign named {named}. Anything beyond "
+            f"u0-u3 is an innocent account reported as part of an operation."
+        )
