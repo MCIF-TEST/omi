@@ -27,6 +27,11 @@ from app.campaigns.detector.types import (
 T0 = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
+#: Shuffles for the one test here that also runs netdetect, kept low because this suite is fast
+#: and the contrast it draws does not depend on the precision of the null.
+SHUFFLES_FOR_NETDETECT = 24
+
+
 def build(
     specs: list[dict],
     *,
@@ -309,3 +314,68 @@ def test_an_operation_sharing_a_cohort_with_ordinary_high_scorers_names_only_the
             f"with {innocents} ordinary high scorers the campaign named {named}. Anything beyond "
             f"u0-u3 is an innocent account reported as part of an operation."
         )
+
+
+def test_the_seventy_cut_is_blind_to_a_disciplined_operation_and_the_cost_is_a_cliff():
+    """MEASURES A CLAIM CLAUDE.md MAKES AND NOTHING CHECKED: that the 70+ cohort filter is "blind by
+    construction" to the operation most worth catching.
+
+    It matters because of WHICH detector is wired where. The cohort detector runs automatically on
+    every scan. `app/netdetect` never reads a score at all, and is admin-only and manual.
+
+    Same accounts, same behaviour, varying only the OMI score they were given:
+
+        op score 95 / 85 / 75  ->  cohort holds all 8, the automatic detector can see them
+        op score 65 / 45 / 30  ->  cohort holds ZERO accounts
+
+    So the claim is right and the cost is a cliff rather than a slope: one point under the cut and
+    the operation disappears from the automatic path entirely. The cohort comes back EMPTY rather
+    than merely incomplete, because ordinary accounts do not clear 70 either, so both passes produce
+    nothing and nothing records that anything was skipped.
+
+    THIS IS NOT AN ARGUMENT FOR RUNNING NETDETECT AUTOMATICALLY, and the two open decisions are why.
+    netdetect costs nothing to run (no provider call, no model call, no credit) so the obvious move
+    is to wire it into the scan path. It also names 52.9% innocent accounts on the amplifier ring,
+    and running it automatically would mean naming those people automatically, without an operator
+    ever choosing to look. The membership trim gates the wiring: fix who gets named first.
+    """
+    from app.campaigns.detector.cohort import SCORE_THRESHOLD, from_scan_rows
+
+    import tests.netdetect_corpora as NC
+    from app.netdetect import detect_from_commenters
+
+    ring = NC.amplifier_ring(8, seed=63)
+    op_ids = {r["external_id"] for r in ring}
+    rows = NC.organic_population(60, seed=31) + ring
+
+    def cohort_for(op_score: float):
+        scan_rows = [
+            {
+                "external_id": r["external_id"],
+                "handle": r.get("handle") or r["external_id"],
+                "overall_probability": (op_score if r["external_id"] in op_ids else 22) / 100.0,
+            }
+            for r in rows
+        ]
+        return from_scan_rows(scan_rows, [], platform="x")
+
+    above = cohort_for(SCORE_THRESHOLD + 5)
+    assert sum(1 for a in above.accounts if a.external_id in op_ids) == len(op_ids), (
+        "premise: above the cut the whole operation must reach the cohort"
+    )
+
+    below = cohort_for(SCORE_THRESHOLD - 5)
+    assert not [a for a in below.accounts if a.external_id in op_ids], (
+        "the operation reached the cohort while scoring under the threshold, so the filter is not "
+        "what this test believes it is"
+    )
+    assert not below.accounts, (
+        "the cohort came back non-empty, so the 'nothing at all is produced' half of this is no "
+        "longer true and the note above needs revisiting"
+    )
+
+    # And the score-blind detector is unaffected, which is the whole reason it exists.
+    result = detect_from_commenters(rows, shuffles=SHUFFLES_FOR_NETDETECT)
+    assert any(len(set(f.members) & op_ids) >= 4 for f in result.findings), (
+        "netdetect failed to find the operation, so this corpus no longer demonstrates the contrast"
+    )

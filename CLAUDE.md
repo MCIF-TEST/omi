@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2610
-passed, 8 skipped, 2 failed** (2026-09-03, head `828cef9`), both failures pre-existing and
+Suite measured at **2611
+passed, 8 skipped, 2 failed** (2026-09-03, head `1141802` plus the blind-spot test below), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2610 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
+Current measured state: **2611 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2029,6 +2029,32 @@ pairs) rather than absent, so the guard rather than the absence is what carries 
 **What it does cost is recall, not safety.** Forty per cent of the profile is noise a genuine future
 member will not match, which can only make assignment harder. That is a third, independent argument
 for the trim below, arriving from the opposite direction to the other two.
+
+##### What the 70+ cut costs, and why it does NOT argue for auto-running netdetect
+
+CLAUDE.md has said since the package was built that the old 70+ filter is "blind by construction to
+the operation worth catching: aged accounts, hand-written posts, each scoring 30 alone". Nothing
+measured it, and it decides which detector is wired where: the cohort detector runs AUTOMATICALLY on
+every scan, netdetect never reads a score and is admin-only and manual.
+
+Same accounts, same behaviour, varying only the OMI score they carry:
+
+| operation's score | cohort size | operation in cohort | netdetect finds it |
+|---|---|---|---|
+| 95 / 85 / 75 | 8 | 8 | yes |
+| **65 / 45 / 30** | **0** | **0** | yes |
+
+**The claim is right and the cost is a cliff, not a slope.** One point under the cut and the
+operation leaves the automatic path entirely. The cohort comes back EMPTY rather than merely
+incomplete, because ordinary accounts do not clear 70 either, so both passes produce nothing and
+nothing records that anything was skipped.
+
+**The obvious conclusion is wrong, and this is the useful part.** netdetect costs nothing to run (no
+provider call, no model call, no credit) and is deterministic, so wiring it into the scan path looks
+free. It also names 52.9% innocent accounts on the amplifier ring, and running it automatically
+would mean naming those people automatically, on every scan, without an operator ever choosing to
+look. **The membership trim therefore GATES the wiring decision**: fix who gets named first, then
+the cheap automatic coverage becomes available. Two open items that looked independent are ordered.
 
 ##### The other detector in this repo already solves this, and that is the strongest argument yet
 
