@@ -40,6 +40,7 @@ from app.netdetect.formation import (
     profile_similarity,
 )
 from app.netdetect.significance import Corpus
+from app.netdetect.types import HARD_FAMILIES as HARD_FAMILIES_FOR_TEST
 
 SHUFFLES = 20
 _LEARNED: dict[tuple, object] = {}
@@ -948,3 +949,73 @@ def test_a_contaminated_finding_pollutes_the_profile_and_still_places_nobody():
             )
 
     assert checked, "no contaminated ring finding was produced; the test asserted nothing"
+
+
+def test_a_bystander_can_hold_hard_evidence_and_one_coincidence_still_places_nobody():
+    """CORRECTS A CLAIM I MADE THREE TIMES: that a bystander never holds hard-family evidence
+    because a hard family is the operator's own act. That is overstated, and it is falsifiable.
+
+    `creation_week` is the one hard feature that is a PROPERTY rather than an act. An innocent
+    account can be provisioned in the same week as an operative by coincidence, and nothing forbids
+    it. `repost_of` is different: converging on an outside target IS an act, and it never
+    contaminated in any configuration measured.
+
+    Measured over a grid wider than the pinned one (14 findings, 43 hard-family evidence features):
+    ONE had a bystander holder, an identity/creation_week feature at ring 60/62. On the pinned
+    corpus family that is 1 hard pair out of 937 touching a bystander, i.e. 0.1% against 56.5% of
+    the accumulated weight being soft. So containment is real and large, and it is not zero.
+
+    THE CONCLUSION SURVIVES FOR A BETTER REASON THAN THE ONE I GAVE, and the reason was already in
+    the code. `MIN_HARD_FEATURES` requires TWO DISTINCT hard features before an account is placed,
+    and its own note says why: a rare `creation_week` scores about 5.8 alone, clearing
+    `MIN_HARD_EVIDENCE` unaided, and the package added the floor after measuring exactly one false
+    assignment that rested on one such coincidence. So the safety does not depend on bystanders
+    being unable to hold hard evidence. It depends on one coincidence never being enough.
+
+    This test therefore pins the GUARD rather than the absence, because the absence is not true.
+    """
+    from app.netdetect.assign import MIN_HARD_FEATURES
+
+    assert MIN_HARD_FEATURES >= 2, (
+        "assignment would place an account on a single hard feature, and `creation_week` is a "
+        "calendar coincidence an innocent account can share; the measured false assignment this "
+        "floor was added for rested on exactly one such feature"
+    )
+
+    ring = C.amplifier_ring(8, seed=62)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(60, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    seen_contaminated_hard = False
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) < 4:
+            continue
+        bystanders = members - ring_ids
+        for item in finding.evidence or []:
+            if item.feature.family not in HARD_FAMILIES_FOR_TEST:
+                continue
+            holders = set(result.corpus.feature_accounts.get(item.feature, ())) & members
+            if holders & bystanders:
+                seen_contaminated_hard = True
+                # The mechanism, named. If a NETWORK family ever turns up here the reasoning above
+                # is wrong in a way that matters much more: convergence on an outside target is an
+                # act, and a bystander performing it would not be a coincidence.
+                assert item.feature.family == "identity", (
+                    f"a {item.feature.family} feature reached a bystander. Only identity is "
+                    f"coincidental (a shared provisioning week); network is an act."
+                )
+
+        # Whatever the evidence looks like, no ordinary account may be placed on this profile.
+        profile = build_profile(finding, result.corpus)
+        for account in result.corpus.accounts:
+            if account.external_id in members:
+                continue
+            assert not score_against(account, profile, formation_key="r").assigned
+
+    assert seen_contaminated_hard, (
+        "no bystander held hard evidence on the corpus this was measured on, so the correction "
+        "this test records has stopped being demonstrated; re-measure before restoring any claim "
+        "that it cannot happen"
+    )

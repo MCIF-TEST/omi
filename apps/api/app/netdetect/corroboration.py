@@ -259,10 +259,12 @@ def annotate(session, candidates, *, platform: str | None = None,
     * **A lead candidate is mostly NOT the operation.** The measured overlaps were 2 of 17, 4 of 23,
       5 of 16 and so on: it is a Louvain community holding a few known accounts among many ordinary
       ones. `RunOut.leads` is a COUNT for that reason and must stay one.
-    * **Hard history did not spread to those bystanders, in any configuration.** In all twelve,
-      `hard_pairs` came to exactly the number of pairs the known members can account for on their
-      own, so no pair involving a swept-in account carried hard-family history. That follows from
-      what the hard families are (the operator's own acts) rather than from luck, and it is pinned.
+    * **Hard history essentially did not spread to those bystanders.** In all twelve configurations
+      `hard_pairs` came to exactly the number of pairs the known members account for on their own.
+      Read that as very rare rather than impossible: a wider sweep later found one bystander holding
+      a hard feature, an identity/`creation_week` coincidence, because a provisioning week is a
+      property and not an act. What makes it harmless is `assign.MIN_HARD_FEATURES`, which needs two
+      distinct hard features before anyone is placed. See `persist.py` for the numbers.
 
     Must run BEFORE this run's own pairs are folded into the graph. The context exclusion makes it
     correct either way, but reading first keeps the two acts in the order a reader would assume.

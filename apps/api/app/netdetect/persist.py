@@ -58,13 +58,24 @@ def pair_evidence_from(corpus: Corpus, candidate: Candidate) -> dict[tuple[str, 
     THAT LAST RULE IS WHAT CONTAINS A CONTAMINATED FINDING, and it was measured rather than assumed.
     A finding's pairs go into the graph permanently, and the amplifier ring publishes 52.9%
     bystanders, so an over-broad finding could poison the deployment's memory rather than one page.
-    Over the nine-configuration ring grid: 652 pairs recorded, 400 touching an innocent account and
-    54.6% of the accumulated weight, and ZERO of those 400 carrying a HARD family.
+    Measured on the PINNED corpus family (organic seed 31, the one the contamination figure cites):
+    1189 pairs recorded, 937 touching an innocent account and 56.5% of the accumulated weight, and
+    ONE of those 937 carrying a hard family.
 
-    So contamination lands entirely in `log_lr`, which `corroboration.py` already documents as
-    non-discriminating (a newsroom saturates it too), and not at all in `hard_pairs`, which is what
-    decisions are keyed on. It holds because both accounts must share the SAME feature and a hard
-    family is by definition the operator's own act, which a swept-in bystander does not perform.
+    So contamination lands almost entirely in `log_lr`, which `corroboration.py` already documents
+    as non-discriminating (a newsroom saturates it too), and at 0.1% in `hard_pairs`, which is what
+    decisions are keyed on.
+
+    IT IS NOT ZERO, AND AN EARLIER VERSION OF THIS NOTE SAID IT WAS. The first measurement used a
+    different corpus family (organic seed equal to the ring seed) and reported zero, and the reason
+    given was that a hard family is the operator's own act which a bystander does not perform. That
+    reasoning is wrong for one feature: `creation_week` is a PROPERTY, not an act, so an innocent
+    account can be provisioned in the same week by coincidence. `repost_of` is an act and never
+    contaminated in any configuration measured.
+
+    The safety conclusion survives on a better footing, already stated in `assign.py`:
+    `MIN_HARD_FEATURES` requires TWO distinct hard features to place an account, precisely because a
+    rare `creation_week` clears `MIN_HARD_EVIDENCE` alone. One coincidence is never enough.
     """
     members = sorted(candidate.members)
     if len(members) < 2 or len(members) > MAX_MEMBERS_FOR_PAIRS:

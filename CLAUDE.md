@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2605
-passed, 8 skipped, 2 failed** (2026-09-03, head `2777dad` plus the profile-pollution test below), both failures pre-existing and
+Suite measured at **2607
+passed, 8 skipped, 2 failed** (2026-09-03, head `cd146e1` plus the two formations tests below), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2605 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
+Current measured state: **2607 passed, 8 skipped, 2 failed** (2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -2019,11 +2019,12 @@ was measured separately, and they agree:
 reaches a profile only when two or more members share it. Bystanders are members, so two of them
 sharing something enters the operation's permanent identity. Measured, that happens at 40%.
 
-**And it stops exactly where it would name somebody.** None of the polluted features is a hard
-family, and `MIN_HARD_EVIDENCE` plus `MIN_HARD_FEATURES` mean soft evidence alone can never place an
-account, so no ordinary account in the section places against the polluted profile. This is the same
-structural fact three times over: a hard family is the operator's own act, which a swept-in
-bystander does not perform.
+**And it stops exactly where it would name somebody.** No ordinary account in the section places
+against the polluted profile, in any configuration. The reason is `MIN_HARD_EVIDENCE` plus
+`MIN_HARD_FEATURES`: soft evidence alone can never place an account, and two DISTINCT hard features
+are required, so neither the 40% of soft noise nor a lone `creation_week` coincidence can name
+anybody. Note the correction above: hard-family contamination is rare (0.1% of bystander-touching
+pairs) rather than absent, so the guard rather than the absence is what carries this.
 
 **What it does cost is recall, not safety.** Forty per cent of the profile is noise a genuine future
 member will not match, which can only make assignment harder. That is a third, independent argument
@@ -2505,18 +2506,25 @@ context and does not discriminate, and `hard_pairs` / `hard_families` are the di
 **That split also turns out to CONTAIN the amplifier ring's contamination, which is the second
 reason not to collapse it.** A published finding's pairs are folded into the graph permanently, and
 the ring names 52.9% bystanders, so the obvious worry is that one over-broad finding poisons the
-deployment's memory rather than just one page. Measured over the nine-configuration ring grid:
-**652 pairs recorded, 400 of them touching an innocent account, 54.6% of the accumulated weight,
-and ZERO of those 400 carrying a hard family.** The soft half is contaminated at roughly the rate
-the finding is; the discriminating half is not contaminated at all.
+deployment's memory rather than just one page. Measured on the pinned corpus family (organic seed
+31): **1189 pairs recorded, 937 touching an innocent account and 56.5% of the accumulated weight,
+and ONE of those 937 carrying a hard family.** The soft half is contaminated at roughly the rate the
+finding is; the discriminating half at 0.1%.
 
-That is structural rather than lucky. `pair_evidence_from` records a pair only where BOTH accounts
-hold the same evidence feature, and a hard family is by definition the operator's own act, which a
-swept-in bystander does not perform. The same property showed up independently in the lead path
-below, where hard history never reached a bystander in any of twelve configurations. **So a
-contaminated finding inflates the number that was already documented as meaning nothing on its own,
-and contributes nothing to the number decisions are keyed on.** Anything that starts reading
-`log_lr` as evidence gives that containment away.
+**IT IS NOT ZERO, AND THIS SECTION SAID IT WAS.** The first measurement used a different corpus
+family (organic seed equal to the ring seed) and the reason given was that a hard family is the
+operator's own act which a bystander does not perform. **That reasoning is wrong for one feature.**
+`creation_week` is a PROPERTY rather than an act, so an innocent account can be provisioned in the
+same week by coincidence; measured over a wider grid, 1 of 43 hard-family evidence features had a
+bystander holder and it was exactly that. `repost_of` is an act and never contaminated anywhere.
+
+**The conclusion survives on a better footing, and the footing was already in the code.**
+`assign.MIN_HARD_FEATURES` requires TWO distinct hard features before an account is placed, and its
+own note says why: a rare `creation_week` scores about 5.8 and clears `MIN_HARD_EVIDENCE` unaided,
+and the floor was added after measuring one false assignment that rested on exactly that. So safety
+does not rest on bystanders being unable to hold hard evidence, which is false. It rests on one
+coincidence never being enough. Anything that starts reading `log_lr` as evidence, or that lowers
+`MIN_HARD_FEATURES`, gives the containment away.
 
 Four rules:
 
