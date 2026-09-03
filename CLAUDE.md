@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2598
-passed, 8 skipped, 2 failed** (26m13s, 2026-09-02, head `b842b70`), both failures pre-existing and
+Suite measured at **2602
+passed, 8 skipped, 2 failed** (17m54s, 2026-09-03, head `acadfd3`), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -104,7 +104,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2598 passed, 8 skipped, 2 failed** (26m13s, 2026-09-02), both documented below:
+Current measured state: **2602 passed, 8 skipped, 2 failed** (17m54s, 2026-09-03), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
