@@ -20,7 +20,11 @@ THREE PROPERTIES CARRY THE MODULE, and two of them are about restraint:
 from __future__ import annotations
 
 import tests.netdetect_corpora as C
+from app.netdetect import attachment as attachment_module
 from app.netdetect import detect_from_commenters
+from app.netdetect.features import profile_from_commenter
+from app.netdetect.candidates import communities
+from app.netdetect.significance import Corpus, leave_one_out_scores, score_candidate
 from app.netdetect.attachment import (
     MAX_MEMBERS,
     MIN_CONTRIBUTION_GAP,
@@ -433,21 +437,115 @@ def test_the_constants_are_the_measured_ones():
     """Pinned so a later tweak is a deliberate act with a measurement behind it."""
     assert WEAK_FRACTION == 0.25
     assert MIN_MEDIAN_CONTRIBUTION == 0.5
-    # Cost is steep in the member count: measured on a 220-account corpus at 0.21s for 20 members,
-    # 2.8s for 40 and 15.4s for 60. This runs inside a request that has already spent tens of
-    # seconds detecting, so the cap is where the answer stops being worth the wait.
-    assert MAX_MEMBERS == 40
+    # RAISED 40 -> 100 by making the arithmetic cheaper rather than by agreeing to wait longer.
+    # The old cost curve was real (0.21s at 20 members, 2.8s at 40, 15.4s at 60) and the cap had
+    # already fired, silencing the membership test on the two most contaminated findings in the
+    # corpora. With `significance.leave_one_out_scores` the same 168-account corpus measures 0.26s
+    # at 40, 0.81s at 60 and 3.82s at 100, so 100 members now costs less than 40 used to.
+    #
+    # The value is STRUCTURAL rather than a time budget: `candidates.MAX_GROUP_SHARE` (0.40) bounds
+    # a community at 40% of the corpus and 250 accounts is the largest section this product reports
+    # on, so 100 is the largest finding that can reach `assess` at all.
+    assert MAX_MEMBERS == 100
 
 
 def test_an_oversized_finding_abstains_rather_than_making_the_operator_wait():
     """And it says which of the two empty-list meanings applies, so nobody reads the silence as
     'every member belongs'."""
-    result, finding = _planted(60, 5)
-    oversized = sorted(result.corpus.by_id)[:MAX_MEMBERS + 5]
-    attachment = assess(result.corpus, oversized)
+    # A corpus BIGGER THAN THE CAP, built directly rather than through `detect`: the abstention is
+    # decided before any scoring, so this costs nothing and needs no findings. It used to reuse a
+    # 68-account planted corpus, which silently stopped exercising the size branch the moment the
+    # cap rose above 68 and fell through to the gap abstention instead, reporting a green test for
+    # a path it was no longer taking.
+    rows = C.organic_population(MAX_MEMBERS + 20, seed=11)
+    corpus = Corpus([
+        profile_from_commenter(r) for r in rows if isinstance(r, dict) and r.get("external_id")
+    ])
+    assert corpus.size > MAX_MEMBERS, "premise: the corpus must be able to exceed the cap"
+
+    oversized = sorted(corpus.by_id)[:MAX_MEMBERS + 5]
+    attachment = assess(corpus, oversized)
     assert not attachment.answered
     assert attachment.weak == []
+    assert attachment.unchecked_for_size, (
+        "an over-cap abstention must be marked as a capability limit, or a reader cannot tell "
+        "'nobody looked' from 'nobody is weakly attached'"
+    )
     assert str(MAX_MEMBERS) in attachment.abstained
+
+
+def test_the_fast_leave_one_out_is_the_same_arithmetic():
+    """THE GUARD THAT MAKES THE REWRITE SAFE TO KEEP, and the only one that can be.
+
+    `significance.leave_one_out_scores` exists to answer, in one pass, exactly what calling
+    `score_candidate` once per removal answers. That claim is worth nothing asserted: it is a
+    performance rewrite of the arithmetic every membership verdict in this package rests on, so the
+    test is a DIFFERENTIAL against the naive computation on real corpora rather than a spot check
+    against remembered numbers.
+
+    Three things could make it diverge and each is checked here by construction, because all three
+    are exercised somewhere in these corpora:
+
+    * `_p_edge` is now computed once per (account, feature) instead of once per removal;
+    * a feature only the removed member holds leaves the reduced union entirely, and lands at k = 0
+      here instead (both give no surprise, since `MIN_SHARED_BY` is 2);
+    * THE IN-GROUP EXCLUSION IS NOT SYMMETRIC. A reply, repost or mention aimed at a member is
+      skipped as conversation; removing that member un-excludes it, so the feature counts for
+      exactly one removal and for no other and for not the full set. That asymmetry is the thing a
+      rewrite silently gets wrong, and it would show up here as a disagreement on precisely the
+      network-heavy corpora (the ring, the fandom) rather than everywhere.
+
+    Agreement is to floating-point noise rather than bit-identical, and it has to be: prefix/suffix
+    accumulation associates the same additions differently. Measured across every candidate set in
+    these six corpora the largest disagreement was 1.4e-14, against contributions this module
+    rounds to four decimals, so the tolerance below is many orders of magnitude tighter than
+    anything that could move a verdict.
+    """
+    cases = [
+        ("ring 60/61", C.organic_population(60, seed=31) + C.amplifier_ring(8, seed=61)),
+        ("planted 50/5", C.organic_population(50, seed=5) + C.planted_operation(8, seed=5)),
+        ("newsroom", C.organic_population(60, seed=7) + C.professional_beat(10, seed=21)),
+        ("fandom", C.organic_population(60, seed=7) + C.fan_community(12, seed=33)),
+    ]
+
+    compared = 0
+    worst = 0.0
+    for name, rows in cases:
+        corpus = Corpus([
+            profile_from_commenter(r) for r in rows
+            if isinstance(r, dict) and r.get("external_id")
+        ])
+        for members in communities(corpus):
+            ordered = sorted(dict.fromkeys(members))
+            if len(ordered) < 3:
+                continue
+            compared += 1
+
+            # The naive form, spelled out rather than imported, so this keeps testing what it says
+            # even if `attachment.leave_one_out` is rewritten again later.
+            full_ref = score_candidate(corpus, ordered, collect_evidence=False).score
+            ref = {
+                m: score_candidate(corpus, [x for x in ordered if x != m],
+                                   collect_evidence=False).score
+                for m in ordered
+            }
+
+            full_fast, fast = leave_one_out_scores(corpus, ordered)
+            assert set(fast) == set(ref), f"{name}: the fast path answered about different members"
+            worst = max(worst, abs(full_ref - full_fast))
+            for m in ordered:
+                worst = max(worst, abs(ref[m] - fast[m]))
+                assert abs(ref[m] - fast[m]) < 1e-9, (
+                    f"{name}: leaving out {m} from {len(ordered)} members disagrees by "
+                    f"{abs(ref[m] - fast[m]):.3e}; the fast path is not the same arithmetic"
+                )
+
+    assert compared >= 8, (
+        f"only {compared} candidate sets were compared, which is too few to have exercised the "
+        f"in-group exclusion asymmetry. Find corpora that produce candidates rather than relaxing "
+        f"this."
+    )
+    assert worst < 1e-9, f"largest disagreement {worst:.3e}"
 
 
 # ==================================================================================================
@@ -567,26 +665,35 @@ def test_a_finding_more_than_half_bystanders_still_gets_a_verdict():
     )
 
 
-def test_a_finding_too_large_to_test_goes_to_a_reader_rather_than_publishing_unchecked():
-    """THE SAME BUG AS THE MEDIAN RULE, REACHED BY THE SIZE ROUTE, and measured rather than feared.
+def test_a_finding_too_large_to_test_goes_to_a_reader_rather_than_publishing_unchecked(
+    monkeypatch,
+):
+    """THE SAME BUG AS THE MEDIAN RULE, REACHED BY THE SIZE ROUTE.
 
     `assess` abstains above `MAX_MEMBERS`, and contamination is what GROWS a finding, so the largest
     findings are the most contaminated ones and were the only ones nobody looked at. Measured on the
     amplifier ring as the background grows, bystanders of members:
 
         20 -> 12    25 -> 17    33 -> 25    38 -> 30    40 -> 32     all tested, all sent to review
-        49 -> 41    44 -> 36                             OVER CAP, untested, and PUBLISHED
+        49 -> 41    44 -> 36                    OVER THE CAP OF 40, untested, and PUBLISHED
 
-    So at exactly the point contamination is worst (84%), crossing the cap flipped a finding from
-    "a human is asked" to "nothing asks anybody". A 168-account comment section is ordinary for this
-    product, so this is production-reachable and not a fixture artefact.
+    So at exactly the point contamination was worst (84%), crossing the cap flipped a finding from
+    "a human is asked" to "nothing asks anybody".
+
+    THE CAP IS NOW 100 AND THOSE TWO FINDINGS ARE TESTED, which is what the sibling test below
+    records. The size branch is still reachable and still has to behave, so this drives it with the
+    cap lowered rather than by building a 250-account corpus: the real `detect` path, the real
+    `assess`, and the real branch, with only the constant moved. The VALUE of the constant is a
+    separate question and is pinned by `test_the_cap_is_large_enough_for_the_findings_that_occur`.
 
     THE FIX ADDS REVIEW AND CHANGES NO MEMBERSHIP. Nobody is dropped, no score moves. That is what
     keeps it separate from the two open decisions, which change who is NAMED.
     """
+    monkeypatch.setattr(attachment_module, "MAX_MEMBERS", 6)
+
     ring = C.amplifier_ring(8, seed=62)
     ring_ids = {r["external_id"] for r in ring}
-    rows = C.organic_population(160, seed=31) + ring
+    rows = C.organic_population(60, seed=31) + ring
     result = detect_from_commenters(rows, shuffles=SHUFFLES)
 
     checked = 0
@@ -594,7 +701,7 @@ def test_a_finding_too_large_to_test_goes_to_a_reader_rather_than_publishing_unc
         members = set(finding.members)
         if len(members & ring_ids) < 4:
             continue
-        if len(members) <= MAX_MEMBERS:
+        if len(members) <= attachment_module.MAX_MEMBERS:
             continue
         checked += 1
         assert not finding.attachment_checked, "premise: this finding must be over the cap"
@@ -619,8 +726,53 @@ def test_a_finding_too_large_to_test_goes_to_a_reader_rather_than_publishing_unc
         )
 
     assert checked, (
-        "no finding exceeded MAX_MEMBERS on this corpus, so the size route went untested. If the "
-        "corpora changed, find one that does rather than deleting this."
+        "no finding exceeded the lowered cap, so the size route went untested. If the corpora "
+        "changed, find a configuration that does rather than deleting this."
+    )
+
+
+def test_the_cap_is_large_enough_for_the_findings_that_occur():
+    """The payoff, measured: the two findings the old cap silenced now get an exact verdict.
+
+    At `MAX_MEMBERS` 40 these were the most contaminated findings in the corpora and the only ones
+    whose membership was never tested. The rewrite in `significance.leave_one_out_scores` made the
+    test cheap enough to run on them, and it does not merely run, it lands on exactly the right set:
+
+        corpus        members  bystanders  flagged  false positives
+        ring 130/62        38          30       30                0
+        ring 130/63        40          32       32                0
+        ring 160/62        49          41       41                0
+        ring 160/63        44          36       36                0
+
+    Only the 160 rows were over the old cap; the 130 rows are here so the claim is about a range
+    rather than a single point. THE ASSERTION IS EXACTNESS, not merely that something was flagged: a
+    membership test that ran and named the wrong people would be worse than one that abstained.
+    """
+    ring = C.amplifier_ring(8, seed=62)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(160, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    checked = 0
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) < 4 or len(members) <= 40:
+            continue
+        checked += 1
+        assert finding.attachment_checked, (
+            f"a {len(members)}-member finding still went untested, so the cap is still binding on "
+            f"the findings it binds worst on"
+        )
+        bystanders = members - ring_ids
+        flagged = set(finding.weakly_attached or ())
+        assert flagged == bystanders, (
+            f"flagged {len(flagged)} accounts against {len(bystanders)} bystanders; "
+            f"missed {sorted(bystanders - flagged)}, wrongly flagged {sorted(flagged - bystanders)}"
+        )
+
+    assert checked, (
+        "no finding on this corpus exceeded the OLD cap of 40, so this records nothing. The point "
+        "is that findings that size exist and are now tested; find one rather than deleting this."
     )
 
 

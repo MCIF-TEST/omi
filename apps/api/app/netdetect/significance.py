@@ -305,6 +305,194 @@ def score_candidate(
     )
 
 
+def _surprise(tail: float) -> float:
+    """One tail to one surprise, so the fast path below cannot drift from `feature_surprise`."""
+    if tail <= 0.0:
+        return MAX_FEATURE_SURPRISE
+    return min(MAX_FEATURE_SURPRISE, -math.log10(tail))
+
+
+def _loo_tails(probs: list[float], ks: list[int]) -> list[float]:
+    """``P(X >= ks[i])`` over ``probs`` with index ``i`` removed, for every ``i``, in O(n^2).
+
+    The naive way to answer this is one full DP per removal, which is O(n^3) per feature and is what
+    made `attachment.MAX_MEMBERS` necessary. Instead build the distribution over every PREFIX of the
+    probabilities and the tail of the distribution over every SUFFIX; the set without index ``i`` is
+    the prefix before ``i`` convolved with the suffix after it, and the tail of that convolution is
+    ``sum_j A[i][j] * Btail[i+1][k - j]``, which is O(n) per removal once both tables exist.
+
+    EXACT, NOT APPROXIMATE, and deliberately so: this is the far tail the whole package reads, and
+    `_poisson_binomial_tail` already refuses a normal approximation for that reason. Only the
+    association order of the additions differs, so the results agree to floating-point noise rather
+    than merely closely. Measured against the naive computation over 400 randomised trials (mixing
+    probabilities of 0 and 1 with tiny and large ones) the largest absolute deviation was 6.7e-16,
+    and `test_the_fast_leave_one_out_is_the_same_arithmetic` pins the agreement on real corpora.
+
+    THE OBVIOUS ALTERNATIVE IS UNSOUND AND WAS NOT USED. Given the full distribution one can
+    "divide out" a single Bernoulli to recover the distribution without it, which is O(n) per
+    removal rather than O(n^2) overall. It divides by ``1 - p``, so it is undefined at ``p == 1``
+    (which `_p_edge` reaches, since it clamps with ``min(1.0, ...)``) and amplifies error as ``p``
+    approaches it. Prefix/suffix only ever multiplies and adds non-negative numbers.
+    """
+    n = len(probs)
+    ps = [min(1.0, max(0.0, p)) for p in probs]
+
+    prefix: list[list[float]] = [[1.0]]
+    cur = [1.0]
+    for p in ps:
+        nxt = [0.0] * (len(cur) + 1)
+        for j, v in enumerate(cur):
+            if v:
+                nxt[j] += v * (1.0 - p)
+                nxt[j + 1] += v * p
+        cur = nxt
+        prefix.append(cur)
+
+    # suffix_tail[i][t] = P(sum of ps[i:] >= t). Index n is the empty suffix.
+    suffix_tail: list[list[float]] = [[] for _ in range(n + 1)]
+    suffix_tail[n] = [1.0, 0.0]
+    cur = [1.0]
+    for i in range(n - 1, -1, -1):
+        p = ps[i]
+        nxt = [0.0] * (len(cur) + 1)
+        for j, v in enumerate(cur):
+            if v:
+                nxt[j] += v * (1.0 - p)
+                nxt[j + 1] += v * p
+        cur = nxt
+        run = 0.0
+        tails = [0.0] * (len(cur) + 1)
+        for j in range(len(cur) - 1, -1, -1):
+            run += cur[j]
+            tails[j] = run
+        suffix_tail[i] = tails
+
+    out: list[float] = []
+    for i in range(n):
+        k = ks[i]
+        if k <= 0:
+            out.append(1.0)
+            continue
+        if k > n - 1:
+            out.append(0.0)
+            continue
+        head = prefix[i]
+        tails = suffix_tail[i + 1]
+        total = 0.0
+        for j, v in enumerate(head):
+            if not v:
+                continue
+            need = k - j
+            if need <= 0:
+                total += v
+            elif need < len(tails):
+                total += v * tails[need]
+        out.append(max(0.0, min(1.0, total)))
+    return out
+
+
+def leave_one_out_scores(corpus: Corpus, members: list[str]) -> tuple[float, dict[str, float]]:
+    """``(score of the set, {member: score of the set without that member})``.
+
+    EXACTLY WHAT CALLING `score_candidate` ONCE PER REMOVAL PRODUCES, one order of n cheaper. The
+    naive form re-walks the feature union and re-runs a full Poisson-binomial DP for every member,
+    so cost grows about n^3.5 and `attachment.MAX_MEMBERS` had to cap the test at 40 members. That
+    cap is not a preference: it decides whether a finding's membership is checked at all, and a
+    finding that crosses it is exactly a finding large enough to have been drawn too wide.
+
+    Three things make it equivalent rather than merely similar, and each is a way it could quietly
+    stop being so:
+
+    * `_p_edge` depends only on the account and the feature, never on the rest of the set, so it is
+      computed once per pair instead of once per removal. That is pure caching.
+    * A feature only the removed member holds falls out of the reduced union, and it lands at
+      ``k = 0`` here instead. Both give no surprise, because `MIN_SHARED_BY` is 2.
+    * THE IN-GROUP EXCLUSION IS NOT SYMMETRIC, and this is the part a rewrite gets wrong. A reply,
+      repost or mention aimed at a MEMBER is skipped as conversation rather than convergence.
+      Removing that member takes them out of the group, so the same feature stops being in-group and
+      starts counting. Such a feature therefore contributes nothing to the full score and to exactly
+      one removal, and is handled on its own path below rather than folded in.
+    """
+    kept = [m for m in dict.fromkeys(members) if m in corpus.by_id]
+    n = len(kept)
+    if n < 2:
+        return 0.0, {}
+
+    union: set[Feature] = set()
+    for m in kept:
+        union |= corpus.by_id[m].features
+
+    position = {m: i for i, m in enumerate(kept)}
+    handles = [(corpus.by_id[m].handle or "").lower().lstrip("@") for m in kept]
+    handle_holders: dict[str, list[int]] = defaultdict(list)
+    for i, h in enumerate(handles):
+        if h:
+            handle_holders[h].append(i)
+
+    full_families: dict[str, list[float]] = defaultdict(list)
+    loo_families: list[dict[str, list[float]]] = [defaultdict(list) for _ in range(n)]
+
+    # Sorted for the same reason the corpus build is: a set of Features iterates in hash order.
+    for f in sorted(union, key=lambda f: f.token()):
+        if not corpus.is_rare(f):
+            continue
+
+        # Which single removal (if any) un-excludes this feature. None means it is not in-group at
+        # all and so counts everywhere.
+        frees: int | None = None
+        if f.kind in ("reply_to", "target_post", "repost_of"):
+            if f.value in position:
+                frees = position[f.value]
+        elif f.kind == "mentions":
+            holders_of_handle = handle_holders.get(f.value)
+            if holders_of_handle:
+                if len(holders_of_handle) > 1:
+                    # Still names a member after any single removal, so it is in-group throughout.
+                    continue
+                frees = holders_of_handle[0]
+
+        holders = corpus.feature_accounts.get(f, ())
+        holds = [m in holders for m in kept]
+        k_full = sum(holds)
+
+        if frees is not None:
+            i = frees
+            k = k_full - (1 if holds[i] else 0)
+            if k < MIN_SHARED_BY:
+                continue
+            probs = [_p_edge(corpus, m, f) for j, m in enumerate(kept) if j != i]
+            s = _surprise(_poisson_binomial_tail(probs, k))
+            if s > 0.0:
+                loo_families[i][f.family].append(s)
+            continue
+
+        ks = [k_full - (1 if h else 0) for h in holds]
+        if k_full < MIN_SHARED_BY and max(ks, default=0) < MIN_SHARED_BY:
+            continue
+
+        probs = [_p_edge(corpus, m, f) for m in kept]
+
+        if k_full >= MIN_SHARED_BY:
+            s = _surprise(_poisson_binomial_tail(probs, k_full))
+            if s > 0.0:
+                full_families[f.family].append(s)
+
+        if max(ks, default=0) < MIN_SHARED_BY:
+            continue
+        tails = _loo_tails(probs, ks)
+        for i in range(n):
+            if ks[i] < MIN_SHARED_BY:
+                continue
+            s = _surprise(tails[i])
+            if s > 0.0:
+                loo_families[i][f.family].append(s)
+
+    def _score(fams: dict[str, list[float]]) -> float:
+        return weighted({fam: _harmonic_sum(vals) for fam, vals in fams.items() if vals})
+
+    return _score(full_families), {kept[i]: _score(loo_families[i]) for i in range(n)}
+
+
 def _harmonic_sum(values: list[float]) -> float:
     """Sorted descending, weighted 1, 1/2, 1/3, ... See the module docstring.
 

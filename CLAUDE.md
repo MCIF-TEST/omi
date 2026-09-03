@@ -2974,11 +2974,68 @@ which are the most contaminated ones. The 25-member finding above carries 17 bys
 exactly the failure the median rule had, arriving by a different route, and it is not hypothetical
 in the way "max 12" made it sound.
 
-It has not fired and nothing here is broken today. The point is that the headroom is 15 members
-rather than 28, on a population nobody had measured, so a corpus that produces slightly larger
-findings would reach it. If it ever does, the honest response is the leave-one-out rewrite, NOT a
-quiet raise of the cap: a cap raised without the cost work turns an admin request that has already
-spent tens of seconds detecting into one that spends tens more.
+##### It fired, and the answer was to make the test cheap rather than to widen the cap
+
+This section used to end "it has not fired and nothing here is broken today", with the note that if
+it ever did, the honest response was the leave-one-out rewrite and NOT a quiet raise of the cap.
+Both halves came due. Growing the background grows the finding, and the bystander share grows with
+it, so at 160 organic accounts the ring produces findings of **44 and 49 members carrying 36 and 41
+bystanders (82% and 84%)**, both over the cap of 40, both untested, and both PUBLISHED.
+
+`significance.leave_one_out_scores` is the rewrite. The naive form ran one full `score_candidate`
+per member and each of those re-ran a Poisson-binomial DP over the whole set, so cost grew about
+n^3.5. It now computes every removal in ONE pass at O(n^2) per feature, by building the distribution
+over every PREFIX of the probabilities and the tail over every SUFFIX: the set without member *i* is
+the prefix before it convolved with the suffix after it. Measured on the same 168-account corpus:
+
+| n | before | after |
+|---|---|---|
+| 20 | 0.21s | 0.03s |
+| 40 | 2.80s | 0.26s |
+| 60 | 15.4s | 0.81s |
+| 100 | - | 3.82s |
+| 120 | - | 6.82s |
+
+**So `MAX_MEMBERS` is 100 and 100 members now costs less than 40 used to.** The value is
+STRUCTURAL rather than a time budget: `candidates.MAX_GROUP_SHARE` (0.40) bounds a community at 40%
+of the corpus and 250 accounts is the largest section this product reports on, so 100 is the largest
+finding that can reach `assess` at all. The cap stops binding in practice instead of binding hardest
+where it hurts most. It is still a cap and `unchecked_for_size` still exists, because a bigger
+corpus can still cross it and "nobody looked" must never present as "nobody is weakly attached".
+
+**The payoff is measured, and it is exactness rather than merely coverage.** The four largest ring
+findings are now tested and flag **exactly** their bystander sets: 30 of 30, 32 of 32, 36 of 36, 41
+of 41, with **no genuine ring member flagged in any of them**. A membership test that ran and named
+the wrong people would be worse than one that abstained.
+
+**THREE THINGS MAKE IT EQUIVALENT RATHER THAN SIMILAR, and the third is the one a rewrite gets
+wrong.** `_p_edge` depends only on the account and the feature, so it is cached rather than
+recomputed per removal. A feature only the removed member holds leaves the reduced union and lands
+at k=0 here instead, which is the same nothing because `MIN_SHARED_BY` is 2. And **the in-group
+exclusion is not symmetric**: a reply, repost or mention aimed at a MEMBER is skipped as
+conversation, so removing that member un-excludes it, and such a feature contributes to no full
+score and to exactly one removal. Get that wrong and the numbers stay plausible.
+
+**Do not take the O(n) deconvolution instead.** Dividing the full distribution by one Bernoulli
+looks strictly better and is unsound: it divides by `1 - p`, which `_p_edge` reaches exactly (it
+clamps with `min(1.0, ...)`), and amplifies error as p approaches it. Prefix/suffix only ever
+multiplies and adds non-negative numbers.
+
+**The guard is a DIFFERENTIAL against the naive computation on real corpora**, not a spot check
+against remembered numbers, because this is the arithmetic every membership verdict rests on.
+Agreement is 1.4e-14 across every candidate set in six corpora, against contributions rounded to
+four decimals. `test_the_fast_leave_one_out_is_the_same_arithmetic` spells the naive form out rather
+than importing it, so it keeps testing what it says if `leave_one_out` is rewritten again. **It was
+verified to FAIL** on the plausible wrong rewrite (treating an in-group feature as excluded for
+every removal), by 4.6 log units rather than by rounding, which also proves the asymmetry really
+occurs in these corpora rather than being a theoretical worry.
+
+One test had to change and the reason is worth knowing: the over-cap test built its member list from
+a 68-account corpus, so the moment the cap rose above 68 it stopped exercising the size branch and
+fell through to the gap abstention, **reporting green for a path it was no longer taking**. It now
+builds a corpus larger than the cap, and the end-to-end size branch is driven with the cap lowered
+rather than by building a 250-account corpus, so the branch and the constant's value are pinned
+separately.
 
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious

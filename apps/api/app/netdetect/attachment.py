@@ -95,7 +95,7 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass, field
 
-from app.netdetect.significance import Corpus, score_candidate
+from app.netdetect.significance import Corpus, leave_one_out_scores
 
 #: A member contributing less than this share of what the typical member contributes is not carrying
 #: the finding. RETAINED FOR REFERENCE AND NO LONGER THE RULE: the weak set is now the group below
@@ -160,17 +160,41 @@ MIN_CONTRIBUTION_GAP = 0.8
 
 #: Above this many members the test abstains rather than running.
 #:
-#: MEASURED, not guessed. Leave-one-out costs one scoring per member and each scoring walks a
-#: feature union that itself grows with the member count, so the curve is steep. On a 220-account
-#: corpus: n=20 took 0.21s, n=30 1.0s, n=40 2.8s, n=50 7.2s, n=60 15.4s. This runs inside an admin
-#: request that has already spent tens of seconds detecting, so 40 is where the answer stops being
-#: worth the wait.
+#: RAISED FROM 40 TO 100 BY MAKING THE ARITHMETIC CHEAPER, NOT BY DECIDING TO WAIT LONGER. The old
+#: value came from a real measurement of a genuinely steep curve: leave-one-out ran one full scoring
+#: per member and each scoring re-ran a Poisson-binomial DP over the whole set, so cost grew about
+#: n^3.5 (n=20 0.21s, n=30 1.0s, n=40 2.8s, n=50 7.2s, n=60 15.4s) and 40 was where the answer
+#: stopped being worth the wait inside an admin request.
 #:
-#: It agrees with `persist.MAX_MEMBERS_FOR_PAIRS` by coincidence of the same underlying judgement,
-#: that a finding this large is a subject rather than a formation. They are kept separate because
-#: the cost models are different (pairs grow quadratically, this closer to n^3.5), and collapsing
-#: them would tie one bound to the other's measurement.
-MAX_MEMBERS = 40
+#: THE CAP HAD ALREADY FIRED, WHICH IS WHY THIS WAS WORTH FIXING RATHER THAN LIVING WITH. On a
+#: 168-account section the amplifier ring produces findings of 44 and 49 members carrying 82% and
+#: 84% bystanders, so the cap was switching the membership test off on precisely the most
+#: contaminated findings there are. That is the same shape as the median bug this module already
+#: paid for, and the honest response is to make the test able to run, not to widen the wait.
+#:
+#: `significance.leave_one_out_scores` computes every removal in one pass at O(n^2) per feature
+#: instead of O(n^3), and is exact rather than approximate (agreement with the naive computation is
+#: 1.4e-14 over real corpora, against results this module rounds to four decimals). Re-measured on
+#: the same 168-account corpus:
+#:
+#:     n=20 0.03s   n=40 0.26s   n=60 0.81s   n=80 1.98s   n=100 3.82s   n=120 6.82s
+#:
+#: So 100 members now costs less than the old 40 did, and this is set from the STRUCTURE rather than
+#: from that budget: `candidates.MAX_GROUP_SHARE` (0.40) bounds a community at 40% of the corpus,
+#: and 250 accounts is the largest section this product reports on, so 100 is the largest finding
+#: that can reach here at all. The cap stops binding in practice instead of binding hardest where
+#: it hurts most.
+#:
+#: IT IS STILL A CAP, AND `unchecked_for_size` STILL EXISTS. A corpus larger than 250 can still
+#: cross it, and "nobody looked" must never present as "nobody is weakly attached". Raising this
+#: further is a cost decision and needs the curve above re-measured, not an assumption that the
+#: rewrite made it free.
+#:
+#: It no longer agrees with `persist.MAX_MEMBERS_FOR_PAIRS` (40), and that divergence is the reason
+#: they were kept separate rather than collapsed: the cost models differ (pairs grow quadratically,
+#: this one now n^2 per feature), so tying one bound to the other's measurement would have dragged
+#: the pair cap along with this change for no reason.
+MAX_MEMBERS = 100
 
 
 @dataclass(slots=True)
@@ -225,12 +249,8 @@ def leave_one_out(corpus: Corpus, members: list[str]) -> dict[str, float]:
     ordered = sorted(dict.fromkeys(members))
     if len(ordered) < 3:
         return {}
-    full = score_candidate(corpus, ordered, collect_evidence=False).score
-    out: dict[str, float] = {}
-    for m in ordered:
-        rest = [x for x in ordered if x != m]
-        out[m] = full - score_candidate(corpus, rest, collect_evidence=False).score
-    return out
+    full, without = leave_one_out_scores(corpus, ordered)
+    return {m: full - without[m] for m in ordered if m in without}
 
 
 def assess(corpus: Corpus, members: list[str]) -> Attachment:
