@@ -37,9 +37,24 @@ from app.storage.models import NetdetectFinding
 
 logger = logging.getLogger("omi.netdetect.persist")
 
-#: Longest member list folded into pairwise edges. Pairs grow quadratically, so a 200-account
-#: finding would write ~20,000 rows for one observation; a finding that large is a subject rather
-#: than a formation and is refused upstream anyway.
+#: Longest member list folded into pairwise edges WHOLE. Pairs grow quadratically, so a 200-account
+#: finding would write ~20,000 rows for one observation.
+#:
+#: THE OTHER HALF OF THIS NOTE USED TO SAY SUCH A FINDING "is refused upstream anyway", AND THAT WAS
+#: FALSE. Measured on a 168-account section, the amplifier ring produces findings of 44 and 49
+#: members that are published (with a review flag), and both folded to exactly NOTHING: the
+#: deployment's memory learned nothing at all from its largest findings, silently, because a
+#: returned empty mapping is indistinguishable from a finding with no shared evidence.
+#:
+#: DO NOT "FIX" THAT BY RAISING THIS CONSTANT. Measured on the 49-member finding, folding it whole
+#: writes 997 edges in 0.61s, so cost is not what makes it a bad idea: **969 of those 997 pairs
+#: touch an innocent account**. The cap has been protecting the permanent graph from the worst
+#: findings for a reason its own docstring never stated, and raising it would pour 97%
+#: bystander-touching weight into shared state that `corroboration.py` reads back forever.
+#:
+#: What happens above the cap instead is a fallback to the finding's CORE, exactly as
+#: `candidates._densest_core` falls back rather than discarding a community that exceeds
+#: `MAX_GROUP_SHARE`. See `pair_evidence_from`.
 MAX_MEMBERS_FOR_PAIRS = 40
 
 
@@ -76,16 +91,65 @@ def pair_evidence_from(corpus: Corpus, candidate: Candidate) -> dict[tuple[str, 
     The safety conclusion survives on a better footing, already stated in `assign.py`:
     `MIN_HARD_FEATURES` requires TWO distinct hard features to place an account, precisely because a
     rare `creation_week` clears `MIN_HARD_EVIDENCE` alone. One coincidence is never enough.
+
+    MEASURED AND DELIBERATELY NOT TAKEN: RESTRICTING TO THE CORE BELOW THE CAP TOO. The fallback
+    above the cap folds only the members the membership test says carry the finding, and that same
+    restriction would work below it. On the ring findings that sit under the cap it is dramatic:
+
+        finding      folded today   touching an innocent account   core only   innocent
+        38 members            578                            550          28          0
+        40 members            624                            596          28          0
+        23 members            185                            157          28          0
+
+    Across every corpus measured it drops no genuine pair and keeps no bystander-touching one, and
+    the controls are untouched because a real community is what `attachment` abstains on (the
+    newsroom's 45 pairs are identical either way).
+
+    IT IS STILL NOT DONE, and the reason is the same one that keeps the trim in CLAUDE.md's open
+    decisions. Today's behaviour is not a bug: the contamination above was measured, and accepted on
+    the argument that it lands in `log_lr` (which does not discriminate) rather than in `hard_pairs`
+    (which does). Changing it improves on a documented trade rather than fixing a defect, and it
+    changes what the deployment permanently remembers about named real people on synthetic evidence.
+    The silent zero ABOVE the cap was a defect, because its stated justification was false, and that
+    is the part fixed here.
     """
     members = sorted(candidate.members)
-    if len(members) < 2 or len(members) > MAX_MEMBERS_FOR_PAIRS:
+    if len(members) < 2:
         return {}
 
+    fold = members
+    if len(members) > MAX_MEMBERS_FOR_PAIRS:
+        # TOO LARGE TO FOLD WHOLE, SO FOLD ITS CORE RATHER THAN NOTHING. This used to return an
+        # empty mapping, which meant the largest findings contributed nothing to the accumulating
+        # graph and nothing recorded that they had not: an empty return also means "this finding
+        # shares no pairwise evidence", so the two were indistinguishable.
+        #
+        # The core is the members the membership test says actually carry the finding. Measured on
+        # the two ring findings that cross the cap (49 and 44 members), the core is 8 accounts and
+        # 28 pairs, with ZERO touching an innocent account, against 997 and 883 pairs of which 969
+        # and 855 do. So this both raises coverage (0 pairs to 28) and is cleaner than folding the
+        # whole finding would have been.
+        #
+        # WITHOUT A MEMBERSHIP VERDICT THERE IS NO CORE, and the old behaviour stands. An abstention
+        # is not permission to guess at who belongs: `attachment_checked` false means nobody looked,
+        # which is exactly the case where picking a subset would be inventing one.
+        weak = set(candidate.weakly_attached or ())
+        core = [m for m in members if m not in weak]
+        if not candidate.attachment_checked or not (2 <= len(core) <= MAX_MEMBERS_FOR_PAIRS):
+            return {}
+        fold = core
+
+    fold_set = set(fold)
     out: dict[tuple[str, str], dict[str, float]] = {}
     for item in candidate.evidence or []:
         holders = corpus.feature_accounts.get(item.feature)
         if not holders:
             continue
+        # THE DIVISOR STAYS OVER THE WHOLE FINDING, not over the core, and that is what makes the
+        # fallback a strict subset. Dividing among the core's pairs instead would hand each of them
+        # a larger share than folding the finding whole would have, which is inventing weight out of
+        # a cost cap. Every edge written here carries exactly the number it would have carried with
+        # no cap at all; there are simply fewer of them.
         sharing = sorted(set(holders) & set(members))
         if len(sharing) < 2:
             continue
@@ -97,6 +161,8 @@ def pair_evidence_from(corpus: Corpus, candidate: Candidate) -> dict[tuple[str, 
             continue
         share = item.surprise / float(len(pairs))
         for pair in pairs:
+            if pair[0] not in fold_set or pair[1] not in fold_set:
+                continue
             bucket = out.setdefault(pair, {})
             bucket[item.feature.family] = bucket.get(item.feature.family, 0.0) + share
     return out

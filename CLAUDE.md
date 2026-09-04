@@ -3046,6 +3046,55 @@ builds a corpus larger than the cap, and the end-to-end size branch is driven wi
 rather than by building a 250-account corpus, so the branch and the constant's value are pinned
 separately.
 
+##### The largest findings were folding into the graph as nothing, on a second false claim
+
+Found by following the cap change to its neighbour. `persist.MAX_MEMBERS_FOR_PAIRS` (40) justified
+itself two ways: pairs grow quadratically, **and** "a finding that large is a subject rather than a
+formation and is refused upstream anyway". The second half is false, and the same measurement that
+raised the attachment cap disproves it: the 44- and 49-member ring findings are PUBLISHED, and both
+folded to an **empty mapping**. An empty mapping also means "this finding shares no pairwise
+evidence", so nothing anywhere recorded that the accumulating `CoordinationEdge` graph had learned
+nothing at all from the biggest findings this detector produces.
+
+**DO NOT FIX IT BY RAISING THE CONSTANT, and the reason is not cost.** Measured, folding the
+49-member finding whole writes **997 edges in 0.61s**, which is affordable. It is a bad idea because
+**969 of those 997 pairs touch an innocent account**. The cap has been protecting the permanent
+graph from the worst findings for a reason its own docstring never stated, and raising it would pour
+97% bystander-touching weight into shared state that `corroboration.py` reads back forever.
+
+**What it does instead is fall back to the finding's CORE**, which is the same move
+`candidates._densest_core` already makes when a community exceeds `MAX_GROUP_SHARE`: keep the core
+rather than discarding the lot. The core is the members the membership test says carry the finding,
+so this only became possible once `attachment` could run at these sizes at all. Measured:
+
+| finding | folded before | folded now | touching an innocent account |
+|---|---|---|---|
+| 49 members | 0 | 28 | 0 |
+| 44 members | 0 | 28 | 0 |
+
+Three rules on it:
+
+- **The divisor stays over the WHOLE finding.** Dividing a feature's surprise among the CORE's pairs
+  would hand each of them a bigger share than folding the finding whole would have, so the graph
+  would record that these accounts looked *more* coordinated precisely because the finding was too
+  large to fold. Every edge written carries exactly the number it would have carried with no cap;
+  there are simply fewer of them. Pinned, and the guard was **verified to fail** on that exact wrong
+  version.
+- **An abstention is not permission to guess.** `attachment_checked` false means nobody looked,
+  which is the one case where picking a subset would be inventing one, so the old empty return
+  stands there.
+- **Nothing below the cap changed**, byte for byte, and that is deliberate. See below.
+
+**MEASURED AND DELIBERATELY NOT TAKEN: the same restriction BELOW the cap.** It is dramatic there
+(578 pairs of which 550 touch an innocent account become 28 of which 0; likewise 624 to 28 and 185
+to 28) and across every corpus it drops no genuine pair and keeps no bystander-touching one, with
+the controls untouched because a real community is exactly what `attachment` abstains on. It is not
+done because today's behaviour is **not a defect**: that contamination was measured and accepted on
+the argument that it lands in `log_lr` (which does not discriminate) rather than in `hard_pairs`
+(which does). Changing it improves on a documented trade and alters what the deployment permanently
+remembers about named real people on synthetic evidence. The silent zero ABOVE the cap was a defect,
+because its stated justification was false, and that is the half fixed here.
+
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).

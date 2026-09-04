@@ -18,7 +18,15 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.netdetect.persist import MAX_MEMBERS_FOR_PAIRS, members_key, pair_evidence_from, persist_finding
+import tests.netdetect_corpora as C
+from app.netdetect import persist
+from app.netdetect.detect import detect_from_commenters
+from app.netdetect.persist import (
+    MAX_MEMBERS_FOR_PAIRS,
+    members_key,
+    pair_evidence_from,
+    persist_finding,
+)
 from app.netdetect.significance import Corpus
 from app.netdetect.types import (
     FAMILY_IDENTITY,
@@ -456,3 +464,130 @@ def test_a_row_stored_before_the_join_existed_serves_null_and_never_an_empty_lis
     served = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()[0]
     assert served["evidence"]
     assert all(e["members"] is None for e in served["evidence"])
+
+
+# ==================================================================================================
+# Above the cap: fold the core rather than nothing
+# ==================================================================================================
+def _uncapped(corpus, candidate):
+    """What folding the whole finding would have produced, with the cost cap lifted."""
+    original = persist.MAX_MEMBERS_FOR_PAIRS
+    persist.MAX_MEMBERS_FOR_PAIRS = 10 ** 9
+    try:
+        return persist.pair_evidence_from(corpus, candidate)
+    finally:
+        persist.MAX_MEMBERS_FOR_PAIRS = original
+
+
+def _ring_finding_over_the_cap():
+    """The real corpus that produces one, so this tests the shape production actually reaches."""
+    ring = C.amplifier_ring(8, seed=62)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(160, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=24)
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) >= 4 and len(members) > persist.MAX_MEMBERS_FOR_PAIRS:
+            return result.corpus, finding, ring_ids
+    raise AssertionError(
+        "no finding on this corpus exceeded MAX_MEMBERS_FOR_PAIRS, so the fallback went untested. "
+        "Find a configuration that produces one rather than deleting this."
+    )
+
+
+def test_a_finding_too_large_to_fold_whole_folds_its_core_rather_than_nothing():
+    """THE LARGEST FINDINGS WERE CONTRIBUTING NOTHING, SILENTLY, ON A FALSE JUSTIFICATION.
+
+    `MAX_MEMBERS_FOR_PAIRS` said a finding that large "is refused upstream anyway". Measured, it is
+    not: the amplifier ring on a 168-account section produces findings of 44 and 49 members which
+    are published, and both folded to an empty mapping. An empty mapping also means "this finding
+    shares no pairwise evidence", so nothing anywhere recorded that the deployment's memory had
+    learned nothing from its biggest findings.
+
+    The fallback is the same one `candidates._densest_core` already uses when a community exceeds
+    `MAX_GROUP_SHARE`: keep the core rather than discarding the lot. Here the core is the members
+    the membership test says carry the finding, which is why this only became possible once
+    `attachment` could run at these sizes at all.
+    """
+    corpus, finding, ring_ids = _ring_finding_over_the_cap()
+
+    evidence = persist.pair_evidence_from(corpus, finding)
+    assert evidence, (
+        f"a {len(finding.members)}-member finding folded to nothing, so the accumulating graph "
+        f"still learns nothing from the largest findings"
+    )
+
+    weak = set(finding.weakly_attached or ())
+    core = {m for m in finding.members if m not in weak}
+    assert core, "premise: the membership test must have identified a core"
+    for a, b in evidence:
+        assert a in core and b in core, "a pair outside the core reached the fold"
+
+    innocent = [p for p in evidence if p[0] not in ring_ids or p[1] not in ring_ids]
+    assert not innocent, (
+        f"{len(innocent)} of {len(evidence)} folded pairs touch an innocent account. Folding this "
+        f"finding whole would have written 969 of 997 such pairs, which is the reason the cap must "
+        f"not simply be raised"
+    )
+
+
+def test_the_core_fold_is_a_strict_subset_and_never_inflates_a_weight():
+    """THE DIVISOR STAYS OVER THE WHOLE FINDING, and that is what makes this safe to accumulate.
+
+    Each feature's surprise is divided among the pairs that share it. Dividing among the CORE's
+    pairs instead would hand each of them a bigger share than folding the finding whole would have,
+    which is manufacturing weight out of a cost cap: the graph would record that these accounts
+    looked more coordinated precisely because the finding was too large to fold.
+
+    So every edge written must carry exactly the number it would have carried with no cap at all.
+    There are simply fewer of them.
+    """
+    corpus, finding, _ = _ring_finding_over_the_cap()
+
+    folded = persist.pair_evidence_from(corpus, finding)
+    whole = _uncapped(corpus, finding)
+
+    assert set(folded) <= set(whole), "the fold produced a pair the uncapped fold does not have"
+    assert len(folded) < len(whole), "premise: the cap must actually be reducing the pair count"
+    for pair, families in folded.items():
+        assert families == whole[pair], (
+            f"pair {pair} was written with {families} but folding the finding whole gives "
+            f"{whole[pair]}; the cap is inventing weight"
+        )
+
+
+def test_without_a_membership_verdict_an_oversized_finding_still_folds_nothing():
+    """AN ABSTENTION IS NOT PERMISSION TO GUESS AT WHO BELONGS.
+
+    `attachment_checked` false means nobody looked, which is precisely the case where choosing a
+    subset would be inventing one. The old behaviour therefore stands, and the three states this
+    package keeps insisting on stay distinct: checked with a core, checked with none weak, and not
+    checked at all.
+    """
+    corpus, finding, _ = _ring_finding_over_the_cap()
+    assert finding.attachment_checked, "premise: this fixture must carry a verdict"
+
+    finding.attachment_checked = False
+    assert persist.pair_evidence_from(corpus, finding) == {}, (
+        "an oversized finding whose membership was never tested folded a core anyway, which means "
+        "the accumulating graph is being handed a subset nobody computed"
+    )
+
+
+def test_nothing_below_the_cap_changed():
+    """The fallback must be reachable ONLY where the cap binds.
+
+    A finding under the cap is folded exactly as before, contamination and all. That contamination
+    is a documented, measured trade rather than a defect (it lands in `log_lr`, which does not
+    discriminate, not in `hard_pairs`, which does), so changing it is an open decision recorded in
+    `pair_evidence_from` and not something the cap fix is entitled to do quietly.
+    """
+    rows = C.organic_population(60, seed=7) + C.professional_beat(10, seed=21)
+    result = detect_from_commenters(rows, shuffles=24)
+    assert result.findings, "premise: this corpus must produce a finding to compare"
+
+    for finding in result.findings:
+        assert len(finding.members) <= persist.MAX_MEMBERS_FOR_PAIRS, "premise: under the cap"
+        assert persist.pair_evidence_from(result.corpus, finding) == _uncapped(
+            result.corpus, finding
+        ), "behaviour below the cap changed"
