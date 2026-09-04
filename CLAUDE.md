@@ -3179,6 +3179,19 @@ the trial-credit env vars: two values that must agree with no runtime check that
 default path end to end, so it cannot pass on arithmetic that has drifted from what `detect` does.
 **Verified to fail** at quantile 0.98, with a message naming both constants and the fix.
 
+The other pairs were checked at the same time and are all consistent: `MIN_CORPUS` x
+`MAX_GROUP_SHARE` gives 10 against a `MIN_GROUP` of 3, `MIN_SHARED_BY` (2) sits under `MIN_GROUP`,
+and `assign`'s two hard-evidence floors agree with `detect`'s.
+
+**ONE COUPLING THIS SESSION INTRODUCED IS NOW GUARDED TOO**, because the rule is not to add the
+class of defect you have just spent the session removing. `attachment.MAX_MEMBERS` = 100 is derived
+across THREE modules: `candidates.MAX_GROUP_SHARE` (0.40) x `reports.templates._ALL_COMMENTERS_CAP`
+(250). Raise either and the cap silently stops covering the biggest findings, which are the most
+contaminated ones, so the membership test would abstain exactly where it is needed most with nothing
+failing. **The margin is zero by construction** (100 IS 0.40 x 250), which is intended, and does
+mean any increase on either side trips the guard immediately. Verified to fail with the report cap
+raised to 400.
+
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).

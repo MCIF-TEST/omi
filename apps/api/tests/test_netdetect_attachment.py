@@ -474,6 +474,37 @@ def test_an_oversized_finding_abstains_rather_than_making_the_operator_wait():
     assert str(MAX_MEMBERS) in attachment.abstained
 
 
+def test_the_membership_cap_still_covers_the_largest_finding_that_can_reach_it():
+    """A COUPLING THIS SESSION INTRODUCED, so it gets a guard rather than a docstring.
+
+    `MAX_MEMBERS` was raised to 100 and the value is derived, not chosen: `MAX_GROUP_SHARE` (0.40)
+    bounds a community at 40% of the corpus, and `_ALL_COMMENTERS_CAP` (250) is the largest section
+    this product reports on, so 100 is the largest finding that can reach `assess` at all. That
+    reasoning spans three modules and lived only in a comment.
+
+    THE FAILURE IT PREVENTS IS THE BUG THIS MODULE JUST FINISHED PAYING FOR. Raise the report cap,
+    or raise the group share, and `MAX_MEMBERS` silently stops covering the biggest findings. Those
+    are the most contaminated ones (measured, 82-84% bystanders), so the membership test would go
+    back to abstaining exactly where it is needed most, with `unchecked_for_size` set and nobody
+    reading it as a regression because nothing failed.
+
+    THE MARGIN IS ZERO BY CONSTRUCTION, which is why this is an inequality rather than an equality:
+    100 is exactly 0.40 x 250. That is intended (there is no reason to pay for headroom that cannot
+    be reached) and it does mean any increase on either side trips this immediately.
+    """
+    from app.netdetect.candidates import MAX_GROUP_SHARE
+    from app.reports.templates import _ALL_COMMENTERS_CAP
+
+    largest_reachable = int(_ALL_COMMENTERS_CAP * MAX_GROUP_SHARE)
+    assert MAX_MEMBERS >= largest_reachable, (
+        f"a finding of up to {largest_reachable} members can reach the membership test "
+        f"({_ALL_COMMENTERS_CAP} accounts x MAX_GROUP_SHARE {MAX_GROUP_SHARE}) but MAX_MEMBERS is "
+        f"{MAX_MEMBERS}, so the largest and most contaminated findings would go untested again. "
+        f"Raise MAX_MEMBERS and re-measure the cost curve in its docstring rather than lowering "
+        f"either of the other two to fit."
+    )
+
+
 def test_the_fast_leave_one_out_is_the_same_arithmetic():
     """THE GUARD THAT MAKES THE REWRITE SAFE TO KEEP, and the only one that can be.
 
