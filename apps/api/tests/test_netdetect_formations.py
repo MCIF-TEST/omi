@@ -1197,3 +1197,78 @@ def test_two_operations_sharing_commodity_tooling_are_still_told_apart(monkeypat
         f"{len(result.findings)} findings resolved to {len(keys)} formations; a shared soft-family "
         f"feature must not be enough to give two adversaries one identity"
     )
+
+
+def test_two_operations_are_told_apart_even_sharing_both_hard_families(monkeypatch):
+    """THE STRONGEST VERSION, and it bounds what an adversary can do by imitation.
+
+    The previous two tests share nothing, then share a SOFT family. This one shares both HARD ones:
+    the same provisioning week (`identity`, weight 1.00) and the same amplification targets
+    (`network`, weight 1.00). Those are the two families every publication decision in this package
+    keys on, so if copying them merged two adversaries, an operation could hide inside another by
+    signing its accounts up the same week and boosting the same posts.
+
+    Measured across two organic backgrounds, at each step:
+
+        shared: nothing                  2 findings, 8+8, 0 mixed, 2 formations
+        shared: publishing tool (soft)   2 findings, 8+8, 0 mixed, 2 formations
+        shared: signup week (hard)       2 findings, 8+8, 0 mixed, 2 formations
+        shared: targets (hard)           2 findings, 8+8, 0 mixed, 2 formations
+        shared: signup week AND targets  2 findings, 8+8, 0 mixed, 2 formations
+
+    WHY IT HOLDS is worth stating, because it is structural rather than lucky: candidate generation
+    groups on TOTAL shared rare-feature weight, and each operation shares far more within itself
+    (script, tool, handle factory, bio, posting interval) than it does across. Copying two features
+    does not outweigh five.
+
+    This is a CHARACTERISATION of how much imitation the separation tolerates, not a promise that it
+    tolerates any amount. An operator copying every axis is, by this package's own definition, no
+    longer a different operator.
+    """
+    from app.storage.db import get_session
+
+    from app.netdetect import registry
+
+    monkeypatch.setitem(C.OPERATORS, "clinic", {
+        **C.OPERATORS["clinic"],
+        "signup_days_ago": C.OPERATORS["stadium"]["signup_days_ago"],
+        "target": C.OPERATORS["stadium"]["target"],
+    })
+    assert (
+        C.OPERATORS["clinic"]["signup_days_ago"] == C.OPERATORS["stadium"]["signup_days_ago"]
+        and C.OPERATORS["clinic"]["target"] is C.OPERATORS["stadium"]["target"]
+    ), "premise: both hard families must actually be shared"
+
+    stadium = C.planted_operation(8, seed=101, operator="stadium", prefix="sta")
+    clinic = C.planted_operation(8, seed=202, operator="clinic", prefix="cli")
+    stadium_ids = {r["external_id"] for r in stadium}
+    clinic_ids = {r["external_id"] for r in clinic}
+
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + stadium + clinic, shuffles=24,
+    )
+
+    for finding in result.findings:
+        members = set(finding.members)
+        from_stadium = len(members & stadium_ids)
+        from_clinic = len(members & clinic_ids)
+        assert not (from_stadium and from_clinic), (
+            f"sharing both hard families merged {from_stadium} stadium accounts with "
+            f"{from_clinic} clinic ones. An operation could then hide inside another by signing up "
+            f"the same week and boosting the same posts."
+        )
+
+    with get_session() as session:
+        keys = set()
+        for finding in result.findings:
+            row, _how = registry.record(
+                session, finding, result.corpus, platform="x", context_id="post-shared-hard",
+            )
+            session.flush()
+            keys.add(row.formation_key)
+        session.commit()
+
+    assert len(keys) == len(result.findings) == 2, (
+        f"{len(result.findings)} findings resolved to {len(keys)} formations while sharing both "
+        f"hard families; the catalogue would then hold one identity for two adversaries"
+    )
