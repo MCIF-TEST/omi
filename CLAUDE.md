@@ -4197,6 +4197,28 @@ one is built to score 70+ across the board, because that is the state the filter
 `POST /v1/admin/coordination/{slug}/dismiss` records a labelled negative so a future calibration has
 something to fit against.
 
+#### The LSH banding is a coupled triple, and only a comment enforced it
+
+Same audit that caught the shuffle defaults, run over `app/campaigns/detector`: **46 of 57 constants
+are named by no test.** One of them is a genuine arithmetic invariant. `textsim.py` says
+"b * r must equal NUM_PERM" and nothing checked it.
+
+It matters because banding slices with `signatures[key][lo:hi]`, and **Python slicing past the end
+does not raise**: it returns a SHORT or EMPTY tuple. A band beyond the signature therefore computes
+nothing and buckets every account together, whatever the data. Measured at bands=48 against a
+128-permutation signature: **16 of 48 bands slice short or empty**, and on 30 accounts with
+unrelated text the candidate set goes from 362 pairs to all 435.
+
+**Raising the band count is the natural "be more sensitive" edit**, which is exactly how this would
+happen, and nothing would fail. The damage lands as an O(n^2) candidate explosion in the prefilter
+rather than as a wrong verdict, because the real filtering is downstream, so it would present as the
+detector getting slower with nobody knowing why. Lowering the product wastes permutations instead:
+at bands=16 the tail 64 are never consulted and the candidate set drops to 311.
+
+`test_the_lsh_banding_uses_every_permutation_and_no_band_is_degenerate` asserts the product AND the
+slicing, since the product alone would still pass if the slicing changed shape later. **Verified to
+fail** at bands=48.
+
 ### Campaigns are GATED, not scoped, because they have no owner
 
 `Campaign` has no `user_id` and that is deliberate: one operation seen by two customers on two
