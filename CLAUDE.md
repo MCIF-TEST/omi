@@ -43,8 +43,8 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2613
-passed, 8 skipped, 2 failed** (2026-09-04, head `4b71126`), both failures pre-existing and
+Suite measured at **2617
+passed, 8 skipped, 2 failed** (2026-09-04, head `9bfabed`), both failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **six sequential chunks rather than one process**, because this sandbox
@@ -57,7 +57,7 @@ run, so the two methods agree on this tree.
 **RECONCILE A CHUNKED TOTAL AGAINST `--collect-only`, WHICH COSTS TWO SECONDS.** Summing six chunk
 footers by hand is exactly as reliable as it sounds: passed + skipped + failed must equal what
 `python -m pytest -q --collect-only` reports, and if it does not, a file was listed in two chunks or
-missed by all of them. The 2613 above reconciles (2613 + 8 + 2 = 2623 collected). The figure it
+missed by all of them. The 2617 above reconciles (2617 + 8 + 2 = 2627 collected). The figure it
 replaces did not: it was recorded as 2612 and no test file changed between that head and this one
 apart from the two tests added here, so the earlier chunking over-counted by one. Nothing was
 broken and nothing regressed; a hand-summed number was simply wrong, which is the argument for
@@ -113,7 +113,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2613 passed, 8 skipped, 2 failed** (2026-09-04), both documented below:
+Current measured state: **2617 passed, 8 skipped, 2 failed** (2026-09-04), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
