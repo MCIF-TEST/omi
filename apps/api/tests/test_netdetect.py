@@ -27,7 +27,11 @@ from app.netdetect.features import (  # noqa: E402
     profile_from_commenter,
     timing_features,
 )
-from app.netdetect.shuffle import shuffle_corpus  # noqa: E402
+from app.netdetect.shuffle import (  # noqa: E402
+    DEFAULT_QUANTILE,
+    DEFAULT_SHUFFLES,
+    shuffle_corpus,
+)
 from app.netdetect.significance import _poisson_binomial_tail, internal_reply_ratio  # noqa: E402
 
 #: Enough shuffles to express p<=0.05 (the floor is 1/(K+1)), small enough to keep the suite quick.
@@ -143,6 +147,50 @@ def test_too_few_shuffles_refuses_instead_of_silently_finding_nothing():
     assert result.refused is not None
     assert not result.looked
     assert "1/(K+1)" in result.refused or "cannot express" in result.refused
+
+
+def test_the_shipped_defaults_can_actually_report_something():
+    """`DEFAULT_SHUFFLES` AND `DEFAULT_QUANTILE` ARE COUPLED AND NOTHING RECONCILED THEM.
+
+    The test above proves the detector REFUSES a configuration that cannot express the p-value it
+    was asked for. It passes an explicit K=8, so it says nothing about the pair of constants the
+    product actually ships, and those two are exactly the kind of pair this repo has been bitten by
+    before (the Clerk keys, the preset name, the trial-credit env vars): two values in two places
+    that must agree, with no runtime check that they do.
+
+    The arithmetic: at quantile q the smallest expressible p-value is 1/(K+1), so K must be at least
+    round(1/(1-q)) - 1. Shipped, that is 19 against a `DEFAULT_SHUFFLES` of 24, a margin of five.
+
+    THE FAILURE IS NOT HYPOTHETICAL AND IT IS NOT A SMALL EDIT AWAY. Tightening the quantile is the
+    most natural "let us be stricter" change anyone could make to this package, and it silently
+    couples:
+
+        quantile 0.90  needs K >= 9     24 is fine
+        quantile 0.95  needs K >= 19    24 is fine, and is what ships
+        quantile 0.98  needs K >= 49    EVERY DEFAULT RUN REFUSED
+        quantile 0.99  needs K >= 99    EVERY DEFAULT RUN REFUSED
+
+    Nothing crashes. Every scan reports "Nothing was tested", which is honest but is also the
+    product detecting nothing at all, and whoever raised the quantile has no reason to connect the
+    two. Better than the original K=8 bug, which said nothing whatsoever, and still a bad day.
+    """
+    alpha = 1.0 - DEFAULT_QUANTILE
+    needed = int(round(1.0 / alpha)) - 1 if alpha > 0 else 0
+    assert DEFAULT_SHUFFLES >= needed, (
+        f"the shipped defaults cannot express the p-value they ask for: quantile "
+        f"{DEFAULT_QUANTILE} needs at least {needed} shuffles and DEFAULT_SHUFFLES is "
+        f"{DEFAULT_SHUFFLES}, so every run using the defaults would be refused and the product "
+        f"would detect nothing. Raise DEFAULT_SHUFFLES or lower DEFAULT_QUANTILE."
+    )
+
+    # And prove it end to end rather than only in arithmetic: the default path must not refuse.
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + C.planted_operation(8, seed=5),
+    )
+    assert result.refused is None, (
+        f"a run on the shipped defaults was refused: {result.refused}"
+    )
+    assert result.looked, "the shipped defaults did not get as far as looking"
 
 
 # =============================================================================================== #

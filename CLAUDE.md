@@ -3151,6 +3151,34 @@ accounts on a customer surface. Measured, two operations in one 70+ cohort give 
 shared, and with both shared. Pinned by
 `test_two_operations_in_one_cohort_are_two_campaigns_and_never_one`.
 
+##### `DEFAULT_SHUFFLES` and `DEFAULT_QUANTILE` are a coupled pair, and nothing reconciled them
+
+Found by listing every constant in `app/netdetect` and checking which no test names: 32 of 71, and
+this pair is the one that matters. The K=8 blunder above is pinned by a test that passes an EXPLICIT
+K=8, so it says nothing about the two constants the product actually ships.
+
+The arithmetic: at quantile q the smallest expressible p-value is 1/(K+1), so K must be at least
+`round(1/(1-q)) - 1`. Shipped that is **19 against a `DEFAULT_SHUFFLES` of 24**, a margin of five.
+
+**Tightening the quantile is the most natural "let us be stricter" edit anyone could make here, and
+it silently couples:**
+
+| quantile | K needed | against the shipped 24 |
+|---|---|---|
+| 0.90 | 9 | fine |
+| 0.95 | 19 | fine, and is what ships |
+| **0.98** | **49** | **every default run refused** |
+| **0.99** | **99** | **every default run refused** |
+
+Nothing crashes and nothing is silent, which is better than the original bug: every scan reports
+"Nothing was tested". It is still the product detecting nothing at all, and whoever raised the
+quantile has no reason to connect the two numbers. Same class as the Clerk keys, the preset name and
+the trial-credit env vars: two values that must agree with no runtime check that they do.
+
+`test_the_shipped_defaults_can_actually_report_something` asserts the pair AND drives the real
+default path end to end, so it cannot pass on arithmetic that has drifted from what `detect` does.
+**Verified to fail** at quantile 0.98, with a message naming both constants and the fix.
+
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).
