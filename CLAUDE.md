@@ -3118,6 +3118,14 @@ The fixture makes the claim meaningful rather than trivial: `OPERATORS["stadium"
 targets, mention, hashtag and posting interval. They share only the fact of being automated, which
 is exactly the thing that must not be enough to merge them.
 
+**AND IT SURVIVES THEM GENUINELY SHARING ONE AXIS**, which is the realistic version. Two operators
+buying the same publishing SaaS is ordinary, and `infrastructure` is a SOFT family (0.55) for that
+reason. Measured with the clinic operator's client string replaced by the stadium operator's: still
+two findings, 8 of 8 each, still two formations, on both backgrounds tried. So the separation is not
+resting on the operators differing on every axis at once. A merge here would be the worse of the two
+failures because it is the one an operator can ENGINEER: buy the tool your target's critics already
+use and the detector folds you into them.
+
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).

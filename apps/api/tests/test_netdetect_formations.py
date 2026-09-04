@@ -1134,3 +1134,66 @@ def test_two_operations_under_one_post_are_told_apart_all_the_way_to_the_catalog
         "both findings resolved to one formation, so the catalogue now holds a chimera profile "
         "carrying two operators' scripts, tools and targets. Every future assign and sweep reads it."
     )
+
+
+def test_two_operations_sharing_commodity_tooling_are_still_told_apart(monkeypatch):
+    """THE ADVERSARIAL VERSION OF THE TEST ABOVE, and the realistic one.
+
+    Two operators buying the same publishing SaaS is ordinary: the tool market is small, and
+    `infrastructure` is deliberately a SOFT family (weight 0.55) for exactly that reason, since a
+    shared tool can simply be a shared profession. The question is whether the separation above
+    rests on the operators happening to differ on every axis at once, or whether it survives them
+    genuinely sharing one.
+
+    Measured on two organic backgrounds with the clinic operator's client string replaced by the
+    stadium operator's: still two findings, 8 of 8 each, no cross-contamination, and still two
+    formations. So the separation is not resting on the tool.
+
+    A merge here would be the worse failure of the two, because it is the case an operator can
+    ENGINEER: buy the tool your target's critics already use and the detector folds you into them.
+    """
+    from app.storage.db import get_session
+
+    from app.netdetect import registry
+
+    shared_client = C.OPERATORS["stadium"]["client"]
+    monkeypatch.setitem(
+        C.OPERATORS, "clinic", {**C.OPERATORS["clinic"], "client": shared_client},
+    )
+    assert C.OPERATORS["clinic"]["client"] == C.OPERATORS["stadium"]["client"], (
+        "premise: both operations must be built with the same publishing tool"
+    )
+
+    stadium = C.planted_operation(8, seed=101, operator="stadium", prefix="sta")
+    clinic = C.planted_operation(8, seed=202, operator="clinic", prefix="cli")
+    stadium_ids = {r["external_id"] for r in stadium}
+    clinic_ids = {r["external_id"] for r in clinic}
+
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + stadium + clinic, shuffles=24,
+    )
+
+    for finding in result.findings:
+        members = set(finding.members)
+        from_stadium = len(members & stadium_ids)
+        from_clinic = len(members & clinic_ids)
+        assert not (from_stadium and from_clinic), (
+            f"a shared publishing tool merged {from_stadium} stadium accounts with {from_clinic} "
+            f"clinic ones into one finding. That is a merge an operator can engineer by buying the "
+            f"tool their target's critics already use."
+        )
+
+    with get_session() as session:
+        keys = set()
+        for finding in result.findings:
+            row, _how = registry.record(
+                session, finding, result.corpus, platform="x", context_id="post-shared-tool",
+            )
+            session.flush()
+            keys.add(row.formation_key)
+        session.commit()
+
+    assert len(keys) == len(result.findings) == 2, (
+        f"{len(result.findings)} findings resolved to {len(keys)} formations; a shared soft-family "
+        f"feature must not be enough to give two adversaries one identity"
+    )
