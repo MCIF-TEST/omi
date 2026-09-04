@@ -3095,6 +3095,29 @@ the argument that it lands in `log_lr` (which does not discriminate) rather than
 remembers about named real people on synthetic evidence. The silent zero ABOVE the cap was a defect,
 because its stated justification was false, and that is the half fixed here.
 
+##### Two operations under one post: measured, correct, and previously untested
+
+Every planted-operation corpus in this suite carries ONE operation, so nothing had ever asked what
+happens when two unrelated adversaries comment on the same post. That is an ordinary situation on a
+contested topic, and it is worth knowing because getting it wrong would be bad in both directions at
+once: one finding naming all sixteen accounts says two groups are running together, about named real
+people, on no evidence that they are; and `build_profile` would distil that into a single CHIMERA
+profile holding both operators' scripts, tools, handle factories and targets. A profile is what
+survives account rotation, so a chimera is a permanent identity matching neither operation well,
+which every future `assign` and `sweep` then reads.
+
+**Measured, it is correct.** Across three organic backgrounds `detect` separates them every time
+(8 of 8 each, no cross-contamination, one background sweeping in a single bystander), and
+`registry.record` writes TWO formations rather than one. Pinned by
+`test_two_operations_under_one_post_are_told_apart_all_the_way_to_the_catalogue`, which asserts both
+levels and **was verified to fail** when `FORMATION_MATCH_THRESHOLD` is dropped to 0 so the
+catalogue merges.
+
+The fixture makes the claim meaningful rather than trivial: `OPERATORS["stadium"]` and
+`OPERATORS["clinic"]` differ in script, publishing tool, bio, handle factory, provisioning window,
+targets, mention, hashtag and posting interval. They share only the fact of being automated, which
+is exactly the thing that must not be enough to merge them.
+
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).

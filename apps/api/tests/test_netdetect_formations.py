@@ -1065,3 +1065,72 @@ def test_the_monitoring_pass_itself_ages_the_catalogue_not_just_its_helper():
         assert row.phase != "active", (
             "run_one_pass reported a phase change that did not reach the row"
         )
+
+
+def test_two_operations_under_one_post_are_told_apart_all_the_way_to_the_catalogue():
+    """A REALISTIC SHAPE THE FIXTURES NEVER COVERED, and a merge would be a serious error.
+
+    Every planted-operation corpus in this suite carries ONE operation, so nothing asked what
+    happens when two unrelated adversaries comment on the same post. That is an ordinary situation
+    on a contested topic, and getting it wrong is worse than a miss in both directions at once:
+
+    * one finding naming all sixteen accounts says these two groups are running together, about
+      named real people, on no evidence that they are;
+    * `build_profile` would then distil that finding into a single CHIMERA profile holding both
+      operators' scripts, tools, handle factories and targets. A profile is what survives account
+      rotation, so a chimera is a permanent identity matching neither operation well, and every
+      future `assign` and `sweep` reads it.
+
+    Measured across three organic backgrounds, `detect` separates them cleanly every time (8 of 8
+    each, no cross-contamination, one background sweeping in a single bystander), and `registry`
+    records TWO formations rather than one.
+
+    The two operators are genuinely different adversaries rather than two seeds of one: `OPERATORS`
+    gives them different scripts, publishing tools, bios, handle factories, provisioning windows,
+    targets, mentions, hashtags and posting intervals. They share only the fact of being automated,
+    which is exactly the thing that must not be enough to merge them.
+    """
+    from app.storage.db import get_session
+
+    from app.netdetect import registry
+
+    stadium = C.planted_operation(8, seed=101, operator="stadium", prefix="sta")
+    clinic = C.planted_operation(8, seed=202, operator="clinic", prefix="cli")
+    stadium_ids = {r["external_id"] for r in stadium}
+    clinic_ids = {r["external_id"] for r in clinic}
+
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + stadium + clinic, shuffles=24,
+    )
+
+    assert len(result.findings) == 2, (
+        f"expected the two operations to come out as two findings, got {len(result.findings)}. "
+        f"One finding here would name sixteen accounts as a single group."
+    )
+
+    for finding in result.findings:
+        members = set(finding.members)
+        from_stadium = len(members & stadium_ids)
+        from_clinic = len(members & clinic_ids)
+        assert not (from_stadium and from_clinic), (
+            f"a finding mixes {from_stadium} stadium accounts with {from_clinic} clinic ones, so "
+            f"two unrelated operations are being reported as one group"
+        )
+        assert max(from_stadium, from_clinic) == 8, (
+            f"a finding carries only {max(from_stadium, from_clinic)} of its operation's 8 accounts"
+        )
+
+    with get_session() as session:
+        keys = set()
+        for finding in result.findings:
+            row, _how = registry.record(
+                session, finding, result.corpus, platform="x", context_id="post-1",
+            )
+            session.flush()
+            keys.add(row.formation_key)
+        session.commit()
+
+    assert len(keys) == 2, (
+        "both findings resolved to one formation, so the catalogue now holds a chimera profile "
+        "carrying two operators' scripts, tools and targets. Every future assign and sweep reads it."
+    )
