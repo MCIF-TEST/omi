@@ -379,3 +379,78 @@ def test_the_seventy_cut_is_blind_to_a_disciplined_operation_and_the_cost_is_a_c
     assert any(len(set(f.members) & op_ids) >= 4 for f in result.findings), (
         "netdetect failed to find the operation, so this corpus no longer demonstrates the contrast"
     )
+
+
+def test_two_operations_in_one_cohort_are_two_campaigns_and_never_one():
+    """THE DETECTOR THAT RUNS ON EVERY SCAN, asked the question the fixtures never asked.
+
+    Every scenario in this file carries at most ONE operation, so nothing had checked what happens
+    when two unrelated ones land in the same 70+ cohort. That is ordinary on a contested topic, and
+    the merge risk here is concrete rather than theoretical: `CampaignService.merge_clusters` unions
+    any two clusters sharing a single account, which is exactly why findings are required to come
+    out member-disjoint and why `record_clusters` is called once per finding.
+
+    A merge would publish one campaign naming all eight accounts, on evidence that only ever said
+    each four were running together separately. Unlike the netdetect equivalent this reaches a
+    customer surface by default, because this pass fires automatically when the scan is saved.
+
+    Measured, it separates every time, including when the two operations genuinely share features:
+
+        shared: nothing                    2 campaigns, 4+4, 0 mixed
+        shared: publishing client          2 campaigns, 4+4, 0 mixed
+        shared: amplification targets      2 campaigns, 4+4, 0 mixed
+        shared: client AND targets         2 campaigns, 4+4, 0 mixed
+
+    The two scripts, handle factories, provisioning windows and arrival bursts differ, which is what
+    an unrelated second operation looks like. Sharing a commodity tool is the case an operator could
+    most cheaply engineer.
+    """
+    script_a = "this project is the most undervalued opportunity in the space right now, do not sleep"
+    script_b = "the clinic closure leaves this whole district without any urgent care whatsoever today"
+    burst_a = [T0 + timedelta(seconds=s) for s in (0, 7, 15, 22)]
+    burst_b = [T0 + timedelta(hours=5, seconds=s) for s in (0, 6, 13, 20)]
+    first = {f"u{i}" for i in range(4)}
+    second = {f"u{i}" for i in range(4, 8)}
+
+    for label, shared_client, shared_targets in (
+        ("nothing", False, False),
+        ("the publishing client", True, False),
+        ("the amplification targets", False, True),
+        ("the client and the targets", True, True),
+    ):
+        specs = [
+            {"text": script_a, "at": burst_a[i], "handle": f"gains_daily_{i}",
+             "client": "AutoPoster Pro", "post_count": 8,
+             "created": T0 - timedelta(days=30, seconds=60 * i),
+             "targets": ["campaign_post_0", "campaign_post_1"]}
+            for i in range(4)
+        ] + [
+            {"text": script_b, "at": burst_b[i], "handle": f"care_voice_{i}",
+             "client": "AutoPoster Pro" if shared_client else "BulkPoster Studio",
+             "post_count": 8,
+             "created": T0 - timedelta(days=300, seconds=60 * i),
+             "targets": (["campaign_post_0", "campaign_post_1"] if shared_targets
+                         else ["health_thread_0", "health_thread_1"])}
+            for i in range(4)
+        ]
+        counts = ({"AutoPoster Pro": 8} if shared_client
+                  else {"AutoPoster Pro": 4, "BulkPoster Studio": 4})
+        quiet = [T0 + timedelta(hours=k) for k in range(-10, 12)]
+        cohort = build(specs, thread_times=quiet + burst_a + burst_b,
+                       client_counts=counts, scanned_total=60)
+
+        found = campaigns(cohort)
+        assert len(found) == 2, (
+            f"sharing {label}: expected two campaigns, got {len(found)} "
+            f"with sizes {sorted(len(f.members) for f in found)}"
+        )
+        for finding in found:
+            members = set(finding.members)
+            assert not (members & first and members & second), (
+                f"sharing {label}: one campaign mixes both operations, naming "
+                f"{len(members)} accounts as a single group"
+            )
+            assert len(members) == 4, (
+                f"sharing {label}: a campaign carries {len(members)} members rather than its "
+                f"operation's four"
+            )

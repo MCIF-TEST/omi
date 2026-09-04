@@ -3141,6 +3141,16 @@ features does not outweigh five. It is a CHARACTERISATION of how much imitation 
 tolerates, not a promise of any amount: an operator copying every axis is, by this package's own
 definition, no longer a different operator.
 
+**THE COHORT DETECTOR SEPARATES THEM TOO, AND THERE IT MATTERS MORE**, because that pass runs
+AUTOMATICALLY when a scan is saved while netdetect is admin-only and manual. Its fixtures carried at
+most one operation as well, and the merge risk is concrete rather than theoretical:
+`CampaignService.merge_clusters` unions any two clusters sharing a single account, which is why
+findings have to come out member-disjoint. A merge would publish one campaign naming all eight
+accounts on a customer surface. Measured, two operations in one 70+ cohort give **2 campaigns, 4+4,
+0 mixed** with nothing shared, with the publishing client shared, with the amplification targets
+shared, and with both shared. Pinned by
+`test_two_operations_in_one_cohort_are_two_campaigns_and_never_one`.
+
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
 fix is measured NOT to work).
