@@ -2073,7 +2073,29 @@ suite is either all-innocent (the controls) or all-operation, so the realistic s
 sharing a 70+ cohort with ordinary accounts that merely score high, was untested.
 
 Measured, adding 0, 2, 4 and 8 ordinary high scorers to a four-account operation: it names **4 of 4
-operatives and 0 innocents every time**, against netdetect's 52.9% on the amplifier ring.
+operatives and 0 innocents every time**.
+
+**THAT WAS PUT BESIDE NETDETECT'S 52.9% AND THE TWO CAME FROM DIFFERENT FIXTURES**, which is not a
+comparison. The cohort figure was measured on the hand-built specs in its own precision suite and
+the netdetect figure on the amplifier ring in `netdetect_corpora`, so the gap could have been a
+property of two populations rather than of two detectors. It is measured head to head now: ONE
+corpus, BOTH detectors, every account pushed over the 70 cut so the cohort filter is not quietly
+doing the work.
+
+| corpus | detector | named | genuine | innocent | rate |
+|---|---|---|---|---|---|
+| ring 160/62 | netdetect | 49 | 8 | 41 | **83.7%** |
+| ring 160/62 | cohort | 8 | 8 | **0** | 0.0% |
+| ring 130/62 | netdetect | 38 | 8 | 30 | **78.9%** |
+| ring 130/62 | cohort | 8 | 8 | **0** | 0.0% |
+| ring 60/61 | netdetect | 23 | 8 | 15 | **65.2%** |
+| ring 60/61 | cohort | 8 | 8 | **0** | 0.0% |
+
+Same eight ring accounts, same background, same corpus, and the cohort detector names exactly the
+ring while netdetect names up to six times as many people. So the gap is the detectors. Pinned by
+`test_both_detectors_on_one_corpus_and_only_one_of_them_names_bystanders`, which asserts the
+premise (every account over the cut) before asserting anything else, so it cannot pass by having
+the filter do the work.
 
 **The difference is an admission gate, not the kind of statistic.** The cohort detector admits
 members one at a time: an account joins only when its OWN posterior link to the group clears 0.95.
@@ -2083,8 +2105,10 @@ what happens without a gate, and this codebase already contains a working one.
 
 That matters for the trim decision below because it is not a synthetic-corpus argument. It is a
 precedent: the house already gates membership per account elsewhere, on the detector that runs by
-itself, and it is measured perfectly precise where the manual one is more than half wrong. Pinned by
-`test_an_operation_sharing_a_cohort_with_ordinary_high_scorers_names_only_the_operation`.
+itself, and it is measured perfectly precise where the manual one is more than half wrong, on the
+same corpus. Pinned by
+`test_an_operation_sharing_a_cohort_with_ordinary_high_scorers_names_only_the_operation` and by the
+head-to-head test above.
 
 **What netdetect would use is already built and already measured.** `attachment`'s leave-one-out
 delta is a SET-level per-member statistic, so it does not reintroduce the pairwise reasoning the
@@ -5409,7 +5433,8 @@ code, because it is the foundation the future algorithm builds on.
    withheld **44 innocent names and lost 0 genuine members**, and the 40% of a formation profile
    that is bystander noise can only make future assignment harder. The alternative route
    (tightening candidate generation) is **measured dead**, and the cohort detector in this same repo
-   already gates membership per account and is measured perfectly precise. Not taken here because it
+   already gates membership per account and is measured perfectly precise **on the same corpus,
+   head to head** (netdetect 41 innocent of 49 named, cohort 0 of 8). Not taken here because it
    changes what is published about named real people and every corpus is synthetic. **Reproduce the
    ring row on real scanned data first**, then decide. Evidence is beside the code in
    `app/netdetect/attachment.py`.

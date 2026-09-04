@@ -454,3 +454,104 @@ def test_two_operations_in_one_cohort_are_two_campaigns_and_never_one():
                 f"sharing {label}: a campaign carries {len(members)} members rather than its "
                 f"operation's four"
             )
+
+
+def test_both_detectors_on_one_corpus_and_only_one_of_them_names_bystanders():
+    """THE APPLES-TO-APPLES COMPARISON. CLAUDE.md has been putting two numbers side by side that
+    came from DIFFERENT FIXTURES: the cohort detector's "4 of 4 operatives, 0 innocents" (measured
+    on the hand-built specs above) against netdetect's 52.9% (measured on the amplifier ring in
+    ``netdetect_corpora``). Two detectors measured on two populations is not a comparison, and the
+    conclusion it was being used to support is an open decision about what gets published about
+    named real people.
+
+    So: ONE corpus, BOTH detectors, and every account pushed over the 70 cut so the cohort filter
+    is not quietly doing the work. Measured:
+
+        ring 160/62   netdetect  names 49, 8 genuine, 41 innocent  (83.7%)
+                      cohort     names  8, 8 genuine,  0 innocent  ( 0.0%)
+        ring 130/62   netdetect  names 38, 8 genuine, 30 innocent  (78.9%)
+                      cohort     names  8, 8 genuine,  0 innocent  ( 0.0%)
+        ring  60/61   netdetect  names 23, 8 genuine, 15 innocent  (65.2%)
+                      cohort     names  8, 8 genuine,  0 innocent  ( 0.0%)
+
+    THE DIFFERENCE IS AN ADMISSION GATE, NOT THE KIND OF STATISTIC. The cohort detector admits
+    members one at a time: an account joins only when its OWN posterior link to the group clears
+    0.95. netdetect takes Louvain communities wholesale and has no per-account admission test at
+    all. Both are looking at the same eight ring accounts among the same background here, so false
+    naming is not intrinsic to the set-level thesis and it is not the price of catching the ring.
+
+    THIS STRENGTHENS THE CASE FOR THE MEMBERSHIP TRIM AND DOES NOT TAKE THE DECISION. The corpus is
+    still synthetic, and a trim changes what is published about named people. What it removes is
+    the excuse that the two detectors were never compared fairly.
+    """
+    from app.campaigns.detector.cohort import SCORE_THRESHOLD, from_scan_rows
+
+    import tests.netdetect_corpora as NC
+    from app.netdetect import detect_from_commenters
+
+    for background, ring_seed in ((60, 61), (130, 62)):
+        ring = NC.amplifier_ring(8, seed=ring_seed)
+        ring_ids = {r["external_id"] for r in ring}
+        rows = NC.organic_population(background, seed=31) + ring
+
+        # --- netdetect, score-blind, on these rows ------------------------------------------
+        net = detect_from_commenters(rows, shuffles=SHUFFLES_FOR_NETDETECT)
+        ring_findings = [f for f in net.findings if len(set(f.members) & ring_ids) >= 4]
+        assert ring_findings, (
+            f"netdetect no longer finds the ring at background {background}, so this corpus has "
+            "stopped demonstrating anything and the numbers above are stale"
+        )
+        named = set()
+        for f in ring_findings:
+            named |= set(f.members)
+        net_innocent = named - ring_ids
+        assert net_innocent, (
+            "netdetect named no bystanders here, which would be the defect fixed. Re-measure the "
+            "table above and move this test to assert the improvement rather than the contrast"
+        )
+
+        # --- the cohort detector, same rows, nothing hidden by the 70 cut -------------------
+        scan_rows = [
+            {
+                "external_id": r["external_id"],
+                "handle": r.get("handle") or r["external_id"],
+                "overall_probability": (SCORE_THRESHOLD + 15) / 100.0,
+                "bio": r.get("bio"),
+                "account_created_at": r.get("account_created_at"),
+                "thread_comments": r.get("thread_comments"),
+                "recent_activity": r.get("recent_activity"),
+            }
+            for r in rows
+        ]
+        thread = [
+            {"author_id": r["external_id"], "created_at": c["created_at"]}
+            for r in rows
+            for c in (r.get("thread_comments") or [])
+            if isinstance(c, dict) and c.get("created_at")
+        ]
+        coh = from_scan_rows(scan_rows, thread, platform="x")
+        assert len(coh.accounts) == len(rows), (
+            "premise: every account must be over the cut, or the cohort detector's precision is "
+            "partly the filter's and the comparison is unfair again"
+        )
+
+        cres = run.detect(coh)
+        corroborated = [f for f in cres.findings if f.label == fuse.LABEL_CORROBORATED]
+        coh_named: set[str] = set()
+        for f in corroborated:
+            coh_named |= set(f.members)
+        coh_innocent = coh_named - ring_ids
+
+        assert not coh_innocent, (
+            f"the cohort detector named {len(coh_innocent)} bystanders at background "
+            f"{background}: {sorted(coh_innocent)[:5]}. Its measured precision on this corpus was "
+            "perfect, so this is a regression in the admission gate"
+        )
+        assert len(coh_named & ring_ids) >= 4, (
+            "the cohort detector lost the ring, so it is no longer trading precision for anything "
+            "and the contrast above is not the one being drawn"
+        )
+        assert len(net_innocent) > len(coh_innocent), (
+            "the two detectors now name bystanders at the same rate on one corpus, which is the "
+            "whole finding this test exists to pin"
+        )
