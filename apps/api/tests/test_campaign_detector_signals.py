@@ -319,3 +319,53 @@ def test_every_signal_survives_accounts_with_no_evidence_at_all():
     c = cohort(accs)
     for signal in signals.SIGNALS:
         assert signal(c) == [], signal.__name__
+
+
+def test_the_lsh_banding_uses_every_permutation_and_no_band_is_degenerate():
+    """`LSH_BANDS * LSH_ROWS` MUST EQUAL `NUM_PERM`, and only a comment said so.
+
+    `textsim.py` states the invariant ("b * r must equal NUM_PERM") and nothing enforced it. It
+    matters because the banding slices the signature with `signatures[key][lo:hi]`, and Python
+    slicing past the end does not raise: it silently returns a SHORT or EMPTY tuple.
+
+    So a band beyond the signature computes nothing, and every account lands in the same bucket for
+    it, whatever the data. Measured at bands=48 rows=4 against a 128-permutation signature: **16 of
+    48 bands slice short or empty**, and on 30 accounts with unrelated text the candidate set goes
+    from 362 pairs to all 435. That is not the S-curve moving, it is a third of the bands answering
+    "everything matches" by construction.
+
+    RAISING THE BAND COUNT IS THE NATURAL "be more sensitive" EDIT, which is exactly how this would
+    happen, and nothing would fail. The cost lands as an O(n^2) candidate explosion in the prefilter
+    rather than as a wrong verdict, since the real filtering is downstream, so it would show up as
+    the detector getting slower and nobody knowing why.
+
+    Lowering the product silently wastes permutations instead: at bands=16 rows=4 the tail 64
+    permutations are never consulted and the candidate set drops to 311.
+
+    The assertion is on the product AND on the slicing, because the product alone would still pass
+    if the slicing changed shape later.
+    """
+    from app.campaigns.detector.textsim import (
+        LSH_BANDS,
+        LSH_ROWS,
+        NUM_PERM,
+        minhash,
+        shingles,
+    )
+
+    assert LSH_BANDS * LSH_ROWS == NUM_PERM, (
+        f"LSH banding is {LSH_BANDS} x {LSH_ROWS} = {LSH_BANDS * LSH_ROWS} against NUM_PERM "
+        f"{NUM_PERM}. Above it, the overflow bands slice past the signature and every account "
+        f"collides in each of them; below it, the tail permutations are never consulted."
+    )
+
+    signature = minhash(shingles(
+        "the quick brown fox jumps over the lazy dog again and again today and tomorrow"
+    ))
+    assert len(signature) == NUM_PERM, "a signature must carry exactly NUM_PERM values"
+    for band in range(LSH_BANDS):
+        lo, hi = band * LSH_ROWS, (band + 1) * LSH_ROWS
+        assert len(signature[lo:hi]) == LSH_ROWS, (
+            f"band {band} slices to {len(signature[lo:hi])} values rather than {LSH_ROWS}, so it "
+            f"buckets every account together regardless of what they wrote"
+        )

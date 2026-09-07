@@ -1664,6 +1664,89 @@ class NetdetectFormation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class NetdetectSection(Base):
+    """A comment section this deployment looked at and could not resolve.
+
+    THE THIRD STATE, AND THE REASON IT NEEDS A ROW OF ITS OWN. A finding is a group the detector
+    named. This is the opposite: a section where one group is large enough that the null this
+    section provides cannot price what the group shares, so the run produced NO findings and reads
+    exactly like a clean scan. See `app/netdetect/domination.py` for the measurement.
+
+    Without a row nothing survives the request. `NetdetectFinding` exists because read-only findings
+    "evaporated when the page closed"; this evaporates the same way and is worse, because there is
+    no finding for an operator to notice its absence against. A dominated section produces silence,
+    and silence is what this record exists to break.
+
+    NO ACCOUNTS ARE NAMED HERE, deliberately. The group failed the significance test: naming it
+    would publish a claim the evidence could not support, and the statistic cannot separate an
+    operation from a community that simply turned up together. What the row carries is the SHAPE
+    (how many accounts, how much of the section they occupy, which families were suppressed) and
+    the instruction to sweep the investigation against the formation catalogue, which weighs
+    accounts against OTHER investigations and so does not depend on this corpus at all.
+    """
+
+    __tablename__ = "netdetect_sections"
+    __table_args__ = (
+        # One row per (investigation, post). A re-run updates it rather than stacking, exactly as
+        # findings do, because an operator re-runs constantly while tuning.
+        Index("ix_netdetect_section_key", "investigation_id", "context_id", unique=True),
+        Index("ix_netdetect_section_status", "status", "suppressed"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    investigation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("investigations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    context_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    platform: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+
+    #: How big the section was, and the shape of the group that could not be priced in it.
+    corpus_size: Mapped[int] = mapped_column(Integer, default=0)
+    suppressed: Mapped[int] = mapped_column(Integer, default=0)
+    group_size: Mapped[int] = mapped_column(Integer, default=0)
+    #: The largest share of the section any suppressed feature reached. Above `RARITY_CEILING` by
+    #: construction: that is what "suppressed" means.
+    top_prevalence: Mapped[float] = mapped_column(Float, default=0.0)
+    families_json: Mapped[list] = mapped_column(JSON, default=list)
+    #: The operator-facing sentence, written at detection time so the row stays readable without
+    #: the corpus, exactly as a finding's evidence sentences are.
+    sentence: Mapped[str] = mapped_column(Text, default="")
+
+    #: WHAT THE FORMATION CATALOGUE SAID ABOUT THIS SECTION, which is the one thing that still
+    #: works here. A profile carries the surprise each feature had in the corpus it was LEARNED in,
+    #: so it does not read this section's rarity and a group big enough to poison its own
+    #: background here cannot poison a profile built where it was a minority. Measured: recall
+    #: through this section falls 8/8 to 0 between 24% and 32% share while recall through the
+    #: catalogue stays 8/8 at 32%, 40% and 50%, and it places nobody on the innocent controls that
+    #: also trip this statistic. See `app/netdetect/domination.py`.
+    #:
+    #: STILL A COUNT, and the no-accounts rule above is why. A placement names a person and belongs
+    #: in the sweep panel, which renders it with the evidence a reader needs to argue with it. What
+    #: this row carries is enough to tell an operator whether the section is worth opening.
+    catalogue_placed: Mapped[int] = mapped_column(Integer, default=0)
+    #: Of those, how many would have passed an individual review: the part of the section no
+    #: per-account score would have caught.
+    catalogue_concealed: Mapped[int] = mapped_column(Integer, default=0)
+    #: THREE STATES, and two of them store zero. False means the catalogue was never consulted;
+    #: true with an empty catalogue means there was nothing to compare against; true otherwise
+    #: means it looked. Reading a zero without this as "the catalogue cleared them" is exactly the
+    #: mistake `attachment_checked` and `corroboration.checked` exist to prevent.
+    catalogue_checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    catalogue_empty: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    #: "open" until somebody looks. Reviewing is not dismissing a finding: there is no finding.
+    #: It records that a person read the section and decided what it was.
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Required when reviewing, for the same reason a dismissal reason is: a verdict with no stated
+    #: reason records that somebody looked and nothing about what they concluded.
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class NetdetectFinding(Base):
     """One corrected set-level finding from `app/netdetect`, kept so it can be judged later.
 
@@ -1731,6 +1814,16 @@ class NetdetectFinding(Base):
     #:
     #: NULL means the lookup did not run, never that these accounts were strangers.
     corroboration_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    #: ``external_id -> handle`` for the members, written HERE at detection time for the same
+    #: reason the evidence sentences are: the payload they came from is not loaded when the queue
+    #: is served, and resolving them later would mean reading ``payload_json`` once per row, which
+    #: is the N+1 this repo has already paid for on the archive list.
+    #:
+    #: A finding names real people, and an operator judging one should be reading the names those
+    #: people chose rather than a platform id. Rows written before this column have none, so a
+    #: missing handle must fall back to the id and must never render as though the account had no
+    #: handle: those are different claims, the same distinction as ``attachment_checked``.
+    handles_json: Mapped[dict] = mapped_column(JSON, default=dict)
     #: The evidence sentences, written HERE at detection time, because the corpus they were derived
     #: from is not kept and the finding has to stay readable without it.
     evidence_json: Mapped[list] = mapped_column(JSON, default=list)

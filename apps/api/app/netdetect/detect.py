@@ -23,6 +23,8 @@ on the output so a finding can be described, and they never touch detection.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import logging
 from dataclasses import dataclass, field
 
@@ -67,6 +69,10 @@ MIN_HARD_EVIDENCE = 3.0
 MIN_CORPUS = 25
 
 
+if TYPE_CHECKING:
+    from app.netdetect.domination import Domination
+
+
 @dataclass(slots=True)
 class DetectionResult:
     findings: list[Candidate] = field(default_factory=list)
@@ -80,6 +86,13 @@ class DetectionResult:
     null_shuffles: int = 0
     #: Set when the whole run was refused rather than merely finding nothing.
     refused: str | None = None
+    #: Whether one group is large enough here to poison the null this section provides.
+    #:
+    #: THE DIFFERENCE BETWEEN "NOTHING FOUND" AND "CANNOT TELL". An operation that owns more than a
+    #: quarter of a comment section pushes its own hard-family tells past `RARITY_CEILING`, so they
+    #: are dropped as ordinary and the group is refused for want of a second family. Without this
+    #: the run returns no findings and reads exactly like a clean section. See `domination.py`.
+    domination: "Domination | None" = None
     #: The corpus the findings were made in. Carried so a caller can decompose a finding back to
     #: the features each pair actually shares (see `app.netdetect.persist`) without rebuilding it,
     #: which would risk rebuilding it DIFFERENTLY and attributing evidence that was never scored.
@@ -166,6 +179,13 @@ def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
         )
         return result
 
+    # Assessed on the CANDIDATE COMMUNITIES, which is where a dominant group is still intact: the
+    # generator finds it and only the significance test loses it. Computed before the early return
+    # below, or the one case that most needs saying would be the one case that never says it.
+    from app.netdetect import domination as dom
+
+    result.domination = dom.assess(corpus, list(cand.communities(corpus)))
+
     found = _search(corpus)
     if not found:
         return result       # looked, found nothing. Not a refusal.
@@ -201,6 +221,67 @@ def detect(corpus: Corpus, *, shuffles: int = DEFAULT_SHUFFLES,
             full.weakly_attached = list(attach.weak)
             full.attachment_note = attach.abstained
             full.attachment_checked = attach.answered
+            # A finding whose own membership test says MOST of its members are not carrying it is
+            # unresolved in exactly the sense the hard-evidence check above is unresolved, and it
+            # goes to a reader for the same reason.
+            #
+            # This is the amplifier ring: measured, it publishes 153 named accounts of which 81 are
+            # innocent (52.9%), with `needs_adjudication` None, so nothing asked a human before
+            # those names were shown as members of a coordinated ring. The set is genuinely
+            # significant and the group is genuinely there, so suppressing it would hide a real
+            # operation; what cannot be settled from the statistics is WHO of the named is in it.
+            #
+            # IT ADDS REVIEW AND NEVER REMOVES ANYONE. No member is dropped, no score changes, and
+            # nothing that was already flagged for adjudication is unflagged. That keeps this
+            # separate from the two open decisions (trimming the flagged members, and the
+            # `RARITY_CEILING` value), both of which change who is NAMED and are deliberately not
+            # taken here. See CLAUDE.md.
+            # THE SAME DOUBT REACHED BY THE SIZE ROUTE, and it was measured live rather than
+            # feared. `attachment` abstains above `MAX_MEMBERS`, and contamination is what GROWS a
+            # finding, so the largest findings are the most contaminated ones and were the only
+            # ones nobody looked at. Measured on the amplifier ring as the background grows:
+            # 12 of 20, 17 of 25, 25 of 33, 30 of 38 and 32 of 40 bystanders are all tested and
+            # sent to a reader, and then a 49-member finding carrying 41 bystanders (84%) crossed
+            # the cap and was PUBLISHED with nothing asking anybody. A 168-account comment section
+            # is ordinary for this product, so this is reachable in production rather than only in
+            # a fixture.
+            #
+            # ONLY THE SIZE ABSTENTION. "Every member contributes about equally" is a real answer
+            # about a real group and is what a genuine community looks like; flagging that would
+            # send everything to review and make review meaningless. `unchecked_for_size` is the
+            # explicit marker rather than a string match, because two copies of one predicate is
+            # the drift this package keeps paying for.
+            if attach.unchecked_for_size:
+                # LEADS WITH THE JUDGEMENT, NOT THE STATE, and that is not a stylistic choice.
+                # The queue prints "Membership was not tested: <note>" under the member list from
+                # `attachment_note`, so opening this with the same clause made the card say one
+                # fact twice, which is the defect the majority-case sentence was just cut back for.
+                # This is the stored reason and is served without the member list (the review queue,
+                # the API), so it still has to stand alone: it names the size, and then says the
+                # thing only a review judgement can say.
+                reason = (
+                    f"Treat the membership as unverified rather than as agreed: this finding is "
+                    f"larger than the {len(full.members)}-account membership check runs for, so "
+                    f"which of these accounts carry it has never been established. Findings this "
+                    f"large are the ones most likely to have been drawn too wide."
+                )
+                full.needs_adjudication = (
+                    f"{full.needs_adjudication} ALSO: {reason}"
+                    if full.needs_adjudication else reason
+                )
+            elif attach.answered and len(attach.weak) * 2 > len(full.members):
+                reason = (
+                    f"{len(attach.weak)} of {len(full.members)} named accounts do not carry this "
+                    f"finding, which is most of them. The set is significant and its membership is "
+                    f"not: read this as a group that has been drawn too wide rather than as an "
+                    f"operation with weak members, and confirm each name against the evidence."
+                )
+                # Never overwrite an existing reason: the hard-evidence one names a different and
+                # equally load-bearing doubt, and a reader needs both.
+                full.needs_adjudication = (
+                    f"{full.needs_adjudication} ALSO: {reason}"
+                    if full.needs_adjudication else reason
+                )
             result.findings.append(full)
         else:
             c.refused = (

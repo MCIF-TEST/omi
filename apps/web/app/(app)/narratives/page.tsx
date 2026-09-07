@@ -4,6 +4,7 @@ import { apiServer } from '@/lib/api-server';
 import { type User } from '@/lib/api';
 import { CoordinationQueue } from './coordination-queue';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
+import { CoordinationNav, WhyTwoDetectors } from '@/components/shared/coordination-nav';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Coordination' };
@@ -36,7 +37,12 @@ export default async function NarrativesPage() {
         eyebrow="Coordination · Admin"
         title="Coordinated campaigns"
         lede="Accounts an investigation scored at 70 or above, grouped by evidence they produced themselves. Runs on every scan, costs nothing, and calls no model."
-      />
+      >
+        {/* The same rail as the other two coordination surfaces. Three pages answering one question
+            in three vocabularies, with no way to get between them, is most of why they read as
+            three unrelated tools rather than one. */}
+        <CoordinationNav current="/narratives" />
+      </ConsoleHeader>
 
       <CoordinationQueue />
 
@@ -60,6 +66,11 @@ export default async function NarrativesPage() {
           Every finding is an observation about behaviour that co-occurred. It is not a claim about
           who operates an account, whether money changed hands, or anyone&apos;s intent.
         </p>
+        {/* The blind spot this page has and the other one does not, stated on the page it applies
+            to. The 70 cut is measured to be a cliff rather than a slope: one point under it and a
+            whole operation leaves this pass entirely, and the cohort comes back EMPTY rather than
+            incomplete, so nothing here records that anything was skipped. */}
+        <WhyTwoDetectors />
       </Card>
     </div>
   );

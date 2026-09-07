@@ -298,6 +298,18 @@ export interface NetdetectEvidence {
   corpus_count: number;
   surprise: number;
   sentence: string;
+  /**
+   * WHICH of the finding's members hold this feature, not just how many.
+   *
+   * `members` on the finding and `shared_by` here are two disconnected projections of one
+   * incidence structure: neither can say whether the evidence is about the same people throughout
+   * or about two sub-groups joined at a seam. This carries the join.
+   *
+   * Undefined means the holders were not recorded (a finding stored before this field existed).
+   * That is NOT the same as "no member holds it", which cannot be true of a feature that reached
+   * the evidence list at all, so a reader must be told rather than shown an empty grid.
+   */
+  members?: string[] | null;
 }
 
 export interface NetdetectCorroboration {
@@ -321,6 +333,16 @@ export interface NetdetectFinding {
   context_id: string | null;
   platform: string;
   members: string[];
+  /**
+   * `external_id -> handle`, PARTIAL BY DESIGN. A finding names real people and an operator should
+   * be reading the names they chose, so handles are stored at detection time; they cannot be
+   * resolved when the queue is served, because that would mean loading one investigation payload
+   * per row.
+   *
+   * A member ABSENT here means we have no handle for that account, never that the account has no
+   * handle, so render the id rather than a blank. Rows recorded before this existed carry none.
+   */
+  handles: Record<string, string>;
   member_count: number;
   score: number;
   /** Null means "not compared against the shuffled search", which must never be read as passing it. */
@@ -436,6 +458,66 @@ export function sweepFormations(slug: string): Promise<FormationSweep> {
   );
 }
 
+/**
+ * One detector run over one stored investigation.
+ *
+ * FOUR OUTCOMES, and three of them present as an empty `findings` list. Reading any empty result as
+ * "these accounts are unrelated" is the mistake this shape exists to prevent:
+ *
+ *   - findings present            -> sets that beat the shuffled search
+ *   - `refused`                   -> the run could not be performed at all (too small a corpus, too
+ *                                    few shuffles to express the p-value it was asked for)
+ *   - `unresolvable`              -> one group is large enough HERE to poison the null, so the
+ *                                    section cannot resolve itself in EITHER direction
+ *   - none of the above, empty    -> looked, and refused everything it looked at
+ */
+export interface NetdetectRun {
+  slug: string;
+  corpus_size: number;
+  rare_features: number;
+  null_shuffles: number;
+  null_threshold: number | null;
+  findings: NetdetectRunFinding[];
+  /** Candidates that scored and did not beat the correction. "We looked and refused" is a stronger
+   *  statement than "we found nothing", and calibration needs the near-misses. */
+  rejected: number;
+  refused: string | null;
+  unresolvable: string | null;
+  recorded?: number;
+  accumulated?: number;
+}
+
+export interface NetdetectRunFinding {
+  members: string[];
+  handles?: string[];
+  score: number;
+  corrected_p: number | null;
+  needs_adjudication: string | null;
+}
+
+/**
+ * Run the detector over a stored investigation.
+ *
+ * COSTS NOTHING: no provider call, no model call, no credit. It reads a payload that is already
+ * stored, which is what makes it safe to put behind a button rather than a confirmation.
+ *
+ * `record: false` keeps the answer and skips the store, which is what an operator tuning
+ * thresholds wants: a run per button press would turn the queue into a log.
+ */
+export function runNetdetect(
+  slug: string,
+  opts: { shuffles?: number; record?: boolean } = {},
+): Promise<NetdetectRun> {
+  const q = new URLSearchParams();
+  if (opts.shuffles !== undefined) q.set('shuffles', String(opts.shuffles));
+  if (opts.record !== undefined) q.set('record', String(opts.record));
+  const qs = q.toString();
+  return apiClient<NetdetectRun>(
+    `/v1/admin/netdetect/${encodeURIComponent(slug)}${qs ? `?${qs}` : ''}`,
+    { method: 'POST' },
+  );
+}
+
 export function listNetdetectFindings(
   status: NetdetectStatus | 'all' = 'open',
 ): Promise<NetdetectFinding[]> {
@@ -514,6 +596,73 @@ export interface NetdetectCalibration {
    *  the reservoir is deep enough. */
   still_needed: string;
   caveats: string[];
+}
+
+/**
+ * A comment section this deployment looked at and could not resolve.
+ *
+ * NOT a finding, and the distinction is the whole reason it exists. An operation owning more than
+ * about a quarter of a section pushes its own provisioning and targeting evidence past the rarity
+ * ceiling, where it is dropped as ordinary before any statistics run, so the scan returns nothing
+ * and reads exactly like a clean section. Measured, recall falls from 8/8 to 0 between 24% and 32%
+ * share.
+ *
+ * It names no accounts, deliberately: the group failed the significance test, and the same shape is
+ * produced by a community that simply turned up together.
+ */
+export interface NetdetectSection {
+  id: number;
+  investigation_id: number | null;
+  context_id: string | null;
+  platform: string;
+  corpus_size: number;
+  /** Hard-family behaviours the group shares that the rarity ceiling discarded as ordinary. */
+  suppressed: number;
+  group_size: number;
+  /** The largest share of the section any suppressed behaviour reached. */
+  top_prevalence: number;
+  families: string[];
+  sentence: string;
+  /**
+   * What the formation catalogue said about this section, and the reason a row here is worth
+   * opening. A formation profile carries the surprise each feature had in the corpus it was
+   * LEARNED in, so it does not read this section's rarity and a group big enough to poison its own
+   * background here cannot poison a profile built where it was a minority.
+   *
+   * THREE STATES, and two of them report zero placements. `catalogue_checked` false means the
+   * catalogue was never consulted; true with `catalogue_empty` means nothing has been catalogued
+   * yet; true without it means it looked and this is a real answer. They are different statements
+   * about the people who commented here, so the panel must branch on them rather than on the count.
+   */
+  catalogue_checked: boolean;
+  catalogue_empty: boolean;
+  /** A count, never names. Placements are rendered by the sweep panel, with their evidence. */
+  catalogue_placed: number;
+  /** Of those, how many would have passed an individual review. The number to read first. */
+  catalogue_concealed: number;
+  status: string;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NetdetectSectionList {
+  sections: NetdetectSection[];
+  /** Served with the list, or a queue of these reads as a queue of operations. */
+  note: string;
+}
+
+export function netdetectSections(status = 'open'): Promise<NetdetectSectionList> {
+  return apiClient<NetdetectSectionList>(
+    `/v1/admin/netdetect/sections?status=${encodeURIComponent(status)}`,
+  );
+}
+
+export function reviewNetdetectSection(id: number, note: string): Promise<NetdetectSection> {
+  return apiClient<NetdetectSection>(`/v1/admin/netdetect/sections/${id}/reviewed`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
 }
 
 export function netdetectCalibration(): Promise<NetdetectCalibration> {
@@ -1130,6 +1279,17 @@ export interface InvestigationSummary {
 
 export interface InvestigationsListResponse {
   investigations: InvestigationSummary[];
+}
+
+/**
+ * The caller's own recent investigations, newest first.
+ *
+ * Used by the detector's run picker. It lists what THIS operator has scanned, which is the right
+ * scope: the detector reads a stored payload, and the payloads an admin can meaningfully choose
+ * between are their own.
+ */
+export function listInvestigations(limit = 50): Promise<InvestigationsListResponse> {
+  return apiClient<InvestigationsListResponse>(`/v1/investigations?limit=${limit}`);
 }
 
 export interface InvestigationDetailResponse {

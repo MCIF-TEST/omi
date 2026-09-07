@@ -83,6 +83,7 @@ NETDETECT_ROUTES = [
     # The formation catalogue and the two placement routes. These name real people as members of
     # an operation, and the sweep does it for a whole comment section at once, so they are the last
     # routes that should ever answer an ordinary customer.
+    ("GET", "/v1/admin/netdetect/sections"),
     ("GET", "/v1/admin/netdetect/formations"),
     ("POST", "/v1/admin/netdetect/formations/sweep?slug=inv_anything"),
 ]
@@ -121,6 +122,13 @@ def test_the_cross_narrative_dismiss_route_refuses_a_signed_in_customer(auth_cli
 def test_netdetect_routes_refuse_a_signed_in_customer(auth_client, method, path):
     r = auth_client.request(method, path)
     assert r.status_code == 403, f"{method} {path} answered {r.status_code}: {r.text[:200]}"
+
+
+def test_the_netdetect_section_review_refuses_a_signed_in_customer(auth_client):
+    """A section record names no accounts, but it still carries other customers' investigation ids,
+    and reviewing one writes a verdict into the reservoir a later calibration is fitted against."""
+    r = auth_client.post("/v1/admin/netdetect/sections/1/reviewed", json={"note": "x"})
+    assert r.status_code == 403, r.text
 
 
 def test_the_netdetect_judgement_routes_refuse_a_signed_in_customer(auth_client):

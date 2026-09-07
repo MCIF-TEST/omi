@@ -18,7 +18,15 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.netdetect.persist import MAX_MEMBERS_FOR_PAIRS, members_key, pair_evidence_from, persist_finding
+import tests.netdetect_corpora as C
+from app.netdetect import persist
+from app.netdetect.detect import detect_from_commenters
+from app.netdetect.persist import (
+    MAX_MEMBERS_FOR_PAIRS,
+    members_key,
+    pair_evidence_from,
+    persist_finding,
+)
 from app.netdetect.significance import Corpus
 from app.netdetect.types import (
     FAMILY_IDENTITY,
@@ -28,6 +36,9 @@ from app.netdetect.types import (
     Feature,
     FeatureEvidence,
 )
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.storage.db import get_session
 from app.storage.models import CoordinationEdge, NetdetectFinding
 
@@ -284,3 +295,382 @@ def test_recording_a_finding_publishes_nothing():
         _persist(session, corpus, candidate, investigation_id=4008, context_id="ctx-quiet")
         session.commit()
         assert session.query(Campaign).count() == before
+
+
+# ==================================================================================================
+# The join: which members hold which feature
+#
+# `members` on the finding and `shared_by` on an evidence row are two disconnected projections of
+# one members-by-features incidence structure. Neither can say whether the evidence is about the
+# SAME people throughout or about two sub-groups joined at a seam, which is the question a reviewer
+# actually has about a group of named real people. These pin the join through persist and serve.
+# ==================================================================================================
+def _seam_corpus():
+    """Two sub-groups sharing nothing with each other, plus one account bridging them.
+
+    THE SHAPE THE JOIN EXISTS TO SHOW. Every projection of this finding looks the same as a solid
+    one: six members, two families, both contributing. Only the incidence says the identity
+    evidence and the text evidence are about different people.
+    """
+    ident = Feature(FAMILY_IDENTITY, "creation_week", "2026-W02")
+    text = Feature(FAMILY_TEXT, "shingle", "the same five words in a row")
+    corpus = _corpus({
+        "i1": [ident], "i2": [ident], "bridge": [ident, text], "t1": [text], "t2": [text],
+    })
+    candidate = Candidate(
+        members=["bridge", "i1", "i2", "t1", "t2"], platform="x", score=9.0,
+        by_family={FAMILY_IDENTITY: 5.0, FAMILY_TEXT: 4.0},
+        evidence=[
+            _evidence(ident, shared_by=3, corpus_count=3, surprise=5.0),
+            _evidence(text, shared_by=3, corpus_count=3, surprise=4.0),
+        ],
+    )
+    return corpus, candidate
+
+
+def _store(session, corpus, candidate, context_id):
+    session.query(NetdetectFinding).delete()
+    session.flush()
+    row = persist_finding(
+        session, candidate, corpus, investigation_id=None, context_id=context_id,
+        platform="x", corpus_size=corpus.size, null_shuffles=32, null_threshold=1.0,
+        accumulate=False,
+    )
+    session.commit()
+    return row
+
+
+def test_each_evidence_row_records_which_members_hold_it():
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        row = _store(session, corpus, candidate, "join")
+        stored = list(row.evidence_json or [])
+        members = set(row.members_json or [])
+
+    assert len(stored) == 2
+    by_kind = {e["kind"]: e for e in stored}
+    assert by_kind["creation_week"]["members"] == ["bridge", "i1", "i2"]
+    assert by_kind["shingle"]["members"] == ["bridge", "t1", "t2"]
+
+    for e in stored:
+        held = e["members"]
+        # Only members of THIS finding, or the grid would draw a mark against somebody who is not
+        # named on the page.
+        assert set(held) <= members
+        assert held == sorted(held), "unsorted holders make the stored row non-deterministic"
+
+
+def test_the_join_distinguishes_a_seam_from_a_solid_block():
+    """THE POINT OF THE WHOLE FIELD. Both families contribute and every projection agrees, yet only
+    one account holds evidence in both. Without the incidence a reader cannot tell this finding
+    from one where every member does everything."""
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        row = _store(session, corpus, candidate, "seam")
+        stored = list(row.evidence_json or [])
+
+    support = {e["family"]: set(e["members"]) for e in stored}
+    assert len(support) == 2
+    core = set.intersection(*support.values())
+    assert core == {"bridge"}, "the seam collapsed; the join is not recording what it must"
+
+
+def test_the_holders_survive_the_serve_path():
+    """A join that exists only in the database is a join the reader never sees."""
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        _store(session, corpus, candidate, "join-serve")
+
+    body = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()
+    assert body
+    served = body[0]
+    assert served["evidence"]
+    for e in served["evidence"]:
+        assert e["members"], "the API served an evidence row with no holders"
+        assert set(e["members"]) <= set(served["members"])
+        # The count and the list are two views of one fact. If they disagreed, the band header and
+        # the grid would tell a reader different things about the same feature.
+        assert len(e["members"]) == e["shared_by"]
+
+
+def test_the_review_reason_survives_the_serve_path():
+    """A doubt that only exists in the database is a doubt nobody acts on.
+
+    `detect` sets `needs_adjudication` when a finding rests on no hard family, and now also when its
+    own membership test says most of the named accounts are not carrying it. Every existing test for
+    that reads `detect`'s in-memory result. Nothing checked that the string reaches a reader, and the
+    entire value of the flag is that a person sees it before those names are treated as members of an
+    operation.
+
+    This repo has twice paid for the gap between "computed" and "served": the domination verdict was
+    returned in `RunOut` and never written down, and `/r/<token>/json` dumped a payload past a gate a
+    source-level guard could not see. Two links here are untested by anything else, so this walks
+    persist -> serve.
+    """
+    corpus, candidate = _seam_corpus()
+    candidate.needs_adjudication = (
+        "no evidence of the operator's own acts ALSO: 9 of 17 named accounts do not carry this "
+        "finding, which is most of them."
+    )
+    with get_session() as session:
+        _store(session, corpus, candidate, "review-serve")
+
+    body = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()
+    assert body, "the finding did not come back at all"
+    served = body[0]["needs_adjudication"]
+    assert served, "a finding flagged for review was served with no reason, so nothing asks anybody"
+
+    # BOTH doubts have to survive, not just the first. They name different things (what the evidence
+    # rests on, and who the finding is about), and `detect` appends rather than overwrites precisely
+    # so a reader gets both; a column or serialiser that truncated would silently drop the second.
+    assert "operator's own acts" in served
+    assert "do not carry this finding" in served
+
+
+def test_a_finding_nobody_needs_to_review_serves_null_and_not_an_empty_string():
+    """The other half of the three-state discipline this package keeps.
+
+    An empty string is falsy in Python and in TypeScript alike, so it would render the same as null
+    today and the bug would be invisible. It is still wrong: null means the detector reached no
+    doubt, and "" would mean it reached a doubt it could not describe. The queue branches on this
+    value to decide whether to show a review block at all.
+    """
+    corpus, candidate = _seam_corpus()
+    candidate.needs_adjudication = None
+    with get_session() as session:
+        _store(session, corpus, candidate, "review-none")
+
+    body = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()
+    assert body
+    assert body[0]["needs_adjudication"] is None, (
+        "a finding with no doubt must serve null, never an empty string"
+    )
+
+
+def test_a_row_stored_before_the_join_existed_serves_null_and_never_an_empty_list():
+    """THE THIRD STATE. "We did not record who holds this" and "nobody holds this" are opposite
+    statements about named people, and the second cannot be true of a feature that reached the
+    evidence list at all. The web reads null as "not recorded" and declines to draw a grid; an
+    empty list would render as a finding whose members share nothing."""
+    corpus, candidate = _seam_corpus()
+    with get_session() as session:
+        row = _store(session, corpus, candidate, "legacy")
+        # Exactly the shape a row written before the field existed has.
+        row.evidence_json = [
+            {k: v for k, v in e.items() if k != "members"} for e in (row.evidence_json or [])
+        ]
+        session.commit()
+
+    served = TestClient(app).get("/v1/admin/netdetect/findings/all?status=open").json()[0]
+    assert served["evidence"]
+    assert all(e["members"] is None for e in served["evidence"])
+
+
+# ==================================================================================================
+# Above the cap: fold the core rather than nothing
+# ==================================================================================================
+def _uncapped(corpus, candidate):
+    """What folding the whole finding would have produced, with the cost cap lifted."""
+    original = persist.MAX_MEMBERS_FOR_PAIRS
+    persist.MAX_MEMBERS_FOR_PAIRS = 10 ** 9
+    try:
+        return persist.pair_evidence_from(corpus, candidate)
+    finally:
+        persist.MAX_MEMBERS_FOR_PAIRS = original
+
+
+def _ring_finding_over_the_cap():
+    """The real corpus that produces one, so this tests the shape production actually reaches."""
+    ring = C.amplifier_ring(8, seed=62)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(160, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=24)
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) >= 4 and len(members) > persist.MAX_MEMBERS_FOR_PAIRS:
+            return result.corpus, finding, ring_ids
+    raise AssertionError(
+        "no finding on this corpus exceeded MAX_MEMBERS_FOR_PAIRS, so the fallback went untested. "
+        "Find a configuration that produces one rather than deleting this."
+    )
+
+
+def test_a_finding_too_large_to_fold_whole_folds_its_core_rather_than_nothing():
+    """THE LARGEST FINDINGS WERE CONTRIBUTING NOTHING, SILENTLY, ON A FALSE JUSTIFICATION.
+
+    `MAX_MEMBERS_FOR_PAIRS` said a finding that large "is refused upstream anyway". Measured, it is
+    not: the amplifier ring on a 168-account section produces findings of 44 and 49 members which
+    are published, and both folded to an empty mapping. An empty mapping also means "this finding
+    shares no pairwise evidence", so nothing anywhere recorded that the deployment's memory had
+    learned nothing from its biggest findings.
+
+    The fallback is the same one `candidates._densest_core` already uses when a community exceeds
+    `MAX_GROUP_SHARE`: keep the core rather than discarding the lot. Here the core is the members
+    the membership test says carry the finding, which is why this only became possible once
+    `attachment` could run at these sizes at all.
+    """
+    corpus, finding, ring_ids = _ring_finding_over_the_cap()
+
+    evidence = persist.pair_evidence_from(corpus, finding)
+    assert evidence, (
+        f"a {len(finding.members)}-member finding folded to nothing, so the accumulating graph "
+        f"still learns nothing from the largest findings"
+    )
+
+    weak = set(finding.weakly_attached or ())
+    core = {m for m in finding.members if m not in weak}
+    assert core, "premise: the membership test must have identified a core"
+    for a, b in evidence:
+        assert a in core and b in core, "a pair outside the core reached the fold"
+
+    innocent = [p for p in evidence if p[0] not in ring_ids or p[1] not in ring_ids]
+    assert not innocent, (
+        f"{len(innocent)} of {len(evidence)} folded pairs touch an innocent account. Folding this "
+        f"finding whole would have written 969 of 997 such pairs, which is the reason the cap must "
+        f"not simply be raised"
+    )
+
+
+def test_the_core_fold_is_a_strict_subset_and_never_inflates_a_weight():
+    """THE DIVISOR STAYS OVER THE WHOLE FINDING, and that is what makes this safe to accumulate.
+
+    Each feature's surprise is divided among the pairs that share it. Dividing among the CORE's
+    pairs instead would hand each of them a bigger share than folding the finding whole would have,
+    which is manufacturing weight out of a cost cap: the graph would record that these accounts
+    looked more coordinated precisely because the finding was too large to fold.
+
+    So every edge written must carry exactly the number it would have carried with no cap at all.
+    There are simply fewer of them.
+    """
+    corpus, finding, _ = _ring_finding_over_the_cap()
+
+    folded = persist.pair_evidence_from(corpus, finding)
+    whole = _uncapped(corpus, finding)
+
+    assert set(folded) <= set(whole), "the fold produced a pair the uncapped fold does not have"
+    assert len(folded) < len(whole), "premise: the cap must actually be reducing the pair count"
+    for pair, families in folded.items():
+        assert families == whole[pair], (
+            f"pair {pair} was written with {families} but folding the finding whole gives "
+            f"{whole[pair]}; the cap is inventing weight"
+        )
+
+
+def test_without_a_membership_verdict_an_oversized_finding_still_folds_nothing():
+    """AN ABSTENTION IS NOT PERMISSION TO GUESS AT WHO BELONGS.
+
+    `attachment_checked` false means nobody looked, which is precisely the case where choosing a
+    subset would be inventing one. The old behaviour therefore stands, and the three states this
+    package keeps insisting on stay distinct: checked with a core, checked with none weak, and not
+    checked at all.
+    """
+    corpus, finding, _ = _ring_finding_over_the_cap()
+    assert finding.attachment_checked, "premise: this fixture must carry a verdict"
+
+    finding.attachment_checked = False
+    assert persist.pair_evidence_from(corpus, finding) == {}, (
+        "an oversized finding whose membership was never tested folded a core anyway, which means "
+        "the accumulating graph is being handed a subset nobody computed"
+    )
+
+
+def test_nothing_below_the_cap_changed():
+    """The fallback must be reachable ONLY where the cap binds.
+
+    A finding under the cap is folded exactly as before, contamination and all. That contamination
+    is a documented, measured trade rather than a defect (it lands in `log_lr`, which does not
+    discriminate, not in `hard_pairs`, which does), so changing it is an open decision recorded in
+    `pair_evidence_from` and not something the cap fix is entitled to do quietly.
+    """
+    rows = C.organic_population(60, seed=7) + C.professional_beat(10, seed=21)
+    result = detect_from_commenters(rows, shuffles=24)
+    assert result.findings, "premise: this corpus must produce a finding to compare"
+
+    for finding in result.findings:
+        assert len(finding.members) <= persist.MAX_MEMBERS_FOR_PAIRS, "premise: under the cap"
+        assert persist.pair_evidence_from(result.corpus, finding) == _uncapped(
+            result.corpus, finding
+        ), "behaviour below the cap changed"
+
+
+# ---------------------------------------------------------------------------------------------
+# Handles: a finding names real people, so an operator should read the names they chose
+# ---------------------------------------------------------------------------------------------
+def test_the_members_handles_are_stored_so_the_queue_never_has_to_load_a_payload():
+    """The run route computed handles for its in-memory response and threw them away, so every
+    stored finding rendered as a list of raw platform ids.
+
+    They cannot be resolved when the queue is SERVED. `list_findings` deliberately touches no
+    investigation payload, and joining one per row to look up names is the N+1 this repo already
+    paid for on the archive list, worst for the heaviest findings. So detection time is the only
+    chance to keep them.
+    """
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(
+            session, corpus, candidate, investigation_id=4501,
+            handles={"p1": "firstvoice", "p2": "secondvoice", "p3": "thirdvoice"},
+        )
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4501).one()
+
+    assert stored.handles_json == {
+        "p1": "firstvoice", "p2": "secondvoice", "p3": "thirdvoice",
+    }
+
+
+def test_only_the_members_own_handles_are_stored_not_the_whole_corpus():
+    """The route hands in a map for every scanned account. Storing that whole map would put a few
+    hundred unrelated handles on every finding, on the heaviest column in the product."""
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(
+            session, corpus, candidate, investigation_id=4502,
+            handles={
+                "p1": "firstvoice", "p2": "secondvoice", "p3": "thirdvoice",
+                "bystander-1": "someone", "bystander-2": "someone-else",
+            },
+        )
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4502).one()
+
+    assert set(stored.handles_json) == {"p1", "p2", "p3"}, (
+        "a handle for an account that is not a member of this finding was stored"
+    )
+
+
+def test_a_blank_handle_is_dropped_rather_than_stored_as_an_empty_name():
+    """A MISSING HANDLE AND AN EMPTY ONE ARE DIFFERENT CLAIMS about a named person, and only one of
+    them is true here.
+
+    The platform row carries `handle or ""`, so an account we have no handle for arrives as an
+    empty string. Stored, that renders as an account whose name is blank; dropped, the client falls
+    back to the id, which is what we actually know. Same distinction as `attachment_checked`, and
+    it is why the client may never treat an absent key as "no handle".
+    """
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(
+            session, corpus, candidate, investigation_id=4503,
+            handles={"p1": "firstvoice", "p2": "", "p3": "   "},
+        )
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4503).one()
+
+    assert stored.handles_json == {"p1": "firstvoice"}
+    assert "p2" not in stored.handles_json and "p3" not in stored.handles_json
+
+
+def test_a_finding_stored_before_handles_existed_still_persists_and_reads_back_empty():
+    """The column is new, so most rows in a live database have nothing in it. Recording without
+    handles must stay a normal, non-exceptional path rather than something the caller has to
+    remember to pass."""
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(session, corpus, candidate, investigation_id=4504)
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4504).one()
+
+    assert stored.handles_json in ({}, None), (
+        "a finding recorded with no handles should carry none, not a placeholder"
+    )

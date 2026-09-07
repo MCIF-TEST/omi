@@ -321,6 +321,96 @@ def test_annotate_survives_a_broken_lookup_without_failing_the_run(session):
 
 
 # ==================================================================================================
+# The lead path, which this module's docstring used to say had never fired
+# ==================================================================================================
+def test_a_refused_candidate_whose_members_are_already_known_becomes_a_lead(session):
+    """The path `annotate` covers refused candidates FOR, pinned because it was written off unproven.
+
+    `corroboration.annotate` used to state that this had never been observed firing, on the
+    reasoning that the rejected list is empty across every synthetic corpus. Measured, it is empty on
+    none of them: eleven corpora each produced one to four refused candidates, at 40 shuffles against
+    a production default of 24.
+
+    This is the scenario the path exists for, and it is the production shape rather than a contrived
+    one: an operator caught under earlier posts comes back more disciplined, forms a candidate that
+    this corpus cannot prove, and is refused. The corpus is silent; the deployment's memory is not.
+
+    THE TWO PREMISES ARE ASSERTED FIRST. A test that only checked for a lead would keep passing if
+    the scan started FINDING the operation, at which point it would be measuring something else
+    entirely and quietly stop covering the refusal path.
+    """
+    _seed_history(session, "operation", ["lead_post_a", "lead_post_b"])
+
+    # The same operator, disciplined past what this corpus can prove. Measured across six discipline
+    # settings and two background sizes, a lead was produced on all twelve.
+    rows = organic_population(60, seed=21) + planted_operation(8, discipline=0.85, seed=99)
+    result = detect_from_commenters(rows, exclude_context={POST}, shuffles=SHUFFLES)
+
+    assert not result.findings, (
+        "premise: this corpus must be UNABLE to prove the operation, or this test is measuring the "
+        "ordinary finding path rather than the refusal path"
+    )
+    assert result.rejected, (
+        "premise: the near-miss pile must not be empty. If it is, the claim this test replaced has "
+        "become true again and the docstrings that record the measurement need revisiting"
+    )
+
+    corrob.annotate(session, [*result.findings, *result.rejected], exclude_context=POST)
+    leads = [
+        c for c in result.rejected
+        if c.corroboration is not None and c.corroboration.hard_history
+    ]
+    assert leads, (
+        "a set this corpus refused, whose members were already seen doing the operator's own acts "
+        "under two other posts, produced no lead"
+    )
+
+
+def test_a_lead_never_credits_hard_history_to_an_account_that_was_swept_in(session):
+    """The measurement that keeps a lead from becoming an accusation about a bystander.
+
+    A refused candidate is a Louvain community, so it holds a few known accounts among many ordinary
+    ones: the overlaps measured 2 of 17, 4 of 23 and 5 of 16. If prior HARD history attached to
+    those bystanders, the one number that discriminates an operation from a newsroom would be
+    saying something false about people who did nothing.
+
+    Measured across all twelve configurations it does not: `hard_pairs` came to exactly the pairs
+    the known members account for BETWEEN THEMSELVES. This asserts the inequality rather than that
+    equality, because the property that matters is "no bystander pair carries hard history" and the
+    exact equality additionally depends on every known member having been co-recorded earlier.
+
+    It holds by construction rather than by luck: `pair_evidence_from` records a pair only when BOTH
+    accounts hold the same evidence feature, and the hard families are the operator's own acts,
+    which a bystander does not perform.
+    """
+    _seed_history(session, "operation", ["lead_post_a", "lead_post_b"])
+
+    rows = organic_population(60, seed=21) + planted_operation(8, discipline=0.85, seed=99)
+    result = detect_from_commenters(rows, exclude_context={POST}, shuffles=SHUFFLES)
+    corrob.annotate(session, result.rejected, exclude_context=POST)
+
+    known = set(members_of("operation"))
+    checked = 0
+    for c in result.rejected:
+        cor = c.corroboration
+        if cor is None or not cor.hard_history:
+            continue
+        checked += 1
+        k = len(set(c.members) & known)
+        assert cor.hard_pairs <= k * (k - 1) // 2, (
+            f"{cor.hard_pairs} pairs carry hard history but only {k} of the {len(c.members)} named "
+            f"accounts are known, which can account for at most {k * (k - 1) // 2}. Hard history "
+            f"has reached an account this candidate merely swept in."
+        )
+        assert k >= 2, (
+            "a lead fired on a candidate holding fewer than two known accounts, so its hard history "
+            "cannot be about this set at all"
+        )
+
+    assert checked, "no lead was produced, so this test asserted nothing"
+
+
+# ==================================================================================================
 # The migration path
 # ==================================================================================================
 def test_the_snapshot_column_reaches_a_database_that_already_had_the_table():

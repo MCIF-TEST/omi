@@ -381,6 +381,44 @@ def test_the_page_never_lets_an_empty_weak_list_read_as_an_all_clear():
     assert "Membership was not tested" in src
     assert "Every member carries this finding" in src
 
+    # FOUR STATES NOW, and the fourth only became reachable when the membership test was repaired.
+    # It used to key on the median contribution and abstained on exactly the findings that are
+    # mostly bystanders, so a majority flag could not occur; flagging went from 18 of 81 bystanders
+    # to 81 of 81. "N highlighted members ... check those names first" is no prioritisation when N
+    # is most of the list, and it frames a finding that is mostly bystanders as an operation with a
+    # few weak members. Those are different claims about named real people.
+    assert "which is most of it" in src, (
+        "the page gives the same sentence whether 2 of 20 members were flagged or 17 of 25; the "
+        "second is a finding whose composition is in doubt, not a few names to check first"
+    )
+    # AND IT MUST NOT RESTATE THE REVIEW BANNER. `detect` sets `needs_adjudication` on exactly this
+    # condition and the card renders that reason a few lines above, so for a while the page said the
+    # same thing twice in almost the same words: both carried the count AND both said "rather than
+    # as an operation with weak members". That is the shape this repo already fixed once on the
+    # analyst progress panel, where one fact had six vocabularies. The banner judges the FINDING;
+    # this sentence sits under the member list and says how to read the LIST.
+    assert "rather than the group as an operation with weak members" not in src, (
+        "the membership sentence has gone back to restating the review banner's interpretation; "
+        "cut it to what only its position can say"
+    )
+
+    # THE SAME TRAP ON THE ADJACENT BRANCH. The card prints "Membership was not tested: <note>"
+    # from `attachment_note`, and `detect`'s size-abstention review reason opened with the same
+    # clause when it was first written, so an over-cap finding said one fact twice. Guarded here
+    # because the two strings live in different languages and neither file can see the other.
+    import inspect
+
+    from app.netdetect import detect as _detect_mod
+    _detect_src = inspect.getsource(_detect_mod)
+    assert "membership was not tested:" not in _detect_src, (
+        "detect's review reason opens with the clause the card already prints under the member "
+        "list; lead with the judgement instead so the card does not state one fact twice"
+    )
+
+    assert "weakly_attached.length * 2 > row.members.length" in src, (
+        "the majority case is not computed from the two lists, so it cannot be distinguished"
+    )
+
 
 def test_a_judgement_cannot_be_recorded_without_a_reason():
     """The reason is the only thing a later calibration can be fitted against. The API rejects a
@@ -399,16 +437,24 @@ def test_no_number_is_rendered_beside_a_member_name():
     about the FINDING and are meant to be there, and a blanket search would fail on an innocent
     comment while saying nothing useful about why.
     """
-    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
-    start = src.index(">Members<")
-    end = src.index(">Evidence<", start)
-    members_block = src[start:end]
-    for numeric in (".toFixed(", "surprise", "posterior"):
-        assert numeric not in members_block, (
-            f"the members block renders {numeric!r}. A number beside a person's name reads as a "
-            f"judgement about them, and the only per-member figure available does not separate "
-            f"bystanders from real members."
-        )
+    # Member names now live in the MATRIX rows, with the chip row only as the fallback for
+    # findings stored before the join existed. Both are checked; the rule did not move.
+    matrix = (_PAGE_DIR / "evidence-matrix.tsx").read_text()
+    row_block = matrix[matrix.index("matrix.rows.map("):matrix.index("{/* One row of prose")]
+
+    chips = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    chip_block = chips[chips.index(">Members<"):chips.index("mt-1.5 text-2xs text-fg-mute")]
+
+    for name, block in (("matrix rows", row_block), ("chip fallback", chip_block)):
+        for numeric in (".toFixed(", "surprise", "posterior"):
+            assert numeric not in block, (
+                f"the {name} render {numeric!r}. A number beside a person's name reads as a "
+                f"judgement about them, and the only per-member figure available does not "
+                f"separate bystanders from real members."
+            )
+
+    # The column caption DOES carry figures, and must: they are about a FEATURE, not a person.
+    assert ".toFixed(" in matrix
 
 
 def test_the_sweep_panel_distinguishes_all_three_outcomes():
@@ -496,3 +542,74 @@ def test_only_the_open_queue_is_reordered():
     judgements."""
     src = (_PAGE_DIR / "finding-queue.tsx").read_text()
     assert "filter === 'open' && ranks.size > 0" in src
+
+
+def _code_only(src: str) -> str:
+    """Source with comments stripped.
+
+    A guard that scans raw source fails on the comment explaining the guard, which teaches whoever
+    hits it that the rule is noise. Both guards below are about what the CODE does.
+    """
+    import re
+
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    return "\n".join(re.sub(r"//.*$", "", line) for line in src.splitlines())
+
+
+def test_the_finding_card_draws_the_join_and_not_two_flat_lists():
+    """A finding is a members-by-features incidence structure. The card had been rendering two
+    disconnected projections of it, a row of member chips and a list of evidence sentences, so the
+    reviewer's actual question about a group of named real people, "are these the same people
+    throughout or two sub-groups joined at a seam", could only be taken on faith."""
+    src = (_PAGE_DIR / "finding-queue.tsx").read_text()
+    assert "EvidenceMatrix" in src, "the card renders no matrix"
+    matrix = (_PAGE_DIR / "evidence-matrix.tsx").read_text()
+
+    # ONE member list, not two. The matrix's row labels ARE the member list when the join was
+    # recorded; the chip row is only the fallback for findings stored before it existed.
+    assert "hasHolderData" in src
+
+    # The three-state rule. An empty grid would say these accounts share nothing, which cannot be
+    # true of a finding that exists at all.
+    assert "was not recorded" in matrix
+
+    # An absent hard family is STATED. Measured, the professional-beat control is a solid block
+    # with zero identity and zero network features: the solidity is the alarming part and the
+    # absence is the answer, so it cannot be left undrawn.
+    assert "hardPresence" in matrix
+    assert "none" in matrix
+
+
+def test_the_matrix_uses_no_opacity_modifier_on_a_design_token():
+    """MEASURED, NOT STYLE. The palette declares its colours as bare `var(--x)`, so Tailwind emits
+    no `/n` variant for them: `bg-accent/70` lands in the class list and never in the stylesheet.
+    The first version of this grid rendered every cell transparent because of it.
+
+    Scoped to this file rather than the app, because there are ~200 such uses elsewhere and fixing
+    those is a palette change that would restyle every page. See CLAUDE.md.
+    """
+    import re
+
+    src = _code_only((_PAGE_DIR / "evidence-matrix.tsx").read_text())
+    bad = re.findall(
+        r"\b(?:bg|border|text|ring|fill|stroke)-"
+        r"(?:accent|accent-2|fg|fg-dim|fg-mute|border-1|border-2|border-hot|tier-[a-z]+)/\d+",
+        src,
+    )
+    assert not bad, f"opacity modifiers that will not be generated: {sorted(set(bad))}"
+
+
+def test_rule_rack_is_a_hairline_and_is_never_used_as_a_container():
+    """`.rule-rack` is `height: 1px`. Used as a wrapper it collapses the box and spills its content
+    over whatever follows: measured at 1px tall with the text overlapping the next element. Two
+    shipped components were doing it, so this is a regression guard rather than a style rule."""
+    import re
+
+    for name in ("finding-queue.tsx", "evidence-matrix.tsx", "formation-sweep.tsx"):
+        src = _code_only((_PAGE_DIR / name).read_text())
+        for line in src.splitlines():
+            if "rule-rack" not in line:
+                continue
+            assert re.search(r"<hr\b", line), (
+                f"{name} uses rule-rack on something other than an <hr>: {line.strip()[:100]}"
+            )

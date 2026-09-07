@@ -40,6 +40,7 @@ from app.netdetect.formation import (
     profile_similarity,
 )
 from app.netdetect.significance import Corpus
+from app.netdetect.types import HARD_FAMILIES as HARD_FAMILIES_FOR_TEST
 
 SHUFFLES = 20
 _LEARNED: dict[tuple, object] = {}
@@ -873,4 +874,401 @@ def test_an_arrival_bucket_is_never_part_of_a_formations_identity():
     assert "arrival" in CONTEXTUAL_KINDS
     assert not [f for f in stadium.features if f.kind in CONTEXTUAL_KINDS], (
         "a timestamp bucket became part of an operation's durable identity"
+    )
+
+
+def test_a_contaminated_finding_pollutes_the_profile_and_still_places_nobody():
+    """THE THIRD DOWNSTREAM PATH, and the one that matters most because assignment names an
+    INDIVIDUAL rather than describing a set.
+
+    A published amplifier-ring finding names 52.9% innocent accounts, and that finding is what a
+    formation profile is distilled from. `build_profile` reads the candidate's EVIDENCE rather than
+    the members' feature bags, so a feature reaches the profile only when two or more members share
+    it. Bystanders are members, so two of them sharing something puts it into the operation's
+    permanent identity, and every later sweep is measured against that identity.
+
+    MEASURED, AND IT IS THE SAME SHAPE AS THE GRAPH LEAK. Across the pinned ring grid the profile is
+    40% bystander-only (48 features of 120), so the pollution is real and substantial. NONE of it is
+    a hard family, and no ordinary account in the section places against the polluted profile
+    (0 of 31, 0 of 45, 0 of 63).
+
+    That holds for the reason the whole package rests on rather than by luck: a hard family is the
+    operator's own act, which a swept-in bystander does not perform, and `MIN_HARD_EVIDENCE` plus
+    `MIN_HARD_FEATURES` mean soft features alone can never place anybody. So contamination reaches
+    the profile and stops at the point where it would name someone.
+
+    WHAT IT DOES COST is discriminative power rather than safety: 40% of the profile is noise that
+    a genuine future member does not match, which can only make assignment harder. That is a recall
+    risk, and it is the argument for trimming stated from a third direction.
+    """
+    from app.netdetect.types import HARD_FAMILIES
+
+    ring = C.amplifier_ring(8, seed=63)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(40, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    checked = 0
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) < 4 or not (members - ring_ids):
+            continue
+        profile = build_profile(finding, result.corpus)
+        assert profile.features, "the finding produced no profile at all"
+
+        bystander_only = []
+        for pf in profile.features:
+            holders: set[str] = set()
+            for feature, hs in result.corpus.feature_accounts.items():
+                if (feature.family, feature.kind, feature.value) == (pf.family, pf.kind, pf.value):
+                    holders = set(hs) & members
+                    break
+            if holders and not (holders & ring_ids):
+                bystander_only.append(pf)
+
+        checked += 1
+        # The premise: if this stops being true the measurement below is about a different thing.
+        assert bystander_only, (
+            "no bystander-only feature reached the profile, so this test is no longer exercising "
+            "the pollution path it was written for"
+        )
+        assert not [pf for pf in bystander_only if pf.family in HARD_FAMILIES], (
+            "a HARD family feature held only by bystanders entered the operation's durable "
+            "identity; soft pollution is contained by MIN_HARD_EVIDENCE and this would not be"
+        )
+
+        # THE HARM TEST. Ordinary accounts from this very section are the population nearest the
+        # finding and so the likeliest to match a polluted profile.
+        for account in result.corpus.accounts:
+            if account.external_id in members:
+                continue
+            outcome = score_against(account, profile, formation_key="ring")
+            assert not outcome.assigned, (
+                f"{account.external_id} was placed in the operation on a profile built from a "
+                f"finding that was mostly bystanders"
+            )
+
+    assert checked, "no contaminated ring finding was produced; the test asserted nothing"
+
+
+def test_a_bystander_can_hold_hard_evidence_and_one_coincidence_still_places_nobody():
+    """CORRECTS A CLAIM I MADE THREE TIMES: that a bystander never holds hard-family evidence
+    because a hard family is the operator's own act. That is overstated, and it is falsifiable.
+
+    `creation_week` is the one hard feature that is a PROPERTY rather than an act. An innocent
+    account can be provisioned in the same week as an operative by coincidence, and nothing forbids
+    it. `repost_of` is different: converging on an outside target IS an act, and it never
+    contaminated in any configuration measured.
+
+    Measured over a grid wider than the pinned one (14 findings, 43 hard-family evidence features):
+    ONE had a bystander holder, an identity/creation_week feature at ring 60/62. On the pinned
+    corpus family that is 1 hard pair out of 937 touching a bystander, i.e. 0.1% against 56.5% of
+    the accumulated weight being soft. So containment is real and large, and it is not zero.
+
+    THE CONCLUSION SURVIVES FOR A BETTER REASON THAN THE ONE I GAVE, and the reason was already in
+    the code. `MIN_HARD_FEATURES` requires TWO DISTINCT hard features before an account is placed,
+    and its own note says why: a rare `creation_week` scores about 5.8 alone, clearing
+    `MIN_HARD_EVIDENCE` unaided, and the package added the floor after measuring exactly one false
+    assignment that rested on one such coincidence. So the safety does not depend on bystanders
+    being unable to hold hard evidence. It depends on one coincidence never being enough.
+
+    This test therefore pins the GUARD rather than the absence, because the absence is not true.
+    """
+    from app.netdetect.assign import MIN_HARD_FEATURES
+
+    assert MIN_HARD_FEATURES >= 2, (
+        "assignment would place an account on a single hard feature, and `creation_week` is a "
+        "calendar coincidence an innocent account can share; the measured false assignment this "
+        "floor was added for rested on exactly one such feature"
+    )
+
+    ring = C.amplifier_ring(8, seed=62)
+    ring_ids = {r["external_id"] for r in ring}
+    rows = C.organic_population(60, seed=31) + ring
+    result = detect_from_commenters(rows, shuffles=SHUFFLES)
+
+    seen_contaminated_hard = False
+    for finding in result.findings:
+        members = set(finding.members)
+        if len(members & ring_ids) < 4:
+            continue
+        bystanders = members - ring_ids
+        for item in finding.evidence or []:
+            if item.feature.family not in HARD_FAMILIES_FOR_TEST:
+                continue
+            holders = set(result.corpus.feature_accounts.get(item.feature, ())) & members
+            if holders & bystanders:
+                seen_contaminated_hard = True
+                # The mechanism, named. If a NETWORK family ever turns up here the reasoning above
+                # is wrong in a way that matters much more: convergence on an outside target is an
+                # act, and a bystander performing it would not be a coincidence.
+                assert item.feature.family == "identity", (
+                    f"a {item.feature.family} feature reached a bystander. Only identity is "
+                    f"coincidental (a shared provisioning week); network is an act."
+                )
+
+        # Whatever the evidence looks like, no ordinary account may be placed on this profile.
+        profile = build_profile(finding, result.corpus)
+        for account in result.corpus.accounts:
+            if account.external_id in members:
+                continue
+            assert not score_against(account, profile, formation_key="r").assigned
+
+    assert seen_contaminated_hard, (
+        "no bystander held hard evidence on the corpus this was measured on, so the correction "
+        "this test records has stopped being demonstrated; re-measure before restoring any claim "
+        "that it cannot happen"
+    )
+
+
+def test_the_monitoring_pass_itself_ages_the_catalogue_not_just_its_helper():
+    """THE WIRING, WHICH THE TEST ABOVE DOES NOT COVER.
+
+    `test_the_monitoring_pass_ages_the_formation_catalogue` calls `_refresh_formation_phases`
+    directly. That proves the helper works and says nothing about whether anything calls it: delete
+    the line from `run_one_pass` and that test still passes, while the catalogue silently stops
+    ageing and every dormant operation goes on presenting as live.
+
+    This is the gap this repo keeps paying for one level up. `registry.refresh_phases` was itself
+    written and left with nothing calling it, which is why the helper exists at all; the fix added a
+    caller and a test for the helper, and left the caller unguarded.
+
+    So this drives the real entry point and asserts the catalogue actually moved.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.monitoring.scheduler import run_one_pass
+    from app.netdetect.formation import DORMANT_AFTER_DAYS
+    from app.storage.db import get_session
+    from app.storage.models import NetdetectFormation
+
+    now = datetime.now(timezone.utc)
+    with get_session() as session:
+        session.add(NetdetectFormation(
+            formation_key="wiring_stale", platform="x", phase="active",
+            profile_json={}, families_json=[], members_json=["a", "b"], member_count=2,
+            contexts_json=["p"], sighting_count=1,
+            first_seen=now - timedelta(days=200),
+            last_seen=now - timedelta(days=DORMANT_AFTER_DAYS + 30),
+        ))
+        session.commit()
+
+    out = run_one_pass()
+
+    assert out.get("formation_phases") == 1, (
+        "the monitoring pass did not report ageing any formation. If the call was removed from "
+        "run_one_pass the catalogue stops ageing silently and every dormant operation keeps "
+        "presenting as live."
+    )
+    with get_session() as session:
+        row = session.query(NetdetectFormation).filter_by(formation_key="wiring_stale").one()
+        assert row.phase != "active", (
+            "run_one_pass reported a phase change that did not reach the row"
+        )
+
+
+def test_two_operations_under_one_post_are_told_apart_all_the_way_to_the_catalogue():
+    """A REALISTIC SHAPE THE FIXTURES NEVER COVERED, and a merge would be a serious error.
+
+    Every planted-operation corpus in this suite carries ONE operation, so nothing asked what
+    happens when two unrelated adversaries comment on the same post. That is an ordinary situation
+    on a contested topic, and getting it wrong is worse than a miss in both directions at once:
+
+    * one finding naming all sixteen accounts says these two groups are running together, about
+      named real people, on no evidence that they are;
+    * `build_profile` would then distil that finding into a single CHIMERA profile holding both
+      operators' scripts, tools, handle factories and targets. A profile is what survives account
+      rotation, so a chimera is a permanent identity matching neither operation well, and every
+      future `assign` and `sweep` reads it.
+
+    Measured across three organic backgrounds, `detect` separates them cleanly every time (8 of 8
+    each, no cross-contamination, one background sweeping in a single bystander), and `registry`
+    records TWO formations rather than one.
+
+    The two operators are genuinely different adversaries rather than two seeds of one: `OPERATORS`
+    gives them different scripts, publishing tools, bios, handle factories, provisioning windows,
+    targets, mentions, hashtags and posting intervals. They share only the fact of being automated,
+    which is exactly the thing that must not be enough to merge them.
+    """
+    from app.storage.db import get_session
+
+    from app.netdetect import registry
+
+    stadium = C.planted_operation(8, seed=101, operator="stadium", prefix="sta")
+    clinic = C.planted_operation(8, seed=202, operator="clinic", prefix="cli")
+    stadium_ids = {r["external_id"] for r in stadium}
+    clinic_ids = {r["external_id"] for r in clinic}
+
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + stadium + clinic, shuffles=24,
+    )
+
+    assert len(result.findings) == 2, (
+        f"expected the two operations to come out as two findings, got {len(result.findings)}. "
+        f"One finding here would name sixteen accounts as a single group."
+    )
+
+    for finding in result.findings:
+        members = set(finding.members)
+        from_stadium = len(members & stadium_ids)
+        from_clinic = len(members & clinic_ids)
+        assert not (from_stadium and from_clinic), (
+            f"a finding mixes {from_stadium} stadium accounts with {from_clinic} clinic ones, so "
+            f"two unrelated operations are being reported as one group"
+        )
+        assert max(from_stadium, from_clinic) == 8, (
+            f"a finding carries only {max(from_stadium, from_clinic)} of its operation's 8 accounts"
+        )
+
+    with get_session() as session:
+        keys = set()
+        for finding in result.findings:
+            row, _how = registry.record(
+                session, finding, result.corpus, platform="x", context_id="post-1",
+            )
+            session.flush()
+            keys.add(row.formation_key)
+        session.commit()
+
+    assert len(keys) == 2, (
+        "both findings resolved to one formation, so the catalogue now holds a chimera profile "
+        "carrying two operators' scripts, tools and targets. Every future assign and sweep reads it."
+    )
+
+
+def test_two_operations_sharing_commodity_tooling_are_still_told_apart(monkeypatch):
+    """THE ADVERSARIAL VERSION OF THE TEST ABOVE, and the realistic one.
+
+    Two operators buying the same publishing SaaS is ordinary: the tool market is small, and
+    `infrastructure` is deliberately a SOFT family (weight 0.55) for exactly that reason, since a
+    shared tool can simply be a shared profession. The question is whether the separation above
+    rests on the operators happening to differ on every axis at once, or whether it survives them
+    genuinely sharing one.
+
+    Measured on two organic backgrounds with the clinic operator's client string replaced by the
+    stadium operator's: still two findings, 8 of 8 each, no cross-contamination, and still two
+    formations. So the separation is not resting on the tool.
+
+    A merge here would be the worse failure of the two, because it is the case an operator can
+    ENGINEER: buy the tool your target's critics already use and the detector folds you into them.
+    """
+    from app.storage.db import get_session
+
+    from app.netdetect import registry
+
+    shared_client = C.OPERATORS["stadium"]["client"]
+    monkeypatch.setitem(
+        C.OPERATORS, "clinic", {**C.OPERATORS["clinic"], "client": shared_client},
+    )
+    assert C.OPERATORS["clinic"]["client"] == C.OPERATORS["stadium"]["client"], (
+        "premise: both operations must be built with the same publishing tool"
+    )
+
+    stadium = C.planted_operation(8, seed=101, operator="stadium", prefix="sta")
+    clinic = C.planted_operation(8, seed=202, operator="clinic", prefix="cli")
+    stadium_ids = {r["external_id"] for r in stadium}
+    clinic_ids = {r["external_id"] for r in clinic}
+
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + stadium + clinic, shuffles=24,
+    )
+
+    for finding in result.findings:
+        members = set(finding.members)
+        from_stadium = len(members & stadium_ids)
+        from_clinic = len(members & clinic_ids)
+        assert not (from_stadium and from_clinic), (
+            f"a shared publishing tool merged {from_stadium} stadium accounts with {from_clinic} "
+            f"clinic ones into one finding. That is a merge an operator can engineer by buying the "
+            f"tool their target's critics already use."
+        )
+
+    with get_session() as session:
+        keys = set()
+        for finding in result.findings:
+            row, _how = registry.record(
+                session, finding, result.corpus, platform="x", context_id="post-shared-tool",
+            )
+            session.flush()
+            keys.add(row.formation_key)
+        session.commit()
+
+    assert len(keys) == len(result.findings) == 2, (
+        f"{len(result.findings)} findings resolved to {len(keys)} formations; a shared soft-family "
+        f"feature must not be enough to give two adversaries one identity"
+    )
+
+
+def test_two_operations_are_told_apart_even_sharing_both_hard_families(monkeypatch):
+    """THE STRONGEST VERSION, and it bounds what an adversary can do by imitation.
+
+    The previous two tests share nothing, then share a SOFT family. This one shares both HARD ones:
+    the same provisioning week (`identity`, weight 1.00) and the same amplification targets
+    (`network`, weight 1.00). Those are the two families every publication decision in this package
+    keys on, so if copying them merged two adversaries, an operation could hide inside another by
+    signing its accounts up the same week and boosting the same posts.
+
+    Measured across two organic backgrounds, at each step:
+
+        shared: nothing                  2 findings, 8+8, 0 mixed, 2 formations
+        shared: publishing tool (soft)   2 findings, 8+8, 0 mixed, 2 formations
+        shared: signup week (hard)       2 findings, 8+8, 0 mixed, 2 formations
+        shared: targets (hard)           2 findings, 8+8, 0 mixed, 2 formations
+        shared: signup week AND targets  2 findings, 8+8, 0 mixed, 2 formations
+
+    WHY IT HOLDS is worth stating, because it is structural rather than lucky: candidate generation
+    groups on TOTAL shared rare-feature weight, and each operation shares far more within itself
+    (script, tool, handle factory, bio, posting interval) than it does across. Copying two features
+    does not outweigh five.
+
+    This is a CHARACTERISATION of how much imitation the separation tolerates, not a promise that it
+    tolerates any amount. An operator copying every axis is, by this package's own definition, no
+    longer a different operator.
+    """
+    from app.storage.db import get_session
+
+    from app.netdetect import registry
+
+    monkeypatch.setitem(C.OPERATORS, "clinic", {
+        **C.OPERATORS["clinic"],
+        "signup_days_ago": C.OPERATORS["stadium"]["signup_days_ago"],
+        "target": C.OPERATORS["stadium"]["target"],
+    })
+    assert (
+        C.OPERATORS["clinic"]["signup_days_ago"] == C.OPERATORS["stadium"]["signup_days_ago"]
+        and C.OPERATORS["clinic"]["target"] is C.OPERATORS["stadium"]["target"]
+    ), "premise: both hard families must actually be shared"
+
+    stadium = C.planted_operation(8, seed=101, operator="stadium", prefix="sta")
+    clinic = C.planted_operation(8, seed=202, operator="clinic", prefix="cli")
+    stadium_ids = {r["external_id"] for r in stadium}
+    clinic_ids = {r["external_id"] for r in clinic}
+
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + stadium + clinic, shuffles=24,
+    )
+
+    for finding in result.findings:
+        members = set(finding.members)
+        from_stadium = len(members & stadium_ids)
+        from_clinic = len(members & clinic_ids)
+        assert not (from_stadium and from_clinic), (
+            f"sharing both hard families merged {from_stadium} stadium accounts with "
+            f"{from_clinic} clinic ones. An operation could then hide inside another by signing up "
+            f"the same week and boosting the same posts."
+        )
+
+    with get_session() as session:
+        keys = set()
+        for finding in result.findings:
+            row, _how = registry.record(
+                session, finding, result.corpus, platform="x", context_id="post-shared-hard",
+            )
+            session.flush()
+            keys.add(row.formation_key)
+        session.commit()
+
+    assert len(keys) == len(result.findings) == 2, (
+        f"{len(result.findings)} findings resolved to {len(keys)} formations while sharing both "
+        f"hard families; the catalogue would then hold one identity for two adversaries"
     )

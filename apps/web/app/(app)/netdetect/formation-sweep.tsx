@@ -120,7 +120,7 @@ export function FormationSweep() {
                 {result.placed.length > 0 ? (
                   <ul className="space-y-2">
                     {result.placed.map((p) => (
-                      <li key={p.external_id} className="rule-rack border-l-2 border-tier-high pl-2.5">
+                      <li key={p.external_id} className="border-l-2 border-tier-high pl-2.5">
                         <div className="flex flex-wrap items-baseline gap-x-2">
                           <span className="font-mono text-xs text-fg">{p.handle}</span>
                           <span className="meta">

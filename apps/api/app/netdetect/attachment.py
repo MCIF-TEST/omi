@@ -57,6 +57,37 @@ Removing a flagged account would change the finding's membership, its score and 
 which is a detection decision taken on a heuristic. It would also make the mirror error unrecoverable:
 a wrongly flagged member is a real participant quietly deleted from an operation. The flag goes to a
 reader beside the evidence, and the reader decides.
+
+THE COST OF THAT RULE IS NOW MEASURED, AND IT IS THE WHOLE OF THE FALSE NAMING. The justification
+above rests on a worry rather than a number: that a trim would delete real participants and would
+weaken the finding. Both halves were measured on the pinned amplifier-ring grid, where a published
+finding names 52.9% innocent accounts.
+
+    corpus     named  innocent  flagged   score  trimmed  null threshold  survives
+    ring 40/63    17         9      9/9   13.49    19.19            7.28       yes
+    ring 60/61    23        15    15/15   14.16    20.05            9.06       yes
+    ring 80/63    25        17    17/17   16.36    20.04           10.07       yes
+
+The flagged set is EXACTLY the bystanders in every configuration, the trim leaves exactly the eight
+ring accounts, and the finding clears the null by a wide margin without them. So on this evidence
+the false naming is not the price of catching the ring: the ring is catchable while naming nobody
+innocent. Read the rising score as arithmetic rather than as a second result, though: a subset that
+keeps the shared features has the same k over a smaller n, so a smaller tail follows by
+construction, and it is the same fact `leave_one_out` already measures.
+
+THE CONTROLS SAY A TRIM COULD NOT HURT THEM, and structurally rather than luckily. A real community
+is everybody contributing alike, which is precisely the shape this abstains on, so there is no flag
+to trim by: the newsroom control abstains, the fan community produces no finding, and across every
+planted-operation fixture no genuine member is flagged anywhere. Measured over all of it, a trim
+would have withheld 44 innocent names and lost 0 genuine members.
+
+IT STILL DOES NOT DROP, and that is deliberate rather than unfinished. Dropping changes what is
+published about named real people, and every corpus above is synthetic. The asymmetry is worth
+stating because it differs from the `RARITY_CEILING` decision: raising that ceiling moves the naming
+in BOTH directions, while trimming only ever removes names and, measured, removes only innocent
+ones. That makes it a safer change, not an automatic one. Pinned by
+`test_the_finding_survives_without_the_members_this_test_flags` and
+`test_a_trim_would_take_nothing_from_the_community_controls` so the evidence cannot quietly rot.
 """
 
 from __future__ import annotations
@@ -64,35 +95,106 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass, field
 
-from app.netdetect.significance import Corpus, score_candidate
+from app.netdetect.significance import Corpus, leave_one_out_scores
 
 #: A member contributing less than this share of what the typical member contributes is not carrying
-#: the finding. Measured separation on the contaminated corpora is wide: the tightest case put the
-#: bystander at 0.07 of the median against a weakest genuine member at 0.78, so this sits between
-#: them with room on both sides rather than being fitted to either.
+#: the finding. RETAINED FOR REFERENCE AND NO LONGER THE RULE: the weak set is now the group below
+#: the widest step (see `MIN_CONTRIBUTION_GAP`), which needs no reference point and so cannot be
+#: dragged off by the very members it is trying to identify. The original measurement still reads
+#: correctly on findings where bystanders are a minority: the tightest case put the bystander at
+#: 0.07 of the median against a weakest genuine member at 0.78.
 WEAK_FRACTION = 0.25
 
-#: Below this median contribution the question is not answerable and the answer is no answer.
-#:
-#: A homogeneous group (every member holding the same features) gives every member a delta near zero,
-#: because the evidence survives whoever you remove. Measured: such findings ran medians of 0.04 to
-#: 0.18 while every finding with a real bystander ran 1.57 to 3.92. The gap is an order of magnitude,
-#: which is why a blunt gate is enough and a fitted one would be false precision.
+#: Below this median contribution the question WAS treated as unanswerable. RETAINED FOR REFERENCE
+#: AND NO LONGER THE RULE: see `MIN_CONTRIBUTION_GAP` below for why it was wrong and what replaced
+#: it. The original measurement stands on its own terms, which is what made the error hard to see:
+#: homogeneous findings ran medians of 0.04 to 0.18 while findings with a real bystander ran 1.57 to
+#: 3.92.
 MIN_MEDIAN_CONTRIBUTION = 0.5
+
+#: The smallest step between two neighbouring contributions that counts as a REAL BOUNDARY rather
+#: than the ordinary spread inside one group.
+#:
+#: WHY LEVEL CANNOT ANSWER THIS, WHICH IS THE BUG THIS CONSTANT REPLACES. The old rule abstained
+#: when the MEDIAN contribution was low, on the reasoning that a homogeneous group gives every
+#: member a delta near zero. That reasoning is sound and its converse is false: a finding that is
+#: more than half bystanders ALSO has a near-zero median, because the median then falls inside the
+#: bystander cluster instead of between the clusters. So the guard switched itself off exactly as
+#: contamination got worse. Measured on the amplifier-ring grid, it abstained on every finding where
+#: bystanders reached half or more (9 of 17, 15 of 23, 17 of 25) while the two populations were
+#: cleanly separated in every one of them: no genuine member below +1.19, no bystander above +0.52.
+#:
+#: THE MAXIMUM CANNOT ANSWER IT EITHER, and that was measured before it was discarded. Keying on the
+#: max classifies every ring finding correctly and then ruins the case the abstention exists for: a
+#: PURE 8-member operation with no bystanders measures a max of 0.834, so a max rule checks it and
+#: flags about half a clean group. All three homogeneous fixtures behave that way.
+#:
+#: What separates the two is BIMODALITY. A contaminated finding is two populations with an empty
+#: band between them; a homogeneous one is a single continuous spread. Measured largest step:
+#:
+#:     homogeneous op 50/5    0.568        contaminated ring 40/63    1.406  (splits 9 of 9)
+#:     homogeneous op 50/23   0.282        contaminated ring 60/61    1.057  (splits 15 of 15)
+#:     homogeneous op 60/23   0.287        contaminated ring 80/63    1.482  (splits 17 of 17)
+#:     newsroom control       0.235
+#:
+#: The band between 0.568 and 1.057 is empty, so this sits in the middle of it rather than being
+#: fitted to either side, and in all three contaminated cases the split lands on EXACTLY the
+#: bystander count. The RATIO of step to spread was measured too and does not work: homogeneous runs
+#: 0.390 to 0.587 against a contaminated 0.379 to 0.579, which overlap completely.
+#:
+#: IT ALSO ABSTAINS ON SOME CONTAMINATED FINDINGS, AND THAT IS CORRECT RATHER THAN A MISS. The
+#: numbers above come from ring corpora built on organic seed 31. Measured on ring corpora whose
+#: organic background carries the ring's own seed, the two populations do not separate at all and
+#: this abstains, naming nobody:
+#:
+#:     ring 40/61  8 ring, 1 bystander   ring spans -0.218..0.746, the bystander sits at 0.712
+#:     ring 80/63  8 ring, 5 bystanders  ring spans  0.692..1.630, bystanders reach 0.947
+#:
+#: In the first the single bystander out-contributes SIX of the eight genuine members; in the second
+#: the top bystander out-contributes the weakest genuine one. A rule that insisted on producing a
+#: verdict there would have flagged real operation members and cleared the bystander, which is the
+#: same failure the discarded MAX rule had, arriving from the other direction. So "flagged 0 of 5"
+#: on such a corpus is this working: `abstained` is set, `answered` is False, and the surface says
+#: no membership verdict was reached rather than showing a clean bill of health.
+MIN_CONTRIBUTION_GAP = 0.8
 
 #: Above this many members the test abstains rather than running.
 #:
-#: MEASURED, not guessed. Leave-one-out costs one scoring per member and each scoring walks a
-#: feature union that itself grows with the member count, so the curve is steep. On a 220-account
-#: corpus: n=20 took 0.21s, n=30 1.0s, n=40 2.8s, n=50 7.2s, n=60 15.4s. This runs inside an admin
-#: request that has already spent tens of seconds detecting, so 40 is where the answer stops being
-#: worth the wait.
+#: RAISED FROM 40 TO 100 BY MAKING THE ARITHMETIC CHEAPER, NOT BY DECIDING TO WAIT LONGER. The old
+#: value came from a real measurement of a genuinely steep curve: leave-one-out ran one full scoring
+#: per member and each scoring re-ran a Poisson-binomial DP over the whole set, so cost grew about
+#: n^3.5 (n=20 0.21s, n=30 1.0s, n=40 2.8s, n=50 7.2s, n=60 15.4s) and 40 was where the answer
+#: stopped being worth the wait inside an admin request.
 #:
-#: It agrees with `persist.MAX_MEMBERS_FOR_PAIRS` by coincidence of the same underlying judgement,
-#: that a finding this large is a subject rather than a formation. They are kept separate because
-#: the cost models are different (pairs grow quadratically, this closer to n^3.5), and collapsing
-#: them would tie one bound to the other's measurement.
-MAX_MEMBERS = 40
+#: THE CAP HAD ALREADY FIRED, WHICH IS WHY THIS WAS WORTH FIXING RATHER THAN LIVING WITH. On a
+#: 168-account section the amplifier ring produces findings of 44 and 49 members carrying 82% and
+#: 84% bystanders, so the cap was switching the membership test off on precisely the most
+#: contaminated findings there are. That is the same shape as the median bug this module already
+#: paid for, and the honest response is to make the test able to run, not to widen the wait.
+#:
+#: `significance.leave_one_out_scores` computes every removal in one pass at O(n^2) per feature
+#: instead of O(n^3), and is exact rather than approximate (agreement with the naive computation is
+#: 1.4e-14 over real corpora, against results this module rounds to four decimals). Re-measured on
+#: the same 168-account corpus:
+#:
+#:     n=20 0.03s   n=40 0.26s   n=60 0.81s   n=80 1.98s   n=100 3.82s   n=120 6.82s
+#:
+#: So 100 members now costs less than the old 40 did, and this is set from the STRUCTURE rather than
+#: from that budget: `candidates.MAX_GROUP_SHARE` (0.40) bounds a community at 40% of the corpus,
+#: and 250 accounts is the largest section this product reports on, so 100 is the largest finding
+#: that can reach here at all. The cap stops binding in practice instead of binding hardest where
+#: it hurts most.
+#:
+#: IT IS STILL A CAP, AND `unchecked_for_size` STILL EXISTS. A corpus larger than 250 can still
+#: cross it, and "nobody looked" must never present as "nobody is weakly attached". Raising this
+#: further is a cost decision and needs the curve above re-measured, not an assumption that the
+#: rewrite made it free.
+#:
+#: It no longer agrees with `persist.MAX_MEMBERS_FOR_PAIRS` (40), and that divergence is the reason
+#: they were kept separate rather than collapsed: the cost models differ (pairs grow quadratically,
+#: this one now n^2 per feature), so tying one bound to the other's measurement would have dragged
+#: the pair cap along with this change for no reason.
+MAX_MEMBERS = 100
 
 
 @dataclass(slots=True)
@@ -106,7 +208,32 @@ class Attachment:
     #: Median contribution, the scale the threshold is relative to.
     median: float = 0.0
     #: Non-null when no verdict was reached. Never read this as "nobody is weakly attached".
+    #: The widest step between two neighbouring contributions: the boundary this test looks for.
+    #: Set whether or not it cleared `MIN_CONTRIBUTION_GAP`, so a caller holding the Attachment can
+    #: see WHY it abstained and not merely that it did.
+    #:
+    #: IN-PROCESS ONLY, and deliberately so for now. `attachment_note` carries the abstention itself
+    #: through `Candidate` to the stored row and out to a reader, so the CONDITION is not lost at
+    #: the serialiser; this number is the supporting detail behind it. Surfacing it would mean a
+    #: Candidate field, a column, an `_INCREMENTAL_COLUMNS` entry and a route field, which is real
+    #: plumbing for a diagnostic. Worth doing if an operator ever has to argue with an abstention,
+    #: and worth NOT claiming until then.
+    gap: float = 0.0
     abstained: str | None = None
+    #: True when the abstention is a CAPABILITY LIMIT rather than an answer about the data.
+    #:
+    #: The two are opposite and a caller must be able to tell them apart without matching on the
+    #: string. "Every member contributes about equally" is a real finding about a real group, and it
+    #: is what a genuine community looks like, so acting on it would make review meaningless. "This
+    #: finding is larger than the test runs for" says nothing about the group at all: nobody looked.
+    #:
+    #: MEASURED, and this is not a hypothetical distinction. The ring's findings grow with the
+    #: background, and the bystander share grows with them: 12 of 20, 17 of 25, 25 of 33, 30 of 38,
+    #: 32 of 40 are all tested and sent to a reader, and then a 49-member finding carrying 41
+    #: bystanders (84%) crosses the cap, is not tested, and was PUBLISHED with nothing asking
+    #: anybody. That is the same shape as the median bug this module already paid for, reached by
+    #: the size route instead: the guard switched itself off exactly where it was needed most.
+    unchecked_for_size: bool = False
 
     @property
     def answered(self) -> bool:
@@ -122,12 +249,8 @@ def leave_one_out(corpus: Corpus, members: list[str]) -> dict[str, float]:
     ordered = sorted(dict.fromkeys(members))
     if len(ordered) < 3:
         return {}
-    full = score_candidate(corpus, ordered, collect_evidence=False).score
-    out: dict[str, float] = {}
-    for m in ordered:
-        rest = [x for x in ordered if x != m]
-        out[m] = full - score_candidate(corpus, rest, collect_evidence=False).score
-    return out
+    full, without = leave_one_out_scores(corpus, ordered)
+    return {m: full - without[m] for m in ordered if m in without}
 
 
 def assess(corpus: Corpus, members: list[str]) -> Attachment:
@@ -136,8 +259,10 @@ def assess(corpus: Corpus, members: list[str]) -> Attachment:
     if len(ordered) < 3:
         return Attachment(abstained="a finding this small has no typical member to compare against")
     if len(ordered) > MAX_MEMBERS:
+        # Flagged as a capability limit, not as an answer. See `unchecked_for_size`.
         return Attachment(
-            abstained=f"{len(ordered)} members is above the {MAX_MEMBERS} this test is run for"
+            abstained=f"{len(ordered)} members is above the {MAX_MEMBERS} this test is run for",
+            unchecked_for_size=True,
         )
 
     contribution = leave_one_out(corpus, ordered)
@@ -148,16 +273,31 @@ def assess(corpus: Corpus, members: list[str]) -> Attachment:
     result = Attachment(contribution={k: round(v, 4) for k, v in contribution.items()},
                         median=round(median, 4))
 
-    if median < MIN_MEDIAN_CONTRIBUTION:
-        # NOT "nobody is weakly attached". The evidence is spread evenly enough that removing any one
-        # member barely moves the score, which is what a real community looks like as well as what a
-        # tight operation looks like. Singling anybody out here would be picking a rounding error.
+    # THE QUESTION IS WHETHER THERE ARE TWO POPULATIONS HERE, NOT WHETHER THE NUMBERS ARE SMALL.
+    #
+    # Sort the contributions and look for the widest step between neighbours. A finding carrying
+    # bystanders is bimodal: everyone who holds the evidence sits well above everyone who does not,
+    # with an empty band between. A homogeneous group is one continuous spread with no such band,
+    # whether its members contribute a lot or a little.
+    #
+    # This replaced a rule that keyed on the median LEVEL and therefore abstained precisely when
+    # contamination was worst, because a finding more than half bystanders has its median inside the
+    # bystander cluster. See `MIN_CONTRIBUTION_GAP` for that measurement and for why keying on the
+    # maximum instead is also wrong.
+    ranked = sorted(contribution.items(), key=lambda kv: (kv[1], kv[0]))
+    steps = [(ranked[i + 1][1] - ranked[i][1], i) for i in range(len(ranked) - 1)]
+    gap, below = max(steps) if steps else (0.0, -1)
+    result.gap = round(gap, 4)
+
+    if gap < MIN_CONTRIBUTION_GAP:
+        # NOT "nobody is weakly attached". There is no boundary in this finding to draw, which is
+        # what a real community looks like as well as what a tight operation looks like. Singling
+        # anybody out here would be picking a rounding error.
         result.abstained = (
             "every member contributes about equally to this finding, so none can be singled out "
             "as weakly attached"
         )
         return result
 
-    threshold = WEAK_FRACTION * median
-    result.weak = sorted(m for m, v in contribution.items() if v < threshold)
+    result.weak = sorted(name for name, _ in ranked[:below + 1])
     return result
