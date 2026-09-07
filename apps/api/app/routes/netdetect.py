@@ -325,6 +325,10 @@ def run_on_investigation(
                             result.corpus.by_id[m].score
                             for m in candidate.members if m in result.corpus.by_id
                         ],
+                        # Already computed a few lines up for the in-memory response, and until now
+                        # thrown away. The queue serves findings without loading any payload, so
+                        # this is the only chance to keep the names.
+                        handles=handles,
                     )
                     recorded += 1
                 session.commit()
@@ -528,6 +532,10 @@ class StoredFindingOut(BaseModel):
     context_id: str | None
     platform: str
     members: list[str]
+    #: ``external_id -> handle`` for the members we have a handle for. PARTIAL BY DESIGN: rows
+    #: written before handles were stored carry none, and a member absent here means the handle is
+    #: unknown to us, never that the account has no handle. The client falls back to the id.
+    handles: dict[str, str] = {}
     member_count: int
     score: float
     corrected_p: float | None
@@ -556,6 +564,7 @@ def _stored_out(row: NetdetectFinding) -> StoredFindingOut:
         context_id=row.context_id,
         platform=row.platform,
         members=list(row.members_json or []),
+        handles=dict(row.handles_json or {}),
         member_count=row.member_count,
         score=row.score,
         corrected_p=row.corrected_p,

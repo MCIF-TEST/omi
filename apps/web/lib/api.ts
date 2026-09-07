@@ -333,6 +333,16 @@ export interface NetdetectFinding {
   context_id: string | null;
   platform: string;
   members: string[];
+  /**
+   * `external_id -> handle`, PARTIAL BY DESIGN. A finding names real people and an operator should
+   * be reading the names they chose, so handles are stored at detection time; they cannot be
+   * resolved when the queue is served, because that would mean loading one investigation payload
+   * per row.
+   *
+   * A member ABSENT here means we have no handle for that account, never that the account has no
+   * handle, so render the id rather than a blank. Rows recorded before this existed carry none.
+   */
+  handles: Record<string, string>;
   member_count: number;
   score: number;
   /** Null means "not compared against the shuffled search", which must never be read as passing it. */
@@ -444,6 +454,66 @@ export interface FormationSweep {
 export function sweepFormations(slug: string): Promise<FormationSweep> {
   return apiClient<FormationSweep>(
     `/v1/admin/netdetect/formations/sweep?slug=${encodeURIComponent(slug)}`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * One detector run over one stored investigation.
+ *
+ * FOUR OUTCOMES, and three of them present as an empty `findings` list. Reading any empty result as
+ * "these accounts are unrelated" is the mistake this shape exists to prevent:
+ *
+ *   - findings present            -> sets that beat the shuffled search
+ *   - `refused`                   -> the run could not be performed at all (too small a corpus, too
+ *                                    few shuffles to express the p-value it was asked for)
+ *   - `unresolvable`              -> one group is large enough HERE to poison the null, so the
+ *                                    section cannot resolve itself in EITHER direction
+ *   - none of the above, empty    -> looked, and refused everything it looked at
+ */
+export interface NetdetectRun {
+  slug: string;
+  corpus_size: number;
+  rare_features: number;
+  null_shuffles: number;
+  null_threshold: number | null;
+  findings: NetdetectRunFinding[];
+  /** Candidates that scored and did not beat the correction. "We looked and refused" is a stronger
+   *  statement than "we found nothing", and calibration needs the near-misses. */
+  rejected: number;
+  refused: string | null;
+  unresolvable: string | null;
+  recorded?: number;
+  accumulated?: number;
+}
+
+export interface NetdetectRunFinding {
+  members: string[];
+  handles?: string[];
+  score: number;
+  corrected_p: number | null;
+  needs_adjudication: string | null;
+}
+
+/**
+ * Run the detector over a stored investigation.
+ *
+ * COSTS NOTHING: no provider call, no model call, no credit. It reads a payload that is already
+ * stored, which is what makes it safe to put behind a button rather than a confirmation.
+ *
+ * `record: false` keeps the answer and skips the store, which is what an operator tuning
+ * thresholds wants: a run per button press would turn the queue into a log.
+ */
+export function runNetdetect(
+  slug: string,
+  opts: { shuffles?: number; record?: boolean } = {},
+): Promise<NetdetectRun> {
+  const q = new URLSearchParams();
+  if (opts.shuffles !== undefined) q.set('shuffles', String(opts.shuffles));
+  if (opts.record !== undefined) q.set('record', String(opts.record));
+  const qs = q.toString();
+  return apiClient<NetdetectRun>(
+    `/v1/admin/netdetect/${encodeURIComponent(slug)}${qs ? `?${qs}` : ''}`,
     { method: 'POST' },
   );
 }
@@ -1209,6 +1279,17 @@ export interface InvestigationSummary {
 
 export interface InvestigationsListResponse {
   investigations: InvestigationSummary[];
+}
+
+/**
+ * The caller's own recent investigations, newest first.
+ *
+ * Used by the detector's run picker. It lists what THIS operator has scanned, which is the right
+ * scope: the detector reads a stored payload, and the payloads an admin can meaningfully choose
+ * between are their own.
+ */
+export function listInvestigations(limit = 50): Promise<InvestigationsListResponse> {
+  return apiClient<InvestigationsListResponse>(`/v1/investigations?limit=${limit}`);
 }
 
 export interface InvestigationDetailResponse {

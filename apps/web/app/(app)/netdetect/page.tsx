@@ -5,7 +5,10 @@ import { FindingQueue } from './finding-queue';
 import { UnresolvedSections } from './unresolved-sections';
 import { FormationCatalogue } from './formation-catalogue';
 import { FormationSweep } from './formation-sweep';
+import { RunPanel } from './run-panel';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
+import { CoordinationNav, WhyTwoDetectors } from '@/components/shared/coordination-nav';
+import { Stage } from '@/components/shared/stage-rail';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Network findings' };
@@ -43,18 +46,46 @@ export default async function NetdetectPage() {
         eyebrow="Operations · Admin"
         title="Network findings"
         lede="Sets of accounts that share improbably many rare behaviours, corrected for the size of the search. A finding is a lead, not a verdict: judging one records the only ground truth this detector will ever accumulate, and nothing here reaches a customer."
-      />
+      >
+        <CoordinationNav current="/netdetect" />
+      </ConsoleHeader>
 
-      {/* ABOVE the queue, because it is a warning about what the queue could not cover. A finding
-          queue can only show what the detector named, and a section one group is large enough to
-          dominate produces no findings at all. */}
-      <UnresolvedSections />
+      {/* THE JOB HAS AN ORDER, AND SAYING SO IS MOST OF THE FIX. These panels were stacked in a
+          column with nothing to say which came first or that they were one piece of work. Each was
+          individually legible and the page as a whole was not: an operator could tell what every
+          panel showed and not what to do with it. */}
 
-      <FormationCatalogue />
+      <Stage
+        n={1}
+        title="Run the detector"
+        lede="Pick a scan you have already run. Detection re-reads stored evidence, so it costs nothing and can be run as often as you like."
+      >
+        <RunPanel />
+        {/* ABOVE the queue, because it is a warning about what a queue can never contain. A section
+            one group is large enough to dominate produces NO findings at all, which reads exactly
+            like a clean scan, so it belongs where a run happens rather than being left for somebody
+            to notice its absence. */}
+        <UnresolvedSections />
+      </Stage>
 
-      <FormationSweep />
+      <Stage
+        n={2}
+        title="Review what it found"
+        lede="Each finding names real accounts on statistical evidence. Confirming or dismissing one records the only ground truth this detector will ever have, which is what lets its thresholds be calibrated at all."
+      >
+        <FindingQueue />
+      </Stage>
 
-      <FindingQueue />
+      <Stage
+        n={3}
+        title="Track what you confirmed"
+        lede="An operation persists across posts and survives its accounts being burned and replaced. Sweep a new comment section against everything catalogued here."
+      >
+        <FormationCatalogue />
+        <FormationSweep />
+      </Stage>
+
+      <WhyTwoDetectors className="sm:pl-9" />
     </div>
   );
 }

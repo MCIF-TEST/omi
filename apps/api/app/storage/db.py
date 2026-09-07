@@ -206,6 +206,7 @@ _INCREMENTAL_COLUMNS: list[tuple[str, str, str]] = [
     #: The formation a finding was resolved to, so a stored finding can name its operation.
     ("netdetect_findings", "formation_key", "VARCHAR(32)"),
     ("netdetect_findings", "corroboration_json", "JSON"),
+    ("netdetect_findings", "handles_json", "JSON"),
     # What the formation catalogue said about a section this scan could not resolve. Same reasoning
     # as `attachment_checked` above and the same default: `catalogue_checked` is 0 on a row written
     # before the fallback existed, so its zero placements read as "never consulted" rather than as

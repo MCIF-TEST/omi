@@ -1814,6 +1814,16 @@ class NetdetectFinding(Base):
     #:
     #: NULL means the lookup did not run, never that these accounts were strangers.
     corroboration_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    #: ``external_id -> handle`` for the members, written HERE at detection time for the same
+    #: reason the evidence sentences are: the payload they came from is not loaded when the queue
+    #: is served, and resolving them later would mean reading ``payload_json`` once per row, which
+    #: is the N+1 this repo has already paid for on the archive list.
+    #:
+    #: A finding names real people, and an operator judging one should be reading the names those
+    #: people chose rather than a platform id. Rows written before this column have none, so a
+    #: missing handle must fall back to the id and must never render as though the account had no
+    #: handle: those are different claims, the same distinction as ``attachment_checked``.
+    handles_json: Mapped[dict] = mapped_column(JSON, default=dict)
     #: The evidence sentences, written HERE at detection time, because the corpus they were derived
     #: from is not kept and the finding has to stay readable without it.
     evidence_json: Mapped[list] = mapped_column(JSON, default=list)

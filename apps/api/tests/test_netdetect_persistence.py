@@ -591,3 +591,86 @@ def test_nothing_below_the_cap_changed():
         assert persist.pair_evidence_from(result.corpus, finding) == _uncapped(
             result.corpus, finding
         ), "behaviour below the cap changed"
+
+
+# ---------------------------------------------------------------------------------------------
+# Handles: a finding names real people, so an operator should read the names they chose
+# ---------------------------------------------------------------------------------------------
+def test_the_members_handles_are_stored_so_the_queue_never_has_to_load_a_payload():
+    """The run route computed handles for its in-memory response and threw them away, so every
+    stored finding rendered as a list of raw platform ids.
+
+    They cannot be resolved when the queue is SERVED. `list_findings` deliberately touches no
+    investigation payload, and joining one per row to look up names is the N+1 this repo already
+    paid for on the archive list, worst for the heaviest findings. So detection time is the only
+    chance to keep them.
+    """
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(
+            session, corpus, candidate, investigation_id=4501,
+            handles={"p1": "firstvoice", "p2": "secondvoice", "p3": "thirdvoice"},
+        )
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4501).one()
+
+    assert stored.handles_json == {
+        "p1": "firstvoice", "p2": "secondvoice", "p3": "thirdvoice",
+    }
+
+
+def test_only_the_members_own_handles_are_stored_not_the_whole_corpus():
+    """The route hands in a map for every scanned account. Storing that whole map would put a few
+    hundred unrelated handles on every finding, on the heaviest column in the product."""
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(
+            session, corpus, candidate, investigation_id=4502,
+            handles={
+                "p1": "firstvoice", "p2": "secondvoice", "p3": "thirdvoice",
+                "bystander-1": "someone", "bystander-2": "someone-else",
+            },
+        )
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4502).one()
+
+    assert set(stored.handles_json) == {"p1", "p2", "p3"}, (
+        "a handle for an account that is not a member of this finding was stored"
+    )
+
+
+def test_a_blank_handle_is_dropped_rather_than_stored_as_an_empty_name():
+    """A MISSING HANDLE AND AN EMPTY ONE ARE DIFFERENT CLAIMS about a named person, and only one of
+    them is true here.
+
+    The platform row carries `handle or ""`, so an account we have no handle for arrives as an
+    empty string. Stored, that renders as an account whose name is blank; dropped, the client falls
+    back to the id, which is what we actually know. Same distinction as `attachment_checked`, and
+    it is why the client may never treat an absent key as "no handle".
+    """
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(
+            session, corpus, candidate, investigation_id=4503,
+            handles={"p1": "firstvoice", "p2": "", "p3": "   "},
+        )
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4503).one()
+
+    assert stored.handles_json == {"p1": "firstvoice"}
+    assert "p2" not in stored.handles_json and "p3" not in stored.handles_json
+
+
+def test_a_finding_stored_before_handles_existed_still_persists_and_reads_back_empty():
+    """The column is new, so most rows in a live database have nothing in it. Recording without
+    handles must stay a normal, non-exceptional path rather than something the caller has to
+    remember to pass."""
+    corpus, candidate = _simple_finding()
+    with get_session() as session:
+        _persist(session, corpus, candidate, investigation_id=4504)
+        session.commit()
+        stored = session.query(NetdetectFinding).filter_by(investigation_id=4504).one()
+
+    assert stored.handles_json in ({}, None), (
+        "a finding recorded with no handles should carry none, not a placeholder"
+    )

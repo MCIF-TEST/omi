@@ -43,8 +43,9 @@ that population; and the corroboration lead path, written off in three places as
 unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
 `app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2625
-passed, 8 skipped, 2 failed** (2026-09-04, head `6b2af24`), both failures pre-existing and
+Suite measured at **2629
+passed, 8 skipped, 2 failed** (2026-09-07, head `692c227` + the coordination redesign), both
+failures pre-existing and
 listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
 
 That figure was measured in **five sequential chunks rather than one process**, because this sandbox
@@ -57,7 +58,7 @@ run, so the two methods agree on this tree.
 **RECONCILE A CHUNKED TOTAL AGAINST `--collect-only`, WHICH COSTS TWO SECONDS.** Summing five chunk
 footers by hand is exactly as reliable as it sounds: passed + skipped + failed must equal what
 `python -m pytest -q --collect-only` reports, and if it does not, a file was listed in two chunks or
-missed by all of them. The 2625 above reconciles (2625 + 8 + 2 = 2635 collected). The figure it
+missed by all of them. The 2629 above reconciles (2629 + 8 + 2 = 2639 collected). The figure it
 replaces did not: it was recorded as 2612 and no test file changed between that head and this one
 apart from the two tests added here, so the earlier chunking over-counted by one. Nothing was
 broken and nothing regressed; a hand-summed number was simply wrong, which is the argument for
@@ -113,7 +114,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2625 passed, 8 skipped, 2 failed** (2026-09-04), both documented below:
+Current measured state: **2629 passed, 8 skipped, 2 failed** (2026-09-07), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -1867,6 +1868,76 @@ Three things the page must keep doing:
 
 Pinned by nine source-level tests at the end of `tests/test_netdetect_routes.py`, because TypeScript
 will not tell anyone if the server gate is dropped.
+
+#### The page could read the queue and could not fill it, which is the same defect one step up
+
+Redesigned 2026-09-06 on the owner's brief: keep the statistical honesty and the real numbers, make
+the job obvious. Four findings, and the first is the one that mattered.
+
+**THE EMPTY STATE PRINTED AN ENDPOINT.** It said to run `POST /v1/admin/netdetect/<slug>`, because
+there was no way to start a detection from the page. So the ground-truth reservoir this page exists
+to fill (thirty judgements, eight of each class, before the calibration report will recommend
+anything) was gated behind curl exactly as it had been before the page was built. `run-panel.tsx`
+is an investigation picker and a button. **It is safe as a button because the run costs nothing**:
+no provider call, no model call, no credit, re-reading a payload that is already stored, which the
+route's own docstring says. `record: false` sits behind Options for tuning, since a stored row per
+button press turns the queue into a log.
+
+**FOUR PANELS IN A COLUMN WITH NO STATED ORDER.** An operator could tell what each showed and not
+what to do. The page is now three numbered stages (`components/shared/stage-rail.tsx`): run, review,
+track. **Not a wizard**: nothing is gated or disabled, the numbering describes the work rather than
+sequencing the interface, and every stage carries a sentence saying what it is for, because a
+numeral with no explanation is decoration pretending to be a filing system.
+
+**A FINDING RENDERED AS RAW PLATFORM IDS.** Handles were computed by the run route for its in-memory
+response and thrown away, so a queue naming real people showed `amp0, amp1, amp2`. They cannot be
+resolved at SERVE time: `list_findings` deliberately touches no payload, and joining one per row is
+the N+1 the archive list already paid for. So `NetdetectFinding.handles_json` stores them at
+detection time (registered in `_INCREMENTAL_COLUMNS`, guarded by a test that builds a pre-existing
+database and was **verified to fail** without the entry). **A member absent from the map means we
+hold no handle for that account, never that the account has none**, so the client falls back to the
+id and a blank is dropped rather than stored. Same three-state discipline as `attachment_checked`.
+
+**`lib/netdetect-read.ts` is the pure layer, and it is a module with tests because every rule in it
+is a claim about named real people.** `findingHeadline` states the SHAPE of the evidence and never
+reaches a verdict, pinned by a test asserting the words bot, operation, campaign, fake and
+inauthentic never appear; `runVerdict` classifies the four run outcomes, three of which present as
+an empty findings list, so "refused" and "one group dominates this section" can never render as
+"nothing found"; `reservoirProgress` tracks **the worst of the three ratios**, so twenty-nine
+dismissals and no confirmations cannot read as nearly done when that reservoir can only teach the
+detector to be quieter.
+
+**Two defects were found by looking at the served page rather than the source**, which is the only
+way this class shows up:
+
+- The headline collided with itself past three families: *"...and 2 more, more than chance in this
+  section explains"*. Now two sentences.
+- **The reservoir meter disappeared the moment the open queue emptied**, because it was rendered
+  inside the ranking note, which needs ranked open findings. That is exactly when an operator wants
+  to know how far calibration still has to go. The meter now renders whenever the calibration call
+  succeeded, and its track was `bg-bg-elev` on a `bg-bg-elev` card, so an empty reservoir painted
+  nothing at all.
+
+**AND THE DEAD-CLASS TRAP CAUGHT ME WRITING IT.** `bg-accent/10`, `border-accent/40` and
+`bg-tier-elevated/5` generate NO CSS here, which this file already records; I used all three in the
+new components and confirmed it against the built stylesheet rather than by eye. Replaced with a
+hairline in the semantic colour over `bg-bg-elev-2`, which is the instrument grammar anyway.
+`lib/palette-opacity.test.ts` guards the new files only, and says why: about 200 such uses already
+exist, fixing them is a palette change that would restyle every page and is the owner's call, so a
+repo-wide assertion would fail on day one and be deleted. **The rule is do not add more.**
+
+**The three coordination surfaces now say which is which.** `/netdetect`, `/narratives` and `/graph`
+answered one question in three vocabularies with no way between them. `CoordinationNav` puts the
+same rail on all three and `WhyTwoDetectors` states the distinction an operator actually gets wrong,
+once, shared: the campaign pass runs automatically but only sees accounts already scored 70+, so a
+disciplined operation is invisible to it **by construction**; the network detector never reads a
+score, which is what lets it see that operation, and is manual because it names people on
+statistical evidence alone.
+
+**Verified against a real running stack**, not by inspection: API and web booted, an admin signed
+up, an investigation seeded with a planted amplifier ring, the detector run through the button, one
+finding recorded with all 23 handles round-tripping to the queue, and the page rendered in Chromium
+at 1180px. That is how both prose defects and the invisible track were found.
 
 #### A finding names bystanders, at a measured rate, and nothing said so
 

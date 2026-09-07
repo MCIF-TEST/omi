@@ -181,6 +181,7 @@ def persist_finding(
     null_threshold: float | None,
     accumulate: bool = True,
     member_scores: list[float | None] | None = None,
+    handles: dict[str, str] | None = None,
     now: datetime | None = None,
 ) -> NetdetectFinding:
     """Store one finding, and fold its pairs into the global graph.
@@ -209,6 +210,15 @@ def persist_finding(
     row.platform = candidate.platform or platform
     row.members_json = sorted(candidate.members)
     row.member_count = len(candidate.members)
+    # Only the members' own handles, and only the ones we actually have. Storing the whole corpus
+    # map would put every scanned account's handle on every finding, and a blank handle is dropped
+    # rather than stored: the row means "the handle we know", and an empty string would render as
+    # an account with no name instead of falling back to the id.
+    if handles:
+        row.handles_json = {
+            m: str(handles[m]) for m in sorted(candidate.members)
+            if m in handles and str(handles[m] or "").strip()
+        }
     row.score = float(candidate.score)
     row.corrected_p = candidate.corrected_p
     row.by_family_json = {k: round(v, 6) for k, v in (candidate.by_family or {}).items()}

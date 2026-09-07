@@ -6,6 +6,13 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { hasHolderData } from '@/lib/evidence-matrix';
+import {
+  REASON_PRESETS,
+  findingHeadline,
+  memberLabels,
+  namedCount,
+  reservoirProgress,
+} from '@/lib/netdetect-read';
 import { EvidenceMatrix } from './evidence-matrix';
 import {
   judgeNetdetectFinding,
@@ -27,7 +34,13 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 type RankedFinding = NetdetectNextToJudge & { rank: number };
 
-type Ranking = { order: NetdetectNextToJudge[]; stillNeeded: string };
+type Ranking = {
+  order: NetdetectNextToJudge[];
+  stillNeeded: string;
+  /** Judged counts, so the reservoir renders as a distance rather than as a sentence. */
+  confirmed: number;
+  dismissed: number;
+};
 
 /** Open is work outstanding; confirmed is the rarer and more valuable label. */
 const STATUS_TONE: Record<NetdetectStatus, string> = {
@@ -63,7 +76,13 @@ export function FindingQueue() {
     let live = true;
     netdetectCalibration()
       .then((c) => {
-        if (live) setRanking({ order: c.next_to_judge, stillNeeded: c.still_needed });
+        if (live)
+          setRanking({
+            order: c.next_to_judge,
+            stillNeeded: c.still_needed,
+            confirmed: c.confirmed,
+            dismissed: c.dismissed,
+          });
       })
       .catch(() => {
         if (live) setRanking(null);
@@ -125,7 +144,17 @@ export function FindingQueue() {
         </Card>
       ) : null}
 
-      {filter === 'open' && ranking && ranks.size > 0 ? <JudgeFirstNote ranking={ranking} /> : null}
+      {/* THE METER IS NOT PART OF THE RANKING NOTE, and gating it on one was backwards. Both used
+          to render together only when there were ranked open findings, so the calibration progress
+          disappeared the moment the queue emptied, which is precisely when an operator wants to
+          know how much further there is to go. Found by judging a finding and watching the meter
+          vanish. The ranking explanation still needs ranked findings to explain. */}
+      {ranking ? (
+        <Card className="border-accent space-y-3">
+          {ranks.size > 0 && filter === 'open' ? <JudgeFirstNote ranking={ranking} /> : null}
+          <ReservoirMeter confirmed={ranking.confirmed} dismissed={ranking.dismissed} />
+        </Card>
+      ) : null}
 
       {rows === null ? (
         <div className="flex items-center gap-2 text-fg-mute text-sm">
@@ -134,10 +163,13 @@ export function FindingQueue() {
         </div>
       ) : rows.length === 0 ? (
         <Card>
+          {/* AN EMPTY STATE THAT NAMES AN ENDPOINT IS AN ADMISSION THAT THE PAGE CANNOT DO THE
+              JOB. This one used to print `POST /v1/admin/netdetect/<slug>`, so the only way to fill
+              the queue this page exists to serve was to leave the page. The action is upstairs
+              now, so this points at it. */}
           <p className="text-sm text-fg-mute">
-            Nothing here. Run the detector on an investigation from{' '}
-            <code className="font-mono text-2xs">POST /v1/admin/netdetect/&lt;slug&gt;</code> and its
-            findings arrive in this queue.
+            No findings yet. Run the detector on one of your scans in step 1 above and anything it
+            finds arrives here to be judged.
           </p>
         </Card>
       ) : (
@@ -152,7 +184,7 @@ export function FindingQueue() {
 /** The ranking, plus what the reservoir still needs, as one small statement above the queue. */
 function JudgeFirstNote({ ranking }: { ranking: Ranking }) {
   return (
-    <Card className="border-accent/25 space-y-1.5">
+    <div className="space-y-1.5">
       <p className="meta meta-hi">Judge these first</p>
       <p className="text-xs text-fg-dim">
         {/* THE ORDER IS INFORMATION, NOT SUSPICION, and an operator who reads it the other way works
@@ -166,14 +198,50 @@ function JudgeFirstNote({ ranking }: { ranking: Ranking }) {
         reported whatever the thresholds are set to teaches nothing, because nobody needed a label to
         know how it would come out. Every other finding here is equally worth judging on its merits.
       </p>
-      {ranking.stillNeeded ? (
-        <p className="font-mono text-2xs text-fg-mute">Still needed: {ranking.stillNeeded}</p>
-      ) : (
-        <p className="font-mono text-2xs text-fg-mute">
-          The reservoir is deep enough to fit against. The calibration report recommends from here.
-        </p>
-      )}
-    </Card>
+    </div>
+  );
+}
+
+/**
+ * How far the ground-truth reservoir is from being fittable, as a distance rather than a sentence.
+ *
+ * The calibration report refuses to recommend any threshold below thirty judgements with at least
+ * eight of each class, and nothing produces those automatically: they arrive one operator click at
+ * a time. "29 more judgements, 7 more confirmed" is accurate and impossible to pace against.
+ *
+ * THE BAR TRACKS THE WORST OF THE THREE RATIOS, not the total. Twenty-nine dismissals and no
+ * confirmations is a reservoir that can only teach the detector to be quieter, and a bar reading
+ * nearly full there would be actively misleading about how close the work is to being useful.
+ */
+function ReservoirMeter({ confirmed, dismissed }: { confirmed: number; dismissed: number }) {
+  const p = reservoirProgress({ confirmed, dismissed });
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="meta">Calibration reservoir</span>
+        <span className="font-mono text-2xs text-fg-mute tabular-nums">
+          {p.confirmed} confirmed · {p.dismissed} dismissed
+        </span>
+      </div>
+      {/* THE TRACK NEEDS TO BE VISIBLE AT ZERO. It was `bg-bg-elev`, which is the Card's own
+          ground, so an empty reservoir rendered as nothing at all: no bar, no sense of a distance
+          to travel, exactly the state the meter exists to make legible. `bg-bg-elev-3` is the next
+          step up the ramp and reads against the panel. */}
+      <div className="h-1.5 w-full rounded-sm bg-bg-elev-3 overflow-hidden">
+        <div
+          className={cn(
+            'h-full rounded-sm transition-[width] duration-300 ease-omi',
+            p.ready ? 'bg-tier-low' : 'bg-accent',
+          )}
+          style={{ width: `${Math.round(p.fraction * 100)}%` }}
+        />
+      </div>
+      <p className="text-2xs text-fg-mute">
+        {p.ready
+          ? 'Deep enough to fit against. The calibration report recommends from here.'
+          : `${p.shortfall} before any threshold can be recommended.`}
+      </p>
+    </div>
   );
 }
 
@@ -210,8 +278,9 @@ function FindingCard({
     }
   };
 
-  const weak = new Set(row.weakly_attached);
   const matrixed = hasHolderData(row.evidence);
+  const labels = memberLabels(row.members, row.handles, row.weakly_attached);
+  const named = namedCount(labels);
 
   return (
     <Card className="space-y-4">
@@ -235,19 +304,39 @@ function FindingCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 font-mono text-xs text-fg-mute break-all">
+          {/* WHAT THIS IS CLAIMING, before any statistic. The card led with four numbers and a
+              list of platform ids, which is accurate and answers none of the questions somebody
+              opening the page has. The headline describes the SHAPE of the evidence and never
+              reaches a verdict: these are named real people who can read this. */}
+          <p className="mt-1.5 text-sm text-fg">{findingHeadline(row)}</p>
+          <p className="mt-1 font-mono text-2xs text-fg-mute break-all">
             {row.context_id ? `post ${row.context_id}` : 'no post recorded'}
           </p>
         </div>
         <div className="flex gap-4 shrink-0">
-          <Readout label="Score" value={row.score.toFixed(2)} />
+          {/* EVERY NUMBER CARRIES ITS MEANING. The owner reads this page and the numbers stay, but
+              nothing here should require remembering what a corrected p-value is. */}
+          <Readout
+            label="Surprise"
+            value={row.score.toFixed(2)}
+            help="Weighted log10 improbability of this set sharing this much. 2 is about a hundred to one, 4 about ten thousand to one."
+          />
           <Readout
             label="Corrected p"
             /* Null means "not compared against the shuffled search", which is not the same as
                passing it, so it renders as a dash rather than as a number. */
             value={row.corrected_p === null ? '-' : row.corrected_p.toFixed(3)}
+            help={
+              row.corrected_p === null
+                ? 'Not compared against the shuffled search. That is not the same as having passed it.'
+                : 'How often a search this large finds a set this surprising in shuffled data, where nothing is coordinated by construction.'
+            }
           />
-          <Readout label="Corpus" value={String(row.corpus_size)} />
+          <Readout
+            label="Corpus"
+            value={String(row.corpus_size)}
+            help="Accounts the finding was drawn from. A group of eight among 300 is a different claim from eight among 30."
+          />
         </div>
       </div>
 
@@ -267,28 +356,42 @@ function FindingCard({
             members={row.members}
             evidence={row.evidence}
             weaklyAttached={row.weakly_attached}
+            handles={row.handles}
           />
         ) : (
           <>
             <p className="meta mb-1.5">Members</p>
             <div className="flex flex-wrap gap-1.5">
-              {row.members.map((m) => (
+              {labels.map((m) => (
                 <span
-                  key={m}
+                  key={m.id}
                   className={cn(
                     'font-mono text-2xs px-1.5 py-0.5 rounded-sm border',
-                    weak.has(m)
+                    m.weak
                       ? 'border-tier-elevated/40 text-tier-elevated'
                       : 'border-border-1 text-fg-dim',
                   )}
-                  title={weak.has(m) ? 'Does not carry this finding. Still a member; check it first.' : undefined}
+                  title={
+                    m.weak
+                      ? `${m.secondary ?? m.id} · does not carry this finding. Still a member; check it first.`
+                      : (m.secondary ?? undefined)
+                  }
                 >
-                  {m}
+                  {/* A HANDLE WHEN WE HAVE ONE, THE ID WHEN WE DO NOT. An absent handle means we
+                      have none for that account, never that the account has none, so the id is
+                      shown rather than a blank. */}
+                  {m.primary}
                 </span>
               ))}
             </div>
           </>
         )}
+        {named > 0 && named < labels.length ? (
+          <p className="mt-1.5 text-2xs text-fg-mute">
+            {named} of {labels.length} shown by handle. The rest are accounts we hold no handle for,
+            so their platform id is shown instead.
+          </p>
+        ) : null}
         <p className="mt-1.5 text-2xs text-fg-mute">
           {/* THREE STATES, and the middle one is easy to lose. An empty list means opposite things
               with and without `attachment_checked`, so the sentence never leaves it to inference. */}
@@ -365,6 +468,32 @@ function FindingCard({
           <label className="meta block" htmlFor={`reason-${row.id}`}>
             Why
           </label>
+          {/* PRESETS FILL THE BOX; THEY NEVER SUBMIT. Judging is the bottleneck (thirty judgements
+              is the whole cost of calibrating this detector, and they arrive one click at a time),
+              so a blank rectangle is a real tax. But a preset that judged in one click would let a
+              verdict be recorded about named people without reading the finding, and the reason is
+              the only thing a later calibration can be fitted against. Every one of these is a
+              shape the precision suite already treats as a control. */}
+          <div className="flex flex-wrap gap-1.5">
+            {REASON_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => setReason(preset.text)}
+                title={preset.text}
+                className={cn(
+                  'h-6 px-2 rounded-sm border font-mono text-2xs uppercase tracking-wider',
+                  'ease-omi transition-[color,border-color] duration-150 focus-hard',
+                  // No opacity modifiers: they generate nothing on a palette token here.
+                  preset.verdict === 'confirm'
+                    ? 'border-tier-high text-tier-high'
+                    : 'border-border-1 text-fg-mute hover:text-fg',
+                )}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
           <textarea
             id={`reason-${row.id}`}
             value={reason}
@@ -406,9 +535,9 @@ function FindingCard({
   );
 }
 
-function Readout({ label, value }: { label: string; value: string }) {
+function Readout({ label, value, help }: { label: string; value: string; help?: string }) {
   return (
-    <div className="readout-v">
+    <div className="readout-v" title={help}>
       <span className="meta">{label}</span>
       <span className="stat-value">{value}</span>
     </div>

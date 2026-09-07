@@ -628,6 +628,13 @@ def test_the_new_columns_reach_a_database_that_already_had_the_table():
         con = sqlite3.connect(path)
         columns = {r[1] for r in con.execute("PRAGMA table_info(netdetect_findings)")}
         assert {"weak_members_json", "attachment_note", "attachment_checked"} <= columns
+        # Same list, same failure mode. `handles_json` is what lets the queue render names
+        # instead of platform ids, and a missing column here fails every insert rather than
+        # merely losing the names.
+        assert "handles_json" in columns, (
+            "handles_json never reached a database that already had the table, so it is "
+            "missing from _INCREMENTAL_COLUMNS or misspelled there"
+        )
 
         checked = con.execute(
             "SELECT attachment_checked FROM netdetect_findings WHERE id = 1"
