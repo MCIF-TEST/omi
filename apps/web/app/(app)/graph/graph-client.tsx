@@ -6,6 +6,7 @@ import { apiClient, ApiError, type UserGraphOut, type UserGraphDetail, type User
 import { TierBadge } from '@/components/shared/tier-badge';
 import { CoordinationCanvas } from '@/components/viz/coordination-canvas';
 import { ConsoleHeader, SECTION_INDEX } from '@/components/shared/console-header';
+import { CoordinationNav } from '@/components/shared/coordination-nav';
 
 // ---------------------------------------------------------------------------
 // State types
@@ -159,6 +160,10 @@ export function GraphClient() {
           </button>
         }
       >
+        {/* The same rail as the two detector queues. This page is where an operator curates the
+            accounts a finding pointed them at, so getting back to the finding should not mean the
+            sidebar. */}
+        <CoordinationNav current="/graph" />
 
         {/* Inline create form */}
         {creating && (

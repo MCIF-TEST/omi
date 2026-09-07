@@ -68,6 +68,12 @@ def filter_cross_platform(edges: list, platform_of) -> list:
     ``platform_of`` maps an account id to its platform. Applied as a filter rather than inside each
     signal so the rule lives in exactly one place: seven signals each remembering it is seven
     chances to forget.
+
+    NOTHING CALLS THIS WRAPPER, and that is safe rather than a latent drift. The live path is
+    `detector/run.py::_drop_illegal_cross_platform`, which applies `may_link` over the same edges in
+    the same way. Both sides call the SAME predicate, so the rule really does live in one place and
+    the duplicate here is a spelling of it rather than a second copy of it. Were the rule itself
+    inlined into either caller, this repo's usual drift would apply; it is not.
     """
     kept = []
     for e in edges:

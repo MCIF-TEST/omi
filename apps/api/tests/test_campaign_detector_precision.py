@@ -27,6 +27,11 @@ from app.campaigns.detector.types import (
 T0 = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
+#: Shuffles for the one test here that also runs netdetect, kept low because this suite is fast
+#: and the contrast it draws does not depend on the precision of the null.
+SHUFFLES_FOR_NETDETECT = 24
+
+
 def build(
     specs: list[dict],
     *,
@@ -244,3 +249,309 @@ def test_a_batch_that_is_entirely_one_operation_is_still_caught():
     c = build(specs, thread_times=quiet + burst,
               client_counts={"MassTweet": 5}, scanned_total=5, thread_author_count=5)
     assert len(campaigns(c)) == 1
+
+
+def test_an_operation_sharing_a_cohort_with_ordinary_high_scorers_names_only_the_operation():
+    """THE MIXED CASE, which is the realistic one and was untested.
+
+    Every other test in this file is either all-innocent (the controls) or all-operation. The cohort
+    is whatever scored 70 or above, so in practice an operation shares it with ordinary accounts
+    that merely look suspicious one at a time: old, chatty, high-volume, unremarkable.
+
+    THIS IS THE QUESTION THAT FOUND THE BIGGEST DEFECT IN THE OTHER DETECTOR. `app/netdetect` takes
+    Louvain communities wholesale and has no per-account admission test, and its amplifier-ring
+    findings name 52.9% innocent accounts. This detector gates membership per account: one joins
+    only when its OWN posterior link to the group clears the bar. Measured with 0, 2, 4 and 8
+    ordinary high scorers added to a four-account operation, it names 4 of 4 operatives and 0
+    innocents every time.
+
+    So false naming is not intrinsic to detecting sets. It is what happens without an admission
+    gate, and this codebase already contains a working one.
+    """
+    script = "this project is the most undervalued opportunity in the space right now, do not sleep"
+    chatter = [
+        "honestly not sure what to make of this one but the chart looks interesting today",
+        "been following since the start and the team has delivered every single time so far",
+        "people keep saying it is over and yet here we are again another green candle",
+        "i sold too early last cycle and i am not making that mistake twice this time",
+        "the fundamentals have not changed at all regardless of what the price is doing",
+        "watching this closely, might add more if it dips under the previous support level",
+        "everyone in my timeline is talking about this today which is usually a bad sign",
+        "no financial advice obviously but this looks like accumulation to me right now",
+    ]
+    burst = [T0 + timedelta(seconds=s) for s in (0, 7, 15, 22)]
+
+    for innocents in (2, 4, 8):
+        specs = [
+            {"text": script, "at": burst[i], "handle": f"gains_daily_{i}",
+             "client": "AutoPoster Pro", "post_count": 8,
+             "created": T0 - timedelta(days=30, seconds=60 * i)}
+            for i in range(4)
+        ]
+        # Ordinary people who merely SCORE high: their own words, their own clients, arriving
+        # minutes apart rather than seconds, and years older than the operation's accounts.
+        for j in range(innocents):
+            specs.append({
+                "text": chatter[j % len(chatter)],
+                "at": T0 + timedelta(minutes=7 * (j + 1)),
+                "handle": f"realperson{j}",
+                "client": f"Client{j}",
+                "post_count": 40,
+                "created": T0 - timedelta(days=900 + 40 * j),
+            })
+
+        quiet = [T0 + timedelta(hours=k) for k in range(-10, 10)]
+        cohort = build(specs, thread_times=quiet + burst,
+                       client_counts={"AutoPoster Pro": 4}, scanned_total=60)
+        found = campaigns(cohort)
+
+        assert len(found) == 1, (
+            f"with {innocents} ordinary high scorers the detector reported {len(found)} campaigns; "
+            f"the operation is still one group and the innocents are not a second"
+        )
+        named = sorted(found[0].members)
+        assert named == ["u0", "u1", "u2", "u3"], (
+            f"with {innocents} ordinary high scorers the campaign named {named}. Anything beyond "
+            f"u0-u3 is an innocent account reported as part of an operation."
+        )
+
+
+def test_the_seventy_cut_is_blind_to_a_disciplined_operation_and_the_cost_is_a_cliff():
+    """MEASURES A CLAIM CLAUDE.md MAKES AND NOTHING CHECKED: that the 70+ cohort filter is "blind by
+    construction" to the operation most worth catching.
+
+    It matters because of WHICH detector is wired where. The cohort detector runs automatically on
+    every scan. `app/netdetect` never reads a score at all, and is admin-only and manual.
+
+    Same accounts, same behaviour, varying only the OMI score they were given:
+
+        op score 95 / 85 / 75  ->  cohort holds all 8, the automatic detector can see them
+        op score 65 / 45 / 30  ->  cohort holds ZERO accounts
+
+    So the claim is right and the cost is a cliff rather than a slope: one point under the cut and
+    the operation disappears from the automatic path entirely. The cohort comes back EMPTY rather
+    than merely incomplete, because ordinary accounts do not clear 70 either, so both passes produce
+    nothing and nothing records that anything was skipped.
+
+    THIS IS NOT AN ARGUMENT FOR RUNNING NETDETECT AUTOMATICALLY, and the two open decisions are why.
+    netdetect costs nothing to run (no provider call, no model call, no credit) so the obvious move
+    is to wire it into the scan path. It also names 52.9% innocent accounts on the amplifier ring,
+    and running it automatically would mean naming those people automatically, without an operator
+    ever choosing to look. The membership trim gates the wiring: fix who gets named first.
+    """
+    from app.campaigns.detector.cohort import SCORE_THRESHOLD, from_scan_rows
+
+    import tests.netdetect_corpora as NC
+    from app.netdetect import detect_from_commenters
+
+    ring = NC.amplifier_ring(8, seed=63)
+    op_ids = {r["external_id"] for r in ring}
+    rows = NC.organic_population(60, seed=31) + ring
+
+    def cohort_for(op_score: float):
+        scan_rows = [
+            {
+                "external_id": r["external_id"],
+                "handle": r.get("handle") or r["external_id"],
+                "overall_probability": (op_score if r["external_id"] in op_ids else 22) / 100.0,
+            }
+            for r in rows
+        ]
+        return from_scan_rows(scan_rows, [], platform="x")
+
+    above = cohort_for(SCORE_THRESHOLD + 5)
+    assert sum(1 for a in above.accounts if a.external_id in op_ids) == len(op_ids), (
+        "premise: above the cut the whole operation must reach the cohort"
+    )
+
+    below = cohort_for(SCORE_THRESHOLD - 5)
+    assert not [a for a in below.accounts if a.external_id in op_ids], (
+        "the operation reached the cohort while scoring under the threshold, so the filter is not "
+        "what this test believes it is"
+    )
+    assert not below.accounts, (
+        "the cohort came back non-empty, so the 'nothing at all is produced' half of this is no "
+        "longer true and the note above needs revisiting"
+    )
+
+    # And the score-blind detector is unaffected, which is the whole reason it exists.
+    result = detect_from_commenters(rows, shuffles=SHUFFLES_FOR_NETDETECT)
+    assert any(len(set(f.members) & op_ids) >= 4 for f in result.findings), (
+        "netdetect failed to find the operation, so this corpus no longer demonstrates the contrast"
+    )
+
+
+def test_two_operations_in_one_cohort_are_two_campaigns_and_never_one():
+    """THE DETECTOR THAT RUNS ON EVERY SCAN, asked the question the fixtures never asked.
+
+    Every scenario in this file carries at most ONE operation, so nothing had checked what happens
+    when two unrelated ones land in the same 70+ cohort. That is ordinary on a contested topic, and
+    the merge risk here is concrete rather than theoretical: `CampaignService.merge_clusters` unions
+    any two clusters sharing a single account, which is exactly why findings are required to come
+    out member-disjoint and why `record_clusters` is called once per finding.
+
+    A merge would publish one campaign naming all eight accounts, on evidence that only ever said
+    each four were running together separately. Unlike the netdetect equivalent this reaches a
+    customer surface by default, because this pass fires automatically when the scan is saved.
+
+    Measured, it separates every time, including when the two operations genuinely share features:
+
+        shared: nothing                    2 campaigns, 4+4, 0 mixed
+        shared: publishing client          2 campaigns, 4+4, 0 mixed
+        shared: amplification targets      2 campaigns, 4+4, 0 mixed
+        shared: client AND targets         2 campaigns, 4+4, 0 mixed
+
+    The two scripts, handle factories, provisioning windows and arrival bursts differ, which is what
+    an unrelated second operation looks like. Sharing a commodity tool is the case an operator could
+    most cheaply engineer.
+    """
+    script_a = "this project is the most undervalued opportunity in the space right now, do not sleep"
+    script_b = "the clinic closure leaves this whole district without any urgent care whatsoever today"
+    burst_a = [T0 + timedelta(seconds=s) for s in (0, 7, 15, 22)]
+    burst_b = [T0 + timedelta(hours=5, seconds=s) for s in (0, 6, 13, 20)]
+    first = {f"u{i}" for i in range(4)}
+    second = {f"u{i}" for i in range(4, 8)}
+
+    for label, shared_client, shared_targets in (
+        ("nothing", False, False),
+        ("the publishing client", True, False),
+        ("the amplification targets", False, True),
+        ("the client and the targets", True, True),
+    ):
+        specs = [
+            {"text": script_a, "at": burst_a[i], "handle": f"gains_daily_{i}",
+             "client": "AutoPoster Pro", "post_count": 8,
+             "created": T0 - timedelta(days=30, seconds=60 * i),
+             "targets": ["campaign_post_0", "campaign_post_1"]}
+            for i in range(4)
+        ] + [
+            {"text": script_b, "at": burst_b[i], "handle": f"care_voice_{i}",
+             "client": "AutoPoster Pro" if shared_client else "BulkPoster Studio",
+             "post_count": 8,
+             "created": T0 - timedelta(days=300, seconds=60 * i),
+             "targets": (["campaign_post_0", "campaign_post_1"] if shared_targets
+                         else ["health_thread_0", "health_thread_1"])}
+            for i in range(4)
+        ]
+        counts = ({"AutoPoster Pro": 8} if shared_client
+                  else {"AutoPoster Pro": 4, "BulkPoster Studio": 4})
+        quiet = [T0 + timedelta(hours=k) for k in range(-10, 12)]
+        cohort = build(specs, thread_times=quiet + burst_a + burst_b,
+                       client_counts=counts, scanned_total=60)
+
+        found = campaigns(cohort)
+        assert len(found) == 2, (
+            f"sharing {label}: expected two campaigns, got {len(found)} "
+            f"with sizes {sorted(len(f.members) for f in found)}"
+        )
+        for finding in found:
+            members = set(finding.members)
+            assert not (members & first and members & second), (
+                f"sharing {label}: one campaign mixes both operations, naming "
+                f"{len(members)} accounts as a single group"
+            )
+            assert len(members) == 4, (
+                f"sharing {label}: a campaign carries {len(members)} members rather than its "
+                f"operation's four"
+            )
+
+
+def test_both_detectors_on_one_corpus_and_only_one_of_them_names_bystanders():
+    """THE APPLES-TO-APPLES COMPARISON. CLAUDE.md has been putting two numbers side by side that
+    came from DIFFERENT FIXTURES: the cohort detector's "4 of 4 operatives, 0 innocents" (measured
+    on the hand-built specs above) against netdetect's 52.9% (measured on the amplifier ring in
+    ``netdetect_corpora``). Two detectors measured on two populations is not a comparison, and the
+    conclusion it was being used to support is an open decision about what gets published about
+    named real people.
+
+    So: ONE corpus, BOTH detectors, and every account pushed over the 70 cut so the cohort filter
+    is not quietly doing the work. Measured:
+
+        ring 160/62   netdetect  names 49, 8 genuine, 41 innocent  (83.7%)
+                      cohort     names  8, 8 genuine,  0 innocent  ( 0.0%)
+        ring 130/62   netdetect  names 38, 8 genuine, 30 innocent  (78.9%)
+                      cohort     names  8, 8 genuine,  0 innocent  ( 0.0%)
+        ring  60/61   netdetect  names 23, 8 genuine, 15 innocent  (65.2%)
+                      cohort     names  8, 8 genuine,  0 innocent  ( 0.0%)
+
+    THE DIFFERENCE IS AN ADMISSION GATE, NOT THE KIND OF STATISTIC. The cohort detector admits
+    members one at a time: an account joins only when its OWN posterior link to the group clears
+    0.95. netdetect takes Louvain communities wholesale and has no per-account admission test at
+    all. Both are looking at the same eight ring accounts among the same background here, so false
+    naming is not intrinsic to the set-level thesis and it is not the price of catching the ring.
+
+    THIS STRENGTHENS THE CASE FOR THE MEMBERSHIP TRIM AND DOES NOT TAKE THE DECISION. The corpus is
+    still synthetic, and a trim changes what is published about named people. What it removes is
+    the excuse that the two detectors were never compared fairly.
+    """
+    from app.campaigns.detector.cohort import SCORE_THRESHOLD, from_scan_rows
+
+    import tests.netdetect_corpora as NC
+    from app.netdetect import detect_from_commenters
+
+    for background, ring_seed in ((60, 61), (130, 62)):
+        ring = NC.amplifier_ring(8, seed=ring_seed)
+        ring_ids = {r["external_id"] for r in ring}
+        rows = NC.organic_population(background, seed=31) + ring
+
+        # --- netdetect, score-blind, on these rows ------------------------------------------
+        net = detect_from_commenters(rows, shuffles=SHUFFLES_FOR_NETDETECT)
+        ring_findings = [f for f in net.findings if len(set(f.members) & ring_ids) >= 4]
+        assert ring_findings, (
+            f"netdetect no longer finds the ring at background {background}, so this corpus has "
+            "stopped demonstrating anything and the numbers above are stale"
+        )
+        named = set()
+        for f in ring_findings:
+            named |= set(f.members)
+        net_innocent = named - ring_ids
+        assert net_innocent, (
+            "netdetect named no bystanders here, which would be the defect fixed. Re-measure the "
+            "table above and move this test to assert the improvement rather than the contrast"
+        )
+
+        # --- the cohort detector, same rows, nothing hidden by the 70 cut -------------------
+        scan_rows = [
+            {
+                "external_id": r["external_id"],
+                "handle": r.get("handle") or r["external_id"],
+                "overall_probability": (SCORE_THRESHOLD + 15) / 100.0,
+                "bio": r.get("bio"),
+                "account_created_at": r.get("account_created_at"),
+                "thread_comments": r.get("thread_comments"),
+                "recent_activity": r.get("recent_activity"),
+            }
+            for r in rows
+        ]
+        thread = [
+            {"author_id": r["external_id"], "created_at": c["created_at"]}
+            for r in rows
+            for c in (r.get("thread_comments") or [])
+            if isinstance(c, dict) and c.get("created_at")
+        ]
+        coh = from_scan_rows(scan_rows, thread, platform="x")
+        assert len(coh.accounts) == len(rows), (
+            "premise: every account must be over the cut, or the cohort detector's precision is "
+            "partly the filter's and the comparison is unfair again"
+        )
+
+        cres = run.detect(coh)
+        corroborated = [f for f in cres.findings if f.label == fuse.LABEL_CORROBORATED]
+        coh_named: set[str] = set()
+        for f in corroborated:
+            coh_named |= set(f.members)
+        coh_innocent = coh_named - ring_ids
+
+        assert not coh_innocent, (
+            f"the cohort detector named {len(coh_innocent)} bystanders at background "
+            f"{background}: {sorted(coh_innocent)[:5]}. Its measured precision on this corpus was "
+            "perfect, so this is a regression in the admission gate"
+        )
+        assert len(coh_named & ring_ids) >= 4, (
+            "the cohort detector lost the ring, so it is no longer trading precision for anything "
+            "and the contrast above is not the one being drawn"
+        )
+        assert len(net_innocent) > len(coh_innocent), (
+            "the two detectors now name bystanders at the same rate on one corpus, which is the "
+            "whole finding this test exists to pin"
+        )

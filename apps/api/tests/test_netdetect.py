@@ -27,7 +27,11 @@ from app.netdetect.features import (  # noqa: E402
     profile_from_commenter,
     timing_features,
 )
-from app.netdetect.shuffle import shuffle_corpus  # noqa: E402
+from app.netdetect.shuffle import (  # noqa: E402
+    DEFAULT_QUANTILE,
+    DEFAULT_SHUFFLES,
+    shuffle_corpus,
+)
 from app.netdetect.significance import _poisson_binomial_tail, internal_reply_ratio  # noqa: E402
 
 #: Enough shuffles to express p<=0.05 (the floor is 1/(K+1)), small enough to keep the suite quick.
@@ -143,6 +147,50 @@ def test_too_few_shuffles_refuses_instead_of_silently_finding_nothing():
     assert result.refused is not None
     assert not result.looked
     assert "1/(K+1)" in result.refused or "cannot express" in result.refused
+
+
+def test_the_shipped_defaults_can_actually_report_something():
+    """`DEFAULT_SHUFFLES` AND `DEFAULT_QUANTILE` ARE COUPLED AND NOTHING RECONCILED THEM.
+
+    The test above proves the detector REFUSES a configuration that cannot express the p-value it
+    was asked for. It passes an explicit K=8, so it says nothing about the pair of constants the
+    product actually ships, and those two are exactly the kind of pair this repo has been bitten by
+    before (the Clerk keys, the preset name, the trial-credit env vars): two values in two places
+    that must agree, with no runtime check that they do.
+
+    The arithmetic: at quantile q the smallest expressible p-value is 1/(K+1), so K must be at least
+    round(1/(1-q)) - 1. Shipped, that is 19 against a `DEFAULT_SHUFFLES` of 24, a margin of five.
+
+    THE FAILURE IS NOT HYPOTHETICAL AND IT IS NOT A SMALL EDIT AWAY. Tightening the quantile is the
+    most natural "let us be stricter" change anyone could make to this package, and it silently
+    couples:
+
+        quantile 0.90  needs K >= 9     24 is fine
+        quantile 0.95  needs K >= 19    24 is fine, and is what ships
+        quantile 0.98  needs K >= 49    EVERY DEFAULT RUN REFUSED
+        quantile 0.99  needs K >= 99    EVERY DEFAULT RUN REFUSED
+
+    Nothing crashes. Every scan reports "Nothing was tested", which is honest but is also the
+    product detecting nothing at all, and whoever raised the quantile has no reason to connect the
+    two. Better than the original K=8 bug, which said nothing whatsoever, and still a bad day.
+    """
+    alpha = 1.0 - DEFAULT_QUANTILE
+    needed = int(round(1.0 / alpha)) - 1 if alpha > 0 else 0
+    assert DEFAULT_SHUFFLES >= needed, (
+        f"the shipped defaults cannot express the p-value they ask for: quantile "
+        f"{DEFAULT_QUANTILE} needs at least {needed} shuffles and DEFAULT_SHUFFLES is "
+        f"{DEFAULT_SHUFFLES}, so every run using the defaults would be refused and the product "
+        f"would detect nothing. Raise DEFAULT_SHUFFLES or lower DEFAULT_QUANTILE."
+    )
+
+    # And prove it end to end rather than only in arithmetic: the default path must not refuse.
+    result = detect_from_commenters(
+        C.organic_population(60, seed=31) + C.planted_operation(8, seed=5),
+    )
+    assert result.refused is None, (
+        f"a run on the shipped defaults was refused: {result.refused}"
+    )
+    assert result.looked, "the shipped defaults did not get as far as looking"
 
 
 # =============================================================================================== #
@@ -1098,3 +1146,153 @@ def test_bridging_the_two_sub_groups_gives_the_candidate_a_real_shared_core():
         assert c.needs_adjudication, (
             "a group whose only hard evidence is three accounts' signup week was published"
         )
+
+
+# ==================================================================================================
+# The amplifier ring publishes with more bystanders than members, and nobody had measured it
+# ==================================================================================================
+#: Kept small on purpose: the full grid this was measured on is nine configurations and minutes of
+#: detection. These three carry the finding, and the number below is a CEILING on a known defect
+#: rather than a target.
+RING_CONTAMINATION_GRID = [(40, 63), (60, 61), (80, 63)]
+
+#: MEASURED, NOT CHOSEN. Across the full nine-configuration grid (backgrounds 40/60/80 x ring seeds
+#: 61/62/63) the published ring findings named 81 organic accounts among 153, i.e. 52.9%, and
+#: `attachment.assess` flagged only 18 of those 81. This bound sits just above the worst of the
+#: three configurations kept here so the defect cannot silently get worse; it is emphatically not a
+#: statement that this rate is acceptable.
+RING_CONTAMINATION_CEILING = 0.75
+
+
+def test_a_finding_that_is_mostly_bystanders_goes_to_a_reader():
+    """The one change taken here, and it is the conservative one of the three available.
+
+    The amplifier ring names 52.9% innocent accounts and used to be PUBLISHED, so nothing asked a
+    human before those names appeared as members of a coordinated ring. Two ways to reduce the
+    naming itself were measured (trimming the flagged members, and the `RARITY_CEILING` value) and
+    both are left to a deliberate decision, because both change who is NAMED on synthetic evidence.
+
+    This changes nobody's membership and no score. It routes a finding whose own membership test
+    says most of its members are not carrying it to the same place the hard-evidence check already
+    routes a newsroom: a reader. Adding review is the one move here that cannot make a false
+    accusation worse.
+
+    THE SEPARATION IS WHAT MAKES IT SAFE, and it is measured: all three ring configurations are
+    sent to review, and every clean planted operation stays publishable, including the one that
+    legitimately carries three bystanders out of eleven (a minority, so the finding is an operation
+    with weak members rather than a group drawn too wide).
+    """
+    reviewed = published = 0
+    for organic, seed in RING_CONTAMINATION_GRID:
+        rows = C.organic_population(organic, seed=31) + C.amplifier_ring(8, seed=seed)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        for finding in [c for c in result.findings if _members_from(c, "amp") >= 4]:
+            innocent = sum(1 for m in finding.members if m.startswith("org"))
+            if innocent * 2 <= len(finding.members):
+                continue
+            reviewed += 1
+            assert finding.needs_adjudication, (
+                f"a finding naming {innocent} innocent accounts of {len(finding.members)} is still "
+                f"published with nothing asking a human first"
+            )
+            assert "do not carry this finding" in finding.needs_adjudication
+
+    assert reviewed, "no majority-bystander finding was produced; this test asserted nothing"
+
+    # The other half. A clean operation must not be dragged into review by this.
+    for organic, seed in ((50, 23), (60, 23)):
+        rows = C.organic_population(
+            organic, seed=seed, subject_noise=False, arrivals=False,
+        ) + C.planted_operation(8, discipline=0.0, seed=99, subject_noise=False, arrivals=False)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        for finding in [c for c in result.findings if _members_from(c, "op") >= 6]:
+            published += 1
+            assert finding.needs_adjudication is None, (
+                "a clean operation was sent to review by the membership rule, which would make "
+                "every finding need a human and so make review meaningless"
+            )
+    assert published, "no clean operation was examined; the safety half asserted nothing"
+
+
+def test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_a_defect():
+    """A CHARACTERISATION OF SOMETHING WRONG, pinned so it cannot worsen unnoticed.
+
+    `test_a_finding_is_mostly_the_operation_and_the_rate_is_pinned` measures purity on the PLANTED
+    OPERATION and pins it at 10%. Nobody ever measured it on the amplifier ring, which is a
+    different shape: the ring shares a publishing tool and a set of amplification targets, and
+    organic accounts in the background genuinely repost some of the same posts. So Louvain attaches
+    them and the significance test does not remove them.
+
+    Measured across the full grid: 81 organic accounts among 153 named, 52.9%. When this test was
+    written those findings were PUBLISHED rather than flagged, with `needs_adjudication` None, so
+    nothing asked a human before these names were shown as members of a coordinated ring. That was
+    the most serious category this package has.
+
+    THEY NOW GO TO A READER. `detect` sets `needs_adjudication` when the membership test says most
+    of the named accounts are not carrying the finding, which is exactly these three and none of the
+    clean fixtures. The rate this test pins is UNCHANGED by that: the same accounts are still named,
+    and what changed is that a human is asked first. Pinned by
+    `test_a_finding_that_is_mostly_bystanders_goes_to_a_reader`.
+
+    THE MEMBERSHIP TEST NOW NAMES THEM ALL, AND THE RATE ABOVE IS STILL 52.9%. When this test was
+    written `attachment.assess` flagged only 18 of the 81, missing every bystander on four of the
+    nine configurations, because its abstention keyed on the MEDIAN contribution and a finding more
+    than half bystanders has a median inside the bystander cluster. The bimodality rule that
+    replaced it flags 81 of 81 with 0 genuine members caught.
+
+    That fixed the guard and does not fix this, which is the distinction worth keeping straight:
+    `attachment` REPORTS and never drops, by design, so a flagged bystander is still a member and
+    still published. The rate this test pins is unchanged by the repair, and only a change to what
+    gets INTO a finding can move it.
+
+    WHY THIS IS NOT FIXED HERE. The obvious lever is `RARITY_CEILING`, and raising it to 0.60 was
+    measured to cut this from 15 bystanders to 1 on the worst configuration WHILE also restoring the
+    domination blind spot's recall, with no control publishing anything it did not already publish.
+    That is a change to the core constant of this package on synthetic corpora, so it is written up
+    with its evidence and left to a deliberate decision rather than taken as a side effect of a
+    measurement. See CLAUDE.md.
+    """
+    named = innocent = widest = 0
+    for organic, seed in RING_CONTAMINATION_GRID:
+        rows = C.organic_population(organic, seed=31) + C.amplifier_ring(8, seed=seed)
+        result = detect_from_commenters(rows, shuffles=SHUFFLES)
+        hits = [c for c in result.findings if _members_from(c, "amp") >= 4]
+        assert hits, f"the ring was not found at organic={organic} seed={seed}"
+        for c in hits:
+            named += len(c.members)
+            widest = max(widest, len(c.members))
+            innocent += sum(1 for m in c.members if m.startswith("org"))
+
+    assert named, "no ring finding was produced anywhere on the grid"
+
+    # THE MEMBERSHIP GUARD ABSTAINS ABOVE `attachment.MAX_MEMBERS`, AND CONTAMINATION IS WHAT GROWS
+    # A FINDING. So a finding large enough to reach that cap would have its membership test switched
+    # off precisely because it is the most contaminated, which is the same shape as the median bug
+    # `test_a_finding_more_than_half_bystanders_still_gets_a_verdict` exists for, arriving by a
+    # different route.
+    #
+    # Measured over the full grid the ring reaches 25 members against a cap of 40, so the headroom is
+    # 15 and not the 28 that the old planted-operation figure ("max 12") implied. This pins that
+    # headroom: if a corpus starts producing findings that reach the cap, the answer is the
+    # leave-one-out cost work, never a quiet raise.
+    from app.netdetect.attachment import MAX_MEMBERS
+
+    assert widest <= MAX_MEMBERS, (
+        f"a ring finding reached {widest} members against MAX_MEMBERS={MAX_MEMBERS}; at the cap "
+        f"attachment.assess abstains and the membership guard is silently off on the most "
+        f"contaminated findings there are"
+    )
+
+    rate = innocent / named
+    assert rate <= RING_CONTAMINATION_CEILING, (
+        f"{innocent} innocent accounts among {named} named ({rate:.1%}) in PUBLISHED ring findings, "
+        f"worse than the pinned {RING_CONTAMINATION_CEILING:.0%}. This bound characterises a known "
+        f"defect; going above it means it has degraded further."
+    )
+    # The defect is real: if this ever fails because the rate has FALLEN to the planted-operation
+    # level, that is a fix worth noticing and the ceiling above should be tightened to lock it in.
+    assert rate > MAX_CONTAMINATION_RATE, (
+        f"ring contamination is now {rate:.1%}, at or below the {MAX_CONTAMINATION_RATE:.0%} pinned "
+        f"for the planted operation. Something improved: tighten RING_CONTAMINATION_CEILING and "
+        f"update the note in CLAUDE.md rather than leaving a bound nothing constrains."
+    )

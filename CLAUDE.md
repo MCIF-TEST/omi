@@ -29,11 +29,40 @@ accumulating `CoordinationEdge` graph, written since the tracking layer shipped 
 back). Read "Formations" and "Corroboration" below. Two rules there were decided by measurement and
 will be re-broken by anyone who reasons about them instead: the OMI score may characterise a
 formation but never detect one, and **total accumulated history does not separate an operation from
-a newsroom**, so only its hard-family half discriminates.
+a newsroom**, so only its hard-family half discriminates. A sixth session made the netdetect finding
+READABLE (the members-by-features evidence matrix) and then found the blind spot it had been hiding:
+an operation owning more than about a quarter of a comment section pushes its own hard evidence past
+`RARITY_CEILING`, so the run reports nothing and reads exactly like a clean scan. Read "The section
+an operation is big enough to hide in" before touching that ceiling, and note the rule that came out
+of it: **the catalogue resolves what the section cannot**, measured rather than argued, and it is a
+fallback rather than a fix. The same session then went looking for claims this file makes that
+nobody had actually measured, and three were wrong. The membership test's abstention keyed on a
+level rather than a boundary, so it switched itself off exactly as contamination worsened; the
+amplifier ring publishes more bystanders than members and no measurement had ever been run against
+that population; and the corroboration lead path, written off in three places as "built and
+unproven", fires on every corpus tried. **Prefer a measurement to a plausible sentence anywhere in
+`app/netdetect/`**, and note that all three of these had passed review and shipped.
 
-Suite measured at **2550
-passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both failures pre-existing and listed below. The 8
-skips are the corpus-backed tests — see "The dataset corpus is not in git".
+Suite measured at **2629
+passed, 8 skipped, 2 failed** (2026-09-07, head `692c227` + the coordination redesign), both
+failures pre-existing and
+listed below. The 8 skips are the corpus-backed tests — see "The dataset corpus is not in git".
+
+That figure was measured in **five sequential chunks rather than one process**, because this sandbox
+reclaimed the container twice while a single 30-minute run was in flight and the run is lost with it.
+Chunking is not free: collection order is what item 2 below turns on, so a chunked total can differ
+from a single-process one, and a single `python -m pytest -q` remains the reference method when the
+container survives long enough to finish it. Both pre-existing failures reproduced in the chunked
+run, so the two methods agree on this tree.
+
+**RECONCILE A CHUNKED TOTAL AGAINST `--collect-only`, WHICH COSTS TWO SECONDS.** Summing five chunk
+footers by hand is exactly as reliable as it sounds: passed + skipped + failed must equal what
+`python -m pytest -q --collect-only` reports, and if it does not, a file was listed in two chunks or
+missed by all of them. The 2629 above reconciles (2629 + 8 + 2 = 2639 collected). The figure it
+replaces did not: it was recorded as 2612 and no test file changed between that head and this one
+apart from the two tests added here, so the earlier chunking over-counted by one. Nothing was
+broken and nothing regressed; a hand-summed number was simply wrong, which is the argument for
+spending the two seconds.
 
 > Several sessions work this repo in parallel (Claude Code sessions and Grok). Before starting, check
 > whether `main` has moved: this branch's PR has merged once already, and a branch that is `0 ahead /
@@ -85,7 +114,7 @@ well-formed dummy above rather than something like `pk_test_x`.
 
 ## Known-failing tests (pre-existing, not yours)
 
-Current measured state: **2550 passed, 8 skipped, 2 failed** (14m47s, 2026-08-29), both documented below:
+Current measured state: **2629 passed, 8 skipped, 2 failed** (2026-09-07), both documented below:
 
 1. `tests/test_investigation_prompt_builder.py::test_user_presents_the_investigation_context_evidence`
    — asserts the template's `evidence_instruction` appears in `pp.user`, but the comprehensive stage
@@ -98,6 +127,17 @@ Current measured state: **2550 passed, 8 skipped, 2 failed** (14m47s, 2026-08-29
    fixed, and do not read its absence as a licence to tighten the gate.
 
 **A second failure is yours.** If you see mass failures instead, see the next section first.
+
+**Do not EDIT a source file while a suite is running: the source-level guards will fail spuriously.**
+This repo has many tests that read source with `inspect.getsource` or by opening a file
+(`test_signals_are_admin_only`, the netdetect route guards, `lib/analyst-identity.test.ts`, the
+mention exclusion guard in `test_netdetect.py`, and others). `inspect.getsource` resolves the
+function's line numbers as they were AT IMPORT and then slices the file AS IT IS ON DISK, so
+inserting lines above a guarded function mid-run makes the guard read shifted text and assert
+against the wrong lines. Observed 2026-09-02: a comment block added above `RARITY_CEILING` while a
+run was in flight failed `test_a_mention_of_another_member_is_not_convergence_on_an_outside_target`,
+which passed immediately on a re-run with the file stable, and nothing about the failure pointed at
+the real cause. Start the run after the edits, or expect to re-run.
 
 **Count depends on collection order.** A run during the launch-readiness work reported *13* failures;
 11 of those were order-dependent analyst tests that adding new test files shifted into a different
@@ -1717,6 +1757,85 @@ another, and every test would pass.
 Pinned by six tests in `tests/test_netdetect_calibration.py` and three source-level guards at the
 end of `tests/test_netdetect_routes.py`.
 
+#### The finding is an incidence structure, so draw it as one
+
+`lib/evidence-matrix.ts` + `app/(app)/netdetect/evidence-matrix.tsx`. A finding is a claim about
+WHICH named accounts share WHICH rare behaviours, and the card had been rendering two disconnected
+projections of that: a row of member chips, and a list of evidence sentences carrying only a count.
+Nothing joined them, so the question a reviewer actually has about a group of named real people,
+**are these the same people throughout or two sub-groups joined at a seam**, could only be taken on
+faith.
+
+The matrix is members down the side, the finding's own evidence features across the top, grouped
+into family bands with the hard families first. Rendered against the three corpora that must look
+different, it separates them at a glance:
+
+| corpus | what the grid shows |
+|---|---|
+| planted operation in organic | a solid blue block, and the one swept-in bystander an entirely EMPTY row |
+| professional beat (a newsroom) | a solid block with **no blue at all**: much shared behaviour, none of it the operator's own acts |
+| two sub-groups bridged | the seam: the identity column is held by one sub-group and the text band by the other |
+
+**WHY THIS IS ALLOWED WHERE A PER-MEMBER NUMBER WAS NOT.** `attachment.py` measured the obvious
+score (how much shared evidence a member participates in) and refused to publish it, because it
+ranks some bystanders ABOVE genuine operation members. A matrix shows COMPOSITION rather than
+magnitude: it says which KIND of evidence each member holds, and the kind is what discriminates.
+Same distinction corroboration draws between `log_lr` (does not separate an operation from a
+newsroom) and `hard_pairs` (does). So columns are ordered hard-families-first, and **no row ever
+carries a count or a rank**, which `test_no_number_is_rendered_beside_a_member_name` now checks over
+the matrix rows as well as the chip fallback.
+
+Four more rules:
+
+- **An ABSENT hard family is stated, never merely undrawn.** A band contributing nothing draws
+  nothing, and a reader cannot notice a column that was never rendered. The newsroom control is a
+  solid, alarming-looking block whose whole answer is "zero identity, zero network", so
+  `hardPresence` lists every hard family including the empty ones and the strip prints
+  `IDENTITY NONE · NETWORK NONE`. Same reasoning as `phase_of` treating dormancy as an event.
+- **Three states.** `recorded: false` (no evidence row carried its holders) is not an empty grid.
+  An empty grid would say these accounts share nothing, which cannot be true of a finding that
+  exists. Findings stored before the field serve `members: null` and the component says so.
+- **ONE member list.** The matrix's row labels ARE the member list; the chip row is only the
+  fallback when the join was not recorded. Two lists of the same names is what the first draft had.
+- **A grid cannot be screenshotted into a sentence**, so the strongest few evidence sentences stay
+  written out beneath it. "If you cannot quote it, you cannot claim it" applies to a coordination
+  claim as much as to the analyst's prose.
+
+Not a force-directed account graph, deliberately: this package's thesis is that a set-level
+statistic is not recoverable by fusing pairwise ones, so a node-link diagram would draw edges the
+score was never computed from, confidently. `persist.py` records the holders per evidence row (free:
+the corpus is already in hand) and `EvidenceOut.members` serves them. Pinned by
+`lib/evidence-matrix.test.ts` (20, including two guards that read `app/netdetect/types.py` so the
+family list and the hard-family set cannot drift across the two languages) and four tests in
+`tests/test_netdetect_persistence.py`.
+
+#### Two CSS mistakes found by measuring, one of them shipped
+
+Both were invisible to TypeScript, to the linter, to the build and to every test, and neither would
+have been found by reading the code.
+
+- **`.rule-rack` is `height: 1px`.** It is a hairline RULE, and using it as a container collapses
+  the box: measured at 1px tall with its content overflowing and **overlapping the element below**.
+  Two shipped components were doing it, so the "Seen before" corroboration block on the finding
+  queue and the placement list on the formation sweep have been printing over their neighbours.
+  Fixed to the `border-l-2 ... pl-2.5` they already carried, and guarded by a test that allows
+  `rule-rack` only on an `<hr>`.
+- **An opacity modifier on a palette token generates NOTHING.** Every colour in `tailwind.config.ts`
+  is declared as a bare `var(--x)`, which Tailwind cannot decompose into channels, so it emits no
+  `/n` variant at all. Measured in the served stylesheet: `.bg-accent` exists, `bg-accent/70` and
+  even `bg-accent/10` are **absent**. The class lands in the DOM and the element computes to
+  `rgba(0,0,0,0)`; the first version of the matrix rendered every cell hollow because of it. Same
+  family as the `var(--tier-low)66` drop-shadow bug already recorded above.
+
+  **There are roughly 200 such uses across `apps/web`** (`bg-accent/10` x17, `border-tier-low/40`
+  x14, `bg-tier-high/10` x9, and so on), so every tinted panel background and softened border in
+  the product is currently painting nothing. **Fixing it properly is a palette change, not a
+  component change**: the tokens have to be redeclared as `rgb(var(--x-rgb) / <alpha-value>)` with
+  channel variables beside them, which would switch ~200 surfaces on at once and visibly restyle
+  every page. That is a deliberate decision for the owner, not a side effect of a detector change,
+  so this session used solid tokens in the matrix and recorded the finding here. A source guard
+  keeps the matrix itself clean.
+
 #### The queue has an interface now, and that is what makes the reservoir reachable
 
 `/netdetect` (`app/(app)/netdetect/`), labelled **Formations** in both navs. The routes shipped
@@ -1750,6 +1869,76 @@ Three things the page must keep doing:
 Pinned by nine source-level tests at the end of `tests/test_netdetect_routes.py`, because TypeScript
 will not tell anyone if the server gate is dropped.
 
+#### The page could read the queue and could not fill it, which is the same defect one step up
+
+Redesigned 2026-09-06 on the owner's brief: keep the statistical honesty and the real numbers, make
+the job obvious. Four findings, and the first is the one that mattered.
+
+**THE EMPTY STATE PRINTED AN ENDPOINT.** It said to run `POST /v1/admin/netdetect/<slug>`, because
+there was no way to start a detection from the page. So the ground-truth reservoir this page exists
+to fill (thirty judgements, eight of each class, before the calibration report will recommend
+anything) was gated behind curl exactly as it had been before the page was built. `run-panel.tsx`
+is an investigation picker and a button. **It is safe as a button because the run costs nothing**:
+no provider call, no model call, no credit, re-reading a payload that is already stored, which the
+route's own docstring says. `record: false` sits behind Options for tuning, since a stored row per
+button press turns the queue into a log.
+
+**FOUR PANELS IN A COLUMN WITH NO STATED ORDER.** An operator could tell what each showed and not
+what to do. The page is now three numbered stages (`components/shared/stage-rail.tsx`): run, review,
+track. **Not a wizard**: nothing is gated or disabled, the numbering describes the work rather than
+sequencing the interface, and every stage carries a sentence saying what it is for, because a
+numeral with no explanation is decoration pretending to be a filing system.
+
+**A FINDING RENDERED AS RAW PLATFORM IDS.** Handles were computed by the run route for its in-memory
+response and thrown away, so a queue naming real people showed `amp0, amp1, amp2`. They cannot be
+resolved at SERVE time: `list_findings` deliberately touches no payload, and joining one per row is
+the N+1 the archive list already paid for. So `NetdetectFinding.handles_json` stores them at
+detection time (registered in `_INCREMENTAL_COLUMNS`, guarded by a test that builds a pre-existing
+database and was **verified to fail** without the entry). **A member absent from the map means we
+hold no handle for that account, never that the account has none**, so the client falls back to the
+id and a blank is dropped rather than stored. Same three-state discipline as `attachment_checked`.
+
+**`lib/netdetect-read.ts` is the pure layer, and it is a module with tests because every rule in it
+is a claim about named real people.** `findingHeadline` states the SHAPE of the evidence and never
+reaches a verdict, pinned by a test asserting the words bot, operation, campaign, fake and
+inauthentic never appear; `runVerdict` classifies the four run outcomes, three of which present as
+an empty findings list, so "refused" and "one group dominates this section" can never render as
+"nothing found"; `reservoirProgress` tracks **the worst of the three ratios**, so twenty-nine
+dismissals and no confirmations cannot read as nearly done when that reservoir can only teach the
+detector to be quieter.
+
+**Two defects were found by looking at the served page rather than the source**, which is the only
+way this class shows up:
+
+- The headline collided with itself past three families: *"...and 2 more, more than chance in this
+  section explains"*. Now two sentences.
+- **The reservoir meter disappeared the moment the open queue emptied**, because it was rendered
+  inside the ranking note, which needs ranked open findings. That is exactly when an operator wants
+  to know how far calibration still has to go. The meter now renders whenever the calibration call
+  succeeded, and its track was `bg-bg-elev` on a `bg-bg-elev` card, so an empty reservoir painted
+  nothing at all.
+
+**AND THE DEAD-CLASS TRAP CAUGHT ME WRITING IT.** `bg-accent/10`, `border-accent/40` and
+`bg-tier-elevated/5` generate NO CSS here, which this file already records; I used all three in the
+new components and confirmed it against the built stylesheet rather than by eye. Replaced with a
+hairline in the semantic colour over `bg-bg-elev-2`, which is the instrument grammar anyway.
+`lib/palette-opacity.test.ts` guards the new files only, and says why: about 200 such uses already
+exist, fixing them is a palette change that would restyle every page and is the owner's call, so a
+repo-wide assertion would fail on day one and be deleted. **The rule is do not add more.**
+
+**The three coordination surfaces now say which is which.** `/netdetect`, `/narratives` and `/graph`
+answered one question in three vocabularies with no way between them. `CoordinationNav` puts the
+same rail on all three and `WhyTwoDetectors` states the distinction an operator actually gets wrong,
+once, shared: the campaign pass runs automatically but only sees accounts already scored 70+, so a
+disciplined operation is invisible to it **by construction**; the network detector never reads a
+score, which is what lets it see that operation, and is manual because it names people on
+statistical evidence alone.
+
+**Verified against a real running stack**, not by inspection: API and web booted, an admin signed
+up, an investigation seeded with a planted amplifier ring, the detector run through the button, one
+finding recorded with all 23 handles round-tripping to the queue, and the page rendered in Chromium
+at 1180px. That is how both prose defects and the invisible track were found.
+
 #### A finding names bystanders, at a measured rate, and nothing said so
 
 Found while verifying the persistence work. Every recall test asks whether the planted operation was
@@ -1775,6 +1964,408 @@ detector rightly does with its admitting posterior) is very tempting. On the mea
 swept-in organic accounts **out-rank a genuine operation member**, so an operator shown that ranking
 would clear the wrong accounts and doubt the right ones. A number beside a person's name is read as a
 judgement about them, so publishing it would be worse than publishing nothing.
+
+##### THE SAME NUMBER ON THE AMPLIFIER RING IS 52.9%, AND IT WAS NEVER MEASURED
+
+Both figures above (6.8%, later 1.0%) are the **planted operation**. Nobody had measured purity on
+the amplifier ring, which is a different shape: the ring shares a publishing tool and a set of
+amplification targets, and organic accounts in the background genuinely repost some of the same
+posts, so Louvain attaches them and the significance test does not remove them.
+
+Measured across a systematic grid (backgrounds 40/60/80 x ring seeds 61/62/63), at the production
+`RARITY_CEILING` of 0.25:
+
+| | |
+|---|---|
+| ring recall | 8/8 on all nine |
+| named accounts | 153 |
+| organic among them | **81, i.e. 52.9%** |
+| state | **PUBLISHED**, not flagged for adjudication |
+| flagged by `attachment.assess` | **18 of 81** |
+
+**More than half the named accounts are bystanders, and the finding is published rather than sent to
+a human.** `needs_adjudication` is None on every one of them, so nothing asks anybody before these
+names are shown as members of a coordinated ring. The membership test does not cover the gap: on
+four of the nine configurations it flagged **zero** of 9, 15, 12 and 17 bystanders, and it reports
+rather than drops by design, so an unflagged bystander is published as an equal member.
+
+The ring is a genuine positive and publishing it is correct: `test_an_amplifier_ring_is_now_
+reachable_where_it_previously_left_no_evidence` asserts exactly that. The defect is the membership,
+not the finding.
+
+Pinned by `test_the_amplifier_ring_publishes_with_bystanders_and_the_rate_is_pinned_as_a_defect`,
+which is a CHARACTERISATION rather than an approval: it bounds the rate above so the defect cannot
+silently worsen, and it also fails if the rate ever falls to the planted-operation level, so an
+accidental fix gets noticed and locked in instead of leaving a bound nothing constrains.
+
+###### Why the membership test misses them: the abstention switches itself off when it is needed
+
+Diagnosed rather than guessed. `attachment.assess` flagged 18 of the 81 and flagged ZERO on four
+configurations, and zero-of-many is the signature of an ABSTENTION rather than a bad threshold.
+
+`MIN_MEDIAN_CONTRIBUTION` (0.5) exists for the genuinely homogeneous group: every member holds the
+same features, removing any one barely moves the score, and singling anybody out would be picking a
+rounding error. Its docstring states the reasoning exactly: *"in a homogeneous operation ... the
+median contribution sits near zero."* That is true. **The code relies on the converse, and the
+converse is false.** A finding that is more than half bystanders ALSO has a near-zero median,
+because the median falls inside the bystander cluster rather than between the clusters.
+
+Measured on the ring grid, per member leave-one-out deltas:
+
+| corpus | bystanders | verdict | median | ring members | organic members |
+|---|---|---|---|---|---|
+| 40/61 | 6 of 14 | checked | 1.570 | +1.48 to +2.53 | -1.08 to -0.43 |
+| 40/63 | 9 of 17 | **ABSTAIN** | 0.017 | +1.42 to +2.05 | -1.14 to +0.02 |
+| 60/61 | 15 of 23 | **ABSTAIN** | -0.001 | +1.19 to +2.05 | -0.74 to +0.13 |
+| 60/62 | 8 of 16 | checked | 1.158 | +1.79 to +3.05 | -0.87 to +0.52 |
+| 80/63 | 17 of 25 | **ABSTAIN** | -0.162 | +1.49 to +1.98 | -0.57 to +0.01 |
+
+The two populations separate completely in EVERY row: no ring member below +1.19, no bystander
+above +0.52. The bystanders are perfectly identifiable, and the test reports that none of them can
+be singled out. **It abstains in exactly the three rows where bystanders reach half or more**, which
+is to say the guard turns itself off as contamination gets worse.
+
+**THE OBVIOUS FIX IS MEASURED AND DOES NOT WORK, so do not reach for it.** Testing the MAX instead
+of the median classifies all five ring rows perfectly (`0.25 x max` lands in the empty band every
+time) and keeps both newsroom controls abstaining at 0.485 and 0.463 against the 0.5 floor. It then
+breaks the case the abstention exists for: a PURE 8-member operation with zero bystanders measures
+median 0.184 with a max of **0.834**, so a max rule checks it, sets a threshold of 0.209 just above
+its median, and flags about half a clean group. All three homogeneous fixtures behave that way
+(maxes 0.834, 0.602, 0.668), so `test_a_homogeneous_group_gets_no_verdict_rather_than_an_arbitrary_
+one` would stop exercising the abstention path at all rather than merely failing.
+
+What actually separates the two is **bimodality**: a contaminated finding is two populations with an
+empty band between them, a homogeneous one is a single continuous spread. Level cannot see that and
+neither can the maximum.
+
+**FIXED, and the rule is now the widest step.** `assess` sorts the contributions, takes the largest
+gap between neighbours, and abstains below `MIN_CONTRIBUTION_GAP` (0.8) instead of below a median
+level. Measured largest step, which is what puts the constant where it is:
+
+| non-contaminated | step | contaminated | step | splits |
+|---|---|---|---|---|
+| homogeneous op 50/5 | 0.568 | ring 40/63 | 1.406 | 9 of 9 |
+| homogeneous op 50/23 | 0.282 | ring 60/61 | 1.057 | 15 of 15 |
+| homogeneous op 60/23 | 0.287 | ring 80/63 | 1.482 | 17 of 17 |
+| newsroom control | 0.235 | | | |
+
+The band between 0.568 and 1.057 is empty, so 0.8 sits in the middle of it rather than being fitted
+to either side, and every contaminated split lands on EXACTLY the bystander count. The step-to-spread
+RATIO was measured too and does not work: homogeneous 0.390 to 0.587 against contaminated 0.379 to
+0.579, which overlap completely.
+
+Re-measured over the full nine-configuration ring grid: **the membership test now flags 81 of 81
+bystanders, up from 18 of 81, with no genuine member flagged in any configuration.** One row also
+improved in the other direction: a clean 8-member finding that previously had 2 GENUINE members
+wrongly flagged now flags nobody.
+
+**It abstains on SOME contaminated findings, and that is the rule working rather than a miss.** The
+grid above builds its ring corpora over organic seed 31. Build them over the ring's own seed instead
+and the two populations stop separating, so it names nobody:
+
+| corpus | genuine members span | bystanders | verdict |
+|---|---|---|---|
+| ring 40/61 (1 bystander) | -0.218 to 0.746 | 0.712 | abstains |
+| ring 80/63 (5 bystanders) | 0.692 to 1.630 | -0.316 to 0.947 | abstains |
+
+In the first, the single bystander out-contributes **six of the eight genuine members**; in the
+second the top bystander out-contributes the weakest genuine one. Any rule forced to produce a
+verdict on those would flag real operation members and clear the bystander, which is exactly the
+failure the discarded MAX rule had, reached from the other direction. So do not read "flagged 0 of
+5" on such a corpus as a regression: `attachment_checked` is False and the surface says no
+membership verdict was reached, which is the honest third state. Pinned by
+`test_it_abstains_on_a_contaminated_finding_whose_populations_do_not_separate`, which asserts the
+overlap BEFORE asserting the abstention so it cannot pass on a premise that stopped being true.
+
+**What this does NOT change is who gets NAMED.** The finding still carries 52.9% bystanders, because
+`attachment` reports and never drops, which is a deliberate rule and not an oversight. What changed
+is that a reader now sees every one of them marked as not carrying the finding, instead of roughly
+four in five being presented as equal members of an operation.
+
+##### Where the contamination goes: all three downstream paths are now measured
+
+A published ring finding names 52.9% innocent accounts, and that finding feeds three things. Each
+was measured separately, and they agree:
+
+| path | contamination | hard-family share | does it name anyone |
+|---|---|---|---|
+| the finding itself | 81 of 153 named (52.9%) | n/a | **yes**, this is the defect |
+| the accumulating `CoordinationEdge` graph | 400 of 652 pairs, 54.6% of weight | **0 pairs** | no |
+| the formation profile | 48 of 120 features (40.0%) | **0 features** | no: **0 of 139** organic placed |
+
+**The formation profile is the one that mattered most and had never been looked at**, because
+`assign` places an INDIVIDUAL against a profile, which is the sharpest naming act in the system.
+`build_profile` reads the candidate's evidence rather than members' feature bags, so a feature
+reaches a profile only when two or more members share it. Bystanders are members, so two of them
+sharing something enters the operation's permanent identity. Measured, that happens at 40%.
+
+**And it stops exactly where it would name somebody.** No ordinary account in the section places
+against the polluted profile, in any configuration. The reason is `MIN_HARD_EVIDENCE` plus
+`MIN_HARD_FEATURES`: soft evidence alone can never place an account, and two DISTINCT hard features
+are required, so neither the 40% of soft noise nor a lone `creation_week` coincidence can name
+anybody. Note the correction above: hard-family contamination is rare (0.1% of bystander-touching
+pairs) rather than absent, so the guard rather than the absence is what carries this.
+
+**What it does cost is recall, not safety.** Forty per cent of the profile is noise a genuine future
+member will not match, which can only make assignment harder. That is a third, independent argument
+for the trim below, arriving from the opposite direction to the other two.
+
+##### What the 70+ cut costs, and why it does NOT argue for auto-running netdetect
+
+CLAUDE.md has said since the package was built that the old 70+ filter is "blind by construction to
+the operation worth catching: aged accounts, hand-written posts, each scoring 30 alone". Nothing
+measured it, and it decides which detector is wired where: the cohort detector runs AUTOMATICALLY on
+every scan, netdetect never reads a score and is admin-only and manual.
+
+Same accounts, same behaviour, varying only the OMI score they carry:
+
+| operation's score | cohort size | operation in cohort | netdetect finds it |
+|---|---|---|---|
+| 95 / 85 / 75 | 8 | 8 | yes |
+| **65 / 45 / 30** | **0** | **0** | yes |
+
+**The claim is right and the cost is a cliff, not a slope.** One point under the cut and the
+operation leaves the automatic path entirely. The cohort comes back EMPTY rather than merely
+incomplete, because ordinary accounts do not clear 70 either, so both passes produce nothing and
+nothing records that anything was skipped.
+
+**The obvious conclusion is wrong, and this is the useful part.** netdetect costs nothing to run (no
+provider call, no model call, no credit) and is deterministic, so wiring it into the scan path looks
+free. It also names 52.9% innocent accounts on the amplifier ring, and running it automatically
+would mean naming those people automatically, on every scan, without an operator ever choosing to
+look. **The membership trim therefore GATES the wiring decision**: fix who gets named first, then
+the cheap automatic coverage becomes available. Two open items that looked independent are ordered.
+
+##### The other detector in this repo already solves this, and that is the strongest argument yet
+
+The cohort detector (`app/campaigns/detector/`) runs AUTOMATICALLY on every scan, while netdetect is
+admin-only and manual. Its membership precision had never been measured: every test in its precision
+suite is either all-innocent (the controls) or all-operation, so the realistic shape, an operation
+sharing a 70+ cohort with ordinary accounts that merely score high, was untested.
+
+Measured, adding 0, 2, 4 and 8 ordinary high scorers to a four-account operation: it names **4 of 4
+operatives and 0 innocents every time**.
+
+**THAT WAS PUT BESIDE NETDETECT'S 52.9% AND THE TWO CAME FROM DIFFERENT FIXTURES**, which is not a
+comparison. The cohort figure was measured on the hand-built specs in its own precision suite and
+the netdetect figure on the amplifier ring in `netdetect_corpora`, so the gap could have been a
+property of two populations rather than of two detectors. It is measured head to head now: ONE
+corpus, BOTH detectors, every account pushed over the 70 cut so the cohort filter is not quietly
+doing the work.
+
+| corpus | detector | named | genuine | innocent | rate |
+|---|---|---|---|---|---|
+| ring 160/62 | netdetect | 49 | 8 | 41 | **83.7%** |
+| ring 160/62 | cohort | 8 | 8 | **0** | 0.0% |
+| ring 130/62 | netdetect | 38 | 8 | 30 | **78.9%** |
+| ring 130/62 | cohort | 8 | 8 | **0** | 0.0% |
+| ring 60/61 | netdetect | 23 | 8 | 15 | **65.2%** |
+| ring 60/61 | cohort | 8 | 8 | **0** | 0.0% |
+
+Same eight ring accounts, same background, same corpus, and the cohort detector names exactly the
+ring while netdetect names up to six times as many people. So the gap is the detectors. Pinned by
+`test_both_detectors_on_one_corpus_and_only_one_of_them_names_bystanders`, which asserts the
+premise (every account over the cut) before asserting anything else, so it cannot pass by having
+the filter do the work.
+
+**The difference is an admission gate, not the kind of statistic.** The cohort detector admits
+members one at a time: an account joins only when its OWN posterior link to the group clears 0.95.
+netdetect takes Louvain communities wholesale and has no per-account admission test at all. So false
+naming is not intrinsic to detecting sets, and it is not the price of the set-level thesis; it is
+what happens without a gate, and this codebase already contains a working one.
+
+That matters for the trim decision below because it is not a synthetic-corpus argument. It is a
+precedent: the house already gates membership per account elsewhere, on the detector that runs by
+itself, and it is measured perfectly precise where the manual one is more than half wrong, on the
+same corpus. Pinned by
+`test_an_operation_sharing_a_cohort_with_ordinary_high_scorers_names_only_the_operation` and by the
+head-to-head test above.
+
+**What netdetect would use is already built and already measured.** `attachment`'s leave-one-out
+delta is a SET-level per-member statistic, so it does not reintroduce the pairwise reasoning the
+package exists to avoid, and it identifies the bystanders exactly. The only thing missing is the
+decision to act on it.
+
+##### The false naming is avoidable, and that is measured rather than argued
+
+This section used to end "reducing the naming itself needs either the ceiling decision above or a
+change to candidate generation". There is a third option and it now has numbers. The
+report-never-drop rule rests on a worry rather than a measurement: that trimming would delete real
+participants and would weaken the finding. Both halves were tested.
+
+| corpus | named | innocent | flagged | score | trimmed | null threshold | survives |
+|---|---|---|---|---|---|---|---|
+| ring 40/63 | 17 | 9 | 9 of 9 | 13.49 | 19.19 | 7.28 | yes |
+| ring 60/61 | 23 | 15 | 15 of 15 | 14.16 | 20.05 | 9.06 | yes |
+| ring 80/63 | 25 | 17 | 17 of 17 | 16.36 | 20.04 | 10.07 | yes |
+
+**The flagged set is exactly the bystanders, the trim leaves exactly the eight ring accounts, and
+the finding clears the null without them by a wide margin.** So the 52.9% is not the price of
+catching the ring. The ring is catchable while naming nobody innocent.
+
+**The rising score is arithmetic, not a second result.** A subset keeping the shared features has
+the same k over a smaller n, so a smaller Poisson-binomial tail follows by construction, and it is
+the same fact the leave-one-out delta already measures. The two claims that are NOT arithmetic are
+the ones to hold on to: the flag matches ground truth exactly, and the trimmed set still clears the
+null.
+
+**A trim could not hurt the controls, structurally rather than luckily.** A real community is
+everybody contributing alike, which is exactly the shape `assess` abstains on, so there is no flag
+to trim by: the newsroom abstains, the fan community produces no finding, and no genuine member is
+flagged in any planted-operation fixture. Over everything measured a trim would have withheld **44
+innocent names and lost 0 genuine members**.
+
+**It is still not done, and the asymmetry against the ceiling decision is the point.** Dropping
+changes what is published about named real people and every corpus here is synthetic. But raising
+`RARITY_CEILING` moves the naming in BOTH directions (the newsroom bloats 10 to 28), whereas
+trimming only ever removes names and, measured, removes only innocent ones. That makes it the safer
+of the two open changes, not an automatic one. Pinned by
+`test_the_finding_survives_without_the_members_this_test_flags` and
+`test_a_trim_would_take_nothing_from_the_community_controls`.
+
+##### And the third option is measured DEAD, which is what makes the choice a pair
+
+The two routes this file used to offer were the ceiling and "a change to candidate generation". The
+second was the more attractive: an exclusion at generation time is a MISS rather than a false
+accusation, which is the safer error for a product that names real people. **It is not available.**
+
+The generator sees the pair-weight graph and nothing else, and on that graph the populations do not
+separate at all. Internal edge weight inside the finding:
+
+| corpus | ring min | ring median | bystander max | bystander median | separates |
+|---|---|---|---|---|---|
+| ring 40/63 | 37.45 | 48.36 | **63.27** | 39.83 | no |
+| ring 60/61 | 39.91 | 60.71 | **77.97** | 52.31 | no |
+| ring 80/63 | 49.70 | 66.57 | **98.59** | 58.35 | no |
+
+The strongest bystander carries far MORE internal weight than the weakest genuine member, every
+time. That is structural: a bystander is swept in **precisely because** it shares many rare features
+with the group, so shared weight is the very quantity that makes it look like a member. What
+separates them is whether removing an account makes the set more or less surprising, and that is a
+property of the set statistic, which does not exist yet at generation time. Same shape as the
+discarded per-member attachment-weight statistic, reached from the other end.
+
+`test_bystanders_do_not_separate_on_anything_generation_can_see` asserts the overlap, so a future
+session cannot spend the effort twice, and the note sits in `candidates.py` beside where the
+refinement would go. **So the real choice is now two options rather than three**, and the trim is
+the safer of the two.
+
+##### What WAS done: a mostly-bystander finding goes to a reader
+
+Both remaining options change who is NAMED, on synthetic corpora, so neither was taken. There is a
+third move that changes nobody's membership and no score, and it addresses the part of this that
+was worst: the ring findings were **PUBLISHED**, `needs_adjudication` None, so nothing asked a human
+before 81 innocent accounts were shown as members of a coordinated ring.
+
+`detect` now sets `needs_adjudication` when the membership test says MOST of the named accounts are
+not carrying the finding. That is the same move the hard-evidence check already makes for a
+newsroom, for the same reason: the set is genuinely significant, and what cannot be settled from the
+statistics is WHO of the named is in it. Measured:
+
+| corpus | members | genuine | weak | outcome |
+|---|---|---|---|---|
+| ring 40/63 | 17 | 8 | 9 | **review (membership)** |
+| ring 60/61 | 23 | 8 | 15 | **review (membership)** |
+| ring 80/63 | 25 | 8 | 17 | **review (membership)** |
+| planted op 50/5 | 11 | 8 | 3 | published, unchanged |
+| planted op 50/23, 60/23 | 8 | 8 | 0 | published, unchanged |
+| newsroom | 10 | 10 | abstains | review (hard evidence), reason preserved |
+
+Four rules on it:
+
+- **It ADDS review and never removes anyone.** No member is dropped, no score moves, and a finding
+  already flagged keeps its existing reason with the new one appended rather than replacing it. The
+  hard-evidence doubt and the membership doubt are different things and a reader needs both.
+- **A MINORITY of weak members is not this.** `planted op 50/5` carries 3 bystanders of 11 and stays
+  publishable, because that is an operation with weak members rather than a group drawn too wide.
+  The boundary is the same `weak * 2 > members` the queue uses for its fourth UI state, so the two
+  cannot disagree about the same finding.
+- **It keys on `attach.answered`.** An abstention is not a majority: where the populations do not
+  separate there is no verdict to act on, and reading "flagged nobody" as "nobody is weak" is the
+  three-state error this package keeps paying for.
+- **The rate it fires on is unchanged.** The same accounts are still named. What changed is that a
+  human is asked first, which is the only one of the three moves that cannot make a false accusation
+  worse.
+
+Pinned by `test_a_finding_that_is_mostly_bystanders_goes_to_a_reader`, whose second half asserts a
+clean operation is NOT dragged into review, because a rule that sends everything to a reader makes
+review meaningless.
+
+##### The review reason has to reach a reader, and the card was saying it twice
+
+Two follow-ups to sending mostly-bystander findings to review, both found by walking the change to
+its end rather than stopping at `detect`.
+
+**Nothing tested that the reason survives persistence.** Every test for `needs_adjudication` reads
+`detect`'s in-memory result, and the whole value of the flag is that a person sees it before those
+names are treated as members of an operation. This repo has twice paid for the gap between computed
+and served: the domination verdict was returned in `RunOut` and never written down, and
+`/r/<token>/json` dumped a payload past a gate the source-level guard could not see.
+`test_the_review_reason_survives_the_serve_path` walks persist to serve and asserts BOTH doubts
+survive, because `detect` appends with `ALSO:` rather than overwriting and a truncation would drop
+the second silently. Its partner pins that a finding with no doubt serves **null and not an empty
+string**: both are falsy in Python and TypeScript alike, so that bug would render identically and be
+invisible.
+
+**The card stated one fact twice.** `detect` sets the reason on exactly the condition the queue's
+fourth membership state branches on, so a mostly-bystander finding carried the count and the phrase
+"rather than as an operation with weak members" in the review banner AND in the sentence under the
+member list. That is the analyst-panel defect in miniature, and the fix is the one that worked
+there: cut each statement back to what only it can say. The banner judges the FINDING; the sentence
+sits under the list and says how to read the LIST, so it keeps the count and the prioritisation and
+drops the interpretation. It stays self-sufficient on the count because a finding recorded before
+this change carries no banner at all. A source guard fails if the interpretation returns.
+
+`WEAK_FRACTION` and `MIN_MEDIAN_CONTRIBUTION` are retained with their original measurements and
+marked as no longer the rule. They read correctly on findings where bystanders are a MINORITY, which
+is exactly what made the error hard to see.
+
+**FIXING IT MADE A FOURTH UI STATE REACHABLE, and the queue had to grow one.** The old rule could
+not produce a majority flag: it abstained on exactly the findings that are mostly bystanders, so the
+page only ever saw a handful highlighted. Now a 25-member finding highlights 17. The existing
+sentence, *"N highlighted members did not carry this finding. They are still members; check those
+names against the evidence first"*, is wrong twice at that scale: telling somebody to check 68% of a
+list first is no prioritisation, and "an operation with some weak members" is not what a mostly
+bystander finding is. So above half, the queue says the membership itself is in question rather than
+the group being an operation with weak members. Same discipline as the three states it joins:
+`attachment_checked` false, empty, non-empty, and now non-empty-and-most-of-them are four different
+statements about named real people, and the page must not collapse any pair of them. Pinned by
+`test_a_finding_more_than_half_bystanders_still_gets_a_verdict`, which asserts the fixture really
+does have a bystander majority before asserting anything else, so it cannot quietly stop testing the
+condition the old rule could not survive.
+
+##### What raising `RARITY_CEILING` actually costs, now that it has been measured
+
+This file has twice said the ceiling must not simply be raised, on the stated grounds that nothing
+had measured what raising it costs the controls. That measurement now exists, and it does not say
+what the warning assumed. Published / flagged / largest membership, per control:
+
+| control | 0.25 (production) | 0.60 | 1.00 |
+|---|---|---|---|
+| organic, 60 | 0/0/0 | 0/0/0 | 0/0/0 |
+| organic, 40 | 0/0/0 | 0/0/0 | 0/0/0 |
+| newsroom in organic | 0/1/10 | 0/1/10 | 0/2/**28** |
+| newsroom at 40% of 25 | 0/1/10 | 0/2/10 | 0/2/10 |
+| fan community in organic | 0/0/0 | 0/0/0 | 0/0/0 |
+| fan community at 44% | 0/0/0 | 0/0/0 | 0/0/0 |
+| amplifier ring | **1**/0/**23** | **1**/0/**9** | 1/0/9 |
+
+**No control that is silent at 0.25 publishes anything at 0.60 or at 1.00.** The false accusation the
+warning existed to prevent does not appear. What the ceiling changes is WHO GETS NAMED, and it moves
+in both directions: a full lift bloats the newsroom finding from its true 10 reporters to 28, while
+on the amplifier ring the production setting is the one naming 15 bystanders and 0.60 cuts that to 1.
+
+Put beside the domination band, **0.60 is not a trade on anything measured here**: it restores the
+blind spot's recall (0 of 16 to 16 of 16 at 32% share) AND removes most of the ring's false naming,
+while leaving every other control exactly where it was.
+
+**It is still NOT changed, and that is deliberate.** These are synthetic corpora, `RARITY_CEILING` is
+the core constant of this package, and a threshold that decides whether named real people are
+reported as running an operation together should move by a decision with a commit and a reviewer
+behind it, not as a side effect of a session that went looking for something else. The prohibition
+above stands, but its stated REASON is now gone: this is a recommendation with numbers attached,
+waiting on the owner, and the first thing to do before acting on it is to reproduce the ring row on
+real scanned data rather than on `netdetect_corpora`.
 `test_attachment_weight_does_not_separate_the_bystanders_and_must_not_be_sold_as_if_it_did` is a
 guard against building it, and states what would have to change for it to become buildable.
 
@@ -1865,6 +2456,14 @@ recognised after every account in it has been burned, and it is the same reasoni
   advisory lock, so N instances do not each age the catalogue N times. It is best-effort and never
   raises: a phase is a label on a lead, and failing the pass over one would take the anomaly
   detection and the watchlist rescans down with it.
+
+  **The WIRING is guarded now, not just the helper, and the difference is the whole point.** The
+  original test called `_refresh_formation_phases` directly, so deleting the call from
+  `run_one_pass` would have left it green while the catalogue silently stopped ageing and every
+  dormant operation went on presenting as live. Nothing covered `monitoring.scheduler.run_one_pass`
+  at all. That is the same "written and nothing calls it" gap that created this helper, repeated one
+  level up. The new guard drives the real entry point, and was **verified to FAIL with the call
+  stubbed out** rather than assumed to: a guard nobody has seen fail is a guard nobody knows works.
 - **A re-run of one post is not a second sighting.** `contexts_json` is a set, exactly as in the
   tracking layer, so nobody can strengthen a formation by pressing the button again.
 
@@ -2068,6 +2667,29 @@ What separates them is **which families** the prior evidence sits in, which is `
 extended across time. So the module reports two things and never conflates them: `log_lr` is
 context and does not discriminate, and `hard_pairs` / `hard_families` are the discriminating half.
 
+**That split also turns out to CONTAIN the amplifier ring's contamination, which is the second
+reason not to collapse it.** A published finding's pairs are folded into the graph permanently, and
+the ring names 52.9% bystanders, so the obvious worry is that one over-broad finding poisons the
+deployment's memory rather than just one page. Measured on the pinned corpus family (organic seed
+31): **1189 pairs recorded, 937 touching an innocent account and 56.5% of the accumulated weight,
+and ONE of those 937 carrying a hard family.** The soft half is contaminated at roughly the rate the
+finding is; the discriminating half at 0.1%.
+
+**IT IS NOT ZERO, AND THIS SECTION SAID IT WAS.** The first measurement used a different corpus
+family (organic seed equal to the ring seed) and the reason given was that a hard family is the
+operator's own act which a bystander does not perform. **That reasoning is wrong for one feature.**
+`creation_week` is a PROPERTY rather than an act, so an innocent account can be provisioned in the
+same week by coincidence; measured over a wider grid, 1 of 43 hard-family evidence features had a
+bystander holder and it was exactly that. `repost_of` is an act and never contaminated anywhere.
+
+**The conclusion survives on a better footing, and the footing was already in the code.**
+`assign.MIN_HARD_FEATURES` requires TWO distinct hard features before an account is placed, and its
+own note says why: a rare `creation_week` scores about 5.8 and clears `MIN_HARD_EVIDENCE` unaided,
+and the floor was added after measuring one false assignment that rested on exactly that. So safety
+does not rest on bystanders being unable to hold hard evidence, which is false. It rests on one
+coincidence never being enough. Anything that starts reading `log_lr` as evidence, or that lowers
+`MIN_HARD_FEATURES`, gives the containment away.
+
 Four rules:
 
 - **It is a PRIOR, never a seventh family.** The families are measured inside one corpus against a
@@ -2083,11 +2705,38 @@ Four rules:
 - **`checked` is explicit.** A zero with `checked` false means nobody looked, which is not a
   statement about the people named. Same distinction as `attachment_checked`.
 
+#### The lead path fires, and this file said it did not
+
 `annotate` also covers REFUSED candidates, so a set this corpus could not prove whose members were
-already seen doing the operator's own acts becomes a **lead** rather than nothing. **Stated
-honestly: that path has never been observed firing.** The rejected list is empty across every
-synthetic scenario, because a candidate weak enough to fail the null is normally caught earlier by
-a structural refusal. Built and unproven, not a feature.
+already seen doing the operator's own acts becomes a **lead** rather than nothing. This section used
+to say that path had never been observed firing, because the rejected list was empty across every
+synthetic scenario, a candidate weak enough to fail the null being caught earlier by a structural
+refusal. **Measured 2026-09-02, both halves of that are false**, and the same sentence was in three
+places (here, the `annotate` docstring, and a comment in `routes/netdetect.py`), which is the drift
+this file keeps warning about.
+
+**The near-miss pile is never empty.** Eleven corpora (the planted operation at eight discipline
+settings, plus the newsroom, fan community and amplifier ring) each produced **one to three** rejected
+candidates, measured at 40 shuffles against a production default of 24, so the result is conservative
+rather than an artefact of a loose null. Nor are they close calls: their scores ran **48% to 82% of
+the null threshold**, the newsroom's being the nearest. A candidate reaches the null having already
+passed all four refusals in `_structural_refusal`, which is exactly why it is not filtered upstream.
+
+**The lead itself fires.** Seed the graph from an operation caught under two unrelated posts, then
+scan the same operator where this corpus can prove nothing: **one or two leads on all twelve
+configurations**, including discipline **0.85 and 1.0 where `detect` returns no findings at all**.
+That is the case the path was built for, and it makes history a third recall route beside the
+detector and the formation sweep.
+
+Two measurements keep it from becoming an accusation, and both must survive any work here:
+
+- **A lead candidate is mostly NOT the operation.** Overlaps measured at 2 of 17, 4 of 23, 5 of 16.
+  It is a Louvain community holding a few known accounts among many ordinary ones, so `RunOut.leads`
+  is a **count** and naming those accounts would repeat the amplifier-ring defect on weaker evidence.
+- **Hard history did not spread to the bystanders, in any of the twelve.** `hard_pairs` came to
+  exactly the pairs the known members account for between themselves, so no pair involving a
+  swept-in account carried hard-family history. That follows from what the hard families ARE (the
+  operator's own acts, which a bystander does not perform) rather than from luck.
 
 Stored as `corroboration_json`, a snapshot refreshed on re-run exactly as `score` and `corrected_p`
 are, and registered in `_INCREMENTAL_COLUMNS`. Pinned by
@@ -2161,6 +2810,193 @@ test's own premise was false: the ring shared text as well as reposts.
 Fixed by making the premise true (every account gets text nobody else could share), and it now
 holds **0 of 8 backgrounds**.
 
+#### The section an operation is big enough to hide in
+
+**The most serious blind spot found so far, and it is inverted from intuition: crowding a comment
+section can HIDE the group doing the crowding, and the run then reports nothing at all.**
+
+`RARITY_CEILING` (0.25) drops any feature held by more than a quarter of the corpus, on the
+reasoning that a common feature carries no information. That holds while the corpus is a fair
+background and is false when it is a comment section, which is exactly what an operation can flood.
+An operation of k accounts shares its hard-family tells (one signup week, one set of outside
+targets) across ALL k members by construction, so those features sit at prevalence k/n and are
+discarded FIRST, because per-account text shingles vary between members and stay rare.
+
+**It is a BAND, not a slope, and the first measurement here got that wrong.** That sweep raised the
+share by SHRINKING the background, which drove the corpus under `detect.MIN_CORPUS` (25) at the top
+of the range, so those runs were refused for SIZE. A size refusal is stated on `RunOut.refused` and
+is not silent, which is the entire property that makes the ceiling case dangerous. Three mechanisms
+can empty a dominated section and only one of them says nothing:
+
+| mechanism | is it silent? |
+|---|---|
+| `RARITY_CEILING` suppression | **yes**, reads exactly like a clean scan |
+| `MIN_CORPUS` (25) | no, a stated refusal |
+| `candidates.MAX_GROUP_SHARE` (0.40) | no, the generator caps the community |
+
+Re-measured with the corpus held at **n = 50**, so share is isolated from size:
+
+| op share | suppressed hard features | recall | recall with the ceiling lifted |
+|---|---|---|---|
+| 12% | 0 | 6/6 | 6/6 |
+| 24% | 0 | 12/12 | 12/12 |
+| **32%** | **5** | **0/16** | 16/16 |
+| 40% | 4 | 16/20 | 20/20 |
+| 50% | 5 | 18/25 | 20/25 |
+
+**The worst point is near a third, and recall partially RETURNS above it.** At 32% the loss is total
+and silent: the corpus is well clear of the floor, the generator still produces a 19-account
+community under a cap of 20, and the significance test throws it away because `hard_evidence` has
+fallen to **0.00** and only text and timing carry weight, so it is refused for "only 1 family
+carried real weight". Above that the operation is big enough that its diluted evidence still carries
+some members, and by 50% the binding constraint is `MAX_GROUP_SHARE` rather than the ceiling (20 of
+25 IS the cap, not a loss). At 67% the detector inverts entirely and names 10 ORGANIC accounts, the
+organic minority now being the rare one.
+
+**Lifting the ceiling alone restores full recall everywhere the group cap allows**, and that is the
+load-bearing fact for any future fix: the Chung-Lu null underneath is NOT also poisoned, only the
+local prevalence estimate is wrong. So judging rarity against an outside background is viable
+arithmetic rather than a rewrite. It is equally the reason not to just raise the ceiling, since the
+same lift is what lets generic shared behaviour into every other finding.
+
+Pinned by `test_the_worst_point_is_not_a_corpus_size_artifact_and_the_ceiling_is_the_whole_mechanism`,
+which asserts the corpus is above the floor and that `refused` is None, so the two confusions that
+produced the overstated table cannot come back.
+
+**`app/netdetect/domination.py` converts that silence into a stated refusal to resolve.** It counts
+hard-family features shared by at least half a candidate community that the ceiling threw away, and
+`DetectionResult.domination` carries the verdict. `RunOut.unresolvable` serves it, as a THIRD state
+beside `refused` (could not run) and an empty findings list (ran and found nothing).
+
+**It never claims an operation is present, and that restraint is measured rather than cautious.**
+The same statistic fires on a fan community filling 44% of a small section, because fans converging
+on one artist's posts is real network evidence: a null built from a section one group dominates
+cannot resolve that group in EITHER direction. The notice says so, offers the innocent reading, and
+names `assign.sweep`, which weighs accounts against formations catalogued from OTHER investigations
+and so does not depend on rarity within this corpus at all.
+
+**Restricting it to the HARD families is what keeps it honest.** The professional-beat control fills
+40% of a 25-account section and scores **zero**, because a newsroom shares text, timing and a
+publishing tool rather than provisioning and targets. Organic corpora at 25 and 60, and a viral
+thread, all score zero. Every dominated corpus scores 5 or more, so `MIN_SUPPRESSED_HARD` (3) sits
+in an empty gap rather than being fitted to either side.
+
+**The real fix is not this, and it is worth stating.** Rarity should be judged against a background
+of ordinary accounts rather than against the section under test, and this deployment has one: the
+accumulating `CoordinationEdge` graph and the formation catalogue. A signup week that is common in
+this section but rare across the deployment is still rare. That is a larger piece of work and it
+depends on accumulated data, so what ships here is the honest refusal. **Do not "fix" the blind spot
+by raising `RARITY_CEILING`**: the ceiling is also what keeps generic shared behaviour out of every
+other finding.
+
+That warning used to end "and nothing has measured what raising it costs the controls", which stopped
+being true when the cost WAS measured (see the ceiling-cost table above). The prohibition stands and
+the reason for it has changed, which matters because the two call for different next steps. It is no
+longer "we do not know": on the corpora available, 0.60 was measured **strictly better on every
+control**, restoring this blind spot's recall (0 of 16 to 16 of 16 at 32% share) and cutting the
+amplifier ring's named bystanders from 15 to 1, with no control publishing anything it did not
+already publish. It stays unchanged because those corpora are synthetic, this is the core constant
+of the package, and the honest first step is reproducing the ring row on real scanned data. **It is
+the owner's decision with the evidence in front of them, not a measurement nobody has taken.**
+
+**A dominated section is WRITTEN DOWN, because it produces no findings to notice.** The first draft
+computed the verdict and returned it in `RunOut` only, which is the same defect this file has
+recorded twice: information computed and discarded at the serialiser. Worse here than usual, since
+`NetdetectFinding` exists precisely because findings "evaporated when the page closed", and a
+dominated section has no finding whose absence an operator could spot. `NetdetectSection` +
+`persist_section` + `GET /v1/admin/netdetect/sections` + the `UnresolvedSections` panel close it.
+
+Four rules on that record:
+
+- **It runs OUTSIDE the findings block.** That block is gated on `result.findings`, which is exactly
+  the case a dominated section fails, so folding it in would mean the one state that cannot speak
+  for itself is the one state never written down.
+- **A resolvable re-run WITHDRAWS the warning.** A section stops being unresolvable as soon as
+  enough ordinary accounts comment under the post, and a stale "cannot resolve" sitting in the queue
+  is a claim about a section that has stopped being true.
+- **A REVIEWED row is never withdrawn.** Somebody's verdict is the only ground truth this system
+  accumulates, the same rule a dismissed finding follows.
+- **It names NO accounts, and the panel is guarded against reaching for them.** The group failed the
+  significance test, and the statistic cannot separate an operation from a community, so the record
+  carries the shape (how many accounts, how much of the section, which families) and the next step.
+
+Pinned by `tests/test_netdetect_domination.py` (22), which pins the mechanism, the diagnostic, the
+newsroom silence, the fandom firing as CORRECT, the three-state rule, the withdrawal, the page
+warning, and the catalogue fallback below. The two new routes are covered against a REAL non-admin
+in `tests/test_coordination_admin_gate.py`, because every other test here runs in local mode where
+`require_user` returns `is_admin=True`.
+
+##### The catalogue resolves what the section cannot, and that claim is measured now
+
+`domination.py` closed by telling the operator to go and sweep the section by hand against the
+formation catalogue, on the reasoning that a formation profile carries the surprise each feature had
+in the corpus it was LEARNED in, so it does not read this corpus's rarity at all. That reasoning was
+sound and it was **asserted, never measured**, which is the thing this file keeps warning about.
+
+It is measured now, and it holds. Catalogue the stadium operator from a section where it holds 8 of
+68, then rotate it onto accounts sharing no id with anything stored and vary its share of the NEW
+section:
+
+| op share | detect finds it | suppressed here | sweep places | organic placed |
+|---|---|---|---|---|
+| 12% | yes | 0 | 8 / 8 | 0 / 56 |
+| 24% | yes | 0 | 8 / 8 | 0 / 25 |
+| 32% | **no** | 5 | **8 / 8** | 0 / 17 |
+| 40% | no (see below) | 5 | **8 / 8** | 0 / 12 |
+| 50% | no (see below) | 5 | **8 / 8** | 0 / 8 |
+
+**Read the last two rows carefully, because this construction shrinks the background.** At 40% and
+50% the corpus is 20 and 16 accounts, under `detect.MIN_CORPUS`, so those runs were refused for SIZE
+rather than silenced by the ceiling. The section-side claim rests on the **32%** row, where the
+corpus is exactly at the floor and the emptiness really is silent, and on the n = 50 band measured
+in the section above. What the last two rows do show is still worth having: the catalogue places a
+rotated operation even in a section too small for the detector to run on at all.
+
+**Recall through the catalogue is FLAT across the whole range**, including where recall through the
+section collapses. The two are blind to different things, so the fallback is worth running exactly
+where the primary path fails.
+
+**The safety half matters more, because the statistic that sends us here fires on innocent groups
+too** and a fallback that answered those with names would turn a careful refusal into an accusation.
+Against a catalogue of two unrelated operations it places **nobody** on a fan community at 44% and at
+60% (which trips the statistic HARDER than the operation does, at 12 suppressed against 5), a
+newsroom at 40%, an uncatalogued amplifier ring at 32%, and plain organic.
+
+So the run now **does it automatically** rather than telling somebody to. Five rules:
+
+- **Only on a section that could not resolve itself.** On a section the detector CAN price, its own
+  findings are the better answer, and a second number beside them invites reading the two as
+  agreeing or disagreeing when they measure different things.
+- **COUNTS, never names, on both the response and the row.** A placement is a claim about a person
+  and it already has a home: `POST /formations/sweep` renders it through `_assignment_out` with the
+  evidence a reader needs to argue with it. A second serialiser on a second path is exactly how one
+  of them quietly stops carrying `refused` or `hard_evidence`, which this repo paid for once in
+  `coerce_comprehensive_model_output`.
+- **Three states, two of which report zero.** `catalogue_checked` false means never consulted;
+  true with `catalogue_empty` means nothing has been catalogued to compare against; true without it
+  means it looked. The panel branches on `catalogue_checked`, never on the count, and a source-level
+  test enforces that: branching on the count would tell an operator a section is clean when nothing
+  has ever been catalogued.
+- **`NOT_A_CLEARANCE` rides along, reused verbatim** from the sweep route rather than reworded. The
+  uncatalogued row above is the honest limit: the catalogue only recognises operations somebody has
+  already recorded.
+- **Refreshed on every re-run**, because the catalogue GROWS between runs and a section that placed
+  nobody last week can place somebody today. A stale zero is the same defect as a stale warning.
+
+Verified end to end against a real API and a real catalogue, not only in unit tests: a seeded 32%
+section reports no findings, records `unresolvable`, and the panel renders "the formation catalogue
+places 8 accounts here in an operation recorded in another investigation, 8 of which would have
+passed an individual review", naming nobody.
+
+**One thing this does NOT do is fix the blind spot.** The detector still cannot resolve such a
+section, and an operation nobody has catalogued is still invisible there (measured: 0 placed on the
+uncatalogued ring). The real fix is judging rarity against an outside background, which is a larger
+piece of work depending on accumulated data. **Do not "fix" it by raising `RARITY_CEILING`**: the
+ceiling is also what keeps generic shared behaviour out of every other finding. That cost HAS since
+been measured (see "What raising `RARITY_CEILING` actually costs" above, and the note beside the
+constant in `significance.py`), and the prohibition stands on a different footing now: not that
+nobody has looked, but that the corpora are synthetic and this is the owner's decision.
+
 #### The sub-group hole in `MIN_FAMILIES` is measured now, and it does not open
 
 `MIN_FAMILIES` is checked on the WHOLE candidate, and a candidate is a Louvain community rather
@@ -2194,11 +3030,262 @@ asserted and a change to either has somewhere to fail. **Do not build the sub-gr
 **A related measurement that kills a different piece of planned work.** `attachment.MAX_MEMBERS` is
 40 and the leave-one-out cost curve is steep (n=50 4.2s, n=60 9.3s, n=80 37.0s), so raising it looks
 like it needs an exact-equivalent rewrite of the Poisson-binomial tail via prefix/suffix
-convolution. **It does not, because the abstention has never fired.** Finding sizes measured across
-the systematic grid (four background sizes x three seeds): min 8, median 8, **max 12**, zero above
-40. Optimising the leave-one-out would be optimising a case no corpus has ever produced. If a real
-scan ever yields a finding above 40 members the page already says membership was not tested, and
-THAT is the signal to do the work.
+convolution. **It does not, because the abstention has never fired**, and optimising it would be
+optimising a case no corpus has produced.
+
+**The margin is much thinner than that first measurement suggested, though, and the first
+measurement was of the wrong population.** "min 8, median 8, max 12" was the PLANTED OPERATION grid.
+The amplifier ring produces far bigger findings, because its bystanders are members: measured across
+backgrounds 40/60/80 x ring seeds 61/62/63, sizes run 8, 13, 14, 16, 17, 17, 20, 23 and **25**. The
+largest is more than double the old figure and sits at 62% of the cap.
+
+**IT FIRED, AND IT IS FIXED.** The warning below was written when the largest measured finding was
+25 against a cap of 40, which read as headroom. Grow the background and the finding grows with it,
+and so does the bystander share:
+
+| corpus | members | bystanders | membership tested | outcome before |
+|---|---|---|---|---|
+| ring 130/62 | 38 | 30 (79%) | yes | review |
+| ring 130/63 | 40 | 32 (80%) | yes | review |
+| **ring 160/63** | **44** | **36 (82%)** | **no, over cap** | **PUBLISHED** |
+| **ring 160/62** | **49** | **41 (84%)** | **no, over cap** | **PUBLISHED** |
+
+So at exactly the point contamination is worst, crossing `MAX_MEMBERS` flipped a finding from "a
+human is asked" to "nothing asks anybody". A 168-account comment section is ordinary for this
+product, so this was reachable in production and not a fixture artefact.
+
+`detect` now sends a finding to a reader when the membership test could not RUN, and
+`Attachment.unchecked_for_size` is the explicit marker rather than a string match.
+
+**Its wording had to be cut back immediately, because the first version reintroduced the
+duplication that had just been fixed one branch over.** The card prints "Membership was not tested:
+<note>" under the member list, and the review reason opened with the same clause and the same
+count, so an over-cap finding stated one fact twice. The reason now leads with the judgement
+("treat the membership as unverified") rather than the state. It still names the size, because it is
+the STORED reason and is served without the member list to the review queue and the API, so it has
+to stand alone. A guard in `test_netdetect_routes.py` reads `detect`'s source and fails if the
+clause comes back, since the two strings live in different languages and neither file can see the
+other. **Only the size
+abstention counts.** "Every member contributes about equally" is a real answer about a real group,
+and is what a genuine community looks like, so acting on it would send everything to review and make
+review meaningless. It adds review and changes no membership, which is what keeps it separate from
+the two decisions that change who is named.
+
+**WATCH THIS, BECAUSE THE CAP'S ABSTENTION HAS THE SAME SHAPE AS THE BUG DIRECTLY ABOVE.**
+Contamination is what grows a finding; a grown finding is likelier to reach `MAX_MEMBERS`; reaching
+it makes `assess` abstain. So the membership guard would switch itself off on the LARGEST findings,
+which are the most contaminated ones. The 25-member finding above carries 17 bystanders. That is
+exactly the failure the median rule had, arriving by a different route, and it is not hypothetical
+in the way "max 12" made it sound.
+
+##### It fired, and the answer was to make the test cheap rather than to widen the cap
+
+This section used to end "it has not fired and nothing here is broken today", with the note that if
+it ever did, the honest response was the leave-one-out rewrite and NOT a quiet raise of the cap.
+Both halves came due. Growing the background grows the finding, and the bystander share grows with
+it, so at 160 organic accounts the ring produces findings of **44 and 49 members carrying 36 and 41
+bystanders (82% and 84%)**, both over the cap of 40, both untested, and both PUBLISHED.
+
+`significance.leave_one_out_scores` is the rewrite. The naive form ran one full `score_candidate`
+per member and each of those re-ran a Poisson-binomial DP over the whole set, so cost grew about
+n^3.5. It now computes every removal in ONE pass at O(n^2) per feature, by building the distribution
+over every PREFIX of the probabilities and the tail over every SUFFIX: the set without member *i* is
+the prefix before it convolved with the suffix after it. Measured on the same 168-account corpus:
+
+| n | before | after |
+|---|---|---|
+| 20 | 0.21s | 0.03s |
+| 40 | 2.80s | 0.26s |
+| 60 | 15.4s | 0.81s |
+| 100 | - | 3.82s |
+| 120 | - | 6.82s |
+
+**So `MAX_MEMBERS` is 100 and 100 members now costs less than 40 used to.** The value is
+STRUCTURAL rather than a time budget: `candidates.MAX_GROUP_SHARE` (0.40) bounds a community at 40%
+of the corpus and 250 accounts is the largest section this product reports on, so 100 is the largest
+finding that can reach `assess` at all. The cap stops binding in practice instead of binding hardest
+where it hurts most. It is still a cap and `unchecked_for_size` still exists, because a bigger
+corpus can still cross it and "nobody looked" must never present as "nobody is weakly attached".
+
+**The payoff is measured, and it is exactness rather than merely coverage.** The four largest ring
+findings are now tested and flag **exactly** their bystander sets: 30 of 30, 32 of 32, 36 of 36, 41
+of 41, with **no genuine ring member flagged in any of them**. A membership test that ran and named
+the wrong people would be worse than one that abstained.
+
+**THREE THINGS MAKE IT EQUIVALENT RATHER THAN SIMILAR, and the third is the one a rewrite gets
+wrong.** `_p_edge` depends only on the account and the feature, so it is cached rather than
+recomputed per removal. A feature only the removed member holds leaves the reduced union and lands
+at k=0 here instead, which is the same nothing because `MIN_SHARED_BY` is 2. And **the in-group
+exclusion is not symmetric**: a reply, repost or mention aimed at a MEMBER is skipped as
+conversation, so removing that member un-excludes it, and such a feature contributes to no full
+score and to exactly one removal. Get that wrong and the numbers stay plausible.
+
+**Do not take the O(n) deconvolution instead.** Dividing the full distribution by one Bernoulli
+looks strictly better and is unsound: it divides by `1 - p`, which `_p_edge` reaches exactly (it
+clamps with `min(1.0, ...)`), and amplifies error as p approaches it. Prefix/suffix only ever
+multiplies and adds non-negative numbers.
+
+**The guard is a DIFFERENTIAL against the naive computation on real corpora**, not a spot check
+against remembered numbers, because this is the arithmetic every membership verdict rests on.
+Agreement is 1.4e-14 across every candidate set in six corpora, against contributions rounded to
+four decimals. `test_the_fast_leave_one_out_is_the_same_arithmetic` spells the naive form out rather
+than importing it, so it keeps testing what it says if `leave_one_out` is rewritten again. **It was
+verified to FAIL** on the plausible wrong rewrite (treating an in-group feature as excluded for
+every removal), by 4.6 log units rather than by rounding, which also proves the asymmetry really
+occurs in these corpora rather than being a theoretical worry.
+
+One test had to change and the reason is worth knowing: the over-cap test built its member list from
+a 68-account corpus, so the moment the cap rose above 68 it stopped exercising the size branch and
+fell through to the gap abstention, **reporting green for a path it was no longer taking**. It now
+builds a corpus larger than the cap, and the end-to-end size branch is driven with the cap lowered
+rather than by building a 250-account corpus, so the branch and the constant's value are pinned
+separately.
+
+##### The largest findings were folding into the graph as nothing, on a second false claim
+
+Found by following the cap change to its neighbour. `persist.MAX_MEMBERS_FOR_PAIRS` (40) justified
+itself two ways: pairs grow quadratically, **and** "a finding that large is a subject rather than a
+formation and is refused upstream anyway". The second half is false, and the same measurement that
+raised the attachment cap disproves it: the 44- and 49-member ring findings are PUBLISHED, and both
+folded to an **empty mapping**. An empty mapping also means "this finding shares no pairwise
+evidence", so nothing anywhere recorded that the accumulating `CoordinationEdge` graph had learned
+nothing at all from the biggest findings this detector produces.
+
+**DO NOT FIX IT BY RAISING THE CONSTANT, and the reason is not cost.** Measured, folding the
+49-member finding whole writes **997 edges in 0.61s**, which is affordable. It is a bad idea because
+**969 of those 997 pairs touch an innocent account**. The cap has been protecting the permanent
+graph from the worst findings for a reason its own docstring never stated, and raising it would pour
+97% bystander-touching weight into shared state that `corroboration.py` reads back forever.
+
+**What it does instead is fall back to the finding's CORE**, which is the same move
+`candidates._densest_core` already makes when a community exceeds `MAX_GROUP_SHARE`: keep the core
+rather than discarding the lot. The core is the members the membership test says carry the finding,
+so this only became possible once `attachment` could run at these sizes at all. Measured:
+
+| finding | folded before | folded now | touching an innocent account |
+|---|---|---|---|
+| 49 members | 0 | 28 | 0 |
+| 44 members | 0 | 28 | 0 |
+
+Three rules on it:
+
+- **The divisor stays over the WHOLE finding.** Dividing a feature's surprise among the CORE's pairs
+  would hand each of them a bigger share than folding the finding whole would have, so the graph
+  would record that these accounts looked *more* coordinated precisely because the finding was too
+  large to fold. Every edge written carries exactly the number it would have carried with no cap;
+  there are simply fewer of them. Pinned, and the guard was **verified to fail** on that exact wrong
+  version.
+- **An abstention is not permission to guess.** `attachment_checked` false means nobody looked,
+  which is the one case where picking a subset would be inventing one, so the old empty return
+  stands there.
+- **Nothing below the cap changed**, byte for byte, and that is deliberate. See below.
+
+**MEASURED AND DELIBERATELY NOT TAKEN: the same restriction BELOW the cap.** It is dramatic there
+(578 pairs of which 550 touch an innocent account become 28 of which 0; likewise 624 to 28 and 185
+to 28) and across every corpus it drops no genuine pair and keeps no bystander-touching one, with
+the controls untouched because a real community is exactly what `attachment` abstains on. It is not
+done because today's behaviour is **not a defect**: that contamination was measured and accepted on
+the argument that it lands in `log_lr` (which does not discriminate) rather than in `hard_pairs`
+(which does). Changing it improves on a documented trade and alters what the deployment permanently
+remembers about named real people on synthetic evidence. The silent zero ABOVE the cap was a defect,
+because its stated justification was false, and that is the half fixed here.
+
+##### Two operations under one post: measured, correct, and previously untested
+
+Every planted-operation corpus in this suite carries ONE operation, so nothing had ever asked what
+happens when two unrelated adversaries comment on the same post. That is an ordinary situation on a
+contested topic, and it is worth knowing because getting it wrong would be bad in both directions at
+once: one finding naming all sixteen accounts says two groups are running together, about named real
+people, on no evidence that they are; and `build_profile` would distil that into a single CHIMERA
+profile holding both operators' scripts, tools, handle factories and targets. A profile is what
+survives account rotation, so a chimera is a permanent identity matching neither operation well,
+which every future `assign` and `sweep` then reads.
+
+**Measured, it is correct.** Across three organic backgrounds `detect` separates them every time
+(8 of 8 each, no cross-contamination, one background sweeping in a single bystander), and
+`registry.record` writes TWO formations rather than one. Pinned by
+`test_two_operations_under_one_post_are_told_apart_all_the_way_to_the_catalogue`, which asserts both
+levels and **was verified to fail** when `FORMATION_MATCH_THRESHOLD` is dropped to 0 so the
+catalogue merges.
+
+The fixture makes the claim meaningful rather than trivial: `OPERATORS["stadium"]` and
+`OPERATORS["clinic"]` differ in script, publishing tool, bio, handle factory, provisioning window,
+targets, mention, hashtag and posting interval. They share only the fact of being automated, which
+is exactly the thing that must not be enough to merge them.
+
+**AND IT SURVIVES THEM GENUINELY SHARING FEATURES, INCLUDING BOTH HARD FAMILIES.** That is the
+realistic version, and the one an adversary could try to engineer. Measured on two organic
+backgrounds at each step:
+
+| what the two operations share | findings | mixed | formations |
+|---|---|---|---|
+| nothing | 2 (8+8) | 0 | 2 |
+| the publishing tool (`infrastructure`, soft 0.55) | 2 (8+8) | 0 | 2 |
+| the provisioning week (`identity`, HARD 1.00) | 2 (8+8) | 0 | 2 |
+| the amplification targets (`network`, HARD 1.00) | 2 (8+8) | 0 | 2 |
+| **the provisioning week AND the targets** | **2 (8+8)** | **0** | **2** |
+
+`identity` and `network` are the two families every publication decision in this package keys on, so
+if copying them merged two adversaries an operation could hide inside another by signing its
+accounts up the same week and boosting the same posts.
+
+**WHY IT HOLDS IS STRUCTURAL RATHER THAN LUCKY**, and worth knowing before anyone tunes candidate
+generation: grouping is on TOTAL shared rare-feature weight, and each operation shares far more
+within itself (script, tool, handle factory, bio, posting interval) than it does across. Copying two
+features does not outweigh five. It is a CHARACTERISATION of how much imitation the separation
+tolerates, not a promise of any amount: an operator copying every axis is, by this package's own
+definition, no longer a different operator.
+
+**THE COHORT DETECTOR SEPARATES THEM TOO, AND THERE IT MATTERS MORE**, because that pass runs
+AUTOMATICALLY when a scan is saved while netdetect is admin-only and manual. Its fixtures carried at
+most one operation as well, and the merge risk is concrete rather than theoretical:
+`CampaignService.merge_clusters` unions any two clusters sharing a single account, which is why
+findings have to come out member-disjoint. A merge would publish one campaign naming all eight
+accounts on a customer surface. Measured, two operations in one 70+ cohort give **2 campaigns, 4+4,
+0 mixed** with nothing shared, with the publishing client shared, with the amplification targets
+shared, and with both shared. Pinned by
+`test_two_operations_in_one_cohort_are_two_campaigns_and_never_one`.
+
+##### `DEFAULT_SHUFFLES` and `DEFAULT_QUANTILE` are a coupled pair, and nothing reconciled them
+
+Found by listing every constant in `app/netdetect` and checking which no test names: 32 of 71, and
+this pair is the one that matters. The K=8 blunder above is pinned by a test that passes an EXPLICIT
+K=8, so it says nothing about the two constants the product actually ships.
+
+The arithmetic: at quantile q the smallest expressible p-value is 1/(K+1), so K must be at least
+`round(1/(1-q)) - 1`. Shipped that is **19 against a `DEFAULT_SHUFFLES` of 24**, a margin of five.
+
+**Tightening the quantile is the most natural "let us be stricter" edit anyone could make here, and
+it silently couples:**
+
+| quantile | K needed | against the shipped 24 |
+|---|---|---|
+| 0.90 | 9 | fine |
+| 0.95 | 19 | fine, and is what ships |
+| **0.98** | **49** | **every default run refused** |
+| **0.99** | **99** | **every default run refused** |
+
+Nothing crashes and nothing is silent, which is better than the original bug: every scan reports
+"Nothing was tested". It is still the product detecting nothing at all, and whoever raised the
+quantile has no reason to connect the two numbers. Same class as the Clerk keys, the preset name and
+the trial-credit env vars: two values that must agree with no runtime check that they do.
+
+`test_the_shipped_defaults_can_actually_report_something` asserts the pair AND drives the real
+default path end to end, so it cannot pass on arithmetic that has drifted from what `detect` does.
+**Verified to fail** at quantile 0.98, with a message naming both constants and the fix.
+
+The other pairs were checked at the same time and are all consistent: `MIN_CORPUS` x
+`MAX_GROUP_SHARE` gives 10 against a `MIN_GROUP` of 3, `MIN_SHARED_BY` (2) sits under `MIN_GROUP`,
+and `assign`'s two hard-evidence floors agree with `detect`'s.
+
+**ONE COUPLING THIS SESSION INTRODUCED IS NOW GUARDED TOO**, because the rule is not to add the
+class of defect you have just spent the session removing. `attachment.MAX_MEMBERS` = 100 is derived
+across THREE modules: `candidates.MAX_GROUP_SHARE` (0.40) x `reports.templates._ALL_COMMENTERS_CAP`
+(250). Raise either and the cap silently stops covering the biggest findings, which are the most
+contaminated ones, so the membership test would abstain exactly where it is needed most with nothing
+failing. **The margin is zero by construction** (100 IS 0.40 x 250), which is intended, and does
+mean any increase on either side trips the guard immediately. Verified to fail with the report cap
+raised to 400.
 
 **Not yet built:** the adjudication call, and a per-member attachment test on assignment (the
 finding-level contamination rate is measured and pinned, the cause is understood, and the obvious
@@ -3204,6 +4291,28 @@ one is built to score 70+ across the board, because that is the state the filter
 **The dismissals are the only ground truth this will ever accumulate.** Every constant is reasoned;
 `POST /v1/admin/coordination/{slug}/dismiss` records a labelled negative so a future calibration has
 something to fit against.
+
+#### The LSH banding is a coupled triple, and only a comment enforced it
+
+Same audit that caught the shuffle defaults, run over `app/campaigns/detector`: **46 of 57 constants
+are named by no test.** One of them is a genuine arithmetic invariant. `textsim.py` says
+"b * r must equal NUM_PERM" and nothing checked it.
+
+It matters because banding slices with `signatures[key][lo:hi]`, and **Python slicing past the end
+does not raise**: it returns a SHORT or EMPTY tuple. A band beyond the signature therefore computes
+nothing and buckets every account together, whatever the data. Measured at bands=48 against a
+128-permutation signature: **16 of 48 bands slice short or empty**, and on 30 accounts with
+unrelated text the candidate set goes from 362 pairs to all 435.
+
+**Raising the band count is the natural "be more sensitive" edit**, which is exactly how this would
+happen, and nothing would fail. The damage lands as an O(n^2) candidate explosion in the prefilter
+rather than as a wrong verdict, because the real filtering is downstream, so it would present as the
+detector getting slower with nobody knowing why. Lowering the product wastes permutations instead:
+at bands=16 the tail 64 are never consulted and the candidate set drops to 311.
+
+`test_the_lsh_banding_uses_every_permutation_and_no_band_is_degenerate` asserts the product AND the
+slicing, since the product alone would still pass if the slicing changed shape later. **Verified to
+fail** at bands=48.
 
 ### Campaigns are GATED, not scoped, because they have no owner
 
@@ -4330,6 +5439,39 @@ Three things not to undo:
 fails when a new reason arrives without one, so a failure can never render as a bare error with no
 next step.
 
+### The "written and nothing calls it" audit
+
+`registry.refresh_phases` was written for a real job and had nothing calling it, and the fix for
+that repeated the same gap one level up (the caller was added, and only the helper was tested). Two
+instances is a pattern, so it was checked mechanically rather than one function at a time: for every
+public function in `app/netdetect` and `app/campaigns`, count references anywhere in `app/` except
+the `def` line itself.
+
+**The first version of that check was wrong and would have reported four false alarms.** It excluded
+the whole defining file, so `detector/persist.py`'s `record_campaigns`, `record_global_evidence`,
+`upsert_index_row` and `write_payload_block` looked dead when `save()` calls all four at lines
+298-301. Count the home file, skip only the definition.
+
+Eight functions have no call site in `app/`. Two carried misleading docstrings and are now corrected:
+
+- **`tracking/operations.py::sweep_dormant`** claimed to be "called opportunistically from the
+  detection path" (no call site exists) and justified having no schedule by saying this deployment
+  has no scheduler (there is one, and it is where `refresh_phases` was wired). **Deliberately still
+  not wired**, and the contrast with `refresh_phases` is the reason: there, the phase column is what
+  an operator reads and nothing else derived it, so an unswept catalogue showed dead operations as
+  live. Here `mark_seen` derives dormancy inline from `last_seen_at`, resurgence works without the
+  sweep, and no route serves `dormant_since`. Scheduling a write for a column nothing reads is
+  speculative. Wire it the day something consumes the column, and delete the derived half then.
+- **`tracking/crossplatform.py::filter_cross_platform`** looked like a second copy of the
+  cross-platform rule. It is not: it and the live `detector/run.py::_drop_illegal_cross_platform`
+  both call the SAME `may_link` predicate, so the rule does live in one place and this is a spelling
+  of it. Worth recording precisely, because "two implementations of one rule" is this repo's classic
+  drift and this is not an instance of it.
+
+The rest are small helpers reachable from tests, plus `verdict_coordination.py`, which is documented
+as deliberately unwired. **Nothing was deleted**: the campaigns note above forbids tidying unimported
+code, because it is the foundation the future algorithm builds on.
+
 ## Outstanding — needs the user, not code
 
 0. **Measure the coordination detector on real scans.** Every threshold in
@@ -4347,9 +5489,41 @@ next step.
    `GET /v1/admin/netdetect/findings/calibration` replays every threshold against those judgements
    and refuses to recommend anything until there are 30 with 8 of each class, so the first thirty
    are the whole cost of calibrating it. Watch specifically for a finding that names an account you
-   can tell is an ordinary bystander: that is the measured ~7% contamination and the judgement to
-   record is a dismissal with that reason, since it is the one class no threshold currently
-   separates.
+   can tell is an ordinary bystander, and record a dismissal with that reason, since it is the one
+   class no threshold currently separates.
+
+   **Expect that to be common, not rare.** The "~7%" this item used to quote is the PLANTED
+   OPERATION. On amplifier-ring-shaped findings the measured rate is **52.9%**, i.e. most of the
+   named accounts, so a finding whose members are mostly ordinary is the expected case rather than
+   a surprise. Findings above half now say so themselves and go to review.
+
+0a. **DECIDE: trim the members the membership test flags.** This is the one that matters, and it
+   gates the next item. netdetect names 52.9% innocent accounts on ring-shaped findings, and four
+   independent measurements say trimming costs nothing: the flag is exactly the bystander set, the
+   trimmed finding still clears the null by a wide margin, across every control a trim would have
+   withheld **44 innocent names and lost 0 genuine members**, and the 40% of a formation profile
+   that is bystander noise can only make future assignment harder. The alternative route
+   (tightening candidate generation) is **measured dead**, and the cohort detector in this same repo
+   already gates membership per account and is measured perfectly precise **on the same corpus,
+   head to head** (netdetect 41 innocent of 49 named, cohort 0 of 8). Not taken here because it
+   changes what is published about named real people and every corpus is synthetic. **Reproduce the
+   ring row on real scanned data first**, then decide. Evidence is beside the code in
+   `app/netdetect/attachment.py`.
+
+0b. **DECIDE (after 0a): whether netdetect runs automatically.** The cohort detector runs on every
+   scan and its 70+ cut is measured **blind** to a disciplined operation: at score 65 the cohort
+   comes back with ZERO accounts, so both automatic passes produce nothing and nothing records that
+   anything was skipped. netdetect finds that operation at every score, costs nothing to run (no
+   provider call, no model call, no credit) and is deterministic, so wiring it into the scan path
+   looks free. **It is not, while 0a is open**: running it automatically would name those 52.9%
+   automatically, on every scan, without an operator ever choosing to look. Fix who gets named
+   first.
+
+0c. **DECIDE: `RARITY_CEILING` 0.25 -> 0.60.** Measured strictly better on every synthetic control
+   (blind-spot recall 0/16 to 16/16 at 32% share, ring bystanders 15 to 1, no control publishing
+   anything it did not already publish). Independent of 0a and smaller in effect, but it moves
+   naming in BOTH directions where trimming only ever removes names, so it is the less safe of the
+   two. Evidence sits beside the constant in `app/netdetect/significance.py`.
 1. **Register the Stripe webhook** and set `OMI_STRIPE_WEBHOOK_SECRET` on the API service, then
    redeploy. URL is `https://<API-host>/v1/billing/webhook` (**not** the web host) and the six events
    are listed in `docs/stripe-setup.md` §3 — or read them off `/v1/billing/preflight`, called directly

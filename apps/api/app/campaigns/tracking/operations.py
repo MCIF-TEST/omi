@@ -154,9 +154,22 @@ def mark_lifecycle(campaign: Campaign, *, now: datetime | None = None) -> str:
 def sweep_dormant(session, *, now: datetime | None = None) -> int:
     """Mark operations dormant that have not been seen inside the window.
 
-    Called opportunistically from the detection path rather than on a schedule, because this
-    deployment has no scheduler running in production. That is a deliberate constraint of the
-    design, not an oversight: everything here has to make progress on scan traffic alone.
+    NOTHING CALLS THIS, and both halves of what this docstring used to say were false. It claimed to
+    be "called opportunistically from the detection path", and no call site exists anywhere in
+    `app/`; it justified not being scheduled by saying the deployment has no scheduler, and
+    `app/monitoring/scheduler.py` runs a pass holding a Postgres advisory lock, which is exactly
+    where `netdetect.registry.refresh_phases` was wired for the same job.
+
+    IT IS STILL NOT WIRED, DELIBERATELY, and the difference from `refresh_phases` is the point.
+    There, the phase column was the thing an operator reads off the formation catalogue and nothing
+    else derived it, so leaving it unswept meant every dormant operation presented as live. Here,
+    `mark_seen` derives dormancy inline from `last_seen_at` (`dormant_since is not None OR the last
+    sighting is older than DORMANCY_DAYS`), so resurgence detection works without this ever running,
+    and no route or export serves `dormant_since`. Scheduling a write for a column nothing reads
+    would be speculative work.
+
+    So this is dead code with a live purpose: wire it the day something consumes the stored column,
+    and delete the derived half of `mark_seen`'s check at the same time so the two cannot disagree.
     """
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(days=DORMANCY_DAYS)
