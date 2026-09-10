@@ -1926,6 +1926,29 @@ hairline in the semantic colour over `bg-bg-elev-2`, which is the instrument gra
 exist, fixing them is a palette change that would restyle every page and is the owner's call, so a
 repo-wide assertion would fail on day one and be deleted. **The rule is do not add more.**
 
+##### A third mistake found the same way, and the doc line that taught it
+
+Rendering the redesigned page against a MOCK detection run (fourteen seeded comment sections, twelve
+recorded findings, three catalogued formations) showed the finding header as `SURPRISE14.16
+CORRECTED P0.040 CORPUS68`: label and figure with no gap, on the three numbers a reader uses to
+weigh a claim about named people.
+
+`.readout` is the flex COLUMN and `.readout-v` styles the figure inside it (`.readout > .readout-v`
+in `globals.css`). Both new components put `readout-v` on the wrapper, so the container got no
+`display:flex` and no gap at all. Every other call site in `apps/web` has it right, which is the tell
+that this was not a judgement call: **the table in this file described the pair as "`.readout` /
+`.readout-v` | A label over a figure", which reads as two variants and is what taught the error.**
+That line is corrected above. Invisible to TypeScript, to the linter, to the build and to every test,
+exactly like the two CSS defects recorded above it, and found the same way: by looking at the served
+page rather than the source.
+
+**The band labels in the evidence matrix are clipped and that one is DELIBERATE.** `bandLabel`
+shortens a family name to what its band is wide, so a three-column network band prints `NETWOR`. It
+looks like the same class of defect and is not: the comment beside it records the alternative it was
+measured against (`I...` for a one-column band, which is noise rather than a label), the full name is
+on the title attribute and in the hover caption, and both hard families are spelled out in the strip
+directly above. Left alone rather than fixed, so changing it stays a deliberate act.
+
 **The three coordination surfaces now say which is which.** `/netdetect`, `/narratives` and `/graph`
 answered one question in three vocabularies with no way between them. `CoordinationNav` puts the
 same rail on all three and `WhyTwoDetectors` states the distinction an operator actually gets wrong,
@@ -3889,7 +3912,7 @@ re-typing its parts, which is how four spellings of one label appeared in the fi
 | `.meta` (+ `.meta-hi`, `.meta-on`) | THE label voice. Mono, 10px, 0.18em, uppercase. Field labels, column heads, panel titles, status words. **Never a sentence**: past about five words the tracking stops being readable. |
 | `.panel` / `.panel-head` / `.panel-body` | A framed readout. The header is a 34px bar, label hard left, meta hard right, hairline under, on its own ground. |
 | `.tick-frame` (+ `.tick-frame-live`) | Corner registration ticks. |
-| `.readout` / `.readout-v` | A label over a figure. Every number in this product should be presented this way. |
+| `.readout` / `.readout-v` | A label over a figure. **`.readout` is the CONTAINER** (the flex column that puts the label above the figure and sets the 3px gap); `.readout-v` styles the FIGURE inside it, as does `.stat-value`. They are not two variants of one thing, and reading them as horizontal/vertical puts `readout-v` on the wrapper, which drops the column layout and glues the two together (`SURPRISE14.16`). Every number in this product should be presented this way. |
 | `.led` (`-ok` `-warn` `-fail` `-work` `-off`) | Square status lamp. |
 | `.rack-table`, `.rule-rack`, `.focus-hard` | Data table, capped hairline, square focus outline. |
 

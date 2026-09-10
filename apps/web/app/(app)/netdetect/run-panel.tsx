@@ -251,7 +251,7 @@ export function RunPanel({ onRecorded }: { onRecorded?: () => void }) {
 
 function Readout({ label, value }: { label: string; value: string }) {
   return (
-    <div className="readout-v">
+    <div className="readout">
       <span className="meta">{label}</span>
       <span className="stat-value">{value}</span>
     </div>
