@@ -537,7 +537,7 @@ function FindingCard({
 
 function Readout({ label, value, help }: { label: string; value: string; help?: string }) {
   return (
-    <div className="readout-v" title={help}>
+    <div className="readout" title={help}>
       <span className="meta">{label}</span>
       <span className="stat-value">{value}</span>
     </div>
